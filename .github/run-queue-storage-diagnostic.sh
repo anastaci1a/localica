@@ -32,7 +32,8 @@ cleanup() {
   # Missing packages are harmless; still-installed packages contaminate the mandatory gate.
   adb -s "$serial" shell pm list packages "$package" > "$root/packages-after-cleanup.txt" 2>&1
   if [[ "$?" != 0 ]]; then cleanup_result=1; fi
-  if grep -Fxq "package:$package" "$root/packages-after-cleanup.txt" || grep -Fxq "package:$test_package" "$root/packages-after-cleanup.txt"; then cleanup_result=1; fi
+  tr -d '\r' < "$root/packages-after-cleanup.txt" > "$root/packages-after-cleanup-normalized.txt"
+  if grep -Fxq "package:$package" "$root/packages-after-cleanup-normalized.txt" || grep -Fxq "package:$test_package" "$root/packages-after-cleanup-normalized.txt"; then cleanup_result=1; fi
   printf 'cleanup_ran=true\noriginal_exit=%s\ncleanup_exit=%s\n' "$result" "$cleanup_result" > "$root/cleanup.txt"
   if (( result == 0 && cleanup_result != 0 )); then result=$cleanup_result; fi
   exit "$result"
@@ -52,6 +53,11 @@ adb -s "$serial" shell getprop > "$root/device-properties.txt"
 adb -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r' > "$root/api.txt"
 adb -s "$serial" install -r "$target" > "$root/install-target.txt"
 adb -s "$serial" install -r "$tests" > "$root/install-tests.txt"
+# A sideloaded APK does not install its packaged profile automatically on these emulators.
+adb -s "$serial" shell am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE \
+  -n "$package/androidx.profileinstaller.ProfileInstallReceiver" > "$root/profile-install.txt"
+grep -Eq 'Broadcast completed: result=1([,[:space:]]|$)' "$root/profile-install.txt"
+adb -s "$serial" shell am force-stop "$package"
 adb -s "$serial" shell cmd package compile -f -m speed-profile "$package" > "$root/compile.txt"
 grep -q Success "$root/compile.txt"
 adb -s "$serial" shell dumpsys package dexopt > "$root/dexopt.txt"
