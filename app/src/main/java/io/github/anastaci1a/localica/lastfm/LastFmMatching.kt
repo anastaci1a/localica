@@ -26,11 +26,12 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
         locals.forEach { local -> local.tokens.distinct().filterNot { it in stop }.forEach { getOrPut(it) { mutableListOf() } += local } }
     }
 
-    fun match(snapshot: LastFmSnapshot, mappings: Map<String, String>): LastFmMatches {
+    fun match(snapshot: LastFmSnapshot, mappings: Map<String, String>, checkActive: () -> Unit = {}): LastFmMatches {
         val counts = linkedMapOf<String, Long>(); val review = mutableListOf<LastFmReview>()
         val resolved = mutableListOf<LastFmResolution>(); val editions = mutableListOf<LastFmReview>()
         val absent = mutableListOf<LastFmTrack>(); var dismissed = 0
-        for (remote in snapshot.tracks) {
+        for ((index, remote) in snapshot.tracks.withIndex()) {
+            if (index % 64 == 0) checkActive()
             val mapping = mappings[remote.key]
             if (mapping == LastFmMatcher.NONE) { dismissed++; absent += remote; continue }
             val manual = mapping?.let(byId::get)

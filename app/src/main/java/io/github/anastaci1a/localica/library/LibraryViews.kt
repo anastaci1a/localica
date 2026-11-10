@@ -71,6 +71,7 @@ object LibraryViews {
                 }
             }
             var visited = 0
+            if (current !== source) io.github.anastaci1a.localica.diagnostics.WorkCounters.groupProjections.incrementAndGet()
             val result = plan.map { group ->
                 LibraryGroup(group.id, group.title, group.subtitle, group.rows.map { row ->
                     if (visited++ % 128 == 0) checkActive()
