@@ -576,7 +576,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     // flight or waiting for an effect to publish a replacement source.
     val flat = flatGlass()
     fun retired(backdrop: FrostedBackdrop?) = backdrop != null &&
-        (backdrop.hasGlassLayer == flat || backdrop.hasGlassLayer && backdrop.layer.isReleased)
+        (backdrop.hasGlassLayer == flat || backdrop.isRetired)
     val currentSource = source?.takeUnless(::retired)
         ?: ambientSource?.takeUnless(::retired)
         ?: anchor.source?.takeUnless(::retired)

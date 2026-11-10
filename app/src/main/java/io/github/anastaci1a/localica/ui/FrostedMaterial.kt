@@ -64,6 +64,9 @@ internal class FrostedBackdrop(private val glassLayer: GraphicsLayer?, dark: Boo
     val recordedChildren get() = requireNotNull(recordingDebug).children
     private val defaultRenderer = defaultGlassRendererGeneration()
     val rendererGeneration get() = renderer?.generation ?: defaultRenderer
+    private val allocatedGeneration = rendererGeneration
+    // Layerless descriptors have no released GraphicsLayer to reveal an old owner.
+    val isRetired get() = if (hasGlassLayer) layer.isReleased else rendererGeneration != allocatedGeneration
     private val captureLock = Mutex()
     var parent by mutableStateOf<FrostedBackdrop?>(null)
     var materialOnly by mutableStateOf(false)
