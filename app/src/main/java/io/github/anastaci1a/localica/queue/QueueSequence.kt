@@ -309,6 +309,7 @@ internal class QueueSequence(internal val db: SupportSQLiteDatabase) {
                     knownDurations = knownDurations - ((SELECT durationMs FROM queue_sequence_songs WHERE id = OLD.songId) IS NOT NULL)
                 WHERE queueId = OLD.queueId;
                 END""")
+            QueueSelection.createSchema(db)
         }
     }
 }
