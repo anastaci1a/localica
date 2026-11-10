@@ -467,3 +467,4 @@ io.github.anastaci1a.localica.SelectionInsetScrollTest
 io.github.anastaci1a.localica.SelectionInsetContextsTest
 io.github.anastaci1a.localica.QueueSequenceTest
 io.github.anastaci1a.localica.QueueTraversalTest
+io.github.anastaci1a.localica.QueueHeaderSummaryTest
