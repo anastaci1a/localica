@@ -7,9 +7,14 @@ import io.github.anastaci1a.localica.library.TrackSort
 import io.github.anastaci1a.localica.library.enumNameOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** The actor and viewport receive immutable windows; SQLite connections never escape this worker boundary. */
 internal class QueueWindowStore(private val room: RoomDatabase) {
+    private val schemaLock = Mutex()
+    @Volatile private var schemaReady = false
+
     suspend fun restore(settings: QueueSettings): QueueLibrary = transaction { sequence ->
         val db = sequence.db
         QueueSelection(sequence).reset()
@@ -37,7 +42,7 @@ internal class QueueWindowStore(private val room: RoomDatabase) {
     }
 
     /** A late player callback may update only the exact active occurrence and durable current visit. */
-    suspend fun checkpoint(queueId: String, entryId: String, visitToken: String, positionMs: Long): Boolean = transaction { sequence ->
+    suspend fun checkpoint(queueId: String, entryId: String, visitToken: String, positionMs: Long): Boolean = transaction(sweepSelections = false) { sequence ->
         require(positionMs >= 0)
         sequence.db.compileStatement("""
             UPDATE queues SET positionMs = ? WHERE id = ? AND currentEntryId = ?
@@ -90,14 +95,27 @@ internal class QueueWindowStore(private val room: RoomDatabase) {
                 position, summary.revision), playbackWindow = window)
     }
 
-    private suspend fun <T> transaction(block: (QueueSequence) -> T): T = withContext(Dispatchers.IO) {
+    /** This store shares the actor and owning Room database lifetime. Set readiness only after schema commit. */
+    private suspend fun ensureSchema() {
+        if (schemaReady) return
+        schemaLock.withLock {
+            if (!schemaReady) {
+                room.withTransaction {
+                    val db = room.openHelper.writableDatabase
+                    QueueSequence.createSchema(db)
+                    QueueTraversal.createSchema(db)
+                }
+                schemaReady = true
+            }
+        }
+    }
+
+    private suspend fun <T> transaction(sweepSelections: Boolean = true, block: (QueueSequence) -> T): T = withContext(Dispatchers.IO) {
+        ensureSchema()
         room.withTransaction {
-            val db = room.openHelper.writableDatabase
-            QueueSequence.createSchema(db)
-            QueueTraversal.createSchema(db)
-            val sequence = QueueSequence(db)
-            QueueSelection(sequence).sweepStale()
-            block(sequence).also { QueueSelection(sequence).sweepStale() }
+            val sequence = QueueSequence(room.openHelper.writableDatabase)
+            if (sweepSelections) QueueSelection(sequence).sweepStale()
+            block(sequence).also { if (sweepSelections) QueueSelection(sequence).sweepStale() }
         }
     }
 }
