@@ -485,3 +485,4 @@ io.github.anastaci1a.localica.LastFmScrollStressTest
 io.github.anastaci1a.localica.LastFmArchivePullTest
 io.github.anastaci1a.localica.QueueSequenceTest
 io.github.anastaci1a.localica.QueueTraversalTest
+io.github.anastaci1a.localica.QueueHeaderSummaryTest
