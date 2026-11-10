@@ -38,4 +38,5 @@ data class QueuePlaybackWindow(val visits: List<QueueVisit>, val currentToken: S
 internal val ListeningQueue.currentVisit: QueueVisit? get() = if (playbackWindow != null) playbackWindow.current else journey?.current
 internal val ListeningQueue.previousVisit: QueueVisit? get() = if (playbackWindow != null) playbackWindow.previous else journey?.previous
 internal val ListeningQueue.nextVisit: QueueVisit? get() = if (playbackWindow != null) playbackWindow.next else journey?.next
-internal fun ListeningQueue.playbackVisits(): List<QueueVisit> = playbackWindow?.visits ?: journey?.window().orEmpty()
+internal fun ListeningQueue.playbackVisits(): List<QueueVisit> = playbackWindow?.visits
+    ?: requireNotNull(journey) { "Playback requires a prepared journey or durable window" }.window()

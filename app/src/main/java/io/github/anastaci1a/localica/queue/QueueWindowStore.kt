@@ -10,7 +10,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** The actor and viewport receive immutable windows; SQLite connections never escape this worker boundary. */
+/**
+ * The actor and viewport receive immutable windows; SQLite connections never escape this worker boundary.
+ * One store belongs to one actor and open Room lifetime; never reuse it after closing or replacing the database.
+ */
 internal class QueueWindowStore(private val room: RoomDatabase) {
     private val schemaLock = Mutex()
     @Volatile private var schemaReady = false
