@@ -54,7 +54,7 @@ if (process.argv[2] === '--pre-push') {
     checkTrailers(event.pull_request.body || '', 'Pull request body');
     commits = range(event.pull_request.head.sha, event.pull_request.base.sha);
   } else if (process.env.GITHUB_EVENT_NAME === 'push') {
-    commits = range(event.after, event.before);
+    commits = zero.test(event.after) ? [] : range(event.after, event.before);
   } else {
     commits = range(process.env.GITHUB_SHA);
   }
