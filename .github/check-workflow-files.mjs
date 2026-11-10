@@ -11,6 +11,8 @@ function commit(value) {
   catch { git('fetch', '--no-tags', 'origin', value); }
   return value;
 }
+// Accepted guard history predates this policy and includes the retired identity.yml.
+const policyBase = commit('8cfda782947b15d73c601a191fab900f2f5c0a7e');
 let base, head;
 if (process.argv[2] === '--range') {
   [, , , base, head] = process.argv;
@@ -43,7 +45,7 @@ for (const entry of files) {
 }
 for (const name of approved) if (!found.has(name)) errors.push(`Missing approved workflow file: ${name}`);
 // Inspect each introduced commit: a transient extra workflow must fail even if removed later.
-const commits = git('rev-list', head, `^${base}`).trim().split('\n').filter(Boolean);
+const commits = git('rev-list', head, `^${base}`, `^${policyBase}`).trim().split('\n').filter(Boolean);
 for (const sha of commits) {
   // Disabling rename detection treats every rename/copy destination as an addition.
   const added = git('diff-tree', '--root', '-r', '-m', '--no-commit-id', '--no-renames', '--diff-filter=A', '--name-only', '-z', sha, '--', '.github/workflows/').split('\0').filter(Boolean);
