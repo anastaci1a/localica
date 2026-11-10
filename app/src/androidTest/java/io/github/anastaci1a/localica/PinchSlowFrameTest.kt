@@ -71,7 +71,7 @@ class PinchSlowFrameTest {
         try {
             ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
                 val tracks = (0..80).map { Track("slow:$it", "Song ${it.toString().padStart(2, '0')}", fileName = "$it.mp3", relativePath = "$it.mp3") }
-                scenario.onActivity { activity -> activity.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+                scenario.onActivity { activity -> activity.setContent { EngineTheme { Box(Modifier.fillMaxSize()) {
                     BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
                         PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
                         queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
