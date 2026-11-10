@@ -293,6 +293,52 @@ class QueueTraversalTest {
         } finally { room.close() }
     }
 
+    @Test fun shuffledBehindArrivalFromAForwardCursorPreservesEveryRecordedVisit() {
+        for ((loop, current) in listOf(false to 117, true to 0, true to 117)) for (cursor in listOf(3, 64)) {
+            val queue = queue(211, current, JourneyModes(loop = loop))
+            val ids = queue.entries.map { it.id }
+            val modes = JourneyModes(shuffle = true, loop = loop)
+            var journey = queue.journey!!.reconcile(ids, queue.currentEntryId, modes, kotlin.random.Random(43))
+            repeat(cursor) { journey = journey.arrive(journey.next!!.token, ids) }
+            assertEquals(cursor, journey.cursor)
+            val behind = journey.window().first()
+            assertNotEquals(journey.history.first(), behind)
+            val retained = journey.history
+            val room = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+            try {
+                val saved = queue.copy(journey = journey, currentEntryId = journey.current!!.entryId)
+                runBlocking { room.queues().save(QueueLibrary(), QueueLibrary(listOf(saved), saved.id)) }
+                val db = room.openHelper.writableDatabase
+                QueueSequence.createSchema(db); QueueTraversal.createSchema(db)
+                db.beginTransaction()
+                try {
+                    val sequence = QueueSequence(db)
+                    QueueSequenceMigration(sequence).import(queue.id)
+                    val traversal = QueueTraversal(sequence)
+                    assertEquals(journey.window(), traversal.restore(queue.id, saved.currentEntryId, modes).visits)
+                    journey = journey.arrive(behind.token, ids)
+                    val window = requireNotNull(traversal.arriveBehind(queue.id, behind.token))
+                    assertEquals(listOf(behind) + retained, journey.history)
+                    assertEquals(journey.window(), window.visits)
+                    assertEquals(journey.current, window.current)
+                    assertEquals(retained.first(), window.next)
+                    db.query("SELECT entryId,cycle,token FROM queue_sequence_history WHERE queueId = ? ORDER BY position",
+                        arrayOf(queue.id)).use { rows ->
+                        assertEquals(journey.history, buildList {
+                            while (rows.moveToNext()) add(QueueVisit(rows.getString(0), rows.getLong(1), rows.getString(2)))
+                        })
+                    }
+                    db.query("SELECT entryId FROM queue_sequence_plan WHERE queueId = ? AND cycle = ? AND visited = 1",
+                        arrayOf(queue.id, journey.cycle)).use { rows ->
+                        assertEquals(journey.visited, buildSet { while (rows.moveToNext()) add(rows.getString(0)) })
+                    }
+                    assertTrue(window.visits.size <= QueuePlaybackWindow.MaximumVisits)
+                    db.setTransactionSuccessful()
+                } finally { db.endTransaction() }
+            } finally { room.close() }
+        }
+    }
+
     @Test fun missingLegacyJourneyInitializesExactShuffleOrderWithBoundedProjection() {
         for (size in listOf(1, 13, 211)) for (loop in listOf(false, true)) for (reshuffle in listOf(false, true)) {
             val modes = JourneyModes(shuffle = true, loop = loop, reshuffle = reshuffle)
