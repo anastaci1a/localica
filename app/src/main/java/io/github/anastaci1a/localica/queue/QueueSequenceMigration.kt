@@ -1,11 +1,12 @@
 package io.github.anastaci1a.localica.queue
 
 import android.util.JsonReader
+import android.util.JsonToken
 import io.github.anastaci1a.localica.library.TrackSnapshot
 import io.github.anastaci1a.localica.library.TrackSort
 import io.github.anastaci1a.localica.library.enumNameOrNull
-import java.io.InputStream
 import java.io.InputStreamReader
+import java.io.PushbackReader
 
 /** One-time, transactional conversion of schema-7 rows. No occurrence-sized Kotlin collection is created. */
 internal class QueueSequenceMigration(private val sequence: QueueSequence) {
@@ -82,18 +83,22 @@ internal class QueueSequenceMigration(private val sequence: QueueSequence) {
     }
 
     private fun importManualOrder(queueId: String) {
-        val hasOrder = db.query("SELECT length(orderState) > 0 FROM queues WHERE id = ?", arrayOf(queueId)).use {
-            check(it.moveToFirst()); it.getInt(0) != 0
-        }
-        if (!hasOrder) return
         var head: String? = null
         var previous: String? = null
         var sort = TrackSort.Manual
         var ascending = true
-        JsonReader(InputStreamReader(QueueOrderStream(queueId), Charsets.UTF_8)).use { json ->
+        val reader = PushbackReader(InputStreamReader(LegacyQueueOrderStream(db, queueId), Charsets.UTF_8), 1)
+        reader.use {
+            var first = reader.read()
+            while (first >= 0 && first.toChar().isWhitespace()) first = reader.read()
+            if (first < 0) return
+            reader.unread(first)
+            val json = JsonReader(reader)
+            var manualSeen = false
             json.beginObject()
             while (json.hasNext()) when (json.nextName()) {
                 "manual" -> {
+                    manualSeen = true
                     json.beginArray()
                     while (json.hasNext()) {
                         val id = json.nextString()
@@ -111,11 +116,18 @@ internal class QueueSequenceMigration(private val sequence: QueueSequence) {
                     }
                     json.endArray()
                 }
-                "sort" -> sort = enumNameOrNull<TrackSort>(json.nextString()) ?: TrackSort.Manual
-                "ascending" -> ascending = json.nextBoolean()
+                "sort" -> sort = if (json.peek() == JsonToken.STRING) {
+                    enumNameOrNull<TrackSort>(json.nextString()) ?: TrackSort.Manual
+                } else { json.skipValue(); TrackSort.Manual }
+                "ascending" -> ascending = when (json.peek()) {
+                    JsonToken.BOOLEAN -> json.nextBoolean()
+                    JsonToken.STRING -> !json.nextString().equals("false", ignoreCase = true)
+                    else -> { json.skipValue(); true }
+                }
                 else -> json.skipValue()
             }
             json.endObject()
+            require(manualSeen) { "The saved manual order is missing" }
         }
         // Reproduce SavedOrder.reconcile: insert a missing occurrence after its physical predecessor,
         // retaining the independent manual order of all surviving saved occurrences.
@@ -172,30 +184,4 @@ internal class QueueSequenceMigration(private val sequence: QueueSequence) {
         db.execSQL("UPDATE queue_sequence_manual_links SET nextId = ? WHERE queueId = ? AND id = ?", arrayOf(to, queueId, from))
     }
 
-    /** UTF-8 bytes are chunked before decoding, so even an ID crossing a chunk keeps every code point. */
-    private inner class QueueOrderStream(private val queueId: String) : InputStream() {
-        private var chunk = ByteArray(0)
-        private var index = 0
-        private var offset = 1L
-        override fun read(): Int {
-            if (index == chunk.size && !refill()) return -1
-            return chunk[index++].toInt() and 255
-        }
-        override fun read(bytes: ByteArray, start: Int, length: Int): Int {
-            require(start >= 0 && length >= 0 && start <= bytes.size - length)
-            if (length == 0) return 0
-            if (index == chunk.size && !refill()) return -1
-            val count = minOf(length, chunk.size - index)
-            chunk.copyInto(bytes, start, index, index + count)
-            index += count
-            return count
-        }
-        private fun refill(): Boolean {
-            chunk = db.query("SELECT substr(CAST(orderState AS BLOB),?,16384) FROM queues WHERE id = ?",
-                arrayOf(offset, queueId)).use { check(it.moveToFirst()); it.getBlob(0) }
-            offset += chunk.size
-            index = 0
-            return chunk.isNotEmpty()
-        }
-    }
 }

@@ -173,6 +173,68 @@ class QueueSequenceTest {
         assertEquals((70 until 90).toList(), sequence.page("q", 70, 20).entries.map { it.position })
     }
 
+    private fun savedOrder(sql: androidx.sqlite.db.SupportSQLiteDatabase, queueId: String): SavedOrder {
+        val ids = sql.query("SELECT id FROM queue_sequence_entries WHERE queueId = ? ORDER BY manualPosition", arrayOf(queueId)).use { rows ->
+            buildList { while (rows.moveToNext()) add(rows.getString(0)) }
+        }
+        return sql.query("SELECT sort,ascending FROM queue_sequence_state WHERE queueId = ?", arrayOf(queueId)).use {
+            check(it.moveToFirst())
+            SavedOrder(ids, TrackSort.valueOf(it.getString(0)), it.getInt(1) != 0)
+        }
+    }
+
+    @Test fun manualEditsMatchFullSavedOrderIncludingNoOpsAndUnchangedRandomPermutations() {
+        for (size in listOf(0, 1, 2, 7)) for (operation in listOf("reverse", "move", "adjacent", "randomize")) for (seed in 0..4) {
+            database { sequence, sql ->
+                val entries = List(size) { QueueEntry(id = "entry:$it", track = song(it)) }
+                val initial = io.github.anastaci1a.localica.queue.ListeningQueue(name = "Queue", entries = entries,
+                    order = SavedOrder(entries.reversed().map { it.id }, TrackSort.Title, false))
+                sequence.append("q", entries)
+                sql.execSQL("UPDATE queue_sequence_state SET sort = 'Title', ascending = 0 WHERE queueId = 'q'")
+                sql.execSQL("UPDATE queue_sequence_entries SET manualPosition = ? - position WHERE queueId = 'q'", arrayOf(size - 1))
+                val expected = when (operation) {
+                    "reverse" -> { sequence.reverse("q"); QueueEdits.reverse(initial) }
+                    "move" -> if (size < 2) initial else {
+                        sequence.move("q", entries.first().id, null)
+                        QueueEdits.moveBefore(initial, setOf(entries.first().id), null)
+                    }
+                    "adjacent" -> if (size < 2) initial else {
+                        sequence.move("q", entries.first().id, entries[1].id)
+                        QueueEdits.moveBefore(initial, setOf(entries.first().id), entries[1].id)
+                    }
+                    else -> {
+                        sequence.randomize("q", random = kotlin.random.Random(seed))
+                        QueueEdits.randomize(initial, false, kotlin.random.Random(seed))
+                    }
+                }
+                val label = "size=$size operation=$operation seed=$seed"
+                assertEquals(label, expected.entries.map { it.id }, ids(sequence))
+                assertEquals(label, expected.order, savedOrder(sql, "q"))
+            }
+        }
+    }
+
+    @Test fun blankAndDefaultedLegacyOrderFieldsMatchTheExistingCodec() {
+        val ids = listOf("first", "second", "third")
+        fun json() = org.json.JSONObject().put("manual", org.json.JSONArray(listOf("third", "deleted", "first")))
+        val cases = listOf("", " \t\n\r", "\u2003\u00a0", json().toString(),
+            json().put("ascending", false).toString(), json().put("ascending", "FALSE").toString(),
+            json().put("ascending", org.json.JSONObject.NULL).toString(), json().put("ascending", 42).toString(),
+            json().put("sort", "Title").toString(), json().put("sort", org.json.JSONObject.NULL).toString(),
+            json().put("sort", org.json.JSONObject().put("unknown", true)).toString())
+        for (text in cases) database { sequence, sql ->
+            sql.execSQL("INSERT INTO queues (id,name,createdAt,currentEntryId,positionMs,shuffle,repeat,orderState) VALUES ('legacy','Legacy',0,NULL,0,0,'Off',?)", arrayOf(text))
+            sql.compileStatement("INSERT INTO queue_entries (id,queueId,ordinal,track) VALUES (?,'legacy',?,?)").use { insert ->
+                ids.forEachIndexed { index, id ->
+                    insert.clearBindings(); insert.bindString(1, id); insert.bindLong(2, index.toLong())
+                    insert.bindString(3, TrackSnapshot.encode(song(index))); insert.executeInsert()
+                }
+            }
+            QueueSequenceMigration(sequence).import("legacy")
+            assertEquals(text, SavedOrderCodec.decode(text, ids), savedOrder(sql, "legacy"))
+        }
+    }
+
     @Test fun failedTransactionRollsBackRowsRevisionAndAggregates() {
         val room = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         try {

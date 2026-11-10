@@ -8,7 +8,8 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
     internal data class State(val queueId: String, val namespace: String, val cursor: Int,
         val historySize: Int, val cycle: Long, val modes: JourneyModes, val anchor: String?)
 
-    fun restore(queueId: String, currentEntryId: String?, modes: JourneyModes): QueuePlaybackWindow {
+    fun restore(queueId: String, currentEntryId: String?, modes: JourneyModes,
+        random: kotlin.random.Random = kotlin.random.Random.Default): QueuePlaybackWindow {
         sequence.checkWorker()
         check(db.inTransaction())
         var state = state(queueId)
@@ -48,6 +49,7 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
             ?: sequence.page(queueId, 0, 1).entries.firstOrNull()?.entry?.id
         if (selected == null) return QueuePlaybackWindow(emptyList(), null, emptyMap(), modes)
         val current = historyAt(queueId, state.cursor)
+        var insertedCurrent = false
         if (current == null || current.entryId != selected) {
             val visit = QueueVisit(selected, state.cycle)
             val insertion = state.cursor + 1
@@ -58,8 +60,69 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
                 namespace = if (modes.shuffle) state.namespace else UUID.randomUUID().toString(),
                 anchor = if (modes.shuffle) null else visit.token)
             write(state)
+            insertedCurrent = true
+        }
+        if (state.modes.shuffle) {
+            initializePlans(state, random)
+            if (insertedCurrent) db.execSQL("UPDATE queue_sequence_plan SET visited = 1 WHERE queueId = ? AND cycle = ? AND entryId = ?",
+                arrayOf(queueId, state.cycle, selected))
         }
         return window(state)
+    }
+
+    /** Persist an exact Fisher–Yates plan without allocating IDs or visits for the whole queue. */
+    private fun initializePlans(state: State, random: kotlin.random.Random) {
+        val count = sequence.revision(state.queueId).count
+        if (count == 0) return
+        val lastCycle = if (!state.modes.loop) state.cycle else minOf(Long.MAX_VALUE - 2, state.cycle) + 2
+        for (cycle in state.cycle..lastCycle) {
+            val exists = db.query("SELECT 1 FROM queue_sequence_plan WHERE queueId = ? AND cycle = ? LIMIT 1",
+                arrayOf(state.queueId, cycle)).use { it.moveToFirst() }
+            if (exists) continue
+            if (cycle > state.cycle && !state.modes.reshuffle) {
+                db.execSQL("INSERT INTO queue_sequence_plan (queueId,cycle,position,entryId,visited,scheduled,token) " +
+                    "SELECT queueId,?,position,entryId,0,0,NULL FROM queue_sequence_plan WHERE queueId = ? AND cycle = ?",
+                    arrayOf(cycle, state.queueId, cycle - 1))
+                continue
+            }
+            db.execSQL("INSERT INTO queue_sequence_plan (queueId,cycle,position,entryId,visited,scheduled,token) " +
+                "SELECT queueId,?,position,id,0,0,NULL FROM queue_sequence_entries WHERE queueId = ?",
+                arrayOf(cycle, state.queueId))
+            val anchor = if (cycle != state.cycle) null else db.query(
+                "SELECT entryId FROM queue_sequence_history WHERE queueId = ? AND cycle = ? ORDER BY position LIMIT 1",
+                arrayOf(state.queueId, cycle)).use { if (it.moveToFirst()) it.getString(0) else null }
+            val anchorPosition = anchor?.let { id -> db.query(
+                "SELECT position FROM queue_sequence_plan WHERE queueId = ? AND cycle = ? AND entryId = ?",
+                arrayOf(state.queueId, cycle, id)).use { if (it.moveToFirst()) it.getInt(0) else null } }
+            if (anchorPosition != null && anchorPosition > 0) {
+                db.execSQL("UPDATE queue_sequence_plan SET position = -1 WHERE queueId = ? AND cycle = ? AND position = ?",
+                    arrayOf(state.queueId, cycle, anchorPosition))
+                val reserve = Int.MAX_VALUE.toLong() + 1
+                db.execSQL("UPDATE queue_sequence_plan SET position = position + ? WHERE queueId = ? AND cycle = ? AND position >= 0 AND position < ?",
+                    arrayOf(reserve, state.queueId, cycle, anchorPosition))
+                db.execSQL("UPDATE queue_sequence_plan SET position = position - ? + 1 WHERE queueId = ? AND cycle = ? AND position >= ?",
+                    arrayOf(reserve, state.queueId, cycle, reserve))
+                db.execSQL("UPDATE queue_sequence_plan SET position = 0 WHERE queueId = ? AND cycle = ? AND position = -1",
+                    arrayOf(state.queueId, cycle))
+            }
+            val first = if (anchorPosition == null) 0 else 1
+            db.compileStatement("UPDATE queue_sequence_plan SET position = ? WHERE queueId = ? AND cycle = ? AND position = ?").use { swap ->
+                fun move(from: Int, to: Int) {
+                    swap.clearBindings()
+                    swap.bindLong(1, to.toLong()); swap.bindString(2, state.queueId)
+                    swap.bindLong(3, cycle); swap.bindLong(4, from.toLong())
+                    check(swap.executeUpdateDelete() == 1)
+                }
+                for (index in count - 1 downTo first + 1) {
+                    val other = random.nextInt(first, index + 1)
+                    if (index == other) continue
+                    move(index, -1); move(other, index); move(-1, other)
+                }
+            }
+            db.execSQL("UPDATE queue_sequence_plan SET visited = 1 WHERE queueId = ? AND cycle = ? AND entryId IN " +
+                "(SELECT entryId FROM queue_sequence_history WHERE queueId = ? AND cycle = ? AND position <= ?)",
+                arrayOf(state.queueId, cycle, state.queueId, cycle, state.cursor))
+        }
     }
 
     fun window(queueId: String): QueuePlaybackWindow {
@@ -168,6 +231,8 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
             "${namespace.length}:$namespace:$cycle:${id.length}:$id".toByteArray(Charsets.UTF_8)).toString()
 
         fun createSchema(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            QueueSequence(db).checkWorker()
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_visits_queue_cycle_entry_ordinal ON queue_visits(queueId,cycle,entryId,ordinal)")
             db.execSQL("""CREATE TABLE IF NOT EXISTS queue_sequence_traversal (
                 queueId TEXT NOT NULL PRIMARY KEY, namespace TEXT NOT NULL, cursor INTEGER NOT NULL,
                 historySize INTEGER NOT NULL, cycle INTEGER NOT NULL, shuffle INTEGER NOT NULL,

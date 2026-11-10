@@ -67,6 +67,36 @@ class QueueTraversalTest {
         compare(inserted.copy(journey = scheduled))
     }
 
+    @Test fun missingLegacyJourneyInitializesExactShuffleOrderWithBoundedProjection() {
+        for (size in listOf(1, 13, 211)) for (loop in listOf(false, true)) for (reshuffle in listOf(false, true)) {
+            val modes = JourneyModes(shuffle = true, loop = loop, reshuffle = reshuffle)
+            val queue = queue(size, size / 2, modes).copy(journey = null)
+            val reference = QueueJourney.start(queue.entries.map { it.id }, queue.currentEntryId, modes, kotlin.random.Random(31))
+            val room = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+            try {
+                runBlocking { room.queues().save(QueueLibrary(), QueueLibrary(listOf(queue), queue.id)) }
+                val db = room.openHelper.writableDatabase
+                QueueSequence.createSchema(db); QueueTraversal.createSchema(db)
+                db.beginTransaction()
+                try {
+                    val sequence = QueueSequence(db)
+                    QueueSequenceMigration(sequence).import(queue.id)
+                    val traversal = QueueTraversal(sequence)
+                    val window = traversal.restore(queue.id, queue.currentEntryId, modes, kotlin.random.Random(31))
+                    assertEquals(reference.window().map { it.entryId to it.cycle }, window.visits.map { it.entryId to it.cycle })
+                    assertEquals(reference.next?.entryId, window.next?.entryId)
+                    assertEquals(reference.previous?.entryId, window.previous?.entryId)
+                    assertTrue(window.visits.size <= QueuePlaybackWindow.MaximumVisits)
+                    assertEquals(window, traversal.restore(queue.id, queue.currentEntryId, modes, kotlin.random.Random(31)))
+                    db.query("SELECT COUNT(*) FROM queue_sequence_history WHERE queueId = ?", arrayOf(queue.id)).use {
+                        assertTrue(it.moveToFirst()); assertEquals(1, it.getInt(0))
+                    }
+                    db.setTransactionSuccessful()
+                } finally { db.endTransaction() }
+            } finally { room.close() }
+        }
+    }
+
     @Test fun storeRestoresOnlyTheActiveWindowAndRetainsExactLogicalCountsAndCursors() {
         val room = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         try {
