@@ -35,6 +35,13 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+        <!-- Headset and Bluetooth keys, and launchers such as Samsung Sound Assistant's "Favourite media app" (#828),
+             resolve MEDIA_BUTTON; the receiver cold-starts PlaybackService, which resumes the last queue. -->
+        <receiver android:name="androidx.media3.session.MediaButtonReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
         <service android:name=".editing.TagEditService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync" tools:node="merge" />
