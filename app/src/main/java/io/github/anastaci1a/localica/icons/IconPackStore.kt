@@ -53,7 +53,7 @@ object IconPacks {
     val library: StateFlow<List<StoredIconPack>> get() = libraryState
     val activeId: StateFlow<String?> get() = activeState
     private var loadedRoot: String? = null
-    private fun directory(context: Context) = File(context.filesDir, "icon-packs")
+    private fun directory(context: Context) = File(io.github.anastaci1a.localica.preferences.PreparedPreferences.filesDirectory(context), "icon-packs")
     private fun preferences(context: Context) = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "icon-packs")
 
     /** Loads all images once per process, and migrates the previous single-pack directory. */
@@ -63,7 +63,7 @@ object IconPacks {
             val target = File(root, backup.name.removeSuffix(".old"))
             if (target.exists()) backup.deleteRecursively() else check(backup.renameTo(target))
         }
-        val legacy = File(context.filesDir, "icon-pack")
+        val legacy = File(io.github.anastaci1a.localica.preferences.PreparedPreferences.filesDirectory(context), "icon-pack")
         if (legacy.isDirectory) {
             val target = File(root, "legacy")
             if (!target.exists()) {

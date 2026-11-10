@@ -26,7 +26,7 @@ data class ArtistPhotoWorkStatus(val pending: Int = 0, val failed: Set<String> =
 /** One serial queue shares the provider throttle. Each artist is checkpointed before advancing. */
 class ArtistPhotoWork(private val app: LocalicaApplication) {
     private val manager by lazy { WorkManager.getInstance(app) }
-    private val jobs = ArtistPhotoJobs(File(app.filesDir, "artist-photo-work"))
+    private val jobs = ArtistPhotoJobs(File(io.github.anastaci1a.localica.preferences.PreparedPreferences.filesDirectory(app), "artist-photo-work"))
     private val lock = Mutex()
     private val mutableStatus = MutableStateFlow(ArtistPhotoWorkStatus())
     val status = mutableStatus.asStateFlow()
@@ -100,6 +100,7 @@ class ArtistPhotoWork(private val app: LocalicaApplication) {
 class ArtistPhotoWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result {
         val app = applicationContext as LocalicaApplication
+        app.preferences.awaitReady()
         app.onlineMetadataConsent.load()
         val done = app.artistPhotoWork.drain { remaining, artist ->
             setProgress(workDataOf("remaining" to remaining, "artist" to artist))
