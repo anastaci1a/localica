@@ -45,8 +45,6 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (BuildConfig.DEBUG) android.os.StrictMode.setThreadPolicy(android.os.StrictMode.ThreadPolicy.Builder()
-            .detectDiskReads().detectDiskWrites().detectCustomSlowCalls().penaltyLog().build())
         enableEdgeToEdge()
         // The window can draw immediately. Mount saved-state consumers only after publication.
         setContent { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) }
