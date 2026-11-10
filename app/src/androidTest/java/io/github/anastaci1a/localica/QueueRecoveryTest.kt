@@ -28,6 +28,35 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Real durable journals, destructive/rollback faults and native source opens, using private fixtures. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class QueueRecoveryTest {
+    @Test fun batchCancelDrainsRealReadersAndUsesFreshRecoveryForEachSource() = fixture {
+        play()
+        val library = (InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as LocalicaApplication).library
+        val refresh = MetadataRefreshJournal(File(directory, "batch-refresh.json"))
+        val transaction = TagBatchTransaction(writer,
+            editing = { track, action -> library.withExclusiveFiles { queues.withFileEdit(track.id, action) } },
+            recovering = { track, action -> library.withExclusiveFiles { queues.withFileRecovery(track.id, action) } },
+            refresh = { track -> withContext(Dispatchers.IO) { refresh.include(track) } })
+        val batch = withContext(Dispatchers.IO) { writer.batches.begin(tracks.take(2),
+            TagPatch(mapOf(EditField.Title to "Batch title")), null, true) }
+        assertTrue(transaction.writeOne(batch.id, 0)!!.saved)
+        awaitMain { player.isPlaying }
+        val gate = WriteGate().also { documents.nextWrite = it }
+        val second = async { transaction.writeOne(batch.id, 1) }
+        try {
+            withTimeout(10000) { gate.entered.await() }
+            transaction.requestCancel(batch.id)
+        } finally { gate.release.countDown() }
+        second.await()
+        transaction.restore(batch.id)
+        files.forEachIndexed { index, file -> assertArrayEquals(originalBytes[index], file.readBytes()) }
+        awaitMain { player.mediaItemCount > 0 && player.playbackState == Player.STATE_READY }
+        withContext(Dispatchers.Main) { assertFalse(player.playWhenReady); assertFalse(player.isPlaying) }
+        assertNull(writer.pending())
+        assertNull(writer.batches.read())
+        assertEquals(tracks.take(2).map { it.id }.toSet(), refresh.read().map { it.id }.toSet())
+        assertEquals(original.entries, queues.state.value.library.active!!.entries)
+    }
+
     @Test fun failedOverwriteAndRollbackCannotReopenCurrentOrDuplicateSources() = fixture {
         play()
         val before = queues.state.value.library.active!!

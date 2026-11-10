@@ -86,6 +86,31 @@ class PlaylistDestinationUiTest {
         compose.runOnIdle { assertFalse(closed) }
     }
 
+    // #733: `onClick = ::add` froze `valid`, `controller` and `tracks` from the first composition.
+    @Test fun addButtonCommitsAfterTheDraftNameMakesTheDialogValid() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val controller = PlaylistController(database.playlists(), scope)
+        val song = Track("test:song", "Example", fileName = "example.mp3", relativePath = "example.mp3")
+        var finished = false
+        try {
+            runBlocking { controller.state.first { !it.loading } }
+            compose.setContent { if (contentMounted) LocalicaTheme {
+                val state by controller.state.collectAsState()
+                AddToPlaylistDialog(listOf(song), state, controller, {}, { finished = true })
+            } }
+            compose.onNodeWithText("Add", substring = false).assertIsNotEnabled()
+            compose.onNode(hasSetTextAction()).performTextInput("Fresh mix")
+            compose.onNodeWithText("Add", substring = false).assertIsEnabled().performClick()
+            compose.waitUntil(5000) { finished }
+            assertEquals(listOf("Fresh mix"), controller.state.value.playlists.map { it.name })
+        } finally {
+            scope.cancel()
+            database.close()
+        }
+    }
+
     @Test fun duplicateDraftCannotAddAndKeyboardSubmissionCommitsEveryDestination() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val database = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()

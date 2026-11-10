@@ -123,6 +123,8 @@ Recovery requires a final XML with every expected method and no failures, no obs
 
 Any other failure, a rebooted guest, a device that stays offline, a package that cannot be removed or an exact-method iteration keeps the original failure.
 
+On API 26 and 27 the test APK's own process (fixture providers, AndroidX Bootstrap/Empty activities) can die when UiAutomation's accessibility-state change reaches a just-detached window: `ViewRootImpl.onAccessibilityStateChanged` dereferences a null `mView` (fixed in Android 9; #730). The test APK's `TestPackageApplication` keeps that process's main looper running after exactly that framework NPE and rethrows every other exception. `TestProcessAccessibilityLaunchTest` reproduces the overlap.
+
 Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
 The `runner` input defaults to `hosted`. `runner=self-hosted` moves only the two focused emulator jobs to the owner’s locked-down single-job runner, for the owner’s manual dispatch on a branch (#592). A queued self-hosted job waits for the owner’s launcher and is never rerouted.

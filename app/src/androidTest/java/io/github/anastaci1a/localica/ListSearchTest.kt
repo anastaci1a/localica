@@ -195,7 +195,10 @@ class ListSearchTest {
                 var polls = 0
                 var focusedEditors = 0
                 try {
-                    compose.waitUntil(5000) {
+                    // The readiness contract is the 5000ms virtual budget below. Each poll can cost
+                    // ~1s of wall time on a loaded CI emulator, so a 5000ms wall deadline allowed only
+                    // five of the six polls readiness needs (#699 combined-700 HANDOFF).
+                    compose.waitUntil(20000) {
                         // Native traversal/semantics can cost hundreds of wall milliseconds.
                         // Pump a bounded 64ms slice, retaining every actual placement callback,
                         // rather than synchronizing once per virtual frame.

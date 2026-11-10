@@ -162,9 +162,21 @@ Use persisted Storage Access Framework tree grants without broad storage permiss
 | Operation | Ownership and recovery |
 | --- | --- |
 | Scan | Explicit `dataSync` foreground service, bounded wake lock, app-owned progress/cancellation. Survive Activity recreation/backgrounding, honor service timeouts and report process interruption next launch. Notification permission is optional. |
-| Tag batch | `dataSync` foreground service with bounded wake lock. Dismissing the editor leaves work running; stop after the current verified write. Keep eight local job outcomes and mark unfinished jobs interrupted on restart. |
+| Tag batch | One controller worker and a `dataSync` foreground service with bounded wake lock. Explicit background continuation retains ownership. Keep eight local job outcomes. [Durable batch decisions](#durable-tag-batches) survive restart. |
 | Tag transaction | Edit a private copy with Jaudiotagger; compare encoded audio/unrelated tags and verify requested values/artwork. Sync an original and record the recovery journal before overwrite. On failure attempt verified rollback; keep failed-file recovery separate from the durable batch-refresh journal. |
 | Playback during edits | [Playback during edits rules](#playback-during-edits). |
+
+### Durable tag batches
+
+Store batches in app-files `tag-batches`, beside single-file `tag-recovery`. Immutable ordered targets, patch, copied artwork and draft precede per-file records. A small atomic header owns phase, background intent and the admitted-entry watermark. Missing admitted entries fail closed, including no-undo entries.
+
+Canonical document identities coalesce tree-grant aliases. Capture and hash full first-touch originals before replacement. Bind each write to that original hash. Commit the verified batch outcome before discarding single-file recovery. Reopen uncertain atomic mutations before another decision.
+
+Preflight reserves all undo originals, two largest-file working copies, bounded tag/artwork growth and at least 64 MiB headroom. Count unknown lengths inside existing file scopes. Recheck headroom before each file. [Editing choices](product.md#metadata-and-artwork-editing) own insufficient-space and no-undo behavior.
+
+Cancellation closes next-file admission immediately. Persist its intent, reconcile retained single-file recovery, then restore every attempted entry under a fresh source-bound recovery scope. Verify originals and actual source hashes. External changes, missing originals and uncertain outcomes retain recovery rather than authorize replacement or cleanup.
+
+Done and cancellation arbitrate through durable terminal decisions. Read terminal headers before partially cleaned payloads; remove headers last. Unpublished originals block terminal cleanup. Successful background work commits automatically; failed work retains recovery. Atomic records support process interruption, without claiming arbitrary power-loss durability.
 
 ### Playback during edits
 
@@ -260,6 +272,8 @@ Pinch and scrollbar requests carry cancellation generations. Geometry restoratio
 
 Measure glass from foreground content, then fit its padded backdrop independently. Uniformly scale fixed menu layout into the moving viewport. Search keeps its field unscaled and top-aligned, with one opening rectangle animation and captured rendered geometry for reversible closing.
 
+Dialog height sizing is fixed for a retained presentation. Content-sized dialogs retain measured-height easing and fit. The tag editor declares a viewport fraction once. Immutable sizing and inset presets live in `ui.spec`; `ui.layout.PopupViewportSlot` owns the container, incoming inset consumption and remaining IME measurement that fixes content height. Popup intent still owns opening and return.
+
 `GlassMorphContent` shares the glass spring for in-surface size and face transitions. Only the destination's children are placed; outgoing faces retain drawing without input. The selection panel uses the same spring for its visible occupancy and retains its complete material and shadow during dismissal.
 
 Its own window's reported IME target or safe-bottom compatibility destination drives size and placement together. Retargets retain current position and velocity. Release modal input at dismissal, retaining its drawing until the trigger acknowledges restoration. Trigger and popup share deformation, corner policy and optical parameters. Blend their source recordings before handoff, without discarding unsettled rebound.
@@ -302,7 +316,11 @@ What None samples inside a finished panel material (frosted panels, the Queue dr
 
 The region stops where the recorded scene ends, so material bounds reaching past a screen or window edge never make a fill translucent. Opaque panels also ignore transparent pixels inside their source.
 
-On Android 13+, None maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes. Each reduction step is then one exact block mean of up to 8×8 texels in a single shader pass, drawn unscaled so no texture is sampled below half scale, and the tint/contrast shader takes the exact mean of the last level (at most 8×8 texels) directly: four GPU passes for a 512 px side instead of twelve, with the same coverage-weighted result.
+On Android 13+, None maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes.
+
+Each reduction step is then one exact block mean of up to 8×8 texels in a single shader pass, drawn unscaled so no texture is sampled below half scale.
+
+The tint/contrast shader takes the exact mean of the last level (at most 8×8 texels) directly: four GPU passes for a 512 px side instead of twelve, with the same coverage-weighted result.
 
 None replaces only the optical fill. Floating, panel, lift and selection shadows use the same appearance settings and drawing path in both renderers, so a renderer switch never changes a shadow.
 

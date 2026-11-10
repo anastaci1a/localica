@@ -30,7 +30,7 @@ internal fun GlassMorphContent(expanded: Boolean, modifier: Modifier = Modifier,
     fun phase() = if (reduced) { if (expanded) 1f else 0f } else progress.value.coerceIn(0f, 1f)
     Layout(modifier = modifier, content = {
         RetainedGlassFace(!expanded, { 1f - phase() }, content = compact)
-        RetainedGlassFace(expanded, ::phase, content = content)
+        RetainedGlassFace(expanded, { phase() }, content = content)
     }) { children, constraints ->
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val small = children[0].measure(loose)
