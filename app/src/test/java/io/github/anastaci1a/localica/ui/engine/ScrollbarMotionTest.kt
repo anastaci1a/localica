@@ -70,16 +70,24 @@ class ScrollbarMotionTest {
             assertEquals(0, h.clock.activeCount)
         }
     }
-    @Test(timeout = 5000) fun localAndGlobalReductionRetireEveryChannelWithoutReplay() {
+    @Test(timeout = 5000) fun localReductionPreservesBaseCurvesAndGlobalReductionRetiresWork() {
         for (global in listOf(false, true)) for (seconds in listOf(.064, .8, 1.3)) EngineHarness().use { h ->
             val motion = ScrollbarMotion(h.clock)
             motion.reveal(); motion.release(.2f); motion.contact(true, 1f)
             h.advance(.016); h.advance(seconds)
-            if (global) h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Reduced), StockUiSpec)
-            else motion.access(true)
-            assertEquals(0, h.clock.activeCount)
-            assertEquals(0f, motion.opacity(), 0f)
-            assertEquals(0f, motion.releaseOffset(), 0f)
+            val opacity = motion.opacity()
+            val release = motion.releaseOffset()
+            if (global) {
+                h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Reduced), StockUiSpec)
+                assertEquals(0, h.clock.activeCount)
+                assertEquals(0f, motion.opacity(), 0f)
+                assertEquals(0f, motion.releaseOffset(), 0f)
+            } else {
+                motion.access(true)
+                assertEquals(if (seconds < .18) 2 else 1, h.clock.activeCount)
+                assertEquals(opacity.toRawBits(), motion.opacity().toRawBits())
+                assertEquals(release.toRawBits(), motion.releaseOffset().toRawBits())
+            }
             assertEquals(1.5f, motion.scale(), 0f)
             motion.access(false)
             if (global) h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Standard), StockUiSpec)
@@ -92,14 +100,18 @@ class ScrollbarMotionTest {
             assertEquals(0, h.clock.activeCount)
         }
     }
-    @Test fun fixedReducedCancellationAndDisposalLeaveNoRegisteredWork() {
+    @Test fun fixedReducedKeepsBaseCurvesAndCancellationDisposalRetireWork() {
         EngineHarness().use { h ->
             val motion = ScrollbarMotion(h.clock, reduced = true)
             motion.reveal(); motion.release(.2f); motion.contact(true, 1f)
-            assertEquals(0, h.clock.activeCount)
+            assertEquals(2, h.clock.activeCount)
+            assertEquals(1f, motion.opacity(), 0f)
+            assertEquals(.2f, motion.releaseOffset(), 0f)
+            assertEquals(1.5f, motion.scale(), 0f)
+            h.advance(.016); h.advance(1.5)
             assertEquals(0f, motion.opacity(), 0f)
             assertEquals(0f, motion.releaseOffset(), 0f)
-            assertEquals(1.5f, motion.scale(), 0f)
+            assertEquals(0, h.clock.activeCount)
             motion.access(false)
             motion.reveal(); motion.release(.2f); motion.contact(false, 1f)
             assertEquals(3, h.clock.activeCount)
@@ -190,6 +202,61 @@ class ScrollbarMotionTest {
                 observer.clear()
                 motion.dispose()
             }
+        }
+    }
+    @Test fun reducedRevealAndReleaseKeepTheExactBaseCurvesAndIdleDelay() {
+        EngineHarness().use { h ->
+            val motion = ScrollbarMotion(h.clock, reduced = true)
+            motion.reveal()
+            assertEquals("Reduced activity reveals the scrollbar immediately", 1f, motion.opacity(), 0f)
+            assertEquals("Only the idle timer is registered", 1, h.clock.activeCount)
+            h.advance(.016)
+            androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+            var invalidations = 0
+            val scope = Any()
+            val observer = androidx.compose.runtime.snapshots.SnapshotStateObserver { it() }
+            val changed: (Any) -> Unit = { invalidations++ }
+            observer.start()
+            try {
+                repeat(10) {
+                    observer.observeReads(scope, changed) { assertEquals(1f, motion.opacity(), 0f) }
+                    h.advance(.016)
+                    androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+                    assertEquals("The Reduced idle timer does not resample presentation", 0, invalidations)
+                }
+                h.advance(1.039999999)
+                assertEquals("Visible until the idle deadline", 1f, motion.opacity(), 0f)
+                assertEquals(1, h.clock.activeCount)
+                h.advance(.000000001)
+                androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+                val incoming = TargetBasedAnimation(tween<Float>(220, 1200), Float.VectorConverter, 1f, 0f)
+                assertEquals("The base fade begins at the idle deadline", incoming.getValueFromNanos(1_200_000_000).toRawBits(), motion.opacity().toRawBits())
+                h.advance(.08)
+                androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+                assertEquals(incoming.getValueFromNanos(1_280_000_000).toRawBits(), motion.opacity().toRawBits())
+                assertTrue("The real fade invalidates presentation", invalidations > 0)
+                h.advance(.14)
+                assertEquals(0f, motion.opacity(), 0f)
+                assertEquals(0, h.clock.activeCount)
+            } finally {
+                observer.stop()
+                observer.clear()
+            }
+            motion.reveal()
+            h.advance(.016); h.advance(.8)
+            motion.reveal()
+            h.advance(.016); h.advance(.8)
+            assertEquals("New activity replaces the prior idle deadline", 1f, motion.opacity(), 0f)
+            h.advance(.62)
+            assertEquals(0f, motion.opacity(), 0f)
+            assertEquals(0, h.clock.activeCount)
+            motion.release(.3f)
+            assertEquals("Reduced release keeps the base starting offset", .3f, motion.releaseOffset(), 0f)
+            h.advance(.016); h.advance(.08)
+            val release = TargetBasedAnimation(tween<Float>(180), Float.VectorConverter, .3f, 0f)
+            assertEquals(release.getValueFromNanos(80_000_000).toRawBits(), motion.releaseOffset().toRawBits())
+            motion.reveal(); motion.dispose()
+            assertEquals(0, h.clock.activeCount)
         }
     }
 }

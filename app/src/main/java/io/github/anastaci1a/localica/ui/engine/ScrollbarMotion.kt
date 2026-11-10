@@ -107,7 +107,7 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
 }
 
 /** One component owns reveal, grip and release, with separate registered motion channels.
- * Entering Reduced retires every channel immediately and never replays stale activity.
+ * App Reduced changes grip motion only, preserving the incoming reveal and release timelines.
  */
 @Stable
 internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolean = false,
@@ -121,11 +121,11 @@ internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolea
     internal fun opacity() = opacity.value()
     fun reveal() {
         check(!disposed)
-        opacity.start(1f, 0f, ScrollbarSpec.fadeMillis, ScrollbarSpec.idleMillis, reduced = reduced)
+        opacity.start(1f, 0f, ScrollbarSpec.fadeMillis, ScrollbarSpec.idleMillis)
     }
     fun release(gap: Float) {
         check(!disposed)
-        release.start(gap, 0f, ScrollbarSpec.releaseMillis, reduced = reduced)
+        release.start(gap, 0f, ScrollbarSpec.releaseMillis)
     }
     fun contact(held: Boolean, speed: Float) {
         check(!disposed)
@@ -138,8 +138,7 @@ internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolea
         clock.checkMutation()
         if (reduced && !this.reduced) {
             val stamp = clock.stampNow
-            release.reduce(stamp)
-            opacity.reduce(stamp)
+            // The pinned component changes only grip when app Reduced changes.
             grip.reduce(stamp)
         }
         this.reduced = reduced
