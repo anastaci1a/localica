@@ -45,11 +45,23 @@ for mode in playback scan tag lastfm; do
     grep -E "[[:space:]]$pid[[:space:]]+$pid[[:space:]].*ExoPlayerImpl[[:space:]]*: Release $player_id[[:space:]]" "$directory/logcat.txt" > "$directory/player-release.txt"
   fi
   if [[ "$mode" == scan || "$mode" == tag ]]; then
-    if [[ "$mode" == scan ]]; then service=ScanService; notification=9001; else service=TagEditService; notification=9010; fi
+    if [[ "$mode" == scan ]]; then service=ScanService; notification=9001; service_package=scanner; else service=TagEditService; notification=9010; service_package=editing; fi
     # API26 does not emit am_create_service on these images. The service's foreground notification
     # is an independently recorded binder-side entry witness, with exact PID/package/notification ID.
-    grep -F 'notification_enqueue:' "$directory/events.txt" | grep -F ",$pid,$app,$notification," > "$directory/foreground-notification.txt"
-    printf 'service-entry=%s;foreground-notification=%s;same-pid=true\n' "$service" "$notification" >> "$directory/receipt.txt"
+    if grep -F 'notification_enqueue:' "$directory/events.txt" | grep -F ",$pid,$app,$notification," > "$directory/foreground-notification.txt"; then
+      printf 'service-entry=%s;foreground-notification=%s;same-pid=true\n' "$service" "$notification" >> "$directory/receipt.txt"
+    else
+      # Recent Android versions defer notifications for short foreground work. Bind the system's
+      # exact component start to this PID's process-start interval; stale or restarted owners fail.
+      awk -v pid="$pid" -v app="$app" -v component="$app/io.github.anastaci1a.localica.$service_package.$service" '
+        index($0, "am_proc_start: [0," pid ",") && index($0, "," app ",") { owner=1; next }
+        owner && index($0, "am_proc_start:") && index($0, "," app ",") { owner=0 }
+        owner && index($0, "am_proc_died: [0," pid ",") { owner=0 }
+        owner && index($0, "am_foreground_service_start: [0," component ",") { print; seen=1 }
+        END { exit !seen }
+      ' "$directory/events.txt" > "$directory/foreground-service.txt"
+      printf 'service-entry=%s;foreground-component=true;process-owner-pid=%s;same-pid=true\n' "$service" "$pid" >> "$directory/receipt.txt"
+    fi
   fi
   printf '%s\ntracks=13400\nstrictmode=fatal\n' "$receipt" >> "$directory/receipt.txt"
   adb -s "$serial" shell am force-stop "$app"

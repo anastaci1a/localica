@@ -49,7 +49,18 @@ elif args[0] == 'logcat':
             service = 'ScanService' if mode == 'scan' else 'TagEditService'
             event_pid = pid + 50 if fail == 'wrong-service-pid' else pid
             notification = 9001 if mode == 'scan' else 9010
-            print(f'11-10 11:00:00.000 100 100 I notification_enqueue: [10001,{event_pid},io.github.anastaci1a.localica.debug,{notification},NULL,0,Notification(),0]')
+            if fail.startswith('deferred-'):
+                owner_pid = pid + 50 if fail == 'deferred-wrong-pid' else pid
+                process = f'11-10 11:00:00.000 100 100 I am_proc_start: [0,{owner_pid},10001,io.github.anastaci1a.localica.debug,added application,io.github.anastaci1a.localica.debug]'
+                service_package = 'scanner' if mode == 'scan' else 'editing'
+                event = f'11-10 11:00:01.000 100 100 I am_foreground_service_start: [0,io.github.anastaci1a.localica.debug/io.github.anastaci1a.localica.{service_package}.{service},1,ACTIVITY_STARTER,36]'
+                if fail == 'deferred-stale': print(event)
+                print(process)
+                if fail == 'deferred-restarted': print(process.replace(str(owner_pid), str(owner_pid + 60), 1))
+                if fail == 'deferred-dead': print(f'11-10 11:00:00.500 100 100 I am_proc_died: [0,{owner_pid},io.github.anastaci1a.localica.debug,0]')
+                if fail not in ('deferred-stale', 'deferred-missing'): print(event)
+            else:
+                print(f'11-10 11:00:00.000 100 100 I notification_enqueue: [10001,{event_pid},io.github.anastaci1a.localica.debug,{notification},NULL,0,Notification(),0]')
     elif '-b' not in args:
         log_pid = pid + 50 if fail == 'wrong-player-pid' else pid
         print(f'11-10 11:00:00.000 {log_pid} {log_pid} I ExoPlayerImpl: Init ab12 [AndroidXMedia3]')
@@ -82,6 +93,15 @@ class PreferenceEntryAdmission(unittest.TestCase):
         for receipt in receipts.values():
             self.assertIn('process-absent-before=true', receipt)
             self.assertIn('tracks=13400\nstrictmode=fatal', receipt)
+
+    def test_deferred_notification_requires_component_in_matching_live_process_interval(self):
+        result, receipts, _ = self.run_protocol('deferred-valid')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn('foreground-component=true;process-owner-pid=1002', receipts['scan'])
+        for control in ('deferred-wrong-pid', 'deferred-stale', 'deferred-restarted', 'deferred-dead', 'deferred-missing'):
+            with self.subTest(control=control):
+                result, _, _ = self.run_protocol(control)
+                self.assertNotEqual(0, result.returncode)
 
     def test_missing_or_failed_instrumentation_receipts_are_rejected(self):
         for control in ('failed-instrumentation', 'missing-receipt'):
