@@ -43,12 +43,14 @@ class LastFmMatchCacheTest {
     @Test fun streamedCountsEqualTheFullMatchOnAMixedCorpus() {
         val random = java.util.Random(779)
         val titles = listOf("Orbit", "Moss", "Delta", "Glass", "Harbor", "Nova", "Prism", "Reed", "Slate", "Tide")
-        val tracks = (0 until 400).map { n ->
+        val singles = (0 until 400).map { n ->
             val artist = "Artist ${n % 37}"
             val title = "${titles[n % titles.size]} ${titles[(n * 7) % titles.size]} ${n / 10}"
             Track("t$n", title, artist, "Album ${n / 10}${if (n % 23 == 0) " (Deluxe)" else ""}", 150_000L + (n % 50) * 1000, "$n.mp3", "$n.mp3",
                 id = "t$n", albumArtist = artist, musicBrainzId = if (n % 11 == 0) "mb-${n / 2}" else null)
         }
+        // Every 29th song also exists as a second copy of the same recording (another folder, same tags).
+        val tracks = singles + singles.filterIndexed { index, _ -> index % 29 == 0 }.map { it.copy(uri = "${it.id}-copy", id = "${it.id}-copy", fileName = "${it.id}-copy.mp3") }
         val remote = (0 until 600).map { i ->
             val base = tracks[random.nextInt(tracks.size)]
             when (i % 6) {
@@ -62,13 +64,62 @@ class LastFmMatchCacheTest {
         }
         val archive = LastFmSnapshot("user", 7, remote, emptyMap(), 1)
         val mappings = mapOf(remote[0].key to "t3", remote[6].key to LastFmMatcher.NONE, remote[12].key to LastFmMatcher.REVIEW)
-        val full = LastFmMatcher.match(archive, tracks, mappings)
-        val streamed = LastFmMatcher.matchCounts(archive, tracks, mappings)
-        assertTrue("fixture must exercise reviews", full.review.isNotEmpty()); assertTrue(full.editions.isNotEmpty() || full.resolutions.any { it.tracks.size > 1 } || true)
-        assertEquals(full.counts, streamed.counts); assertEquals(full.recordingGroups, streamed.recordingGroups)
-        assertEquals(full.matched, streamed.matched); assertEquals(full.notInLibrary, streamed.notInLibrary); assertEquals(full.dismissed, streamed.dismissed)
-        assertFalse(streamed.complete); assertTrue(streamed.resolutions.isEmpty() && streamed.review.isEmpty())
-        assertTrue(full.counts.isNotEmpty() && full.notInLibrary > 0 && full.dismissed >= 1)
+        val oracle = LegacyLastFmMatchingEngine(tracks).match(archive, mappings)
+        assertTrue("fixture must exercise reviews", oracle.review.isNotEmpty())
+        assertTrue("fixture must exercise multi-recording resolutions", oracle.resolutions.any { it.tracks.size > 1 })
+        assertTrue(oracle.counts.isNotEmpty() && oracle.notInLibrary > 0 && oracle.dismissed >= 1 && oracle.resolutions.any { it.manual })
+        assertTrue(oracle.resolutions.map { it.tier }.toSet().size >= 2)
+        assertSameFullResult(oracle, LastFmMatcher.match(archive, tracks, mappings))
+        assertSameCounts(oracle, LastFmMatcher.matchCounts(archive, tracks, mappings))
+    }
+
+    /** Strict full-output equality against the frozen pre-#779 engine: order, tiers, scores, reasons and manual flags included. */
+    private fun assertSameFullResult(oracle: LastFmMatches, actual: LastFmMatches) {
+        assertEquals(oracle.counts, actual.counts); assertEquals(oracle.recordingGroups, actual.recordingGroups)
+        assertEquals(oracle.matched, actual.matched); assertEquals(oracle.notInLibrary, actual.notInLibrary); assertEquals(oracle.dismissed, actual.dismissed)
+        assertEquals(oracle.resolutions.map { listOf(it.remote, it.tracks.map { t -> t.id }, it.tier, it.reason, it.score, it.manual) },
+            actual.resolutions.map { listOf(it.remote, it.tracks.map { t -> t.id }, it.tier, it.reason, it.score, it.manual) })
+        assertEquals(oracle.review.map { listOf(it.remote, it.candidates.map { t -> t.id }, it.reason, it.tier) },
+            actual.review.map { listOf(it.remote, it.candidates.map { t -> t.id }, it.reason, it.tier) })
+        assertEquals(oracle.editions.map { listOf(it.remote, it.candidates.map { t -> t.id }, it.reason, it.tier) },
+            actual.editions.map { listOf(it.remote, it.candidates.map { t -> t.id }, it.reason, it.tier) })
+        assertEquals(oracle.unmatched, actual.unmatched); assertEquals(oracle.judgments.size, actual.judgments.size); assertEquals(oracle.clearCount, actual.clearCount)
+        assertTrue(actual.complete); assertSame(oracle.sourceSnapshot, actual.sourceSnapshot)
+    }
+
+    private fun assertSameCounts(oracle: LastFmMatches, streamed: LastFmMatches) {
+        assertEquals(oracle.counts, streamed.counts); assertEquals(oracle.recordingGroups, streamed.recordingGroups)
+        assertEquals(oracle.matched, streamed.matched); assertEquals(oracle.notInLibrary, streamed.notInLibrary); assertEquals(oracle.dismissed, streamed.dismissed)
+        assertFalse(streamed.complete); assertTrue(streamed.resolutions.isEmpty() && streamed.review.isEmpty() && streamed.editions.isEmpty() && streamed.unmatched.isEmpty())
+        assertSame(oracle.sourceSnapshot, streamed.sourceSnapshot)
+    }
+
+    /** Linked editions, a group joined transitively through a MusicBrainz recording, and saturating totals. */
+    @Test fun editionsTransitiveGroupsAndSaturationFoldExactly() {
+        val standard = Track("std", "Song", "Artist", "Album", 200_000, "std.flac", "std.flac", id = "std", albumArtist = "Artist")
+        val deluxe = standard.copy(uri = "dlx", id = "dlx", fileName = "dlx.flac", musicBrainzId = "rec-1")
+        val live = standard.copy(uri = "live", id = "live", fileName = "live.flac", album = "Live Album", musicBrainzId = "rec-1")
+        val unrelated = standard.copy(uri = "other", id = "other", title = "Other", fileName = "other.flac")
+        val library = listOf(standard, deluxe, live, unrelated)
+        val plain = LastFmTrack("Artist", "Song", 10, "Album", durationMs = 200_000)
+        val recording = LastFmTrack("Artist", "Song", 5, "Live Album", mbid = "rec-1", durationMs = 200_000)
+        val huge = LastFmTrack("Artist", "Other", Long.MAX_VALUE - 1, "Album", durationMs = 200_000)
+        val hugeAgain = LastFmTrack("Artist", "Other", 7, "Album", mbid = null, durationMs = 200_000)
+        val archive = LastFmSnapshot("user", 1, listOf(plain, recording, huge, hugeAgain), emptyMap(), 1)
+        val oracle = LegacyLastFmMatchingEngine(library).match(archive, emptyMap())
+        val full = LastFmMatcher.match(archive, library, emptyMap())
+        val streamed = LastFmMatcher.matchCounts(archive, library, emptyMap())
+        // Linked editions: the plain song resolves to both album copies and is listed as an edition decision.
+        val editions = oracle.resolutions.first { it.remote == plain }
+        assertEquals(setOf("std", "dlx"), editions.tracks.map { it.id }.toSet()); assertTrue(oracle.editions.any { it.remote == plain })
+        // The recording id links the live copy to the deluxe copy, and through it to the standard copy: one group of three.
+        val linked = oracle.resolutions.first { it.remote == recording }
+        assertTrue(linked.tracks.map { it.id }.containsAll(listOf("dlx", "live")))
+        assertEquals(1, listOf("std", "dlx", "live").map { oracle.recordingGroups.getValue(it) }.toSet().size)
+        assertEquals(15L, oracle.counts["std"]); assertEquals(15L, oracle.counts["dlx"]); assertEquals(15L, oracle.counts["live"])
+        // Saturation: totals never overflow.
+        assertEquals(Long.MAX_VALUE, oracle.counts["other"])
+        assertSameFullResult(oracle, full); assertSameCounts(oracle, streamed)
     }
     private val song = Track("song", "Song", "Artist", "Album", 200_000, "song.flac", "song.flac")
     private val other = song.copy(uri = "other", id = "other", title = "Other")

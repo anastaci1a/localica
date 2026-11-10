@@ -135,16 +135,23 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
             } else if (strong.isNotEmpty() && mapping != LastFmMatcher.REVIEW) {
                 chosen = expand(strong); reason = "Recording MusicBrainz ID agrees"; score = 100
             } else {
-                val evidence = queries(remote).flatMap { query -> candidates(query).mapNotNull { score(remote, query, it) } }
-                    .groupBy { it.local.track.id }.values.map { rows -> rows.maxBy { it.score } }
-                    .sortedWith(compareByDescending<Evidence> { it.score }.thenBy { it.local.track.id })
+                // Best evidence per library song, first maximum kept (as maxBy did), then a total order:
+                // the same list the former flatMap/groupBy/sortedWith pipeline produced, without its temporaries.
+                bestByTrack.clear(); evidence.clear()
+                for (query in queries(remote)) forEachCandidate(query) { local ->
+                    val found = score(remote, query, local) ?: return@forEachCandidate
+                    val id = local.track.id
+                    val current = bestByTrack[id]
+                    if (current == null || found.score > current.score) bestByTrack[id] = found
+                }
+                evidence.addAll(bestByTrack.values); evidence.sortWith(evidenceOrder)
                 val top = evidence.firstOrNull()
                 if (mapping == LastFmMatcher.REVIEW) {
                     sink.review(remote, { (strong + evidence.map { it.local }).distinctBy { it.track.id }.map { it.track } }, "Automatic match undone by you")
                     continue
                 }
                 if (top == null) { sink.absent(remote); continue }
-                val family = evidence.filter { sameFamily(listOf(top.local, it.local)) }
+                val family = evidence.filter { sameFamily(top.local, it.local) }
                 val competitor = evidence.firstOrNull { candidate -> family.none { it.local.track.id == candidate.local.track.id } }
                 if (top.tier == LastFmMatchTier.UNCERTAIN || competitor != null && top.score - competitor.score < 10) {
                     sink.review(remote, { evidence.map { it.local.track } },
@@ -175,16 +182,28 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
         return listOfNotNull(original, parsed).distinctBy { it.name }
     }
 
+    private val bestByTrack = HashMap<String, Evidence>()
+    private val evidence = ArrayList<Evidence>()
+    private val evidenceOrder = compareByDescending<Evidence> { it.score }.thenBy { it.local.track.id }
+
     /** Insertion order equals the former list order; locals are unique per track id, so the set deduplicates identically. */
-    private fun candidates(query: Query): List<Local> {
+    private inline fun forEachCandidate(query: Query, action: (Local) -> Unit) {
         val scratch = candidateScratch
         scratch.clear()
         byTitle[query.name.title]?.let(scratch::addAll)
         byArtist[query.name.artist]?.let(scratch::addAll)
         if (query.knownAlbum) byAlbum[query.album]?.let(scratch::addAll)
         query.lookupTokens.forEach { token -> tokenIndex[token]?.takeIf { it.size <= 256 }?.let(scratch::addAll) }
-        return scratch.toList()
+        for (local in scratch) action(local)
     }
+
+    /** [sameFamily] for exactly two rows, without building the intermediate lists. */
+    private fun sameFamily(a: Local, b: Local): Boolean =
+        a.name.artist == b.name.artist && a.name.title == b.name.title &&
+            a.album == b.album && a.album.isNotBlank() &&
+            !(a.name.featured.isNotBlank() && b.name.featured.isNotBlank() && a.name.featured != b.name.featured) &&
+            !(a.mbid != null && b.mbid != null && a.mbid != b.mbid) &&
+            duration(a.track.durationMs, b.track.durationMs) != -1
 
     private fun score(remote: LastFmTrack, q: Query, local: Local): Evidence? {
         val exactTitle = q.name.title == local.name.title && q.name.title.isNotBlank()
@@ -274,7 +293,7 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
         fun artistTokens(value: String) = tokens(LastFmNames.text(value)).filterNot { it == "the" || it == "and" }.toSet()
         fun knownAlbum(value: String) = value.isNotBlank() && value !in setOf("unknown", "unknown album", "none", "compilation")
         fun setSimilarity(a: Set<String>, b: Set<String>) = if (a.isEmpty() || b.isEmpty()) 0.0 else
-            2.0 * a.intersect(b).size / (a.size + b.size)
+            2.0 * a.count { it in b } / (a.size + b.size)
         fun orderedSimilarity(a: List<String>, b: List<String>): Double {
             if (a.isEmpty() || b.isEmpty() || a.size > 64 || b.size > 64) return 0.0
             val previous = IntArray(b.size + 1)
