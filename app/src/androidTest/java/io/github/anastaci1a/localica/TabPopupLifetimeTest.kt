@@ -82,10 +82,11 @@ class TabPopupLifetimeTest {
             } }
             compose.waitUntil(5000) { !controller.state.value.loading }
             fun tab(label: String) = compose.onNodeWithText(label, useUnmergedTree = true)
-            tab("Matches").performScrollTo().performClick()
-            openSelector({ compose.onNodeWithText("Match group").performScrollTo().performClick() }, midMinimize)
+            compose.onNodeWithText("Review matches").performScrollTo().performClick()
+            compose.onNodeWithTag("setting:Match group").performScrollTo().assertIsDisplayed()
+            openSelector({ compose.onNodeWithText("Match group").performClick() }, midMinimize)
             switchAndAssertGone({ tab("Overview").performClick() }) {
-                compose.onAllNodesWithText("Match group").assertCountEquals(0)
+                compose.onAllNodesWithTag("setting:Match group").assertCountEquals(0)
                 compose.onAllNodesWithText("Select").assertCountEquals(0)
             }
         } finally { compose.mainClock.autoAdvance = true; scope.cancel() }
