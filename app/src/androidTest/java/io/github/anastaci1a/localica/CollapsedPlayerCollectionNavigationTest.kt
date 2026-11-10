@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import android.os.Build
@@ -33,11 +34,17 @@ class CollapsedPlayerCollectionNavigationTest {
         entries = tracks.map { SongRow(it.id, it) })
     private val events = SheetEvents()
     private val contentEvents = mutableListOf<Pair<String, Boolean>>()
+    private val liveRetainedHosts = mutableMapOf<String, Int>()
+    private var navigationContentBoundary = 0
+    private var requestedDestination: String? = null
+    private var navigationFrame = 0L
     private lateinit var records: File
     private lateinit var access: MotionAccess
     private data class FrameRecord(val source: String, val api: Int, val frameMs: Long,
         val access: MotionAccess, val referenceTravel: Float, val phase: Float, val queuePhase: Float,
         val basisJoins: Int, val contentEvents: List<Pair<String, Boolean>>)
+    private data class StartupRecord(val frame: FrameRecord, val phaseSettled: Boolean,
+        val queueSettled: Boolean, val liveHosts: Map<String, Int>)
 
     private class SheetEvents : MotionEvents {
         var phase: MotionFloat? = null
@@ -76,6 +83,9 @@ class CollapsedPlayerCollectionNavigationTest {
             title = track.title) else PlaybackState(connected = true)
         compose.setContent { CompositionLocalProvider(LocalSheetContentObserver provides { name, mounted ->
             contentEvents += name to mounted
+            val count = (liveRetainedHosts[name] ?: 0) + if (mounted) 1 else -1
+            check(count >= 0)
+            if (count == 0) liveRetainedHosts.remove(name) else liveRetainedHosts[name] = count
         }) { LocalicaTheme {
             val clock = LocalUiClock.current
             SideEffect { clock.events = events }
@@ -85,7 +95,28 @@ class CollapsedPlayerCollectionNavigationTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().size == 1 }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
-        compose.runOnIdle { events.checking = true }
+        val startup = compose.runOnIdle {
+            val phase = checkNotNull(events.phase)
+            val queue = checkNotNull(events.queuePhase)
+            val context = checkNotNull(phase.clock.context)
+            StartupRecord(FrameRecord(BuildConfig.SOURCE_SHA, Build.VERSION.SDK_INT,
+                compose.mainClock.currentTime, context.access, context.fullPlayerReferenceTravelPx,
+                phase.value(), queue.value(), events.basisJoins, contentEvents.toList()),
+                phase.settled, queue.settled, liveRetainedHosts.toMap())
+        }
+        records.appendText("startup\t" + listOf(startup.frame, startup.phaseSettled,
+            startup.queueSettled, startup.liveHosts).joinToString("\t") + "\n")
+        compose.runOnIdle {
+            assertEquals(access, startup.frame.access)
+            assertTrue("Navigation begins at an exactly resting player", startup.phaseSettled)
+            assertEquals(0f, startup.frame.phase, 0f)
+            assertTrue("Navigation begins at an exactly resting Queue", startup.queueSettled)
+            assertEquals(0f, startup.frame.queuePhase, 0f)
+            assertTrue("Navigation begins without any live retained host", startup.liveHosts.isEmpty())
+            navigationContentBoundary = startup.frame.contentEvents.size
+            events.checking = true
+        }
+        compose.onAllNodesWithTag("browser-list").assertCountEquals(1)
     }
 
     private fun assertClosedFrame() {
@@ -100,7 +131,8 @@ class CollapsedPlayerCollectionNavigationTest {
             assertTrue("The Queue must stay at its closed rest", queue.settled)
             assertEquals(0f, queue.value(), 0f)
             assertTrue("No transient phase segment is admitted", events.movingJoins.isEmpty())
-            assertTrue("No retained Player or Queue content may mount, even with cleared semantics", contentEvents.isEmpty())
+            assertTrue("No retained Player or Queue content may mount, even with cleared semantics",
+                contentEvents.drop(navigationContentBoundary).isEmpty())
             FrameRecord(BuildConfig.SOURCE_SHA, Build.VERSION.SDK_INT, compose.mainClock.currentTime,
                 context.access, context.fullPlayerReferenceTravelPx, phase.value(), queue.value(),
                 events.basisJoins, contentEvents.toList())
@@ -110,7 +142,19 @@ class CollapsedPlayerCollectionNavigationTest {
             record.contentEvents).joinToString("\t") + "\n")
         compose.onAllNodesWithTag("queue-surface", useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodesWithContentDescription("Collapse player", useUnmergedTree = true).assertCountEquals(0)
-        compose.onAllNodesWithTag("browser-list").assertCountEquals(1)
+        val destination = requestedDestination
+        if (destination != null) {
+            val browse = compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes()
+            val rows = compose.onAllNodesWithTag(destination).fetchSemanticsNodes()
+            assertTrue("A requested handoff must never admit ambiguous browse owners", browse.size <= 1)
+            assertTrue("A requested handoff must never admit ambiguous destination rows", rows.size <= 1)
+            records.appendText("handoff\t${compose.mainClock.currentTime}\t$destination\t${browse.size}\t${rows.size}\n")
+            assertTrue("Route admission stays inside the original early input window",
+                compose.mainClock.currentTime - navigationFrame <= 100L)
+            if (browse.size == 1 && rows.size == 1 &&
+                rows.single().config.getOrNull(SemanticsProperties.Disabled) == null) requestedDestination = null
+        }
+        if (requestedDestination == null) compose.onAllNodesWithTag("browser-list").assertCountEquals(1)
     }
 
     private fun frames(count: Int) = repeat(count) {
@@ -122,33 +166,52 @@ class CollapsedPlayerCollectionNavigationTest {
         val album = LibraryViews.groups(snapshot, SongListView.Albums, LibraryQuery()).single()
         val row = hasTestTag("media-Album:${album.id}")
         compose.onAllNodes(row).assertCountEquals(1)
+        beginHandoff("media-basis:0")
         compose.onNode(row).performClick()
+    }
+
+    private fun beginHandoff(destination: String) {
+        check(requestedDestination == null)
+        navigationFrame = compose.mainClock.currentTime
+        requestedDestination = destination
+        records.appendText("handoff-request\t$navigationFrame\t$destination\n")
+    }
+
+    private fun awaitRouteAdmission(destination: String) {
+        while (requestedDestination != null) frames(1)
+        compose.onAllNodesWithTag("browser-list").assertCountEquals(1)
+        compose.onAllNodesWithTag(destination).assertCountEquals(1)
+        compose.onNodeWithTag(destination).assertIsEnabled().assertIsDisplayed()
     }
 
     private fun navigation(access: MotionAccess, loaded: Boolean) {
         start(access, loaded)
         if (loaded) compose.onNodeWithTag("player-surface").assertIsDisplayed()
         openAlbum()
+        awaitRouteAdmission("media-basis:0")
         frames(32)
         compose.onAllNodesWithContentDescription("Back").assertCountEquals(1)
+        val album = LibraryViews.groups(snapshot, SongListView.Albums, LibraryQuery()).single()
+        beginHandoff("media-Album:${album.id}")
         compose.onNodeWithContentDescription("Back").performClick()
+        awaitRouteAdmission("media-Album:${album.id}")
         frames(32)
         compose.runOnIdle { assertTrue("The control must exercise real basis replacements", events.basisJoins > 1) }
         // Positive visibility control, including Reduced: the retained Queue host must appear on a real opening.
         if (loaded) {
-            compose.runOnIdle { events.checking = false }
+            val positiveBoundary = compose.runOnIdle { events.checking = false; contentEvents.size }
             compose.onNodeWithTag("player-surface").performClick()
             compose.mainClock.advanceTimeBy(1000)
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
             compose.onNodeWithTag("queue-surface").assertExists()
             compose.runOnIdle {
-                assertTrue(contentEvents.contains("player-overlay" to true))
-                assertTrue(contentEvents.contains("queue-surface" to true))
+                assertTrue(contentEvents.drop(positiveBoundary).contains("player-overlay" to true))
+                assertTrue(contentEvents.drop(positiveBoundary).contains("queue-surface" to true))
             }
             compose.onNodeWithContentDescription("Open queue").assertIsDisplayed().performClick()
             compose.mainClock.advanceTimeBy(1000)
             compose.runOnIdle { assertTrue("The Queue body visibility control must really compose",
-                contentEvents.contains("queue-screen" to true)) }
+                contentEvents.drop(positiveBoundary).contains("queue-screen" to true)) }
         }
         compose.mainClock.autoAdvance = true
     }
@@ -166,9 +229,10 @@ class CollapsedPlayerCollectionNavigationTest {
         start(access, true, MainTab.Playlists, input.name)
         val row = hasText(playlist.name) and hasClickAction()
         compose.onAllNodes(row).assertCountEquals(1)
-        val navigationFrame = compose.mainClock.currentTime
+        beginHandoff("media-basis:0")
         compose.onNode(row).performClick()
         frames(2)
+        awaitRouteAdmission("media-basis:0")
         val list = compose.onNodeWithTag("browser-list")
         val inputFrame = compose.mainClock.currentTime
         assertTrue("Input must begin inside both Standard and Faster chrome transitions",
@@ -203,7 +267,7 @@ class CollapsedPlayerCollectionNavigationTest {
                     compose.mainClock.advanceTimeByFrame()
                     compose.runOnIdle {
                         assertTrue(events.movingJoins.isEmpty())
-                        assertTrue(contentEvents.isEmpty())
+                        assertTrue(contentEvents.drop(navigationContentBoundary).isEmpty())
                     }
                 }
                 compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
