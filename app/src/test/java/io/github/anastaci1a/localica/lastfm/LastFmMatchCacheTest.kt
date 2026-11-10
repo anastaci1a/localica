@@ -82,6 +82,26 @@ class LastFmMatchCacheTest {
         assertEquals(base, LastFmMatchKey.archiveKey(archive.copy(tracks = archive.tracks.map { it.copy() })))
     }
 
+    @Test fun fieldBoundariesAreFramedSoShiftedDelimitersNeverCollide() {
+        // Same byte stream under naive delimiting: artist "A\u0000B" + title "C" versus artist "A" + title "B\u0000C".
+        val shifted = archive.copy(tracks = listOf(LastFmTrack("A\u0000B", "C", 42), remoteOther))
+        val unshifted = archive.copy(tracks = listOf(LastFmTrack("A", "B\u0000C", 42), remoteOther))
+        assertNotEquals(LastFmMatchKey.archiveKey(shifted), LastFmMatchKey.archiveKey(unshifted))
+        val localShifted = library.copy(tracks = listOf(song.copy(artist = "A\u0000B", title = "C"), other))
+        val localUnshifted = library.copy(tracks = listOf(song.copy(artist = "A", title = "B\u0000C"), other))
+        assertNotEquals(LastFmMatchKey.libraryKey(localShifted.tracks), LastFmMatchKey.libraryKey(localUnshifted.tracks))
+        assertNotEquals(LastFmMatchKey.mappingsKey(mapOf("A\u0000B" to "C")), LastFmMatchKey.mappingsKey(mapOf("A" to "B\u0000C")))
+        assertNotEquals(LastFmMatchKey.libraryKey(listOf(song.copy(artist = null, title = ""))), LastFmMatchKey.libraryKey(listOf(song.copy(artist = "", title = ""))))
+        // The two archives really match differently against a library that contains both spellings.
+        val both = library.copy(tracks = listOf(song.copy(id = "shifted", uri = "shifted", artist = "A\u0000B", title = "C"),
+            song.copy(id = "unshifted", uri = "unshifted", artist = "A", title = "B\u0000C")))
+        val first = LastFmMatcher.match(shifted, both.tracks, emptyMap()); val second = LastFmMatcher.match(unshifted, both.tracks, emptyMap())
+        assertNotEquals(first.counts, second.counts)
+        val key = LastFmMatchKey.of(both, shifted, emptyMap())
+        val cache = LastFmMatchCache(key.library, key.archive, key.mappings, first.counts, first.recordingGroups, first.matched, first.notInLibrary, first.dismissed)
+        assertTrue(cache.matches(key)); assertFalse("a shifted archive must not reuse the other's counts", cache.matches(LastFmMatchKey.of(both, unshifted, emptyMap())))
+    }
+
     @Test fun restoredCountsEqualAFullMatchForEveryDistribution() {
         listOf(archive, archive.copy(tracks = listOf(remote.copy(plays = 5), remoteOther.copy(plays = 42)))).forEach { variant ->
             val full = LastFmMatcher.match(variant, library.tracks, emptyMap())

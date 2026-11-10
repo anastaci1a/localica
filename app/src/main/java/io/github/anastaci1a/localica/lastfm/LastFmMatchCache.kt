@@ -29,23 +29,30 @@ data class LastFmMatchKey(val library: String, val archive: String, val mappings
         /** Only fields the matcher reads; play counts, locations and dates never invalidate a match. */
         fun of(catalog: LibrarySnapshot, snapshot: LastFmSnapshot, mappings: Map<String, String>): LastFmMatchKey =
             LastFmMatchKey(libraryKey(catalog.tracks), archiveKey(snapshot), mappingsKey(mappings))
+        /** Unambiguous framing: a null marker or a 4-byte big-endian byte length before each field, never delimiters. */
+        private fun MessageDigest.frame(value: String?) {
+            if (value == null) { update(0xFF.toByte()); return }
+            val bytes = value.toByteArray(Charsets.UTF_8)
+            update(0); update(byteArrayOf((bytes.size ushr 24).toByte(), (bytes.size ushr 16).toByte(), (bytes.size ushr 8).toByte(), bytes.size.toByte()))
+            update(bytes)
+        }
         fun libraryKey(tracks: List<Track>): String {
             val digest = MessageDigest.getInstance("SHA-256")
-            fun feed(value: String?) { digest.update(value.orEmpty().toByteArray(Charsets.UTF_8)); digest.update(0) }
+            digest.frame(tracks.size.toString())
             tracks.forEach { track ->
-                feed(track.id); feed(track.title); feed(track.artist); feed(track.albumArtist); feed(track.album)
-                feed(track.durationMs?.toString()); feed(track.musicBrainzId); digest.update(1)
+                digest.frame(track.id); digest.frame(track.title); digest.frame(track.artist); digest.frame(track.albumArtist)
+                digest.frame(track.album); digest.frame(track.durationMs?.toString()); digest.frame(track.musicBrainzId)
             }
             return digest.digest().toHex()
         }
         /** Every remote field the matcher reads plus each song's plays, length-delimited; a matcher change bumps the version. */
         fun archiveKey(snapshot: LastFmSnapshot): String {
             val digest = MessageDigest.getInstance("SHA-256")
-            fun feed(value: String?) { digest.update(value.orEmpty().toByteArray(Charsets.UTF_8)); digest.update(0) }
-            feed(MATCHER_VERSION); feed(snapshot.username.lowercase()); feed(snapshot.syncedAt.toString()); feed(snapshot.tracks.size.toString())
+            digest.frame(MATCHER_VERSION); digest.frame(snapshot.username.lowercase()); digest.frame(snapshot.syncedAt.toString())
+            digest.frame(snapshot.tracks.size.toString())
             snapshot.tracks.forEach { track ->
-                feed(track.artist); feed(track.title); feed(track.album); feed(track.mbid); feed(track.durationMs?.toString())
-                feed(track.plays.toString()); digest.update(1)
+                digest.frame(track.artist); digest.frame(track.title); digest.frame(track.album); digest.frame(track.mbid)
+                digest.frame(track.durationMs?.toString()); digest.frame(track.plays.toString())
             }
             return digest.digest().toHex()
         }
@@ -54,9 +61,8 @@ data class LastFmMatchKey(val library: String, val archive: String, val mappings
         fun mappingsKey(mappings: Map<String, String>): String {
             if (mappings.isEmpty()) return "-"
             val digest = MessageDigest.getInstance("SHA-256")
-            mappings.entries.sortedBy { it.key }.forEach { (key, value) ->
-                digest.update(key.toByteArray(Charsets.UTF_8)); digest.update(0); digest.update(value.toByteArray(Charsets.UTF_8)); digest.update(1)
-            }
+            digest.frame(mappings.size.toString())
+            mappings.entries.sortedBy { it.key }.forEach { (key, value) -> digest.frame(key); digest.frame(value) }
             return digest.digest().toHex()
         }
         private fun ByteArray.toHex() = joinToString("") { "%02x".format(it) }
