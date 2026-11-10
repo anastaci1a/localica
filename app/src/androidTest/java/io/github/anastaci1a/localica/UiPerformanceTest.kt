@@ -52,8 +52,7 @@ class UiPerformanceTest {
         folders = listOf(FolderSelection("fixture", "Fixture")), tracks = tracks), loading = false) }
     private val queue by lazy { ListeningQueue(id = "fixture", name = "Fixture", createdAt = 0,
         entries = tracks.mapIndexed { n, track -> QueueEntry("entry:$n", track) }) }
-    private val glassMode get() = GlassRendererMode.entries.firstOrNull { it.name == "None" }
-        ?: GlassRendererMode.entries.first { it.name == "Modern" }
+    private val glassMode get() = GlassRendererMode.FlatNone
     private val windows = mutableSetOf<Window>() // main thread only
     private var scenario: ActivityScenario<ComponentActivity>? = null
     private var activity: ComponentActivity? = null
@@ -100,7 +99,7 @@ class UiPerformanceTest {
                         val report = JSONObject(FrameStats.report()).put("scenario", name).put("rep", rep)
                             .put("warmup", rep == 0).put("seed", seed).put("songs", tracks.size)
                             .put("api", Build.VERSION.SDK_INT).put("glassMode", glassMode.name)
-                            .put("glassFallback", glassMode.name != "None").put("artwork", "placeholders; no media I/O")
+                            .put("glassFallback", glassMode != GlassRendererMode.FlatNone).put("artwork", "placeholders; no media I/O")
                             .put("source", args.getString("uiPerformanceSource") ?: "unspecified")
                         check(!report.getBoolean("timeLimitReached")) { "$name exceeded the capture time limit" }
                         val frames = report.getJSONArray("windows")
