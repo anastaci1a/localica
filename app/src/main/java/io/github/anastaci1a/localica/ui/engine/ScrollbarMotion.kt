@@ -15,8 +15,8 @@ import io.github.anastaci1a.localica.ui.spec.ScrollbarSpec
 /** An incoming tween evaluator driven only by registered shared Engine frames.
  * Fresh work admits time zero on the next frame, as Animatable did. An interrupted grip
  * rejoins at its last presented frame, retaining the incoming evaluator and velocity.
- * A completed tween runs its continuation on that Engine frame. Reduction settles at
- * [reducedValue] when one is given, and never runs a continuation.
+ * A completed tween runs its continuation on that Engine frame. A global Engine reduction
+ * settles at [reducedValue] when one is given, and never runs a continuation.
  */
 internal class ScrollbarTween(private val clock: UiClock, initial: Float,
     private val reducedValue: Float? = null) : ActiveMotion {
@@ -50,19 +50,13 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float,
     }
     private fun velocity(): Float = animation?.getVelocityFromNanos(elapsed(clock.stamp), initialVector, targetVector, velocityVector)?.value ?: 0f
     fun start(from: Float, to: Float, duration: Int, delay: Int = 0,
-        easing: Easing = FastOutSlowInEasing, sequential: Boolean = false, reduced: Boolean = false,
-        then: (() -> Unit)? = null) {
+        easing: Easing = FastOutSlowInEasing, sequential: Boolean = false, then: (() -> Unit)? = null) {
         clock.checkMutation()
         check(!disposed)
         val running = !settled
         val velocity = if (sequential && running) velocity() else 0f
         target = to
         resting = from
-        if (reduced) {
-            cancel(to)
-            then?.invoke()
-            return
-        }
         val evaluator = tween<Float>(duration, delay, easing).vectorize(Float.VectorConverter)
         initialVector = AnimationVector1D(from)
         targetVector = AnimationVector1D(to)
@@ -90,7 +84,8 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float,
         if (awaiting) {
             awaiting = false
             started = stamp
-            clock.register(this)
+            // A zero-duration tween (Reduced grip) retires on its admission frame, running its continuation.
+            if (durationNanos == 0L) { val then = next; cancel(target); then?.invoke() } else clock.register(this)
         } else if (holding && elapsed(stamp) < durationNanos) {
             holding = false
             clock.register(this)
@@ -166,7 +161,7 @@ internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolea
         val target = if (held) 1f else 0f
         if (target == grip.target) return
         grip.start(grip.value(), target, if (reduced) 0 else (ScrollbarSpec.gripMillis / speed).toInt(),
-            easing = CubicBezierEasing(0f, 0f, .2f, 1f), sequential = true, reduced = reduced)
+            easing = CubicBezierEasing(0f, 0f, .2f, 1f), sequential = true)
     }
     fun access(reduced: Boolean) {
         clock.checkMutation()
