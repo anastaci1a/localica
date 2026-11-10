@@ -371,8 +371,8 @@ class QueueSequenceTest {
         }
         selection.set(selection.create("q", true), setOf("entry:500"), false)
         selection.reset()
-        sql.query("SELECT COUNT(*) FROM queue_sequence_selection_ranges").use {
-            assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+        for (table in listOf("queue_sequence_selections", "queue_sequence_selection_exceptions", "queue_sequence_selection_ranges")) {
+            sql.query("SELECT COUNT(*) FROM $table").use { assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0)) }
         }
     }
 

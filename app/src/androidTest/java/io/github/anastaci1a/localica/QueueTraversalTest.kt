@@ -115,6 +115,22 @@ class QueueTraversalTest {
                 assertTrue(restored.queues[1].entries.isEmpty())
                 assertEquals(second.currentEntryId, restored.queues[1].currentEntryId)
                 assertEquals(400, restored.queues[1].currentIndex)
+                val active = restored.active!!
+                val token = active.playbackWindow!!.current!!.token
+                val store = QueueWindowStore(room)
+                val legacyOrder = room.openHelper.writableDatabase.query("SELECT orderState FROM queues WHERE id = ?",
+                    arrayOf(first.id)).use { assertTrue(it.moveToFirst()); it.getString(0) }
+                assertFalse(store.checkpoint(first.id, first.currentEntryId!!, "stale-token", 88))
+                assertFalse(store.checkpoint(first.id, first.entries.first().id, token, 99))
+                assertFalse(store.checkpoint(second.id, second.currentEntryId!!, token, 111))
+                assertTrue(store.checkpoint(first.id, first.currentEntryId!!, token, 1234))
+                val afterCheckpoint = store.restore(QueueSettings()).active!!
+                assertEquals(1234L, afterCheckpoint.positionMs)
+                assertEquals(active.storage, afterCheckpoint.storage)
+                assertEquals(active.playbackWindow, afterCheckpoint.playbackWindow)
+                room.openHelper.writableDatabase.query("SELECT orderState FROM queues WHERE id = ?",
+                    arrayOf(first.id)).use { assertTrue(it.moveToFirst()); assertEquals(legacyOrder, it.getString(0)) }
+
             }
         } finally { room.close() }
     }

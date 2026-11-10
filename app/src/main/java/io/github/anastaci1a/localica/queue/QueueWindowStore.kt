@@ -36,6 +36,25 @@ internal class QueueWindowStore(private val room: RoomDatabase) {
         it.page(queueId, start, size)
     }
 
+    /** A late player callback may update only the exact active occurrence and durable current visit. */
+    suspend fun checkpoint(queueId: String, entryId: String, visitToken: String, positionMs: Long): Boolean = transaction { sequence ->
+        require(positionMs >= 0)
+        sequence.db.compileStatement("""
+            UPDATE queues SET positionMs = ? WHERE id = ? AND currentEntryId = ?
+                AND EXISTS (SELECT 1 FROM queue_state WHERE id = 1 AND queueId = queues.id)
+                AND EXISTS (SELECT 1 FROM queue_sequence_traversal t JOIN queue_sequence_history h
+                    ON h.queueId = t.queueId AND h.position = t.cursor
+                    WHERE t.queueId = queues.id AND h.entryId = ? AND h.token = ?)
+        """.trimIndent()).use {
+            it.bindLong(1, positionMs)
+            it.bindString(2, queueId)
+            it.bindString(3, entryId)
+            it.bindString(4, entryId)
+            it.bindString(5, visitToken)
+            it.executeUpdateDelete() == 1
+        }
+    }
+
     suspend fun select(queueId: String, all: Boolean = false): QueueSelectionHandle = transaction {
         QueueSelection(it).create(queueId, all)
     }
