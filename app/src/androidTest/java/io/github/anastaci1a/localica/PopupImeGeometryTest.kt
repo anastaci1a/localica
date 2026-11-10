@@ -154,8 +154,8 @@ class PopupImeGeometryTest {
         if (editor) for (slot in listOf("sheet", "frame", "header", "body", "footer"))
             slots[slot] = compose.onNodeWithTag("tag-editor-$slot", true).fetchSemanticsNode().layoutInfo.coordinates
         var mixedPublished = false
-        val probe = NativeProbe(view, slots, telemetry) { ime ->
-            if (mixedContent && !mixedPublished && ime > 0) {
+        val probe = NativeProbe(view, slots, telemetry) { ime, moving ->
+            if (mixedContent && !mixedPublished && moving) {
                 mixedPublished = true
                 events += "${SystemClock.uptimeMillis()},${System.nanoTime()},mixed-content-published,${System.identityHashCode(window)},$ime,${Thread.currentThread().id}"
                 playlists.value = PlaylistState(listOf(ManualPlaylist(id = "ime-existing", name = "Existing")), loading = false)
@@ -209,7 +209,7 @@ class PopupImeGeometryTest {
         return "insets[$insets] callbacks=${probe.nativeInsets.size} ${probe.nativeInsets.distinct()} $settings ime[$dump]"
     }
 
-    private inner class NativeProbe(private val host: View, private val slots: Map<String, LayoutCoordinates>, private val telemetry: Map<String, Float>, private val onImeProgress: (Int) -> Unit) : View(host.context) {
+    private inner class NativeProbe(private val host: View, private val slots: Map<String, LayoutCoordinates>, private val telemetry: Map<String, Float>, private val onImeProgress: (Int, Boolean) -> Unit) : View(host.context) {
         var phase = "idle"
         val opened = CountDownLatch(1)
         val closed = CountDownLatch(1)
@@ -238,7 +238,11 @@ class PopupImeGeometryTest {
                     animationIds = runningAnimations.joinToString("|") { System.identityHashCode(it).toString() }
                     ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
                     nativeInsets += ime
-                    onImeProgress(ime)
+                    // Publish only inside the actual native opening, independent of keyboard size
+                    // and frame cadence. A final positive inset alone is not motion evidence.
+                    val moving = phase == "opening" && ime > source && ime < target &&
+                        runningAnimations.any { it.typeMask and WindowInsetsCompat.Type.ime() != 0 }
+                    onImeProgress(ime, moving)
                     record("progress"); return insets
                 }
                 override fun onEnd(animation: WindowInsetsAnimationCompat) {

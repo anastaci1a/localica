@@ -5,6 +5,9 @@ import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.rules.ExternalResource
+import org.junit.rules.TestRule
+import org.junit.runner.Description
+import org.junit.runners.model.Statement
 
 /**
  * Force-stops the system keyboard whose component is [selected] (a `package/service` id from
@@ -81,27 +84,42 @@ internal fun AndroidComposeTestRule<*, *>.awaitSystemImeHardKeyboardPolicy(
  * settings, or leave them, at their own pace; the class must not inherit either state.
  * Place it before [FreshSystemIme] so the restarted keyboard reads this policy at its first bind.
  */
-internal class NativeImePolicy : ExternalResource() {
+internal class NativeImePolicy : TestRule {
     private val settings = listOf("secure show_ime_with_hard_keyboard", "global animator_duration_scale",
         "global transition_animation_scale", "global window_animation_scale")
-    private val original = linkedMapOf<String, String>()
     private fun shell(command: String) = ParcelFileDescriptor.AutoCloseInputStream(
         InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command))
         .bufferedReader().use { it.readText().trim() }
 
-    override fun before() {
-        for (setting in settings) {
-            val value = shell("settings get $setting")
-            check(value == "null" || value.toFloatOrNull() != null) { "Unexpected $setting: $value" }
-            original[setting] = value
-            shell("settings put $setting 1")
-            check(shell("settings get $setting").toFloat() == 1f) { "Could not set $setting" }
+    override fun apply(base: Statement, description: Description): Statement = object : Statement() {
+        override fun evaluate() {
+            val original = linkedMapOf<String, String>()
+            var failure: Throwable? = null
+            try {
+                for (setting in settings) {
+                    val value = shell("settings get $setting")
+                    check(value == "null" || value.toFloatOrNull() != null) { "Unexpected $setting: $value" }
+                    original[setting] = value
+                    shell("settings put $setting 1")
+                    check(shell("settings get $setting").toFloat() == 1f) { "Could not set $setting" }
+                    android.util.Log.i("NativeImePolicy", "Before activities: $setting=1 original=$value")
+                }
+                base.evaluate()
+            } catch (caught: Throwable) {
+                failure = caught
+            } finally {
+                // Restore every captured value even if setup or another restoration fails.
+                for ((setting, value) in original.entries.reversed()) {
+                    try {
+                        shell(if (value == "null") "settings delete $setting" else "settings put $setting $value")
+                        check(shell("settings get $setting") == value) { "Could not restore $setting" }
+                        android.util.Log.i("NativeImePolicy", "After activities: $setting=$value")
+                    } catch (caught: Throwable) {
+                        if (failure == null) failure = caught else failure.addSuppressed(caught)
+                    }
+                }
+            }
+            failure?.let { throw it }
         }
-    }
-
-    override fun after() {
-        for ((setting, value) in original.entries.reversed())
-            shell(if (value == "null") "settings delete $setting" else "settings put $setting $value")
-        original.clear()
     }
 }
