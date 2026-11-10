@@ -8,6 +8,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
@@ -66,22 +67,30 @@ class FlatNoneMaterialTest {
         compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
-        fun equal(kind: String, phase: String) = compose.runOnIdle {
-            val expected = requireNotNull(geometry["normal-$kind"])
-            val actual = requireNotNull(geometry["flat-$kind"])
-            assertEquals("$kind $phase bounds", expected.bounds, actual.bounds)
-            assertEquals("$kind $phase radius", expected.corner, actual.corner, 0f)
-        }
         try {
             for (kind in listOf("slider", "switch")) {
-                equal(kind, "rest")
-                for ((pointer, prefix) in listOf("normal", "flat").withIndex()) compose.onNodeWithTag("$prefix-$kind").performTouchInput { down(pointer, center) }
-                repeat(12) { compose.mainClock.advanceTimeByFrame(); equal(kind, "press frame $it") }
-                compose.runOnIdle { assertTrue("Flat $kind must expand on contact", requireNotNull(geometry["flat-$kind"]).bounds.height > 28f) }
-                for ((pointer, prefix) in listOf("normal", "flat").withIndex()) compose.onNodeWithTag("$prefix-$kind").performTouchInput { moveTo(pointer, Offset(width * .8f, centerY)) }
-                repeat(8) { compose.mainClock.advanceTimeByFrame(); equal(kind, "drag frame $it") }
-                for ((pointer, prefix) in listOf("normal", "flat").withIndex()) compose.onNodeWithTag("$prefix-$kind").performTouchInput { up(pointer) }
-                repeat(40) { compose.mainClock.advanceTimeByFrame(); equal(kind, "release frame $it") }
+                fun trace(prefix: String): List<LensGeometry> {
+                    compose.mainClock.advanceTimeBy(1200)
+                    val frames = mutableListOf<LensGeometry>()
+                    fun receipt() = compose.runOnIdle { frames.add(requireNotNull(geometry["$prefix-$kind"])) }
+                    receipt()
+                    compose.onNodeWithTag("$prefix-$kind").performTouchInput { down(center) }
+                    repeat(12) { compose.mainClock.advanceTimeByFrame(); receipt() }
+                    compose.runOnIdle { assertTrue("$prefix $kind must expand on contact", frames.last().bounds.height > 28f) }
+                    compose.onNodeWithTag("$prefix-$kind").performTouchInput { moveTo(Offset(width * .8f, centerY)) }
+                    repeat(8) { compose.mainClock.advanceTimeByFrame(); receipt() }
+                    compose.onNodeWithTag("$prefix-$kind").performTouchInput { up() }
+                    repeat(40) { compose.mainClock.advanceTimeByFrame(); receipt() }
+                    return frames
+                }
+                // Two simultaneous pointers trigger the controls' multi-touch cancellation.
+                // Replay one identical single-pointer contact per control instead.
+                val expected = trace("normal")
+                val actual = trace("flat")
+                expected.zip(actual).forEachIndexed { frame, (normalFrame, flatFrame) ->
+                    assertEquals("$kind frame $frame bounds", normalFrame.bounds, flatFrame.bounds)
+                    assertEquals("$kind frame $frame radius", normalFrame.corner, flatFrame.corner, 0f)
+                }
             }
         } finally { compose.mainClock.autoAdvance = true }
     }
@@ -118,13 +127,22 @@ class FlatNoneMaterialTest {
                     GlassPanelTheme(dark) {
                         source = rememberFrostedBackdrop(Unit)
                         val reference = flatGlassColor()
+                        val appearance = LocalGlassAppearance.current.normalized()
+                        val referenceTone = GlassTone.mixed(appearance.contrast, appearance.contrastWeight, source.lightMix)
                         assertEquals(if (dark) Color(0xFF242528) else Color.White, reference)
-                        Box(Modifier.size(160.dp, 280.dp).testTag("flat-stage")) {
+                        Box(Modifier.size(160.dp, 420.dp).testTag("flat-stage")) {
                             // Adversarial scene must never be sampled, recorded, or blended into the fill.
                             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Magenta) }
                             LiquidGlassSurface(Modifier.size(120.dp).testTag("flat"), source = source,
                                 cornerRadius = 16.dp, shadow = false, pressFeedback = false) {}
-                            Canvas(Modifier.offset(y = 140.dp).size(120.dp)) { drawRect(reference) }
+                            // The required structural rim remains part of the material.
+                            // Compare against an opaque theme draw plus that same finish.
+                            Canvas(Modifier.offset(y = 140.dp).size(120.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))) {
+                                drawRect(reference)
+                                drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), 16.dp.toPx(), tone = referenceTone)
+                            }
+                            Canvas(Modifier.offset(y = 280.dp).size(120.dp)) { drawRect(reference) }
                         }
                     }
                 }
@@ -135,10 +153,12 @@ class FlatNoneMaterialTest {
                 val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
                     ?: InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)!!
                 File(root, "flat-fill-" + expected.toArgb() + ".png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
-                // One native frame compares the material against an independently drawn opaque
-                // theme reference on the same adversarial backing; no color tolerance.
+                // One native frame compares independently drawn opaque theme + structural
+                // rim against the material on adversarial backing; no color tolerance.
                 for (y in 24 until 96) for (x in 24 until 96)
                     assertEquals("Opaque theme interior at $x,$y", pixels[x, y + 140].toArgb(), pixels[x, y].toArgb())
+                assertEquals("The uncoated reference is the specified opaque theme", expected.toArgb(), pixels[60, 340].toArgb())
+                assertEquals("The material center retains the opaque theme", pixels[60, 340].toArgb(), pixels[60, 60].toArgb())
                 compose.runOnIdle {
                     assertFalse(source.hasGlassLayer)
                     assertEquals(0, source.consumers)

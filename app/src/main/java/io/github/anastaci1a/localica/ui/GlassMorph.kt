@@ -563,6 +563,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         anchor.hidden = false; anchor.modalPresent = false; anchor.shadowInModal = false; anchor.contact.modal = false
     } }
     if (!present || popupHome?.mounted == false) return
+    // Flat None retires the optical descriptor without retiring this window.
+    // Rebind in this composition, before drawing, rather than restarting its
+    // flight or waiting for an effect to publish a replacement source.
+    val flat = flatGlass()
+    fun retired(backdrop: FrostedBackdrop?) = backdrop != null &&
+        (backdrop.hasGlassLayer == flat || backdrop.hasGlassLayer && backdrop.layer.isReleased)
+    val currentSource = if (retired(source)) ambientSource ?: anchor.source else source
+    SideEffect { if (source !== currentSource) source = currentSource }
     val departingSource = popupHome?.backdrop.takeIf { returningInline || popupFlight.wasProjected }
     // Navigation keeps the native window in place until this scene is ready.
     // Ordinary popup input must not continuously capture the full-screen
@@ -570,7 +578,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     BackdropLease(departingSource)
     val homeSampleReady = flatGlass() || (departingSource?.recorded == true &&
         (android.os.Build.VERSION.SDK_INT >= 33 || departingSource.fallback != null))
-    val samplingSource = departingSource.takeIf { homeSampleReady } ?: source
+    val samplingSource = departingSource.takeIf { homeSampleReady } ?: currentSource
+    val homeSource = if (retired(anchor.source)) currentSource else anchor.source
     val flightLayer = rememberGraphicsLayer()
     DisposableEffect(popupHome, popupFlight, flightLayer) {
         popupFlight.layer = flightLayer
@@ -586,7 +595,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     // follow current ambient ink, rather than their anchor's remembered seed.
     val panelInk = anchor.ink.takeIf { anchor.bounds != Rect.Zero && it != Color.Unspecified }
         ?: LocalContentColor.current
-    val panelDark = darkOverride ?: if (panelInk != Color.Unspecified) panelInk.luminance() > .5f else source?.dark == true
+    val panelDark = darkOverride ?: if (panelInk != Color.Unspecified) panelInk.luminance() > .5f else currentSource?.dark == true
     val parentPanels = LocalChildPanels.current
     val childPanels = remember { mutableIntStateOf(0) }
     val countsAsPanel = continuousOrigin == null || originAdmitted
@@ -931,7 +940,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = samplingSource,
                                     // Both optical inputs must exclude the inline modal; an ancestor
                                     // trigger source can now contain this very recording.
-                                    homeSource = if (departingSource != null && homeSampleReady) samplingSource else anchor.source, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
+                                    homeSource = if (departingSource != null && homeSampleReady) samplingSource else homeSource, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
                                     homeBounds = { if (visible && !livePreparedOrigin) origin else returningHome ?: anchor.presentedBounds },
                                     homeFootprint = if (!measuredHome) null else ({
                                         if (returningInline) returningFootprint
