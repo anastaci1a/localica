@@ -35,8 +35,8 @@ class SelfHostedPrototypeContract(unittest.TestCase):
         self.assertEqual({'workflow_dispatch', 'workflow_call'}, set(self.workflow['on']))
 
     def test_only_focused_jobs_can_reach_the_self_hosted_runner_and_only_for_owner_dispatch(self):
-        self.assertEqual('${{ inputs.runner != \'self-hosted\' || ' + GUARD + ' }}', self.jobs['focused_26']['if'])
-        self.assertEqual('${{ !cancelled() && (inputs.runner != \'self-hosted\' || ' + GUARD + ') }}',
+        self.assertEqual('${{ needs.identity.result == \'success\' && (inputs.runner != \'self-hosted\' || ' + GUARD + ') }}', self.jobs['focused_26']['if'])
+        self.assertEqual('${{ needs.identity.result == \'success\' && (!cancelled() && (inputs.runner != \'self-hosted\' || ' + GUARD + ')) }}',
                          self.jobs['focused_36']['if'])
         for name, job in self.jobs.items():
             with self.subTest(job=name):

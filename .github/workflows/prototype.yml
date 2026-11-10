@@ -71,10 +71,23 @@ concurrency:
   group: prototype-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  identity:
+    name: Commit identities and attribution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Exercise identity guard policy
+        run: node .github/tests/test_commit_identity.mjs
+      - name: Verify commit identities and attribution
+        run: node .github/check-commit-identity.mjs
   # Two independent chains cap this workflow at two occupied runners:
   # build -> compatibility_26 -> compatibility_36; focused_26 -> focused_36.
   # Explicit status conditions preserve all checks after an earlier failure.
   build:
+    needs: identity
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -148,10 +161,11 @@ jobs:
           prototype-runner-environment.txt
     name: Prototype build, unit tests and lint
   focused_26:
+    needs: identity
     # runner=self-hosted (#592): the owner's locked-down single-job JIT runner, labelled with this
     # run id. Only an owner workflow_dispatch of this workflow may use it; anything else is skipped,
     # never rerouted to a hosted runner. The runner's job-started hook repeats every check.
-    if: ${{ inputs.runner != 'self-hosted' || (github.event_name == 'workflow_dispatch' && github.repository == 'anastaci1a/localica' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && startsWith(github.workflow_ref, 'anastaci1a/localica/.github/workflows/prototype.yml@refs/heads/')) }}
+    if: ${{ needs.identity.result == 'success' && (inputs.runner != 'self-hosted' || (github.event_name == 'workflow_dispatch' && github.repository == 'anastaci1a/localica' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && startsWith(github.workflow_ref, 'anastaci1a/localica/.github/workflows/prototype.yml@refs/heads/'))) }}
     runs-on: ${{ inputs.runner == 'self-hosted' && fromJSON(format('["self-hosted","Linux","X64","localica-jit","ljit-{0}"]', github.run_id)) || 'ubuntu-24.04' }}
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
@@ -286,8 +300,8 @@ jobs:
         if-no-files-found: error
     name: Prototype focused API 26
   compatibility_26:
-    needs: build
-    if: ${{ !cancelled() }}
+    needs: [identity, build]
+    if: ${{ needs.identity.result == 'success' && (!cancelled()) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -378,9 +392,9 @@ jobs:
         if-no-files-found: error
     name: Prototype preserved-data compatibility API 26
   focused_36:
-    needs: focused_26
+    needs: [identity, focused_26]
     # runner=self-hosted (#592): see focused_26; the same guard, never rerouted.
-    if: ${{ !cancelled() && (inputs.runner != 'self-hosted' || (github.event_name == 'workflow_dispatch' && github.repository == 'anastaci1a/localica' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && startsWith(github.workflow_ref, 'anastaci1a/localica/.github/workflows/prototype.yml@refs/heads/'))) }}
+    if: ${{ needs.identity.result == 'success' && (!cancelled() && (inputs.runner != 'self-hosted' || (github.event_name == 'workflow_dispatch' && github.repository == 'anastaci1a/localica' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && startsWith(github.workflow_ref, 'anastaci1a/localica/.github/workflows/prototype.yml@refs/heads/')))) }}
     runs-on: ${{ inputs.runner == 'self-hosted' && fromJSON(format('["self-hosted","Linux","X64","localica-jit","ljit-{0}"]', github.run_id)) || 'ubuntu-24.04' }}
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
@@ -515,8 +529,8 @@ jobs:
         if-no-files-found: error
     name: Prototype focused API 36
   compatibility_36:
-    needs: compatibility_26
-    if: ${{ !cancelled() }}
+    needs: [identity, compatibility_26]
+    if: ${{ needs.identity.result == 'success' && (!cancelled()) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -610,6 +624,7 @@ jobs:
     name: Prototype evidence and delivery decision
     if: ${{ always() }}
     needs:
+    - identity
     - build
     - focused_26
     - compatibility_26

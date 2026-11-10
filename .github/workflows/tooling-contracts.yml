@@ -1,55 +1,37 @@
-# Host tooling contracts only; no Android jobs.
+# Host metadata and tooling checks only; no Android jobs.
 name: Evidence tooling contracts
 'on':
   push:
-    paths:
-      - '.github/workflows/**'
-      - '.github/actions/**'
-      - 'app/src/androidTest/java/**'
-      - '.github/tests/**'
-      - '.github/compatibility/**'
-      - '.github/test-evidence/**'
-      - '.github/emulator-sdk.py'
-      - '.github/shared-test-apks.py'
-      - '.github/prebuilt-device-tests.gradle'
-      - '.github/release-verification.py'
-      - '.github/run-device-tests.sh'
-      - '.github/prepare-device-tests.sh'
-      - '.github/run-prototype-tests.sh'
-      - '.github/prototype-risk-classes.txt'
-      - '.github/emulator-readiness.py'
-      - '.github/emulator-system-image.py'
-      - '.github/dependency-cache-audit.sh'
-      - '.github/gradle-transient-retry.sh'
-      - 'gradle.properties'
   pull_request:
-    paths:
-      - '.github/workflows/**'
-      - '.github/actions/**'
-      - 'app/src/androidTest/java/**'
-      - '.github/tests/**'
-      - '.github/compatibility/**'
-      - '.github/test-evidence/**'
-      - '.github/emulator-sdk.py'
-      - '.github/shared-test-apks.py'
-      - '.github/prebuilt-device-tests.gradle'
-      - '.github/release-verification.py'
-      - '.github/run-device-tests.sh'
-      - '.github/prepare-device-tests.sh'
-      - '.github/run-prototype-tests.sh'
-      - '.github/prototype-risk-classes.txt'
-      - '.github/emulator-readiness.py'
-      - '.github/emulator-system-image.py'
-      - '.github/dependency-cache-audit.sh'
-      - '.github/gradle-transient-retry.sh'
-      - 'gradle.properties'
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
   workflow_call:
 permissions:
   contents: read
 # No concurrency/cancellation policy: do not cancel another invocation.
 jobs:
+  identity:
+    name: Commit identities and attribution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      contracts: ${{ steps.scope.outputs.contracts }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Exercise identity guard policy
+        run: node .github/tests/test_commit_identity.mjs
+      - name: Verify commit identities and attribution
+        run: node .github/check-commit-identity.mjs
+      - name: Exercise tooling selection policy
+        run: node .github/tests/test_tooling_selection.mjs
+      - name: Select tooling contract coverage
+        id: scope
+        run: node .github/select-tooling-contracts.mjs
   contracts:
+    needs: identity
+    if: needs.identity.outputs.contracts == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
