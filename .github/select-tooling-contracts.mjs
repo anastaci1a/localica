@@ -5,6 +5,10 @@ import {spawnSync} from 'node:child_process';
 // Keep the original tooling coverage while metadata checks run on every push/body edit.
 const paths = [
   '.github/workflows/**', '.github/actions/**', 'app/src/androidTest/java/**',
+  'app/src/main/**', 'app/src/sharedTest/**', 'app/src/test/**', 'lint/**',
+  'tools/ui-consolidation/**', 'tools/performance/**', 'app/lint-baseline.xml', 'app/ui-escapes.yaml',
+  'app/build.gradle.kts', 'settings.gradle.kts', 'build.gradle.kts', 'gradle/**',
+  '.github/run-ui-lint.sh',
   '.github/tests/**', '.github/compatibility/**', '.github/test-evidence/**',
   '.github/emulator-sdk.py', '.github/shared-test-apks.py',
   '.github/prebuilt-device-tests.gradle', '.github/release-verification.py',

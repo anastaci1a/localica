@@ -1,5 +1,6 @@
 """Contract for the shared Gradle dependency cache and bounded dependency download retries (#681)."""
 import os
+import shlex
 from pathlib import Path
 import subprocess
 import tempfile
@@ -63,12 +64,24 @@ def run(step):
 
 
 def gradle_tasks(command):
-    """Task names from one `./gradlew ...` line; arguments starting with '-' are options."""
-    words = command.split()
+    """Task names from one shell invocation; quoted flags and option values are not tasks."""
+    words = shlex.split(command)
     if words[:2] == WRAPPED.split()[:2]:
         words = words[2:]
     assert words and words[0] == './gradlew', command
-    return {word for word in words[1:] if not word.startswith('-')}
+    tasks = set()
+    skip_value = False
+    for word in words[1:]:
+        if word in (';', '&&', '||', '|', '>'):
+            break
+        if skip_value:
+            skip_value = False
+            continue
+        if word in ('-I', '--init-script', '-p', '--project-dir', '-b', '--build-file', '-c', '--settings-file', '--max-workers'):
+            skip_value = True
+        elif not word.startswith('-'):
+            tasks.add(word)
+    return tasks
 
 
 def compile_steps(job):
@@ -81,7 +94,9 @@ def compile_tasks(job):
     tasks = set()
     for step in compile_steps(job):
         if run(step).startswith(('./gradlew', WRAPPED)):
-            tasks |= gradle_tasks(run(step))
+            for line in run(step).splitlines():
+                if line.startswith(('./gradlew', WRAPPED)):
+                    tasks |= gradle_tasks(line)
         else:
             script = (GITHUB / 'compatibility' / 'build.sh').read_text()
             lines = [line for line in script.splitlines() if './gradlew' in line]
@@ -97,6 +112,12 @@ def step_index(job, predicate):
 
 
 class SharedDependencyCacheContract(unittest.TestCase):
+    def test_task_parser_retains_lint_tasks_and_ignores_quoted_flags_and_redirections(self):
+        self.assertEqual({':lint:test', 'lintDebug'}, gradle_tasks(
+            './gradlew :lint:test lintDebug "-PlocalicaSourceSha=$source_sha" -I init.gradle --max-workers 2 > result.txt'))
+        self.assertEqual({'assembleDebug', 'assembleDebugAndroidTest'}, gradle_tasks(
+            WRAPPED + ' assembleDebug assembleDebugAndroidTest "-PlocalicaSourceSha=$source_sha" --no-daemon'))
+
     def test_every_setup_gradle_job_names_the_shared_entry_it_restores(self):
         seen = set()
         for path in sorted(WORKFLOWS.glob('*.yml')):

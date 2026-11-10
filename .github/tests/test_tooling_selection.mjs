@@ -40,6 +40,10 @@ try {
   }
   const relevant = [
     '.github/workflows/android.yml', '.github/actions/example/action.yml',
+    'app/src/main/java/Player.kt', 'app/src/sharedTest/java/Fixture.kt', 'app/src/test/java/OwnerTest.kt',
+    'lint/src/main/Detector.kt', 'tools/ui-consolidation/stage.json', 'tools/performance/scenarios.json',
+    'app/lint-baseline.xml', 'app/ui-escapes.yaml', 'app/build.gradle.kts', 'settings.gradle.kts',
+    'build.gradle.kts', 'gradle/libs.versions.toml', '.github/run-ui-lint.sh',
     'app/src/androidTest/java/example/ExampleTest.kt', '.github/tests/example.mjs',
     '.github/compatibility/run.sh', '.github/test-evidence/source_methods.py',
     '.github/emulator-sdk.py', '.github/shared-test-apks.py',
@@ -52,7 +56,7 @@ try {
     '.github/select-tooling-contracts.mjs', 'gradle.properties',
   ];
   for (const file of relevant) check('push', {before: base, after: change(file)}, true);
-  for (const file of ['README.md', 'docs/build.md', 'agents/README.md', 'app/src/main/java/Player.kt']) {
+  for (const file of ['README.md', 'docs/build.md', 'agents/README.md']) {
     check('push', {before: base, after: change(file)}, false);
   }
   const tooling = change('.github/tests/example.mjs');

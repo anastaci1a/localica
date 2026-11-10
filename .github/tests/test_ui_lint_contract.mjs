@@ -65,9 +65,11 @@ test('source-bound bootstrap, substitution, relocation and deletion through real
 
 test('source-only production patches trigger policy contracts', () => {
     const workflow=fs.readFileSync(new URL('../workflows/tooling-contracts.yml',import.meta.url),'utf8');
-    for (const section of workflow.split('  pull_request:')) {
-        assert.match(section, /app\/src\/main\/\*\*/);
-    }
+    const selector=fs.readFileSync(new URL('../select-tooling-contracts.mjs',import.meta.url),'utf8');
+    assert.match(selector, /app\/src\/main\/\*\*/);
+    assert.match(workflow, /node \.github\/select-tooling-contracts\.mjs/);
+    assert.match(workflow, /if: needs\.identity\.outputs\.contracts == 'true'/);
+    assert.doesNotMatch(workflow.split('permissions:')[0], /paths:/);
     assert.match(workflow, /check-ui-lint/);
 });
 test('itemized transfers admit only listed identities, reject stale and expired entries', () => {
