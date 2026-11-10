@@ -6,8 +6,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.positionOnScreen
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.test.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.SongRow
@@ -22,12 +24,21 @@ import java.io.File
 
 /**
  * #748: every multi-select bar button that opens a glass popup opens it from its own bounds
- * and retracts into them, exactly like the more-actions menu. A frozen clock steps every
- * frame from the activation to the settled popup and from Back to the removed surface. The
- * test retains a per-frame geometry trace (layout bounds of the popup surface and of the
- * button, in screen pixels) and a native screenshot of the first visible and last
- * retracting frames for both buttons. The trace is layout evidence read after each frame;
- * the screenshots are the native presentation of the same frames.
+ * and retracts into them, exactly like the more-actions menu.
+ *
+ * The popup body is laid out at its settled size and morphed in draw, so layout bounds say
+ * nothing about where it is drawn. The proof therefore reads native pixels: a frozen clock
+ * steps every frame, a screenshot is taken at each one, and the drawn region is the
+ * bounding box of the pixels that differ from a baseline screenshot taken before the press.
+ * The first visible frame is the first one with such pixels, the last retracting frame the
+ * last one. Each is saved as a PNG named by its trace frame index; every frame, including
+ * those where nothing is drawn, is a row of trace.csv. A missing screenshot or a failed
+ * write fails the test.
+ *
+ * The oracle is the morph's own contract: the surface starts and ends at the trigger's
+ * bounds, and what it draws around them is the shared shadow field, whose extent is
+ * (4 + shadowSpread * 28 + 2) dp. A drawn region may therefore exceed the button by that
+ * extent plus one pixel of rounding, and must contain the button's centre.
  */
 class PopupAnchorMorphTest {
     @get:Rule val compose = createComposeRule()
@@ -37,16 +48,31 @@ class PopupAnchorMorphTest {
     private fun surfaceBounds(): Rect? =
         compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().singleOrNull()?.screenBounds()
 
-    /** Every edge of [actual] lies within [fraction] of the button's larger side from the button's edge. */
-    private fun nearButton(actual: Rect, home: Rect, fraction: Float): Boolean {
-        val tolerance = maxOf(home.width, home.height) * fraction
-        return kotlin.math.abs(actual.left - home.left) <= tolerance && kotlin.math.abs(actual.top - home.top) <= tolerance &&
-            kotlin.math.abs(actual.right - home.right) <= tolerance && kotlin.math.abs(actual.bottom - home.bottom) <= tolerance
+    private fun differing(frame: android.graphics.Bitmap, base: android.graphics.Bitmap): Rect? {
+        val width = frame.width; val height = frame.height
+        require(width == base.width && height == base.height)
+        val a = IntArray(width); val b = IntArray(width)
+        var left = width; var top = height; var right = -1; var bottom = -1
+        for (y in 0 until height) {
+            frame.getPixels(a, 0, width, 0, y, width, 1); base.getPixels(b, 0, width, 0, y, width, 1)
+            for (x in 0 until width) {
+                val p = a[x]; val q = b[x]
+                if (p != q && (kotlin.math.abs(((p shr 16) and 255) - ((q shr 16) and 255)) > 6 ||
+                        kotlin.math.abs(((p shr 8) and 255) - ((q shr 8) and 255)) > 6 || kotlin.math.abs((p and 255) - (q and 255)) > 6)) {
+                    if (x < left) left = x; if (x > right) right = x; if (y < top) top = y; bottom = y
+                }
+            }
+        }
+        return if (right < 0) null else Rect(left.toFloat(), top.toFloat(), right + 1f, bottom + 1f)
     }
 
     private fun runBar(button: String, popupText: String, evidence: String) {
         val rows = listOf(SongRow("a", Track("a", "Alpha", fileName = "a.mp3", relativePath = "a.mp3")))
+        var shadowExtent = 0f
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides false) {
+            val density = LocalDensity.current
+            val spread = LocalGlassAppearance.current.shadowSpread
+            SideEffect { shadowExtent = with(density) { (4f + spread * 28f + 2f).dp.toPx() } + 1f }
             Box(Modifier.fillMaxSize()) {
                 Box(Modifier.align(Alignment.BottomCenter)) {
                     SelectionActions(rows, setOf("a"), {}, null, null, PlaylistState(loading = false))
@@ -56,50 +82,70 @@ class PopupAnchorMorphTest {
         compose.waitForIdle()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val directory = nativeEvidenceDirectory("popup-anchor-748-$evidence", instrumentation.targetContext.getExternalFilesDir(null))
-        val trace = StringBuilder("phase,frame,left,top,right,bottom\n")
-        fun record(phase: String, frame: Int, rect: Rect) { trace.append("$phase,$frame,${rect.left},${rect.top},${rect.right},${rect.bottom}\n") }
-        fun screenshot(name: String) {
-            val image = instrumentation.uiAutomation.takeScreenshot() ?: return
-            try { File(directory, "$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } }
-            finally { image.recycle() }
+        val trace = StringBuilder("phase,frame,surface_layout,drawn_left,drawn_top,drawn_right,drawn_bottom\n")
+        fun grab(): android.graphics.Bitmap {
+            // Frozen clock: wait for the presented frame, then capture it natively.
+            Thread.sleep(150)
+            return checkNotNull(instrumentation.uiAutomation.takeScreenshot()) { "$button: native screenshot unavailable" }
+        }
+        fun save(image: android.graphics.Bitmap, name: String): File {
+            val file = File(directory, "$name.png")
+            check(file.outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }) { "$name: PNG write failed" }
+            assertTrue("$name must be a nonempty image", file.length() > 0)
+            return file
         }
         val home = compose.onNodeWithContentDescription(button).fetchSemanticsNode().screenBounds()
-        record("button", 0, home)
+        val baseline = grab()
+        save(baseline, "baseline")
+        fun contained(drawn: Rect, what: String) {
+            val allowed = Rect(home.left - shadowExtent, home.top - shadowExtent, home.right + shadowExtent, home.bottom + shadowExtent)
+            assertTrue("$what $drawn must contain the centre of $button $home", drawn.contains(home.center))
+            assertTrue("$what $drawn must stay within $button $home plus the shared shadow extent ($shadowExtent px)",
+                drawn.left >= allowed.left && drawn.top >= allowed.top && drawn.right <= allowed.right && drawn.bottom <= allowed.bottom)
+        }
         compose.mainClock.autoAdvance = false
         try {
             compose.onNodeWithContentDescription(button).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
-            var first: Rect? = null
+            var firstDrawn: Rect? = null
             repeat(60) { frame ->
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-                val surface = surfaceBounds()
-                if (surface != null) {
-                    record("open", frame, surface)
-                    if (first == null) { first = surface; screenshot("first-visible-frame") }
-                }
+                val layout = surfaceBounds()
+                val image = grab()
+                try {
+                    val drawn = differing(image, baseline)
+                    trace.append("open,$frame,${layout ?: "absent"},${drawn?.left ?: "absent"},${drawn?.top ?: ""},${drawn?.right ?: ""},${drawn?.bottom ?: ""}\n")
+                    if (firstDrawn == null && drawn != null) {
+                        firstDrawn = drawn
+                        save(image, "first-visible-frame-$frame")
+                        contained(drawn, "first visible frame $frame")
+                    }
+                } finally { image.recycle() }
             }
-            val start = requireNotNull(first) { "$button must present a popup surface" }
-            assertTrue("first visible frame $start must start at the bounds of $button $home", nearButton(start, home, .25f))
+            requireNotNull(firstDrawn) { "$button must draw a popup" }
             compose.mainClock.advanceTimeBy(1500); compose.waitForIdle()
             compose.onNodeWithText(popupText).assertExists()
-            val settled = requireNotNull(surfaceBounds())
-            record("settled", 0, settled)
-            assertTrue("settled popup $settled must be larger than its origin $start", settled.width > start.width * 1.5f)
             pressSystemBack()
-            var last: Rect? = null
+            var lastIndex = -1
+            var lastDrawn: Rect? = null
+            var lastImage: android.graphics.Bitmap? = null
             repeat(60) { frame ->
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-                val surface = surfaceBounds()
-                if (surface != null) { last = surface; record("close", frame, surface); if (frame == 0) screenshot("first-retract-frame") }
+                val layout = surfaceBounds()
+                val image = grab()
+                val drawn = differing(image, baseline)
+                trace.append("close,$frame,${layout ?: "absent"},${drawn?.left ?: "absent"},${drawn?.top ?: ""},${drawn?.right ?: ""},${drawn?.bottom ?: ""}\n")
+                if (drawn != null) { lastImage?.recycle(); lastImage = image; lastIndex = frame; lastDrawn = drawn } else image.recycle()
             }
-            screenshot("last-retract-frame")
+            val retained = checkNotNull(lastImage) { "dismissal of $button must draw a retracting popup" }
+            try { save(retained, "last-retracting-frame-$lastIndex") } finally { retained.recycle() }
+            contained(requireNotNull(lastDrawn), "last retracting frame $lastIndex")
             compose.mainClock.advanceTimeBy(2000); compose.waitForIdle()
             compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(0)
-            val end = requireNotNull(last) { "dismissal of $button must show a retracting surface" }
-            assertTrue("last retracting frame $end must end at the bounds of $button $home (settled $settled)", nearButton(end, home, .5f))
             compose.onNodeWithContentDescription(button).assertExists()
             assertEquals(home, compose.onNodeWithContentDescription(button).fetchSemanticsNode().screenBounds())
         } finally {
             compose.mainClock.autoAdvance = true
+            baseline.recycle()
             File(directory, "trace.csv").writeText(trace.toString())
         }
     }
