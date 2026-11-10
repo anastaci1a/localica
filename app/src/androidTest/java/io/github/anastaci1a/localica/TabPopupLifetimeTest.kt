@@ -81,7 +81,7 @@ class TabPopupLifetimeTest {
                     lastFmContent = { LastFmSettings(controller) })
             } }
             compose.waitUntil(5000) { !controller.state.value.loading }
-            fun tab(label: String) = compose.onNode(hasText(label) and hasAnyAncestor(hasTestTag("lastfm-tabs")), useUnmergedTree = true)
+            fun tab(label: String) = compose.onNodeWithText(label, useUnmergedTree = true)
             tab("Matches").performScrollTo().performClick()
             openSelector({ compose.onNodeWithText("Match group").performScrollTo().performClick() }, midMinimize)
             switchAndAssertGone({ tab("Overview").performClick() }) {
