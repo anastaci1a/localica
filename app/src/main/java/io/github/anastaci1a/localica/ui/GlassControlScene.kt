@@ -60,7 +60,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val opticalWork = LocalGlassOpticalWork.current
     Canvas(modifier.backdropLocation(location)) {
         val shape = geometry()
-            geometryObserver?.invoke(shape)
+        geometryObserver?.invoke(shape)
         if (!optical) {
             scene()
             drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
