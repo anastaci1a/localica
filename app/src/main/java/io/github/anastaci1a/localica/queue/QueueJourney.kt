@@ -64,8 +64,8 @@ data class QueueJourney(
 
     /**
      * The queue-order neighbor behind the oldest visit, kept only by a traversal that began when shuffle was
-     * enabled. It is one entry id under [BEHIND_START], so it costs nothing per queue size, persists as an
-     * ordinary plan row and is refreshed against the live queue order on every plan.
+     * enabled. It is one entry id and index under [BEHIND_START], so it costs nothing per queue size, persists as an
+     * ordinary plan row and is refreshed against the live queue order when the queue or the oldest visit changes.
      */
     private fun behindStart(): QueueVisit? {
         val entry = plans[BEHIND_START]?.firstOrNull() ?: return null
@@ -76,17 +76,19 @@ data class QueueJourney(
         return QueueVisit(entry, oldest.cycle, token)
     }
 
-    private fun behindPlan(ids: List<String>): Map<Long, List<String>> {
+    /** The row is [neighbor id, neighbor queue index]; the index lets going back step without scanning the queue. */
+    private fun behindPlan(ids: List<String>, indexOfOldest: Int? = null): Map<Long, List<String>> {
         if (!modes.shuffle || BEHIND_START !in plans) return emptyMap()
         val oldest = history.firstOrNull()?.entryId ?: return mapOf(BEHIND_START to emptyList())
-        val index = ids.indexOf(oldest)
-        val entry = when {
-            index > 0 -> ids[index - 1]
+        // A remembered index is trusted only while the queue still has the oldest visit there.
+        val index = indexOfOldest?.takeIf { ids.getOrNull(it) == oldest } ?: ids.indexOf(oldest)
+        val neighbor = when {
+            index > 0 -> index - 1
             // Repeat All wraps backwards exactly as ordered Previous does; a one-song queue has nowhere to go.
-            index == 0 && modes.loop && ids.size > 1 -> ids.last()
+            index == 0 && modes.loop && ids.size > 1 -> ids.lastIndex
             else -> null
         }
-        return mapOf(BEHIND_START to listOfNotNull(entry))
+        return mapOf(BEHIND_START to listOfNotNull(neighbor?.let { ids[it] }, neighbor?.toString()))
     }
 
     /** Nearest visits first in both directions, using transport's durable shuffle/ordered plan. */
@@ -107,9 +109,10 @@ data class QueueJourney(
             return (-64..64).mapNotNull(ordered::at)
         }
         val start = (cursor - 64).coerceAtLeast(0)
-        val end = cursor + 65
         // The unplayed queue-order neighbor joins the native timeline so Previous lands on a prepared item.
         val behind = if (start == 0) listOfNotNull(behindStart()) else emptyList()
+        // The window never exceeds 129 visits: the neighbor takes the slot of the farthest forward visit.
+        val end = if (behind.isEmpty()) cursor + 65 else (cursor + 65).coerceAtMost(128)
         return behind + history.subList(start.coerceAtMost(history.size), end.coerceIn(start.coerceAtMost(history.size), history.size)) +
             if (end > history.size) future.take(end - history.size) else emptyList()
     }
@@ -168,7 +171,8 @@ data class QueueJourney(
         behindStart()?.takeIf { it.token == token }?.let { visit ->
             // Going back past the traversal's start joins the retraceable history and counts as visited for the cycle.
             return copy(history = listOf(visit) + history, cursor = 0,
-                visited = if (visit.cycle == cycle) visited + visit.entryId else visited).planned(ids, random)
+                visited = if (visit.cycle == cycle) visited + visit.entryId else visited)
+                .planned(ids, random, refreshBehind = true, indexOfOldest = plans[BEHIND_START]?.getOrNull(1)?.toIntOrNull())
         }
         val visit = future.firstOrNull { it.token == token } ?: return this
         val kept = history.take(cursor + 1) + visit
@@ -222,7 +226,7 @@ data class QueueJourney(
             // Going back from the anchor follows the queue's order; planned() fills the marker row.
             return QueueJourney(history = listOf(anchor), cursor = 0, cycle = anchor.cycle,
                 visited = setOf(anchor.entryId), plans = mapOf(BEHIND_START to emptyList()), modes = requested)
-                .planned(ids, random)
+                .planned(ids, random, refreshBehind = true)
         }
         val newOrderedTraversal = !requested.shuffle && (changedShuffle || newSelection || orderedTraversalId == null || orderedAnchorToken == null)
         val changedCycles = changedShuffle || modes.reshuffle != requested.reshuffle
@@ -233,7 +237,7 @@ data class QueueJourney(
             plans = retainedPlans, future = future.filter { it.entryId in valid },
             orderedTraversalId = if (requested.shuffle) null else if (newOrderedTraversal) UUID.randomUUID().toString() else orderedTraversalId,
             orderedAnchorToken = if (requested.shuffle) null else if (newOrderedTraversal) kept[position].token else orderedAnchorToken)
-            .planned(ids, random)
+            .planned(ids, random, refreshBehind = true)
     }
 
     /** Explicit queue-end reset starts a fresh cycle without inventing earlier visits. */
@@ -250,7 +254,9 @@ data class QueueJourney(
             orderedAnchorToken = if (modes.shuffle) null else visit.token).planned(ids, random)
     }
 
-    private fun planned(ids: List<String>, random: Random): QueueJourney {
+    /** The queue-order neighbor is looked up only where the oldest visit or the queue changes, never per step. */
+    private fun planned(ids: List<String>, random: Random, refreshBehind: Boolean = false,
+        indexOfOldest: Int? = null): QueueJourney {
         val valid = ids.toSet()
         val prepared = linkedMapOf<Long, List<String>>()
         val lastCycle = if (!modes.loop) cycle else if (cycle <= Long.MAX_VALUE - 2) cycle + 2 else Long.MAX_VALUE
@@ -279,7 +285,8 @@ data class QueueJourney(
             remaining.filterNot { modes.shuffle && it in scheduled[number].orEmpty() }
                 .map { id -> oldVisits[number to id] ?: QueueVisit(id, number) }
         }
-        return copy(plans = prepared + behindPlan(ids), future = pending)
+        val behind = if (refreshBehind) behindPlan(ids, indexOfOldest) else if (modes.shuffle) plans.filterKeys { it == BEHIND_START } else emptyMap()
+        return copy(plans = prepared + behind, future = pending)
     }
 
     companion object {

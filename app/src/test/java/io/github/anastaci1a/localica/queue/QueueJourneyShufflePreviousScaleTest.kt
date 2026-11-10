@@ -54,15 +54,15 @@ class QueueJourneyShufflePreviousScaleTest {
             nanos[step] = System.nanoTime() - clock
             perStep[step] = values.scanned - before
             assertEquals(expected, path.current?.entryId)
-            assertEquals("One reserved entry, whatever the queue size", 1, path.plans.getValue(BEHIND).size)
-            assertTrue(path.window().size <= 130)
+            assertEquals("One neighbor id and index, whatever the queue size", 2, path.plans.getValue(BEHIND).size)
+            assertTrue(path.window().size <= 129)
         }
         val gcCount = gc.count - gcBefore; val gcMillis = gc.millis - gcTimeBefore
         val heapAfter = heapMb()
         assertEquals("History grows by exactly the visits walked", steps + 1, path.history.size)
         assertEquals("Plan state is unchanged by walking back", plansSize, path.plans.values.sumOf { it.size })
         // One index lookup per step, never growing with how far back the traversal has gone.
-        assertTrue("A step scans at most one pass over the queue, was ${perStep.max()}", perStep.max() <= size)
+        assertEquals("Going back never scans the queue", 0L, perStep.max())
         assertTrue("Step ${steps - 1} must not cost more than the first (${perStep.first()} vs ${perStep.last()})",
             perStep.last() <= perStep.first())
         // Return forward through the retraced visits to prove the way back is a real history.
@@ -89,13 +89,13 @@ class QueueJourneyShufflePreviousScaleTest {
     @Test fun previousAtThirteenThousandFourHundredEntriesDoesNotGrowWithDepthOrQueueSize() = measure(13_400, 400)
     @Test fun previousAtFiftyThousandEntriesDoesNotGrowWithDepthOrQueueSize() = measure(50_000, 400)
 
-    @Test fun savedStateCostsOneRowWhateverTheQueueSize() {
+    @Test fun savedStateCostsTwoRowsWhateverTheQueueSize() {
         val rows = listOf(13_400, 50_000).map { size ->
             val values = List(size) { "occurrence-$it" }
             val start = QueueJourney.start(values, values[size / 2], JourneyModes(), Random(7))
             val shuffled = start.reconcile(values, values[size / 2], JourneyModes(shuffle = true), Random(11))
             shuffled.cycleRecords("q").count { it.cycle == BEHIND }
         }
-        assertEquals(listOf(1, 1), rows)
+        assertEquals("The neighbor id and its index", listOf(2, 2), rows)
     }
 }

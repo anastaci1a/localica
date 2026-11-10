@@ -140,4 +140,81 @@ class ShufflePreviousPlaybackTest {
             db.close(); file.delete(); preferences.write(original)
         }
     }
+
+    /** Shuffle turned on mid-queue at the second of four songs, then Next until the shuffled order runs out. */
+    private fun exhaust(repeat: QueueRepeat, body: () -> Unit) {
+        try {
+            preferences.write(QueueSettings(shuffle = false, repeat = repeat))
+            instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }
+            val song = Track(file.toURI().toString(), "Duplicate", fileName = file.name, relativePath = file.name)
+            var queue = QueueEdits.create(List(4) { song }, 0, "Shuffle exhaustion")
+            ids = queue.entries.map { it.id }
+            queue = queue.copy(currentEntryId = ids[1], positionMs = 1000, journey = QueueJourney.start(ids, ids[1],
+                JourneyModes(loop = repeat == QueueRepeat.All)))
+            runBlocking { db.queues().save(QueueLibrary(), QueueLibrary(listOf(queue), queue.id)) }
+            main {
+                player = ExoPlayer.Builder(context).build().apply { volume = 0f }
+                queues = QueueController(db.queues(), preferences, (context.applicationContext as LocalicaApplication).library, scope)
+                queues.attach(player)
+            }
+            at(1)
+            queues.shuffle()
+            await(timeoutMs = 15_000) { queues.state.value.settings.shuffle && journey().modes.shuffle }
+            queues.previous(alwaysSong = true)
+            at(0)
+            body()
+        } finally {
+            main {
+                if (::queues.isInitialized && ::player.isInitialized) queues.detach(player)
+                if (::player.isInitialized) player.release()
+                scope.cancel()
+            }
+            db.close(); file.delete(); preferences.write(original)
+        }
+    }
+
+    private fun nextUntilExhausted() {
+        // From the song before the start, the start and every other song remain: three Next steps exhaust the cycle.
+        repeat(3) {
+            val target = journey().next!!.entryId
+            queues.next()
+            await(timeoutMs = 15_000) { queues.state.value.library.active?.currentEntryId == target }
+        }
+        assertEquals(0L, journey().cycle)
+        assertEquals(ids.toSet(), journey().visited)
+    }
+
+    private fun repeatModeIs(expected: Int) = main { assertEquals(expected, player.repeatMode) }
+    private fun settle() = Thread.sleep(1_000)
+
+    @Test fun repeatOffStopsWhenTheShuffledOrderIsExhausted() = exhaust(QueueRepeat.Off) {
+        repeatModeIs(Player.REPEAT_MODE_OFF)
+        nextUntilExhausted()
+        val last = journey().current
+        assertNull(journey().next)
+        main { assertFalse(player.hasNextMediaItem()) }
+        queues.next(); settle()
+        assertEquals(last, journey().current)
+        assertEquals(0L, journey().cycle)
+    }
+
+    @Test fun repeatOneDoesNotExtendTheShuffleCycle() = exhaust(QueueRepeat.One) {
+        repeatModeIs(Player.REPEAT_MODE_ONE)
+        nextUntilExhausted()
+        val last = journey().current
+        assertNull(journey().next)
+        queues.next(); settle()
+        assertEquals(last, journey().current)
+        assertEquals(0L, journey().cycle)
+    }
+
+    @Test fun repeatAllContinuesIntoAnotherShuffleCycle() = exhaust(QueueRepeat.All) {
+        repeatModeIs(Player.REPEAT_MODE_ALL)
+        nextUntilExhausted()
+        val next = journey().next!!
+        assertEquals(1L, next.cycle)
+        queues.next()
+        await(timeoutMs = 15_000) { queues.state.value.library.active?.currentEntryId == next.entryId && journey().cycle == 1L }
+        assertEquals(setOf(next.entryId), journey().visited)
+    }
 }

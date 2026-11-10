@@ -200,4 +200,22 @@ class QueueJourneyShufflePreviousTest {
         assertNull(path.previous)
         assertFalse(BEHIND in path.plans)
     }
+
+    @Test fun theNativeWindowKeepsItsBoundAroundTheRetainedBehindVisit() {
+        val long = (0..300).map { "s$it" }
+        var path = QueueJourney.start(long, "s150", JourneyModes(), Random(7)).reconcile(long, "s150", JourneyModes(shuffle = true), Random(11))
+        repeat(140) { path = path.arrive(path.next!!.token, long, Random(13)) }
+        for (cursor in listOf(0, 1, 63, 64, 65, 66, 100)) {
+            val at = path.arrive(path.history[cursor].token, long, Random(17))
+            assertEquals(cursor, at.cursor)
+            val window = at.window()
+            assertTrue("cursor $cursor window ${window.size}", window.size <= 129)
+            assertTrue("The current visit stays in its window", window.any { it.token == at.current!!.token })
+            val behind = window.first().token != at.history.first().token
+            assertEquals("The behind visit is present exactly while the window reaches the oldest visit", cursor <= 64, behind)
+            if (cursor == 0) assertEquals(at.previous, window.first())
+            if (behind) assertEquals(at.history.first().token, window[1].token)
+            assertEquals(window.size, window.map { it.token }.toSet().size)
+        }
+    }
 }

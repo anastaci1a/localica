@@ -53,7 +53,7 @@ class QueueJourneyPreparationTest {
             val changed = prepared.reconcile(ids, "A", nextModes, Random(42))
             assertNotSame(prepared, changed)
             assertFixed(changed, ids, "A", nextModes)
-            assertEquals(if (nextModes.shuffle) listOf("C") else null, changed.plans[Long.MIN_VALUE])
+            assertEquals(if (nextModes.shuffle) listOf("C", "2") else null, changed.plans[Long.MIN_VALUE])
         }
     }
 
