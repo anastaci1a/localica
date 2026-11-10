@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -57,6 +58,7 @@ class PlayerPresentationSliceEqualityTest {
     private var specAccess = ""
     private var ownsRootClock = false
     private var localReduced = false
+    private val polarity = PlayerBackgroundPolarityState()
 
     @Test fun normalFramesKeepExactAdmissionGeometryAndPixels() = exercise("Normal", false, false)
     @Test fun fasterFramesKeepExactAdmissionGeometryAndPixels() = exercise("Faster", false, true)
@@ -84,7 +86,7 @@ class PlayerPresentationSliceEqualityTest {
                         PlayerSurface(PlaybackState(connected = true, title = "Evening", artist = "Artist", durationMs = 120000),
                             true, {}, InterfaceSettings(reducedMotion = reduced, fasterMotion = faster, artworkLayout = layout,
                                 glass = appearance),
-                            progress, {}, {}, {}, {}, {}, {}, lyricsOpen = lyrics, visual = visual) {
+                            progress, {}, {}, {}, {}, {}, {}, lyricsOpen = lyrics, visual = visual, backgroundPolarity = polarity) {
                             val clock = LocalUiClock.current
                             val rootClock = LocalClockOwner.current
                             val context = LocalEngineContext.current
@@ -155,6 +157,8 @@ class PlayerPresentationSliceEqualityTest {
                     else unique("slice-i-action-ink").assertIsDisplayed()
                 }
                 val image = captureNode.captureToImage()
+                val retained = compose.runOnIdle { polarity.settledEndpoint?.let { it.copy(footprints = it.footprints.toList()) } }
+                if (p == 1f && !selected) assertNotNull("The original polarity field retains an ordinary endpoint", retained)
                 val handlePaint = if (p == 1f) handleContrast(image, captureBounds) else JSONObject.NULL
                 val actionPaint = if (p == 1f && !selected) magentaPixels(image) else 0
                 val lyricsPaint = if (p == 1f && selected) lyricsPixels(image, captureBounds) else 0
@@ -167,6 +171,7 @@ class PlayerPresentationSliceEqualityTest {
                 File(output, "$name.png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
                 receipts.put(JSONObject().put("name", name).put("phaseBits", p.toRawBits()).put("window", JSONArray(window))
                     .put("engine", JSONArray(engine))
+                    .put("retainedEndpoint", retained?.let(::retainedGeometry) ?: JSONObject.NULL)
                     .put("capture", rect(captureBounds)).put("geometry", geometry).put("handlePaint", handlePaint)
                     .put("actionPaint", actionPaint).put("lyricsPaint", lyricsPaint))
             }
@@ -182,6 +187,15 @@ class PlayerPresentationSliceEqualityTest {
         return compose.onNodeWithTag(tag, useUnmergedTree = true)
     }
     private fun rect(value: Rect) = JSONArray(listOf(value.left, value.top, value.right, value.bottom))
+
+    private fun retainedGeometry(value: PlayerBackgroundGeometry): JSONObject {
+        val scale = value.contentScale.computeScaleFactor(Size(32f, 32f), value.cover.size)
+        return JSONObject().put("size", JSONArray(listOf(value.size.width, value.size.height)))
+            .put("cover", rect(value.cover)).put("washCover", rect(value.washCover))
+            .put("footprints", JSONArray(value.footprints.map(::rect)))
+            .put("fields", JSONArray(listOf(value.fullArtBlend, value.softness, value.edgeSoftness, value.edgeBand,
+                value.coverBlend, value.artworkAlpha, value.corner, scale.scaleX, scale.scaleY)))
+    }
 
     private fun handleContrast(image: ImageBitmap, capture: Rect): Boolean {
         val bounds = unique("player-handle").fetchSemanticsNode().boundsInRoot
