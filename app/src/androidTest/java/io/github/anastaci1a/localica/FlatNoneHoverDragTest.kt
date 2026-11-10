@@ -41,6 +41,24 @@ class FlatNoneHoverDragTest {
             val actual = surfaces.get(owners.single()) as Map<*, *>
             return (actual.values.single() as HoverSurfaceRenderer).shadow
         }
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val output = java.io.File(context.getExternalFilesDir(null), "flat-hover-776").apply { mkdirs() }
+        val observations = org.json.JSONArray()
+        val requested = RetainedGlassShadow::class.java.getDeclaredField("requested").apply { isAccessible = true }
+        val raster = RetainedGlassShadow::class.java.getDeclaredField("raster\$delegate").apply { isAccessible = true }
+        fun state() = compose.runOnIdle {
+            val owner = currentShadow() as RetainedGlassShadow
+            val prepared = (raster.get(owner) as State<*>).value
+            val key = prepared?.javaClass?.getDeclaredField("key")?.apply { isAccessible = true }?.get(prepared)
+            org.json.JSONObject().put("owner", System.identityHashCode(owner)).put("rasterizations", owner.rasterizations)
+                .put("requestedKey", requested.get(owner).toString()).put("preparedKeyMatches", key != null && key == requested.get(owner))
+        }
+        fun save(name: String, bitmap: android.graphics.Bitmap) {
+            java.io.File(output, "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        fun pixels(bitmap: android.graphics.Bitmap) = IntArray(bitmap.width * bitmap.height).also {
+            bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        }
         compose.mainClock.autoAdvance = false
         try {
             compose.runOnIdle { GlassWork.observer = { events.add(it) } }
@@ -61,16 +79,28 @@ class FlatNoneHoverDragTest {
             }
             repeat(64) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
             compose.runOnIdle { events.clear() }
+            val beforeReference = state()
             val reference = compose.onNodeWithTag("flat-drag").captureToImage().asAndroidBitmap()
+            val referencePixels = pixels(reference)
+            observations.put(org.json.JSONObject().put("label", "reference").put("before", beforeReference).put("after", state())
+                .put("bitmapConfig", reference.config.toString()).put("colorSpace", reference.colorSpace.toString()))
+            save("reference", reference)
             var changedImages = 0
-            repeat(24) {
+            repeat(24) { index ->
                 compose.runOnIdle { redraw.intValue++ }
                 compose.mainClock.advanceTimeByFrame()
                 compose.waitForIdle()
+                val before = state()
                 val image = compose.onNodeWithTag("flat-drag").captureToImage().asAndroidBitmap()
+                val actual = pixels(image)
+                observations.put(org.json.JSONObject().put("label", index).put("before", before).put("after", state())
+                    .put("differentArgbPixels", actual.indices.count { actual[it] != referencePixels[it] })
+                    .put("bitmapConfig", image.config.toString()).put("colorSpace", image.colorSpace.toString()))
+                save("frame-$index", image)
                 if (!reference.sameAs(image)) changedImages++
                 compose.runOnIdle { shadows.add(currentShadow()) }
             }
+            java.io.File(output, "observations.json").writeText(observations.toString(2))
             compose.runOnIdle {
                 assertEquals("Every actual drag redraw is flat; no optical allocation or preparation", emptyList<String>(), events)
                 assertEquals("The same shadow survives every drag frame", 1, shadows.size)
