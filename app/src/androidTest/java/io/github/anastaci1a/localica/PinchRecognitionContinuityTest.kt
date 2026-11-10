@@ -24,6 +24,7 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.bindPinchClock
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -84,6 +85,7 @@ class PinchRecognitionContinuityTest {
             val owner = Job()
             val scope = CoroutineScope(owner + Dispatchers.Unconfined + clock)
             val motion = BrowsePinchMotion()
+            scope.bindPinchClock(motion.progressOwner.motion)
             try {
                 motion.progress.snapTo(0f)
                 motion.held = true; motion.destinationReady = true; motion.fingerProgress = finger

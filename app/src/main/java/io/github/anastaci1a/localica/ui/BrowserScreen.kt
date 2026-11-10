@@ -333,6 +333,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val mutablePositions = remember(physicalOrder) { physicalOrder.orEmpty().withIndex().associate { it.value to it.index + 1 } }
     val pinchMotion = remember(route.key) { BrowsePinchMotion() }
+    io.github.anastaci1a.localica.ui.components.BindBrowsePinchProgress(pinchMotion.progressOwner)
     /** A saved geometry change (View popup) takes the pinch transaction, not a reflow (#627).
      * Its geometry commits like a pinch; the saved style (sort, information and so on) is
      * written once the transaction ends, so a rollback, failure or disposal still saves it. */

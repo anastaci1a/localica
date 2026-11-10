@@ -1,14 +1,23 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.tween
+import io.github.anastaci1a.localica.ui.components.BrowsePinchProgress
+import io.github.anastaci1a.localica.ui.engine.PinchEaseMinimumFrames
+import io.github.anastaci1a.localica.ui.engine.bindPinchClock
 import androidx.compose.runtime.MonotonicFrameClock
 import androidx.compose.ui.MotionDurationScale
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
 import org.junit.Assert.*
 import org.junit.Test
 
 /** #560: a slow frame (the destination's first composition on a phone) must not finish an ease in one step. */
 class BrowsePinchProgressTest {
+    private suspend fun drive(progress: BrowsePinchProgress, block: suspend CoroutineScope.() -> Unit) = coroutineScope {
+        val root = bindPinchClock(progress.motion)
+        try { block() } finally { root.cancel() }
+    }
+
     /** Frame times as a device reports them; records the shown value after each frame. */
     private class Frames(private val intervalsMillis: List<Double>, private val shown: () -> Float) : MonotonicFrameClock {
         val values = mutableListOf<Float>()
@@ -26,10 +35,10 @@ class BrowsePinchProgressTest {
         val progress = BrowsePinchProgress(from)
         val frames = Frames(intervals) { progress.value }
         var caughtUp = false
-        runBlocking(frames) {
+        runBlocking(frames) { drive(progress) {
             progress.follow(fingers)
             progress.catchUp { caughtUp = true }
-        }
+        } }
         assertTrue(caughtUp)
         assertEquals(fingers, progress.value, 0f)
         return frames
@@ -68,7 +77,7 @@ class BrowsePinchProgressTest {
             val context = if (scale == 1f) frames else frames + object : MotionDurationScale {
                 override val scaleFactor = scale
             }
-            runBlocking(context) { progress.animateTo(0f, tween(220)) }
+            runBlocking(context) { drive(progress) { progress.animateTo(0f) } }
             assertEquals(0f, progress.value, 0f)
             return frames
         }
@@ -90,7 +99,7 @@ class BrowsePinchProgressTest {
         for (interval in listOf(100.0, 200.0, 400.0)) {
             val progress = BrowsePinchProgress(.3f)
             val frames = Frames(listOf(interval)) { progress.value }
-            runBlocking(frames) { progress.animateTo(0f, tween(220)) }
+            runBlocking(frames) { drive(progress) { progress.animateTo(0f) } }
             assertEquals(0f, progress.value, 0f)
             val displayed = frames.values.size
             assertTrue("A settle at $interval ms frames shows $displayed frames, more than ${PinchEaseMinimumFrames + 2}",
@@ -113,7 +122,7 @@ class BrowsePinchProgressTest {
                 frames.largestStep(0f, .3f) < .5f)
             val progress = BrowsePinchProgress(.3f)
             val settle = Frames(listOf(stall, stall) + List(40) { 1000.0 / 60 }) { progress.value }
-            runBlocking(settle) { progress.animateTo(0f, tween(220)) }
+            runBlocking(settle) { drive(progress) { progress.animateTo(0f) } }
             assertTrue("Two $stall ms frames: a frame returns ${settle.largestStep(.3f, 0f)} of the settle: ${settle.values}",
                 settle.largestStep(.3f, 0f) < .5f)
         }
