@@ -28,6 +28,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.platform.graphics.HardwareRendererCompat
 import io.github.anastaci1a.localica.ui.LocalReducedMotion
+import io.github.anastaci1a.localica.ui.SearchMorphSample
 import io.github.anastaci1a.localica.ui.engine.*
 import io.github.anastaci1a.localica.ui.spec.LocalUiSpec
 import org.json.JSONArray
@@ -281,9 +282,12 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
             after.map { listOf(it.sequence, it.nanos, it.viewIdentity, it.tokenIdentity, it.localReduced, it.clockAccess, it.clockSpecAccess, it.bounds, it.surfaceBounds) }) {
             "Observation crossed Engine/policy/native geometry at ${point.label}"
         }
-        row.put("owners", owners).put("supplemental", JSONObject(rule.runOnUiThread(supplemental)))
+        val immutableValues = rule.runOnUiThread(supplemental)
+        val serializedValues = immutableValues.mapValues { (_, value) -> if (value is SearchMorphSample) value.toString() else value }
+        row.put("owners", owners).put("supplemental", JSONObject(serializedValues))
         rows.put(row)
-        File(output, "frames.json").writeText(JSONObject().put("method", method).put("frames", rows).toString(2))
+        File(output, "frames.json").writeText(JSONObject().put("method", method)
+            .put("initialClockMs", initialClock).put("frames", rows).toString(2))
     }
     override fun close() {
         rule.runOnUiThread {
