@@ -105,7 +105,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: EasingSpec,T: Double,sigma: Dou
     internal fun hold() {
         val stamp=clock.stampNow; guard(stamp); check(!touching) { "Contact and departing-home ownership cannot overlap" }
         if(held) return
-        val channels=listOf(motion)+(bound?.channels?:emptyList())
+        val channels=listOf(motion)+(bound?.channels?.toList()?:emptyList())
         val entries=channels.map { channel ->
             val value=channel.rawValue(stamp)
             channel to channel.prepareSegment(Driven(value,0.0),value.toFloat(),stamp,policy="DrivenInput")
