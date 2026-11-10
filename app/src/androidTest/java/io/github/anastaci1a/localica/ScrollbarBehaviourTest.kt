@@ -240,12 +240,24 @@ class ScrollbarBehaviourTest {
         // Finger down on the list, scroll, then hold still for longer than the idle timeout.
         compose.onNodeWithTag("rows").performTouchInput { down(center) }
         val appear = mutableListOf<Float>()
+        val appearAt = mutableListOf<Long>()
         repeat(16) {
             compose.onNodeWithTag("rows").performTouchInput { moveBy(Offset(0f, -10f * density)) }
-            frames(1); val s = sample(); appear += opacity(s); timeline += row(s, ",scroll,${appear.last()}")
+            frames(1); val s = sample(); appear += opacity(s); appearAt += s.millis; timeline += row(s, ",scroll,${appear.last()}")
         }
         assertTrue("Fade-in is monotonic: $appear", appear.zipWithNext().all { (a, b) -> b >= a - 1.5f / 255f })
-        assertTrue("No single-frame pop-in: $appear", appear.count { it > .02f && it < .98f } >= ScrollbarSpec.fadeMillis / 16 - 4)
+        // Each sample also follows an injected move that advances the test clock, so samples are not one frame
+        // apart: judge the fade by elapsed time. No pop-in means the rise spans most of the fade duration, and no
+        // interval rises faster than the easing's steepest slope allows (2.6 x the average rate, plus 8-bit readback).
+        val first = appear.indexOfFirst { it > .02f }
+        val full = appear.indexOfFirst { it >= .98f }
+        assertTrue("Fade-in reached full opacity: $appear", first in 0 until full)
+        assertTrue("The rise spans the fade duration, not one frame: ${appearAt[full] - appearAt[first]} ms of ${ScrollbarSpec.fadeMillis}",
+            appearAt[full] - appearAt[first] >= ScrollbarSpec.fadeMillis * .6f)
+        appear.indices.drop(1).forEach { i ->
+            val allowed = 2.6f * (appearAt[i] - appearAt[i - 1]) / ScrollbarSpec.fadeMillis + 3f / 255f
+            assertTrue("Fade-in jumped ${appear[i] - appear[i - 1]} in ${appearAt[i] - appearAt[i - 1]} ms (> $allowed): $appear", appear[i] - appear[i - 1] <= allowed)
+        }
         val holdUntil = compose.mainClock.currentTime + ScrollbarSpec.idleMillis + ScrollbarSpec.fadeMillis + 1000
         while (compose.mainClock.currentTime < holdUntil) {
             compose.mainClock.advanceTimeBy(100); val s = sample(); timeline += row(s, ",finger-still,${opacity(s)}")
