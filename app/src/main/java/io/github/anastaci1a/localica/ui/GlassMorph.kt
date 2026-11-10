@@ -51,10 +51,6 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.filterNotNull
@@ -70,23 +66,6 @@ import io.github.anastaci1a.localica.ui.engine.GlassShadowExclusion
 import io.github.anastaci1a.localica.ui.engine.GlassShadowReceiver
 import io.github.anastaci1a.localica.ui.engine.GlassShadowReceiverField
 import io.github.anastaci1a.localica.ui.engine.glassWellCaster
-
-/** A retained but undrawn origin cannot acknowledge restoration. Keep the native
- * receipts on the normal path, but retire after the base's six-frame allowance.
- * Bound the field return too: a hidden home cannot submit its owned field. */
-private suspend fun awaitTriggerReturn(returnHome: suspend () -> Unit) = coroutineScope {
-    val returned = async(start = CoroutineStart.UNDISPATCHED) { returnHome() }
-    val deadline = async { repeat(6) { withFrameNanos { } } }
-    try {
-        select<Unit> {
-            returned.onAwait { }
-            deadline.onAwait { }
-        }
-    } finally {
-        returned.cancel()
-        deadline.cancel()
-    }
-}
 
 /** The trigger stays in layout while its one visible surface moves into a modal window. */
 internal data class GlassOriginPresentation(val shape: GlassShape, val vertical: Boolean,
