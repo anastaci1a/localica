@@ -163,7 +163,7 @@ class PopupImeGeometryTest {
         try {
             probe.phase = "opening"
             field.performClick()
-            assertTrue("Native IME opens", probe.opened.await(10, TimeUnit.SECONDS))
+            if (!probe.opened.await(10, TimeUnit.SECONDS)) throw AssertionError("Native IME opens; " + imeDiagnostics(view, probe))
             compose.waitForIdle()
             if (mixedContent) {
                 assertTrue("The update was published during a native IME delta", mixedPublished)
@@ -192,6 +192,14 @@ class PopupImeGeometryTest {
             compose.runOnIdle { controller.close() }
             sceneAudio?.delete()
         }
+    }
+
+    private fun imeDiagnostics(host: View, probe: NativeProbe): String {
+        fun sh(c: String) = android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(c)).bufferedReader().use { it.readText().trim() }
+        val insets = compose.runOnUiThread { ViewCompat.getRootWindowInsets(host)?.let { "visible=${it.isVisible(WindowInsetsCompat.Type.ime())} bottom=${it.getInsets(WindowInsetsCompat.Type.ime()).bottom}" } }
+        val dump = sh("dumpsys -t 2 input_method").lines().filter { l -> listOf("mShowImeWithHardKeyboard", "mIsInputViewShown", "mInputShown", "mImeWindowVis", "mCurId", "mCurFocusedWindow", "hardKeyboard", "mShowRequested").any { it in l } }.joinToString(" ¦ ") { it.trim() }
+        val settings = listOf("secure show_ime_with_hard_keyboard", "secure default_input_method", "global animator_duration_scale", "global transition_animation_scale", "global window_animation_scale").joinToString(" ") { "$it=${sh("settings get $it")}" }
+        return "insets[$insets] callbacks=${probe.nativeInsets.size} ${probe.nativeInsets.distinct()} $settings ime[$dump]"
     }
 
     private inner class NativeProbe(private val host: View, private val slots: Map<String, LayoutCoordinates>, private val telemetry: Map<String, Float>, private val onImeProgress: (Int) -> Unit) : View(host.context) {
