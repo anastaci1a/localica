@@ -22,7 +22,7 @@ class QuickInsetMotionTest {
                 for (sample in 0..1000) {
                     val time = before.durationNanos * sample / 1000
                     assertEquals("Value at $speed/$reduced/$start/$end/$sample", before.getValueFromNanos(time).toRawBits(), after.getValueFromNanos(time).toRawBits())
-                    assertEquals("Velocity at $speed/$reduced/$start/$end/$sample", before.getVelocityVectorFromNanos(time)[0].toRawBits(), after.getVelocityVectorFromNanos(time)[0].toRawBits())
+                    assertEquals("Velocity at $speed/$reduced/$start/$end/$sample", before.getVelocityVectorFromNanos(time).value.toRawBits(), after.getVelocityVectorFromNanos(time).value.toRawBits())
                 }
             }
         }
