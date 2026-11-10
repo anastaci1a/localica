@@ -130,12 +130,19 @@ class MenuInvariantTest {
         end in 1 until label.text.length && label.text[end - 1].isLetterOrDigit() && label.text[end].isLetterOrDigit()
     }
 
+    /** Text that is cut by its line limit or runs past its width. (hasVisualOverflow also reports text narrower than its constraint.) */
+    private fun overflows(label: Label): Boolean = label.layout.let { layout ->
+        val last = layout.lineCount - 1
+        layout.lineCount > layout.layoutInput.maxLines || layout.getLineEnd(last) < label.text.length ||
+            (0..last).any { layout.getLineRight(it) > layout.layoutInput.constraints.maxWidth + 1f }
+    }
+
     private fun describe(label: Label) = "'${label.text}' lines=${label.layout.lineCount} size=${label.layout.size} constraints=${label.layout.layoutInput.constraints} exceedsMaxLines=${(0 until label.layout.lineCount).lastOrNull()?.let { label.layout.isLineEllipsized(it) }} maxLines=${label.layout.layoutInput.maxLines}"
 
     /** I4 for system labels: no overflow and no break inside a word. A failure is a copy or layout defect. */
     @Test fun i4_staticLabelsNeverOverflowOrBreakInsideAWord() = everywhere { _, report ->
         for (label in labels().filter { it.flow == MenuTextFlow.Static }) {
-            if (label.layout.hasVisualOverflow) report("I4 static label overflows: ${describe(label)}")
+            if (overflows(label)) report("I4 static label overflows: ${describe(label)}")
             if (breaksInsideAWord(label)) report("I4 static label breaks inside a word: '${label.text}'")
         }
     }
@@ -153,14 +160,14 @@ class MenuInvariantTest {
         }
         val labels = labels()
         for (label in labels.filter { it.flow == MenuTextFlow.Dynamic }) {
-            if (label.layout.hasVisualOverflow) report("I4 dynamic text overflows: ${describe(label)}")
+            if (overflows(label)) report("I4 dynamic text overflows: ${describe(label)}")
             for (line in 0 until label.layout.lineCount - 1) {
                 val end = label.layout.getLineEnd(line)
                 if (end in 1 until label.text.length && label.text[end - 1].isHighSurrogate()) report("I4 dynamic text splits a surrogate pair: '${label.text}'")
             }
         }
         for (label in labels.filter { it.flow == MenuTextFlow.Value }) {
-            if (label.layout.lineCount != 1 || label.layout.hasVisualOverflow) report("I4 value text is not one whole line: '${label.text}'")
+            if (label.layout.lineCount != 1 || overflows(label)) report("I4 value text is not one whole line: '${label.text}'")
         }
         // The long fixtures must actually exercise the fallback, or this test proves nothing about it.
         if (name.startsWith("Data-long")) assertTrue("$name exercises the fallback", labels.any { it.flow == MenuTextFlow.Dynamic && breaksInsideAWord(it) })
@@ -219,17 +226,21 @@ class MenuInvariantTest {
     @Test fun i9_loadingAndReadyFacesHaveEqualBounds() {
         show()
         val failures = mutableListOf<String>()
+        var detail = emptyMap<Rect, String>()
         fun rows(name: String): List<Rect> {
             shown = fixtures.single { it.name == name }
             compose.waitForIdle()
-            return parts().filter { it.part == MenuPart.Row }.map { it.rect }.sortedWith(compareBy({ it.top }, { it.left }))
+            val all = parts()
+            val rows = all.filter { it.part == MenuPart.Row }.map { it.rect }.sortedWith(compareBy({ it.top }, { it.left }))
+            detail = rows.associateWith { row -> all.filter { it.part != MenuPart.Row && it.rect.inside(row) }.joinToString { "${it.part}@${it.rect.top - row.top},${it.rect.height}" } }
+            return rows
         }
         for (factor in scales) for (ready in fixtures.filter { it.name.endsWith("-ready") }) {
             scale = factor
-            val a = rows(ready.name)
+            val a = rows(ready.name); val readyDetail = detail
             val b = rows(ready.name.removeSuffix("-ready") + "-loading")
             if (a.isEmpty()) failures += "${ready.name}@$factor drew no rows"
-            if (a != b) failures += "I9 ${ready.name}@$factor: ${a.size} ready and ${b.size} loading rows differ at ${a.indices.filter { a[it] != b.getOrNull(it) }.take(6).map { "#$it ready ${a[it]} loading ${b.getOrNull(it)}" }}"
+            if (a != b) failures += "I9 ${ready.name}@$factor: ${a.size} ready and ${b.size} loading rows differ at ${a.indices.filter { a[it] != b.getOrNull(it) }.take(6).map { "#$it ready ${a[it]} [${readyDetail[a[it]]}] loading ${b.getOrNull(it)} [${detail[b.getOrNull(it)]}]" }}"
         }
         assertEquals(failures.joinToString("\n"), 0, failures.size)
     }

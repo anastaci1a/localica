@@ -89,7 +89,8 @@ private fun Value<Long>.count(): Value<String> = when (this) { is Value.Ready ->
         FlatKind.Heading -> MenuHeadingSlot(item.section.heading.orEmpty())
         FlatKind.Caption -> MenuCaptionSlot(item.section.caption.orEmpty())
         FlatKind.RecordEmpty -> MenuCaptionSlot((row as RecordsContent).empty)
-        FlatKind.Row -> if (token != null) MenuRow(row!!, token, host)
+        // A preview binds no event, so it has no token: it is drawn from the host's preview map.
+        FlatKind.Row -> if (row is PreviewContent) MenuControlSlot { host.previews[row.previewKey]?.invoke() } else if (token != null) MenuRow(row!!, token, host)
         FlatKind.RecordEntry -> if (token != null) RecordRow(row as RecordsContent, item.entry, token, host)
         FlatKind.OrderedEntry -> if (token != null) OrderedRow(row as OrderedListContent, item.entry, token, host)
         FlatKind.OrderedAdd -> if (token != null) (row as OrderedListContent).let { list ->
@@ -202,8 +203,7 @@ private fun activate(row: RowContent, token: OwnerToken, host: MenuHost) {
                 }
             } }
         }
-        is PreviewContent -> MenuControlSlot { host.previews[row.previewKey]?.invoke() }
-        is OrderedListContent, is RecordsContent -> Unit // flattened: their entries are separate items
+        is PreviewContent, is OrderedListContent, is RecordsContent -> Unit // flattened: their entries are separate items
     }
 }
 
