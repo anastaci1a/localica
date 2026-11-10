@@ -497,3 +497,4 @@ io.github.anastaci1a.localica.SettingsSearchEntryAdoptionTest
 io.github.anastaci1a.localica.SettingsSearchEntryReductionTest
 io.github.anastaci1a.localica.SearchPendingReturnGeometryTest
 io.github.anastaci1a.localica.PopupParentPendingHandoffTest
+io.github.anastaci1a.localica.CanonicalReducedVisibilityTest
