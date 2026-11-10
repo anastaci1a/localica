@@ -10,6 +10,8 @@ import io.github.anastaci1a.localica.applicationRootComposeRule as createCompose
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
@@ -52,6 +54,12 @@ class LocalicaUiRootLifetimeTest {
                     text = { Observe { dialog = it }; Text("Live root") }, confirmButton = {})
             } }
         } }
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val output = File(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+            ?: checkNotNull(instrumentation.targetContext.getExternalFilesDir(null)).absolutePath, "root-context-lifetime")
+        output.mkdirs()
+        val witness = File(output, "records.tsv")
+        witness.writeText("source\taccess\twidth\theight\tdensity\tnavigationInsetDp\tcontextTravel\texpectedTravel\tedgeIndex\tdiagonal\n")
         fun checkRecord(access: MotionAccess) {
             compose.onNodeWithText("Sibling root witness").assertIsDisplayed()
             compose.runOnIdle {
@@ -61,13 +69,17 @@ class LocalicaUiRootLifetimeTest {
                 assertEquals(IntSize(width, height), root.size)
                 assertEquals(root.size, s.window); assertEquals(s.window, d.window)
                 assertEquals(access, s.context.access); assertEquals(access, s.spec.spec.access)
-                val travel = playerBasis(s.density, root.size, s.navigationInset,
-                    StockUiSpec.clearance.getValue(Clearance.BottomChrome)).edgeTravelPx
+                val basis = playerBasis(s.density, root.size, s.navigationInset,
+                    StockUiSpec.clearance.getValue(Clearance.BottomChrome))
+                val travel = basis.edgeTravelPx
                 assertEquals(travel, s.context.fullPlayerReferenceTravelPx, 0f)
                 val geometry = checkNotNull(s.spec.spec.geometry)
                 assertEquals(travel, geometry.referenceTravelPx, 0f)
                 assertEquals(maxOf(1f, kotlin.math.hypot(width.toFloat(), height.toFloat())), geometry.maxViewportDiagonalPx, 0f)
                 assertTrue(s.context.displayIntervalSeconds <= geometry.maxDisplayIntervalSeconds)
+                witness.appendText(listOf(BuildConfig.SOURCE_SHA, access, width, height, s.density.density,
+                    s.navigationInset.value, s.context.fullPlayerReferenceTravelPx, travel, basis.edgeIndex,
+                    geometry.maxViewportDiagonalPx).joinToString("\t") + "\n")
             }
         }
         checkRecord(MotionAccess.Standard)
@@ -76,7 +88,12 @@ class LocalicaUiRootLifetimeTest {
         checkRecord(MotionAccess.Faster)
         compose.runOnIdle { assertNotSame(initial.spec, screen!!.spec) }
         val faster = checkNotNull(screen)
-        compose.runOnIdle { width = 320; height = 440 }
+        val resized = IntSize(320, 560)
+        val expectedResizedTravel = playerBasis(faster.density, resized, faster.navigationInset,
+            StockUiSpec.clearance.getValue(Clearance.BottomChrome)).edgeTravelPx
+        assertNotEquals("The resize fixture must change the dominant-edge reference under the existing law",
+            faster.context.fullPlayerReferenceTravelPx, expectedResizedTravel)
+        compose.runOnIdle { width = resized.width; height = resized.height }
         checkRecord(MotionAccess.Faster)
         compose.runOnIdle {
             assertNotSame(faster.spec, screen!!.spec)
