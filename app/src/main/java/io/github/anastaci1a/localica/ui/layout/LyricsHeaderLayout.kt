@@ -14,8 +14,8 @@ import io.github.anastaci1a.localica.ui.engine.originGap
 /** Owns the real header measurement; preparation acknowledges this same layout and draw. */
 @Composable
 internal fun LyricsHeaderLayout(controlSize: Dp, reveal: Float, progress: () -> Float,
-    origin: Modifier, decoration: Modifier, content: @Composable BoxScope.() -> Unit) {
-    Box(Modifier.height(controlSize).then(origin)
+    modifier: Modifier, decoration: Modifier, content: @Composable BoxScope.() -> Unit) {
+    Box(Modifier.height(controlSize).then(modifier)
         .layout { measurable, constraints ->
             val width = (controlSize * (1f + originExpansion(reveal, progress()) + originGap(progress()) / 6f)).roundToPx()
             val child = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
@@ -26,9 +26,9 @@ internal fun LyricsHeaderLayout(controlSize: Dp, reveal: Float, progress: () -> 
 /** Joined faces keep two independent hit regions and a centred divider. */
 @Composable
 internal fun BoxScope.LyricsHeaderJoinedLayout(controlSize: Dp, showRight: Boolean, lyricsOpen: Boolean,
-    surface: LyricsHeaderSurface, leftModifier: Modifier, left: @Composable () -> Unit,
+    surface: LyricsHeaderSurface, modifier: Modifier, left: @Composable () -> Unit,
     divider: @Composable (Modifier) -> Unit, right: @Composable () -> Unit) {
-    Box(Modifier.align(Alignment.CenterStart).size(controlSize).then(leftModifier)) { left() }
+    Box(Modifier.align(Alignment.CenterStart).size(controlSize).then(modifier)) { left() }
     if (showRight) {
         divider(Modifier.align(Alignment.Center).then(surface.divider))
         Box(Modifier.align(Alignment.CenterEnd).size(controlSize).then(surface.right)
