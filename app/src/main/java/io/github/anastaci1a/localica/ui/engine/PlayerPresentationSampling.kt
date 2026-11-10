@@ -14,11 +14,11 @@ internal class PlayerPresentationSampling(
     private val backgroundReveal: (Float) -> Float,
     private val actionsReveal: (Float) -> Float,
 ) {
-    fun artworkInputEnabled(restingOpen: Boolean): Boolean {
+    fun lyricsOwnInput(): Boolean {
         val p = player.phase.value().coerceIn(0f, 1f)
         val mode = lyrics.phase.value().coerceIn(0f, 1f)
         val contentAlpha = mode * lyricsReveal(p)
-        return restingOpen && !(contentAlpha > 0f)
+        return contentAlpha > 0f
     }
 
     /** The None atlas is admitted only at the exact collapsed phase, including during held input. */
