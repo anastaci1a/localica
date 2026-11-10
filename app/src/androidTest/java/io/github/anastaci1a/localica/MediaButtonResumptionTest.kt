@@ -36,7 +36,7 @@ class MediaButtonResumptionTest {
         assertTrue(resolved.any { it.activityInfo.name == receiver.className && it.activityInfo.exported })
     }
 
-    @Test fun playKeyColdStartsPlaybackOfTheRestoredQueue() = runBlocking {
+    @Test fun playKeyColdStartsPlaybackOfTheRestoredQueue(): Unit = runBlocking {
         val app = context.applicationContext as LocalicaApplication
         val file = File(context.cacheDir, "media-button-828.wav").also { writeWav(it) }
         val track = Track(file.toURI().toString(), "Media button", durationMs = 60_000, fileName = file.name, relativePath = file.name)
