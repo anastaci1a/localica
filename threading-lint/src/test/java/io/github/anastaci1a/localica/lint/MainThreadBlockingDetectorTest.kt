@@ -13,8 +13,18 @@ class MainThreadBlockingDetectorTest : LintDetectorTest() {
     """)
     private val contexts = kotlin("""
         package kotlinx.coroutines
-        object Dispatchers { val IO = Any(); val Default = Any(); val Main = Any() }
+        object Dispatchers {
+            val IO: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext
+            val Default: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext
+            val Main: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext
+        }
         fun withContext(context: Any, block: () -> Unit) = block()
+    """)
+    private val mainExecutor = java("""
+        package androidx.core.content;
+        public class ContextCompat {
+            public static java.util.concurrent.Executor getMainExecutor(Object context) { return null; }
+        }
     """)
 
     @Test fun testCompositionAndMainCallbacksFailButWorkersRemainLegal() {
@@ -27,6 +37,7 @@ class MainThreadBlockingDetectorTest : LintDetectorTest() {
                 File("cover").length()
                 withContext(Dispatchers.IO) { File("cover").length() }
                 withContext(Dispatchers.Default) { File("cover").length() }
+                withContext(Dispatchers.IO + kotlin.coroutines.EmptyCoroutineContext) { File("cover").length() }
                 withContext(Dispatchers.Main) { File("cover").length() }
             }
         """)).allowMissingSdk().run().expectErrorCount(2)
@@ -118,14 +129,14 @@ class MainThreadBlockingDetectorTest : LintDetectorTest() {
     }
 
     @Test fun testMainExecutorCompletionCannotUseBlockingFutureGet() {
-        lint().files(kotlin("""
+        lint().files(mainExecutor, kotlin("""
             package test
             import java.util.concurrent.CompletableFuture
             import java.util.concurrent.Executor
-            fun getMainExecutor(): Executor = Executor { it.run() }
+            import androidx.core.content.ContextCompat.getMainExecutor
             fun addListener(callback: () -> Unit, executor: Executor) = executor.execute(callback)
             fun watch(future: CompletableFuture<String>) {
-                addListener({ future.get() }, getMainExecutor())
+                addListener({ future.get() }, getMainExecutor(null))
             }
         """)).allowMissingSdk().run().expectErrorCount(1)
     }
@@ -163,5 +174,71 @@ class MainThreadBlockingDetectorTest : LintDetectorTest() {
             import java.io.File
             fun render() { paint { File("state").exists() } }
         """)).allowMissingSdk().run().expectErrorCount(1)
+    }
+
+    @Test fun testContextNamesCannotHideMainAndRightmostDispatcherWins() {
+        lint().files(composable, contexts, kotlin("""
+            package kotlinx.coroutines
+            class CoroutineName(val name: String) : kotlin.coroutines.AbstractCoroutineContextElement(Key) {
+                companion object Key : kotlin.coroutines.CoroutineContext.Key<CoroutineName>
+            }
+        """), kotlin("""
+            package test
+            import androidx.compose.runtime.Composable
+            import kotlinx.coroutines.*
+            import kotlinx.coroutines.Dispatchers.IO as Background
+            import kotlinx.coroutines.Dispatchers.Main as Ui
+            import java.io.File
+            val uiContext = Ui + CoroutineName("IO")
+            val workerContext = Ui + Background
+            fun screen() {
+                withContext(Dispatchers.Main + CoroutineName("IO")) { File("state").length() }
+                withContext(Dispatchers.IO + Dispatchers.Main) { File("state").length() }
+                withContext(Dispatchers.Main + Dispatchers.IO) { File("state").length() }
+                withContext(Background + Ui) { File("state").length() }
+                withContext(Ui + CoroutineName("Default")) { File("state").length() }
+                withContext(Background + CoroutineName("Main")) { File("state").length() }
+                withContext(uiContext) { File("state").length() }
+                withContext(workerContext) { File("state").length() }
+            }
+        """)).allowMissingSdk().run().expectErrorCount(5)
+    }
+
+    @Test fun testMainExecutorExecuteAndImmutableListenerAliases() {
+        lint().files(mainExecutor, kotlin("""
+            package test
+            import androidx.core.content.ContextCompat.getMainExecutor as uiExecutor
+            import java.util.concurrent.Executor
+            import java.io.File
+            fun addListener(callback: () -> Unit, executor: Executor) = executor.execute(callback)
+            fun observe() {
+                uiExecutor(null).execute { File("state").length() }
+                val first = uiExecutor(null)
+                val second = first
+                second.execute { File("state").length() }
+                addListener({ File("state").length() }, second)
+            }
+        """)).allowMissingSdk().run().expectErrorCount(3)
+    }
+
+    @Test fun testExtensionLaunchMapsContextWithoutConfusingItsScopeReceiver() {
+        lint().files(composable, contexts, kotlin("""
+            package kotlinx.coroutines
+            class CoroutineScope(val context: kotlin.coroutines.CoroutineContext)
+            fun CoroutineScope.launch(context: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext,
+                block: () -> Unit) = block()
+        """), kotlin("""
+            package test
+            import kotlinx.coroutines.*
+            import androidx.compose.runtime.Composable
+            import java.io.File
+            val scope = CoroutineScope(Dispatchers.Main)
+            @Composable fun screen() {
+                scope.launch(Dispatchers.IO) { File("state").length() }
+                scope.launch(Dispatchers.Main) { File("state").length() }
+                scope.launch(context = Dispatchers.IO) { File("state").length() }
+                scope.launch { File("state").length() }
+            }
+        """)).allowMissingSdk().run().expectErrorCount(2)
     }
 }

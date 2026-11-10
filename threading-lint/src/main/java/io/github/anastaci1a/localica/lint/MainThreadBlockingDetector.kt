@@ -5,7 +5,15 @@ import com.android.tools.lint.client.api.Vendor
 import com.android.tools.lint.client.api.UElementHandler
 import com.android.tools.lint.detector.api.*
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiMember
+import com.intellij.psi.PsiModifier
+import com.intellij.psi.PsiModifierListOwner
+import com.intellij.psi.PsiNamedElement
+import com.intellij.psi.PsiParameter
+import com.intellij.psi.PsiClass
 import org.jetbrains.uast.*
+import org.jetbrains.kotlin.psi.KtProperty
 
 class ThreadingRegistry : IssueRegistry() {
     override val api = CURRENT_API
@@ -72,27 +80,17 @@ class MainThreadBlockingDetector : Detector(), SourceCodeScanner {
                     .takeWhile { it !is ULambdaExpression && it !is UMethod }
                     .filterIsInstance<UCallExpression>().firstOrNull()
                 if (call != null) {
-                    val name = call.resolve()?.name ?: call.methodName
-                    if (name == "addListener" && call.valueArguments.any {
-                            it !is ULambdaExpression && Regex("\\bgetMainExecutor\\s*\\(").containsMatchIn(it.asSourceString())
-                        }) return true
-                    if (name in setOf("withContext", "launch", "async", "runInterruptible")) {
-                        val dispatcher = call.valueArguments.filterNot { it is ULambdaExpression }
-                            .joinToString { it.asSourceString() }
-                        if (Regex("(?:Dispatchers\\.|\\b)(IO|Default)\\b").containsMatchIn(dispatcher)) return false
-                        if (Regex("(?:Dispatchers\\.|\\b)Main\\b").containsMatchIn(dispatcher)) return true
-                        // Kotlin properties can resolve to their light getter, rather than a field.
-                        val resolved = (call.receiver as? UResolvable)?.resolve()
-                            ?: call.receiver?.sourcePsi?.references?.firstNotNullOfOrNull { it.resolve() }
-                        if (resolved is PsiMethod && resolved.name in setOf("getLifecycleScope", "getViewModelScope") &&
-                            resolved.containingClass?.qualifiedName.orEmpty().startsWith("androidx.lifecycle.")) return true
-                        val declaration = resolved?.navigationElement
-                        val scope = declaration?.toUElementOfType<UVariable>()?.uastInitializer?.asSourceString()
-                            ?: declaration?.text.orEmpty()
-                        val scopeDispatcher = Regex("\\bDispatchers\\s*\\.\\s*(Main|IO|Default)\\b")
-                            .find(scope)?.groupValues?.get(1)
-                        if (scopeDispatcher == "Main") return true
-                        if (scopeDispatcher == "IO" || scopeDispatcher == "Default") return false
+                    val method = call.resolve()
+                    val name = method?.name ?: call.methodName
+                    if (name == "addListener" && mainExecutor(argument(call, "executor"))) return true
+                    if (name == "execute" && mainExecutor(call.receiver)) return true
+                    if (name in setOf("withContext", "launch", "async", "runInterruptible") &&
+                        method?.containingClass?.qualifiedName.orEmpty().startsWith("kotlinx.coroutines.")) {
+                        val supplied = dispatcher(argument(call, "context"))
+                        val effective = if (name == "launch" || name == "async")
+                            combine(scopeDispatcher(call.receiver), supplied) else supplied
+                        if (effective == Dispatcher.WORKER) return false
+                        if (effective == Dispatcher.MAIN) return true
                     }
                     if (name in mainLambdas) return true
                 }
@@ -105,6 +103,108 @@ class MainThreadBlockingDetector : Detector(), SourceCodeScanner {
             parent = parent.uastParent
         }
         return false
+    }
+
+    private enum class Dispatcher { MAIN, WORKER, NONE, UNKNOWN }
+
+    /** ContinuationInterceptor is a context key: the rightmost dispatcher wins. */
+    private fun combine(left: Dispatcher, right: Dispatcher): Dispatcher = when (right) {
+        Dispatcher.NONE -> left
+        Dispatcher.MAIN, Dispatcher.WORKER -> right
+        // Unknown values never establish a worker escape. Preserve a possible Main owner.
+        Dispatcher.UNKNOWN -> if (left == Dispatcher.MAIN) Dispatcher.MAIN else Dispatcher.UNKNOWN
+    }
+
+    private fun argument(call: UCallExpression, name: String): UExpression? {
+        val parameters = call.resolve()?.parameterList?.parameters ?: return null
+        val index = parameters.indexOfFirst {
+            it.name == name || (name == "executor" && it.type.canonicalText == "java.util.concurrent.Executor") ||
+                (name == "context" && it.type.canonicalText == "kotlin.coroutines.CoroutineContext")
+        }
+        return if (index >= 0) call.getArgumentForParameter(index) else null
+    }
+
+    private fun unwrap(expression: UExpression): UExpression = when (expression) {
+        is UParenthesizedExpression -> unwrap(expression.expression)
+        is UNamedExpression -> unwrap(expression.expression)
+        else -> expression
+    }
+
+    private fun resolve(expression: UExpression): PsiElement? =
+        (expression as? UResolvable)?.resolve()
+            ?: (expression as? UQualifiedReferenceExpression)?.selector?.let { (it as? UResolvable)?.resolve() }
+            ?: expression.sourcePsi?.references?.firstNotNullOfOrNull { it.resolve() }
+
+    private fun initializer(symbol: PsiElement?): UExpression? {
+        val variable = (symbol as? UVariable) ?: symbol?.toUElementOfType<UVariable>()
+            ?: symbol?.navigationElement?.toUElementOfType<UVariable>()
+        val property = (variable?.sourcePsi as? KtProperty) ?: symbol?.navigationElement as? KtProperty
+        if (property != null) return if (property.isVar) null else property.initializer?.toUElementOfType<UExpression>()
+        if (variable == null) return null
+        // A mutable alias or caller-supplied parameter cannot prove a worker boundary.
+        if (variable.javaPsi is PsiParameter ||
+            (variable.javaPsi as? PsiModifierListOwner)?.hasModifierProperty(PsiModifier.FINAL) != true) return null
+        return variable.uastInitializer
+    }
+
+    private fun dispatcher(expression: UExpression?, depth: Int = 0): Dispatcher {
+        if (expression == null) return Dispatcher.NONE
+        if (depth > 16) return Dispatcher.UNKNOWN
+        val value = unwrap(expression)
+        if (value is UBinaryExpression && value.operator == UastBinaryOperator.PLUS)
+            return combine(dispatcher(value.leftOperand, depth + 1), dispatcher(value.rightOperand, depth + 1))
+        val symbol = resolve(value)
+        val member = symbol as? PsiMember
+        val owner = member?.containingClass?.qualifiedName.orEmpty()
+        val name = (symbol as? PsiNamedElement)?.name.orEmpty()
+        if (owner == "kotlinx.coroutines.Dispatchers") return when (name.removePrefix("get")) {
+            "Main" -> Dispatcher.MAIN
+            "IO", "Default" -> Dispatcher.WORKER
+            else -> Dispatcher.UNKNOWN
+        }
+        if (owner == "kotlinx.coroutines.MainCoroutineDispatcher" && name == "getImmediate") return Dispatcher.MAIN
+        val typeOwner = (symbol as? PsiClass)?.qualifiedName ?: owner
+        if (typeOwner == "kotlinx.coroutines.NonCancellable" || typeOwner == "kotlin.coroutines.EmptyCoroutineContext") return Dispatcher.NONE
+        val call = value as? UCallExpression ?: (value as? UQualifiedReferenceExpression)?.selector as? UCallExpression
+        if (call != null) {
+            val method = call.resolve()
+            val qualified = method?.containingClass?.qualifiedName.orEmpty()
+            if (method?.isConstructor == true && qualified == "kotlinx.coroutines.CoroutineName") return Dispatcher.NONE
+            if (name in setOf("Job", "SupervisorJob", "CoroutineExceptionHandler") && qualified.startsWith("kotlinx.coroutines."))
+                return Dispatcher.NONE
+            if (name == "limitedParallelism" && qualified.startsWith("kotlinx.coroutines."))
+                return dispatcher(call.receiver, depth + 1)
+            if (name == "plus" && call.receiver != null)
+                return combine(dispatcher(call.receiver, depth + 1), dispatcher(call.valueArguments.firstOrNull(), depth + 1))
+        }
+        return initializer(symbol)?.let { dispatcher(it, depth + 1) } ?: Dispatcher.UNKNOWN
+    }
+
+    private fun scopeDispatcher(expression: UExpression?, depth: Int = 0): Dispatcher {
+        if (expression == null || depth > 16) return Dispatcher.UNKNOWN
+        val value = unwrap(expression)
+        val symbol = resolve(value)
+        val method = symbol as? PsiMethod
+        val owner = method?.containingClass?.qualifiedName.orEmpty()
+        if (method?.name in setOf("getLifecycleScope", "getViewModelScope") && owner.startsWith("androidx.lifecycle."))
+            return Dispatcher.MAIN
+        val call = value as? UCallExpression ?: (value as? UQualifiedReferenceExpression)?.selector as? UCallExpression
+        if (call != null && owner.startsWith("kotlinx.coroutines.")) {
+            if (method?.name == "MainScope") return Dispatcher.MAIN
+            if (method?.name == "CoroutineScope" || (method?.isConstructor == true && owner == "kotlinx.coroutines.CoroutineScope"))
+                return dispatcher(argument(call, "context"), depth + 1)
+        }
+        return initializer(symbol)?.let { scopeDispatcher(it, depth + 1) } ?: Dispatcher.UNKNOWN
+    }
+
+    private fun mainExecutor(expression: UExpression?, depth: Int = 0): Boolean {
+        if (expression == null || depth > 16) return false
+        val value = unwrap(expression)
+        val symbol = resolve(value)
+        val method = symbol as? PsiMethod
+        if (method?.name == "getMainExecutor" && method.containingClass?.qualifiedName in
+            setOf("androidx.core.content.ContextCompat", "android.content.Context")) return true
+        return initializer(symbol)?.let { mainExecutor(it, depth + 1) } ?: false
     }
 
     companion object {
