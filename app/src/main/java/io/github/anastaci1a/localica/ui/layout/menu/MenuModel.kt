@@ -69,6 +69,13 @@ sealed interface RecordsContent : RowContent { val snapshot: RecordSnapshot; val
     val trailingLabel: String?; val trailingIconKey: String? }
 sealed interface PreviewContent : RowContent { val previewKey: String }
 
+/** True for the kinds admission registers no owner for: they bind no event, so they have no token and the binder draws them from content alone. */
+val RowContent.eventFree: Boolean get() = when (this) {
+    is ProgressContent, is StatusCardContent, is PreviewContent -> true
+    is NavContent, is LinkContent, is ValueContent, is ChoiceContent, is ToggleContent, is SliderContent, is ActionContent, is FieldContent, is InfoContent,
+    is NoticeContent, is LegendContent, is OrderedListContent, is RecordsContent -> false
+}
+
 @Immutable sealed interface PopupContent { val key: QualifiedKey; val title: String }
 sealed interface ConfirmContent : PopupContent { val message: String; val confirmLabel: String; val confirmIconKey: String?
     val role: ActionRole; val dismissLabel: String }

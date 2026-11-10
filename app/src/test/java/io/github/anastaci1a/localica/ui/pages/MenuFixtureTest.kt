@@ -66,6 +66,22 @@ class MenuFixtureTest {
         for (kind in PopupContent::class.java.permittedSubclasses) assertTrue("no specimen popup of ${kind.simpleName}", popups.any { kind.isInstance(it) })
     }
 
+    @Test fun everyDeclaredRowKindReachesARenderer() {
+        // A row has an owner (token) exactly when it is not event-free; an event-free kind is drawn by the binder's EventFreeRow.
+        var eventFree = 0
+        for ((id, draft) in SpecimenSource.drafts()) {
+            val page = (AcceptedPage.admit(draft) as Admission.Accepted).page
+            for (row in panels(page.content).flatten().flatMap { it.rows }) {
+                val owned = page.index[row.key.path] != null
+                assertEquals("$id/${row.key.path} (${row::class.simpleName}): owner present must equal not event-free", !row.eventFree, owned)
+                if (row.eventFree) eventFree++
+            }
+        }
+        assertTrue("the specimen declares no progress row", eventFree > 0)
+        for (kind in listOf(ProgressContent::class, StatusCardContent::class, PreviewContent::class)) assertTrue("no specimen row of ${kind.simpleName}",
+            SpecimenSource.drafts().any { (_, d) -> panels((AcceptedPage.admit(d) as Admission.Accepted).page.content).flatten().flatMap { it.rows }.any { kind.java.isInstance(it) } })
+    }
+
     @Test fun declaringIsPureEqualStateGivesEqualContent() {
         for (fixture in SpecimenFixtures) assertEquals(fixture.name, (AcceptedPage.admit(specimenPage(fixture.state)) as Admission.Accepted).page.content,
             (AcceptedPage.admit(specimenPage(fixture.state)) as Admission.Accepted).page.content)

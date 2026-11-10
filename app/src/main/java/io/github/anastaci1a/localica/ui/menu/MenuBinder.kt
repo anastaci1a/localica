@@ -89,8 +89,8 @@ private fun Value<Long>.count(): Value<String> = when (this) { is Value.Ready ->
         FlatKind.Heading -> MenuHeadingSlot(item.section.heading.orEmpty())
         FlatKind.Caption -> MenuCaptionSlot(item.section.caption.orEmpty())
         FlatKind.RecordEmpty -> MenuCaptionSlot((row as RecordsContent).empty)
-        // A preview binds no event, so it has no token: it is drawn from the host's preview map.
-        FlatKind.Row -> if (row is PreviewContent) MenuControlSlot { host.previews[row.previewKey]?.invoke() } else if (row is StatusCardContent) StatusCardRow(row, host) else if (token != null) MenuRow(row!!, token, host)
+        // Kinds that bind no event have no token (see `eventFree`): they are drawn by one renderer, never skipped.
+        FlatKind.Row -> if (row!!.eventFree) EventFreeRow(row, host) else if (token != null) MenuRow(row, token, host)
         FlatKind.RecordEntry -> if (token != null) RecordRow(row as RecordsContent, item.entry, token, host)
         FlatKind.OrderedEntry -> if (token != null) OrderedRow(row as OrderedListContent, item.entry, token, host)
         FlatKind.OrderedAdd -> if (token != null) (row as OrderedListContent).let { list ->
@@ -146,6 +146,18 @@ private fun activate(row: RowContent, token: OwnerToken, host: MenuHost) {
 }
 
 /** A status card binds no event of its own (its actions bind theirs), so it has no token and is drawn by the item renderer. */
+@Composable private fun EventFreeRow(row: RowContent, host: MenuHost) {
+    when (row) {
+        is PreviewContent -> MenuControlSlot { host.previews[row.previewKey]?.invoke() }
+        is StatusCardContent -> StatusCardRow(row, host)
+        is ProgressContent -> MenuProgressSlot(row.status) { modifier ->
+            val fraction = row.fraction
+            if (fraction == null) LinearProgressIndicator(modifier) else ControlProgress({ fraction }, modifier)
+        }
+        else -> error("${row::class.simpleName} binds events and is drawn by MenuRow")
+    }
+}
+
 @Composable private fun StatusCardRow(row: StatusCardContent, host: MenuHost) {
     MenuSurfaceSlot(surface = { corner, content -> LiquidGlassSurface(cornerRadius = corner, pressFeedback = false) { content() } }) {
         val progress = row.progress
@@ -190,14 +202,10 @@ private fun activate(row: RowContent, token: OwnerToken, host: MenuHost) {
         }
         is InfoContent -> MenuRowSlot(MenuRowSize.Control, row.title, if (row.clickable) Modifier.clickable(role = Role.Button) { dispatcher.click(token) } else Modifier,
             value = row.value, icon = row.iconKey?.let { key -> { MenuIconFace(key, it) } })
-        is ProgressContent -> MenuProgressSlot(row.status) { modifier ->
-            val fraction = row.fraction
-            if (fraction == null) LinearProgressIndicator(modifier) else ControlProgress({ fraction }, modifier)
-        }
         is NoticeContent -> MenuNoticeSlot(row.text, row.tone, icon = { MenuIconFace(AppIcon.ActionInfo.id, it) }, fix = row.fixLabel?.let { label -> {
             GlassActionButton(icon(row.fixIconKey.orEmpty()), label) { dispatcher.click(token, ActionSlot.FixAction) }
         } })
-        is StatusCardContent -> Unit // drawn by MenuItem: a card has no token
+        is ProgressContent, is StatusCardContent -> Unit // event-free: drawn by EventFreeRow
         is LegendContent -> MenuLegendSlot(bar = if (!row.bar) null else { {
             MenuLegendBarSlot(row.entries.map { it.tone }, row.entries.map { ((it.count as? Value.Ready)?.value ?: 0L).toFloat() })
         } }) {
