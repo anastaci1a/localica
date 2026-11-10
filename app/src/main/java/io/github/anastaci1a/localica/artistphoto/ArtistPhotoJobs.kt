@@ -13,21 +13,35 @@ internal data class ArtistPhotoJob(val request: ArtistPhotoRequest, val generati
 
 /**
  * Durable queue, independent of activities and WorkManager's bounded input Data. Called on IO under the
- * owner's lock. The directory is read once; every later lookup is O(1) in memory (#779: each visible
- * artist tile asks whether it is queued, which used to read and parse every job file).
+ * owner's lock. The directory is parsed once per generation; [find] is an O(1) memory lookup and
+ * [firstPending]/[pendingCount] scan the in-memory jobs without I/O (#779: each visible artist tile asks
+ * whether it is queued, which used to read and parse every job file). In the application exactly one
+ * [ArtistPhotoWork] owns this directory; the generation marker only serves other instances (tests).
  */
 internal class ArtistPhotoJobs(private val directory: File) {
     private fun name(key: String) = MessageDigest.getInstance("SHA-256")
         .digest(key.toByteArray()).joinToString("") { "%02x".format(it) } + ".json"
     private fun file(key: String) = File(directory, name(key))
     private var loaded: LinkedHashMap<String, ArtistPhotoJob>? = null
-    // Renames and deletes change the directory's stamp, so another instance's writes are noticed with one stat.
-    private var stamp = Long.MIN_VALUE
+    // Every writer replaces the generation marker after each change, so another instance notices any
+    // write (also back-to-back writes within one file-system timestamp) with one small read, never a listing.
+    private val marker = File(directory, "generation")
+    private var generation: String? = null
+    private fun currentGeneration(): String = runCatching { marker.readText() }.getOrDefault("")
+    private fun advanceGeneration() {
+        val next = UUID.randomUUID().toString()
+        val pending = File(directory, "generation.pending")
+        try {
+            pending.outputStream().use { output -> output.write(next.toByteArray()); output.fd.sync() }
+            Files.move(pending.toPath(), marker.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } finally { pending.delete() }
+        generation = next
+    }
 
     private fun index(): LinkedHashMap<String, ArtistPhotoJob> {
-        val current = directory.lastModified()
-        loaded?.takeIf { current == stamp }?.let { return it }
-        stamp = current
+        val current = currentGeneration()
+        loaded?.takeIf { current == generation }?.let { return it }
+        generation = current
         return load()
     }
 
@@ -61,7 +75,7 @@ internal class ArtistPhotoJobs(private val directory: File) {
         if (succeeded) {
             val jobs = index()
             file(job.request.artistKey).delete()
-            jobs.remove(job.request.artistKey); stamp = directory.lastModified()
+            jobs.remove(job.request.artistKey); advanceGeneration()
         } else write(job.copy(state = "failed"))
     }
 
@@ -79,6 +93,6 @@ internal class ArtistPhotoJobs(private val directory: File) {
             pending.outputStream().use { output -> output.write(json.toString().toByteArray()); output.fd.sync() }
             Files.move(pending.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } finally { pending.delete() }
-        jobs[job.request.artistKey] = job; stamp = directory.lastModified()
+        jobs[job.request.artistKey] = job; advanceGeneration()
     }
 }

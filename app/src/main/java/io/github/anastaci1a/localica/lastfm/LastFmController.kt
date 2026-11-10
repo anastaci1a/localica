@@ -14,7 +14,10 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val now: () -> Long = System::currentTimeMillis, private val background: LastFmBackground? = null,
     private val localStatistics: Flow<ListeningStatistics> = flowOf(ListeningStatistics()),
-    private val matchCache: LastFmMatchCacheStore = NoLastFmMatchCacheStore) : PlayCountSource {
+    private val matchCache: LastFmMatchCacheStore = NoLastFmMatchCacheStore,
+    /** Tests inject a gated matcher to prove cancellation and publication ownership. */
+    private val matcher: (LastFmSnapshot, List<io.github.anastaci1a.localica.library.Track>, Map<String, String>, () -> Unit) -> LastFmMatches =
+        { snapshot, tracks, mappings, checkActive -> LastFmMatcher.match(snapshot, tracks, mappings, checkActive) }) : PlayCountSource {
     private val mutable = MutableStateFlow(LastFmState())
     val state = mutable.asStateFlow()
     private val local = MutableStateFlow<Map<String, Long>>(emptyMap())
@@ -37,49 +40,67 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     private val matchInputs: Flow<MatchInput> = combine(state.map { it.saved.snapshot to it.saved.mappings }.distinctUntilChanged(), sharedLibrary) {
         (snapshot, mappings), catalog -> MatchInput(snapshot, mappings, catalog)
     }
+    private val detailDemand = MutableStateFlow(0)
     private val mutableMatches = MutableStateFlow(LastFmMatches(emptyMap(), emptyList()))
     private val countSource = MutableStateFlow(LastFmMatches(emptyMap(), emptyList()))
     /**
-     * Whole-archive matching (#779) runs only when the library, archive or mappings changed since the
-     * persisted result, or while something observes this flow and the current value is incomplete
-     * (the settings page needs review lists). Counts are current either way.
+     * The latest COMPLETE match of the current archive, mappings and library, or the empty result until one
+     * exists (#779). A launch whose inputs equal the persisted cache does not match: counts flow from the
+     * cache through [counts], and this stays empty (no source snapshot) until [details] is collected or the
+     * inputs change. Observing this flow never starts matching; only collecting [details] does.
      */
     val matches: StateFlow<LastFmMatches> = mutableMatches.asStateFlow()
-    private val matching = Mutex()
-    private var published: Pair<MatchInput, LastFmMatches>? = null
+    /** Current per-song counts and recording groups: complete, or restored from the cache (`complete = false`). */
+    val counts: StateFlow<LastFmMatches> = countSource.asStateFlow()
+    /** Collecting this is the only demand for review and resolution lists; the full match runs while collected. */
+    val details: Flow<LastFmMatches> = flow {
+        detailDemand.update { it + 1 }
+        try { emitAll(mutableMatches) } finally { detailDemand.update { it - 1 } }
+    }
+    private val cacheLock = Mutex()
     private var cache: LastFmMatchCache? = null
     private var cacheLoaded = false
-    private suspend fun cachedMatches(input: MatchInput): LastFmMatches? {
-        val snapshot = input.snapshot ?: return null
+    /** Written only by the request owner; the last complete result and its inputs. */
+    private var complete: Pair<MatchInput, LastFmMatches>? = null
+    private suspend fun loadedCache(): LastFmMatchCache? = cacheLock.withLock {
         if (!cacheLoaded) {
             cache = try { matchCache.read() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
             cacheLoaded = true
         }
-        val current = cache ?: return null
+        cache
+    }
+    private suspend fun cachedMatches(input: MatchInput): LastFmMatches? {
+        val snapshot = input.snapshot ?: return null
+        val current = loadedCache() ?: return null
         val key = withContext(Dispatchers.Default) { LastFmMatchKey.of(input.catalog, snapshot, input.mappings) }
         return current.takeIf { it.matches(key) }?.toMatches(snapshot)
     }
+    /** Runs only inside the request owner, so a newer input or demand change cancels it before any publication. */
     private suspend fun fullMatch(input: MatchInput): LastFmMatches {
         val snapshot = input.snapshot ?: return LastFmMatches(emptyMap(), emptyList())
         val started = now()
         val result = withContext(Dispatchers.Default) {
             val context = currentCoroutineContext()
-            LastFmMatcher.match(snapshot, input.catalog.tracks, input.mappings) { context.ensureActive() }
+            matcher(snapshot, input.catalog.tracks, input.mappings) { context.ensureActive() }
         }
         io.github.anastaci1a.localica.diagnostics.Diagnostics.info("LastFm",
             "Matched ${snapshot.tracks.size} archive songs against ${input.catalog.tracks.size} library songs in ${now() - started} ms")
         val key = withContext(Dispatchers.Default) { LastFmMatchKey.of(input.catalog, snapshot, input.mappings) }
-        cache = LastFmMatchCache(key.library, key.archive, key.mappings, result.counts, result.recordingGroups,
+        currentCoroutineContext().ensureActive()
+        complete = input to result
+        val entry = LastFmMatchCache(key.library, key.archive, key.mappings, result.counts, result.recordingGroups,
             result.matched, result.notInLibrary, result.dismissed)
-        try { matchCache.write(cache) }
-        catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { /* A lost cache only costs one full match on the next launch. */ }
+        cacheLock.withLock {
+            cache = entry; cacheLoaded = true
+            try { matchCache.write(entry) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* A lost cache only costs one full match on the next launch. */ }
+        }
         return result
     }
-    private fun publish(input: MatchInput, value: LastFmMatches) {
-        published = input to value
-        countSource.value = value
-        mutableMatches.value = value
+    private fun publish(countsValue: LastFmMatches, matchesValue: LastFmMatches) {
+        countSource.value = countsValue
+        mutableMatches.value = matchesValue
     }
     val overlay: StateFlow<LastFmOverlay> = combine(countSource, local) { matched, counts ->
         matched.withLocalOverlay(matched.sourceSnapshot, counts)
@@ -99,25 +120,24 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     private var workerJob: Job? = null
     init {
         scope.launch {
-            matchInputs.collectLatest { input -> matching.withLock {
-                val previous = published
-                val value = when {
-                    input.snapshot == null -> LastFmMatches(emptyMap(), emptyList())
-                    previous != null && input.sameAs(previous.first) -> previous.second
-                    // An observer (the settings page) needs review lists now; otherwise the persisted counts suffice.
-                    mutableMatches.subscriptionCount.value > 0 -> fullMatch(input)
-                    else -> cachedMatches(input) ?: fullMatch(input)
+            // The single request owner: a newer input or a demand change cancels the running match whole,
+            // so nothing stale is ever published or persisted (#779).
+            combine(matchInputs, detailDemand.map { it > 0 }.distinctUntilChanged()) { input, demand -> input to demand }
+                .collectLatest { (input, demand) ->
+                    val empty = LastFmMatches(emptyMap(), emptyList())
+                    val memo = complete?.takeIf { input.sameAs(it.first) }?.second
+                    when {
+                        input.snapshot == null -> publish(empty, empty)
+                        memo != null -> publish(memo, memo)
+                        demand -> fullMatch(input).let { publish(it, it) }
+                        else -> {
+                            val cached = cachedMatches(input)
+                            // Restored counts: review lists do not exist yet, so matches is explicitly incomplete and sourceless.
+                            if (cached != null) publish(cached, LastFmMatches(emptyMap(), emptyList(), complete = false))
+                            else fullMatch(input).let { publish(it, it) }
+                        }
+                    }
                 }
-                publish(input, value)
-            } }
-        }
-        scope.launch {
-            mutableMatches.subscriptionCount.map { it > 0 }.distinctUntilChanged().collectLatest { observed ->
-                if (observed) matching.withLock {
-                    val (input, value) = published ?: return@withLock
-                    if (!value.complete && mutableMatches.value === value) publish(input, fullMatch(input))
-                }
-            }
         }
         scope.launch { ready.await(); for (edit in edits) {
             try { edit() }
@@ -226,8 +246,8 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
                 generation++
                 try {
                     save(change(state.value.saved)); mutable.value = state.value.copy(syncing = false, progress = null)
-                    if (state.value.saved.snapshot == null) matching.withLock {
-                        cache = null; cacheLoaded = true
+                    if (state.value.saved.snapshot == null) cacheLock.withLock {
+                        cache = null; cacheLoaded = true; complete = null
                         try { matchCache.write(null) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {}
                     }
                 }

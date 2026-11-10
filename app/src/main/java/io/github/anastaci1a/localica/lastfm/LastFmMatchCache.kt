@@ -38,8 +38,19 @@ data class LastFmMatchKey(val library: String, val archive: String, val mappings
             }
             return digest.digest().toHex()
         }
-        fun archiveKey(snapshot: LastFmSnapshot): String =
-            "${snapshot.username.lowercase()}|${snapshot.syncedAt}|${snapshot.tracks.size}|${snapshot.tracks.sumOf { it.plays }}"
+        /** Every remote field the matcher reads plus each song's plays, length-delimited; a matcher change bumps the version. */
+        fun archiveKey(snapshot: LastFmSnapshot): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            fun feed(value: String?) { digest.update(value.orEmpty().toByteArray(Charsets.UTF_8)); digest.update(0) }
+            feed(MATCHER_VERSION); feed(snapshot.username.lowercase()); feed(snapshot.syncedAt.toString()); feed(snapshot.tracks.size.toString())
+            snapshot.tracks.forEach { track ->
+                feed(track.artist); feed(track.title); feed(track.album); feed(track.mbid); feed(track.durationMs?.toString())
+                feed(track.plays.toString()); digest.update(1)
+            }
+            return digest.digest().toHex()
+        }
+        /** Bump when LastFmMatchingEngine's output for equal inputs changes. */
+        const val MATCHER_VERSION = "match-1"
         fun mappingsKey(mappings: Map<String, String>): String {
             if (mappings.isEmpty()) return "-"
             val digest = MessageDigest.getInstance("SHA-256")
