@@ -197,8 +197,7 @@ class PopupHomeShapeTest {
             assertTrue("Plain and quiet buttons share one fading behavior", compose.runOnIdle { anchor.quiet })
             val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
             fun glass(): Int {
-                val shot = if (trigger == Trigger.PillMore) synchronizedShot(automation)
-                    else requireNotNull(automation.takeScreenshot())
+                val shot = synchronizedShot(automation)
                 try {
                     val b = anchor.presentedBounds
                     if (trigger == Trigger.PillMore) {
