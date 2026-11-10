@@ -136,6 +136,7 @@ io.github.anastaci1a.localica.LibraryFilterPresentationTest
 io.github.anastaci1a.localica.LibraryFilterTest
 io.github.anastaci1a.localica.LibraryPlaybackReadTest
 io.github.anastaci1a.localica.LibraryPreferencesTest
+io.github.anastaci1a.localica.LocalicaUiRootLifetimeTest
 io.github.anastaci1a.localica.LibraryScrollResetTest
 io.github.anastaci1a.localica.LiftGlowDragStartTest
 io.github.anastaci1a.localica.LiftShadowContinuityTest
@@ -351,6 +352,7 @@ io.github.anastaci1a.localica.TagEditorChromeLayoutTest
 io.github.anastaci1a.localica.TagEditorFlowTest
 io.github.anastaci1a.localica.TagEditorRootContextTest
 io.github.anastaci1a.localica.TagEditorThemeInheritanceTest
+io.github.anastaci1a.localica.TagRecoveryLaunchTest
 io.github.anastaci1a.localica.TagWritingTest
 io.github.anastaci1a.localica.TestComposeDispatcherTest
 io.github.anastaci1a.localica.TestProcessAccessibilityLaunchTest
