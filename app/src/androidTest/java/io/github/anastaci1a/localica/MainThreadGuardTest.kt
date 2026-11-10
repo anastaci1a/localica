@@ -153,22 +153,31 @@ class MainThreadGuardTest {
                             stack.take(4).joinToString(" <- ") { "${it.className.substringAfterLast('.')}.${it.methodName}" } + " || " +
                             local.joinToString(" <- ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" })
                     }
-                    val future = java.util.concurrent.Executors.newSingleThreadExecutor().submit<String> {
-                        compose.onAllNodes(isRoot()).fetchSemanticsNodes().joinToString("\n") { root ->
-                            fun walk(node: androidx.compose.ui.semantics.SemanticsNode, depth: Int): String =
-                                (if (depth < 8) "  ".repeat(depth) + node.config.joinToString(",") { it.key.name } + "\n" else "") +
-                                    node.children.joinToString("") { walk(it, depth + 1) }
-                            walk(root, 0)
-                        }
-                    }
-                    try { Log.i("Guard817", "t=${tick * 2}s semantics:\n" + future.get(8, java.util.concurrent.TimeUnit.SECONDS).take(3000)) }
-                    catch (e: Exception) { Log.i("Guard817", "t=${tick * 2}s semantics unavailable: $e") }
                 }
             }
         }.also { it.isDaemon = true; it.start() }
         val started = android.os.SystemClock.uptimeMillis()
         try {
-            compose.waitUntil(60_000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
+            var lastDump = 0L
+            compose.waitUntil(60_000) {
+                val now = android.os.SystemClock.uptimeMillis()
+                if (now - lastDump > 4_000) {
+                    lastDump = now
+                    val nodes = compose.onAllNodes(androidx.compose.ui.test.isRoot(), useUnmergedTree = true).fetchSemanticsNodes()
+                    val seen = mutableListOf<String>()
+                    fun walk(node: androidx.compose.ui.semantics.SemanticsNode) {
+                        val cfg = node.config
+                        val tag = cfg.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag)
+                        val text = cfg.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.joinToString("|") { it.text }
+                        val desc = cfg.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)?.joinToString("|")
+                        if (tag != null || text != null || desc != null) seen += "${tag ?: ""}[${(text ?: desc ?: "").take(30)}]"
+                        node.children.forEach(::walk)
+                    }
+                    nodes.forEach(::walk)
+                    Log.i("Guard817", "t=${(now - started) / 1000}s nodes=${seen.size} " + seen.take(60).joinToString(" "))
+                }
+                compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty()
+            }
             Log.i("Guard817", "browser-list present after ${android.os.SystemClock.uptimeMillis() - started} ms")
         } finally { done.set(true) }
     }
