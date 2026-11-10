@@ -109,7 +109,7 @@ class MenuInvariantTest {
         if (centres.size > 1) report("I2 leading centres differ: $centres px")
     }
 
-    @Test fun i3_gapsFollowTheAdjacencyTable() = everywhere { _, report ->
+    @Test fun i3_gapsFollowTheAdjacencyTable() = everywhere { name, report ->
         val all = parts()
         val flat = flatten((AcceptedPage.admit(SpecimenSource.declare(shown.state)) as Admission.Accepted).page.content.panel(), afterTabs = true)
         val rows = all.filter { it.part == MenuPart.Row }
@@ -127,6 +127,11 @@ class MenuInvariantTest {
             cursor += take
         }
         if (cursor < drawn.size) report("I3 drew ${drawn.size} items for ${flat.count} declared")
+        // A fully composed (column) panel must draw every declared item. The Data tab streams lazily and composes only the visible ones.
+        if (!name.startsWith("Data")) {
+            val expected = (0 until flat.count).sumOf { (flat.item(it).row as? LegendContent)?.entries?.size ?: 1 }
+            if (drawn.size != expected) report("I3 drew ${drawn.size} parts for $expected expected; declared ${(0 until flat.count).map { "${flat.item(it).kind}:${flat.item(it).key}" }.takeLast(4)}")
+        }
         val strip = all.filter { it.part == MenuPart.Tab }.maxOfOrNull { it.rect.bottom }
         for (index in 0 until items.size) {
             val above = if (index == 0) strip ?: continue else items[index - 1].rect.bottom
