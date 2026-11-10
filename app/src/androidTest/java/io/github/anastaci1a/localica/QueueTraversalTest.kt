@@ -143,6 +143,58 @@ class QueueTraversalTest {
         }
     }
 
+    @Test fun shuffledBehindProjectionUsesTheLiveOrderAfterEverySequenceEdit() {
+        for (loop in listOf(false, true)) for (current in listOf(0, 170)) for (cursor in listOf(0, 64)) {
+            val queue = queue(300, current, JourneyModes(loop = loop))
+            val ids = queue.entries.map { it.id }
+            val modes = JourneyModes(shuffle = true, loop = loop)
+            var journey = queue.journey!!.reconcile(ids, queue.currentEntryId, modes, kotlin.random.Random(43))
+            // Concrete forward history isolates this projection oracle from the still-unimplemented plan edit seam.
+            val neighbor = if (current > 0) ids[current - 1] else if (loop) ids.last() else null
+            // An empty reserved plan has no legacy rows and therefore no persisted marker on reopen.
+            if (neighbor == null) journey = journey.copy(plans = journey.plans - QueueJourney.BEHIND_START)
+            ids.filter { it != queue.currentEntryId && it != neighbor }.take(150).forEach {
+                journey = journey.select(it, ids)
+            }
+            journey = journey.arrive(journey.history[cursor].token, ids)
+            val room = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+            try {
+                val saved = queue.copy(currentEntryId = journey.current!!.entryId, journey = journey)
+                runBlocking { room.queues().save(QueueLibrary(), QueueLibrary(listOf(saved), saved.id)) }
+                val db = room.openHelper.writableDatabase
+                QueueSequence.createSchema(db); QueueTraversal.createSchema(db)
+                db.beginTransaction()
+                try {
+                    val sequence = QueueSequence(db)
+                    QueueSequenceMigration(sequence).import(queue.id)
+                    val traversal = QueueTraversal(sequence)
+                    assertEquals(journey.window(), traversal.restore(queue.id, saved.currentEntryId, modes).visits)
+                    fun verifyEdit() {
+                        val live = sequence.page(queue.id, 0, QueueSequence.PageSize).entries.map { it.entry.id } +
+                            sequence.page(queue.id, QueueSequence.PageSize, QueueSequence.PageSize).entries.map { it.entry.id }
+                        journey = journey.reconcile(live, saved.currentEntryId, modes, kotlin.random.Random(43))
+                        val window = traversal.window(queue.id)
+                        assertEquals(journey.window(), window.visits)
+                        assertEquals(journey.previous, window.previous)
+                        assertTrue(window.visits.size <= QueuePlaybackWindow.MaximumVisits)
+                    }
+                    if (neighbor != null) {
+                        sequence.move(queue.id, neighbor, ids[1])
+                        verifyEdit()
+                        sequence.remove(queue.id, neighbor)
+                        verifyEdit()
+                    }
+                    sequence.insert(queue.id, requireNotNull(sequence.position(queue.id, ids[current])),
+                        listOf(QueueEntry(id = "inserted", track = queue.entries.first().track)))
+                    verifyEdit()
+                    sequence.reverse(queue.id)
+                    verifyEdit()
+                    db.setTransactionSuccessful()
+                } finally { db.endTransaction() }
+            } finally { room.close() }
+        }
+    }
+
     @Test fun missingLegacyJourneyInitializesExactShuffleOrderWithBoundedProjection() {
         for (size in listOf(1, 13, 211)) for (loop in listOf(false, true)) for (reshuffle in listOf(false, true)) {
             val modes = JourneyModes(shuffle = true, loop = loop, reshuffle = reshuffle)

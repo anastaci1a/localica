@@ -54,7 +54,7 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
                     }
                     id?.let { it to position }
                 }
-                if (behind != null && sequence.position(queueId, behind.first) != null) {
+                if (behind != null) {
                     db.execSQL("INSERT INTO queue_sequence_behind (queueId,entryId,queuePosition) VALUES (?,?,?)",
                         arrayOf(queueId, behind.first, behind.second))
                 }
@@ -184,15 +184,26 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
     private fun shuffledWindow(state: State, selected: QueueVisit): QueuePlaybackWindow {
         val start = (state.cursor - QueuePlaybackWindow.Radius).coerceAtLeast(0)
         val behind = if (start != 0) null else db.query("""
-            SELECT b.entryId,h.cycle,h.token FROM queue_sequence_behind b
+            SELECT h.entryId,h.cycle,h.token FROM queue_sequence_behind b
             JOIN queue_sequence_history h ON h.queueId = b.queueId AND h.position = 0
             WHERE b.queueId = ?
         """.trimIndent(), arrayOf(state.queueId)).use { rows ->
             if (!rows.moveToFirst()) null else {
-                val id = rows.getString(0)
-                val oldest = rows.getString(2)
-                QueueVisit(id, rows.getLong(1), UUID.nameUUIDFromBytes(
-                    "behind:${oldest.length}:$oldest:$id".toByteArray(Charsets.UTF_8)).toString())
+                // The row enables behind projection. Its saved ID/index are import metadata, not live order.
+                val oldestPosition = sequence.position(state.queueId, rows.getString(0))
+                val count = sequence.revision(state.queueId).count
+                val position = when {
+                    oldestPosition != null && oldestPosition > 0 -> oldestPosition - 1
+                    oldestPosition == 0 && state.modes.loop && count > 1 -> count - 1
+                    else -> null
+                }
+                position?.let {
+                    val id = db.query("SELECT id FROM queue_sequence_entries WHERE queueId = ? AND position = ?",
+                        arrayOf(state.queueId, it)).use { entry -> check(entry.moveToFirst()); entry.getString(0) }
+                    val oldest = rows.getString(2)
+                    QueueVisit(id, rows.getLong(1), UUID.nameUUIDFromBytes(
+                        "behind:${oldest.length}:$oldest:$id".toByteArray(Charsets.UTF_8)).toString())
+                }
             }
         }
         val end = (state.cursor.toLong() + QueuePlaybackWindow.Radius + 1).let {
@@ -279,9 +290,7 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
             db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_sequence_history_entryId ON queue_sequence_history(entryId)")
             db.execSQL("""CREATE TABLE IF NOT EXISTS queue_sequence_behind (
                 queueId TEXT NOT NULL PRIMARY KEY, entryId TEXT NOT NULL, queuePosition INTEGER,
-                FOREIGN KEY(queueId) REFERENCES queue_sequence_traversal(queueId) ON DELETE CASCADE,
-                FOREIGN KEY(entryId) REFERENCES queue_sequence_entries(id) ON DELETE CASCADE)""")
-            db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_sequence_behind_entryId ON queue_sequence_behind(entryId)")
+                FOREIGN KEY(queueId) REFERENCES queue_sequence_traversal(queueId) ON DELETE CASCADE)""")
             db.execSQL("""CREATE TABLE IF NOT EXISTS queue_sequence_plan (
                 queueId TEXT NOT NULL, cycle INTEGER NOT NULL, position INTEGER NOT NULL,
                 entryId TEXT NOT NULL, visited INTEGER NOT NULL, scheduled INTEGER NOT NULL, token TEXT,
