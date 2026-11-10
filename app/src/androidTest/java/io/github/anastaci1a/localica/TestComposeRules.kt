@@ -25,7 +25,10 @@ private fun queuedEffects(context: CoroutineContext): CoroutineContext =
     else context + StandardTestDispatcher(context[TestCoroutineScheduler])
 
 /** Observe a production ActivityScenario without launching a synthetic activity before fixture setup. */
-internal fun localicaEmptyComposeRule(): ComposeTestRule = createEmptyComposeRule()
+@OptIn(ExperimentalTestApi::class)
+internal fun localicaEmptyComposeRule(
+    effectContext: CoroutineContext = EmptyCoroutineContext
+): ComposeTestRule = createEmptyComposeRule(queuedEffects(effectContext))
 
 @OptIn(ExperimentalTestApi::class)
 internal fun localicaComposeRule(

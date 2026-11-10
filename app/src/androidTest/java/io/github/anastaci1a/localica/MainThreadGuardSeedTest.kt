@@ -68,11 +68,14 @@ internal object MainThreadGuardFixture {
                 snapshot = LastFmSnapshot("threading-guard", 100_000,
                     tracks.map { LastFmTrack(it.artist.orEmpty(), it.title, 10, it.album) })))
         }
-        context.getSharedPreferences("interface", Context.MODE_PRIVATE).edit().putString("tabs", "Albums,Songs").commit()
-        context.getSharedPreferences("scanner", Context.MODE_PRIVATE).edit().putBoolean("on-launch", false)
-            .putBoolean("full-on-launch", false).commit()
+        check(context.getSharedPreferences("interface", Context.MODE_PRIVATE).edit().putString("tabs", "Albums,Songs").commit())
+        check(context.getSharedPreferences("scanner", Context.MODE_PRIVATE).edit().putBoolean("on-launch", false)
+            .putBoolean("full-on-launch", false).commit())
         BrowsePreferences(context).write(BrowseRoute(MainTab.Albums),
             BrowseStyle(presentation = Presentation.Compact, itemsPerRow = 5), false)
+        // Drain the prior apply() on this worker before the host stops the seed process.
+        check(context.getSharedPreferences("browse-style", Context.MODE_PRIVATE).edit()
+            .putBoolean("main-thread-guard-seeded", true).commit())
     }
 
 }

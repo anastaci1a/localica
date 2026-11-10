@@ -10,7 +10,7 @@ class ComposeTestRulePolicyTest {
         assertTrue("Instrumentation sources must be present", sources.isDirectory)
         val wrapper = "java/io/github/anastaci1a/localica/TestComposeRules.kt"
         val rawImport = Regex(
-            """(?m)^\s*import\s+androidx\.compose\.ui\.test\.junit4\.(?:createComposeRule|createAndroidComposeRule|\*)(?=\s|;|$)"""
+            """(?m)^\s*import\s+androidx\.compose\.ui\.test\.junit4\.(?:createComposeRule|createAndroidComposeRule|createEmptyComposeRule|\*)(?=\s|;|$)"""
         )
         val violations = sources.walkTopDown()
             .filter { it.isFile && it.extension in setOf("kt", "java") }
@@ -18,6 +18,6 @@ class ComposeTestRulePolicyTest {
             .filter { rawImport.containsMatchIn(it.readText()) }
             .map { it.relativeTo(sources).invariantSeparatorsPath }
             .sorted().toList()
-        assertEquals("Use localicaComposeRule/localicaAndroidComposeRule; raw rules can resume composition on a worker", emptyList<String>(), violations)
+        assertEquals("Use the localica Compose rule wrappers; raw rules can resume composition on a worker", emptyList<String>(), violations)
     }
 }

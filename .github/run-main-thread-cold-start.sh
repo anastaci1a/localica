@@ -32,9 +32,13 @@ for attempt in $(seq 1 60); do
   [[ $(adb -s "$serial" shell pidof "$app" | tr -d '\r') == "$pid" ]] || {
     echo 'Cold app process died under fatal Main policy' >&2; exit 1;
   }
-  adb -s "$serial" shell uiautomator dump /sdcard/localica-threading-guard.xml > "$out/dump-status.txt" 2>&1 || true
-  adb -s "$serial" shell cat /sdcard/localica-threading-guard.xml > "$out/window.xml" 2>/dev/null || true
-  if grep -q 'Guard album' "$out/window.xml"; then ready=true; break; fi
+  # Delete both copies first: neither a failed dump nor a failed read may reuse a prior window.
+  rm -f "$out/window.xml"
+  adb -s "$serial" shell rm -f /sdcard/localica-threading-guard.xml
+  if adb -s "$serial" shell uiautomator dump /sdcard/localica-threading-guard.xml > "$out/dump-status.txt" 2>&1 &&
+      grep -Eq 'UI hier(archy|chary) dumped to:' "$out/dump-status.txt" &&
+      adb -s "$serial" shell cat /sdcard/localica-threading-guard.xml > "$out/window.xml" 2> "$out/window-error.txt" &&
+      grep -q 'Guard album' "$out/window.xml"; then ready=true; break; fi
   sleep 1
 done
 [[ "$ready" == true ]] || { echo 'Cold seeded gallery never became visible' >&2; exit 1; }

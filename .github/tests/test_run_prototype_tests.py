@@ -1435,6 +1435,9 @@ import os,pathlib,sys
 a=sys.argv[3:];state=pathlib.Path('running')
 with open('commands','a') as out:out.write(' '.join(a)+'\\n')
 mode=os.environ['COLD_MODE']
+remote=pathlib.Path('remote-window.xml')
+if mode=='stale' and not pathlib.Path('initialized').exists():
+    remote.write_text('<node text="Guard album stale"/>');pathlib.Path('initialized').touch()
 if a[:3]==['shell','am','instrument']:
     print('FAILURES!!!' if mode=='bad-seed' else 'OK (1 test)')
 elif a[:3]==['shell','am','force-stop']:state.unlink(missing_ok=True)
@@ -1444,8 +1447,16 @@ elif a[:2]==['shell','pidof']:
     if state.exists():
         n=pathlib.Path('polls');count=int(n.read_text())+1 if n.exists() else 1;n.write_text(str(count))
         if mode!='dead' or count==1:print('1234')
+elif a[:3]==['shell','rm','-f']:remote.unlink(missing_ok=True)
+elif a[:3]==['shell','uiautomator','dump']:
+    if mode=='stale':sys.exit(1)
+    if mode=='dump-no-receipt':sys.exit(0)
+    remote.write_text('<node text="Guard album 0"/>' if mode!='empty' else '<node/>')
+    print('UI hierchary dumped to: '+a[-1])
 elif a[:2]==['shell','cat']:
-    print('<node text="Guard album 0"/>' if mode!='empty' else '<node/>')
+    if mode=='read-failed':sys.exit(1)
+    if not remote.exists():sys.exit(1)
+    print(remote.read_text())
 ''')
             adb.chmod(0o755)
             sleep = root/'bin/sleep'
@@ -1475,6 +1486,13 @@ elif a[:2]==['shell','cat']:
             self.assertNotEqual(0, result.returncode, mode)
             self.assertFalse(receipt)
             self.assertIn('logcat -b crash', commands)
+
+    def test_stale_dump_failed_read_and_missing_dump_receipt_fail_closed(self):
+        for mode in ('stale', 'read-failed', 'dump-no-receipt'):
+            result, receipt, commands = self.run_cold(mode)
+            self.assertNotEqual(0, result.returncode, mode)
+            self.assertFalse(receipt)
+            self.assertIn('shell rm -f /sdcard/localica-threading-guard.xml', commands)
 
 
 class RiskInventoryContract(unittest.TestCase):
