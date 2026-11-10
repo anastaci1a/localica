@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import io.github.anastaci1a.localica.applicationRootAndroidComposeRule as createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.editing.AndroidEditableDocuments
 import io.github.anastaci1a.localica.editing.RecoverableTagWriter

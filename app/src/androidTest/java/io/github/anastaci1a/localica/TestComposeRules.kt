@@ -77,3 +77,16 @@ internal fun localicaRunComposeUiTest(
     effectContext: CoroutineContext = EmptyCoroutineContext,
     block: ComposeUiTest.() -> Unit
 ) = runComposeUiTest(effectContext = queuedEffects(effectContext)) { FixtureTime.nanos = { mainClock.currentTime * 1_000_000 }; block() }
+
+/** Production-root regressions keep queued effects without installing EngineRecord or a fixture clock. */
+@OptIn(ExperimentalTestApi::class)
+internal fun applicationRootComposeRule(): ComposeContentTestRule =
+    createComposeRule(effectContext = queuedEffects(EmptyCoroutineContext))
+
+internal inline fun <reified A : ComponentActivity> applicationRootAndroidComposeRule():
+    AndroidComposeTestRule<ActivityScenarioRule<A>, A> = applicationRootAndroidComposeRule(A::class.java)
+
+@OptIn(ExperimentalTestApi::class)
+internal fun <A : ComponentActivity> applicationRootAndroidComposeRule(activityClass: Class<A>):
+    AndroidComposeTestRule<ActivityScenarioRule<A>, A> =
+    createAndroidComposeRule(activityClass, effectContext = queuedEffects(EmptyCoroutineContext))
