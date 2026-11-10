@@ -34,14 +34,14 @@ import io.github.anastaci1a.localica.browse.ListSize
 import io.github.anastaci1a.localica.browse.Presentation
 import io.github.anastaci1a.localica.library.FolderSelection
 import io.github.anastaci1a.localica.library.LibrarySnapshot
-import io.github.anastaci1a.localica.library.LibraryUiState
+import io.github.anastaci1a.localica.ui.LibraryUiState
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.navigation.BrowseRoute
 import io.github.anastaci1a.localica.navigation.MainTab
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.queue.QueueUiState
-import io.github.anastaci1a.localica.ui.ArtworkCache
-import io.github.anastaci1a.localica.ui.ArtworkColors
+import io.github.anastaci1a.localica.library.ArtworkCache
+import io.github.anastaci1a.localica.library.ArtworkColors
 import io.github.anastaci1a.localica.ui.BrowserScreen
 import io.github.anastaci1a.localica.ui.LocalicaTheme
 import org.junit.After
