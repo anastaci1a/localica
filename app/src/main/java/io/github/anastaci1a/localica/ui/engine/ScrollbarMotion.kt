@@ -24,6 +24,8 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
     private var targetVector = AnimationVector1D(initial)
     private var velocityVector = AnimationVector1D(0f)
     private var durationNanos = 0L
+    private var delayNanos = 0L
+    private var holding by mutableStateOf(false)
     private var awaiting by mutableStateOf(false)
     private var started = clock.stampNow
     private var disposed = false
@@ -37,6 +39,8 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
     fun value(): Float {
         presented = true
         val active = animation ?: return resting
+        // Delay frames have no visible change. Do not subscribe placement/drawing to their clock.
+        if (awaiting || holding) return resting
         val elapsed = elapsed(clock.stamp)
         return if (elapsed >= durationNanos) target else
             active.getValueFromNanos(elapsed, initialVector, targetVector, velocityVector).value
@@ -59,6 +63,8 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
         targetVector = AnimationVector1D(to)
         velocityVector = AnimationVector1D(velocity)
         durationNanos = evaluator.getDurationNanos(initialVector, targetVector, velocityVector)
+        delayNanos = delay * 1_000_000L
+        holding = delay > 0
         // Warm the evaluator's reusable result vectors at intent time, never on a presented read.
         evaluator.getValueFromNanos(0L, initialVector, targetVector, velocityVector)
         evaluator.getVelocityFromNanos(0L, initialVector, targetVector, velocityVector)
@@ -67,12 +73,20 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
         started = clock.stamp
         clock.register(this)
     }
-    override fun endsAt(stamp: FrameStamp) = awaiting || animation != null && elapsed(stamp) >= durationNanos
+    override fun endsAt(stamp: FrameStamp) = when {
+        awaiting -> true
+        animation == null -> false
+        holding -> elapsed(stamp) >= delayNanos
+        else -> elapsed(stamp) >= durationNanos
+    }
     override fun finish(stamp: FrameStamp) {
         clock.checkMutation()
         if (awaiting) {
             awaiting = false
             started = stamp
+            clock.register(this)
+        } else if (holding && elapsed(stamp) < durationNanos) {
+            holding = false
             clock.register(this)
         } else cancel(target)
     }
@@ -82,6 +96,7 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
         clock.unregister(this)
         animation = null
         awaiting = false
+        holding = false
         resting = value
         target = value
     }
