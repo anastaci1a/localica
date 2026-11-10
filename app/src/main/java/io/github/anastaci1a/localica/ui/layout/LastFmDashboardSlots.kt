@@ -50,7 +50,7 @@ internal fun LastFmDashboardHeader(progress: LastFmProgress?, syncing: Boolean, 
 }
 
 @Composable
-internal fun LastFmStatsGrid(stats: List<Pair<String, String?>>) {
+internal fun LastFmStatsGrid(stats: List<Pair<String, String?>>, valueContent: @Composable (String?) -> Unit) {
     val spaces = StockUiSpec.space
     Column(Modifier.fillMaxWidth().padding(spaces.getValue(Space.Comfortable)),
         verticalArrangement = Arrangement.spacedBy(spaces.getValue(Space.Base))) {
@@ -59,7 +59,7 @@ internal fun LastFmStatsGrid(stats: List<Pair<String, String?>>) {
                 repeat(3) { index ->
                     Column(Modifier.weight(1f)) {
                         row.getOrNull(index)?.let { (label, value) ->
-                            io.github.anastaci1a.localica.ui.AsyncValueText(value, "888,888", style = MaterialTheme.typography.titleLarge)
+                            valueContent(value)
                             Text(label, style = MaterialTheme.typography.bodySmall)
                         }
                     }

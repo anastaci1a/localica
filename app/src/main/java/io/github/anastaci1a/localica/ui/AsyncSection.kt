@@ -37,10 +37,13 @@ internal fun <T : Any> rememberAsyncValue(vararg inputs: Any?, compute: () -> T)
 
 /** Existing control-state fade and browse loading wave own every animated value here. */
 @Composable
-internal fun <T : Any> AsyncSection(value: T?, modifier: Modifier = Modifier, rowCount: Int = 0, content: @Composable (T) -> Unit) {
+internal fun <T : Any> AsyncSection(value: T?, modifier: Modifier = Modifier, rowCount: Int = 0, header: @Composable () -> Unit = {}, content: @Composable (T) -> Unit) {
     val reduced = LocalReducedMotion.current
     val spinner = animateControlStateFloat(if (value == null) 1f else 0f, value == null, "Async section")
     val presented by remember(value != null, spinner, reduced) { derivedStateOf { value != null && (reduced || spinner.value == 0f) } }
+    var hasPresented by remember { mutableStateOf(false) }
+    if (presented) hasPresented = true
+    if (hasPresented) header()
     if (value == null || !presented) {
         val opacity = remember(spinner) { ArtworkTextReveal { spinner.value }.apply { hold(true) } }
         AsyncSpinnerSlot(modifier.artworkTextReveal(opacity, { null }, { 0f }, skeleton = false).testTag("async-section-loading"))
