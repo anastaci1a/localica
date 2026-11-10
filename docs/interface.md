@@ -415,6 +415,8 @@ View offers presentation, list Size or gallery Items per row, extra information 
 
 Every overflowing browse list, including Queue, details, search and Home, gets a narrow edge scrollbar and accessible scroll action. Its 48 dp touch strip keeps the thumb’s visual size. The thumb fades after 1.2 seconds without list or drag movement and reappears on movement. Show letter/year previews only during dragging under title/year sort.
 
+Reduced motion immediately settles the scrollbar fade and release correction. Entering Reduced motion retires active scrollbar motion; leaving it does not replay retired work.
+
 ## Collection details
 
 The floating return arrow in album, artist, Album Artist and playlist details aligns the header Play/Shuffle pill’s bottom with the top-left Back button’s bottom. Its destination uses measured geometry, including density and header changes. Android Back targets the full page top directly.
