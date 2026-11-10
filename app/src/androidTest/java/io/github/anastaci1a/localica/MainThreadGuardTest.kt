@@ -25,6 +25,11 @@ import org.junit.rules.RuleChain
 import java.io.ByteArrayOutputStream
 import java.io.File
 
+// The unchanged main runtime exposes a complete entries list. This test-only adapter preserves the
+// logical-count assertion without adding experimental storage code to the red baseline app.
+private val ListeningQueue.entryCount: Int get() = entries.size
+private const val LoadedQueueWindowLimit = 129
+
 /** Production activity, repositories and native input under the process-wide fatal Main policy. */
 class MainThreadGuardTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -124,7 +129,9 @@ class MainThreadGuardTest {
                 withTimeout(180_000) { controller.state.first { !it.loading } }
             }
             assertNull(controller.state.value.problem)
-            assertEquals(1_000_000, controller.state.value.library.queues.single().entries.size)
+            assertEquals(1_000_000, controller.state.value.library.queues.single().entryCount)
+            assertTrue("Loaded occurrences must stay bounded independently of logical queue size",
+                controller.state.value.library.queues.single().entries.size <= LoadedQueueWindowLimit)
             assertEquals("guard:500000", controller.state.value.library.active?.currentEntryId)
             assertEquals(1234L, controller.state.value.library.active?.positionMs)
             reportMemory("million-restored")
