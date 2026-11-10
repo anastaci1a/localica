@@ -406,6 +406,9 @@ jobs:
       PROTOTYPE_METHODS: ${{ inputs.repeat_methods }}
       PROTOTYPE_REPEAT: ${{ inputs.repeat }}
       TEST_API: '36'
+      LOCALICA_SHARD_COUNT: '8'
+      LOCALICA_SHARD_INDEX: '7'
+      LOCALICA_LIVE_EVIDENCE: 'true'
       # Restores the shared main-branch dependency cache written by dependency-cache.yml and Android test-apks (#681).
       GRADLE_BUILD_ACTION_CACHE_KEY_JOB: localica-test-apks
       GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE: shared
@@ -464,7 +467,7 @@ jobs:
           adb shell wm density 280
           python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
-          bash .github/run-prototype-tests.sh
+          bash .github/run-device-tests.sh
       run: bash .github/local/with-emulator.sh
     - name: Prepare the verified emulator SDK
       if: inputs.runner != 'self-hosted'
@@ -555,6 +558,8 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/
 
           prototype-evidence/
+          native-shard-plan.json
+          native-live-evidence/
           prototype-iterations/
           prototype-runner-environment.txt
           ci-infrastructure/
