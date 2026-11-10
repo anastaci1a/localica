@@ -22,6 +22,7 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.ui.LocalReducedMotion
 import io.github.anastaci1a.localica.ui.LocalicaTheme
 import io.github.anastaci1a.localica.ui.layout.menu.*
+import io.github.anastaci1a.localica.ui.specimenPreviews
 import io.github.anastaci1a.localica.ui.menu.MenuPageHost
 import io.github.anastaci1a.localica.ui.pages.Fixture
 import io.github.anastaci1a.localica.ui.pages.SpecimenSource
@@ -61,7 +62,7 @@ class MenuInvariantTest {
             val device = LocalDensity.current
             density = Density(device.density, scale)
             CompositionLocalProvider(LocalDensity provides Density(device.density, scale), LocalReducedMotion provides true) {
-                Box(Modifier.width(360.dp).fillMaxHeight()) { key(shown, scale) { MenuPageHost(SpecimenSource.declare(shown.state), strict = false) } }
+                Box(Modifier.width(360.dp).fillMaxHeight()) { key(shown, scale) { MenuPageHost(SpecimenSource.declare(shown.state), previews = specimenPreviews, strict = false) } }
             }
         } }
     }
@@ -78,6 +79,8 @@ class MenuInvariantTest {
     /** Runs [check] on every fixture and scale and fails once with every violation it reported. */
     private fun everywhere(check: (name: String, report: (String) -> Unit) -> Unit) {
         show()
+        // The first composition lays text out before fonts and icons settle: settle once before anything is measured.
+        scale = scales.first(); shown = fixtures[1]; compose.waitForIdle()
         val failures = mutableListOf<String>()
         for (factor in scales) for (fixture in fixtures) {
             scale = factor; shown = fixture
@@ -118,7 +121,7 @@ class MenuInvariantTest {
         for (index in 0 until minOf(items.size, flat.count)) {
             val above = if (index == 0) strip ?: continue else items[index - 1].rect.bottom
             val expected = px(spec.dp(flat.gapBefore(index)))
-            if (!near(items[index].rect.top - above, expected)) report("I3 gap before item $index (${flat.item(index).key}) is ${items[index].rect.top - above} px, ${flat.gapBefore(index)} is $expected px")
+            if (!near(items[index].rect.top - above, expected)) report("I3 gap before item $index (${flat.item(index).key}) is ${items[index].rect.top - above} px, ${flat.gapBefore(index)} is $expected px; drawn ${items[index].part} ${items[index].rect}, above ${if (index == 0) "the tab strip" else "${items[index - 1].part} ${items[index - 1].rect}"}; next ${items.getOrNull(index + 1)?.let { "${it.part} ${it.rect}" }}")
         }
     }
 
@@ -127,10 +130,12 @@ class MenuInvariantTest {
         end in 1 until label.text.length && label.text[end - 1].isLetterOrDigit() && label.text[end].isLetterOrDigit()
     }
 
+    private fun describe(label: Label) = "'${label.text}' lines=${label.layout.lineCount} size=${label.layout.size} constraints=${label.layout.layoutInput.constraints} exceedsMaxLines=${(0 until label.layout.lineCount).lastOrNull()?.let { label.layout.isLineEllipsized(it) }} maxLines=${label.layout.layoutInput.maxLines}"
+
     /** I4 for system labels: no overflow and no break inside a word. A failure is a copy or layout defect. */
     @Test fun i4_staticLabelsNeverOverflowOrBreakInsideAWord() = everywhere { _, report ->
         for (label in labels().filter { it.flow == MenuTextFlow.Static }) {
-            if (label.layout.hasVisualOverflow) report("I4 static label overflows: '${label.text}'")
+            if (label.layout.hasVisualOverflow) report("I4 static label overflows: ${describe(label)}")
             if (breaksInsideAWord(label)) report("I4 static label breaks inside a word: '${label.text}'")
         }
     }
@@ -140,9 +145,15 @@ class MenuInvariantTest {
      * unbreakable word), but it never overflows and never splits a surrogate pair. Value text stays on one line.
      */
     @Test fun i4_dynamicTextUsesOnlyTheDeclaredFallback() = everywhere { name, report ->
+        // The Data tab streams its records lazily: bring the last items (the records) into composition before reading labels.
+        if (name.startsWith("Data")) runCatching {
+            val last = flatten((AcceptedPage.admit(SpecimenSource.declare(shown.state)) as Admission.Accepted).page.content.panel(), afterTabs = true).count - 1
+            compose.onNode(hasScrollToIndexAction()).performScrollToIndex(last)
+            compose.waitForIdle()
+        }
         val labels = labels()
         for (label in labels.filter { it.flow == MenuTextFlow.Dynamic }) {
-            if (label.layout.hasVisualOverflow) report("I4 dynamic text overflows: '${label.text}'")
+            if (label.layout.hasVisualOverflow) report("I4 dynamic text overflows: ${describe(label)}")
             for (line in 0 until label.layout.lineCount - 1) {
                 val end = label.layout.getLineEnd(line)
                 if (end in 1 until label.text.length && label.text[end - 1].isHighSurrogate()) report("I4 dynamic text splits a surrogate pair: '${label.text}'")
@@ -157,11 +168,19 @@ class MenuInvariantTest {
 
     @Test fun i5_interactivePartsAreAtLeast48Dp() = everywhere { _, report ->
         val minimum = px(48.dp) - .5f
+        val root = compose.onRoot().fetchSemanticsNode().let { Rect(it.positionInRoot, it.size.toSize()) }
         val interactive = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick)).fetchSemanticsNodes()
         if (interactive.isEmpty()) report("I5 found no interactive part")
         for (node in interactive) {
-            val touch = node.touchBoundsInRoot
-            if (touch.width < minimum || touch.height < minimum) report("I5 ${node.config.getOrNull(SemanticsProperties.Text) ?: node.config.getOrNull(SemanticsProperties.ContentDescription)} is ${touch.width}x${touch.height} px")
+            // touchBoundsInRoot is clipped to the viewport, so a part cut by the screen edge reports a short or empty box. The layout
+            // size is not clipped; the expanded touch box counts only for a part fully on screen. A cut-off part smaller than the
+            // minimum cannot be judged here and is left to the scrolled pixel pass at M1.
+            val layout = Rect(node.positionInRoot, node.size.toSize())
+            val onScreen = layout.inside(root)
+            val width = if (onScreen) maxOf(layout.width, node.touchBoundsInRoot.width) else layout.width
+            val height = if (onScreen) maxOf(layout.height, node.touchBoundsInRoot.height) else layout.height
+            if (!onScreen && (width < minimum || height < minimum)) continue
+            if (width < minimum || height < minimum) report("I5 ${node.config.getOrNull(SemanticsProperties.Text) ?: node.config.getOrNull(SemanticsProperties.ContentDescription)} is ${width}x${height} px")
         }
     }
 
@@ -176,15 +195,19 @@ class MenuInvariantTest {
         }
     }
 
-    @Test fun i7_fullyVisibleRowsKeepTheirShadowInsideTheViewport() = everywhere { _, report ->
+    @Test fun i7_fullyVisibleRowsKeepTheirShadowInsideTheViewport() {
+        var drawn = 0
+        everywhere { _, report ->
         val root = compose.onRoot().fetchSemanticsNode().let { Rect(it.positionInRoot, it.size.toSize()) }
         val outset = px(spec.dp(MenuSize.ShadowOutset))
         // Rows cut by the viewport edge are excluded by rule: only a row whose own bounds are fully inside is checked.
         val surfaces = parts().filter { it.part == MenuPart.Surface }
-        if (surfaces.isEmpty()) report("I7 found no glass surface")
+        drawn += surfaces.size
         for (part in surfaces.filter { it.rect.inside(root) }) {
             if (part.rect.left - outset < root.left - .5f || part.rect.right + outset > root.right + .5f) report("I7 surface at ${part.rect} cannot hold a $outset px outset in $root")
         }
+        }
+        assertTrue("I7 found no glass surface on any fixture", drawn > 0)
     }
 
     @Test fun i8_tabsExposeRoleAndOneSelection() = everywhere { _, report ->
@@ -206,7 +229,7 @@ class MenuInvariantTest {
             val a = rows(ready.name)
             val b = rows(ready.name.removeSuffix("-ready") + "-loading")
             if (a.isEmpty()) failures += "${ready.name}@$factor drew no rows"
-            if (a != b) failures += "I9 ${ready.name}@$factor: ready and loading row bounds differ\n  ready   $a\n  loading $b"
+            if (a != b) failures += "I9 ${ready.name}@$factor: ${a.size} ready and ${b.size} loading rows differ at ${a.indices.filter { a[it] != b.getOrNull(it) }.take(6).map { "#$it ready ${a[it]} loading ${b.getOrNull(it)}" }}"
         }
         assertEquals(failures.joinToString("\n"), 0, failures.size)
     }

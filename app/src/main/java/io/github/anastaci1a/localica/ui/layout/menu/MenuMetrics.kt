@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui.layout.menu
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalContentColor
@@ -17,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -122,9 +122,13 @@ fun Modifier.menuPart(part: MenuPart) = semantics { this[MenuPartKey] = part }
         is Value.Ready -> MenuText(role, value.value, modifier, flow)
         is Value.Loading -> {
             val metrics = LocalMenuEnvironment.current.metrics
-            val line = metrics.line(role)
-            Box(modifier.menuPart(MenuPart.Placeholder).width(width ?: (line * 3)).height(line * value.lines)
-                .background(LocalContentColor.current.copy(alpha = .12f), RoundedCornerShape(metrics.dp(MenuSize.HelperGap))))
+            val ink = LocalContentColor.current
+            // The placeholder holds the role's own invisible lines, so both faces round and measure their height the same way.
+            Box(modifier.menuPart(MenuPart.Placeholder).width(width ?: (metrics.line(role) * 3))
+                .background(ink.copy(alpha = .12f), RoundedCornerShape(metrics.dp(MenuSize.HelperGap)))) {
+                Text(List(value.lines) { "\u200B" }.joinToString("\n"), Modifier.clearAndSetSemantics { }, color = ink.copy(alpha = 0f),
+                    style = menuTextStyle(role), softWrap = false, maxLines = value.lines, overflow = TextOverflow.Clip)
+            }
         }
     }
 }

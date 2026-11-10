@@ -14,7 +14,7 @@ internal fun <S> MenuPage(source: PageSource<S>, onNavigate: (String) -> Unit = 
     MenuPageHost(source.declare(source.state()), onNavigate, previews)
 }
 
-private val specimenPreviews: Map<String, @Composable () -> Unit> = mapOf(SpecimenPreview.Swatch.key to { ControlProgress({ 1f }) })
+internal val specimenPreviews: Map<String, @Composable () -> Unit> = mapOf(SpecimenPreview.Swatch.key to { ControlProgress({ 1f }) })
 
 /** #757 specimen page. Not linked from any shipped page; debug builds reach it through `MenuSpecimenActivity`. */
 @Composable
