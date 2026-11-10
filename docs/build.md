@@ -137,7 +137,7 @@ The decision manifest records the exact SHA, APK identity, selected coverage and
 
 Prototypes use the same [evidence tooling](#evidence-tooling-prerequisites), six-packet limit and outcome rules described above: final XML owns test results, monitoring degradation blocks a green result, and test failure retains its exit status.
 
-No automatic replay or replacement full-suite run is started. Hosted transport evidence must identify the tested publisher revision. Offline contract success alone does not prove live delivery. New manual workflows require registration or an explicitly coordinated branch smoke before use.
+No automatic replay or replacement full-suite run is started. Hosted transport evidence must identify the tested publisher revision. Offline contract success alone does not prove live delivery. Use `prototype.yml` for one-off and diagnostic runs; follow the [workflow file policy](../AGENTS.md#workflow-files).
 
 ### UI frame measurements
 
@@ -256,6 +256,8 @@ Main pushes reuse retained exact-tree evidence when available; otherwise they ru
 ### Step 4
 
 Verify published assets, close resolved issues/remove workflow labels, and replace completed roadmap outcomes with the next checkpoint. Release assets are `localica-vX.Y.Z-pre-release.apk` and its `.sha256`, named by the release job.
+
+After publication, delete the released integration branch once its commits are in main. Preserve integration branches for unreleased trains.
 
 ## Previews
 

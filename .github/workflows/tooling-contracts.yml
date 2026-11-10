@@ -11,7 +11,7 @@ permissions:
 # No concurrency/cancellation policy: do not cancel another invocation.
 jobs:
   identity:
-    name: Commit identities and attribution
+    name: Repository policies
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -24,6 +24,10 @@ jobs:
         run: node .github/tests/test_commit_identity.mjs
       - name: Verify commit identities and attribution
         run: node .github/check-commit-identity.mjs
+      - name: Exercise workflow file policy
+        run: node .github/tests/test_workflow_files.mjs
+      - name: Verify the five approved workflow files
+        run: node .github/check-workflow-files.mjs
       - name: Exercise tooling selection policy
         run: node .github/tests/test_tooling_selection.mjs
       - name: Select tooling contract coverage

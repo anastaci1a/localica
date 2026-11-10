@@ -46,6 +46,8 @@ Commit checks reject every coauthor trailer and AI session or generated attribut
 
 Push every commit immediately and verify the remote branch tip. Never leave completed work only locally.
 
+Delete task-owned alias and proof branches when the task finishes. Preserve commits in main or a verified local bundle before deleting unmerged refs. Keep active, paused and uncertain branches.
+
 Use `umask 0002` when creating workspace contents.
 
 ### Labels
