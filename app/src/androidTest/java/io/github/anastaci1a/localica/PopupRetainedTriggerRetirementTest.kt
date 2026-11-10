@@ -88,7 +88,8 @@ class PopupRetainedTriggerRetirementTest {
         val nativeGeneration: Long?, val nativeOpening: Boolean?, val homeGeneration: Long?, val ownsHome: Boolean?,
         val fieldRequestGeneration: Long?, val fieldSubmitted: Boolean?, val retainedFieldSubmitted: Boolean?,
         val retainedSourceGeneration: Long?, val observedSourceGeneration: Long?,
-        val retainedNativeGeneration: Long?, val observedNativeGeneration: Long?, val retainedHomeMatches: Boolean?)
+        val retainedNativeGeneration: Long?, val observedNativeGeneration: Long?, val retainedHomeMatches: Boolean?,
+        val nativeGateHeld: Boolean, val expanded: Boolean?, val playerFullyOpen: Boolean, val page: Int, val suppressedBrowseDraws: Int)
 
     private fun retirement(adjacentTab: Boolean, reduced: Boolean = false, speed: Float = 4f / 3f,
         hide: Boolean = true, renew: Boolean = false) {
@@ -100,9 +101,15 @@ class PopupRetainedTriggerRetirementTest {
         lateinit var anchor: GlassAnchor
         var popupView: View? = null
         val triggerDraws = AtomicInteger()
+        val suppressedBrowseDraws = AtomicInteger()
         var rootPolicy: (() -> Policy)? = null
         var popupPolicy: (() -> Policy)? = null
         var observedField: ObservedField? = null
+        fun admitOpening() {
+            // Match BrowseSortDialog: reclaim the native host before publishing the new open intent.
+            anchor.reclaimOpening?.invoke()
+            open = true
+        }
         compose.setContent {
             val density = LocalDensity.current
             val settings = remember { InterfaceSettings(reducedMotion = reduced, fasterMotion = speed == 2f) }
@@ -116,11 +123,11 @@ class PopupRetainedTriggerRetirementTest {
                 CompositionLocalProvider(LocalFrostedBackdrop provides backdrop, LocalModalBackdrop provides backdrop) {
                     pager = rememberPagerState { 2 }
                     scope = rememberCoroutineScope()
-                    Box(Modifier.fillMaxSize().safeDrawingPadding().recordFrostedBackdrop(backdrop).background(Color.White)) {
+                    Box(Modifier.fillMaxSize().safeDrawingPadding().background(Color.White)) {
                         // LocalicaScreen's fully open player retains browse composition but omits its draw.
                         Column(Modifier.fillMaxSize().drawWithContent {
-                            if (!hasPlayer || !playerFullyOpen) drawContent()
-                        }) {
+                            if (!hasPlayer || !playerFullyOpen) drawContent() else suppressedBrowseDraws.incrementAndGet()
+                        }.recordFrostedBackdrop(backdrop).background(Color.White)) {
                             TabPager(pager, { listOf(MainTab.Library, MainTab.Albums) }, Modifier.fillMaxSize()) { page ->
                                 if (page == 0) {
                                     anchor = rememberGlassAnchor()
@@ -136,7 +143,7 @@ class PopupRetainedTriggerRetirementTest {
                                     }
                                     Box(Modifier.padding(32.dp)
                                         .drawWithContent { triggerDraws.incrementAndGet(); drawContent() }) {
-                                        ActionIcon(AppIcon.ActionEllipsis, "Retained popup trigger", anchor = anchor) { open = true }
+                                        ActionIcon(AppIcon.ActionEllipsis, "Retained popup trigger", anchor = anchor) { admitOpening() }
                                     }
                                     GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center) {
                                         popupView = LocalView.current
@@ -169,7 +176,8 @@ class PopupRetainedTriggerRetirementTest {
                     expansion?.nativeGeneration, expansion?.nativeOpening,
                     home?.generation, home?.let { node?.ownsWindow(it) }, field?.nativeGeneration, field?.submitted,
                     retained?.request?.submitted, retained?.request?.sourceGeneration, retained?.sourceGeneration,
-                    retained?.request?.nativeGeneration, retained?.nativeGeneration, retained?.homeMatches)
+                    retained?.request?.nativeGeneration, retained?.nativeGeneration, retained?.homeMatches,
+                    expansion?.awaitingNativeGate == true, expansion?.expanded, playerFullyOpen, pager.currentPage, suppressedBrowseDraws.get())
             }
             File(evidence, "$case-$stage.txt").writeText(snapshot.toString() + "\n")
             return snapshot
@@ -189,6 +197,7 @@ class PopupRetainedTriggerRetirementTest {
         fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
         fun assertOpen() {
             compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(1)
+            compose.onNodeWithTag("glass-morph-surface").assertIsDisplayed()
             compose.runOnIdle {
                 assertTrue("A real native host was admitted", anchor.modalPresent)
                 assertTrue("The trigger surrendered its visible surface", anchor.hidden)
@@ -201,7 +210,7 @@ class PopupRetainedTriggerRetirementTest {
         assertTrue("The origin was positively drawn before opening, including Reduced", triggerDraws.get() > 0)
         compose.mainClock.autoAdvance = false
         try {
-            compose.runOnIdle { open = true }
+            compose.runOnIdle { admitOpening() }
             compose.advanceMorphOpening(2_000, anchor) { popupView }
             val opened = checkpoint("opened")
             assertPolicy(opened)
@@ -228,6 +237,9 @@ class PopupRetainedTriggerRetirementTest {
             val closing = checkpoint("closing-gate")
             assertPolicy(closing)
             if (hide) {
+                assertTrue("The close is held at the real native gate", closing.nativeGateHeld)
+                assertEquals(false, closing.nativeOpening)
+                if (!adjacentTab) assertTrue("The actual browse draw gate suppressed content", closing.suppressedBrowseDraws > 0)
                 assertEquals("The hidden home did not draw a new field", opened.homeGeneration, closing.homeGeneration)
                 assertNull("A missing restore receipt has not admitted a home-field request", closing.fieldRequestGeneration)
             }
@@ -244,20 +256,31 @@ class PopupRetainedTriggerRetirementTest {
                 compose.runOnIdle {
                     playerFullyOpen = false
                     if (adjacentTab) scope.launch(start = CoroutineStart.UNDISPATCHED) { pager.scrollToPage(0) }
-                    open = true
+                    admitOpening()
                 }
-                repeat(10) { frame() }
-                val renewed = checkpoint("renewed-past-old-deadline")
+                repeat(10) { index ->
+                    frame()
+                    val continuing = checkpoint("renewed-frame-" + (index + 1))
+                    assertPolicy(continuing)
+                    assertSame("Every frame retains the renewed native host", nativeView, popupView)
+                    assertTrue("The renewed host stays attached through and beyond the old six-frame deadline", continuing.nativeAttached)
+                    assertTrue("The old close never releases the renewed modal", continuing.modal)
+                    assertEquals("The real opening intent owns the continuing expansion", true, continuing.expanded)
+                }
+                compose.advanceMorphOpening(2_000, anchor) { popupView }
+                val renewed = checkpoint("renewed-settled")
                 assertPolicy(renewed)
                 assertOpen()
-                assertSame("The pending close cannot dispose the renewed host", nativeView, popupView)
-                assertTrue("The old deadline elapsed while this native host remained attached", nativeView.isAttachedToWindow)
-                assertTrue("Reopening belongs to a fresh native generation", requireNotNull(renewed.nativeGeneration) > requireNotNull(closing.nativeGeneration))
+                assertSame("Settled reopening retains the same native host", nativeView, popupView)
+                assertTrue("Native generations never regress", requireNotNull(renewed.nativeGeneration) >= requireNotNull(closing.nativeGeneration))
+                assertFalse("The old closing-gate predicate is no longer current", renewed.nativeOpening == false)
+                compose.runOnIdle { assertEquals("The renewed surface settles fully open", 1f, anchor.contact.expansion.value, 0f) }
                 compose.runOnIdle { open = false }
                 compose.advanceMorphOpening(2_000, anchor) { popupView }
                 val retired = checkpoint("renewed-final-retirement")
                 assertFalse(retired.modal)
                 compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(0)
+                compose.waitUntil(5_000) { !nativeView.isAttachedToWindow }
                 return
             }
             repeat(6) { frame() }
@@ -291,7 +314,7 @@ class PopupRetainedTriggerRetirementTest {
             }
             frame()
             assertTrue("The restored origin draws again, including Reduced", triggerDraws.get() > hiddenDraws)
-            compose.runOnIdle { open = true }
+            compose.runOnIdle { admitOpening() }
             compose.advanceMorphOpening(2_000, anchor) { popupView }
             assertPolicy(checkpoint("reopened-after-retirement"))
             assertOpen()
