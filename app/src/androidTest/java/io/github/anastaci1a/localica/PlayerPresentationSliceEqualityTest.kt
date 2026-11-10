@@ -124,6 +124,12 @@ class PlayerPresentationSliceEqualityTest {
                     listOf(rootSize.width.toFloat(), rootSize.height.toFloat(), density.density, density.fontScale,
                         insetTop.toFloat(), insetBottom.toFloat(), progress.value)
                 }
+                val profile = when (Build.VERSION.SDK_INT) {
+                    26 -> listOf(1080f, 1920f, 2.625f, 1f)
+                    36 -> listOf(720f, 1280f, 1.75f, 1f)
+                    else -> error("Slice I proof requires its declared API 26 or 36 profile")
+                }
+                assertEquals("The real window uses the declared viewport, density and font scale", profile, window.take(4))
                 val engine = compose.runOnIdle {
                     val expected = if (reduced) "Reduced" else if (faster) "Faster" else "Standard"
                     val context = requireNotNull(requireNotNull(actualClock).context)
