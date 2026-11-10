@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.QueueSelectorDisclosureIcon
+import io.github.anastaci1a.localica.ui.layout.QueueSelectorActionsRow
+import io.github.anastaci1a.localica.ui.layout.QueuePlaybackActionsRow
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -59,7 +62,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (copy) nameMorph.CompactCopy(Modifier.weight(1f))
             else nameMorph.Compact(Modifier.weight(1f))
-            Icon(appIconPainter(AppIcon.ActionChevronDown), "Select queue", Modifier.size(24.dp))
+            QueueSelectorDisclosureIcon(appIconPainter(AppIcon.ActionChevronDown))
         }
     }
     SideEffect { selectorAnchor.face = { SelectorFace(copy = true) } }
@@ -94,7 +97,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 // The ordinary null path installs no additional provider or layout/input node.
                 val content: @Composable () -> Unit = {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    QueueSelectorActionsRow {
                         onMinimize?.let { ActionIcon(AppIcon.ActionChevronDown, "Minimize queue", onClick = it) }
                         LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor)) {
                             Box(Modifier.fillMaxWidth().height(CompactControlSize).ownButtonDrag(state.library.queues.isNotEmpty())
@@ -111,7 +114,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                             }
                         }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    QueuePlaybackActionsRow {
                         ActionIcon(AppIcon.ActionSort, "Sort queue", anchor = sortAnchor) { sorting = true }
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(position ?: "0 / 0", style = MaterialTheme.typography.titleSmall)

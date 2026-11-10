@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.layout.homeListContentPadding
 import io.github.anastaci1a.localica.R
 
 import androidx.compose.foundation.combinedClickable
@@ -100,7 +101,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                 returnToList.cancel()
             }
         }
-        .recordFrostedBackdrop(listBackdrop, surroundingBackdrop).testTag("home-list"), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = obscuredInset + with(density) { returnControlHeight.toDp() } + 16.dp)) {
+        .recordFrostedBackdrop(listBackdrop, surroundingBackdrop).testTag("home-list"), state = scroll, contentPadding = homeListContentPadding(obscuredInset, returnControlHeight, density)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")

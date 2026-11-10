@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.layout.BrowseViewMeasurementColumn
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -73,9 +74,7 @@ internal fun BrowseOptionsMeasurement(declaration: BrowseOptionsDeclaration, sha
             if (declaration.albumGrouping) BooleanPreferenceFrame("Group by album") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) }
             if (declaration.reserveError) Text("Couldn’t save this order. Try again.", color = MaterialTheme.colorScheme.error)
         }
-        for (gallery in listOf(false, true)) Column(
-            Modifier.fillMaxWidth().padding(horizontal = shadowInset, vertical = shadowInset),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (gallery in listOf(false, true)) BrowseViewMeasurementColumn(shadowInset) {
             ChoiceMeasurement("View mode", listOf("List", "Gallery"))
             if (gallery) PopupMeasurementMaximum {
                 for (count in 1..5) SliderPreferenceFrame(itemsPerRowTitle(count), null, null, null) {
