@@ -448,3 +448,5 @@ io.github.anastaci1a.localica.IconOpticalCentringTest
 io.github.anastaci1a.localica.FlatNoneRealAppTest
 io.github.anastaci1a.localica.FlatNoneMaterialTest
 io.github.anastaci1a.localica.LegacyNonePixelReferenceTest
+io.github.anastaci1a.localica.LegacyNoneControlledPixelReferenceTest
+io.github.anastaci1a.localica.ShadowSchedulingOracleTest
