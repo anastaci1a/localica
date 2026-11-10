@@ -53,7 +53,7 @@ import kotlin.math.abs
 /**
  * #635: scroll-driven recycling must compose every Library item at its final slot.
  *
- * Every native frame during a fast fling, a scrollbar-style run of cold scrollToItem jumps and an
+ * Every native frame during fast flings, a run of app-scrollbar jumps (to the bottom edge too) and an
  * animated return to the top is sampled after drawing. For each visible item the approach
  * (drawn) bounds of the item, its cell, artwork and text must equal their lookahead (final) bounds,
  * and no bounds placement animation may be running. A recycled slot must not inherit the
@@ -105,7 +105,6 @@ class ScrollPlacementFirstFrameTest {
         ArtworkColors.publish(emptyMap())
     }
 
-    private var albumCount = 0
     private class Host { var topRequest by mutableIntStateOf(0) }
 
     private fun main(block: (ComponentActivity) -> Unit) {
@@ -129,7 +128,6 @@ class ScrollPlacementFirstFrameTest {
         val tracks = arguments.getString("corpus")?.let { corpusTracks(File(it)) }
             ?: syntheticTracks((arguments.getString("albums") ?: "1500").toInt())
         ArtworkColors.publish(tracks.associate { it.uri to palette[(it.uri.hashCode() and 0x7fffffff) % palette.size] })
-        albumCount = tracks.map { it.album }.distinct().size
         val library = LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("fixture", "Fixture")), tracks = tracks), loading = false)
         val host = Host()
         scenario = ActivityScenario.launch(ComponentActivity::class.java)
@@ -317,8 +315,9 @@ class ScrollPlacementFirstFrameTest {
         return bounds
     }
 
-    private fun scrollToIndex(index: Int) = main { a ->
-        semantics(a).first { it.tag() == "browser-list" }.config[SemanticsActions.ScrollToIndex].action!!.invoke(index)
+    /** The app scrollbar's own request path: fraction to item target to a cold jump. */
+    private fun scrollbar(fraction: Float) = main { a ->
+        check(semantics(a).first { it.tag() == "browse-scrollbar" }.config[SemanticsActions.SetProgress].action!!.invoke(fraction))
     }
 
 
@@ -335,16 +334,19 @@ class ScrollPlacementFirstFrameTest {
                 Thread.sleep(120)
             }
             Thread.sleep(2500)
-            // A fling back up, then a scrollbar-style drag: one cold scrollToItem per frame.
+            // A fling back up, then scrollbar jumps: one cold jump per frame, including the end.
             phase = "fling-back"
             swipe(bounds.top + bounds.height() * .15f, bounds.top + bounds.height() * .85f, x)
             Thread.sleep(1500)
             phase = "scrollbar-jump"
-            // Grid item 0 is the header; the browser items follow it.
-            val rows = albumCount + 1
             val steps = 40
             for (i in 0..steps) {
-                scrollToIndex(((rows - 1).toLong() * ((i * 7) % (steps + 1)) / steps).toInt())
+                scrollbar(((i * 7) % (steps + 1)).toFloat() / steps)
+                nativeFrame()
+            }
+            // A drag along the last fifth of the track ends at the bottom edge.
+            for (i in 0..20) {
+                scrollbar(.8f + .01f * i)
                 nativeFrame()
             }
             Thread.sleep(1500)
@@ -356,8 +358,8 @@ class ScrollPlacementFirstFrameTest {
         } finally { stop() }
         android.util.Log.i("Placement635", "$label frames=$frame checked=$checkedItems entered=$enteredItems violations=${violations.size}")
         violations.take(200).forEach { android.util.Log.i("Placement635", "$label $it") }
-        assertTrue("$label: $enteredItems item entries over $frame frames; ${violations.size} frames had an item away from its slot " +
-            "or a running placement animation:\n" + violations.take(12).joinToString("\n"), violations.isEmpty() && enteredItems > 0)
+        assertTrue("$label: $enteredItems item entries over $frame frames; ${violations.size} item samples were away from their slots " +
+            "or had a running placement animation:\n" + violations.take(12).joinToString("\n"), violations.isEmpty() && enteredItems > 0)
     }
 
     @Test fun listFlingAndJump() = run(BrowseStyle(presentation = Presentation.List, listSize = ListSize.Normal), "list")
