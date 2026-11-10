@@ -45,9 +45,11 @@ for mode in playback scan tag lastfm; do
     grep -E "[[:space:]]$pid[[:space:]]+$pid[[:space:]].*ExoPlayerImpl[[:space:]]*: Release $player_id[[:space:]]" "$directory/logcat.txt" > "$directory/player-release.txt"
   fi
   if [[ "$mode" == scan || "$mode" == tag ]]; then
-    if [[ "$mode" == scan ]]; then service=ScanService; else service=TagEditService; fi
-    # am_create_service includes the app PID even for a short-lived service.
-    grep -E "am_create_service.*$service.*[, ]$pid\]" "$directory/events.txt" > "$directory/service-created.txt"
+    if [[ "$mode" == scan ]]; then service=ScanService; notification=9001; else service=TagEditService; notification=9010; fi
+    # API26 does not emit am_create_service on these images. The service's foreground notification
+    # is an independently recorded binder-side entry witness, with exact PID/package/notification ID.
+    grep -F 'notification_enqueue:' "$directory/events.txt" | grep -F ",$pid,$app,$notification," > "$directory/foreground-notification.txt"
+    printf 'service-entry=%s;foreground-notification=%s;same-pid=true\n' "$service" "$notification" >> "$directory/receipt.txt"
   fi
   printf '%s\ntracks=13400\nstrictmode=fatal\n' "$receipt" >> "$directory/receipt.txt"
   adb -s "$serial" shell am force-stop "$app"

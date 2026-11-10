@@ -48,7 +48,8 @@ elif args[0] == 'logcat':
         if mode in ('scan', 'tag') and fail != 'missing-service':
             service = 'ScanService' if mode == 'scan' else 'TagEditService'
             event_pid = pid + 50 if fail == 'wrong-service-pid' else pid
-            print(f'11-10 11:00:00.000 100 100 I am_create_service: [0,123,io.github.anastaci1a.localica/.{service},10001,{event_pid}]')
+            notification = 9001 if mode == 'scan' else 9010
+            print(f'11-10 11:00:00.000 100 100 I notification_enqueue: [10001,{event_pid},io.github.anastaci1a.localica.debug,{notification},NULL,0,Notification(),0]')
     elif '-b' not in args:
         log_pid = pid + 50 if fail == 'wrong-player-pid' else pid
         print(f'11-10 11:00:00.000 {log_pid} {log_pid} I ExoPlayerImpl: Init ab12 [AndroidXMedia3]')
@@ -89,7 +90,7 @@ class PreferenceEntryAdmission(unittest.TestCase):
                 self.assertNotEqual(0, result.returncode)
                 self.assertTrue(diagnostics)
 
-    def test_missing_or_wrong_pid_service_creation_is_rejected(self):
+    def test_missing_or_wrong_pid_service_entry_is_rejected(self):
         for control in ('missing-service', 'wrong-service-pid'):
             with self.subTest(control=control):
                 result, receipts, diagnostics = self.run_protocol(control)
