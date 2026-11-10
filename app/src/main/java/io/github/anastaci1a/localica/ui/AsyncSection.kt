@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui
 import android.os.StrictMode
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -75,8 +74,9 @@ internal fun AsyncValueText(value: String?, placeholder: String, modifier: Modif
     val corner = with(LocalDensity.current) { StockUiSpec.space.getValue(Space.Tight).toPx() }
     AsyncValueSlot(modifier, text = {
         val textSemantics = if (value == null) Modifier.clearAndSetSemantics { } else Modifier
-        androidx.compose.material3.Text(value ?: placeholder, textSemantics,
-            color = if (value == null) Color.Transparent else Color.Unspecified,
+        val hidden = if (value == null) remember { ArtworkTextReveal { 0f }.apply { hold(true) } } else null
+        androidx.compose.material3.Text(value ?: placeholder,
+            textSemantics.artworkTextReveal(hidden, { null }, { 0f }, skeleton = false),
             style = style, maxLines = maxLines, minLines = minLines, softWrap = softWrap, overflow = overflow)
     }, placeholder = {
         if (value == null) BrowseLoadingShape(Modifier.matchParentSize().testTag("async-value-placeholder"), { corner })

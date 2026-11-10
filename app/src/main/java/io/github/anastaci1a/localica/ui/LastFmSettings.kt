@@ -71,7 +71,7 @@ internal fun LastFmSettings(controller: LastFmController) {
                     else if (stats.entries == 0) "—" else "${100L * counts.matched / stats.entries}%"
                 LastFmStatsGrid(listOf("Scrobbles" to (stats?.scrobbles?.toString() ?: absentStat), "Songs" to (stats?.songs?.toString() ?: absentStat),
                     "Artists" to (stats?.artists?.toString() ?: absentStat),
-                    "Albums" to (if (statsPending) null else stats?.takeIf { it.entriesWithAlbums > 0 }?.albums?.toString() ?: "—"), "Matched share" to share))
+                    "Albums" to (if (statsPending) null else stats?.albums?.toString() ?: "—"), "Matched share" to share))
             }
         }
     }
