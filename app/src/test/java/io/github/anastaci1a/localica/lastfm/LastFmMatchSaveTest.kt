@@ -49,13 +49,13 @@ class LastFmMatchSaveTest {
             override suspend fun write(value: SavedLastFm) { saved = value }
         }, LastFmSync(LastFmApi { _, _ -> error("No network") }), flowOf(LibrarySnapshot(tracks = listOf(track))), true, consent, scope)
         try {
-            withTimeout(5000) { controller.matches.first { it.clearCount == 1 } }
+            withTimeout(5000) { controller.details.first { it.clearCount == 1 } }
             assertTrue(controller.mapAndAwait(remote.key, LastFmMatcher.NONE))
-            val absent = withTimeout(5000) { controller.matches.first { it.notInLibrary == 1 } }
+            val absent = withTimeout(5000) { controller.details.first { it.notInLibrary == 1 } }
             assertTrue(absent.rows(LastFmGroup.ABSENT, saved.mappings).single().canUndo)
             assertEquals("Marked not in your library by you", absent.rows(LastFmGroup.ABSENT, saved.mappings).single().reason)
             controller.resetMapping(remote.key)
-            withTimeout(5000) { controller.matches.first { it.clearCount == 1 } }
+            withTimeout(5000) { controller.details.first { it.clearCount == 1 } }
             assertFalse(saved.mappings.containsKey(remote.key)); assertEquals(archive, saved.snapshot)
         } finally { scope.cancel() }
     }

@@ -92,4 +92,11 @@ object LastFmMatcher {
             io.github.anastaci1a.localica.diagnostics.WorkCounters.lastFmMatches.incrementAndGet()
             LastFmMatchingEngine(tracks).match(snapshot, mappings, checkActive)
         }
+    /** Streams the archive and keeps only per-song totals and groups (#779); equal to [match] for those fields. */
+    fun matchCounts(snapshot: LastFmSnapshot?, tracks: List<Track>, mappings: Map<String, String> = emptyMap(),
+        checkActive: () -> Unit = {}): LastFmMatches =
+        if (snapshot == null) LastFmMatches(emptyMap(), emptyList()) else {
+            io.github.anastaci1a.localica.diagnostics.WorkCounters.lastFmMatches.incrementAndGet()
+            LastFmMatchingEngine(tracks).matchCounts(snapshot, mappings, checkActive)
+        }
 }

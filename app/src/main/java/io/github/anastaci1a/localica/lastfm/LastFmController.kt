@@ -15,9 +15,11 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     private val now: () -> Long = System::currentTimeMillis, private val background: LastFmBackground? = null,
     private val localStatistics: Flow<ListeningStatistics> = flowOf(ListeningStatistics()),
     private val matchCache: LastFmMatchCacheStore = NoLastFmMatchCacheStore,
-    /** Tests inject a gated matcher to prove cancellation and publication ownership. */
-    private val matcher: (LastFmSnapshot, List<io.github.anastaci1a.localica.library.Track>, Map<String, String>, () -> Unit) -> LastFmMatches =
-        { snapshot, tracks, mappings, checkActive -> LastFmMatcher.match(snapshot, tracks, mappings, checkActive) }) : PlayCountSource {
+    /** Tests inject a gated matcher to prove cancellation and publication ownership; `countsOnly` selects the streamed fold. */
+    private val matcher: (LastFmSnapshot, List<io.github.anastaci1a.localica.library.Track>, Map<String, String>, Boolean, () -> Unit) -> LastFmMatches =
+        { snapshot, tracks, mappings, countsOnly, checkActive ->
+            if (countsOnly) LastFmMatcher.matchCounts(snapshot, tracks, mappings, checkActive) else LastFmMatcher.match(snapshot, tracks, mappings, checkActive)
+        }) : PlayCountSource {
     private val mutable = MutableStateFlow(LastFmState())
     val state = mutable.asStateFlow()
     private val local = MutableStateFlow<Map<String, Long>>(emptyMap())
@@ -75,19 +77,24 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
         val key = withContext(Dispatchers.Default) { LastFmMatchKey.of(input.catalog, snapshot, input.mappings) }
         return current.takeIf { it.matches(key) }?.toMatches(snapshot)
     }
-    /** Runs only inside the request owner, so a newer input or demand change cancels it before any publication. */
-    private suspend fun fullMatch(input: MatchInput): LastFmMatches {
+    /**
+     * Runs only inside the request owner, so a newer input or demand change cancels it before any publication.
+     * `countsOnly` streams the archive into totals (bounded live data, no per-song results); the full result
+     * with review and resolution lists exists only for explicit detail demand.
+     */
+    private suspend fun fullMatch(input: MatchInput, countsOnly: Boolean = false): LastFmMatches {
         val snapshot = input.snapshot ?: return LastFmMatches(emptyMap(), emptyList())
         val started = now()
         val result = withContext(Dispatchers.Default) {
             val context = currentCoroutineContext()
-            matcher(snapshot, input.catalog.tracks, input.mappings) { context.ensureActive() }
+            matcher(snapshot, input.catalog.tracks, input.mappings, countsOnly) { context.ensureActive() }
         }
         io.github.anastaci1a.localica.diagnostics.Diagnostics.info("LastFm",
-            "Matched ${snapshot.tracks.size} archive songs against ${input.catalog.tracks.size} library songs in ${now() - started} ms")
+            "Matched ${snapshot.tracks.size} archive songs against ${input.catalog.tracks.size} library songs in ${now() - started} ms" +
+                if (countsOnly) " (counts only)" else "")
         val key = withContext(Dispatchers.Default) { LastFmMatchKey.of(input.catalog, snapshot, input.mappings) }
         currentCoroutineContext().ensureActive()
-        complete = input to result
+        if (!countsOnly) complete = input to result
         val entry = LastFmMatchCache(key.library, key.archive, key.mappings, result.counts, result.recordingGroups,
             result.matched, result.notInLibrary, result.dismissed)
         cacheLock.withLock {
@@ -131,10 +138,10 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
                         memo != null -> publish(memo, memo)
                         demand -> fullMatch(input).let { publish(it, it) }
                         else -> {
-                            val cached = cachedMatches(input)
-                            // Restored counts: review lists do not exist yet, so matches is explicitly incomplete and sourceless.
-                            if (cached != null) publish(cached, LastFmMatches(emptyMap(), emptyList(), complete = false))
-                            else fullMatch(input).let { publish(it, it) }
+                            // Without demand only counts are needed: restored from the cache, or streamed with bounded live
+                            // data. Either way review lists do not exist yet, so matches is explicitly incomplete and sourceless.
+                            val countsValue = cachedMatches(input) ?: fullMatch(input, countsOnly = true)
+                            publish(countsValue, LastFmMatches(emptyMap(), emptyList(), complete = false))
                         }
                     }
                 }

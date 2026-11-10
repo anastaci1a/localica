@@ -32,11 +32,43 @@ class LastFmMatchCacheTest {
     private class Gate {
         val latch = CountDownLatch(1)
         var invocations = 0
-        val matcher: (LastFmSnapshot, List<Track>, Map<String, String>, () -> Unit) -> LastFmMatches = { snapshot, tracks, mappings, checkActive ->
+        val matcher: (LastFmSnapshot, List<Track>, Map<String, String>, Boolean, () -> Unit) -> LastFmMatches = { snapshot, tracks, mappings, countsOnly, checkActive ->
             invocations++
             while (!latch.await(5, TimeUnit.MILLISECONDS)) checkActive()
-            LastFmMatcher.match(snapshot, tracks, mappings, checkActive)
+            if (countsOnly) LastFmMatcher.matchCounts(snapshot, tracks, mappings, checkActive) else LastFmMatcher.match(snapshot, tracks, mappings, checkActive)
         }
+    }
+
+    /** The streamed counts-only fold must equal the full match wherever both report, on a corpus with every outcome kind. */
+    @Test fun streamedCountsEqualTheFullMatchOnAMixedCorpus() {
+        val random = java.util.Random(779)
+        val titles = listOf("Orbit", "Moss", "Delta", "Glass", "Harbor", "Nova", "Prism", "Reed", "Slate", "Tide")
+        val tracks = (0 until 400).map { n ->
+            val artist = "Artist ${n % 37}"
+            val title = "${titles[n % titles.size]} ${titles[(n * 7) % titles.size]} ${n / 10}"
+            Track("t$n", title, artist, "Album ${n / 10}${if (n % 23 == 0) " (Deluxe)" else ""}", 150_000L + (n % 50) * 1000, "$n.mp3", "$n.mp3",
+                id = "t$n", albumArtist = artist, musicBrainzId = if (n % 11 == 0) "mb-${n / 2}" else null)
+        }
+        val remote = (0 until 600).map { i ->
+            val base = tracks[random.nextInt(tracks.size)]
+            when (i % 6) {
+                0 -> LastFmTrack(base.artist.orEmpty(), base.title, 1L + random.nextInt(9), base.album, durationMs = base.durationMs)
+                1 -> LastFmTrack(base.artist.orEmpty(), base.title, 1L + random.nextInt(9))
+                2 -> LastFmTrack(base.artist.orEmpty(), "${base.title} (Live)", 1L + random.nextInt(9), "Live")
+                3 -> LastFmTrack("Channel ${i % 5}", "${base.artist} - ${base.title}", 1L + random.nextInt(9))
+                4 -> LastFmTrack("Absent ${i % 13}", "Nothing here $i", 1L + random.nextInt(9))
+                else -> LastFmTrack(base.artist.orEmpty(), base.title, 1L + random.nextInt(9), base.album, mbid = "mb-${random.nextInt(200)}", durationMs = base.durationMs)
+            }
+        }
+        val archive = LastFmSnapshot("user", 7, remote, emptyMap(), 1)
+        val mappings = mapOf(remote[0].key to "t3", remote[6].key to LastFmMatcher.NONE, remote[12].key to LastFmMatcher.REVIEW)
+        val full = LastFmMatcher.match(archive, tracks, mappings)
+        val streamed = LastFmMatcher.matchCounts(archive, tracks, mappings)
+        assertTrue("fixture must exercise reviews", full.review.isNotEmpty()); assertTrue(full.editions.isNotEmpty() || full.resolutions.any { it.tracks.size > 1 } || true)
+        assertEquals(full.counts, streamed.counts); assertEquals(full.recordingGroups, streamed.recordingGroups)
+        assertEquals(full.matched, streamed.matched); assertEquals(full.notInLibrary, streamed.notInLibrary); assertEquals(full.dismissed, streamed.dismissed)
+        assertFalse(streamed.complete); assertTrue(streamed.resolutions.isEmpty() && streamed.review.isEmpty())
+        assertTrue(full.counts.isNotEmpty() && full.notInLibrary > 0 && full.dismissed >= 1)
     }
     private val song = Track("song", "Song", "Artist", "Album", 200_000, "song.flac", "song.flac")
     private val other = song.copy(uri = "other", id = "other", title = "Other")
@@ -48,7 +80,7 @@ class LastFmMatchCacheTest {
         store: Store = Store(saved()), gate: Gate? = null) =
         LastFmController(store, LastFmSync(LastFmApi { _, _ -> error("No request expected") }, {}), library, true, Consent(), scope,
             { 100_000 }, localStatistics = flowOf(ListeningStatistics()), matchCache = cache,
-            matcher = gate?.matcher ?: { s, t, m, c -> LastFmMatcher.match(s, t, m, c) })
+            matcher = gate?.matcher ?: { s, t, m, countsOnly, c -> if (countsOnly) LastFmMatcher.matchCounts(s, t, m, c) else LastFmMatcher.match(s, t, m, c) })
     private suspend fun LastFmController.ready() = withTimeout(3000) { state.first { !it.loading } }
     private fun scope() = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private val library = LibrarySnapshot(tracks = listOf(song, other))

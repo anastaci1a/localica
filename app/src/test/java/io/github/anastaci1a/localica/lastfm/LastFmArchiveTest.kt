@@ -39,7 +39,7 @@ class LastFmArchiveTest {
         val controller = controller(store, raw, scope, consent)
         try {
             controller.ready(); count(controller, raw, 42)
-            withTimeout(3000) { controller.matches.first { it.judgments.size == 1 } }
+            withTimeout(3000) { controller.details.first { it.judgments.size == 1 } }
             controller.setActive(false); withTimeout(3000) { controller.state.first { !it.saved.active } }
             assertEquals(7L, count(controller, raw, 7).tracks["song"])
             assertEquals(original.snapshot, store.read().snapshot); assertEquals(original.mappings, store.read().mappings)
@@ -64,7 +64,7 @@ class LastFmArchiveTest {
             controller.setActive(true); count(controller, raw, 42)
             assertEquals("user", store.read().username)
             controller.deleteSyncedData(); withTimeout(3000) { controller.state.first { it.saved.snapshot == null } }
-            withTimeout(3000) { controller.matches.first { it.counts.isEmpty() && it.judgments.isEmpty() } }
+            withTimeout(3000) { controller.details.first { it.counts.isEmpty() && it.judgments.isEmpty() } }
             assertTrue(store.read().mappings.isEmpty()); assertFalse(store.read().useCounts)
             assertEquals(7L, raw.value.tracks["song"]); assertEquals(9L, raw.value.playlists["playlist"])
         } finally { scope.cancel() }
@@ -80,7 +80,7 @@ class LastFmArchiveTest {
             val plusOne = count(controller, raw, 43)
             assertEquals(43L, plusOne.tracks["deluxe"]); assertEquals(2L, plusOne.tracks["local-only"])
             withTimeout(3000) { controller.overlay.first { it.additions == 1L } }
-            assertEquals(42L, controller.matches.value.counts["song"])
+            assertEquals(42L, controller.counts.value.counts["song"])
             raw.value = raw.value.copy(tracks = raw.value.tracks + ("local-only" to 3L))
             count(controller, raw, 43)
             withTimeout(3000) { controller.overlay.first { it.additions == 2L } }
@@ -123,7 +123,7 @@ class LastFmArchiveTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         try {
             val controller = controller(store, raw, scope)
-            controller.ready(); withTimeout(3000) { controller.matches.first { it.matched == 1 } }
+            controller.ready(); withTimeout(3000) { controller.details.first { it.matched == 1 } }
             assertFalse(controller.settings.first().useExternalCounts); count(controller, raw, 7)
             assertEquals(original.snapshot, store.read().snapshot)
         } finally { scope.cancel() }

@@ -186,6 +186,8 @@ class LastFmScrollStressTest {
         try {
             // The archive file must exist before MainActivity first touches the lazy controller.
             archiveFile().delete()
+            // `-e cold true` discards the persisted match result so this launch pays the one-time streamed match.
+            if (arg("cold", "false") == "true") File(context.filesDir, "lastfm-matches.json").delete()
             if (lastfm != "none") runBlocking {
                 FileLastFmStore(archiveFile()).write(SavedLastFm("stress779", useCounts = true, snapshot = archive(tracks),
                     active = lastfm == "on", keepSyncingInBackground = false))
