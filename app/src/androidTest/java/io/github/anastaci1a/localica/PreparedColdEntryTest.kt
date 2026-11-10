@@ -41,7 +41,7 @@ class PreparedColdEntryTest {
         }
         assertNoActivity()
         when (mode) {
-            "playback" -> verifyPlayback(app, instrumentation)
+            "playback" -> withoutSystemMediaResumption(instrumentation) { verifyPlayback(app, instrumentation) }
             "scan" -> {
                 ContextCompat.startForegroundService(app, Intent(app, ScanService::class.java))
                 app.preferences.awaitReady()
@@ -77,6 +77,27 @@ class PreparedColdEntryTest {
             ";gcCount=" + stats["art.gc.gc-count"] + ";gcTimeMs=" + stats["art.gc.gc-time"] +
             ";blockingGcCount=" + stats["art.gc.blocking-gc-count"] + ";blockingGcTimeMs=" + stats["art.gc.blocking-gc-time"]
         instrumentation.sendStatus(0, Bundle().apply { putString("stream", line + "\n") })
+    }
+
+    private suspend fun withoutSystemMediaResumption(instrumentation: android.app.Instrumentation, action: suspend () -> Unit) {
+        // SystemUI otherwise creates an unrelated browser binding after play on API 36. Isolate this
+        // fixture's owned binding so stopService can exercise native destruction, then restore the setting.
+        fun shell(command: String): String {
+            val descriptor = instrumentation.uiAutomation.executeShellCommand(command)
+            return android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }.trim()
+        }
+        val previous = shell("settings get secure qs_media_resumption")
+        check(previous in setOf("null", "0", "1")) { "Unexpected media resumption setting: $previous" }
+        try {
+            shell("settings put secure qs_media_resumption 0")
+            check(shell("settings get secure qs_media_resumption") == "0")
+            android.util.Log.i("PreparedEntryProof", "system-media-resumption=0;previous=$previous")
+            action()
+        } finally {
+            shell(if (previous == "null") "settings delete secure qs_media_resumption" else "settings put secure qs_media_resumption $previous")
+            check(shell("settings get secure qs_media_resumption") == previous)
+            android.util.Log.i("PreparedEntryProof", "system-media-resumption-restored=$previous")
+        }
     }
 
     private suspend fun verifyPlayback(app: LocalicaApplication, instrumentation: android.app.Instrumentation) {
