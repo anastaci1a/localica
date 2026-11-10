@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -47,9 +48,10 @@ internal fun SelectionInsetScroll(grid: LazyGridState, panel: FloatingSelectionP
                     restingClearance = measured.third
                 }
                 generation
-            }.distinctUntilChanged().collectLatest { generation ->
+            }.distinctUntilChanged().drop(1).collectLatest { generation ->
                 controller.interrupt()
-                // Mounting/re-attaching with a visible panel is not a new reveal.
+                // The initial generation is skipped even for a previously used shared panel.
+                // A replacement host never resumes its retired owner's reveal.
                 if (generation == 0L || !panel.visible || !currentEnabled()) return@collectLatest
                 val initial = restingLayout
                 val atBottom = restingAtBottom

@@ -465,6 +465,8 @@ More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remov
 
 Collapsing morphs the same surface into a minimized count pill; tapping it morphs back. Size, foreground and appearance share the interruptible glass spring, honor animation speed and Reduce motion, and immediately release input on outgoing faces.
 
+When the selection pill appears at the list bottom or would cover a selected item, scroll by exactly its added inset on the same quick easing curve. Touch interrupts the scroll. Removing the pill progressively removes its inset and settles only the occupied extra tail.
+
 Close, [Back](#back) or successful actions exit. Cancel/failure/empty selection retains the mode. Collapsing retains selection. Remove-from-source requires one editable source. No separate selection-basket screen. Playlist chooser marks existing membership accessibly while allowing duplicates.
 
 In a complete, manual, unfiltered queue/playlist, hold-drag moves the held occurrence or selected occurrences from that source, preserving their source order even when nonconsecutive. Cross-source selections and filtered views cannot reorder. Applying a saved-order sort does not disable subsequent dragging.
