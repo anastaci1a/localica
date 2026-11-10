@@ -455,3 +455,6 @@ io.github.anastaci1a.localica.BrowseCurrentMainReferenceEqualityTest
 
 # Bounded strict-first browse capture diagnostics (#750).
 io.github.anastaci1a.localica.BrowseSettledReferenceDiagnosticTest
+
+# Isolated native presented-buffer primitive controls (#600).
+io.github.anastaci1a.localica.FirstPresentedBufferCaptureTest
