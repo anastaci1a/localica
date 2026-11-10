@@ -225,6 +225,13 @@ class CollapsedPlayerCollectionNavigationTest {
 
     private enum class Input { Pinch, Back, Search }
 
+    private fun recordAction(input: Input) {
+        val actionFrame = compose.mainClock.currentTime
+        records.appendText("input\t$input\tnavigation=$navigationFrame\taction=$actionFrame\n")
+        assertTrue("Input must begin inside both Standard and Faster chrome transitions",
+            actionFrame - navigationFrame in 1L..100L)
+    }
+
     private fun interactions(access: MotionAccess, input: Input) {
         start(access, true, MainTab.Playlists, input.name)
         val row = hasText(playlist.name) and hasClickAction()
@@ -234,12 +241,10 @@ class CollapsedPlayerCollectionNavigationTest {
         frames(2)
         awaitRouteAdmission("media-basis:0")
         val list = compose.onNodeWithTag("browser-list")
-        val inputFrame = compose.mainClock.currentTime
-        assertTrue("Input must begin inside both Standard and Faster chrome transitions",
-            inputFrame - navigationFrame in 1..100)
         when (input) {
             Input.Pinch -> {
                 val before = list.fetchSemanticsNode().config[SemanticsProperties.StateDescription]
+                recordAction(input)
                 list.performTouchInput {
                     down(0, Offset(centerX - 50f, centerY)); down(1, Offset(centerX + 50f, centerY))
                     moveTo(0, Offset(centerX - 60f, centerY)); moveTo(1, Offset(centerX + 60f, centerY))
@@ -255,6 +260,7 @@ class CollapsedPlayerCollectionNavigationTest {
                 frames(1)
                 val range = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
                 compose.runOnIdle { assertTrue("Back starts with a scrolled list", range.value() > 0f) }
+                recordAction(input)
                 pressSystemBack()
                 frames(40)
                 compose.runOnIdle { assertEquals("Back must return the collection list to its home", 0f, range.value(), 0f) }
@@ -262,7 +268,9 @@ class CollapsedPlayerCollectionNavigationTest {
             }
             Input.Search -> {
                 compose.onAllNodesWithText("Search ${playlist.name}").assertCountEquals(1)
-                compose.onNodeWithText("Search ${playlist.name}").assertIsDisplayed().performClick()
+                val search = compose.onNodeWithText("Search ${playlist.name}").assertIsDisplayed()
+                recordAction(input)
+                search.performClick()
                 repeat(6) {
                     compose.mainClock.advanceTimeByFrame()
                     compose.runOnIdle {
@@ -274,7 +282,6 @@ class CollapsedPlayerCollectionNavigationTest {
                 compose.onNode(hasSetTextAction()).assertIsEnabled().performTextInput("Song")
             }
         }
-        records.appendText("input\t$input\tnavigation=$navigationFrame\tinput=$inputFrame\n")
         compose.mainClock.autoAdvance = true
     }
 
