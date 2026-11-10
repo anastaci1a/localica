@@ -56,11 +56,11 @@ class SubviewScrollJitterTest {
 
     private fun sample(): Frame {
         val header = compose.onAllNodesWithTag("browse-full-span", useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()
-            ?.let { it.boundsInRoot.top to it.boundsInRoot.height }
+            ?.let { it.positionInRoot.y to it.size.height.toFloat() }
         val rows = compose.onAllNodes(SemanticsMatcher("media row") {
             it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("media-") == true
         }, useUnmergedTree = true).fetchSemanticsNodes().associate {
-            it.config[SemanticsProperties.TestTag] to it.boundsInRoot.top
+            it.config[SemanticsProperties.TestTag] to it.positionInRoot.y
         }
         return Frame(header, rows)
     }
