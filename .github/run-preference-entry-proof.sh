@@ -54,11 +54,11 @@ for mode in playback scan tag lastfm; do
       # Recent Android versions defer notifications for short foreground work. Bind the system's
       # exact component start to this PID's process-start interval; stale or restarted owners fail.
       awk -v pid="$pid" -v app="$app" -v component="$app/io.github.anastaci1a.localica.$service_package.$service" '
-        index($0, "am_proc_start: [0," pid ",") && index($0, "," app ",") { owner=1; next }
-        owner && index($0, "am_proc_start:") && index($0, "," app ",") { owner=0 }
-        owner && index($0, "am_proc_died: [0," pid ",") { owner=0 }
+        index($0, "am_proc_start: [0," pid ",") && index($0, "," app ",") { owner=1; seen=0; next }
+        owner && index($0, "am_proc_start:") && index($0, "," app ",") { owner=0; seen=0 }
+        owner && index($0, "am_proc_died: [0," pid ",") { owner=0; seen=0 }
         owner && index($0, "am_foreground_service_start: [0," component ",") { print; seen=1 }
-        END { exit !seen }
+        END { exit !(owner && seen) }
       ' "$directory/events.txt" > "$directory/foreground-service.txt"
       printf 'service-entry=%s;foreground-component=true;process-owner-pid=%s;same-pid=true\n' "$service" "$pid" >> "$directory/receipt.txt"
     fi

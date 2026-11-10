@@ -59,6 +59,11 @@ elif args[0] == 'logcat':
                 if fail == 'deferred-restarted': print(process.replace(str(owner_pid), str(owner_pid + 60), 1))
                 if fail == 'deferred-dead': print(f'11-10 11:00:00.500 100 100 I am_proc_died: [0,{owner_pid},io.github.anastaci1a.localica.debug,0]')
                 if fail not in ('deferred-stale', 'deferred-missing'): print(event)
+                if fail in ('deferred-dead-after', 'deferred-reused-after'):
+                    print(f'11-10 11:00:01.500 100 100 I am_proc_died: [0,{owner_pid},io.github.anastaci1a.localica.debug,0]')
+                if fail == 'deferred-restarted-after': print(process.replace(str(owner_pid), str(owner_pid + 60), 1))
+                if fail == 'deferred-reused-after': print(process)
+                if fail == 'deferred-same-start-after': print(process)
             else:
                 print(f'11-10 11:00:00.000 100 100 I notification_enqueue: [10001,{event_pid},io.github.anastaci1a.localica.debug,{notification},NULL,0,Notification(),0]')
     elif '-b' not in args:
@@ -98,7 +103,7 @@ class PreferenceEntryAdmission(unittest.TestCase):
         result, receipts, _ = self.run_protocol('deferred-valid')
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn('foreground-component=true;process-owner-pid=1002', receipts['scan'])
-        for control in ('deferred-wrong-pid', 'deferred-stale', 'deferred-restarted', 'deferred-dead', 'deferred-missing'):
+        for control in ('deferred-wrong-pid', 'deferred-stale', 'deferred-restarted', 'deferred-dead', 'deferred-missing', 'deferred-dead-after', 'deferred-restarted-after', 'deferred-reused-after', 'deferred-same-start-after'):
             with self.subTest(control=control):
                 result, _, _ = self.run_protocol(control)
                 self.assertNotEqual(0, result.returncode)
