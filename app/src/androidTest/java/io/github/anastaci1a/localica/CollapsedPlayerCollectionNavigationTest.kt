@@ -1,0 +1,181 @@
+package io.github.anastaci1a.localica
+
+import androidx.compose.runtime.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.*
+import androidx.test.platform.app.InstrumentationRegistry
+import android.os.Build
+import io.github.anastaci1a.localica.browse.*
+import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.navigation.*
+import io.github.anastaci1a.localica.playback.PlaybackState
+import io.github.anastaci1a.localica.playlist.*
+import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.*
+import io.github.anastaci1a.localica.ui.spec.MotionAccess
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.RuleChain
+import java.io.File
+
+/** #837: collection chrome may move the closed sheet's basis without opening its retained body. */
+class CollapsedPlayerCollectionNavigationTest {
+    private val compose = localicaComposeRule()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(
+        BrowsePreferenceIsolation(listOf("interface", "browse-style", "library-query"))).around(compose)
+    private val tracks = List(60) { Track("basis:$it", "Song ${it.toString().padStart(2, '0')}",
+        album = "Basis album", artist = "Basis artist", fileName = "$it.mp3", relativePath = "$it.mp3") }
+    private val snapshot = LibrarySnapshot(listOf(FolderSelection("basis-root", "Music")), tracks)
+    private val playlist = ManualPlaylist(id = "basis-playlist", name = "Basis playlist",
+        entries = tracks.map { SongRow(it.id, it) })
+    private val events = SheetEvents()
+    private lateinit var records: File
+    private lateinit var access: MotionAccess
+
+    private class SheetEvents : MotionEvents {
+        var phase: MotionFloat? = null
+        var queuePhase: MotionFloat? = null
+        var checking = false
+        var basisJoins = 0
+        val movingJoins = mutableListOf<MotionJoin>()
+        override fun created(motion: MotionFloat) {}
+        override fun retired(motion: MotionFloat, stamp: FrameStamp) {}
+        override fun joined(motion: MotionFloat, join: MotionJoin) {
+            if (motion.key == ("player" to "phase")) {
+                phase = motion
+                if (checking && join.afterKind != 0) movingJoins += join
+            }
+            if (motion.key == ("queue" to "phase")) {
+                queuePhase = motion
+                if (checking && join.afterKind != 0) movingJoins += join
+            }
+            if (checking && motion.key == (("player" to "frame") to "edge1")) basisJoins++
+        }
+    }
+
+    private fun start(access: MotionAccess, loaded: Boolean, tab: MainTab = MainTab.Albums) {
+        this.access = access
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val output = File(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+            ?: checkNotNull(context.getExternalFilesDir(null)).absolutePath, "collapsed-collection-navigation")
+        output.mkdirs()
+        records = File(output, "$access-$loaded-$tab.tsv")
+        records.writeText("source\tapi\tframeMs\taccess\treferenceTravel\tphase\tqueuePhase\tbasisJoins\n")
+        InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(tab),
+            fasterMotion = access == MotionAccess.Faster, reducedMotion = access == MotionAccess.Reduced))
+        BrowsePreferences(context).write(BrowseRoute(tab), BrowseStyle(listSize = ListSize.Small, quickSearch = true), false)
+        val track = tracks.first()
+        val playback = if (loaded) PlaybackState(connected = true, trackId = track.id, trackUri = track.uri,
+            title = track.title) else PlaybackState(connected = true)
+        compose.setContent { LocalicaTheme {
+            val clock = LocalUiClock.current
+            SideEffect { clock.events = events }
+            LocalicaScreen(LibraryUiState(snapshot, loading = false), playback, {}, {}, {}, {}, {}, {},
+                playlist = PlaylistState(listOf(playlist), loading = false))
+        } }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().size == 1 }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { events.checking = true }
+    }
+
+    private fun assertClosedFrame() {
+        val record = compose.runOnIdle {
+            val phase = checkNotNull(events.phase)
+            val queue = checkNotNull(events.queuePhase)
+            val context = checkNotNull(phase.clock.context)
+            assertEquals(access, context.access)
+            assertTrue(context.fullPlayerReferenceTravelPx > 1f)
+            assertTrue("A collection basis replacement must leave the player at rest", phase.settled)
+            assertEquals(0f, phase.value(), 0f)
+            assertTrue("The Queue must stay at its closed rest", queue.settled)
+            assertEquals(0f, queue.value(), 0f)
+            assertTrue("No transient phase segment is admitted", events.movingJoins.isEmpty())
+            listOf(BuildConfig.SOURCE_SHA, Build.VERSION.SDK_INT, compose.mainClock.currentTime,
+                context.access, context.fullPlayerReferenceTravelPx, phase.value(), queue.value(),
+                events.basisJoins).joinToString("\t") + "\n"
+        }
+        records.appendText(record)
+        compose.onAllNodesWithTag("queue-surface", useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Collapse player", useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithTag("browser-list").assertCountEquals(1)
+    }
+
+    private fun frames(count: Int) = repeat(count) {
+        compose.mainClock.advanceTimeByFrame()
+        assertClosedFrame()
+    }
+
+    private fun openAlbum() {
+        val album = LibraryViews.groups(snapshot, SongListView.Albums, LibraryQuery()).single()
+        val row = hasTestTag("media-Album:${album.id}")
+        compose.onAllNodes(row).assertCountEquals(1)
+        compose.onNode(row).performClick()
+    }
+
+    private fun navigation(access: MotionAccess, loaded: Boolean) {
+        start(access, loaded)
+        if (loaded) compose.onNodeWithTag("player-surface").assertIsDisplayed()
+        openAlbum()
+        frames(32)
+        compose.onAllNodesWithContentDescription("Back").assertCountEquals(1)
+        compose.onNodeWithContentDescription("Back").performClick()
+        frames(32)
+        compose.runOnIdle { assertTrue("The control must exercise real basis replacements", events.basisJoins > 1) }
+        // Positive visibility control, including Reduced: the retained Queue host must appear on a real opening.
+        if (loaded) {
+            compose.runOnIdle { events.checking = false }
+            compose.onNodeWithTag("player-surface").performClick()
+            compose.mainClock.advanceTimeBy(1000)
+            compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
+            compose.onNodeWithTag("queue-surface").assertExists()
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun standardCollapsedPlayerNeverComposesTheQueueDuringCollectionNavigation() = navigation(MotionAccess.Standard, true)
+    @Test fun fasterCollapsedPlayerNeverComposesTheQueueDuringCollectionNavigation() = navigation(MotionAccess.Faster, true)
+    @Test fun reducedCollapsedPlayerNeverComposesTheQueueDuringCollectionNavigation() = navigation(MotionAccess.Reduced, true)
+    @Test fun standardEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(MotionAccess.Standard, false)
+    @Test fun fasterEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(MotionAccess.Faster, false)
+    @Test fun reducedEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(MotionAccess.Reduced, false)
+
+    private fun interactions(access: MotionAccess) {
+        start(access, true, MainTab.Playlists)
+        val row = hasText(playlist.name) and hasClickAction()
+        compose.onAllNodes(row).assertCountEquals(1)
+        compose.onNode(row).performClick()
+        frames(2)
+        val list = compose.onNodeWithTag("browser-list")
+        // Recognition occurs while the collection chrome is changing, before the 300 ms tween can finish.
+        val before = list.fetchSemanticsNode().config[SemanticsProperties.StateDescription]
+        list.performTouchInput {
+            down(0, Offset(centerX - 50f, centerY)); down(1, Offset(centerX + 50f, centerY))
+            moveTo(0, Offset(centerX - 60f, centerY)); moveTo(1, Offset(centerX + 60f, centerY))
+        }
+        frames(2)
+        assertNotEquals("The list must admit pinch recognition during navigation", before,
+            list.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+        list.performTouchInput { up(0); up(1) }
+        frames(32)
+        list.performScrollToIndex(35)
+        compose.mainClock.advanceTimeByFrame()
+        val range = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+        compose.runOnIdle { assertTrue("Back control starts with a scrolled list", range.value() > 0f) }
+        pressSystemBack()
+        frames(40)
+        compose.runOnIdle { assertEquals("List Back returns to the list home", 0f, range.value(), 0f) }
+        compose.onNodeWithContentDescription("Playlist actions").assertIsDisplayed()
+        compose.onNodeWithText("Search ${playlist.name}").assertIsDisplayed().performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
+        compose.onNode(hasSetTextAction()).assertIsEnabled().performTextInput("Song")
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun standardCollapsedCollectionAdmitsPinchBackAndSearch() = interactions(MotionAccess.Standard)
+    @Test fun fasterCollapsedCollectionAdmitsPinchBackAndSearch() = interactions(MotionAccess.Faster)
+    @Test fun reducedCollapsedCollectionAdmitsPinchBackAndSearch() = interactions(MotionAccess.Reduced)
+}
