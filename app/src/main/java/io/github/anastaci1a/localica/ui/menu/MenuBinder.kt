@@ -90,7 +90,7 @@ private fun Value<Long>.count(): Value<String> = when (this) { is Value.Ready ->
         FlatKind.Caption -> MenuCaptionSlot(item.section.caption.orEmpty())
         FlatKind.RecordEmpty -> MenuCaptionSlot((row as RecordsContent).empty)
         // A preview binds no event, so it has no token: it is drawn from the host's preview map.
-        FlatKind.Row -> if (row is PreviewContent) MenuControlSlot { host.previews[row.previewKey]?.invoke() } else if (token != null) MenuRow(row!!, token, host)
+        FlatKind.Row -> if (row is PreviewContent) MenuControlSlot { host.previews[row.previewKey]?.invoke() } else if (row is StatusCardContent) StatusCardRow(row, host) else if (token != null) MenuRow(row!!, token, host)
         FlatKind.RecordEntry -> if (token != null) RecordRow(row as RecordsContent, item.entry, token, host)
         FlatKind.OrderedEntry -> if (token != null) OrderedRow(row as OrderedListContent, item.entry, token, host)
         FlatKind.OrderedAdd -> if (token != null) (row as OrderedListContent).let { list ->
@@ -145,6 +145,18 @@ private fun activate(row: RowContent, token: OwnerToken, host: MenuHost) {
     }
 }
 
+/** A status card binds no event of its own (its actions bind theirs), so it has no token and is drawn by the item renderer. */
+@Composable private fun StatusCardRow(row: StatusCardContent, host: MenuHost) {
+    MenuSurfaceSlot(surface = { corner, content -> LiquidGlassSurface(cornerRadius = corner, pressFeedback = false) { content() } }) {
+        val progress = row.progress
+        val ring: @Composable (Modifier) -> Unit = { modifier -> CircularProgressIndicator(progress = { progress ?: 0f }, modifier = modifier) }
+        val glyph: (@Composable (Modifier) -> Unit)? = row.iconKey?.let { key -> { modifier -> MenuIconFace(key, modifier) } }
+        MenuCardSlot(row.title, row.infos.map { it.value }, leading = if (progress != null) ring else glyph,
+            stats = if (row.stats.isEmpty()) null else { { MenuStatGridSlot(row.stats.map { it.label }, row.stats.map { it.value }) } },
+            actions = if (row.actions.isEmpty()) null else { { MenuWrapSlot { row.actions.forEach { action -> key(action.key) { ActionButton(action, host.token(action.key), host) } } } } })
+    }
+}
+
 @Composable private fun MenuRow(row: RowContent, token: OwnerToken, host: MenuHost) {
     val dispatcher = host.core.dispatcher
     when (row) {
@@ -185,14 +197,7 @@ private fun activate(row: RowContent, token: OwnerToken, host: MenuHost) {
         is NoticeContent -> MenuNoticeSlot(row.text, row.tone, icon = { MenuIconFace(AppIcon.ActionInfo.id, it) }, fix = row.fixLabel?.let { label -> {
             GlassActionButton(icon(row.fixIconKey.orEmpty()), label) { dispatcher.click(token, ActionSlot.FixAction) }
         } })
-        is StatusCardContent -> MenuSurfaceSlot(surface = { corner, content -> LiquidGlassSurface(cornerRadius = corner, pressFeedback = false) { content() } }) {
-            val progress = row.progress
-            val ring: @Composable (Modifier) -> Unit = { modifier -> CircularProgressIndicator(progress = { progress ?: 0f }, modifier = modifier) }
-            val glyph: (@Composable (Modifier) -> Unit)? = row.iconKey?.let { key -> { modifier -> MenuIconFace(key, modifier) } }
-            MenuCardSlot(row.title, row.infos.map { it.value }, leading = if (progress != null) ring else glyph,
-                stats = if (row.stats.isEmpty()) null else { { MenuStatGridSlot(row.stats.map { it.label }, row.stats.map { it.value }) } },
-                actions = if (row.actions.isEmpty()) null else { { MenuWrapSlot { row.actions.forEach { action -> key(action.key) { ActionButton(action, host.token(action.key), host) } } } } })
-        }
+        is StatusCardContent -> Unit // drawn by MenuItem: a card has no token
         is LegendContent -> MenuLegendSlot(bar = if (!row.bar) null else { {
             MenuLegendBarSlot(row.entries.map { it.tone }, row.entries.map { ((it.count as? Value.Ready)?.value ?: 0L).toFloat() })
         } }) {

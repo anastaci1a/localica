@@ -86,7 +86,7 @@ internal fun specimenPage(s: SpecimenState): PageDraft = page(PageId.Specimen) {
             section("toggles", heading = "Switches") {
                 toggle(SpecimenSetting("Specimen switch"), s.toggle, on.toggle)
                 toggle(SpecimenSetting("Switch with helper"), s.toggle, on.toggle,
-                    helper = "Helper text sits inside its row, under the title, at the title's start.")
+                    helper = "Helper text sits under the title.")
                 toggle(SpecimenSetting(if (s.long) longTitle else "Disabled switch"), false, on.toggle, enabled = false)
             }
             section("choices", heading = "Choices") {
