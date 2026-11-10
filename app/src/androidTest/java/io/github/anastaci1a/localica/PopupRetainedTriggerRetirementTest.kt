@@ -82,6 +82,92 @@ class PopupRetainedTriggerRetirementTest {
     private data class ObservedField(val request: OwnedFieldRequest, val sourceGeneration: Long,
         val nativeGeneration: Long?, val homeMatches: Boolean)
 
+    private data class SceneNode(val id: Int, val layer: Int?, val parent: Int?, val sampled: List<Int>,
+        val recordedChildren: List<Int>, val recordings: Int, val recorded: Boolean, val rendererGeneration: Int?)
+    private data class FlightNode(val id: Int, val layer: Int?, val prepared: Boolean, val handedOff: Boolean,
+        val wasProjected: Boolean, val projectionActive: Boolean)
+    private data class HomeNode(val id: Int, val backdrop: Int?, val children: List<Int>, val departing: Boolean,
+        val mounted: Boolean, val flights: List<FlightNode>)
+    private data class SceneGraph(val backing: Int?, val browse: Int?, val nativeMaterial: Int?, val nativePanel: Int?,
+        val triggerSource: Int?, val nodes: List<SceneNode>, val homes: List<HomeNode>)
+
+    private fun sceneGraph(backing: FrostedBackdrop?, browse: FrostedBackdrop?, material: FrostedBackdrop?,
+        panel: FrostedBackdrop?, trigger: FrostedBackdrop?, rootHome: GlassPopupHome?, nativeHome: GlassPopupHome?,
+        ids: java.util.IdentityHashMap<Any, Int>): SceneGraph {
+        fun id(value: Any): Int = ids[value] ?: (ids.size + 1).also { ids[value] = it }
+        val sources = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<FrostedBackdrop, Boolean>())
+        val homes = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<GlassPopupHome, Boolean>())
+        val nodes = mutableListOf<SceneNode>()
+        val homeNodes = mutableListOf<HomeNode>()
+        fun source(value: FrostedBackdrop?) {
+            if (value == null || !sources.add(value)) return
+            val parent = value.parent
+            val sampled = value.recordedChildren.toList()
+            val children = value.recordedLayoutChildren.toList()
+            nodes += SceneNode(id(value), if (value.hasGlassLayer) id(value.layer) else null,
+                parent?.let(::id), sampled.map(::id), children.map(::id), value.recordings, value.recorded,
+                value.recordedGeneration?.let(::id))
+            source(parent); sampled.forEach(::source); children.forEach(::source)
+        }
+        fun home(value: GlassPopupHome?) {
+            if (value == null || !homes.add(value)) return
+            val children = value.children.toList()
+            homeNodes += HomeNode(id(value), value.backdrop?.let(::id), children.map(::id), value.departing,
+                value.mounted, value.flights.map { flight -> FlightNode(id(flight), flight.layer?.let(::id),
+                    flight.prepared, flight.handedOff, flight.wasProjected,
+                    (value.departing || flight.handedOff) && flight.prepared && flight.layer?.isReleased == false) })
+            source(value.backdrop); children.forEach(::home)
+        }
+        listOf(backing, browse, material, panel, trigger).forEach(::source)
+        home(rootHome); home(nativeHome)
+        return SceneGraph(backing?.let(::id), browse?.let(::id), material?.let(::id), panel?.let(::id),
+            trigger?.let(::id), nodes.sortedBy { it.id }, homeNodes.sortedBy { it.id })
+    }
+
+    private fun assertFiniteGraph(graph: SceneGraph) {
+        val nodes = graph.nodes.associateBy { it.id }
+        assertEquals("Every captured descriptor has a unique observed identity", graph.nodes.size, nodes.size)
+        val backing = requireNotNull(nodes[graph.backing])
+        val browse = requireNotNull(nodes[graph.browse])
+        assertNotEquals("Backing and browse descriptors are distinct", backing.id, browse.id)
+        assertNotEquals("Backing and browse recordings are distinct", requireNotNull(backing.layer), requireNotNull(browse.layer))
+        assertEquals("The trigger samples only its independent backing", backing.id, graph.triggerSource)
+        assertNull("The plain backing has no sampling parent", backing.parent)
+        assertTrue("The plain backing samples no scene", backing.sampled.isEmpty())
+        assertTrue("The plain backing contains no recorded child", backing.recordedChildren.isEmpty())
+        assertTrue("Both independent sources were really recorded", backing.recorded && browse.recorded)
+        assertTrue(backing.recordings > 0 && browse.recordings > 0)
+        for (native in listOf(graph.nativeMaterial, graph.nativePanel)) {
+            val node = requireNotNull(nodes[native])
+            assertEquals("Native material and panel sample the finite browse source", browse.id, node.parent)
+            assertNotEquals("Native and browse recording identities differ", browse.layer, node.layer)
+        }
+        val roleNodes = listOf(backing, browse, requireNotNull(nodes[graph.nativeMaterial]), requireNotNull(nodes[graph.nativePanel]))
+        assertEquals("Backing, browse, native material and native panel descriptors are distinct", 4, roleNodes.map { it.id }.toSet().size)
+        assertEquals("All four observed source recordings are distinct", 4, roleNodes.map { requireNotNull(it.layer) }.toSet().size)
+        val visiting = mutableSetOf<Int>()
+        val complete = mutableSetOf<Int>()
+        fun visit(id: Int) {
+            if (id in complete) return
+            assertTrue("Actual sampling/recorded-layout dependency graph has no cycle", visiting.add(id))
+            val node = requireNotNull(nodes[id])
+            (listOfNotNull(node.parent) + node.sampled + node.recordedChildren).forEach(::visit)
+            visiting.remove(id); complete.add(id)
+        }
+        graph.nodes.forEach { visit(it.id) }
+        val homes = graph.homes.associateBy { it.id }
+        val sourceLayers = graph.nodes.mapNotNull { it.layer }.toSet()
+        for (home in graph.homes) {
+            home.backdrop?.let { assertTrue("Every home backdrop is included in the dependency graph", it in nodes) }
+            assertTrue("Every actual child home was inspected", home.children.all { it in homes })
+            for (flight in home.flights) {
+                assertFalse("This fixture has no active native projection edge", flight.projectionActive)
+                assertFalse("No hidden native handoff can close a dependency cycle", flight.handedOff || flight.wasProjected)
+                assertTrue("A flight layer never aliases a sampled descriptor recording", flight.layer == null || flight.layer !in sourceLayers)
+            }
+        }
+    }
+
     private data class Checkpoint(val stage: String, val frameMillis: Long, val root: Policy?, val popup: Policy?,
         val mounted: Boolean, val modal: Boolean, val hidden: Boolean, val restoreRequest: Long,
         val restorePresented: Long, val triggerDraws: Int, val nativeAttached: Boolean,
@@ -89,7 +175,8 @@ class PopupRetainedTriggerRetirementTest {
         val fieldRequestGeneration: Long?, val fieldSubmitted: Boolean?, val retainedFieldSubmitted: Boolean?,
         val retainedSourceGeneration: Long?, val observedSourceGeneration: Long?,
         val retainedNativeGeneration: Long?, val observedNativeGeneration: Long?, val retainedHomeMatches: Boolean?,
-        val nativeGateHeld: Boolean, val expanded: Boolean?, val playerFullyOpen: Boolean, val page: Int, val suppressedBrowseDraws: Int)
+        val nativeGateHeld: Boolean, val expanded: Boolean?, val playerFullyOpen: Boolean, val page: Int, val suppressedBrowseDraws: Int,
+        val graph: SceneGraph)
 
     private fun retirement(adjacentTab: Boolean, reduced: Boolean = false, speed: Float = 4f / 3f,
         hide: Boolean = true, renew: Boolean = false) {
@@ -105,6 +192,13 @@ class PopupRetainedTriggerRetirementTest {
         var rootPolicy: (() -> Policy)? = null
         var popupPolicy: (() -> Policy)? = null
         var observedField: ObservedField? = null
+        var backingSource: FrostedBackdrop? = null
+        var browseSource: FrostedBackdrop? = null
+        var nativeMaterial: FrostedBackdrop? = null
+        var nativePanel: FrostedBackdrop? = null
+        var rootHome: GlassPopupHome? = null
+        var nativeHome: GlassPopupHome? = null
+        val observedIds = java.util.IdentityHashMap<Any, Int>()
         fun admitOpening() {
             // Match BrowseSortDialog: reclaim the native host before publishing the new open intent.
             anchor.reclaimOpening?.invoke()
@@ -119,11 +213,16 @@ class PopupRetainedTriggerRetirementTest {
                 LocalReducedMotion provides reduced, LocalMotionSpeed provides speed) {
             LocalicaTheme {
                 ObservePolicy { rootPolicy = it }
-                val backdrop = rememberFrostedBackdrop(Unit, dark = false, lightMix = 0f)
-                CompositionLocalProvider(LocalFrostedBackdrop provides backdrop, LocalModalBackdrop provides backdrop) {
+                val rootPopupHome = LocalGlassPopupHome.current
+                val backing = rememberFrostedBackdrop("retirement-backing", dark = false, lightMix = 0f)
+                val backdrop = rememberFrostedBackdrop("retirement-browse", dark = false, lightMix = 0f)
+                SideEffect { backingSource = backing; browseSource = backdrop; rootHome = rootPopupHome }
+                CompositionLocalProvider(LocalFrostedBackdrop provides backing, LocalModalBackdrop provides backdrop) {
                     pager = rememberPagerState { 2 }
                     scope = rememberCoroutineScope()
                     Box(Modifier.fillMaxSize().safeDrawingPadding().background(Color.White)) {
+                        // The sampled backing contains no glass or recorded descendants.
+                        Box(Modifier.fillMaxSize().recordFrostedBackdrop(backing).background(Color.White))
                         // LocalicaScreen's fully open player retains browse composition but omits its draw.
                         Column(Modifier.fillMaxSize().drawWithContent {
                             if (!hasPlayer || !playerFullyOpen) drawContent() else suppressedBrowseDraws.incrementAndGet()
@@ -148,6 +247,10 @@ class PopupRetainedTriggerRetirementTest {
                                     GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center) {
                                         popupView = LocalView.current
                                         ObservePolicy { popupPolicy = it }
+                                        val material = LocalFrostedBackdrop.current
+                                        val panel = LocalModalBackdrop.current
+                                        val home = LocalGlassPopupHome.current
+                                        SideEffect { nativeMaterial = material; nativePanel = panel; nativeHome = home }
                                         Box(Modifier.fillMaxWidth().height(180.dp)) { Text("Retained trigger popup") }
                                     }
                                 } else Box(Modifier.fillMaxSize().background(Color.Green))
@@ -177,7 +280,8 @@ class PopupRetainedTriggerRetirementTest {
                     home?.generation, home?.let { node?.ownsWindow(it) }, field?.nativeGeneration, field?.submitted,
                     retained?.request?.submitted, retained?.request?.sourceGeneration, retained?.sourceGeneration,
                     retained?.request?.nativeGeneration, retained?.nativeGeneration, retained?.homeMatches,
-                    expansion?.awaitingNativeGate == true, expansion?.expanded, playerFullyOpen, pager.currentPage, suppressedBrowseDraws.get())
+                    expansion?.awaitingNativeGate == true, expansion?.expanded, playerFullyOpen, pager.currentPage, suppressedBrowseDraws.get(),
+                    sceneGraph(backingSource, browseSource, nativeMaterial, nativePanel, anchor.source, rootHome, nativeHome, observedIds))
             }
             File(evidence, "$case-$stage.txt").writeText(snapshot.toString() + "\n")
             return snapshot
@@ -193,6 +297,7 @@ class PopupRetainedTriggerRetirementTest {
                 assertTrue(policy.density > 0f && policy.fontScale > 0f)
             }
             assertEquals(snapshot.root?.clockId, snapshot.popup?.clockId)
+            assertFiniteGraph(snapshot.graph)
         }
         fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
         fun assertOpen() {
