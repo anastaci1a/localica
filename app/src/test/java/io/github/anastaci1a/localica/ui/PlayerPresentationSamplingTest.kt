@@ -41,7 +41,7 @@ class PlayerPresentationSamplingTest {
             player.value = p
             lyrics.value = mode
             val original = resting && !(playerLyricsMotion(p, mode).contentAlpha > 0f)
-            assertEquals("p=$p mode=$mode resting=$resting", original, sampling.artworkInputEnabled(resting))
+            assertEquals("p=$p mode=$mode resting=$resting", original, resting && !sampling.lyricsOwnInput())
         }
     }
 

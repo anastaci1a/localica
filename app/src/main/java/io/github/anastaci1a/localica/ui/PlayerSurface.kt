@@ -145,6 +145,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // immediately, including the fully expanded endpoint before onExpanded changes.
     val lyricMotion = playerLyricsMotion(p, lyricVisibility)
     val lyricProgress = lyricMotion.layout
+    // Both artwork input paths share the panel's exact positive-content boundary.
+    val lyricsInteractive = presentation.sampling.lyricsOwnInput()
     val settledBackground = if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f
     val backgroundView = rememberProfileValue("player-background", settledBackground, MotionProfile.ArtworkLayout)
     val backgroundProgress = backgroundView.value()
@@ -330,7 +332,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val playerRest by rememberExpansionRest(sheet.expansion)
     val queueClosed by rememberExpansionClosed(queue?.expansion)
     val restingOpen = expanded && playerRest == ExpansionRest.Open && queueClosed
-    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork, artPixels, presentation.sampling.artworkInputEnabled(restingOpen), settings, onArtworkVisit)
+    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork, artPixels, restingOpen && !lyricsInteractive, settings, onArtworkVisit)
     val swipeOffset = artSwipe.offset.value
     val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)
     val swipeFeather = if (settings.artworkLayout == ArtworkLayout.FullBackground)
