@@ -16,7 +16,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrElse
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
