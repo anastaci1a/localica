@@ -296,7 +296,9 @@ class ScrollPlacementFirstFrameTest {
             (chain + root + listOf("art", "text", "info", "menu").mapNotNull { byTag["browse-$it-$key"] }).distinct().forEach { info ->
                 activeAnimations(info).forEach { problems += "placement animation active: $it" }
             }
-            if (problems.isNotEmpty()) violations += "[$phase] frame $frame item $key (frame ${age} since it entered" +
+            // The search morph may move rows that stay composed; entering rows never may.
+            val intentional = phase == INTENTIONAL_PHASE && age > 0
+            if (problems.isNotEmpty() && !intentional) violations += "[$phase] frame $frame item $key (frame ${age} since it entered" +
                 (reusedFrom[key]?.let { ", slot recycled from $it" } ?: "") + "): " + problems.joinToString("; ")
         }
         lastVisible = visible
@@ -351,7 +353,7 @@ class ScrollPlacementFirstFrameTest {
 
 
     private fun run(style: BrowseStyle, label: String, tab: MainTab = MainTab.Albums, open: (() -> BrowseRoute)? = null,
-        trigger: (Host) -> Unit = { h -> main { h.topRequest++ } }) {
+        intentionalTrigger: Boolean = false, trigger: (Host) -> Unit = { h -> main { h.topRequest++ } }) {
         val host = host(style, tab, open)
         var phase = "fling"
         val stop = startSampler { phase }
@@ -381,7 +383,7 @@ class ScrollPlacementFirstFrameTest {
             }
             Thread.sleep(1500)
             // The context's programmatic scroll (tab re-tap, filter or search change) from deep in the list.
-            phase = "autoscroll-trigger"
+            phase = if (intentionalTrigger) INTENTIONAL_PHASE else "autoscroll-trigger"
             trigger(host)
             Thread.sleep(3000)
             awaitIdle()
@@ -405,8 +407,13 @@ class ScrollPlacementFirstFrameTest {
         main { h.route = h.route.copy(filter = null) }
     }
 
-    /** Albums list; the trigger is a search query change and its removal. */
-    @Test fun searchChange() = run(BrowseStyle(presentation = Presentation.List, listSize = ListSize.Normal), "search", MainTab.Albums) { h ->
+    /**
+     * Albums list; the trigger is a search query change and its removal. Opening search displaces
+     * rows through the search morph, an intentional layout change: rows that stay composed may
+     * animate, while every row entering the viewport must still start at its final slot.
+     */
+    @Test fun searchChange() = run(BrowseStyle(presentation = Presentation.List, listSize = ListSize.Normal), "search", MainTab.Albums,
+        intentionalTrigger = true) { h ->
         main { h.route = h.route.copy(search = true, text = "Album 1") }
         Thread.sleep(600)
         main { h.route = h.route.copy(text = "") }
@@ -424,5 +431,6 @@ class ScrollPlacementFirstFrameTest {
         const val LONG_ALBUM = "Long Album"
         const val LONG_ARTIST = "Long Artist"
         const val PROLIFIC_ARTIST = "Prolific Artist"
+        const val INTENTIONAL_PHASE = "content-change"
     }
 }
