@@ -114,13 +114,25 @@ class MenuInvariantTest {
         val flat = flatten((AcceptedPage.admit(SpecimenSource.declare(shown.state)) as Admission.Accepted).page.content.panel(), afterTabs = true)
         val rows = all.filter { it.part == MenuPart.Row }
         // Top-level stream items: rows that are not inside another row, headings and captions, in visual order.
-        val items = all.filter { part -> part.part == MenuPart.Heading || part.part == MenuPart.Caption ||
+        val drawn = all.filter { part -> part.part == MenuPart.Heading || part.part == MenuPart.Caption ||
             (part.part == MenuPart.Row && rows.none { it !== part && it.rect != part.rect && part.rect.inside(it.rect) }) }.sortedBy { it.rect.top }
-        if (items.size > flat.count) report("I3 drew ${items.size} items for ${flat.count} declared")
+        // A legend is one declared item drawn as its bar plus one row per entry: group those rows back into the item.
+        val items = mutableListOf<Part>()
+        var cursor = 0
+        for (index in 0 until flat.count) {
+            if (cursor >= drawn.size) break
+            val take = ((flat.item(index).row as? LegendContent)?.entries?.size ?: 1).coerceAtMost(drawn.size - cursor)
+            val group = drawn.subList(cursor, cursor + take)
+            items += Part(group.first().part, Rect(group.minOf { it.rect.left }, group.minOf { it.rect.top }, group.maxOf { it.rect.right }, group.maxOf { it.rect.bottom }), group.first().node)
+            cursor += take
+        }
+        if (cursor < drawn.size) report("I3 drew ${drawn.size} items for ${flat.count} declared")
         val strip = all.filter { it.part == MenuPart.Tab }.maxOfOrNull { it.rect.bottom }
-        for (index in 0 until minOf(items.size, flat.count)) {
+        for (index in 0 until items.size) {
             val above = if (index == 0) strip ?: continue else items[index - 1].rect.bottom
-            val expected = px(spec.dp(flat.gapBefore(index)))
+            // The legend bar is not a part: it sits above the first entry, one row gap above it.
+            val bar = (flat.item(index).row as? LegendContent)?.takeIf { it.bar }?.let { px(spec.dp(MenuSize.Marker)) + px(spec.dp(MenuGap.RowToRow)) } ?: 0f
+            val expected = px(spec.dp(flat.gapBefore(index))) + bar
             if (!near(items[index].rect.top - above, expected)) report("I3 gap before item $index (${flat.item(index).key}) is ${items[index].rect.top - above} px, ${flat.gapBefore(index)} is $expected px; drawn ${items[index].part} ${items[index].rect}, above ${if (index == 0) "the tab strip" else "${items[index - 1].part} ${items[index - 1].rect}"}; stream ${items.take(5).map { "${it.part} ${it.rect}" }}, strip ${all.filter { it.part == MenuPart.Tab }.map { it.rect }}")
         }
     }

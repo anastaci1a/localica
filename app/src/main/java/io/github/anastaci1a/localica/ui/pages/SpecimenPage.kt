@@ -56,7 +56,7 @@ internal fun specimenPage(s: SpecimenState): PageDraft = page(PageId.Specimen) {
     val longTitle = "A long row title that wraps"
     tabs(s.tab, on.tab) {
         tab(SpecimenTab.Rows, "Rows") {
-            section("navigation", heading = "Navigation and links", caption = "Links open a page or a popup; the chevron and the icon stay centred on the row.") {
+            section("navigation", heading = "Navigation and links", caption = "Links open a page or a popup.") {
                 nav(PageId.SpecimenChild)
                 link(local("plain", "Plain link")) { on.event("plain") }
                 link(local("summary", if (s.long) longTitle else "Link with summary"), summary = "One line of supporting text", leading = Lead.Icon(AppIcon.ActionInfo)) { on.event("summary") }
