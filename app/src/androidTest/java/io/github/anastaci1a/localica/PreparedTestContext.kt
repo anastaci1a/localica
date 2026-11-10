@@ -19,7 +19,9 @@ internal fun preparedTestOwner(context: Context,
 internal fun preparedTestContext(context: Context,
     names: List<String> = PreparedPreferences.defaultNames): Context {
     val owner = preparedTestOwner(context, names)
+    val application = context.applicationContext
     return object : ContextWrapper(context), PreparedPreferences.Owner {
         override val preparedPreferences = owner
+        override fun getApplicationContext(): Context = if (application === context) this else application
     }
 }

@@ -80,6 +80,16 @@ class PreparedColdEntryTest {
     }
 
     private suspend fun verifyPlayback(app: LocalicaApplication, instrumentation: android.app.Instrumentation) {
+        // Ordinary suites may have used a service/player earlier in this PID. Begin a fresh service episode.
+        app.stopService(Intent(app, PlaybackService::class.java))
+        val services = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        withTimeout(30_000) {
+            while (services.getRunningServices(Int.MAX_VALUE).any { it.service.className == PlaybackService::class.java.name }) delay(20)
+        }
+        instrumentation.waitForIdleSync()
+        val episode = "playback-episode=" + java.util.UUID.randomUUID()
+        android.util.Log.i("PreparedEntryProof", episode)
+        fun episodeLog() = logcat(instrumentation).substringAfter(episode, "")
         val future = withContext(Dispatchers.Main) {
             MediaController.Builder(app, SessionToken(app, android.content.ComponentName(app, PlaybackService::class.java))).buildAsync()
         }
@@ -119,7 +129,7 @@ class PreparedColdEntryTest {
             withContext(Dispatchers.Main) { controller.seekTo(1234) }
             awaitMain("native-seek-position") { app.queues.playbackSample()?.positionMs == 1234L }
             val playerIds = Regex("ExoPlayerImpl\\s*:\\s*Init ([0-9a-f]+)")
-                .findAll(logcat(instrumentation)).map { it.groupValues[1] }.distinct().toList()
+                .findAll(episodeLog()).map { it.groupValues[1] }.distinct().toList()
             assertEquals("Require exactly one actual service-owned engine", 1, playerIds.size)
             val playerId = playerIds.single()
             // Drop the binding before stopService; a bound Android service cannot be destroyed yet.
@@ -145,7 +155,7 @@ class PreparedColdEntryTest {
                 }
             } finally { database.close() }
             val released = Regex("ExoPlayerImpl\\s*:\\s*Release $playerId\\b")
-            withTimeout(30_000) { while (!released.containsMatchIn(logcat(instrumentation))) delay(20) }
+            withTimeout(30_000) { while (!released.containsMatchIn(episodeLog())) delay(20) }
             // The release log is emitted inside release(); an idle Main receipt follows the completed callback.
             instrumentation.waitForIdleSync()
             withContext(Dispatchers.Main) { assertNull(app.queues.playbackSample()) }

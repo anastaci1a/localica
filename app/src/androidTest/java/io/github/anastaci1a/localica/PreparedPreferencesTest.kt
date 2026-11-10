@@ -146,6 +146,7 @@ class PreparedPreferencesTest {
             override fun edit(): SharedPreferences.Editor { edits.incrementAndGet(); return raw.edit() }
         }
         val context = preparedTestContext(object : ContextWrapper(app) {
+            override fun getApplicationContext(): Context = this
             override fun getFilesDir() = directory
             override fun getSharedPreferences(store: String, mode: Int): SharedPreferences {
                 check(store == "queue-settings")
@@ -154,9 +155,13 @@ class PreparedPreferencesTest {
                 return retained
             }
         }, listOf("queue-settings"))
+        val ordinary = preparedTestContext(ContextWrapper(app), listOf("queue-settings"))
+        assertSame(app, ordinary.applicationContext)
         try {
             val themed = android.view.ContextThemeWrapper(context, android.R.style.Theme_Material)
             withContext(Dispatchers.Main) {
+                assertSame(context, themed.applicationContext)
+                assertSame(retained, PreparedPreferences.get(themed.applicationContext, "queue-settings"))
                 assertSame(retained, PreparedPreferences.get(themed, "queue-settings"))
                 assertSame(directory, PreparedPreferences.filesDirectory(themed))
                 val preferences = io.github.anastaci1a.localica.queue.QueuePreferences(themed)
