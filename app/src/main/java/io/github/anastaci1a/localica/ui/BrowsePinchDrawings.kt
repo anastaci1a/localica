@@ -304,6 +304,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     val recordingDensity = androidx.compose.ui.platform.LocalDensity.current
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
     val averageProgress = glassAverageProgress()
+    val flatColor = if (flatGlass()) flatGlassColor() else null
     val blur = android.os.Build.VERSION.SDK_INT >= 33
     DisposableEffect(graphics) { onDispose { groups.forEach { it.release() } } }
     val geometryResolver = remember(motion) { { key: Any?, current: HoverGeometry -> motion.resolveHover(key, current) } }
@@ -417,7 +418,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                     val parts = members.map { lifted[it].first }
                     drawHoverGroup(groups[index], parts, { a, b -> minOf(parts[a].progress, parts[b].progress) },
                         backing, location, blur, recordingDensity, direction, MediaSelectionGap.toPx(),
-                        opacity = members.maxOf { lifted[it].second }, lift = liftStyle, averageProgress = averageProgress.value)
+                        opacity = members.maxOf { lifted[it].second }, lift = liftStyle, averageProgress = averageProgress.value, flatColor = flatColor)
                 }
             }
             fun drawRetainedText(placed: RetainedPinchPlacement) {

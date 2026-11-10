@@ -21,7 +21,7 @@ class NoneControlPolicyTest {
     @get:Rule val compose = localicaComposeRule()
 
     @Test fun whiteRestingControlsKeepGeometryAndInputWithoutSourceLeasesInBothThemes() {
-        val runtime = GlassRendererRuntime(GlassRendererMode.None)
+        val runtime = GlassRendererRuntime(GlassRendererMode.SingleToneBlur)
         var dark by mutableStateOf(false)
         var value by mutableFloatStateOf(.5f)
         var checked by mutableStateOf(false)

@@ -156,7 +156,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     SettingsSearchResults(search, values) { result ->
                         var target = result.setting
                         var destination = result.page
-                        if (glass.renderer == GlassRendererMode.None &&
+                        if (glass.renderer != GlassRendererMode.Normal &&
                             "Glass" in SettingsCatalog.path(destination) && destination != "Glass") {
                             target = SettingsCatalog.entries.first { it.id == "Glass renderer" }
                             destination = "Glass"

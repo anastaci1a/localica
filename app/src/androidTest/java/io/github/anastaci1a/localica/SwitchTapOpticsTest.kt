@@ -325,7 +325,7 @@ class SwitchTapOpticsTest {
         var opticalWork = 0
         var draws = 0
         val drawObserver: () -> Unit = { draws++ }
-        val runtime = GlassRendererRuntime(GlassRendererMode.None)
+        val runtime = GlassRendererRuntime(GlassRendererMode.SingleToneBlur)
         val tag = "capture-work"
         compose.setContent {
             CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {

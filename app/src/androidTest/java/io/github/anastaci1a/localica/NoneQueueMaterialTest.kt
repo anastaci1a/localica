@@ -39,7 +39,7 @@ class NoneQueueMaterialTest {
         var playerWhite by mutableStateOf(false)
         lateinit var source: FrostedBackdrop
         compose.setContent { CompositionLocalProvider(
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) },
             LocalGlassAppearance provides GlassAppearance(whiteTint = .35f, contrast = .15f, shadowStrength = 0f)
         ) { LocalicaTheme {
             source = rememberFrostedBackdrop(Unit, dark = false)

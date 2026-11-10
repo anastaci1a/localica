@@ -52,7 +52,7 @@ class NonePreimageTest {
 
     @Composable private fun Fixture(content: @Composable () -> Unit) = CompositionLocalProvider(
         LocalDensity provides Density(1f),
-        LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+        LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) },
         LocalGlassAppearance provides appearance) { LocalicaTheme { content() } }
 
     private fun <T> eventually(block: () -> T): T {

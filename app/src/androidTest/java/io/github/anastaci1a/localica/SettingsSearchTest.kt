@@ -117,7 +117,7 @@ class SettingsSearchTest {
     }
 
     @Test fun noneKeepsGlassSubmenusVisibleAndDisabled() {
-        show("Glass", GlassAppearance(renderer = GlassRendererMode.None))
+        show("Glass", GlassAppearance(renderer = GlassRendererMode.SingleToneBlur))
         compose.onNodeWithText("Glass appearance", substring = false).assertIsDisplayed().assertIsNotEnabled()
         compose.onNodeWithText("Glass advanced", substring = false).assertIsDisplayed().assertIsNotEnabled()
         compose.onNodeWithText("Navigation selector", substring = false).assertIsDisplayed().assertIsNotEnabled()
@@ -178,7 +178,7 @@ class SettingsSearchTest {
         val before = store.all.toMap()
         try {
             assertTrue(store.edit().clear().putFloat("glass-blur", .65f).putFloat("glass-depth", .9f)
-                .putString("glass-renderer", "None").putInt("lyric-delay-ms", -750)
+                .putString("glass-renderer", "SingleToneBlur").putInt("lyric-delay-ms", -750)
                 .putBoolean("expand-on-play", false).commit())
             val seeded = store.all.toMap()
             val restored = InterfacePreferences(context).read()

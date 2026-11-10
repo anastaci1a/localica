@@ -40,13 +40,24 @@ internal fun currentGlassRendererGeneration(): GlassRendererGeneration =
 /** Retargeting preserves the current material blend while surface geometry stays mounted. */
 @Composable
 internal fun glassAverageProgress(): State<Float> = androidx.compose.animation.core.animateFloatAsState(
-    if (currentGlassRendererGeneration().backend == GlassBackend.None) 1f else 0f,
+    if (currentGlassRendererGeneration().backend != GlassBackend.Normal) 1f else 0f,
     androidx.compose.animation.core.spring(1f, 450f), label = "Glass render mode")
 
 /** Counts optical work at invocation, without retaining scenes or scheduling frames. */
 internal val LocalGlassOpticalWork = staticCompositionLocalOf<(() -> Unit)?> { null }
 
-/** Requested None owns the cheap material and resting control policy, independently of fallback. */
+/** Only the legacy sampling mode retains its resting-only control exception. */
 @Composable
-internal fun requestedGlassNone(): Boolean =
-    (LocalGlassRendererRuntime.current?.requested ?: LocalGlassAppearance.current.renderer) == GlassRendererMode.None
+internal fun requestedSingleToneBlur(): Boolean =
+    (LocalGlassRendererRuntime.current?.requested ?: LocalGlassAppearance.current.renderer) == GlassRendererMode.SingleToneBlur
+
+/** Flat mode bypasses the complete glass graph, including allocation and preparation. */
+@Composable
+internal fun flatGlass(): Boolean = currentGlassRendererGeneration().backend == GlassBackend.FlatNone
+
+internal fun flatGlassColor(dark: Boolean) =
+    if (dark) androidx.compose.ui.graphics.Color(0xFF242528) else androidx.compose.ui.graphics.Color.White
+
+@Composable
+internal fun flatGlassColor(): androidx.compose.ui.graphics.Color =
+    flatGlassColor(androidx.compose.material3.MaterialTheme.colorScheme.onSurface.red > .5f)

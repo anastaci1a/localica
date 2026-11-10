@@ -23,7 +23,7 @@ import org.junit.Test
 class SlidingTabsTest {
     @get:Rule val compose = createComposeRule()
     @Test fun optionalForegroundRefractionChangesOnlyTheSelectedInk() = inspectForeground(io.github.anastaci1a.localica.navigation.GlassRendererMode.Normal)
-    @Test fun noneKeepsSelectedInkWhenForegroundSamplingIsEnabled() = inspectForeground(io.github.anastaci1a.localica.navigation.GlassRendererMode.None)
+    @Test fun noneKeepsSelectedInkWhenForegroundSamplingIsEnabled() = inspectForeground(io.github.anastaci1a.localica.navigation.GlassRendererMode.SingleToneBlur)
 
     private fun inspectForeground(mode: io.github.anastaci1a.localica.navigation.GlassRendererMode) {
         val runtime = GlassRendererRuntime(mode)

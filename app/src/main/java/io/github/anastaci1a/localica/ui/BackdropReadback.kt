@@ -15,6 +15,7 @@ internal class BackdropReadback(
     private val scene: () -> BackdropReadbackScene,
     private val schedule: (Long, () -> Unit) -> (() -> Unit),
 ) {
+    init { GlassWork.event("readback-barrier") }
     var invalidateComposite: (() -> Unit)? = null
     private var pending: Ticket? = null
     val isPending: Boolean get() = pending?.result?.isCompleted == false

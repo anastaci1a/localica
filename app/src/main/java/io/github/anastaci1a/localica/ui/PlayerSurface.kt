@@ -662,7 +662,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
 @Composable
 private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: FrostedBackdrop,
     enabled: Boolean): Modifier {
-    val cover = rememberGraphicsLayer()
+    if (flatGlass()) return this
+    val cover = rememberGlassLayer()
     val cutout = remember { Path() }
     return drawWithContent {
         drawContent()

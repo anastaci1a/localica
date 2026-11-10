@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -35,14 +36,15 @@ internal class LyricsBackdropScene(val source: FrostedBackdrop, alpha: () -> Flo
     schedule: (Long, () -> Unit) -> (() -> Unit)) {
     val layers = mutableStateListOf<LyricsBackdropLayer>()
     var compositeDraws: Map<Any, BackdropProducerDraws> = emptyMap()
-    val readback = BackdropReadback({ Snapshot.withoutReadObservation {
+    private val glassReadback = if (source.hasGlassLayer) BackdropReadback({ Snapshot.withoutReadObservation {
         BackdropReadbackScene(listOf(alpha(), source.size, source.location.placement),
             layers.filter { it.alpha() > 0f }.associate { layer ->
                 layer to
                 BackdropReadbackProducer(listOf(layer.alpha(), layer.source.size,
                     layer.source.location.placement, layer.contentKey()), layer.hasMask)
             })
-    } }, schedule)
+    } }, schedule) else null
+    val readback get() = requireNotNull(glassReadback) { "Flat None has no glass readback barrier" }
 
     fun recorded(layer: LyricsBackdropLayer, request: Int) {
         layer.recordedReadbackRequest = request
@@ -94,32 +96,35 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
         val cancel: () -> Unit = { handler.removeCallbacks(runnable) }
         cancel
     } }
+    val flat = flatGlass()
+    val displayCutout: DrawScope.() -> Path? = { Path().apply { addRect(Rect(Offset.Zero, size)) } }
     val observer by rememberUpdatedState(LocalLyricsBackdropObserver.current)
-    SideEffect { source.parent = backing; source.readbackBarrier = scene.readback; observer?.invoke(scene, true) }
-    DisposableEffect(scene) { onDispose {
-        scene.readback.dispose()
-        observer?.invoke(scene, false)
-        if (source.readbackBarrier === scene.readback) source.readbackBarrier = null
-    } }
-    // Invalidate in-flight thumbnails when producer content or placement changes.
-    LaunchedEffect(scene) {
-        if (Build.VERSION.SDK_INT < 33) snapshotFlow {
-            currentAlpha() to scene.layers.map { layer ->
-                listOf(layer.source.recorded, layer.source.size, layer.source.location.placement,
-                    layer.alpha(), layer.contentKey())
+    if (!flat) {
+        SideEffect { source.parent = backing; source.readbackBarrier = scene.readback; observer?.invoke(scene, true) }
+        DisposableEffect(scene) { onDispose {
+            scene.readback.dispose()
+            observer?.invoke(scene, false)
+            if (source.readbackBarrier === scene.readback) source.readbackBarrier = null
+        } }
+        // Invalidate in-flight thumbnails when producer content or placement changes.
+        LaunchedEffect(scene) {
+            if (Build.VERSION.SDK_INT < 33) snapshotFlow {
+                currentAlpha() to scene.layers.map { layer ->
+                    listOf(layer.source.recorded, layer.source.size, layer.source.location.placement,
+                        layer.alpha(), layer.contentKey())
+                }
+            }.collectLatest {
+                scene.readback.sceneChanged()
+                source.refresh()
             }
-        }.collectLatest {
-            scene.readback.sceneChanged()
-            source.refresh()
         }
     }
     Box(modifier, propagateMinConstraints = true) {
         CompositionLocalProvider(LocalLyricsBackdropScene provides scene, content = content)
         // Compose the real artwork plus all retained Crossfade documents for sampling
         // only. Displaying this backing again would strengthen translucent player art.
-        Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = {
-            Path().apply { addRect(Rect(Offset.Zero, size)) }
-        }, readbackRequest = { source.readbackRequest }, onRecorded = { request ->
+        if (!flat) Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = displayCutout,
+            readbackRequest = { source.readbackRequest }, onRecorded = { request ->
             scene.readback.compositeRecorded(request, scene.compositeDraws)
         }).then(LyricsReadbackDraw(scene.readback))) {
             scene.compositeDraws = emptyMap()
@@ -153,6 +158,7 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
 @Composable
 internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () -> Float,
     contentKey: () -> Any?): Modifier {
+    if (flatGlass()) return lyricsViewportMask()
     // This display list is replayed by the shared scene, never read back independently.
     val source = rememberFrostedBackdrop(Unit, enabled = false, retainRaster = false)
     val currentAlpha by rememberUpdatedState(alpha)
@@ -164,18 +170,22 @@ internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () ->
         onDispose { scene.layers.remove(layer); scene.readback.sceneChanged() }
     }
     return recordFrostedBackdrop(source, readbackRequest = { scene.source.readbackRequest },
-        onRecorded = { scene.recorded(layer, it) }).clipToBounds()
-        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
-            // Observe inside the retained mask layer: invalidating only its parent
-            // replays the same child display list on API 26's readback surface. Both
-            // existing captures must redraw this final viewport, not just its wrapper.
-            // Never feed this draw-only request back into refresh/capture flows.
-            val request = scene.source.readbackRequest
-            drawContent()
-            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
-                0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
-            layer.maskedReadbackRequest = request
-            scene.readback.producerMasked(layer, request)
-        }
+        onRecorded = { scene.recorded(layer, it) }).lyricsViewportMask(request = { scene.source.readbackRequest }, masked = { request ->
+        layer.maskedReadbackRequest = request
+        scene.readback.producerMasked(layer, request)
+    })
 }
+
+/** Keep clipping, group compositing and the final mask identical for every renderer. */
+private inline fun Modifier.lyricsViewportMask(crossinline request: () -> Int = { -1 },
+    crossinline masked: (Int) -> Unit = {}): Modifier = clipToBounds()
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        // Observe inside this retained mask, before its content, so API 26's readback
+        // redraws both the glyph recording and its final clipped/faded viewport.
+        val readbackRequest = request()
+        drawContent()
+        drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
+            0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+        masked(readbackRequest)
+    }

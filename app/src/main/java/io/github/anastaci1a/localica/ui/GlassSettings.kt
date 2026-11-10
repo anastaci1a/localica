@@ -59,7 +59,7 @@ internal fun GlassSettingsControls(value: GlassAppearance, section: String = "Gl
     val navigate = LocalSettingsNavigate.current
     if (section == "Glass") {
         GlassRendererPreference(value.renderer) { onChange(value.copy(renderer = it)) }
-        val enabled = value.renderer != GlassRendererMode.None
+        val enabled = value.renderer == GlassRendererMode.Normal
         listOf("Glass appearance" to "Blur, tint, and floating shadows",
             "Glass advanced" to "Contrast, shape, depth, and expansion",
             "Navigation selector" to "Tab style, tint, and refraction").forEach { (page, summary) ->
@@ -67,7 +67,7 @@ internal fun GlassSettingsControls(value: GlassAppearance, section: String = "Gl
         }
         return
     }
-    CompositionLocalProvider(LocalSettingsEnabled provides (value.renderer != GlassRendererMode.None)) {
+    CompositionLocalProvider(LocalSettingsEnabled provides (value.renderer == GlassRendererMode.Normal)) {
         when (section) {
             "Glass appearance" -> GlassAppearanceSettings(value, onChange)
             "Glass advanced" -> GlassAdvancedSettings(value, onChange)
@@ -157,7 +157,11 @@ internal fun GlassRendererPreference(value: GlassRendererMode, onChange: (GlassR
     ChoicePreference("Glass renderer", value, GlassRendererMode.entries, { it.label }, popup = true, onSelect = onChange)
     val explanation = if (value == GlassRendererMode.Normal && android.os.Build.VERSION.SDK_INT < 33)
         "Normal uses solid average colour on this Android version. Refraction requires Android 13 or later."
-    else "Using "+value.label+" on this device."
+    else when (value) {
+        GlassRendererMode.SingleToneBlur -> "Single-Tone Blur is a testing mode that averages the scene beneath each surface."
+        GlassRendererMode.FlatNone -> "Opaque theme fills without glass effects."
+        else -> "Using " + value.label + " on this device."
+    }
     Text(explanation, style = MaterialTheme.typography.bodySmall)
 }
 
