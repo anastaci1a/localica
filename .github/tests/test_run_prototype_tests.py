@@ -1446,13 +1446,15 @@ elif a[:3]==['shell','am','start']:
 elif a[:2]==['shell','pidof']:
     if state.exists():
         n=pathlib.Path('polls');count=int(n.read_text())+1 if n.exists() else 1;n.write_text(str(count))
-        if mode!='dead' or count==1:print('1234')
+        if mode not in ('dead','clear-failed-dead') or count==1:print('1234')
 elif a[:3]==['shell','rm','-f']:remote.unlink(missing_ok=True)
 elif a[:3]==['shell','uiautomator','dump']:
     if mode=='stale':sys.exit(1)
     if mode=='dump-no-receipt':sys.exit(0)
     remote.write_text('<node text="Guard album 0"/>' if mode!='empty' else '<node/>')
     print('UI hierchary dumped to: '+a[-1])
+elif a[:2]==['logcat','-c'] and mode in ('clear-failed','clear-failed-dead'):
+    print("failed to clear the 'main' log", file=sys.stderr);sys.exit(1)
 elif a[:2]==['shell','cat']:
     if mode=='read-failed':sys.exit(1)
     if not remote.exists():sys.exit(1)
@@ -1479,6 +1481,16 @@ elif a[:2]==['shell','cat']:
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(receipt)
         self.assertNotIn('am start', commands)
+        self.assertIn('logcat -b crash', commands)
+
+    def test_failed_diagnostic_clear_does_not_replace_process_and_ui_gates(self):
+        result, receipt, commands = self.run_cold('clear-failed')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn('logcat-cleared=false', receipt)
+        self.assertIn('cold-gallery-visible=true', receipt)
+        result, receipt, commands = self.run_cold('clear-failed-dead')
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse(receipt)
 
     def test_process_death_and_missing_gallery_fail_closed(self):
         for mode in ('dead', 'empty'):
