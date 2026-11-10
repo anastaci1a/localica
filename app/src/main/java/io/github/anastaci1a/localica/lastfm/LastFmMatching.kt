@@ -109,17 +109,21 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
     /** Counts and groups only: identical to [match] for those fields, with no per-song result retained. */
     fun matchCounts(snapshot: LastFmSnapshot, mappings: Map<String, String>, checkActive: () -> Unit = {}): LastFmMatches {
         val folder = CountFolder(); var matched = 0; var absent = 0; var dismissed = 0
+        var clear = 0; var judgments = 0; var reviews = 0; var editions = 0
         resolve(snapshot, mappings, checkActive, object : Sink {
             override fun resolved(remote: LastFmTrack, tracks: List<Track>, tier: LastFmMatchTier, reason: String, score: Int, manual: Boolean) {
                 matched++; folder.add(tracks.map { it.id }, remote.plays)
+                if (tier == LastFmMatchTier.CLEAR) clear++ else if (tier == LastFmMatchTier.PROBABLE) judgments++
+                if (tracks.size > 1) editions++
             }
-            override fun review(remote: LastFmTrack, candidates: () -> List<Track>, reason: String) {}
+            override fun review(remote: LastFmTrack, candidates: () -> List<Track>, reason: String) { reviews++ }
             override fun absent(remote: LastFmTrack) { absent++ }
             override fun dismissed(remote: LastFmTrack) { dismissed++; absent++ }
         })
         val groups = folder.groups()
         return LastFmMatches(folder.versionCounts(groups), emptyList(), absent, matched = matched, dismissed = dismissed,
-            recordingGroups = groups, sourceSnapshot = snapshot, complete = false)
+            recordingGroups = groups, sourceSnapshot = snapshot, complete = false,
+            buckets = LastFmMatchBuckets(matched, clear, judgments, reviews, absent, editions))
     }
 
     private fun resolve(snapshot: LastFmSnapshot, mappings: Map<String, String>, checkActive: () -> Unit, sink: Sink) {

@@ -70,7 +70,27 @@ class LastFmScrollStressTest {
 
     // ---- fixture -------------------------------------------------------------------------------
 
-    private fun libraryTracks(): List<Track> = (0 until TRACKS).map { n ->
+    /**
+     * `-e libraryJsonl <device path>`: one JSON object per line with title, artist, album, albumArtist, durationMs,
+     * track, date, genre (private tag data pushed by the harness, never written into evidence). Otherwise synthetic.
+     */
+    private fun libraryTracks(): List<Track> {
+        val path = arg("libraryJsonl", "")
+        if (path.isEmpty()) return syntheticTracks()
+        val lines = File(path).readLines().filter { it.isNotBlank() }
+        require(lines.isNotEmpty()) { "Empty library file $path" }
+        return lines.mapIndexed { n, line ->
+            val json = JSONObject(line)
+            fun text(key: String) = json.optString(key).takeIf { it.isNotBlank() }
+            val title = text("title") ?: "Untitled ${n + 1}"
+            Track("real779://track/$n", title, artist = text("artist"), album = text("album"),
+                durationMs = json.optLong("durationMs").takeIf { it > 0 }, fileName = "$n.m4a", relativePath = "real/$n.m4a",
+                id = "real779:track:$n", albumArtist = text("albumArtist"),
+                trackNumber = text("track")?.substringBefore('/')?.toIntOrNull(), year = text("date")?.take(4)?.toIntOrNull(), genre = text("genre"))
+        }
+    }
+
+    private fun syntheticTracks(): List<Track> = (0 until TRACKS).map { n ->
         val album = n / PER_ALBUM
         val artist = album / ALBUMS_PER_ARTIST
         val artistName = "Synthetic Artist ${artist.toString().padStart(3, '0')}"
@@ -202,7 +222,13 @@ class LastFmScrollStressTest {
             ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
                 requireNotNull(device.findFresh(By.desc(tab.label), 20_000)) { "Missing tab ${tab.label}" }.click()
                 val firstTitle = when (tab) { MainTab.Artists -> "Synthetic Artist 000"; MainTab.Songs -> "Orbit Moss 00000"; else -> "Synthetic Album 0000" }
-                requireNotNull(device.findFresh(By.text(firstTitle), 60_000)) { "Fixture list did not appear ($firstTitle)" }
+                if (arg("libraryJsonl", "").isEmpty()) requireNotNull(device.findFresh(By.text(firstTitle), 60_000)) { "Fixture list did not appear ($firstTitle)" }
+                else {
+                    // Real tags: wait for any row text of the first album, artist or song row instead of a known title.
+                    val firstRow = when (tab) { MainTab.Artists -> tracks.mapNotNull { it.artist }; MainTab.Songs -> tracks.map { it.title }; else -> tracks.mapNotNull { it.album } }
+                        .filter { it.isNotBlank() }.minByOrNull { it.trim().lowercase() }
+                    requireNotNull(device.findFresh(By.textStartsWith(firstRow.orEmpty().take(24)), 120_000)) { "Fixture list did not appear (real library)" }
+                }
                 SystemClock.sleep(2500) // Let the first catalog, artwork placeholders and any startup work settle.
                 var window: android.view.Window? = null
                 scenario.onActivity { window = it.window }

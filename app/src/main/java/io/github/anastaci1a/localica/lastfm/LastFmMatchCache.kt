@@ -18,10 +18,14 @@ import java.security.MessageDigest
  */
 data class LastFmMatchCache(val libraryKey: String, val archiveKey: String, val mappingsKey: String,
     val counts: Map<String, Long>, val recordingGroups: Map<String, String>, val matched: Int, val notInLibrary: Int,
-    val dismissed: Int) {
+    val dismissed: Int, val buckets: LastFmMatchBuckets) {
     fun matches(key: LastFmMatchKey) = libraryKey == key.library && archiveKey == key.archive && mappingsKey == key.mappings
     fun toMatches(snapshot: LastFmSnapshot) = LastFmMatches(counts, emptyList(), notInLibrary, matched = matched,
-        dismissed = dismissed, recordingGroups = recordingGroups, sourceSnapshot = snapshot, complete = false)
+        dismissed = dismissed, recordingGroups = recordingGroups, sourceSnapshot = snapshot, complete = false, buckets = buckets)
+    companion object {
+        fun of(key: LastFmMatchKey, result: LastFmMatches) = LastFmMatchCache(key.library, key.archive, key.mappings, result.counts,
+            result.recordingGroups, result.matched, result.notInLibrary, result.dismissed, result.buckets)
+    }
 }
 
 data class LastFmMatchKey(val library: String, val archive: String, val mappings: String) {
@@ -96,18 +100,23 @@ class FileLastFmMatchCacheStore(file: File) : LastFmMatchCacheStore {
 }
 
 object LastFmMatchCacheCodec {
-    private const val VERSION = 1
+    /** Version 2 added the six bucket counters; older entries are rejected (one full counts-only match), never read as zeros. */
+    private const val VERSION = 2
     fun encode(value: LastFmMatchCache): String = JSONObject().apply {
         put("version", VERSION); put("libraryKey", value.libraryKey); put("archiveKey", value.archiveKey); put("mappingsKey", value.mappingsKey)
         put("matched", value.matched); put("notInLibrary", value.notInLibrary); put("dismissed", value.dismissed)
+        put("buckets", JSONObject().put("matched", value.buckets.matched).put("clear", value.buckets.clear).put("judgments", value.buckets.judgments)
+            .put("review", value.buckets.review).put("absent", value.buckets.absent).put("editions", value.buckets.editions))
         put("counts", JSONObject(value.counts)); put("recordingGroups", JSONObject(value.recordingGroups))
     }.toString()
     fun decode(text: String): LastFmMatchCache? = JSONObject(text).run {
         if (optInt("version") != VERSION) return null
-        val counts = getJSONObject("counts"); val groups = getJSONObject("recordingGroups")
+        val counts = getJSONObject("counts"); val groups = getJSONObject("recordingGroups"); val buckets = getJSONObject("buckets")
         LastFmMatchCache(getString("libraryKey"), getString("archiveKey"), getString("mappingsKey"),
             counts.keys().asSequence().associateWith { counts.getLong(it).also { count -> require(count >= 0) } },
             groups.keys().asSequence().associateWith { groups.getString(it) },
-            getInt("matched"), getInt("notInLibrary"), getInt("dismissed"))
+            getInt("matched"), getInt("notInLibrary"), getInt("dismissed"),
+            LastFmMatchBuckets(buckets.getInt("matched"), buckets.getInt("clear"), buckets.getInt("judgments"),
+                buckets.getInt("review"), buckets.getInt("absent"), buckets.getInt("editions")))
     }
 }

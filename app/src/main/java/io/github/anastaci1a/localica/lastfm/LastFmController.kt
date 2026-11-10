@@ -46,10 +46,10 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     private val mutableMatches = MutableStateFlow(LastFmMatches(emptyMap(), emptyList()))
     private val countSource = MutableStateFlow(LastFmMatches(emptyMap(), emptyList()))
     /**
-     * The latest COMPLETE match of the current archive, mappings and library, or the empty result until one
-     * exists (#779). A launch whose inputs equal the persisted cache does not match: counts flow from the
-     * cache through [counts], and this stays empty (no source snapshot) until [details] is collected or the
-     * inputs change. Observing this flow never starts matching; only collecting [details] does.
+     * The current result for the current archive, mappings and library (#779). Without detail demand it is a
+     * counts-only result: sourced, `complete = false`, with per-song counts and [LastFmMatches.buckets] but no
+     * review or resolution lists (restored from the cache, or streamed with bounded live data). Collecting
+     * [details] is the only thing that makes it complete. Observing this flow never starts matching.
      */
     val matches: StateFlow<LastFmMatches> = mutableMatches.asStateFlow()
     /** Current per-song counts and recording groups: complete, or restored from the cache (`complete = false`). */
@@ -95,8 +95,7 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
         val key = withContext(Dispatchers.Default) { LastFmMatchKey.of(input.catalog, snapshot, input.mappings) }
         currentCoroutineContext().ensureActive()
         if (!countsOnly) complete = input to result
-        val entry = LastFmMatchCache(key.library, key.archive, key.mappings, result.counts, result.recordingGroups,
-            result.matched, result.notInLibrary, result.dismissed)
+        val entry = LastFmMatchCache.of(key, result)
         cacheLock.withLock {
             cache = entry; cacheLoaded = true
             try { matchCache.write(entry) }
@@ -138,10 +137,11 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
                         memo != null -> publish(memo, memo)
                         demand -> fullMatch(input).let { publish(it, it) }
                         else -> {
-                            // Without demand only counts are needed: restored from the cache, or streamed with bounded live
-                            // data. Either way review lists do not exist yet, so matches is explicitly incomplete and sourceless.
+                            // Without demand only counts and bucket metadata are needed: restored from the cache, or streamed
+                            // with bounded live data. The result is sourced and `complete = false`: background observers
+                            // (the dashboard summary) read its buckets; review lists appear once details are demanded.
                             val countsValue = cachedMatches(input) ?: fullMatch(input, countsOnly = true)
-                            publish(countsValue, LastFmMatches(emptyMap(), emptyList(), complete = false))
+                            publish(countsValue, countsValue)
                         }
                     }
                 }

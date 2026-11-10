@@ -51,7 +51,7 @@ class LastFmMatchSaveTest {
         try {
             withTimeout(5000) { controller.details.first { it.clearCount == 1 } }
             assertTrue(controller.mapAndAwait(remote.key, LastFmMatcher.NONE))
-            val absent = withTimeout(5000) { controller.details.first { it.notInLibrary == 1 } }
+            val absent = withTimeout(5000) { controller.details.first { it.complete && it.notInLibrary == 1 } }
             assertTrue(absent.rows(LastFmGroup.ABSENT, saved.mappings).single().canUndo)
             assertEquals("Marked not in your library by you", absent.rows(LastFmGroup.ABSENT, saved.mappings).single().reason)
             controller.resetMapping(remote.key)

@@ -24,11 +24,17 @@ data class LastFmResolution(val remote: LastFmTrack, val tracks: List<Track>, va
 data class LastFmMatches(val counts: Map<String, Long>, val review: List<LastFmReview>,
     val notInLibrary: Int = 0, val editions: List<LastFmReview> = emptyList(), val matched: Int = 0, val dismissed: Int = 0,
     val resolutions: List<LastFmResolution> = emptyList(), val unmatched: List<LastFmTrack> = emptyList(), val recordingGroups: Map<String, String> = emptyMap(), val sourceSnapshot: LastFmSnapshot? = null,
-    /** False for counts restored from the persisted match cache (#779): review and resolution lists are absent. */
-    val complete: Boolean = true) {
+    /** False for counts-only results (streamed or restored, #779): review and resolution lists are absent, [buckets] are not. */
+    val complete: Boolean = true,
+    /** Bucket sizes as metadata, so a counts-only result still describes the archive without any list. */
+    val buckets: LastFmMatchBuckets = LastFmMatchBuckets(matched, resolutions.count { it.tier == LastFmMatchTier.CLEAR },
+        resolutions.count { it.tier == LastFmMatchTier.PROBABLE }, review.size, notInLibrary, editions.size)) {
     val judgments: List<LastFmResolution> get() = resolutions.filter { it.tier == LastFmMatchTier.PROBABLE }
     val clearCount: Int get() = resolutions.count { it.tier == LastFmMatchTier.CLEAR }
 }
+
+/** Sizes of the dashboard buckets; equal whether folded from lists or counted while streaming. */
+data class LastFmMatchBuckets(val matched: Int, val clear: Int, val judgments: Int, val review: Int, val absent: Int, val editions: Int)
 
 private val whitespace = Regex("\\s+")
 internal fun normalize(value: String?): String = Normalizer.normalize(value.orEmpty(), Normalizer.Form.NFKC)

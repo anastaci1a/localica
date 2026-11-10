@@ -77,6 +77,7 @@ class LastFmMatchCacheTest {
     private fun assertSameFullResult(oracle: LastFmMatches, actual: LastFmMatches) {
         assertEquals(oracle.counts, actual.counts); assertEquals(oracle.recordingGroups, actual.recordingGroups)
         assertEquals(oracle.matched, actual.matched); assertEquals(oracle.notInLibrary, actual.notInLibrary); assertEquals(oracle.dismissed, actual.dismissed)
+        assertEquals(oracle.buckets, actual.buckets)
         assertEquals(oracle.resolutions.map { listOf(it.remote, it.tracks.map { t -> t.id }, it.tier, it.reason, it.score, it.manual) },
             actual.resolutions.map { listOf(it.remote, it.tracks.map { t -> t.id }, it.tier, it.reason, it.score, it.manual) })
         assertEquals(oracle.review.map { listOf(it.remote, it.candidates.map { t -> t.id }, it.reason, it.tier) },
@@ -90,6 +91,7 @@ class LastFmMatchCacheTest {
     private fun assertSameCounts(oracle: LastFmMatches, streamed: LastFmMatches) {
         assertEquals(oracle.counts, streamed.counts); assertEquals(oracle.recordingGroups, streamed.recordingGroups)
         assertEquals(oracle.matched, streamed.matched); assertEquals(oracle.notInLibrary, streamed.notInLibrary); assertEquals(oracle.dismissed, streamed.dismissed)
+        assertEquals(oracle.buckets, streamed.buckets)
         assertFalse(streamed.complete); assertTrue(streamed.resolutions.isEmpty() && streamed.review.isEmpty() && streamed.editions.isEmpty() && streamed.unmatched.isEmpty())
         assertSame(oracle.sourceSnapshot, streamed.sourceSnapshot)
     }
@@ -137,9 +139,9 @@ class LastFmMatchCacheTest {
     private val library = LibrarySnapshot(tracks = listOf(song, other))
 
     @Test fun codecRoundTripsEveryField() {
-        val cache = LastFmMatchCache("lib", "archive", "-", mapOf("song" to 42L), mapOf("song" to "song"), 1, 2, 3)
+        val cache = LastFmMatchCache("lib", "archive", "-", mapOf("song" to 42L), mapOf("song" to "song"), 1, 2, 3, LastFmMatchBuckets(1, 1, 0, 4, 2, 0))
         assertEquals(cache, LastFmMatchCacheCodec.decode(LastFmMatchCacheCodec.encode(cache)))
-        assertNull(LastFmMatchCacheCodec.decode("{\"version\":0}"))
+        assertNull(LastFmMatchCacheCodec.decode("{\"version\":0}")); assertNull("entries without bucket counters are rejected, never zero", LastFmMatchCacheCodec.decode(LastFmMatchCacheCodec.encode(cache).replace("\"version\":2", "\"version\":1")))
     }
 
     @Test fun keysChangeOnlyWithMatchingInputs() {
@@ -181,7 +183,7 @@ class LastFmMatchCacheTest {
         val first = LastFmMatcher.match(shifted, both.tracks, emptyMap()); val second = LastFmMatcher.match(unshifted, both.tracks, emptyMap())
         assertNotEquals(first.counts, second.counts)
         val key = LastFmMatchKey.of(both, shifted, emptyMap())
-        val cache = LastFmMatchCache(key.library, key.archive, key.mappings, first.counts, first.recordingGroups, first.matched, first.notInLibrary, first.dismissed)
+        val cache = LastFmMatchCache.of(key, first)
         assertTrue(cache.matches(key)); assertFalse("a shifted archive must not reuse the other's counts", cache.matches(LastFmMatchKey.of(both, unshifted, emptyMap())))
     }
 
@@ -189,10 +191,9 @@ class LastFmMatchCacheTest {
         listOf(archive, archive.copy(tracks = listOf(remote.copy(plays = 5), remoteOther.copy(plays = 42)))).forEach { variant ->
             val full = LastFmMatcher.match(variant, library.tracks, emptyMap())
             val key = LastFmMatchKey.of(library, variant, emptyMap())
-            val restored = LastFmMatchCache(key.library, key.archive, key.mappings, full.counts, full.recordingGroups,
-                full.matched, full.notInLibrary, full.dismissed).toMatches(variant)
+            val restored = LastFmMatchCache.of(key, full).toMatches(variant)
             assertEquals(full.counts, restored.counts); assertEquals(full.recordingGroups, restored.recordingGroups)
-            assertEquals(full.matched, restored.matched); assertFalse(restored.complete); assertSame(variant, restored.sourceSnapshot)
+            assertEquals(full.matched, restored.matched); assertEquals(full.buckets, restored.buckets); assertFalse(restored.complete); assertSame(variant, restored.sourceSnapshot)
         }
     }
 
@@ -210,7 +211,7 @@ class LastFmMatchCacheTest {
             withTimeout(3000) { second.overlay.first { it.counts["song"] == 42L } }
             assertEquals("A cached result must not match again", 0L, WorkCounters.lastFmMatches.get())
             assertFalse(second.counts.value.complete)
-            assertNull("matches carries only complete results", second.matches.value.sourceSnapshot)
+            assertFalse("restored result is counts-only", second.matches.value.complete); assertSame(second.counts.value, second.matches.value); assertEquals(second.matches.value.buckets, first.matches.value.buckets)
             assertEquals(mapOf("song" to 42L, "other" to 5L),
                 withTimeout(3000) { second.applyTo(flowOf(ListeningStatistics())).first { it.tracks.isNotEmpty() } }.tracks)
             // Review lists are demanded explicitly; the match then completes once and stays complete after the demand ends.
@@ -237,7 +238,7 @@ class LastFmMatchCacheTest {
         } finally { scope.cancel() }
     }
 
-    /** The #753 summary collector observes `matches` for the controller's lifetime; it must neither force a match nor see partial buckets. */
+    /** The #753 summary collector observes `matches` for the controller lifetime: it reads bucket metadata from the restored result and never forces a match. */
     @Test fun aPermanentBackgroundObserverNeverStartsMatchingOrReadsPartialBuckets() = runBlocking {
         for (observerFirst in listOf(true, false)) {
             val cache = MemoryCache()
@@ -246,10 +247,10 @@ class LastFmMatchCacheTest {
                 controller(flowOf(library), cache, scope).let { withTimeout(3000) { it.overlay.first { o -> o.counts["song"] == 42L } } }
                 WorkCounters.reset()
                 val controller = controller(flowOf(library), cache, scope)
-                val summaries = mutableListOf<Int>()
+                val summaries = mutableListOf<LastFmMatchBuckets>()
                 fun observe() = scope.launch {
                     combine(controller.state.map { it.saved.snapshot }.distinctUntilChanged(), controller.matches) { snapshot, matched -> snapshot to matched }
-                        .collect { (snapshot, matched) -> if (snapshot != null && matched.sourceSnapshot === snapshot) summaries += matched.resolutions.size }
+                        .collect { (snapshot, matched) -> if (snapshot != null && matched.sourceSnapshot === snapshot) summaries += matched.buckets }
                 }
                 if (observerFirst) observe()
                 controller.ready()
@@ -257,11 +258,11 @@ class LastFmMatchCacheTest {
                 if (!observerFirst) observe()
                 delay(50)
                 assertEquals("observer must not force a match", 0L, WorkCounters.lastFmMatches.get())
-                assertTrue("no partial bucket summary", summaries.isEmpty())
+                assertTrue("the observer reads bucket metadata from the restored result", summaries.isNotEmpty()); assertEquals(1, summaries.distinct().size)
                 withTimeout(3000) { controller.details.first { it.complete } }
                 withTimeout(3000) { controller.matches.first { it.complete && it.sourceSnapshot != null } }
                 delay(20)
-                assertEquals(listOf(2), summaries.distinct()); assertEquals(1L, WorkCounters.lastFmMatches.get())
+                val full = controller.matches.value; assertEquals(2, full.matched); assertEquals(listOf(full.buckets), summaries.distinct()); assertEquals(1L, WorkCounters.lastFmMatches.get())
             } finally { scope.cancel() }
         }
     }
@@ -326,7 +327,7 @@ class LastFmMatchCacheTest {
             withTimeout(3000) { while (gate.invocations < 1) delay(5) }
             demand.cancel(); delay(50)
             gate.latch.countDown(); delay(50)
-            assertNull("cancelled work must not publish", controller.matches.value.sourceSnapshot)
+            assertFalse("cancelled work must not publish a complete result", controller.matches.value.complete)
             assertEquals(42L, controller.counts.value.counts["song"])
             val complete = withTimeout(3000) { controller.details.first { it.complete } }
             assertEquals(2, complete.matched); assertEquals(2, gate.invocations)
