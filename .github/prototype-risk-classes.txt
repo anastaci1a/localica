@@ -298,6 +298,7 @@ io.github.anastaci1a.localica.ScopedSearchOpticsTest
 io.github.anastaci1a.localica.ScrollPerformanceTest
 io.github.anastaci1a.localica.ScrollbarContinuityTest
 io.github.anastaci1a.localica.ScrollbarScreenshotTest
+io.github.anastaci1a.localica.ScrollbarRootReductionTest
 io.github.anastaci1a.localica.SearchDismissalLifecycleTest
 io.github.anastaci1a.localica.SearchHistoryTest
 io.github.anastaci1a.localica.SearchImeHandoffObservationTest
