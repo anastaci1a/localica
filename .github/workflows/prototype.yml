@@ -477,7 +477,7 @@ jobs:
           adb shell wm density 280
           python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
-          python3 .github/prototype-health.py
+          python3 .github/recovery-fault-proof.py --mode started & python3 .github/prototype-health.py
     - name: Preserve lost-emulator attempt and authorize one fresh boot
       id: emulator-recovery
       if: ${{ !cancelled() && steps.emulator-first.outcome == 'failure' }}
