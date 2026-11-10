@@ -132,12 +132,12 @@ class EnumDecodingTest {
     private fun withPreferences(storeName: String, test: (Context, SharedPreferences) -> Unit) {
         val base = InstrumentationRegistry.getInstrumentation().targetContext
         val ownedName = "enum-decoding-test-${UUID.randomUUID()}"
-        val context = object : ContextWrapper(base) {
+        val context = preparedTestContext(object : ContextWrapper(base) {
             override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
                 check(name == storeName)
                 return base.getSharedPreferences(ownedName, mode)
             }
-        }
+        }, listOf(storeName))
         val raw = context.getSharedPreferences(storeName, Context.MODE_PRIVATE)
         try { test(context, raw) } finally {
             raw.edit().clear().commit()

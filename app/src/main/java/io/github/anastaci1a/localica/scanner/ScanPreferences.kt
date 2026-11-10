@@ -4,7 +4,7 @@ import android.content.Context
 import io.github.anastaci1a.localica.library.ScanOptions
 
 class ScanPreferences(context: Context) {
-    private val store = context.getSharedPreferences("scanner", 0)
+    private val store = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "scanner")
     var scanOnLaunch: Boolean
         get() = store.getBoolean("on-launch", false)
         set(value) { store.edit().putBoolean("on-launch", value).apply() }

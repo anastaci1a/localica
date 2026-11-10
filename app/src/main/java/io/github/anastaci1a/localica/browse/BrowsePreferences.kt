@@ -23,8 +23,8 @@ data class BrowseStyle(val sort: TrackSort = TrackSort.Title, val ascending: Boo
 
 /** Text belongs to the navigation route; only presentation and ordering live in preferences. */
 class BrowsePreferences(context: Context) {
-    private val store = context.getSharedPreferences("browse-style", Context.MODE_PRIVATE)
-    private val legacyStore = context.getSharedPreferences("library-query", Context.MODE_PRIVATE)
+    private val store = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "browse-style")
+    private val legacyStore = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "library-query")
     fun type(route: BrowseRoute): String = BrowsePreferenceKeys.type(route)
     init { migrateCatalogScopes(); migrateAlbumTracklist() }
     // Collection identities remain independent; roots share their catalog type.

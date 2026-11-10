@@ -83,6 +83,9 @@ trap 'stop_child INT 130' INT
 if [[ "$method_iteration" == false ]]; then
   bash .github/run-main-thread-cold-start.sh "$serial"
 fi
+if [[ "$method_iteration" == false && ",$selector," == *",io.github.anastaci1a.localica.PreparedColdEntryTest,"* ]]; then
+  bash .github/run-preference-entry-proof.sh "$serial"
+fi
 run_gate() {
   local status
   python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest -I .github/prebuilt-device-tests.gradle "${aot_args[@]}" --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &

@@ -8,7 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class InterfacePreferences(context: Context) {
-    private val preferences = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
+    private val preferences = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "interface")
     fun read(): InterfaceSettings {
         val savedRenderer = preferences.getString("glass-renderer", null)
         if (savedRenderer in listOf("Automatic", "Modern", "Legacy") || preferences.contains("glass-live-scroll")) {

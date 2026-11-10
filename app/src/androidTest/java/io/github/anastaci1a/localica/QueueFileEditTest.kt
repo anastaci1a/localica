@@ -368,9 +368,9 @@ class QueueFileEditTest {
         val file = File(context.cacheDir, "edit-lease-$id.mp3")
         instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }
         val prefsName = "edit-lease-$id"
-        val preferences = QueuePreferences(object : ContextWrapper(context) {
+        val preferences = QueuePreferences(preparedTestContext(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences(prefsName, mode)
-        })
+        }))
         val actor = CoroutineScope(SupervisorJob() +
             (actorScheduler?.let { StandardTestDispatcher(it) } ?: Dispatchers.Main.immediate))
         val tracks = listOf("one", "two", "one").map { Track(Uri.fromFile(file).toString(), it,
