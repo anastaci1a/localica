@@ -204,6 +204,24 @@ class ScrollbarModelTest {
         }
     }
 
+    @Test fun travelThatWasNeverAppliedStaysOwedToTheDrag() {
+        val model = ScrollbarModel()
+        val grid = coldGrid(20000)
+        model.observe(grid.frame(0))
+        val drag = ScrollbarDrag()
+        drag.begin(model.fraction)
+        drag.move(.01f)
+        val first = drag.take(model.position, model.remaining)
+        // Blocked or stale: the step is dropped, and not accepted.
+        drag.move(.01f)
+        val second = drag.take(model.position, model.remaining)
+        assertTrue("Unapplied travel is still owed, plus the new travel: $first then $second", second > first * 1.9f)
+        drag.accept()
+        drag.move(.01f)
+        val third = drag.take(model.position, model.remaining)
+        assertEquals("Accepted travel is settled", first, third, first * .05f)
+    }
+
     @Test fun grabbingWithoutMovingNeverMovesTheList() {
         for ((name, grid) in lists() + mapOf("cold" to coldGrid(20000))) for (start in listOf(0, grid.maxScroll / 3, grid.maxScroll)) {
             val moved = drag(grid, start, List(20) { 0f })

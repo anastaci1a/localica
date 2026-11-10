@@ -60,9 +60,9 @@ internal fun ScrollbarSlots(state: Any, key: Any, movement: () -> Pair<Int, Int>
         fun thumb(): Float { val r = restingThumb(); return r + ScrollbarSpec.heldExtraLength(r, lengthCap) * motion.grip() }
         fun displayed() = if (dragging()) dragFraction() else (fraction() + motion.releaseOffset()).coerceIn(0f, 1f)
         fun position() = displayed().coerceIn(0f, 1f) * (track - thumb()).coerceAtLeast(0f)
-        // The visible thumb, at least the minimum touch length about its centre. Hidden: no target.
+        // The visible thumb (at least the opacity floor), at least the minimum touch length about its centre.
         fun hit(y: Float): Boolean {
-            if (motion.opacity() <= 0f) return false
+            if (motion.opacity() < ScrollbarSpec.hitOpacityFloor) return false
             val length = thumb()
             val reach = maxOf(length, touch) / 2f
             val centre = position() + length / 2f
@@ -108,16 +108,20 @@ internal fun ScrollbarSlots(state: Any, key: Any, movement: () -> Pair<Int, Int>
                     drawRoundRect(scrollbarColor(rest, held, motion.grip()), cornerRadius = CornerRadius(corner))
                 })
         }
-        // Only a drag reads the list position in composition; ordinary scrolling never recomposes the rail.
-        val preview = if (dragging()) previewFor() else null
-        if (preview != null) Surface(Modifier.align(Alignment.TopStart)
+        // The preview text is derived state: a drag reads the list position, but the rail recomposes only when
+        // the label itself changes, never on each movement frame.
+        val labelFor by rememberUpdatedState(previewFor)
+        val isDragging by rememberUpdatedState(dragging)
+        val preview by remember { derivedStateOf { if (isDragging()) labelFor() else null } }
+        val label = preview
+        if (label != null) Surface(Modifier.align(Alignment.TopStart)
             .scrollbarPresentation(motion, ::position).testTag("scroll-preview"),
             shape = RoundedCornerShape(ScrollbarSpec.previewRadius),
             color = MaterialTheme.colorScheme.primaryContainer) {
             Box(Modifier.defaultMinSize(ScrollbarSpec.previewMinimum,
                 ScrollbarSpec.previewMinimum).padding(ScrollbarSpec.previewPadding),
                 contentAlignment = Alignment.Center) {
-                Text(preview, style = MaterialTheme.typography.titleMedium)
+                Text(label, style = MaterialTheme.typography.titleMedium)
             }
         }
     }

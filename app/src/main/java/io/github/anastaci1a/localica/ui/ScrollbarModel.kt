@@ -178,8 +178,9 @@ internal class ScrollbarDrag {
     /** The finger-driven thumb fraction, read by placement and drawing. */
     var fraction by mutableFloatStateOf(0f); private set
     private var applied = 0f
+    private var taken = 0f
 
-    fun begin(fraction: Float) { this.fraction = fraction.coerceIn(0f, 1f); applied = this.fraction }
+    fun begin(fraction: Float) { this.fraction = fraction.coerceIn(0f, 1f); applied = this.fraction; taken = applied }
     fun move(delta: Float) { fraction = (fraction + delta).coerceIn(0f, 1f) }
 
     /** The list movement in pixels owed since the last call, from the model's current [position] and
@@ -188,13 +189,18 @@ internal class ScrollbarDrag {
     fun take(position: Float, remaining: Float): Float {
         val from = applied
         val to = fraction
-        applied = to
+        taken = to
         return when {
             to == from -> 0f
             to > from -> if (to >= 1f) Float.POSITIVE_INFINITY else (to - from) / (1f - from) * remaining
             else -> if (to <= 0f) Float.NEGATIVE_INFINITY else (to - from) / from * position
         }
     }
+
+    /** Marks the travel last returned by [take] as executed. Travel that is never applied (blocked input, a stale
+     * generation) stays owed, so the thumb and the list cannot drift apart.
+     */
+    fun accept() { applied = taken }
 }
 
 /** Resting and held geometry of the scrollbar thumb; the held thumb is a uniform scale of the resting one. */

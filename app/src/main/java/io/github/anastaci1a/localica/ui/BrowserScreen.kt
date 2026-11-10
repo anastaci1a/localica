@@ -1373,11 +1373,18 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val cornerControl = (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) &&
                 !route.search && (artDetail || playlists.playlists.any { it.id == route.collection?.id })) ||
                 (route.tab in setOf(MainTab.Library, MainTab.Playlists) && route.collection == null && !route.search)
+            // The back button moves with the list, so its bottom is read in the layout phase: the host never
+            // recomposes for it.
+            val scrollbarPill = if (showFilters || (showSearchPill && !artDetail)) pillSlotHeight else 0.dp
             if (loadedResult != null) BrowseScrollbar(gridState, result.items, displayedStyle.sort,
-                Modifier.align(Alignment.CenterEnd).padding(
-                    top = maxOf(if (showFilters || (showSearchPill && !artDetail)) pillSlotHeight else 0.dp,
-                        if (artDetail) with(density) { (collectionBackBottom - listViewportTop).coerceAtLeast(0f).toDp() } else 0.dp),
-                    bottom = obscuredInset + if (cornerControl) with(density) { actionControlHeight.toDp() } else 0.dp),
+                Modifier.align(Alignment.CenterEnd).padding(top = scrollbarPill,
+                    bottom = obscuredInset + if (cornerControl) with(density) { actionControlHeight.toDp() } else 0.dp)
+                    .layout { measurable, constraints ->
+                        val head = if (artDetail) (collectionBackBottom - listViewportTop - scrollbarPill.toPx())
+                            .coerceAtLeast(0f).roundToInt().coerceAtMost(constraints.maxHeight) else 0
+                        val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = constraints.maxHeight - head))
+                        layout(placeable.width, constraints.maxHeight) { placeable.place(0, head) }
+                    },
                 onUserScroll = ::userScroll)
             if (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search) {
                 val playlist = playlists.playlists.firstOrNull { it.id == route.collection?.id }

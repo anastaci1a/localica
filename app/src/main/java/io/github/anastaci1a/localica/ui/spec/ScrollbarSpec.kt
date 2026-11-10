@@ -27,6 +27,8 @@ internal object ScrollbarSpec {
     const val releaseMillis = 180
     const val fadeMillis = 220
     const val idleMillis = 1200
+    /** The thumb takes contact only while at least this visible; a fade-out tail below it passes touches to the list. */
+    const val hitOpacityFloor = .5f
 
     init {
         require(listOf(railWidth, hitWidth, minimumThumbHeight, thumbWidth, heldExtraWidth, heldMaxExtraLength,
@@ -35,6 +37,7 @@ internal object ScrollbarSpec {
         require(railWidth >= hitWidth && hitWidth >= thumbWidth + heldExtraWidth + edgeInset)
         require(previewMinimum >= previewPadding * 2 && maximumTrackShare > 0f && maximumTrackShare <= 1f)
         require(heldLengthShare.isFinite() && heldLengthShare >= 0f)
+        require(hitOpacityFloor > 0f && hitOpacityFloor <= 1f)
         require(gripMillis > 0f && releaseMillis > 0 && fadeMillis > 0 && idleMillis > 0)
     }
 

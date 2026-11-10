@@ -298,11 +298,15 @@ class ScrollbarBehaviourTest {
         assertAppearsThenFades("fling settle", flingFade, ScrollbarSpec.idleMillis.toLong() - 16)
     }
 
-    @Test fun relativeDragOverColdRowsMovesMonotonicallyAtOperatorScale() {
+    @Test fun relativeDragOverColdRowsMovesMonotonicallyAtOperatorScale() = coldDrag(20_000)
+
+    @Test fun relativeDragOverFiftyThousandColdRowsMovesMonotonically() = coldDrag(50_000)
+
+    private fun coldDrag(items: Int) {
         val runtime = Runtime.getRuntime()
         fun heap() = runtime.totalMemory() - runtime.freeMemory()
         fun gcs() = android.os.Debug.getRuntimeStat("art.gc.gc-count")?.toLongOrNull() ?: -1L
-        host(20_000, 120, cold = true)
+        host(items, 120, cold = true)
         val heapBefore = heap(); val gcBefore = gcs()
         compose.revealScrollbar(state)
         val start = position()
@@ -332,14 +336,29 @@ class ScrollbarBehaviourTest {
         compose.waitForIdle()
         val heapAfter = heap(); val gcAfter = gcs()
         fun key(p: Pair<Int, Int>) = p.first.toLong() * 1_000_000L + p.second
-        csv("cold-drag", "direction,index,offset", down.map { "down,${it.first},${it.second}" } + up.map { "up,${it.first},${it.second}" })
-        File(dir, "cold-drag-memory-api$api.txt").writeText("items=20000 heapBeforeBytes=$heapBefore heapAfterBytes=$heapAfter " +
+        csv("cold-drag-$items", "direction,index,offset", down.map { "down,${it.first},${it.second}" } + up.map { "up,${it.first},${it.second}" })
+        File(dir, "cold-drag-$items-memory-api$api.txt").writeText("items=$items "heapBeforeBytes=$heapBefore heapAfterBytes=$heapAfter " +
             "heapDeltaBytes=${heapAfter - heapBefore} gcBefore=$gcBefore gcAfter=$gcAfter gcDelta=${gcAfter - gcBefore} " +
             "maxHeapBytes=${runtime.maxMemory()}\n")
         assertTrue("Down drag never reverses: $down", down.zipWithNext().all { (a, b) -> key(b) >= key(a) })
         assertTrue("Down drag crossed cold rows: ${down.last()}", down.last().first > start.first + 100)
         assertTrue("Up drag never reverses: $up", up.zipWithNext().all { (a, b) -> key(b) <= key(a) })
         assertTrue("Up drag moved back", up.last().first < down.last().first)
+    }
+
+    @Test fun aFadeOutTailBelowTheVisibilityFloorPassesContactToTheList() {
+        host(2000, 64)
+        compose.revealScrollbar(state)
+        val y = compose.thumbGrabY()
+        // Well into the fade-out: the bar is faintly visible but below the hit floor.
+        compose.mainClock.advanceTimeBy(ScrollbarSpec.idleMillis + 90L)
+        val s = sample()
+        assertTrue("Tail is faint but not gone: ${opacity(s)}", opacity(s) in .01f..(ScrollbarSpec.hitOpacityFloor - .05f))
+        val before = position()
+        bar().performTouchInput { down(Offset(centerX, y)); moveBy(Offset(0f, -viewConfiguration.touchSlop * 6), delayMillis = 120); up() }
+        frames(8)
+        compose.mainClock.autoAdvance = true
+        assertNotEquals("A faint bar passes the contact to the list, which scrolled", before, position())
     }
 
     @Test fun trackStartsAndEndsAtTheHostBoundsPlusStandardPadding() {
