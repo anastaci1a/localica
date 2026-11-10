@@ -67,6 +67,8 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
                             stats = cached?.stats ?: withContext(Dispatchers.Default) { snapshot.accountStats() }
                             statsSnapshot = snapshot
                         }
+                        // Keep the last completed overview together while matching a replacement archive.
+                        if (matched.sourceSnapshot !== snapshot) return@collect
                         val cached = summaryState.value?.takeIf { it.username == snapshot.username && it.syncedAt == snapshot.syncedAt }
                         val counts = if (matched.sourceSnapshot === snapshot) LastFmDashboardCounts.from(matched) else cached?.counts
                         val prepared = LastFmSettingsSummary(snapshot.username, snapshot.syncedAt, requireNotNull(stats), counts)

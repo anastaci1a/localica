@@ -47,4 +47,25 @@ class LastFmSummaryCacheTest {
             withTimeout(5000) { persisted.first { it == null } }
         } finally { scope.cancel() }
     }
+    @Test fun replacementArchiveKeepsTheCompletedOverviewUntilItsMatchingIsReady() = runBlocking<Unit> {
+        val library = MutableSharedFlow<LibrarySnapshot>(replay = 1)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val archive = SavedLastFm("user", snapshot = LastFmSnapshot("user", 20,
+            listOf(LastFmTrack("Artist", "Song", 7)), localBaseline = emptyMap()))
+        val controller = LastFmController(object : LastFmStore {
+            override suspend fun readSummary() = cached
+            override suspend fun read() = archive
+            override suspend fun write(value: SavedLastFm) { }
+        }, LastFmSync(LastFmApi { _, _ -> error("Offline fixture") }), library, true, consent, scope)
+        try {
+            withTimeout(5000) { controller.state.first { !it.loading } }
+            assertNull(withTimeoutOrNull(200) { controller.summary.first { it?.syncedAt == 20L } })
+            assertEquals(cached, controller.summary.value)
+            library.emit(LibrarySnapshot())
+            val completed = withTimeout(5000) { controller.summary.filterNotNull().first { it.syncedAt == 20L } }
+            assertEquals(7L, completed.stats.scrobbles)
+            assertEquals(1, completed.counts?.absent)
+        } finally { scope.cancel() }
+    }
+
 }
