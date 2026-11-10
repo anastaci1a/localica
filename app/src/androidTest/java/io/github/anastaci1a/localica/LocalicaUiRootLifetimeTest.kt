@@ -62,7 +62,7 @@ class LocalicaUiRootLifetimeTest {
         witness.writeText("source\taccess\twidth\theight\tdensity\tnavigationInsetDp\tcontextTravel\texpectedTravel\tedgeIndex\tdiagonal\n")
         fun checkRecord(access: MotionAccess) {
             compose.onNodeWithText("Sibling root witness").assertIsDisplayed()
-            compose.runOnIdle {
+            val row = compose.runOnIdle {
                 val s = checkNotNull(screen); val d = checkNotNull(dialog)
                 assertSame(root, s.root); assertSame(s.root, d.root)
                 assertSame(s.context, d.context); assertSame(s.spec, d.spec)
@@ -77,10 +77,11 @@ class LocalicaUiRootLifetimeTest {
                 assertEquals(travel, geometry.referenceTravelPx, 0f)
                 assertEquals(maxOf(1f, kotlin.math.hypot(width.toFloat(), height.toFloat())), geometry.maxViewportDiagonalPx, 0f)
                 assertTrue(s.context.displayIntervalSeconds <= geometry.maxDisplayIntervalSeconds)
-                witness.appendText(listOf(BuildConfig.SOURCE_SHA, access, width, height, s.density.density,
+                listOf(BuildConfig.SOURCE_SHA, access, width, height, s.density.density,
                     s.navigationInset.value, s.context.fullPlayerReferenceTravelPx, travel, basis.edgeIndex,
-                    geometry.maxViewportDiagonalPx).joinToString("\t") + "\n")
+                    geometry.maxViewportDiagonalPx).joinToString("\t") + "\n"
             }
+            witness.appendText(row)
         }
         checkRecord(MotionAccess.Standard)
         val initial = checkNotNull(screen)
