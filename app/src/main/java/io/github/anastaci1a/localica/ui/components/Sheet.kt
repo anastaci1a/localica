@@ -8,6 +8,15 @@ import kotlinx.coroutines.flow.first
 
 @Stable interface SheetState { val expanded: Boolean; val expansion: ExpansionView; val contact: SheetContact; fun expand(); fun collapse() }
 @Stable interface SheetScope { val expanded: Boolean; val navigationInset: Dp }
+/** Optional lifecycle receipts for retained sheet content, independent of cleared semantics or drawing. */
+internal val LocalSheetContentObserver = staticCompositionLocalOf<((String, Boolean) -> Unit)?> { null }
+@Composable internal fun ObserveSheetContent(key: String) {
+    val observer = LocalSheetContentObserver.current ?: return
+    DisposableEffect(key, observer) {
+        observer(key, true)
+        onDispose { observer(key, false) }
+    }
+}
 /** Owner-created contact intents: edge displacement since contact start and release velocity, px and px/s toward expansion. */
 @Stable class SheetContact internal constructor(val onDragStart: () -> Boolean, val onDrag: (Float) -> Unit,
     val onRelease: (Float) -> ReleaseDecision, val onDragCancel: () -> Unit)
