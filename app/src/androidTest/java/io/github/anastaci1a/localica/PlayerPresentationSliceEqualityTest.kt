@@ -74,14 +74,16 @@ class PlayerPresentationSliceEqualityTest {
             val bottom = WindowInsets.safeDrawing.getBottom(actualDensity)
             SideEffect { density = actualDensity; insetTop = top; insetBottom = bottom }
             val backdrop = rememberFrostedBackdrop(Unit, enabled = false, dark = true, lightMix = 1f, retainRaster = false)
-            CompositionLocalProvider(LocalFrostedBackdrop provides backdrop, LocalReducedMotion provides reduced) {
+            val appearance = GlassAppearance(renderer = GlassRendererMode.None)
+            CompositionLocalProvider(LocalFrostedBackdrop provides backdrop, LocalReducedMotion provides reduced,
+                LocalGlassAppearance provides appearance) {
                 Box(Modifier.fillMaxSize().background(navy).safeDrawingPadding()) {
                     BoxWithConstraints(Modifier.fillMaxSize().testTag("slice-i-capture")
                         .onGloballyPositioned { rootSize = it.findRootCoordinates().size }) {
                         scope = rememberCoroutineScope()
                         PlayerSurface(PlaybackState(connected = true, title = "Evening", artist = "Artist", durationMs = 120000),
                             true, {}, InterfaceSettings(reducedMotion = reduced, fasterMotion = faster, artworkLayout = layout,
-                                glass = GlassAppearance(renderer = GlassRendererMode.None)),
+                                glass = appearance),
                             progress, {}, {}, {}, {}, {}, {}, lyricsOpen = lyrics, visual = visual) {
                             val clock = LocalUiClock.current
                             val rootClock = LocalClockOwner.current
