@@ -457,3 +457,4 @@ io.github.anastaci1a.localica.TagBatchControllerTest
 io.github.anastaci1a.localica.TagBatchTransactionTest
 io.github.anastaci1a.localica.TagSaveProgressPopupTest
 io.github.anastaci1a.localica.QueueLibraryHeapTest
+io.github.anastaci1a.localica.QueueRestoreEquivalenceTest
