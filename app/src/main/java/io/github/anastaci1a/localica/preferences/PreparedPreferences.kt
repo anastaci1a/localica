@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +43,8 @@ class PreparedPreferences(context: Context, scope: CoroutineScope, names: List<S
             scope.launch(start = CoroutineStart.LAZY) {
                 previous?.join()
                 awaitReady()
+                // Child completion can resume a successor inline while parent cancellation visits its children.
+                scope.ensureActive()
                 action()
             }.also { entryTails[scope] = it }
         }

@@ -133,6 +133,48 @@ class PreparedPreferencesTest {
     }
 
 
+    @Test fun callerCancellationRejectsInlineSuccessorsAfterReadiness() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<LocalicaApplication>()
+        app.preferences.awaitReady()
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val pending = java.util.concurrent.ConcurrentLinkedQueue<Runnable>()
+        val inline = java.util.concurrent.atomic.AtomicBoolean(true)
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun isDispatchNeeded(context: kotlin.coroutines.CoroutineContext) = !inline.get()
+            override fun dispatch(context: kotlin.coroutines.CoroutineContext, block: Runnable) { pending.add(block) }
+        }
+        val entryScope = CoroutineScope(SupervisorJob() + dispatcher)
+        val context = object : ContextWrapper(app) {
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
+                entered.countDown()
+                check(release.await(10, TimeUnit.SECONDS))
+                return super.getSharedPreferences(name, mode)
+            }
+        }
+        val owner = PreparedPreferences(context, preparationScope)
+        val events = mutableListOf<String>()
+        try {
+            withContext(Dispatchers.IO) { check(entered.await(10, TimeUnit.SECONDS)) }
+            val jobs = listOf("attach", "play", "pause").map { event ->
+                owner.launchWhenReady(entryScope) { events += event }
+            }
+            inline.set(false)
+            release.countDown()
+            withTimeout(10_000) { owner.awaitReady() }
+            withTimeout(10_000) { while (pending.isEmpty()) delay(1) }
+            inline.set(true)
+            // Cancelling the first child can resume its joining successor inline before cancellation reaches it.
+            entryScope.cancel()
+            while (true) { val continuation = pending.poll() ?: break; continuation.run() }
+            withTimeout(10_000) { jobs.joinAll() }
+            assertTrue(owner.ready.value)
+            assertEquals(emptyList<String>(), events)
+        } finally { release.countDown(); entryScope.cancel(); preparationScope.cancel() }
+    }
+
+
     @Test fun isolatedPreparedContextRetainsItsStoreEditorAndDirectoryAcrossThemeWrappers() = runBlocking {
         val app = ApplicationProvider.getApplicationContext<LocalicaApplication>()
         app.preferences.awaitReady()
