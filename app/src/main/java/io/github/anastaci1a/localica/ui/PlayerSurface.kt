@@ -46,6 +46,9 @@ import io.github.anastaci1a.localica.ui.components.rememberExpansionRest
 import io.github.anastaci1a.localica.ui.components.PlayerReveal
 import io.github.anastaci1a.localica.ui.components.rememberPresence
 import io.github.anastaci1a.localica.ui.components.rememberProfileValue
+import io.github.anastaci1a.localica.ui.components.rememberPlayerPresentation
+import io.github.anastaci1a.localica.ui.layout.PlayerHandlePresentation
+import io.github.anastaci1a.localica.ui.layout.PlayerActionsPresentation
 import io.github.anastaci1a.localica.ui.engine.ExpansionBasis
 import io.github.anastaci1a.localica.ui.spec.MotionProfile
 import io.github.anastaci1a.localica.navigation.*
@@ -117,6 +120,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val palette = animatedPlayerPalette(paletteTarget, blendClock).copy(aspect = aspect)
     // U10.03: the lyrics layout is one expand/collapse owner on the #608 law over the title's travel (basis bound below).
     val lyricsPresence = rememberPresence("player-lyrics", lyricsOpen)
+    val presentation = rememberPlayerPresentation(sheet.expansion, lyricsPresence.view)
     val lyricVisibility = lyricsPresence.view.phase.value()
     val lyricsRest by rememberExpansionRest(lyricsPresence.view)
     val lyricsSettled = lyricsRest == if (lyricsOpen) ExpansionRest.Open else ExpansionRest.Closed
@@ -141,9 +145,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // immediately, including the fully expanded endpoint before onExpanded changes.
     val lyricMotion = playerLyricsMotion(p, lyricVisibility)
     val lyricProgress = lyricMotion.layout
-    // Match the panel's placement, including the outgoing half of a cross-fade.
-    // Drawing order must not let the invisible cover shield presented lyrics.
-    val lyricsInteractive = lyricMotion.contentAlpha > 0f
     val settledBackground = if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f
     val backgroundView = rememberProfileValue("player-background", settledBackground, MotionProfile.ArtworkLayout)
     val backgroundProgress = backgroundView.value()
@@ -309,7 +310,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val seekY = metadataY + 64.dp + rowMotion.seekOffset.dp
     val actionsY = ordinarySeekY + 128.dp + 32.dp * lyricVisibility + rowMotion.actionsOffset.dp
     val backgroundReveal = PlayerReveal.Background.at(p)
-    val handleReveal = PlayerReveal.Handle.at(p)
     val glassFrost = PlayerReveal.Frost.at(p)
     val deviceCorners = rememberDeviceCorners()
     val surfaceFrame = playerSurfaceFrame(maxWidth, maxHeight, navigationInset, bottomChrome, p, deviceCorners)
@@ -330,7 +330,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val playerRest by rememberExpansionRest(sheet.expansion)
     val queueClosed by rememberExpansionClosed(queue?.expansion)
     val restingOpen = expanded && playerRest == ExpansionRest.Open && queueClosed
-    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork, artPixels, restingOpen && !lyricsInteractive, settings, onArtworkVisit)
+    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork, artPixels, presentation.sampling.artworkInputEnabled(restingOpen), settings, onArtworkVisit)
     val swipeOffset = artSwipe.offset.value
     val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)
     val swipeFeather = if (settings.artworkLayout == ArtworkLayout.FullBackground)
@@ -395,10 +395,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // #634: keep the current song's full-player backdrop prepared while minimized. The settled ordinary
     // geometry is retained when the full player rests; a cover of another shape, or a process that has not
     // shown the full player yet, uses the same layout rules at their settled values.
-    if (backgroundGeometry != null && playerRest == ExpansionRest.Open && backgroundReveal >= 1f && !artSwipe.active && swipeOffset == 0f &&
-        lyricsSettled && !lyricsOpen && queueClosed && backgroundView.settled && backgroundView.target == settledBackground &&
-        aspect == artwork.palette.aspect && cropView.settled && cropView.target == cropTarget)
-        SideEffect { polarity.settledEndpoint = backgroundGeometry }
+    presentation.sampling.RetainEndpoint(backgroundGeometry, playerRest == ExpansionRest.Open, artSwipe.active, swipeOffset,
+        lyricsSettled, lyricsOpen, queueClosed, backgroundView, settledBackground, aspect, artwork.palette.aspect,
+        cropView, cropTarget) { polarity.settledEndpoint = it }
     val retainedEndpoint = polarity.settledEndpoint
     val artistStyle = MaterialTheme.typography.bodyLarge
     val seekLabelStyle = MaterialTheme.typography.labelSmall
@@ -443,7 +442,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p,
-            noneAtlasInput = noneAtlasInput.takeIf { p == 0f })
+            noneAtlasInput = presentation.sampling.collapsedMaterial(noneAtlasInput))
         Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > this@PlayerSurface.maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
             .onGloballyPositioned { polarity.measure("background", it) }
@@ -544,7 +543,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 cover(frame, swipeOffset)
                 if (destination != null) cover(destination.visual, swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels, neighbor = true)
             }
-            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).glassShadowOpacity { handleReveal }) {
+            PlayerHandlePresentation(presentation, statusInset, shadowOpacity = { opacity -> Modifier.glassShadowOpacity(opacity) }) {
                 Box(Modifier.align(Alignment.TopCenter).size(96.dp, 48.dp)
                     .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { onExpanded(false) }
                     .semantics { contentDescription = "Player handle" }) {
@@ -615,9 +614,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     cancelTarget = { scrubCancel.bounds },
                     onDrag = { active, hovered -> scrubCancel.update(active, hovered); scrubOverCancel = active && hovered })
             }
-            if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)
-                .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").onGloballyPositioned { polarity.measure("actions", it) }.graphicsLayer { alpha = rowMotion.actionsAlpha }
-                .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
+            PlayerActionsPresentation(presentation, contentInset, actionsY, contentWidth, actionRows,
+                Modifier.testTag("player-actions-row").onGloballyPositioned { polarity.measure("actions", it) },
+                if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier) { actions() }
             Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - transportWidth) / 2) * transportMotion,
                 y = transportY).testTag("player-transport-row").onGloballyPositioned { polarity.measure("transport", it) },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((transportWidth - 160.dp) / 2 * transportMotion)) {
