@@ -113,7 +113,8 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
         val attached: Boolean, val bounds: Rect, val originX: Int, val originY: Int,
         val localReduced: Boolean, val engineAccess: String, val specAccess: String, val clockAccess: String?, val clockSpecAccess: String?,
         val density: Float, val fontScale: Float, val direction: String,
-        val surfaceBounds: Rect?, val insets: List<Int>, val sequence: Long?, val nanos: Long?, val viewIdentity: Int?, val tokenIdentity: Int?, val blocked: Boolean)
+        val surfaceBounds: Rect?, val insets: List<Int>, val sequence: Long?, val nanos: Long?, val clockIdentity: Int?,
+        val viewIdentity: Int?, val tokenIdentity: Int?, val blocked: Boolean)
 
     private fun snapshot(): List<State> = rule.runOnUiThread {
         probes.map { p ->
@@ -130,6 +131,7 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
                 p.surface?.boundsInRoot,
                 listOf(insets?.left ?: 0, insets?.top ?: 0, insets?.right ?: 0, insets?.bottom ?: 0),
                 p.clock?.presentedStamp?.sequence, p.clock?.presentedStamp?.nanos,
+                p.clock?.let(System::identityHashCode),
                 view?.let(System::identityHashCode), view?.windowToken?.let(System::identityHashCode), p.gateBlocked)
         }
     }
@@ -173,7 +175,9 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
             .put("policyIntent", intendedPolicy()).put("intentAssignment", point.policyIntent ?: JSONObject.NULL)
             .put("relativeClockMs", rule.mainClock.currentTime - initialClock)
         val owners = JSONArray()
+        val rootClock = before.first { it.probe.role == "root" }.clockIdentity
         for (state in before.filter { it.attached }) {
+            check(rootClock != null && state.clockIdentity == rootClock) { "A subtree replaced the actual root UiClock" }
             check(state.density > 0f && state.fontScale == 1f && state.direction == "Ltr") { "Unexpected actual window profile" }
             val access = if (state.localReduced) "Reduced" else "Standard"
             check(listOf(state.engineAccess, state.specAccess, state.clockAccess, state.clockSpecAccess).all { it == access }) {
@@ -193,6 +197,7 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
                 .put("direction", state.direction).put("systemInsets", JSONArray(state.insets))
                 .put("engineSequence", state.sequence ?: JSONObject.NULL)
                 .put("engineNanos", state.nanos ?: JSONObject.NULL).put("viewIdentity", state.viewIdentity ?: JSONObject.NULL)
+                .put("clockIdentity", state.clockIdentity ?: JSONObject.NULL)
                 .put("tokenIdentity", state.tokenIdentity ?: JSONObject.NULL).put("blockedProducer", state.blocked)
             if (state.attached && state.window != null && state.view != null && !state.blocked) {
                 val view = state.view
