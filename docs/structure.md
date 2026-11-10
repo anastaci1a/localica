@@ -46,7 +46,11 @@ Typed stacks and valid saved state retain route identity and positions. Shared w
 
 Room entries have independent occurrence IDs and shared track snapshots. Controllers serialize transactions. Cursor-only updates avoid rewriting entries or unchanged saved order, and unchanged visit/selection/position captures retain their queue objects without rebuilding occurrence IDs. Visit history and planned cycle membership use separate typed rows, with incremental inserts and updates that reuse prepared statements.
 
-Ordered traversal persists a namespace and real anchor token to keep projected neighbors stable after restore or history removal without inventing visits. Playlist imports cap input at 5 MiB and retain at most 20,000 entries while consuming lines, then commit after review. Preserve released migrations, IDs, references, grants and settings. Missing snapshot fields remain unknown.
+Ordered traversal persists a namespace and real anchor token to keep projected neighbors stable after restore or history removal without inventing visits. A shuffle traversal begun by turning Shuffle on persists one plan row under a reserved cycle key holding the queue-order neighbor of its oldest visit, whatever the queue size.
+
+That row is refreshed against the live queue on every plan, joins the native window as an unplayed visit with a derived token, and becomes real history only on arrival.
+
+Playlist imports cap input at 5 MiB and retain at most 20,000 entries while consuming lines, then commit after review. Preserve released migrations, IDs, references, grants and settings. Missing snapshot fields remain unknown.
 
 ### Playback
 
