@@ -27,12 +27,12 @@ pattern = (r'TestRunner[^:]*:\s*started:' if args.mode == 'started' else
            r'TestRunner[^:]*:\s*failed:\s*a_deliberateProductAssertion')
 with (root / 'fault-driver.log').open('w') as errors:
     stream = subprocess.Popen(['adb', '-s', serial, 'logcat', '-v', 'brief', '-s', 'TestRunner:I', '*:S'],
-                              stdout=subprocess.PIPE, stderr=errors, text=True)
+                              stdout=subprocess.PIPE, stderr=errors, bufsize=0)
     try:
         while stream.poll() is None and time.monotonic() - started < 300:
             if not select.select([stream.stdout], [], [], 1)[0]:
                 continue
-            line = stream.stdout.readline()
+            line = stream.stdout.readline().decode("utf-8", errors="replace")
             if not re.search(pattern, line):
                 continue
             record['witness'] = line.strip()

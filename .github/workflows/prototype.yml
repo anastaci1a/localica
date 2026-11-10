@@ -478,6 +478,9 @@ jobs:
           python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           python3 .github/recovery-fault-proof.py --mode started & python3 .github/prototype-health.py
+    - name: Require the deliberate qualification fault receipt
+      if: ${{ !cancelled() }}
+      run: python3 -c 'import json; assert json.load(open("ci-infrastructure/fault-injection.json"))["injected"] is True'
     - name: Preserve lost-emulator attempt and authorize one fresh boot
       id: emulator-recovery
       if: ${{ !cancelled() && steps.emulator-first.outcome == 'failure' }}
