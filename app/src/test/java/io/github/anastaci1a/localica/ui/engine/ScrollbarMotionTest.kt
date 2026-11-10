@@ -111,4 +111,57 @@ class ScrollbarMotionTest {
             assertThrows(IllegalStateException::class.java) { motion.reveal() }
         }
     }
+    @Test fun repeatedPresentedReadsAllocateNoScalarObjectsAfterIntentWarmup() {
+        EngineHarness().use { h ->
+            val motion = ScrollbarMotion(h.clock)
+            motion.reveal(); motion.release(.3f); motion.contact(true, 1f)
+            h.advance(.016); h.advance(.064)
+            val api = Class.forName("com.sun.management.ThreadMXBean")
+            val bean = Class.forName("java.lang.management.ManagementFactory").getMethod("getThreadMXBean").invoke(null)
+            api.getMethod("setThreadAllocatedMemoryEnabled", Boolean::class.javaPrimitiveType).invoke(bean, true)
+            val allocated = api.getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
+            var total = 0f
+            repeat(100_000) { total += motion.opacity() + motion.scale() + motion.releaseOffset() }
+            val thread = Thread.currentThread().id
+            val before = allocated.invoke(bean, thread) as Long
+            repeat(1_000_000) { total += motion.opacity() + motion.scale() + motion.releaseOffset() }
+            val bytes = (allocated.invoke(bean, thread) as Long) - before
+            println("Scrollbar scalar reads: 3000000 reads, $bytes allocated bytes including measurement overhead")
+            assertTrue(total.isFinite())
+            assertTrue("Scalar reads allocated $bytes bytes", bytes <= 1024)
+            motion.dispose()
+        }
+    }
+
+    @Test fun delayAndDurationEndpointsKeepTheExactIncomingFloatBits() {
+        EngineHarness().use { h ->
+            val motion = ScrollbarMotion(h.clock)
+            val incoming = TargetBasedAnimation(tween<Float>(220, 1200), Float.VectorConverter, 1f, 0f)
+            motion.reveal()
+            h.advance(.016)
+            var last = 0L
+            for (nanos in listOf(0L, 1L, 1_199_999_999L, 1_200_000_000L, 1_200_000_001L,
+                1_419_999_999L, 1_420_000_000L, 1_420_000_001L)) {
+                if (nanos > last) h.advance((nanos - last) / 1e9)
+                assertEquals("fade bits at $nanos", incoming.getValueFromNanos(nanos).toRawBits(),
+                    motion.opacity().toRawBits())
+                last = nanos
+            }
+            assertEquals(0, h.clock.activeCount)
+        }
+        for (gap in listOf(-.3f, 0f, .3f)) EngineHarness().use { h ->
+            val motion = ScrollbarMotion(h.clock)
+            val incoming = TargetBasedAnimation(tween<Float>(180), Float.VectorConverter, gap, 0f)
+            motion.release(gap)
+            h.advance(.016)
+            var last = 0L
+            for (nanos in listOf(0L, 1L, 179_999_999L, 180_000_000L, 180_000_001L)) {
+                if (nanos > last) h.advance((nanos - last) / 1e9)
+                assertEquals("release bits $gap at $nanos", incoming.getValueFromNanos(nanos).toRawBits(),
+                    motion.releaseOffset().toRawBits())
+                last = nanos
+            }
+            assertEquals(0, h.clock.activeCount)
+        }
+    }
 }

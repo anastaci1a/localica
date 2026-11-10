@@ -3,7 +3,8 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.VectorizedTweenSpec
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
@@ -18,7 +19,11 @@ import io.github.anastaci1a.localica.ui.spec.ScrollbarSpec
  */
 internal class ScrollbarTween(private val clock: UiClock, initial: Float) : ActiveMotion {
     private var resting by mutableFloatStateOf(initial)
-    private var animation by mutableStateOf<TargetBasedAnimation<Float, androidx.compose.animation.core.AnimationVector1D>?>(null)
+    private var animation by mutableStateOf<VectorizedTweenSpec<AnimationVector1D>?>(null)
+    private var initialVector = AnimationVector1D(initial)
+    private var targetVector = AnimationVector1D(initial)
+    private var velocityVector = AnimationVector1D(0f)
+    private var durationNanos = 0L
     private var awaiting by mutableStateOf(false)
     private var started = clock.stampNow
     private var disposed = false
@@ -32,9 +37,11 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
     fun value(): Float {
         presented = true
         val active = animation ?: return resting
-        return active.getValueFromNanos(elapsed(clock.stamp))
+        val elapsed = elapsed(clock.stamp)
+        return if (elapsed >= durationNanos) target else
+            active.getValueFromNanos(elapsed, initialVector, targetVector, velocityVector).value
     }
-    private fun velocity(): Float = animation?.getVelocityVectorFromNanos(elapsed(clock.stamp))?.value ?: 0f
+    private fun velocity(): Float = animation?.getVelocityFromNanos(elapsed(clock.stamp), initialVector, targetVector, velocityVector)?.value ?: 0f
     fun start(from: Float, to: Float, duration: Int, delay: Int = 0,
         easing: Easing = FastOutSlowInEasing, sequential: Boolean = false, reduced: Boolean = false) {
         clock.checkMutation()
@@ -47,12 +54,20 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
             cancel(to)
             return
         }
-        animation = TargetBasedAnimation(tween(duration, delay, easing), Float.VectorConverter, from, to, velocity)
+        val evaluator = tween<Float>(duration, delay, easing).vectorize(Float.VectorConverter)
+        initialVector = AnimationVector1D(from)
+        targetVector = AnimationVector1D(to)
+        velocityVector = AnimationVector1D(velocity)
+        durationNanos = evaluator.getDurationNanos(initialVector, targetVector, velocityVector)
+        // Warm the evaluator's reusable result vectors at intent time, never on a presented read.
+        evaluator.getValueFromNanos(0L, initialVector, targetVector, velocityVector)
+        evaluator.getVelocityFromNanos(0L, initialVector, targetVector, velocityVector)
+        animation = evaluator
         awaiting = !sequential || !running
         started = clock.stamp
         clock.register(this)
     }
-    override fun endsAt(stamp: FrameStamp) = awaiting || animation?.isFinishedFromNanos(elapsed(stamp)) == true
+    override fun endsAt(stamp: FrameStamp) = awaiting || animation != null && elapsed(stamp) >= durationNanos
     override fun finish(stamp: FrameStamp) {
         clock.checkMutation()
         if (awaiting) {
@@ -135,7 +150,7 @@ internal fun rememberScrollbarMotion(key: Any, movement: () -> Pair<Int, Int>, a
     val latestMovement by rememberUpdatedState(movement)
     val latestActivity by rememberUpdatedState(activity)
     SideEffect { owner.access(reduced); owner.contact(held, speed) }
-    LaunchedEffect(key) {
+    LaunchedEffect(owner, key) {
         snapshotFlow { latestMovement() to latestActivity() }.collect { owner.reveal() }
     }
     DisposableEffect(owner) { onDispose { owner.dispose() } }
