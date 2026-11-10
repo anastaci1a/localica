@@ -22,6 +22,7 @@ class LocalicaApplication : Application() {
             "library-query", "library-filters", "pins", "player-actions", "tag-jobs", "cover-images", "listening-identity")
     }
     override fun onCreate() {
+        if (BuildConfig.DEBUG) io.github.anastaci1a.localica.threading.MainThreadPolicy.install()
         super.onCreate()
         io.github.anastaci1a.localica.diagnostics.Diagnostics.mirrorToLogcat =
             applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0

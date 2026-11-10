@@ -38,6 +38,8 @@ class NavigationRandomOwnedSession : AndroidJUnitRunner() {
     private val resumed = mutableSetOf<Activity>()
 
     override fun callApplicationOnCreate(app: Application) {
+        // Enforce this even when instrumentation targets a non-debuggable build.
+        io.github.anastaci1a.localica.threading.MainThreadPolicy.install()
         if (residentMode) app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) { resumed += activity }
             override fun onActivityPaused(activity: Activity) { resumed -= activity }
