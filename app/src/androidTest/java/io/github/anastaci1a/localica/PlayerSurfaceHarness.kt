@@ -89,6 +89,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     CompositionLocalProvider(
         LocalEngineContext provides EngineContext(1f / 60, currentTravel, spec.spec.access),
         io.github.anastaci1a.localica.ui.spec.LocalUiSpec provides spec) {
+    LocalPlayerPresentationHarnessProbe.current?.invoke()
     ProductionPlayerSurface(state, expanded, onExpanded, settings, sheet, onToggle, onSeek, onPrevious, onNext,
         onQueue, onLibrary, lyricsOpen, onLyrics, track, onSettings, actionRows, queueProgress?.let { rememberAnimatableQueueSheet(it, settings) }, frostedBackdrop, glassBackdrop, null, visual,
         artworkVisit, previousArtwork, nextArtwork, onArtworkVisit, bottomChrome, miniForeground, onSeekRequest, sampleState,
