@@ -77,4 +77,36 @@ class PreparedLyricsSelectionTest {
             withContext(Dispatchers.IO) { check(preferences.edit().remove(first.id).remove(second.id).commit()) }
         }
     }
+
+    @Test fun restorationAfterPlaybackChangedTracksDoesNotRestoreTheOldTracksMigration() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<LocalicaApplication>()
+        app.preferences.awaitReady()
+        val preferences = app.preferences.require("lyric-sources")
+        val first = Track("prepared-restore-first", "First", fileName = "first.mp3", relativePath = "first.mp3")
+        val second = first.copy(id = "prepared-restore-second", uri = "file:///second.mp3")
+        val sources = listOf(LyricSource("fallback", "Fallback", LrcParser.parse("Fallback text")),
+            LyricSource("saved", "Saved", LrcParser.parse("[00:00.00]Saved text")))
+        withContext(Dispatchers.IO) {
+            check(preferences.edit().putString(first.id, "saved:plain").putString(second.id, "fallback").commit())
+        }
+        // A plain captured value does not recompose the old owner before the save/dispose boundary.
+        var playbackChangedWhileAbsent = false
+        val restoration = StateRestorationTester(compose)
+        try {
+            restoration.setContent { LocalicaTheme {
+                LyricsPanel(if (playbackChangedWhileAbsent) second else first, 0, true, {},
+                    Modifier.fillMaxWidth().height(360.dp), result = LyricsResult(sources))
+            } }
+            compose.onNodeWithText("Saved text").assertIsDisplayed()
+            compose.runOnIdle { playbackChangedWhileAbsent = true }
+            restoration.emulateSavedInstanceStateRestore()
+            compose.onNodeWithText("Fallback text").assertIsDisplayed()
+            compose.onAllNodesWithText("Saved text").assertCountEquals(0)
+            assertEquals("fallback", preferences.getString(second.id, null))
+            assertEquals("saved", preferences.getString(first.id, null))
+        } finally {
+            withContext(Dispatchers.IO) { check(preferences.edit().remove(first.id).remove(second.id).commit()) }
+        }
+    }
+
 }

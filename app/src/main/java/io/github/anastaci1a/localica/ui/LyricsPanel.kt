@@ -78,8 +78,10 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
     }
     val context = LocalContext.current
     val preferences = remember { io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "lyric-sources") }
-    var chosen by rememberSaveable(track?.id) { mutableStateOf(preferences.getString(track?.id ?: "", null)) }
-    LaunchedEffect(result, chosen) {
+    // The composition key also namespaces restored state. rememberSaveable inputs alone do not
+    // validate a restored value when playback changed tracks while this owner was absent.
+    var chosen by key(track?.id) { rememberSaveable { mutableStateOf(preferences.getString(track?.id ?: "", null)) } }
+    LaunchedEffect(track?.id, result, chosen) {
         val legacy = chosen?.takeIf { it.endsWith(":plain") } ?: return@LaunchedEffect
         val original = legacy.removeSuffix(":plain")
         if (result?.sources?.any { it.id == original && it.document.synced } == true) {
