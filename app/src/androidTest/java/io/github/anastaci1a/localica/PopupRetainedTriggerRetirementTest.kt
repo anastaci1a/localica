@@ -95,13 +95,14 @@ class PopupRetainedTriggerRetirementTest {
         val triggerDraws = AtomicInteger()
         var rootPolicy: (() -> Policy)? = null
         var popupPolicy: (() -> Policy)? = null
-        compose.setContent { LocalicaTheme {
+        compose.setContent {
             val density = LocalDensity.current
             val settings = remember { InterfaceSettings(reducedMotion = reduced, fasterMotion = speed == 2f) }
             val spec = remember(density, settings) { uiSpec(settings, ExpansionGeometryDomain(1000f, 3000f, 1f / 60), density) }
             val context = remember(spec) { EngineContext(1f / 60, 1000f, spec.spec.access) }
             CompositionLocalProvider(LocalEngineContext provides context, LocalUiSpec provides spec,
                 LocalReducedMotion provides reduced, LocalMotionSpeed provides speed) {
+            LocalicaTheme {
                 ObservePolicy { rootPolicy = it }
                 val backdrop = rememberFrostedBackdrop(Unit, dark = false, lightMix = 0f)
                 CompositionLocalProvider(LocalFrostedBackdrop provides backdrop, LocalModalBackdrop provides backdrop) {
