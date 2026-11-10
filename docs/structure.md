@@ -15,6 +15,9 @@ Paths below are under `app/src/main/java/io/github/anastaci1a/localica/`.
 | `artist`, `artistphoto`, `lastfm`, `network` | Artist projections, photo providers/cache, read-only statistics sync and shared online consent. |
 | `navigation`, `home` | Restorable typed routes/preferences; typed pins and manual order. |
 | `ui` | Compose views, lifecycle-aware state, gestures and reusable materials. |
+| `ui.spec`, `ui.layout.menu`, `ui.menu`, `ui.pages` | The menu system (#757): admitted menu tokens; the declaration model, admission, dispatcher, flattening, geometry slots and scaffold; the binder to live controls; page declarations. |
+
+Menu pages are plain data. A page is a function from state to a `PageDraft`, built with the `page { }` builder in `ui.pages` without Compose UI imports. `AcceptedPage.admit` is the only way a draft becomes content: it checks keys, counts and structure and rejects the whole page instead of repairing it. Content holds no callbacks; events go through `MenuDispatcher` to the callback of the current declaration, so an equal rebuild recomposes no row. Record lists reach a page as a `RecordSnapshot`, a versioned handle over a `RecordSource` that the data layer owns; the menu copies nothing and builds no index, so its memory does not grow with the list. `MenuSpec` tokens are admitted against the base `UiSpec`; the page inset and the stream edges share one paint envelope that widens to the shadow clearance. `app/config/menu-host-policy.txt` lists the files that may opt into `MenuInternal`. Until the first page migrates, only the debug-only specimen activity uses the system.
 
 `app/src/test` holds fast behavior tests. `app/src/androidTest` covers real Android storage, UI and playback. Source code owns schema numbers, dependency versions, cache sizes and other tunable constants. Docs retain their constraints and rationale.
 

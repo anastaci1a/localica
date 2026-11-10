@@ -195,6 +195,8 @@ Blur, texture and the artwork continuation remain unchanged.
 
 ### Settings controls
 
+Pages built on the menu system (#757) get their geometry from one scaffold and its slots: one start for row text, one leading box for icons and markers, one gap between neighbouring items from the adjacency table, and one text emitter with a role table. Page code supplies content only. No shipped page uses it yet; the debug build has a specimen page (`MenuSpecimenActivity`) that shows every row and popup kind.
+
 Use equally sized inline segments for two or three choices when measured labels fit. Longer lists stage a draft until Select. Cancel discards it. An enclosing editor retains its separate Save action.
 
 Sliders expose a label, value, endpoints and accessible range. Horizontal values run from logical leading minimum to trailing maximum, including right-to-left layouts. Vertical ranges run from bottom minimum to top maximum.

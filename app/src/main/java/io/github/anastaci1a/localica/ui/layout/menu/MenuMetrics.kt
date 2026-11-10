@@ -104,7 +104,7 @@ fun Modifier.menuPart(part: MenuPart) = semantics { this[MenuPartKey] = part }
     val type = LocalMenuEnvironment.current.metrics.spec.type(role)
     val family = MaterialTheme.typography.bodyLarge.fontFamily
     return remember(type, family) { TextStyle(fontFamily = family, fontSize = type.size.sp.sp, lineHeight = type.size.lineSp.sp,
-        fontWeight = FontWeight(type.weight.value), letterSpacing = 0.sp) }
+        fontWeight = FontWeight(type.weight.value), letterSpacing = type.size.trackingSp.sp) }
 }
 
 /** The one text emitter of the menu system. Nothing else in menu code calls `Text` or names a text style. */
