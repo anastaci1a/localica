@@ -56,7 +56,7 @@ class PopupChromeDepthTest {
         val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
             destination.replace(' ', '-')).apply { mkdirs() }
         val samples = JSONArray()
-        val report = JSONObject().put("source", BuildConfig.SOURCE_SHA).put("destination", destination)
+        val report = JSONObject().put("sourceBinding", "prototype-evidence/context.txt + test-input-apks.sha256").put("destination", destination)
             .put("samples", samples).put("status", "preparing").put("captureOrder", "popup-before-activity")
             .put("comparison", "Original activity and overflow buffers, SrcOver in source space; destination excluded; neutral black scrim only")
         fun save() { File(output, "frames.json").writeText(report.toString(2)) }
