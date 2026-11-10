@@ -98,7 +98,8 @@ class FlatNoneRealAppTest {
             throw failure
         } finally {
             instrumentation.runOnMainSync { io.github.anastaci1a.localica.ui.GlassWork.observer = null }
-            var retired = playback == null
+            var retired = false
+            val retirement = org.json.JSONObject().put("fixture", file.path)
             val cleanupFailure = runCatching { playback?.let { connection ->
                 try {
                     instrumentation.runOnMainSync { connection.clear() }
@@ -106,6 +107,18 @@ class FlatNoneRealAppTest {
                     // the live metadata then proves the native timeline is empty.
                     await(15000) { connection.queues.state.value.library.activeId == null &&
                         connection.state.value.trackUri == null && connection.state.value.problem == null }
+                    val ownedQueues = connection.queues.state.value.library.queues.filter { queue ->
+                        queue.entries.isNotEmpty() && queue.entries.all { it.track.id == root }
+                    }.map { it.id }.toSet()
+                    instrumentation.runOnMainSync { connection.queues.removeQueues(ownedQueues) }
+                    await(15000) { connection.queues.state.value.library.queues.none { it.id in ownedQueues } }
+                    assertFalse("No retained queue may reference the fixture being deleted",
+                        connection.queues.state.value.library.queues.any { queue -> queue.entries.any { it.track.id == root } })
+                    retirement.put("durableActiveEmpty", connection.queues.state.value.library.activeId == null)
+                        .put("nativeTrackEmpty", connection.state.value.trackUri == null)
+                        .put("nativeProblemEmpty", connection.state.value.problem == null)
+                        .put("removedOwnedQueues", org.json.JSONArray(ownedQueues.toList()))
+                        .put("sourceExistedBeforeDelete", file.exists())
                     retired = true
                 } finally { instrumentation.runOnMainSync { connection.close() } }
             } }.exceptionOrNull()
@@ -115,6 +128,11 @@ class FlatNoneRealAppTest {
             // An undrained player must retain its test-owned source, even on a
             // failing teardown, so a later test cannot inherit a missing-file loop.
             if (retired) file.delete()
+            retirement.put("retired", retired).put("sourceExistsAfterCleanup", file.exists())
+            val outputRoot = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+                ?: context.getExternalFilesDir(null)
+            File(outputRoot, "none-real-app-walk").apply { mkdirs() }
+                .resolve("fixture-retirement.json").writeText(retirement.toString(2))
             if (cleanupFailure != null) {
                 val failure = walkFailure
                 if (failure == null) throw cleanupFailure else failure.addSuppressed(cleanupFailure)
