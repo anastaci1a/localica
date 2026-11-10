@@ -12,7 +12,7 @@ Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus
 
 <table>
   <tr>
-    <td align="center"><img src="docs/images/library.png" width="170" alt="Library in the five-per-row gallery with album and artist covers, floating navigation and the mini-player"><br><sub>Library</sub></td>
+    <td align="center"><img src="docs/images/library.png" width="170" alt="Library in the three-per-row gallery with album and artist covers, floating navigation and the mini-player"><br><sub>Library</sub></td>
     <td align="center"><img src="docs/images/album.png" width="170" alt="To Pimp a Butterfly album page with artwork fading into its track list"><br><sub>Album</sub></td>
     <td align="center"><img src="docs/images/artist.png" width="170" alt="Alfa Mist artist page with Play and Shuffle controls and an album row"><br><sub>Artist</sub></td>
     <td align="center"><img src="docs/images/player.png" width="170" alt="Full-screen player showing Ugetsu artwork, playback controls and the Queue handle"><br><sub>Player</sub></td>
