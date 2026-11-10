@@ -158,13 +158,7 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
 @Composable
 internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () -> Float,
     contentKey: () -> Any?): Modifier {
-    if (flatGlass()) return clipToBounds()
-        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
-            drawContent()
-            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
-                0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
-        }
+    if (flatGlass()) return lyricsViewportMask()
     // This display list is replayed by the shared scene, never read back independently.
     val source = rememberFrostedBackdrop(Unit, enabled = false, retainRaster = false)
     val currentAlpha by rememberUpdatedState(alpha)
@@ -176,18 +170,22 @@ internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () ->
         onDispose { scene.layers.remove(layer); scene.readback.sceneChanged() }
     }
     return recordFrostedBackdrop(source, readbackRequest = { scene.source.readbackRequest },
-        onRecorded = { scene.recorded(layer, it) }).clipToBounds()
-        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
-            // Observe inside the retained mask layer: invalidating only its parent
-            // replays the same child display list on API 26's readback surface. Both
-            // existing captures must redraw this final viewport, not just its wrapper.
-            // Never feed this draw-only request back into refresh/capture flows.
-            val request = scene.source.readbackRequest
-            drawContent()
-            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
-                0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
-            layer.maskedReadbackRequest = request
-            scene.readback.producerMasked(layer, request)
-        }
+        onRecorded = { scene.recorded(layer, it) }).lyricsViewportMask(request = { scene.source.readbackRequest }, masked = { request ->
+        layer.maskedReadbackRequest = request
+        scene.readback.producerMasked(layer, request)
+    })
 }
+
+/** Keep clipping, group compositing and the final mask identical for every renderer. */
+private inline fun Modifier.lyricsViewportMask(crossinline request: () -> Int = { -1 },
+    crossinline masked: (Int) -> Unit = {}): Modifier = clipToBounds()
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        // Observe inside this retained mask, before its content, so API 26's readback
+        // redraws both the glyph recording and its final clipped/faded viewport.
+        val readbackRequest = request()
+        drawContent()
+        drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
+            0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+        masked(readbackRequest)
+    }

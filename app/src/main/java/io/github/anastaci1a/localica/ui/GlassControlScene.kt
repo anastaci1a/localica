@@ -28,7 +28,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val flat = flatGlass()
     val flatColor = flatGlassColor()
     val geometryObserver = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) LocalControlGeometryDraw.current else null
-    if (flat || requestedGlassNone()) {
+    if (flat || requestedSingleToneBlur()) {
         // No recording, source subscription, lens, reduction or exclusive lease in None.
         Canvas(modifier) {
             scene()

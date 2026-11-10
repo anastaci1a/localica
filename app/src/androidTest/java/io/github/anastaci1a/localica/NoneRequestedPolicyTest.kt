@@ -26,7 +26,7 @@ class NoneRequestedPolicyTest {
         compose.setContent {
             CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
                 LocalGlassAppearance provides GlassAppearance(renderer = appearance)) {
-                val selected = requestedGlassNone()
+                val selected = requestedSingleToneBlur()
                 SideEffect { actual = selected }
             }
         }

@@ -48,7 +48,7 @@ internal val LocalGlassOpticalWork = staticCompositionLocalOf<(() -> Unit)?> { n
 
 /** Only the legacy sampling mode retains its resting-only control exception. */
 @Composable
-internal fun requestedGlassNone(): Boolean =
+internal fun requestedSingleToneBlur(): Boolean =
     (LocalGlassRendererRuntime.current?.requested ?: LocalGlassAppearance.current.renderer) == GlassRendererMode.SingleToneBlur
 
 /** Flat mode bypasses the complete glass graph, including allocation and preparation. */
