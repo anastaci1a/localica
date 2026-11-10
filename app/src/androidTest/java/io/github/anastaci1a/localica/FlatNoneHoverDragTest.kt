@@ -29,7 +29,7 @@ class FlatNoneHoverDragTest {
         lateinit var root: CompositionData
         val surfaces = HoverGroupRenderer::class.java.getDeclaredField("surfaces").apply { isAccessible = true }
         val shadows = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
-        fun currentShadow(): Any {
+        fun currentShadowOrNull(): Any? {
             val owners = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<HoverGroupRenderer, Boolean>())
             fun visit(table: CompositionData) {
                 for (group in table.compositionGroups) {
@@ -38,21 +38,25 @@ class FlatNoneHoverDragTest {
                 }
             }
             visit(root)
-            val actual = surfaces.get(owners.single()) as Map<*, *>
-            return (actual.values.single() as HoverSurfaceRenderer).shadow
+            val actual = owners.singleOrNull()?.let { surfaces.get(it) as Map<*, *> } ?: return null
+            return (actual.values.singleOrNull() as HoverSurfaceRenderer?)?.shadow
         }
+        fun currentShadow(): Any = checkNotNull(currentShadowOrNull())
         val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
         val output = java.io.File(context.getExternalFilesDir(null), "flat-hover-776").apply { mkdirs() }
         val observations = org.json.JSONArray()
+        val drawObservations = org.json.JSONArray()
         val requested = RetainedGlassShadow::class.java.getDeclaredField("requested").apply { isAccessible = true }
         val raster = RetainedGlassShadow::class.java.getDeclaredField("raster\$delegate").apply { isAccessible = true }
-        fun state() = compose.runOnIdle {
-            val owner = currentShadow() as RetainedGlassShadow
+        fun shadowState(): org.json.JSONObject {
+            val owner = currentShadowOrNull() as RetainedGlassShadow?
+                ?: return org.json.JSONObject().put("allocated", false)
             val prepared = (raster.get(owner) as State<*>).value
             val key = prepared?.javaClass?.getDeclaredField("key")?.apply { isAccessible = true }?.get(prepared)
-            org.json.JSONObject().put("owner", System.identityHashCode(owner)).put("rasterizations", owner.rasterizations)
+            return org.json.JSONObject().put("owner", System.identityHashCode(owner)).put("rasterizations", owner.rasterizations)
                 .put("requestedKey", requested.get(owner).toString()).put("preparedKeyMatches", key != null && key == requested.get(owner))
         }
+        fun state() = compose.runOnIdle { shadowState().put("geometryReadCount", drawObservations.length()) }
         fun save(name: String, bitmap: android.graphics.Bitmap) {
             java.io.File(output, "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         }
@@ -70,7 +74,11 @@ class FlatNoneHoverDragTest {
                     LocalicaTheme {
                         val rest = MediaItemOutline(Rect(40f, 48f, 240f, 112f), 12f)
                         val geometry = hoverGeometry(rest, Rect(0f, 0f, 280f, 160f), 1f)
-                        val frame = HoverCardFrame({ Offset.Zero }, { redraw.intValue; geometry }, { Offset.Zero },
+                        val frame = HoverCardFrame({ Offset.Zero }, {
+                            drawObservations.put(org.json.JSONObject().put("redraw", redraw.intValue)
+                                .put("clockMs", compose.mainClock.currentTime).put("shadow", shadowState()))
+                            geometry
+                        }, { Offset.Zero },
                             { rest.bounds }, { rest.bounds }, { 1f }, { 0f }, { 1f })
                         HoverDragCard(Modifier.size(280.dp, 160.dp).testTag("flat-drag"), frame, null,
                             LiftShadow(1f, .6f, Color.Black), stackShadow = { 1f }) {}
@@ -101,6 +109,7 @@ class FlatNoneHoverDragTest {
                 compose.runOnIdle { shadows.add(currentShadow()) }
             }
             java.io.File(output, "observations.json").writeText(observations.toString(2))
+            java.io.File(output, "draw-observations.json").writeText(drawObservations.toString(2))
             compose.runOnIdle {
                 assertEquals("Every actual drag redraw is flat; no optical allocation or preparation", emptyList<String>(), events)
                 assertEquals("The same shadow survives every drag frame", 1, shadows.size)
