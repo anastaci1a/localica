@@ -109,9 +109,16 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     val defaultRoom = with(density) { (HoverLift.MaxLift / 2).toPx() }.let { androidx.compose.ui.geometry.Rect(it, it, it, it) }
     // Plain map: the underlay reads it while drawing; every frame lambda reads live motion state.
     val frames = remember(drag) { mutableMapOf<String, HoverCardFrame>() }
+    // Resting rows draw the complement of their card, so each item is one instance per frame (#735).
+    DisposableEffect(drag) {
+        state.cardOpacity = { key -> frames[key]?.alpha?.invoke() }
+        onDispose { state.cardOpacity = { null } }
+    }
     fun liftProgress(key: String): Float {
         val initial = drag.lifts[key]?.progress ?: 1f
         // A drag can acquire a selection that is still rising; continue from that contour.
+        // A row that rests lifted (a chosen marker) keeps its card's lift through the handoff (#735).
+        if (state.restsLifted?.invoke(key) == true) return initial + (1f - initial) * flightProgress()
         return (initial + (1f - initial) * flightProgress()) *
             (if (drag.committed) 1f - drag.handoff.value.coerceIn(0f, 1f) else 1f)
     }

@@ -295,51 +295,90 @@ class SearchReturnTopTest {
         }
     }
 
-    @Test fun noticeModeToggleReleasesThePinnedNoticeAndMeasuresItAgain() {
+    @Test fun quickSearchPillShownAtTheTopRevealsItsHeaderOnItsFirstPresentedFrame() {
         fixture(false)
+        val evidence = mutableListOf<String>()
         fun frame(): BrowseScrollFrame {
             val serial = scrollProbe.serial
             compose.runOnIdle { scrollProbe.request++ }
             compose.waitUntil(5000) { scrollProbe.serial > serial }
             return requireNotNull(scrollProbe.frame)
         }
-        arrow.assertDoesNotExist()
-        val pinned = frame()
-        assertEquals("The canonical zero notice is measured while pinned", pinned.viewportWidth, pinned.noticeWidth)
-        assertEquals(1, pinned.index); assertEquals(0, pinned.offset); assertNull(pinned.headerHeight)
-        // A quick-search pill moves into the header: the notice is no longer the measured mode and
-        // its pin and receipt are released. The grid keeps item 1 / offset 0, so the grown header
-        // now sits above the viewport: that is ordinary scrolled content, and Return reveals it.
         val prefs = BrowsePreferences(instrumentation.targetContext)
-        compose.runOnIdle { prefs.write(route, BrowseStyle(quickSearch = true), false) }
-        compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().isNotEmpty() }
-        compose.waitForIdle()
-        val released = frame()
-        assertNull("No receipt while the notice is not measured", released.noticeWidth)
-        assertEquals(1, released.index); assertEquals(0, released.offset); assertNull(released.headerHeight)
-        arrow.assertIsDisplayed().performClick()
-        arrow.assertDoesNotExist()
-        val revealed = frame()
-        assertEquals(0, revealed.index)
-        assertTrue("The pill header is a real visible first item", requireNotNull(revealed.headerHeight) > 0)
-        assertNull(revealed.noticeWidth)
-        list.performScrollToIndex(50)
-        arrow.assertIsDisplayed().performClick()
-        compose.onNodeWithTag("media-return-search:0").assertIsDisplayed()
-        arrow.assertDoesNotExist()
-        // Back to the measured mode: the zero notice is pinned and measured again at the canonical top.
-        compose.runOnIdle { prefs.write(route, BrowseStyle(quickSearch = false), false) }
-        compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().isEmpty() }
-        compose.waitForIdle()
-        arrow.assertDoesNotExist()
-        val restored = frame()
-        assertEquals(restored.viewportWidth, restored.noticeWidth)
-        assertEquals(1, restored.index); assertEquals(0, restored.offset); assertNull(restored.headerHeight)
-        assertEquals("Row bounds are unchanged by the pinned notice", pinned.rowHeight, restored.rowHeight)
-        list.performScrollToIndex(50)
-        arrow.assertIsDisplayed().performClick()
-        compose.onNodeWithTag("media-return-search:0").assertIsDisplayed()
-        arrow.assertDoesNotExist()
+        // A bounded recorder of every grid draw, installed before the preference write. Samples are
+        // taken on the draw itself (animation-clock frame time plus traversal serial, the composed
+        // pill mode, header placement, grid anchor). The probe's pill-mode state is read at draw, so
+        // the mode flip invalidates one diagnostic draw of the retained grid in that same frame even
+        // when its placed items did not change; the test thread's waits only decide when recording
+        // stops. Draw-only invalidation: nothing here measures, scrolls or awaits frames.
+        fun pill(on: Boolean, label: String): List<BrowseScrollFrame> {
+            val frames = java.util.Collections.synchronizedList(mutableListOf<BrowseScrollFrame>())
+            scrollProbe.onFrame = { if (frames.size < 240) frames += it }
+            try {
+                compose.runOnUiThread { prefs.write(route, BrowseStyle(quickSearch = on), false) }
+                compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().isNotEmpty() == on }
+                repeat(3) { frame() }
+            } finally { scrollProbe.onFrame = null }
+            val strip = synchronized(frames) { frames.toList() }
+            evidence += strip.map { "$label $it" }
+            assertTrue("The strip is consecutive: $strip", strip.zipWithNext().all { (a, b) -> b.serial == a.serial + 1 })
+            assertTrue("Every sample carries its frame time: $strip", strip.all { it.frameTime > 0 })
+            assertTrue("The strip reaches the new mode: $strip", strip.any { it.searchPill == on })
+            return strip
+        }
+        fun canonicalTop(frame: BrowseScrollFrame) {
+            assertEquals(1, frame.index); assertEquals(0, frame.offset); assertNull(frame.headerHeight)
+            assertEquals("The zero notice is measured while pinned", frame.viewportWidth, frame.noticeWidth)
+        }
+        try {
+            arrow.assertDoesNotExist()
+            val pinned = frame()
+            canonicalTop(pinned)
+            // Shown at the visual top, the header is visible on the first frame that renders the pill.
+            val shown = pill(true, "top-on")
+            val first = shown.first { it.searchPill }
+            assertEquals("The first presented pill frame is anchored at the header: $first", 0, first.index)
+            assertEquals(0, first.offset)
+            assertEquals("The shown header is visible from its first frame: $first", 0, requireNotNull(first.headerTop))
+            assertTrue(requireNotNull(first.headerHeight) > 0)
+            shown.filter { it.searchPill }.forEach {
+                assertTrue("No pill frame hides the shown header above the top: $it", it.headerHeight != null && it.headerTop == 0)
+            }
+            arrow.assertDoesNotExist()
+            val revealed = frame()
+            assertEquals(0, revealed.index); assertNull("No receipt while the notice is not measured", revealed.noticeWidth)
+            // Hidden again, the zero notice is pinned and measured at the canonical top.
+            pill(false, "top-off")
+            arrow.assertDoesNotExist()
+            val restored = frame()
+            canonicalTop(restored)
+            assertEquals("Row bounds are unchanged by the pinned notice", pinned.rowHeight, restored.rowHeight)
+            // A scrolled list keeps its place in every frame while the header grows above it.
+            list.performScrollToIndex(50)
+            arrow.assertIsDisplayed()
+            val scrolled = frame()
+            pill(true, "scrolled-on").forEach {
+                assertEquals("A scrolled list keeps its index: $it", scrolled.index, it.index)
+                assertEquals("A scrolled list keeps its offset: $it", scrolled.offset, it.offset)
+            }
+            arrow.assertIsDisplayed().performClick()
+            compose.onNodeWithTag("media-return-search:0").assertIsDisplayed()
+            arrow.assertDoesNotExist()
+            val top = frame()
+            assertEquals(0, top.index); assertTrue(requireNotNull(top.headerHeight) > 0)
+            pill(false, "top-off-again")
+            arrow.assertDoesNotExist()
+            canonicalTop(frame())
+            list.performScrollToIndex(50)
+            arrow.assertIsDisplayed().performClick()
+            compose.onNodeWithTag("media-return-search:0").assertIsDisplayed()
+            arrow.assertDoesNotExist()
+        } finally {
+            scrollProbe.onFrame = null
+            val directory = nativeEvidenceDirectory("search-return-top", instrumentation.targetContext.getExternalFilesDir(null))
+            java.io.File(directory, "search-header-reveal-strip-api${android.os.Build.VERSION.SDK_INT}.txt")
+                .writeText(evidence.joinToString("\n", postfix = "\n"))
+        }
     }
 
     @Test fun browseWithEmptyNoticeHidesAtTopAndAfterTap() {

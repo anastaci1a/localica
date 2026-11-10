@@ -25,7 +25,8 @@ internal fun AlbumArtwork(uri: String?, modifier: Modifier = Modifier.size(200.d
 @Composable
 internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: CoverProvider = EmbeddedCoverProvider,
     shape: androidx.compose.ui.graphics.Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop,
-    textReveal: ArtworkTextReveal? = null, replacementArtwork: androidx.compose.ui.graphics.ImageBitmap? = null) {
+    textReveal: ArtworkTextReveal? = null, replacementArtwork: androidx.compose.ui.graphics.ImageBitmap? = null,
+    fallbackPending: Boolean = false) {
     val context = LocalContext.current.applicationContext
     ArtworkCache.configure(context)
     val revision by ArtworkCache.revision.collectAsState()
@@ -39,8 +40,8 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     // Covers that waited out a far journey resume on staggered frames, never all in one.
     val resumeStagger = remember { BooleanArray(1) }
     if (deferred) resumeStagger[0] = true
-    val loaded by produceState<Pair<Triple<List<String>, Int, Long>?, ArtworkCache.CachedArtwork?>>(null to null, request, provider, deferred) {
-        if (pixels > 0 && !deferred) {
+    val loaded by produceState<Pair<Triple<List<String>, Int, Long>?, ArtworkCache.CachedArtwork?>>(null to null, request, provider, deferred, fallbackPending, replacementArtwork != null) {
+        if (pixels > 0 && !deferred && !fallbackPending && replacementArtwork == null) {
             val warm = cached?.takeIf { it.edge >= pixels || it.bitmap == null }
             if (warm == null && resumeStagger[0]) {
                 resumeStagger[0] = false
@@ -71,8 +72,9 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     val indexedMissing = provider === EmbeddedCoverProvider && ArtworkColors.peek(uris) == ArtworkColors.MISSING
     val loading = cached == null && uris.isNotEmpty() && artwork == null && !indexedMissing &&
         (deferred || pixels == 0 || loaded.first != request)
-    ArtworkImage(replacementArtwork ?: artwork, loading, measured, shape, contentScale, tintUris = uris, textReveal = textReveal,
-        expectsArtwork = provider === EmbeddedCoverProvider && ArtworkColors.peek(uris).let { it != null && it != ArtworkColors.MISSING })
+    ArtworkImage(replacementArtwork ?: artwork.takeUnless { fallbackPending }, replacementArtwork == null && (loading || fallbackPending),
+        measured, shape, contentScale, tintUris = uris.takeUnless { fallbackPending }, textReveal = textReveal,
+        expectsArtwork = fallbackPending || provider === EmbeddedCoverProvider && ArtworkColors.peek(uris).let { it != null && it != ArtworkColors.MISSING })
 }
 
 internal fun artworkShape(kind: io.github.anastaci1a.localica.navigation.MediaKind,

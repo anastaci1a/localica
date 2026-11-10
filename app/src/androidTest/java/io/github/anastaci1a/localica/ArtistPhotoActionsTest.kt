@@ -27,9 +27,15 @@ class ArtistPhotoActionsTest {
         val root = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "photo-actions-${java.util.UUID.randomUUID()}")
         val consent = OnlineMetadataConsent(File(root, "consent"))
         val disk = ArtistPhotoDisk(File(root, "photos"), File(root, "choices"), 8L * 1024 * 1024)
+        val replacement = ByteArrayOutputStream().also { output ->
+            Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.GREEN) }
+                .compress(Bitmap.CompressFormat.PNG, 100, output)
+        }.toByteArray()
         val transport = PhotoTransport { url, _ -> when {
             url.contains("/search/artist?") -> """{"data":[{"id":8,"name":"Fixture Artist","picture_big":"https://cdn-images.dzcdn.net/fixture.jpg"}]}""".toByteArray()
             url.contains("/top?") -> """{"data":[{"album":{"title":"Fixture Album"}}]}""".toByteArray()
+            url.contains("/artist/8") -> """{"id":8,"name":"Fixture Artist","picture_big":"https://cdn-images.dzcdn.net/fixture.jpg"}""".toByteArray()
+            url.contains("cdn-images") -> replacement
             else -> """{"artists":[]}""".toByteArray()
         } }
         val photos = ArtistPhotos(consent, disk, transport)
@@ -73,7 +79,10 @@ class ArtistPhotoActionsTest {
             compose.waitUntil(5000) { compose.onAllNodesWithText("Fixture Artist · deezer", substring = true).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Fixture Artist · deezer", substring = true).performScrollTo().performClick()
             compose.onNodeWithText("Select").performClick()
-            compose.waitUntil(5000) { runBlocking { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { disk.choice("Artist:fixture").mode == "manual" } } }
+            compose.waitUntil(5000) { runBlocking { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                disk.choice("Artist:fixture").choice == ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8") &&
+                    disk.choice("Artist:fixture").pendingChoice == null
+            } } }
             assertEquals(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"), disk.choice("Artist:fixture").choice)
         } finally { root.deleteRecursively() }
     }

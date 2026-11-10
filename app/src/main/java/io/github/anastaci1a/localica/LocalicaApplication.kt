@@ -32,7 +32,11 @@ class LocalicaApplication : Application() {
             // here so those Main reads find them in memory. Values and write paths are unchanged.
             for (name in STARTUP_PREFERENCES) runCatching { getSharedPreferences(name, MODE_PRIVATE).contains("") }
         }
-        startup.launch { onlineMetadataConsent.load() }
+        startup.launch {
+            runCatching { artistPhotos.loadIndex() }
+            onlineMetadataConsent.load()
+            artistPhotoWork.bind(startup)
+        }
         startup.launch { io.github.anastaci1a.localica.icons.IconPacks.load(this@LocalicaApplication) }
         startup.launch { startArtworkColors(this) }
         startup.launch {
@@ -70,14 +74,18 @@ class LocalicaApplication : Application() {
     }
     val artistPhotos by lazy {
         io.github.anastaci1a.localica.artistphoto.ArtistPhotos(onlineMetadataConsent,
-            java.io.File(cacheDir, "artist-photos"), java.io.File(filesDir, "artist-photo-matches"))
+            java.io.File(cacheDir, "artist-photos"), java.io.File(filesDir, "artist-photo-matches"),
+            prepare = io.github.anastaci1a.localica.artistphoto.ArtistPhotoEncoding::encode)
+    }
+    val artistPhotoWork by lazy {
+        io.github.anastaci1a.localica.artistphoto.ArtistPhotoWork(this)
     }
     val lastfm by lazy {
         io.github.anastaci1a.localica.lastfm.LastFmController(
             io.github.anastaci1a.localica.lastfm.FileLastFmStore(java.io.File(filesDir, "lastfm-snapshot.json")),
             io.github.anastaci1a.localica.lastfm.LastFmSync(io.github.anastaci1a.localica.lastfm.HttpLastFmApi(BuildConfig.LASTFM_API_KEY, onlineMetadataConsent)),
             library.snapshots, BuildConfig.LASTFM_API_KEY.isNotBlank(), onlineMetadataConsent,
-            localStatistics = statistics.counts)
+            localStatistics = statistics.counts, background = io.github.anastaci1a.localica.lastfm.LastFmWork(this))
     }
     val effectiveStatistics by lazy { lastfm.applyTo(statistics.counts) }
     val playRankings by lazy { io.github.anastaci1a.localica.statistics.PlayRankingSource(

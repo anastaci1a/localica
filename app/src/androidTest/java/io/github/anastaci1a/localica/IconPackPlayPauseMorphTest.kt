@@ -50,12 +50,12 @@ class IconPackPlayPauseMorphTest {
         return ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
     }
 
-    private fun install(play: Pair<String, ByteArray>, pause: Pair<String, ByteArray>) {
+    private fun install(play: Pair<String, ByteArray>? = null, pause: Pair<String, ByteArray>? = null) {
         val source = ByteArrayOutputStream().also { out -> ZipOutputStream(out).use { zip ->
             fun entry(name: String, bytes: ByteArray) { zip.putNextEntry(ZipEntry(name)); zip.write(bytes); zip.closeEntry() }
             entry("pack.json", """{"name":"Play pause morph fixture","version":"1"}""".toByteArray())
-            entry("icons/transport.play.${play.first}", play.second)
-            entry("icons/transport.pause.${pause.first}", pause.second)
+            play?.let { entry("icons/transport.play.${it.first}", it.second) }
+            pause?.let { entry("icons/transport.pause.${it.first}", it.second) }
         } }.toByteArray()
         IconPacks.import(context, source.inputStream())
     }
@@ -156,6 +156,21 @@ class IconPackPlayPauseMorphTest {
         assertTrue("A raster pause still cross-fades", raster.dropLast(1).maxOf(::partialShare) > .2f)
         exact(frame("reference-pause"), raster.last(), "Raster pause end frame")
     }
+
+    private fun partialPackEndpoints(playOnly: Boolean) {
+        if (playOnly) install(play = "svg" to triangle) else install(pause = "svg" to twoBars)
+        content()
+        val play = frame("reference-play"); val pause = frame("reference-pause")
+        exact(play, frame("button"), "Partial pack initial play frame")
+        val forward = animate(toPlaying = true)
+        saveStrip(if (playOnly) "play-only-to-pause" else "pause-only-to-pause", forward)
+        exact(pause, forward.last(), "Partial pack settled pause frame")
+        val back = animate(toPlaying = false)
+        exact(play, back.last(), "Partial pack settled play frame")
+    }
+
+    @Test fun playOnlyPackKeepsExactBuiltinPauseEndpoint() = partialPackEndpoints(true)
+    @Test fun pauseOnlyPackKeepsExactBuiltinPlayEndpoint() = partialPackEndpoints(false)
 
     @Test fun reducedMotionSnapsBetweenTheStaticPackIcons() {
         install("svg" to triangle, "svg" to twoBars)

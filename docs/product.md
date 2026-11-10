@@ -77,7 +77,13 @@ Read/edit Title, Album, Artist, Album Artist, Year, Disc number, Track number, C
 
 Individual and bulk edits change only checked fields. Blank checked values remove user values while retaining track/disc totals and technical comments. Read and verify positive track/disc numerators and user-only comments. Preserve unchecked/mixed values and deduplicate physical songs for writes.
 
-Request write grants explicitly, preview/review changes, verify writes, retain recovery, and report per-file outcomes. A batch can stop after its current transaction. Unsupported formats/fields/providers remain playable and read-only with an explanation. Never silently substitute app-only tags.
+Request write grants explicitly, preview/review changes, verify writes, retain recovery, and report per-file outcomes. Unsupported formats/fields/providers remain playable and read-only with an explanation. Never silently substitute app-only tags.
+
+Reversible batches retain full original files until Done or verified cancellation. Cancel waits for the acquired file transaction, restores every touched original, and verifies complete file hashes. Failed restoration retains recovery and never reports cancellation complete.
+
+Check document sizes and app-files free space before promising undo. Insufficient space offers Save without undo or Back. Explicit no-undo saves retain current-file recovery and offer Stop after current; previous successful files cannot be reverted together.
+
+Interrupted batches require an explicit Resume or Restore choice. A recorded cancellation remains restore-only. If cancellation cannot be recorded, refuse further writes in that session and explain that restarting cannot recover the unwritten choice. Retain the patch, copied replacement artwork, and editor draft for recovery.
 
 A song awaiting byte recovery stays unavailable to playback, including startup and preload. Keep its occurrences/history. Stop at its boundary without silently skipping or wrapping. Unrelated songs remain playable when the affected source is known. Keep the applicable recovery notice through unrelated metadata/settings changes until dismissed, recovered, or playback moves elsewhere.
 
@@ -105,7 +111,7 @@ Timed lyrics interpolate Media3's latency-aware position between samples, freezi
 
 | Value | Rule |
 | --- | --- |
-| Song added date | First successful indexing; retained on rescan. Existing migrated songs use migration date. Removing and reindexing starts a new date. |
+| Song added date | First successful indexing; retained on rescan. Existing migrated songs use migration date. Removing and reindexing starts a new date. A [library data](library-data.md) import can replace it; rescans keep the imported date. |
 | Collection dates | Albums/Artists/Album Artists/Folders use earliest added and latest known modification among current distinct songs. |
 | Playlist dates | Creation/import date; modification changes on rename, cover or membership/order edits, not metadata refresh or no-ops. Migrated playlists initially use creation for both. |
 | Qualified play | Actual listening for 30 seconds or half the duration, whichever is shorter, once per traversal. Exclude paused time and seek jumps. |
@@ -117,17 +123,23 @@ Timed lyrics interpolate Media3's latency-aware position between samples, freezi
 
 Online features is one app-level consent switch. It defaults off. Settings groups this switch, Last.fm, and Artist photos under Online features. Search finds their individual controls. Consent covers artist photos and manual Last.fm sync. Turning it off prevents new network requests, hides artist photos and restores local play counts. Cached photos, the Last.fm archive and match choices are retained.
 
-Artist and Album Artist rows, gallery tiles, Home pins, and the artist page show album art immediately. With consent on, a cached or fetched artist photo crossfades over it. Turning consent off immediately restores album art, including when a photo is cached.
+With consent on, Artist and Album Artist items use decoded cached photos on their first frame. Unknown photo availability or pending disk decode shows the neutral artwork placeholder. Confirmed missing photos use album art; newly fetched photos use the existing reveal.
+
+This behavior applies to rows, gallery tiles, Home pins and collection headers. Turning consent off immediately restores album art, including when a photo is cached.
 
 Artist photo lookup sends artist and release names to Deezer, then MusicBrainz, Wikidata and Wikimedia Commons when needed. It never uses Last.fm images. Automatic matching requires a normalized artist name and a release title shared with the local library. Missing matches retain the caller's latest album artwork.
 
-Photos refresh after 30 days. Failed attempts wait 24 hours before retrying. A 64 MiB disk cache evicts old pictures while preserving artist match choices. Artist photos settings can clear the cache or refresh the library. No library audio or local listening history is uploaded.
+Photos refresh after 30 days. Failed automatic attempts wait 24 hours before retrying. Artist photos settings offers 128, 512, 1024 and 2048 MiB cache budgets; the default is 512 MiB. Usage and separately retained chosen photos are shown. Eviction follows last display and protects visible photos. Clear cache preserves chosen photos and match choices.
 
-The artist menu can review provider candidates, choose another match, or clear a photo. Clear suppresses automatic lookup until a deliberate re-pick or reset. Artist photo information shows saved Wikimedia attribution and licence information, which Commons pictures require. Photos never change audio files or embedded artwork.
+Acquisition continues through WorkManager after leaving the page or app. The persistent queue resumes interrupted artists after process death. Settings shows waiting artists, the current artist and retryable failures. Consent revocation cancels work; enabling it resumes pending artists. No library audio or local listening history is uploaded.
+
+The artist menu opens a progressive thumbnail grid with current and pending choices. A failed pick keeps the previous photo and offers Retry on its tile. Clear suppresses automatic lookup until a deliberate re-pick or reset. Artist photo information shows saved Wikimedia attribution and licence information, which Commons pictures require. Photos never change audio files or embedded artwork.
 
 ## Optional Last.fm statistics
 
-Settings → Online features → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. Last.fm requests use its HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync is manual, with no automatic launch request.
+Settings → Online features → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. Last.fm requests use its HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync starts explicitly, with no automatic launch request.
+
+Background continuation defaults on and uses unique scheduled work with a progress notification.
 
 A refresh publishes one complete snapshot only after every request succeeds. Existing accounts use recent scrobbles and authoritative per-song user counts; large change sets fall back to full paging. Full rescan is also available explicitly. Requests are paced with retry backoff and a one-minute attempt limit. Failure preserves the archive; another account cannot use its counts.
 

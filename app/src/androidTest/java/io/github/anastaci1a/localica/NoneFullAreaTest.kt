@@ -88,7 +88,9 @@ class NoneFullAreaTest {
         }
     }
 
-    @Test fun noneControlSceneReadsDensityAndAveragesItsFullBounds() {
+    /** #691: requested None paints a white resting knob over the control's full bounds. It never
+     * averages or tints from the backdrop, so moving the content behind it changes nothing inside. */
+    @Test fun noneControlScenePaintsAWhiteRestingKnobOverItsFullBounds() {
         var split by mutableFloatStateOf(48f)
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
@@ -100,20 +102,25 @@ class NoneFullAreaTest {
                 val inset = 16.dp.toPx()
                 drawRect(Color.Blue)
                 drawRect(Color.Red, Offset.Zero, Size(split, size.height))
-                // Content outside the full thumb bounds must contribute nothing.
+                // The track scene itself stays visible outside the knob.
                 drawRect(Color.Green, Offset.Zero, Size(inset, size.height))
             }
         } } }
-        for ((boundary, red) in listOf(48f to .5f, 32f to .25f, 64f to .75f)) {
+        for (boundary in listOf(48f, 32f, 64f)) {
             compose.runOnIdle { split = boundary }
-            compose.waitUntil(15_000) {
-                val pixels = compose.onNodeWithTag("control").captureToImage().toPixelMap()
-                listOf(42, 48, 54).all { x ->
-                    val color = pixels[x, 48]
-                    kotlin.math.abs(color.red - red) < .02f && color.green < .02f &&
-                        kotlin.math.abs(color.blue - (1f - red)) < .02f
-                }
+            compose.waitForIdle()
+            val pixels = compose.onNodeWithTag("control").captureToImage().toPixelMap()
+            // Inside the 64px circular knob (centre 48,48): opaque white whatever lies behind it.
+            for (x in listOf(24, 42, 48, 54, 72)) {
+                val color = pixels[x, 48]
+                assertTrue("Knob at x=$x split=$boundary is not white: $color",
+                    color.red > .98f && color.green > .98f && color.blue > .98f)
             }
+            // Outside the knob the scene is drawn unchanged: green track start and blue track end.
+            val start = pixels[8, 48]
+            val end = pixels[88, 48]
+            assertTrue("Scene left of the knob: $start", start.green > .9f && start.red < .1f && start.blue < .1f)
+            assertTrue("Scene right of the knob: $end", end.blue > .9f && end.red < .1f && end.green < .1f)
         }
     }
 

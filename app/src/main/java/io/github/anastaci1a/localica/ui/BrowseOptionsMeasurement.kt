@@ -70,6 +70,7 @@ internal fun BrowseOptionsMeasurement(declaration: BrowseOptionsDeclaration, sha
             }
             ChoiceMeasurement("Sort by", declaration.sortFields.map(::sortLabel), popup = true)
             GlassChoicesMeasurement(listOf("Ascending", "Descending"))
+            if (declaration.albumGrouping) BooleanPreferenceFrame("Group by album") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) }
             if (declaration.reserveError) Text("Couldn’t save this order. Try again.", color = MaterialTheme.colorScheme.error)
         }
         for (gallery in listOf(false, true)) Column(

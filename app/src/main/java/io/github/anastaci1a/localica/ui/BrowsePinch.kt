@@ -173,6 +173,7 @@ internal class BrowsePinchMotion {
     val artwork = mutableMapOf<Any, BrowsePinchLayer>()
     val text = mutableMapOf<Any, BrowsePinchLayer>()
     var viewportCoordinates: LayoutCoordinates? = null
+    var invalidateViewport: (() -> Unit)? = null
     var anchorIndex = 0
     var anchorTop = 0f
     var rowHeight = 64f

@@ -14,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -39,8 +41,34 @@ import kotlin.math.roundToInt
 
 internal fun magneticTabPosition(raw: Float): Float = magneticChoicePosition(raw)
 
+/** True only while the last finger's release dispatches, so a click it produces is told
+ * apart from keyboard or accessible activation. Observes without consuming. */
+private class TabFingerRelease { var active = false }
+
+private fun Modifier.markTabFingerRelease(release: TabFingerRelease): Modifier = pointerInput(release) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        while (true) {
+            if (awaitPointerEvent(PointerEventPass.Initial).changes.any { it.pressed }) continue
+            release.active = true
+            // Main (where the selectable clicks) runs between these two passes of one event.
+            try { awaitPointerEvent(PointerEventPass.Final) } finally { release.active = false }
+            break
+        }
+    }
+}
+
+/** Logical lens travel. A fitting strip spans every tab whatever offset its unused
+ * scroll state kept from an earlier overflow; an overflowing one, its visible cells. */
+internal fun tabSlideBounds(fits: Boolean, scroll: Float, viewport: Float, cell: Float,
+    lastIndex: Int): ClosedFloatingPointRange<Float> {
+    if (fits) return 0f..lastIndex.toFloat()
+    val low = (scroll / cell).coerceAtMost(lastIndex.toFloat())
+    return low..((scroll + viewport) / cell - 1f).coerceIn(low, lastIndex.toFloat())
+}
+
 @Composable
-internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, activity: SelectorTrackActivity? = null, onSelect: (MainTab) -> Unit) {
+internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, activity: SelectorTrackActivity? = null, noneAtlasInput: NoneAtlasInput? = null, onSelect: (MainTab) -> Unit) {
     val renderer = currentGlassRendererGeneration()
     val trackActivity = activity ?: rememberSelectorTrackActivity()
     DisposableEffect(trackActivity) { onDispose { trackActivity.clear() } }
@@ -69,8 +97,11 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     var origin by remember { mutableIntStateOf(chosen) }
     var pressIndex by remember { mutableIntStateOf(chosen) }
     var travelled by remember { mutableStateOf(false) }
-    fun tap(index: Int, haptic: Boolean = true) {
-        if (haptic) haptics.emit(ControlHaptic.Weak)
+    val fingerRelease = remember { TabFingerRelease() }
+    // #664: every committing finger release, reselection included, drops exactly once.
+    // Keyboard and accessible activation keep the single weak activation pulse.
+    fun tap(index: Int, haptic: ControlHaptic? = ControlHaptic.Weak) {
+        haptic?.let(haptics::emit)
         if (tabs[index] == active && abs(page - index) < .001f && !pageDragging) {
             onReselect(tabs[index]); return
         }
@@ -104,6 +135,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
         // Four destinations fit the normal phone shelf. Preserve larger font targets
         // by allowing the strip to overflow rather than shrinking accessible text.
+        // #728: this is the one fit/overflow decision; tabSlideBounds follows it.
         val fits = maxWidth >= minimumWidth * tabs.size ||
             (tabs.size <= 4 && density.fontScale <= 1.15f && maxWidth / tabs.size >= 48.dp)
         val width = if (fits) maxWidth / tabs.size else minimumWidth
@@ -151,7 +183,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             LiquidGlassSurface(Modifier.selectorTrackPlacement(track.translate(-recording.topLeft))
                 .testTag("tab-track-shell").pageGlassCaster(opacity = shadowOpacity), source,
                 pressFeedback = false, shadow = false, cornerRadius = with(density) { radius.toDp() },
-                body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale)
+                body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale, noneAtlasInput = noneAtlasInput)
         }
         val contentOffset = selectorContentScrollOffset(scroll.value, scroll.maxValue, rtl)
         val viewportBounds = androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
@@ -159,8 +191,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             // Travel, not the finger-down commit, retires an unfinished tap request.
             if (delta != 0f && !travelled) { travelled = true; requested = null }
             raw += direction * delta / pixels
-            val low = (scroll.value / pixels).coerceAtMost(tabs.lastIndex.toFloat())
-            val high = ((scroll.value + viewport) / pixels - 1f).coerceIn(low, tabs.lastIndex.toFloat())
+            val travel = tabSlideBounds(fits, scroll.value.toFloat(), viewport, pixels, tabs.lastIndex)
+            val low = travel.start; val high = travel.endInclusive
             val bounded = raw.coerceIn(low, high)
             val excess = raw - bounded
             if (excess != 0f) logicalWall = if (excess < 0f) -1f else 1f
@@ -174,7 +206,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         // The fixed viewport owns lens gestures before its scrolling child. Its context
         // includes ancestors, not the strip itself: only non-lens overflow origins scroll it.
         Box(Modifier.fillMaxSize().testTag("tab-track-host")
-            .selectorTrackDrag(horizontal = true,
+            .markTabFingerRelease(fingerRelease).selectorTrackDrag(horizontal = true,
                 eligible = { point -> if (fits) viewportBounds.contains(point) else
                     selectorVisibleLensContains(point, selectorFrame, contentOffset, viewportBounds) },
                 contact = { pressed = it },
@@ -191,11 +223,14 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                     }
                 },
                 onStart = { dragging = true },
-                onDelta = ::move, option = { chosen },
+                // #728: a lambda, not `::move`. A memoized reference to a local function keeps
+                // its first composition's tabs and geometry after the tab count changes.
+                onDelta = { move(it) }, option = { chosen },
                 // #664: no scroll can claim a fitting bar or the lens (#366 keeps other
                 // overflow origins ineligible), so finger-down commits and pulses at once.
                 immediate = { true },
-                onTap = { if (chosen == origin) tap(pressIndex, haptic = false) },
+                // The shared tap path pulsed only on finger-down, so the tab bar owns this drop.
+                onTap = { haptics.emit(ControlHaptic.Strong); if (chosen == origin) tap(pressIndex, haptic = null) },
                 onEnd = { owned, cancelled ->
                     pressure = 0f; dragging = false
                     // A cancelled press that never travelled restores the option it replaced.
@@ -230,7 +265,11 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                         Box(Modifier.selectorTrackPlacement(cell)
                             .then(if (interactive) Modifier.testTag("tab-option-$index")
                                 .onFocusChanged { trackActivity.focus(index, it.isFocused) }.selectable(active == tab,
-                                interactionSource = null, indication = null, role = Role.Tab, onClick = { tap(index) }) else Modifier),
+                                interactionSource = null, indication = null, role = Role.Tab, onClick = {
+                                    // Reached by touch only from a silent origin (overflow scroll or
+                                    // a scrolling ancestor), so its release is the only pulse.
+                                    tap(index, if (fingerRelease.active) ControlHaptic.Strong else ControlHaptic.Weak)
+                                }) else Modifier),
                             contentAlignment = Alignment.Center) {
                             Column(Modifier.requiredSize(width, with(density) { baseHeight.toDp() })
                                 .graphicsLayer { scaleX = cell.width / pixels; scaleY = cell.height / baseHeight }

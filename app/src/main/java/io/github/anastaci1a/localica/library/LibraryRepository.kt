@@ -108,6 +108,21 @@ class LibraryRepository(
         }
     }
 
+    /** Library data export (#720) reads one fresh database snapshot. */
+    suspend fun currentLibrary(): LibrarySnapshot = withContext(io) { store.current() }
+
+    suspend fun previewLibraryData(document: LibraryDataDocument): LibraryImportPlan =
+        withContext(io) { LibraryDataImport.plan(document, store.current()) }
+
+    /** Re-plans against the current library under the scan lock, so no scan interleaves, then applies in one transaction. */
+    suspend fun importLibraryData(document: LibraryDataDocument): LibraryImportPlan = withContext(io) {
+        scanLock.withLock {
+            val plan = LibraryDataImport.plan(document, store.current())
+            withContext(NonCancellable) { store.applyAddedDates(plan.addedAtChanges) }
+            plan
+        }
+    }
+
     suspend fun removeFolder(uri: String) = withContext(io) {
         scanLock.withLock {
             withContext(NonCancellable) {

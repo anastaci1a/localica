@@ -81,12 +81,29 @@ def expected_for(root, api):
         'NativeShadowFieldConformanceTest': [
             ('independentUncutFieldMatchesBareNativeAtBothOrigins', 29),
         ],
+        'NoneAtlasTest': [
+            ('structuralParentChangesMatchThePerSurfaceChainWithUnchangedUnionBounds', 33),
+            ('memberCapacityOverflowUsesThePerSurfaceFallback', 33),
+            ('distinctSourceAtlasesKeepRetainedRecordingContainmentAcyclic', 33),
+            ('undeclaredContentUsesItsOwnChainEvenWithAnAtlasHost', 33),
+            ('debugAssertionsRejectRetainedReferenceAndAttachmentChanges', 33),
+            ('replacingTheLastConsumerKeepsARegisteredLiveAtlasOwner', 33),
+            ('readdingTheSameEntryRebuildsItsRetainedRecordPlan', 33),
+        ],
         'BackdropInvalidationTest': [
             ('rasterlessBackingRecordInvalidatesItsDependentRecording', 32, 'maxSdkVersion'),
             ('queuedFinalRecordingSurvivesASuspendedThumbnailCaptureAndThenSettles', 32, 'maxSdkVersion'),
         ],
         'ScopedSearchOpticsTest': [
             ('searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
+        ],
+        # The native onEnd latch requires API30 IME inset animation callbacks.
+        'PopupImeGeometryTest': [
+            ('tagEditorNativeImeTrace', 30),
+            ('addToPlaylistsNativeImeTrace', 30),
+            ('playerAddToPlaylistsNativeImeTrace', 30),
+            ('playerTagEditorNativeImeTrace', 30),
+            ('mixedContentDuringNativeImeTrace', 30),
         ],
         'FloatingImeLifecycleTest': [
             ('actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
@@ -133,6 +150,13 @@ def expected_for(root, api):
             require(cls in sdk_contracts and path == 'app/src/androidTest/java/io/github/anastaci1a/localica/' + cls + '.kt',
                     'Unreviewed SDK-filtered source')
             reviewed = sdk_contracts[cls]
+            # This reviewed source uses the exact imported spelling; normalize only
+            # its annotation representation, without changing source or bounds.
+            if cls == 'NoneAtlasTest':
+                imported = 'import androidx.test.filters.SdkSuppress\n'
+                require(text.count(imported) == 1, 'Changed None atlas SDK import')
+                text = text.replace(imported, '').replace(
+                    '@SdkSuppress(', '@androidx.test.filters.SdkSuppress(')
             require(text.count('SdkSuppress') == len(reviewed), 'Additional SDK exclusions require review')
             for contract in reviewed:
                 method, bound = contract[:2]

@@ -211,6 +211,6 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
             }
             state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
-    }, confirmButton = { ActionTextButton(enabled = valid, onClick = ::add) { Text("Add") } },
+    }, confirmButton = { ActionTextButton(enabled = valid, onClick = { add() }) { Text("Add") } },
         dismissButton = { ActionTextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
 }

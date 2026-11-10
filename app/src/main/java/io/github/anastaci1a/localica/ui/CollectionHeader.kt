@@ -56,7 +56,7 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
             middle = lerp(palette.middle, Color.Black, .4f), bottom = lerp(palette.bottom, Color.Black, .4f),
             wash = palette.collectionWash ?: palette.wash), Modifier.fillMaxSize(), fullArtBlend = 1f,
             artHeight = with(density) { imageHeight.toPx() }, artTop = inset + artTop * parallax,
-            softness = 1f, artTopReader = ::pictureTop)
+            softness = 1f, artTopReader = { pictureTop() })
         Box(Modifier.matchParentSize().background(if (light) Color.White.copy(alpha = .58f) else Color.Black.copy(alpha = .16f)))
         visual.artwork?.let { image ->
             Image(image, null, Modifier.fillMaxWidth().height(imageHeight)
@@ -75,8 +75,11 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
     enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit, playlist: Boolean = false,
     pinchHeader: CollectionPinchHeader? = null, onActionBottom: (Float) -> Unit = {}) {
     var headerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val headerDensity = androidx.compose.ui.platform.LocalDensity.current
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val imageHeight = maxWidth
+        val imageHeight = with(headerDensity) {
+            if (constraints.hasBoundedWidth) constraints.maxWidth.toDp() else androidx.compose.ui.unit.Dp.Infinity
+        }
         Box(Modifier.fillMaxWidth().height(imageHeight + 112.dp).onGloballyPositioned { headerCoordinates = it }) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {

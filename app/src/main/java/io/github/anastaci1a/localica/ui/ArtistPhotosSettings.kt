@@ -16,24 +16,40 @@ import java.util.Locale
 internal fun ArtistPhotosSettings(photos: ArtistPhotos, consent: NetworkConsent, snapshot: LibrarySnapshot) {
     val allowed by consent.allowed.collectAsState()
     val revision by photos.changes.collectAsState()
+    val work = artistPhotoEnvironment()?.takeIf { it.photos === photos }?.work
+    val progress = work?.status?.collectAsState()?.value
     var bytes by remember { mutableLongStateOf(0) }
+    var chosenBytes by remember { mutableLongStateOf(0) }
+    var budget by remember { mutableLongStateOf(512L * 1024 * 1024) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(revision, busy) { bytes = photos.cacheBytes() }
+    LaunchedEffect(revision, busy, progress) {
+        bytes = photos.cacheBytes(); chosenBytes = photos.chosenBytes(); budget = photos.cacheBudget()
+    }
     SettingsEntry("Photo sources") {
         Text("Deezer → Wikimedia → album art", style = MaterialTheme.typography.titleMedium)
     }
     Text("Photos are matched by artist name and releases in your library. Album art appears immediately while a photo loads. Photos refresh after 30 days and stay cached for offline use.")
-    SettingsEntry("Photo cache size") { Text("Photo cache size: ${String.format(Locale.ROOT, "%.1f", bytes / (1024.0 * 1024.0))} MiB / 64 MiB") }
+    SettingsEntry("Photo cache size") {
+        Text("Photo cache size: ${String.format(Locale.ROOT, "%.1f", bytes / (1024.0 * 1024.0))} MiB / ${budget / (1024 * 1024)} MiB")
+    }
+    ChoicePreference("Photo cache budget", budget, listOf(128L, 512L, 1024L, 2048L).map { it * 1024 * 1024 },
+        label = { "${it / (1024 * 1024)} MiB" }, popup = true) { selected -> scope.launch { photos.setCacheBudget(selected) } }
+    Text("Chosen photos: ${String.format(Locale.ROOT, "%.1f", chosenBytes / (1024.0 * 1024.0))} MiB, kept separately. Automatic photos use least-recently-displayed eviction. Visible photos are protected.")
     fun run(refresh: Boolean) {
         scope.launch {
             busy = true; status = null
             try {
                 if (refresh) {
                     val requests = withContext(Dispatchers.Default) { libraryArtistPhotoRequests(snapshot) }
-                    photos.refreshAll(requests)
-                    status = if (consent.allowed.value) "Artist photos refreshed." else "Refresh stopped: Online features are off."
+                    if (work != null) {
+                        work.refresh(requests)
+                        status = "Photo refresh queued. You can leave this page."
+                    } else {
+                        photos.refreshAll(requests)
+                        status = if (consent.allowed.value) "Artist photos refreshed." else "Refresh stopped: Online features are off."
+                    }
                 } else { photos.clearCache(); status = "Photo cache cleared. Match choices are kept." }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { status = "Could not update artist photos. Try again." }
@@ -48,6 +64,13 @@ internal fun ArtistPhotosSettings(photos: ArtistPhotos, consent: NetworkConsent,
     }
     if (!allowed) Text("Enable Online features to fetch photos. Artist images use album art while it is off.")
     if (busy) Text("Updating artist photos…")
+    progress?.let { current ->
+        if (current.pending > 0) Text("${current.pending} artists waiting${current.artist?.let { " · Fetching $it" }.orEmpty()}")
+        if (current.failed.isNotEmpty()) {
+            Text("${current.failed.size} artists couldn't be fetched.")
+            ActionTextButton({ scope.launch { work?.retry() } }, enabled = allowed) { Text("Retry") }
+        }
+    }
     status?.let { Text(it) }
     Text("Choose a different photo or clear a wrong match from an artist’s ⋯ menu. Clearing a match keeps album art until you choose a photo again.")
 }

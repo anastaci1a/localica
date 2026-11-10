@@ -78,6 +78,7 @@ internal fun sliderValue(position: Float, range: ClosedFloatingPointRange<Float>
 @Composable
 internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, enabled: Boolean = true, curve: Float = 1f) {
+    val restingOnly = requestedGlassNone()
     val enabledProgress by animateControlStateFloat(if (enabled) 1f else 0f, enabled, "Slider availability")
     val actualSteps = if (steps == 0 && valueRange.start == 0f && valueRange.endInclusive == 1f) 19 else steps
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
@@ -111,7 +112,12 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     } else touched
     val shown by animateFloatAsState(if (touchPreview.active) hoverShown else resting,
         if (touchPreview.active || reduced) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Slider position")
-    val body = rememberGlassBody({ shown }, { pressure }, { if (contact && !hovered) 1f else 0f })
+    val body = key(restingOnly) {
+        if (restingOnly) remember { mutableStateOf(GlassShape()) } else {
+            val body = rememberGlassBody({ shown }, { pressure }, { if (contact && !hovered) 1f else 0f })
+            body
+        }
+    }
     // Down-time state for one contact.
     val contactState = remember { floatArrayOf(0f) } // [grab offset]
     var feedback by remember { mutableStateOf<ControlDragHaptics?>(null) }
@@ -246,7 +252,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
             }
         }.focusable(enabled)) {
     fun Density.thumbBounds(controlWidth: Float): Rect {
-        val scale = 1f + (expansion - 1f) * active
+        val scale = if (restingOnly) 1f else 1f + (expansion - 1f) * active
         val baseWidth = 28.dp.toPx() * scale
         val width = baseWidth * body.value.scaleX()
         val height = 28.dp.toPx() * (1f + (scale - 1f) * 2f / 9f) * body.value.scaleY()
@@ -294,6 +300,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSliderTrack(fr
 /** The containing preference row owns the toggle's semantics and full-width tap target. */
 @Composable
 internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = null) {
+    val restingOnly = requestedGlassNone()
     val speed = LocalMotionSpeed.current
     val reduced = LocalReducedMotion.current
     val position = remember { androidx.compose.animation.core.Animatable(if (checked) 1f else 0f) }
@@ -329,7 +336,12 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
                 else androidx.compose.animation.core.FastOutSlowInEasing), label = "Switch lens")
     // A replaced/unready source cannot become a track-only lens during exit.
     val availableActive by remember(ready) { derivedStateOf { if (ready) active else 0f } }
-    val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active })
+    val body = key(restingOnly) {
+        if (restingOnly) remember { mutableStateOf(GlassShape()) } else {
+            val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active })
+            body
+        }
+    }
     val expansion = LocalGlassAppearance.current.controlExpansion
     val change by rememberUpdatedState(onChange)
     val haptics by rememberUpdatedState(rememberControlHaptics())
@@ -388,7 +400,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
         GlassControlScene(Modifier.matchParentSize(), horizontalPadding = 24.dp, source = source, prepare = { engaged }, geometry = {
             val fraction = position.value.coerceIn(0f, 1f)
             val shape = body.value
-            val scale = 1f + (expansion - 1f) * availableActive
+            val scale = if (restingOnly) 1f else 1f + (expansion - 1f) * availableActive
             val width = 28.dp.toPx() * scale * shape.scaleX()
             val height = 28.dp.toPx() * scale * shape.scaleY()
             val wall = direction * glassWallAffinity(fraction, 1f)
