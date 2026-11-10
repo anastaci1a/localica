@@ -5,6 +5,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.queue.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -134,4 +137,24 @@ class QueueTraversalTest {
             }
         } finally { room.close() }
     }
+    @Test fun concurrentFirstWindowOperationsInstallSchemaOnceWithoutDeadlock() {
+        val installations = java.util.concurrent.atomic.AtomicInteger()
+        val room = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java)
+            .setQueryCallback({ sql, _ ->
+                if (sql.startsWith("CREATE TABLE IF NOT EXISTS queue_sequence_state")) installations.incrementAndGet()
+            }, java.util.concurrent.Executor { it.run() }).build()
+        try {
+            val store = QueueWindowStore(room)
+            runBlocking {
+                withTimeout(10000) {
+                    val first = async(Dispatchers.IO) { store.checkpoint("missing", "entry", "token", 1) }
+                    val second = async(Dispatchers.IO) { store.checkpoint("missing", "entry", "token", 2) }
+                    assertFalse(first.await())
+                    assertFalse(second.await())
+                }
+            }
+            assertEquals(1, installations.get())
+        } finally { room.close() }
+    }
+
 }

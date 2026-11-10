@@ -81,4 +81,11 @@ class QueueEditsTest {
         assertFalse(QueueEdits.canCreate(library, 1, setOf(second.id)))
         assertTrue(QueueEdits.canCreate(library, null, emptySet()))
     }
+    @Test fun nativePlaybackRejectsMissingJourneyAndDurableWindow() {
+        val queue = ListeningQueue(name = "Unprepared", entries = listOf(QueueEntry(track = song("one"))))
+        val failure = runCatching { queue.playbackVisits() }.exceptionOrNull()
+        assertTrue(failure is IllegalArgumentException)
+        assertEquals("Playback requires a prepared journey or durable window", failure?.message)
+    }
+
 }
