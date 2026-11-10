@@ -42,6 +42,7 @@ class FlatNoneRealAppTest {
         val track = Track(Uri.fromFile(file).toString(), "Flat None walk song", album = "Flat None walk album",
             artist = "Localica", fileName = file.name, relativePath = file.name, id = root)
         var playback: PlaybackConnection? = null
+        var walkFailure: Throwable? = null
         fun visible(selector: androidx.test.uiautomator.BySelector): androidx.test.uiautomator.UiObject2 =
             requireNotNull(device.findFresh(selector, 15000)) { "Missing $selector" }
         fun checkpoint(name: String) {
@@ -92,13 +93,32 @@ class FlatNoneRealAppTest {
                 visible(By.desc("Collapse player")).click()
                 checkpoint("returned")
             }
+        } catch (failure: Throwable) {
+            walkFailure = failure
+            throw failure
         } finally {
             instrumentation.runOnMainSync { io.github.anastaci1a.localica.ui.GlassWork.observer = null }
-            playback?.let { connection -> instrumentation.runOnMainSync { connection.clear(); connection.close() } }
+            var retired = playback == null
+            val cleanupFailure = runCatching { playback?.let { connection ->
+                try {
+                    instrumentation.runOnMainSync { connection.clear() }
+                    // The actor publishes activeId only after its durable save;
+                    // the live metadata then proves the native timeline is empty.
+                    await(15000) { connection.queues.state.value.library.activeId == null &&
+                        connection.state.value.trackUri == null && connection.state.value.problem == null }
+                    retired = true
+                } finally { instrumentation.runOnMainSync { connection.close() } }
+            } }.exceptionOrNull()
             actionPreferences.write(originalActions)
             preferences.write(original)
             runBlocking { store.removeRoot(root) }
-            file.delete()
+            // An undrained player must retain its test-owned source, even on a
+            // failing teardown, so a later test cannot inherit a missing-file loop.
+            if (retired) file.delete()
+            if (cleanupFailure != null) {
+                val failure = walkFailure
+                if (failure == null) throw cleanupFailure else failure.addSuppressed(cleanupFailure)
+            }
         }
     }
 }
