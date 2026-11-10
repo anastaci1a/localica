@@ -9,6 +9,10 @@ class QueueJourneyTest {
     private val ids = listOf("A", "B", "C", "D", "E", "F", "X")
     private val random = Random(19)
 
+    @Test fun durableReaderAndJourneyAgreeOnTheReservedBehindCycleEncoding() {
+        assertEquals(QueueJourney.BEHIND_START, QueueBehindStartCycle)
+    }
+
     @Test fun backwardAndForwardRetraceWhileManualSelectionBranchesWithoutForgettingVisitedSongs() {
         var path = QueueJourney.start(ids, "A", JourneyModes(shuffle = true), random)
         for (id in listOf("D", "B", "F")) path = path.select(id, ids, random)
