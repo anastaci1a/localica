@@ -176,6 +176,17 @@ class MainThreadGuardTest {
                     }
                     nodes.forEach(::walk)
                     Log.i("Guard817", "t=${(now - started) / 1000}s nodes=${seen.size} " + seen.take(60).joinToString(" "))
+                    val mergedRoots = compose.onAllNodes(androidx.compose.ui.test.isRoot(), useUnmergedTree = false).fetchSemanticsNodes()
+                    val mergedTags = mutableListOf<String>()
+                    fun walkMerged(node: androidx.compose.ui.semantics.SemanticsNode) {
+                        val props = androidx.compose.ui.semantics.SemanticsProperties
+                        if (props.TestTag in node.config) mergedTags += node.config[props.TestTag]
+                        node.children.forEach(::walkMerged)
+                    }
+                    mergedRoots.forEach(::walkMerged)
+                    val unmergedHit = compose.onAllNodesWithTag("browser-list", useUnmergedTree = true).fetchSemanticsNodes().size
+                    val mergedHit = compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().size
+                    Log.i("Guard817", "t=${(now - started) / 1000}s MERGED roots=${mergedRoots.size} tags=${mergedTags.size} browserListMerged=$mergedHit browserListUnmerged=$unmergedHit " + mergedTags.take(40).joinToString(","))
                 }
                 compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty()
             }
