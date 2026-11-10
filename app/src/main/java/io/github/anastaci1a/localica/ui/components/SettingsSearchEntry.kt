@@ -5,7 +5,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
@@ -34,7 +35,9 @@ internal fun Modifier.settingsSearchEntryModifier(
     val requester = remember { FocusRequester() }
     val view = LocalView.current
     val tint = MaterialTheme.colorScheme.primary
-    val currentAnchor = rememberUpdatedState(onAnchor)
+    // A new registration must also replace the placement callback, even at unchanged geometry.
+    val currentAnchor = remember(owner, id) { mutableStateOf(onAnchor) }
+    SideEffect { currentAnchor.value = onAnchor }
     val alpha = rememberSettingsSearchHighlight(highlighted, reduced) {
         requester.requestFocus()
         view.announceForAccessibility("$title, $page")
