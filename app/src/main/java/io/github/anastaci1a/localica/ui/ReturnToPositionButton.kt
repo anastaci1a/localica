@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.ui.layout.ReturnControlSlot
 
 @Composable
 internal fun ReturnToPositionButton(up: Boolean, label: String, visible: Boolean = true, onClick: () -> Unit) {
@@ -56,7 +57,7 @@ internal fun FloatingReturnToPositionButton(up: Boolean, label: String, visible:
     }
     val motion = rememberFloatingControlMotion(visible, reducedMotion)
     val rise = with(LocalDensity.current) { FloatingControlRise.toPx() }
-    if (motion.retained && !returning) Box(modifier.testTag("floating-return-control")
+    if (motion.retained && !returning) ReturnControlSlot(modifier.testTag("floating-return-control")
         .offset { IntOffset(0, motion.offsetY(rise).roundToInt()) }
         .graphicsLayer {
             alpha = motion.alpha
