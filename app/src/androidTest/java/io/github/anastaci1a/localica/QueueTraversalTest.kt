@@ -13,6 +13,22 @@ import org.junit.Test
 
 class QueueTraversalTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+    private fun assertTraversalState(db: androidx.sqlite.db.SupportSQLiteDatabase, queueId: String,
+        journey: QueueJourney, window: QueuePlaybackWindow) {
+        assertEquals(journey.window(), window.visits)
+        assertEquals(journey.current, window.current)
+        assertEquals(journey.next, window.next)
+        assertTrue(window.visits.size <= QueuePlaybackWindow.MaximumVisits)
+        db.query("SELECT entryId,cycle,token FROM queue_sequence_history WHERE queueId = ? ORDER BY position", arrayOf(queueId)).use { rows ->
+            assertEquals(journey.history, buildList {
+                while (rows.moveToNext()) add(QueueVisit(rows.getString(0), rows.getLong(1), rows.getString(2)))
+            })
+        }
+        db.query("SELECT entryId FROM queue_sequence_plan WHERE queueId = ? AND cycle = ? AND visited = 1",
+            arrayOf(queueId, journey.cycle)).use { rows ->
+            assertEquals(journey.visited, buildSet { while (rows.moveToNext()) add(rows.getString(0)) })
+        }
+    }
     private fun queue(size: Int, current: Int, modes: JourneyModes): ListeningQueue {
         val namespace = java.util.UUID.randomUUID().toString()
         val entries = List(size) { QueueEntry(id = "$namespace:occurrence:$it", track = Track("song:${it % 11}", "Song ${it % 11}",
@@ -337,6 +353,105 @@ class QueueTraversalTest {
                 } finally { db.endTransaction() }
             } finally { room.close() }
         }
+    }
+
+    @Test fun recordedShuffleArrivalKeepsSkippedPlayNextVisitsAfterTheTargetInBoundedPages() {
+        for (scheduledCount in listOf(2, 600)) {
+            val queue = queue(20, 10, JourneyModes(loop = true))
+            val ids = queue.entries.map { it.id }
+            val modes = JourneyModes(shuffle = true, loop = true)
+            var journey = queue.journey!!.reconcile(ids, queue.currentEntryId, modes, kotlin.random.Random(43))
+            for (index in listOf(17, 4, 8)) journey = journey.select(ids[index], ids)
+            journey = journey.arrive(journey.history[1].token, ids)
+            val added = List(scheduledCount) { QueueEntry(id = "scheduled:$it", track = queue.entries.first().track) }
+            val all = ids + added.map { it.id }
+            journey = journey.playNext(added.map { it.id }, all, kotlin.random.Random(43))
+            val target = journey.history.last()
+            val targetPosition = journey.history.lastIndex
+            val affected = targetPosition - journey.cursor
+            val firstScheduled = journey.history[journey.cursor + 1]
+            val room = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+            try {
+                val saved = queue.copy(entries = queue.entries + added, journey = journey, currentEntryId = journey.current!!.entryId)
+                runBlocking { room.queues().save(QueueLibrary(), QueueLibrary(listOf(saved), saved.id)) }
+                val db = room.openHelper.writableDatabase
+                QueueSequence.createSchema(db); QueueTraversal.createSchema(db)
+                db.beginTransaction()
+                try {
+                    val sequence = QueueSequence(db)
+                    QueueSequenceMigration(sequence).import(queue.id)
+                    val traversal = QueueTraversal(sequence)
+                    assertEquals(journey.window(), traversal.restore(queue.id, saved.currentEntryId, modes).visits)
+                    var writes = -1L
+                    traversal.arrivalWriteObserver = {
+                        writes = it
+                        android.util.Log.i("QueueTraversalWrites", "case=scheduled scheduled=$scheduledCount rows=$it")
+                    }
+                    journey = journey.arrive(target.token, all)
+                    var window = requireNotNull(traversal.arriveRecordedShuffle(queue.id, target.token))
+                    assertTraversalState(db, queue.id, journey, window)
+                    assertEquals(4L * affected + 2, writes)
+                    assertEquals(firstScheduled, window.next)
+                    db.query("SELECT COUNT(*) FROM queue_sequence_history_order WHERE queueId = ?", arrayOf(queue.id)).use {
+                        assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+                    }
+                    journey = journey.arrive(firstScheduled.token, all)
+                    window = requireNotNull(traversal.arriveRecordedShuffle(queue.id, firstScheduled.token))
+                    assertTraversalState(db, queue.id, journey, window)
+                    assertEquals(2L, writes)
+                    assertNull(traversal.arriveRecordedShuffle(queue.id, "not-recorded"))
+                    assertEquals(0L, writes)
+                    assertTraversalState(db, queue.id, journey, traversal.window(queue.id))
+                    db.setTransactionSuccessful()
+                } finally { db.endTransaction() }
+            } finally { room.close() }
+        }
+    }
+
+    @Test fun recordedShuffleArrivalRetracesTheBehindAnchorAndKeepsOlderCycleMembershipSeparate() {
+        val queue = queue(20, 17, JourneyModes(loop = true))
+        val ids = queue.entries.map { it.id }
+        val modes = JourneyModes(shuffle = true, loop = true)
+        var journey = queue.journey!!.reconcile(ids, queue.currentEntryId, modes, kotlin.random.Random(43))
+        repeat(25) { journey = journey.arrive(journey.next!!.token, ids, kotlin.random.Random(43)) }
+        val olderAnchor = journey.history.first()
+        val active = journey.current!!
+        journey = journey.arrive(olderAnchor.token, ids)
+        assertTrue(olderAnchor.cycle < journey.cycle)
+        val room = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+        try {
+            val saved = queue.copy(journey = journey, currentEntryId = journey.current!!.entryId)
+            runBlocking { room.queues().save(QueueLibrary(), QueueLibrary(listOf(saved), saved.id)) }
+            val db = room.openHelper.writableDatabase
+            QueueSequence.createSchema(db); QueueTraversal.createSchema(db)
+            db.beginTransaction()
+            try {
+                val sequence = QueueSequence(db)
+                QueueSequenceMigration(sequence).import(queue.id)
+                val traversal = QueueTraversal(sequence)
+                traversal.restore(queue.id, saved.currentEntryId, modes)
+                var writes = -1L
+                traversal.arrivalWriteObserver = {
+                    writes = it
+                    android.util.Log.i("QueueTraversalWrites", "case=older-cycle rows=$it")
+                }
+                val behind = journey.previous!!
+                val historySize = journey.history.size
+                journey = journey.arrive(behind.token, ids)
+                var window = requireNotNull(traversal.arriveBehind(queue.id, behind.token))
+                assertTraversalState(db, queue.id, journey, window)
+                assertEquals(2L * historySize + 2, writes)
+                for (visit in listOf(olderAnchor, active, olderAnchor)) {
+                    journey = journey.arrive(visit.token, ids)
+                    window = requireNotNull(traversal.arriveRecordedShuffle(queue.id, visit.token))
+                    assertTraversalState(db, queue.id, journey, window)
+                    assertEquals(if (visit.cycle == journey.cycle) 2L else 1L, writes)
+                }
+                assertNull(traversal.arriveRecordedShuffle(queue.id, journey.future.first().token))
+                assertEquals(0L, writes)
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+        } finally { room.close() }
     }
 
     @Test fun missingLegacyJourneyInitializesExactShuffleOrderWithBoundedProjection() {

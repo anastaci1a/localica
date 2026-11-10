@@ -5,6 +5,8 @@ import java.util.UUID
 /** Durable traversal pages. Actual history remains in SQL; projected ordered neighbors are not history. */
 internal class QueueTraversal(private val sequence: QueueSequence) {
     private val db get() = sequence.db
+    /** Opt-in diagnostic row writes, including staging rows; observers never affect the transaction. */
+    internal var arrivalWriteObserver: ((Long) -> Unit)? = null
     internal data class State(val queueId: String, val namespace: String, val cursor: Int,
         val historySize: Int, val cycle: Long, val modes: JourneyModes, val anchor: String?)
 
@@ -153,6 +155,10 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
     fun arriveBehind(queueId: String, visitToken: String): QueuePlaybackWindow? {
         sequence.checkWorker()
         check(db.inTransaction())
+        return measureArrival { arriveBehindVisit(queueId, visitToken) }
+    }
+
+    private fun arriveBehindVisit(queueId: String, visitToken: String): QueuePlaybackWindow? {
         val state = requireNotNull(state(queueId))
         if (!state.modes.shuffle) return null
         val visit = behind(state)?.takeIf { it.token == visitToken } ?: return null
@@ -168,6 +174,86 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
         write(updated)
         return window(updated)
     }
+
+    /** Recorded shuffle arrivals retain the active cycle, even when retracing an older cycle. */
+    fun arriveRecordedShuffle(queueId: String, visitToken: String): QueuePlaybackWindow? {
+        sequence.checkWorker()
+        check(db.inTransaction())
+        return measureArrival {
+            val state = requireNotNull(state(queueId))
+            if (!state.modes.shuffle) return@measureArrival null
+            val target = db.query("SELECT position,entryId,cycle FROM queue_sequence_history WHERE queueId = ? AND token = ?",
+                arrayOf(queueId, visitToken)).use {
+                if (!it.moveToFirst()) null else it.getInt(0) to QueueVisit(it.getString(1), it.getLong(2), visitToken)
+            } ?: return@measureArrival null
+            if (target.first == state.cursor) return@measureArrival window(state)
+            val skipped = if (target.first <= state.cursor) 0 else db.query("""
+                SELECT COUNT(*) FROM queue_sequence_history h LEFT JOIN queue_sequence_plan p
+                    ON p.queueId = h.queueId AND p.cycle = h.cycle AND p.entryId = h.entryId
+                WHERE h.queueId = ? AND h.position > ? AND h.position < ?
+                    AND h.cycle = ? AND COALESCE(p.visited,0) = 0
+            """.trimIndent(), arrayOf(queueId, state.cursor, target.first, state.cycle)).use { it.moveToFirst(); it.getInt(0) }
+            if (skipped != 0) moveSkippedVisits(state, target.first, skipped)
+            if (target.second.cycle == state.cycle) {
+                db.execSQL("UPDATE queue_sequence_plan SET visited = 1 WHERE queueId = ? AND cycle = ? AND entryId = ?",
+                    arrayOf(queueId, state.cycle, target.second.entryId))
+            }
+            val updated = state.copy(cursor = target.first - skipped)
+            write(updated)
+            window(updated)
+        }
+    }
+
+    /** Move skipped unplayed visits after the target, with only one constant-size SQL page live at a time. */
+    private fun moveSkippedVisits(state: State, target: Int, skipped: Int) {
+        check(!db.query("SELECT 1 FROM queue_sequence_history_order WHERE queueId = ? LIMIT 1",
+            arrayOf(state.queueId)).use { it.moveToFirst() })
+        var after = state.cursor
+        var seen = 0
+        db.compileStatement("INSERT INTO queue_sequence_history_order (queueId,token,position) VALUES (?,?,?)").use { insert ->
+            while (after < target) {
+                var read = 0
+                db.query("""
+                    SELECT h.position,h.token,h.cycle,COALESCE(p.visited,0) FROM queue_sequence_history h
+                    LEFT JOIN queue_sequence_plan p ON p.queueId = h.queueId AND p.cycle = h.cycle AND p.entryId = h.entryId
+                    WHERE h.queueId = ? AND h.position > ? AND h.position <= ? ORDER BY h.position LIMIT ?
+                """.trimIndent(), arrayOf(state.queueId, after, target, QueueSequence.PageSize)).use { rows ->
+                    while (rows.moveToNext()) {
+                        val position = rows.getInt(0)
+                        val isSkipped = position < target && rows.getLong(2) == state.cycle && rows.getInt(3) == 0
+                        if (isSkipped) seen++
+                        val next = if (isSkipped) target - skipped + seen else position - seen
+                        insert.clearBindings()
+                        insert.bindString(1, state.queueId); insert.bindString(2, rows.getString(1)); insert.bindLong(3, next.toLong())
+                        insert.executeInsert()
+                        after = position
+                        read++
+                    }
+                }
+                check(read > 0)
+            }
+        }
+        check(seen == skipped)
+        db.execSQL("UPDATE queue_sequence_history SET position = -position - 1 WHERE queueId = ? AND position > ? AND position <= ?",
+            arrayOf(state.queueId, state.cursor, target))
+        db.execSQL("""
+            UPDATE queue_sequence_history SET position = (SELECT s.position FROM queue_sequence_history_order s
+                WHERE s.queueId = queue_sequence_history.queueId AND s.token = queue_sequence_history.token)
+            WHERE queueId = ? AND position < 0
+        """.trimIndent(), arrayOf(state.queueId))
+        db.execSQL("DELETE FROM queue_sequence_history_order WHERE queueId = ?", arrayOf(state.queueId))
+    }
+
+    private inline fun <T> measureArrival(block: () -> T): T {
+        val observer = arrivalWriteObserver ?: return block()
+        val before = totalChanges()
+        try { return block() } finally {
+            val writes = totalChanges() - before
+            try { observer(writes) } catch (_: Exception) { }
+        }
+    }
+
+    private fun totalChanges(): Long = db.query("SELECT total_changes()").use { it.moveToFirst(); it.getLong(0) }
 
     private fun window(state: State): QueuePlaybackWindow {
         val selected = historyAt(state.queueId, state.cursor)
@@ -313,6 +399,10 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_queue_sequence_history_position ON queue_sequence_history(queueId,position)")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_sequence_history_entry ON queue_sequence_history(queueId,entryId,cycle,position)")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_sequence_history_entryId ON queue_sequence_history(entryId)")
+            db.execSQL("""CREATE TABLE IF NOT EXISTS queue_sequence_history_order (
+                queueId TEXT NOT NULL, token TEXT NOT NULL, position INTEGER NOT NULL,
+                PRIMARY KEY(queueId,token),
+                FOREIGN KEY(queueId) REFERENCES queue_sequence_traversal(queueId) ON DELETE CASCADE)""")
             db.execSQL("""CREATE TABLE IF NOT EXISTS queue_sequence_behind (
                 queueId TEXT NOT NULL PRIMARY KEY, entryId TEXT NOT NULL, queuePosition INTEGER,
                 FOREIGN KEY(queueId) REFERENCES queue_sequence_traversal(queueId) ON DELETE CASCADE)""")
