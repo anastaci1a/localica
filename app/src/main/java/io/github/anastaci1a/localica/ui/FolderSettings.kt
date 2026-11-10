@@ -37,7 +37,7 @@ private val settingsDestinations = listOf(
     SettingsDestination("Artist photos", "Online features", AppIcon.TabArtists, "Sources, cache, and photo matching"),
     SettingsDestination("Playback and queues", null, AppIcon.TransportPlay, "Preloading, queue switching, and retention"),
     SettingsDestination("Song tap behavior", "Playback and queues", AppIcon.TabSongs, "Default action and per-list overrides"),
-    SettingsDestination("Library and tags", null, AppIcon.TabLibrary, "Folders, scanner configuration, tag jobs and recovery"),
+    SettingsDestination("Library and tags", null, AppIcon.TabLibrary, "Folders, scanner configuration, tag jobs, recovery and library data"),
     SettingsDestination("Library filters", "Library and tags", AppIcon.SettingsLibraryFilters, "Visible filters, their order, and unfiltered collections"),
     SettingsDestination("Folders to scan", "Library and tags", AppIcon.TabFolders, "Choose music folders and excluded subfolders"),
     SettingsDestination("Scanner", "Library and tags", AppIcon.ActionSearch, "Quick Scan, full scan, startup scans, subfolders and short files"),
@@ -114,8 +114,10 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
         }) { shown ->
         val page = shown.title.takeUnless { it == "Settings" }
         val pageKey = (page ?: "root") + shown.folderUri.orEmpty() + shown.iconPackId.orEmpty()
-        GlassSearchField(search, { search = it }, "Search settings",
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
+        if (page == null) {
+            GlassSearchField(search, { search = it }, "Search settings",
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
+        }
         key(pageKey) { holder.SaveableStateProvider(pageKey) {
             val scroll = rememberScrollState()
             val focus = remember(pageKey, scroll) { SettingsSearchFocus(page.orEmpty(), scroll) }
@@ -171,8 +173,13 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         SettingsLink(destination.title, destination.summary, destination.icon) { path = settingsPath(destination.title) }
                     }
                 } else when (page) {
-                    "Interface", "Library and tags" -> settingsDestinations.filter { it.parent == page }.forEach { child ->
-                        SettingsLink(child.title, child.summary, child.icon) { path = path + child.title }
+                    "Interface", "Library and tags" -> {
+                        settingsDestinations.filter { it.parent == page }.forEach { child ->
+                            SettingsLink(child.title, child.summary, child.icon) { path = path + child.title }
+                        }
+                        if (page == "Library and tags") (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let {
+                            LibraryDataSettings(it.library)
+                        }
                     }
                     "Navigation", "Player", "Motion", "Glass", "Glass appearance", "Glass advanced", "Navigation selector", "Appearance" -> interfaceContent(page)
                     "Icon packs" -> IconPackSettings { id -> iconPackId = id; path = path + "Pack icons" }

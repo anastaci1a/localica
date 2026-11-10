@@ -57,6 +57,7 @@ internal fun ActionButton(onClick: () -> Unit, modifier: Modifier = Modifier, en
 
 @androidx.compose.runtime.Composable
 internal fun ActionTextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+    shape: androidx.compose.ui.graphics.Shape = ButtonDefaults.textShape,
     content: @androidx.compose.runtime.Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     val defaults = ButtonDefaults.textButtonColors()
     // Preserve the app's disabled ink across Material token revisions.
@@ -64,7 +65,7 @@ internal fun ActionTextButton(onClick: () -> Unit, modifier: Modifier = Modifier
     val foreground = controlStateColor(enabled, defaults.contentColor, disabledInk,
         "Action text availability")
     androidx.compose.material3.TextButton(controlActivation(enabled, onClick), modifier.ownButtonDrag(enabled), enabled = enabled,
-        colors = defaults.copy(contentColor = foreground, disabledContentColor = foreground), content = content)
+        shape = shape, colors = defaults.copy(contentColor = foreground, disabledContentColor = foreground), content = content)
 }
 
 @androidx.compose.runtime.Composable

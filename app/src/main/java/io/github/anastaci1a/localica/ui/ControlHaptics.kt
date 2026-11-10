@@ -13,6 +13,10 @@ internal fun interface ControlHaptics {
     fun emit(feedback: ControlHaptic)
 }
 
+/** Every drag owner's release (#736): a finger lift after a drag, including a drop on the
+ * cancel target, is Strong. A system cancel (consumed up, second pointer, unmount) is silent. */
+internal fun ControlHaptics.dragReleased() = emit(ControlHaptic.Strong)
+
 /** Tests can record semantic pulses without depending on a device's vibration hardware. */
 internal val LocalControlHaptics = staticCompositionLocalOf<ControlHaptics?> { null }
 
@@ -24,7 +28,7 @@ internal fun rememberControlHaptics(): ControlHaptics {
         ControlHaptics { feedback ->
             // No override flags or vibrator fallback: retain the platform's system-setting gate.
             view.performHapticFeedback(when (feedback) {
-                ControlHaptic.Weak -> HapticFeedbackConstants.CLOCK_TICK
+                ControlHaptic.Weak -> HapticFeedbackConstants.VIRTUAL_KEY
                 ControlHaptic.Strong -> HapticFeedbackConstants.LONG_PRESS
             })
         }

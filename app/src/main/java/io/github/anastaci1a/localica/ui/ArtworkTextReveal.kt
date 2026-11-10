@@ -73,7 +73,7 @@ internal class ArtworkTextReveal {
 internal fun Modifier.artworkTextReveal(reveal: ArtworkTextReveal?, layout: () -> TextLayoutResult?, cornerPx: () -> Float,
     skeleton: Boolean = true): Modifier {
     if (reveal == null) return this
-    val base = MaterialTheme.colorScheme.surfaceContainer
+    val base = LocalLoadingMaterialColor.current ?: MaterialTheme.colorScheme.surfaceContainer
     val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = .065f)
     val shimmer = if (LocalReducedMotion.current) null else LocalLoadingShimmer.current
     val opacity = LocalLoadingMaterialOpacity.current.coerceIn(0f, 1f)

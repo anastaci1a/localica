@@ -87,6 +87,10 @@ public class TestDocumentsProvider extends DocumentsProvider {
         if (!(id.equals("tone.mp3") || id.equals("tone.m4a") || ((id.equals("tone.lrc") || id.equals("import.m3u8") || metadataFixture) && mode.equals("r")))) throw new FileNotFoundException(id);
         // Model provider latency so background/lifecycle checks exercise an in-flight scan.
         if (mode.equals("r")) android.os.SystemClock.sleep(150);
+        return ParcelFileDescriptor.open(fixture(id), ParcelFileDescriptor.parseMode(mode));
+    }
+
+    private File fixture(String id) throws FileNotFoundException {
         File file = new File(getContext().getCacheDir(), id);
         if (!file.exists()) {
             try (InputStream input = getContext().getAssets().open(id); OutputStream output = new FileOutputStream(file)) {
@@ -95,7 +99,13 @@ public class TestDocumentsProvider extends DocumentsProvider {
                 while ((size = input.read(buffer)) != -1) output.write(buffer, 0, size);
             } catch (IOException error) { throw new FileNotFoundException(error.getMessage()); }
         }
-        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.parseMode(mode));
+        return file;
+    }
+
+    // Report the bytes openDocument serves: tag saves verify copies against the declared size (#700).
+    private Long declaredSize(String id) {
+        if (!(id.equals("tone.mp3") || id.equals("tone.m4a"))) return 1024L;
+        try { return fixture(id).length(); } catch (FileNotFoundException error) { return null; }
     }
 
     private void addDocument(MatrixCursor cursor, String id) {
@@ -105,6 +115,6 @@ public class TestDocumentsProvider extends DocumentsProvider {
         cursor.newRow().add(Document.COLUMN_DOCUMENT_ID, id)
             .add(Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "Test tones" : id.substring(id.lastIndexOf('/') + 1))
             .add(Document.COLUMN_MIME_TYPE, mime).add(Document.COLUMN_FLAGS, directory ? 0 : Document.FLAG_SUPPORTS_WRITE)
-            .add(Document.COLUMN_SIZE, directory ? null : 1024);
+            .add(Document.COLUMN_SIZE, directory ? null : declaredSize(id));
     }
 }

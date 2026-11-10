@@ -28,10 +28,9 @@ class CollectionNavigationTest {
             }
         }
         compose.onNodeWithText("Playback and queues").assertIsDisplayed()
-        // #641 keeps a separate search editor on every settings page.
+        // #696 keeps global search at root; this child only opens its explicit editor.
         val queueLimitEditor = hasSetTextAction() and hasText("Maximum queues (blank = unlimited)")
-        compose.onNodeWithText("Search settings").assertIsDisplayed()
-            .assert(hasSetTextAction() and !queueLimitEditor)
+        compose.onNodeWithText("Search settings").assertDoesNotExist()
         compose.onAllNodes(queueLimitEditor).assertCountEquals(0)
         compose.onNodeWithText("Maximum queues: unlimited").performScrollTo().performClick()
         compose.onAllNodes(queueLimitEditor).assertCountEquals(1)
@@ -44,8 +43,7 @@ class CollectionNavigationTest {
             .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         compose.runOnIdle { assertEquals(3, saved?.maximum) }
         compose.onAllNodes(queueLimitEditor).assertCountEquals(0)
-        compose.onNodeWithText("Search settings").assertIsDisplayed()
-            .assert(hasSetTextAction() and !queueLimitEditor)
+        compose.onNodeWithText("Search settings").assertDoesNotExist()
     }
 
     @Test fun albumGroupsAndViewChoicesAreReachable() {

@@ -15,7 +15,9 @@ enum class ListSize { Compact, Normal, Large, Small, Smallest, Tracklist;
 data class BrowseStyle(val sort: TrackSort = TrackSort.Title, val ascending: Boolean = true,
     val presentation: Presentation = Presentation.List, val extraInfo: ExtraInfo = ExtraInfo.Automatic,
     val quickSearch: Boolean = true, val songGrouping: SongGrouping = SongGrouping.None,
-    val itemsPerRow: Int? = null, val listSize: ListSize = ListSize.Normal) {
+    val itemsPerRow: Int? = null, val listSize: ListSize = ListSize.Normal,
+    /** Artist views only (#694): one shared choice, independent of per-list overrides. */
+    val albumGrouping: Boolean = true) {
     fun query() = LibraryQuery(sort = sort, ascending = ascending)
 }
 
@@ -106,7 +108,8 @@ class BrowsePreferences(context: Context) {
             store.getBoolean("$key.quick-search", true),
             sorts.grouping(route),
             store.getInt("$key.columns", 0).takeIf { it in 1..5 },
-            route.resolveListSize(store.enumValue<ListSize>("$key.list-size")))
+            route.resolveListSize(store.enumValue<ListSize>("$key.list-size")),
+            sorts.artistAlbumGrouping)
     }
     /** Reuse the artwork resolver and one immutable read for every row type. */
     fun informationStyles(): Map<MediaKind, BrowseStyle> {
@@ -138,11 +141,14 @@ class BrowsePreferences(context: Context) {
             .putString("$key.presentation", value.presentation.name).putString("$key.info", value.extraInfo.name)
             .putBoolean("$key.quick-search", value.quickSearch).putString("$key.group", value.songGrouping.name)
             .putInt("$key.columns", value.itemsPerRow?.coerceIn(1, 5) ?: 0)
-            .putString("$key.list-size", value.listSize.name).apply()
+            .putString("$key.list-size", value.listSize.name)
+        if (route.isArtistContents()) edit.putBoolean(BrowsePreferenceKeys.ArtistAlbumGrouping, value.albumGrouping)
+        edit.apply()
     }
     fun observe(route: BrowseRoute, onChange: (BrowseStyle) -> Unit): () -> Unit {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == null || key.startsWith(type(route) + ".")) onChange(read(route))
+            if (key == null || key.startsWith(type(route) + ".") ||
+                key == BrowsePreferenceKeys.ArtistAlbumGrouping && route.isArtistContents()) onChange(read(route))
         }
         store.registerOnSharedPreferenceChangeListener(listener)
         return { store.unregisterOnSharedPreferenceChangeListener(listener) }
@@ -156,6 +162,9 @@ class BrowsePreferences(context: Context) {
             .forEach { edit.remove("$key.$it") }
     }
 }
+
+/** Artist and Album Artist song views share the album grouping choice (#694). */
+internal fun BrowseRoute.isArtistContents(): Boolean = !search && collection?.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)
 
 /** Inheritance belongs only to the mixed roots, never a single-type or scoped list. */
 internal fun BrowseRoute.allowsInheritedInformation(): Boolean = collection == null && filter == null &&

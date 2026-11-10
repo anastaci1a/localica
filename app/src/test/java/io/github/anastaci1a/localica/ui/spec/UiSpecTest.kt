@@ -19,7 +19,7 @@ class UiSpecTest {
         assertEquals(Space.entries.toSet(),stock.space.keys)
         assertEquals(listOf(1f,4f,8f,12f,16f,24f,28f),Space.entries.map { stock.space.getValue(it).value })
         assertEquals(listOf(8f,16f,20f,24f,28f),Radius.entries.dropLast(1).map { stock.radius.getValue(it).value })
-        assertEquals(listOf(64f,51.2f,32f,64f,28f),ControlSize.entries.map { stock.control.getValue(it).value })
+        assertEquals(listOf(64f,51.2f,32f,64f,28f,24f,56f,48f,24f),ControlSize.entries.map { stock.control.getValue(it).value })
         assertEquals(listOf(180,270,220,220,300,240,300,165,300,225),MotionProfile.entries.take(10).map { (stock.motion.getValue(it) as MotionProfileSpec).durationMs })
         assertEquals(MarqueeSpec(1800,220,260,30f,EasingSpec(1f/3,0f,2f/3,1f)),stock.motion[MotionProfile.Marquee])
         assertEquals(ListMotionSpec(350,500,120,EasingSpec(.4f,0f,.2f,1f),EasingSpec(0f,0f,1f,1f)),stock.motion[MotionProfile.Scroll])

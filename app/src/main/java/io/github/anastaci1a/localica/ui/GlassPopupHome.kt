@@ -191,9 +191,10 @@ internal fun <T : Any> GlassPopupNavigation(target: T, modifier: Modifier = Modi
         if (alphaObserver != null) SideEffect {
             alphaObserver(home) {
                 if (!home.mounted) 0f else {
-                    // Compose 1.10.6's existing DeferredAnimation drives setAlpha directly.
-                    val alpha = hostTransition.animations.single { it.label.endsWith(" alpha") }
-                    alpha.value as Float
+                    readPopupHostAlpha(
+                        current = hostTransition.currentState, target = hostTransition.targetState,
+                        running = hostTransition.isRunning, seeking = hostTransition.isSeeking,
+                        animations = hostTransition.animations.map { it.label to it.value })
                 }
             }
         }
@@ -202,4 +203,21 @@ internal fun <T : Any> GlassPopupNavigation(target: T, modifier: Modifier = Modi
         // before a subsequent input event can observe the old value.
         GlassPopupHome(home) { content(if (shown === page) target else shown.target) }
     }
+}
+
+/** Diagnostic only. Compose removes built-in fades at stable Visible rest and applies alpha 1.
+ * During motion the actual built-in DeferredAnimation remains mandatory; no inferred timing. */
+internal fun readPopupHostAlpha(current: EnterExitState, target: EnterExitState, running: Boolean,
+    seeking: Boolean, animations: List<Pair<String, Any?>>): Float {
+    val alpha = animations.filter { it.first == "Built-in alpha" }
+    if (alpha.isEmpty()) {
+        check(current == EnterExitState.Visible && target == EnterExitState.Visible && !running && !seeking) {
+            "Missing built-in alpha outside stable Visible rest: current=$current target=$target running=$running seeking=$seeking labels=${animations.map { it.first }}"
+        }
+        return 1f
+    }
+    check(alpha.size == 1) { "Ambiguous built-in alpha: ${animations.map { it.first }}" }
+    val value = alpha.single().second
+    check(value is Float && value.isFinite() && value in 0f..1f) { "Invalid built-in alpha: $value" }
+    return value
 }

@@ -208,6 +208,7 @@ class LyricsReturnBackdropTest {
         mount(state)
         alignCurrentLine(state.document)
         compose.runOnIdle { state.incoming = document('|', dense = true); state.optics = false }
+        alignIncomingLine(requireNotNull(state.incoming))
         val button = returnBounds()
         val direct = capture("overlap-direct")
         assertTrue("Outgoing green glyph pixels must intersect the sampled interior", green(direct, button) > .008f)
@@ -288,9 +289,9 @@ class LyricsReturnBackdropTest {
         compose.waitForIdle()
         compose.onNodeWithContentDescription(ReturnLabel).assertDoesNotExist()
         val selected = compose.onNodeWithText(state.document.lines[30].text).assertIsDisplayed().assertIsSelected()
-        assertTrue("Return still navigates to the current line after replacement and re-entry",
-            selected.fetchSemanticsNode().boundsInRoot.center.y <
-                compose.onNodeWithTag("lyric-lines").fetchSemanticsNode().boundsInRoot.center.y)
+        assertEquals("Return still centres the current line after replacement and re-entry (#717)",
+            compose.onNodeWithTag("lyric-lines").fetchSemanticsNode().boundsInRoot.center.y,
+            selected.fetchSemanticsNode().boundsInRoot.center.y, 2f)
     }
 
     @Test fun transparentArtworkAndLyricRevealHaveOnlyOneDisplayOwner() {
@@ -437,6 +438,16 @@ class LyricsReturnBackdropTest {
             view.getLocationOnScreen(origin)
             sampleOrigin = bounds.topLeft + Offset(origin[0].toFloat(), origin[1].toFloat())
         }
+    }
+
+    /** The incoming document rests with its current (green) line centred (#717): put its inactive red line 31 under the
+     *  return control, over the outgoing green line, as the former one-third rest did with line 33. */
+    private fun alignIncomingLine(incoming: ParsedLyrics) {
+        val line = compose.onNodeWithText(incoming.lines[31].text).fetchSemanticsNode().boundsInRoot
+        val delta = line.center.y - compose.onNodeWithContentDescription(ReturnLabel).fetchSemanticsNode().boundsInRoot.center.y
+        compose.onNode(hasTestTag("lyric-lines") and hasAnyDescendant(hasText(incoming.lines[31].text)))
+            .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, delta) }
+        compose.waitForIdle()
     }
 
     private fun scrollBy(amount: Float) {

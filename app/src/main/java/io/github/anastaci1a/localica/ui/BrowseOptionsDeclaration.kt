@@ -15,6 +15,8 @@ internal data class BrowseOptionsDeclaration(
     val reverse: Boolean,
     val overridden: Boolean,
     val footerScope: Boolean,
+    /** Artist song views offer Group by album beside the sort controls (#694). */
+    val albumGrouping: Boolean = false,
 ) {
     val sortSummaries: List<TrackSort> get() = TrackSort.entries
     val sizeSummaries: List<ListSize> get() = ListSize.entries
@@ -38,7 +40,7 @@ internal fun browseOptionsDeclaration(route: BrowseRoute, mutable: Boolean = fal
     return BrowseOptionsDeclaration(fields, route.listSizes(), route.informationChoices(),
         !route.search && route.collection?.kind != MediaKind.Album && (route.collection != null || route.tab != MainTab.Library),
         mutable, randomize, randomize && reverse, overridden,
-        !mutable && (route.collection != null || route.search))
+        !mutable && (route.collection != null || route.search), route.isArtistContents())
 }
 
 internal fun itemsPerRowTitle(count: Int) = "Items per row: $count"

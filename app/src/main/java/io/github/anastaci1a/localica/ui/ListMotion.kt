@@ -180,16 +180,16 @@ internal suspend fun LazyGridState.easeToTop(reducedMotion: Boolean, style: Long
     easeToItem(0, reducedMotion, 0f, style)
 
 internal suspend fun LazyListState.easeToItem(index: Int, reducedMotion: Boolean, duration: Int = 350,
-    style: LongScrollStyle = LongScroll.style) {
+    style: LongScrollStyle = LongScroll.style, offset: Int = 0, target: (() -> ListScrollTarget)? = null) {
     if (index < 0) return
     // scroll waits for the first layout. Before that, a populated list reports
     // zero items and would silently discard an initial follow-current request.
     scroll {
         val scope = listScrollScope(this@easeToItem, this)
         if (index < scope.itemCount) {
-            if (reducedMotion) scope.snapToItem(index, 0)
-            else scope.approachItem(index, 0, duration, style, synchronized(fadeHolders) { fadeHolders[this@easeToItem] },
-                { layoutInfo.viewportSize.height }, { 1 })
+            if (reducedMotion) scope.snapToItem(index, offset)
+            else scope.approachItem(index, offset, duration, style, synchronized(fadeHolders) { fadeHolders[this@easeToItem] },
+                { layoutInfo.viewportSize.height }, { 1 }, target)
         }
     }
 }

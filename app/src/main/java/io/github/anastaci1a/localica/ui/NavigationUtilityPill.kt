@@ -13,7 +13,7 @@ import io.github.anastaci1a.localica.R
 /** Both actions press the same shell and keep their own click/drag ownership. */
 @Composable
 internal fun NavigationUtilityPill(anchor: GlassAnchor, source: FrostedBackdrop,
-    modifier: Modifier = Modifier, shadowOpacity: () -> Float = { 1f },
+    modifier: Modifier = Modifier, noneAtlasInput: NoneAtlasInput? = null, shadowOpacity: () -> Float = { 1f },
     onSearch: () -> Unit, onMore: () -> Unit) {
     SideEffect {
         anchor.source = source
@@ -31,7 +31,7 @@ internal fun NavigationUtilityPill(anchor: GlassAnchor, source: FrostedBackdrop,
     }
     LiquidGlassSurface(modifier.glassAnchor(anchor).testTag("utility-pill")
         .pageGlassCaster(opacity = shadowOpacity), source = source, shadow = false,
-        depthScale = RaisedGlassDepthScale) {
+        depthScale = RaisedGlassDepthScale, noneAtlasInput = noneAtlasInput) {
         anchor.captureInk()
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             ActionIcon(AppIcon.ActionSearch, "Search library", glass = false, iconSize = 28.dp, onClick = onSearch)

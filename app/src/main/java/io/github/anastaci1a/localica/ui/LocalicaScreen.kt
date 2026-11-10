@@ -291,6 +291,9 @@ fun LocalicaScreen(
     val browseBottomChrome = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
         if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White)
+    // This input records the browse Column only. Shell chrome is a sibling; modal capture may
+    // record that chrome, but modalBackdrop is never issued an atlas capability.
+    val shellNoneAtlas = rememberNoneAtlasInput(browseBackdrop)
     val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual, settings.glass),
         dark = if (expanded) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White,
         lightMix = if (expanded) playerLightMix else null)
@@ -306,6 +309,7 @@ fun LocalicaScreen(
         LocalMotionSpeed provides if (settings.fasterMotion) 2f else 4f / 3f,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
+        LocalBrowseSelectionPanel provides selectionPanel,
         LocalBrowseObscuredInset provides (browseBottomChrome + selectionPanel.clearance)) {
     ShadowPlaneViewport(bottomShadows, settings.glass.shadowStrength, settings.glass.shadowSpread,
         Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background),
@@ -398,7 +402,7 @@ fun LocalicaScreen(
                 SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, activity = tabActivity, shadowOpacity = { chromeVisibility * (1f - phase.value()) }, onReselect = { tab ->
                     navigation = navigation.resetTab(tab, clearLibraryFilter = false)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
-                }) { tab ->
+                }, noneAtlasInput = shellNoneAtlas) { tab ->
                     keyboard?.hide(); focusManager.clearFocus()
                     requestedTab = tab
                     navigationScope.launch {
@@ -417,6 +421,7 @@ fun LocalicaScreen(
             NavigationUtilityPill(utilityAnchor, browseBackdrop,
                 Modifier.width(104.dp).fillMaxHeight(),
                 shadowOpacity = { chromeVisibility * (1f - phase.value()) },
+                noneAtlasInput = shellNoneAtlas,
                 onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
                 onMore = { moreOpen = true })
             GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
@@ -441,7 +446,7 @@ fun LocalicaScreen(
         Sheet(sheet) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
-            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
+            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, noneAtlasInput = shellNoneAtlas, visual = playerVisual,
             onSeekRequest = onSeekRequest, sampleState = playerSample, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             providedPopupHome = playerPopupHome, openingPopupHome = browsePopupHome,
             bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
@@ -465,10 +470,11 @@ fun LocalicaScreen(
         screenScope.QueueSurface(queueSheet, { queueOpen = it }, playerProgress = { phase.value() },
             onOpeningContact = { queueOpeningRequest++ }, providedPopupHome = queuePopupHome) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides queueSelectionPanel.clearance) {
+            CompositionLocalProvider(LocalBrowseSelectionPanel provides queueSelectionPanel) {
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false },
                 selectionVisible = queueOpen && expanded, playerOpen = !queueOpen || !expanded,
-                openingRequest = queueOpeningRequest) } }
+                openingRequest = queueOpeningRequest) } } }
             // Floats over the list: it never shortens the viewport, so the items gain no new bottom clip edge.
             FloatingSelectionPanel(queueSelectionPanel, Modifier.align(Alignment.BottomCenter)) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).controlVerticalScroll(rememberScrollState())) {

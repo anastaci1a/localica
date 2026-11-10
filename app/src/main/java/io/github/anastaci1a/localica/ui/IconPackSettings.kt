@@ -5,11 +5,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.components.SettingsComparisonIcon
+import io.github.anastaci1a.localica.ui.components.SettingsIconComparisonRow
 import io.github.anastaci1a.localica.icons.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -127,15 +128,13 @@ internal fun IconPackViewer(id: String?) {
         icons.forEach { icon ->
             val mask = pack?.masks?.get(icon.id)
             val vector = pack?.vectors?.get(icon.id)
-            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("pack-icon-${icon.id}"),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(packIconPainter(icon, mask, vector), "Pack: ${icon.id}", Modifier.size(24.dp))
-                Icon(packIconPainter(icon, null), "Built-in: ${icon.id}", Modifier.size(24.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(icon.id)
-                    Text(if (vector != null) "Reassigned · Vector" else if (mask != null) "Reassigned" else if (pack == null) "Built-in" else "Built-in (fallback)", style = MaterialTheme.typography.bodySmall)
-                }
-            }
+            SettingsIconComparisonRow(
+                primary = SettingsComparisonIcon(packIconPainter(icon, mask, vector), "Pack: ${icon.id}"),
+                comparison = SettingsComparisonIcon(packIconPainter(icon, null), "Built-in: ${icon.id}"),
+                title = icon.id,
+                summary = if (vector != null) "Reassigned · Vector" else if (mask != null) "Reassigned" else if (pack == null) "Built-in" else "Built-in (fallback)",
+                modifier = Modifier.testTag("pack-icon-${icon.id}"),
+            )
         }
     }
     pack?.report?.let { report ->

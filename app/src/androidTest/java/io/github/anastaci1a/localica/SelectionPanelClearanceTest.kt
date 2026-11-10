@@ -21,12 +21,18 @@ class SelectionPanelClearanceTest {
     @get:Rule val compose = createComposeRule()
     private var visible by mutableStateOf(false)
     private lateinit var panel: FloatingSelectionPanelState
+    private lateinit var referenceOwner: io.github.anastaci1a.localica.ui.engine.ExpansionView
 
     private fun fixture(chrome: Int, reducedMotion: Boolean = false, inline: Boolean = false, cap: Int = 160,
         motionSpeed: Float = 1f) {
         compose.setContent { EngineTheme(reduced = reducedMotion) {
             CompositionLocalProvider(LocalMotionSpeed provides motionSpeed) {
             panel = rememberFloatingSelectionPanel(visible, reducedMotion)
+            // #749 follows the real #608 pill owner; it has no independent 220 ms clock.
+            SideEffect {
+                if (::referenceOwner.isInitialized) check(referenceOwner === panel.face.view)
+                else referenceOwner = panel.face.view
+            }
             CompositionLocalProvider(LocalBrowseObscuredInset provides (chrome.dp + panel.clearance)) {
                 Box(Modifier.size(320.dp, 480.dp).background(Color.White).testTag("viewport")) {
                     if (inline) Column(Modifier.fillMaxSize()) {
@@ -54,12 +60,18 @@ class SelectionPanelClearanceTest {
         val control = compose.onNodeWithTag("control").fetchSemanticsNode().boundsInRoot
         val density = viewport.width / 320f
         var progress = 0f
+        var ownerPhase = 0f
         compose.runOnIdle {
             progress = panel.progress
+            ownerPhase = referenceOwner.phase.value()
             assertTrue("The reported occupancy is finite and bounded", progress.isFinite() && progress in 0f..1f)
+            assertSame("The retained pill keeps one shared motion owner", referenceOwner, panel.face.view)
+            assertEquals("Occupancy follows the shared owner's actual eased appear timeline",
+                referenceOwner.phase.value().coerceIn(0f, 1f), progress, .0001f)
         }
         val contentPixels = (96f * density).roundToInt()
         val chromePixels = (chrome * density).roundToInt()
+        println("STAGE3_SELECTION_FRAME clock=${compose.mainClock.currentTime} owner=${System.identityHashCode(referenceOwner)} phase=$ownerPhase progress=$progress panelHeight=$contentPixels viewportBottom=${viewport.bottom} controlBottom=${control.bottom}")
         val occupiedPixels = contentPixels * progress
         val clearancePixels = occupiedPixels + 8f * density * progress
         assertEquals("Every frame uses the panel's same occupancy", chromePixels + clearancePixels,

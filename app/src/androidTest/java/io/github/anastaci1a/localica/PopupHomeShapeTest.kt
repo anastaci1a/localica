@@ -35,6 +35,7 @@ class PopupHomeShapeTest {
     private enum class Trigger { ListMore, PillMore, Cover }
 
     private lateinit var anchor: GlassAnchor
+    private var rootView: android.view.View? = null
     private var popupView: android.view.View? = null
     private var selected by mutableStateOf(false)
     private var open by mutableStateOf(false)
@@ -42,6 +43,7 @@ class PopupHomeShapeTest {
 
     @Composable private fun Fixture(trigger: Trigger) {
         LocalicaTheme { Box(Modifier.fillMaxSize()) {
+            rootView = LocalView.current
             anchor = rememberGlassAnchor(deferContextPlacement = false)
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(0xFF808080)) }
@@ -183,6 +185,10 @@ class PopupHomeShapeTest {
     @Test fun plainPillButtonRetractsIntoGlassThenTheGlassFadesContinuously() = fadeCheck(Trigger.PillMore)
     @Test fun listMoreButtonFadesItsGlassTheSameWay() = fadeCheck(Trigger.ListMore)
 
+    // Fixed before measuring fade amplitudes, from paired foreground-ablation originals.
+    private fun region(b: Rect) = Rect(b.left + b.width * .40625f, b.top + b.height * .21875f,
+        b.left + b.width * .78125f, b.top + b.height * .4375f)
+
     private fun fadeCheck(trigger: Trigger) {
         run {
 
@@ -191,9 +197,24 @@ class PopupHomeShapeTest {
             assertTrue("Plain and quiet buttons share one fading behavior", compose.runOnIdle { anchor.quiet })
             val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
             fun glass(): Int {
-                val shot = requireNotNull(automation.takeScreenshot())
+                val shot = if (trigger == Trigger.PillMore) synchronizedShot(automation)
+                    else requireNotNull(automation.takeScreenshot())
                 try {
-                    val b = anchor.presentedBounds; val c = Offset(b.left + b.width * .15f, b.center.y) // beside the glyph
+                    val b = anchor.presentedBounds
+                    if (trigger == Trigger.PillMore) {
+                        val qualified = region(b)
+                        val values = mutableListOf<Int>()
+                        for (y in kotlin.math.ceil(qualified.top).toInt() until kotlin.math.floor(qualified.bottom).toInt())
+                            for (x in kotlin.math.ceil(qualified.left).toInt() until kotlin.math.floor(qualified.right).toInt()) {
+                                check(x in 0 until shot.width && y in 0 until shot.height)
+                                values += abs(android.graphics.Color.red(shot.getPixel(x, y)) - android.graphics.Color.red(shot.getPixel(4, y)))
+                            }
+                        check(values.size >= 100) { "Qualified material region must have substantial coverage" }
+                        values.sort()
+                        val contrast = values[values.size / 2]
+                        return contrast
+                    }
+                    val c = Offset(b.left + b.width * .15f, b.center.y) // beside the glyph
                     val centre = android.graphics.Color.red(shot.getPixel(c.x.toInt().coerceIn(0, shot.width - 1), c.y.toInt().coerceIn(0, shot.height - 1)))
                     val background = android.graphics.Color.red(shot.getPixel(4, c.y.toInt().coerceIn(0, shot.height - 1)))
                     val contrast = abs(centre - background)
@@ -219,6 +240,8 @@ class PopupHomeShapeTest {
                 android.util.Log.i("Trim678", "fade $trigger contrast n=${contrast.size} ${contrast.joinToString(" ")}")
                 assertTrue("The return is sampled frame by frame: $contrast", contrast.size >= 4)
                 val peak = contrast.max()
+                if (trigger == Trigger.PillMore)
+                    assertTrue("The return visibly contains material above the resting limit: $contrast", peak > 6)
                 val peakAt = contrast.indexOf(peak)
                 val tail = contrast.drop(peakAt)
                 assertTrue("The glass remains at the home shape and fades out gradually, never a cliff: $contrast",
@@ -228,5 +251,58 @@ class PopupHomeShapeTest {
                 assertTrue("Plain icon only afterwards: ${glass()}", glass() <= 6)
             } finally { compose.mainClock.autoAdvance = true }
         }
+    }
+
+    private val markers = java.util.IdentityHashMap<android.view.View, FrameMarker>()
+    private var stage = 0
+    @org.junit.After fun removeMarkers() = compose.runOnUiThread {
+        markers.forEach { (view, marker) -> view.overlay.remove(marker) }
+    }
+
+    private class FrameMarker(val x: Int) : android.graphics.drawable.Drawable() {
+        var stage = 0
+        private val paint = android.graphics.Paint()
+        init { setBounds(x, 100, x + 8, 108) }
+        override fun draw(canvas: android.graphics.Canvas) {
+            paint.color = android.graphics.Color.rgb(stage * 8, 255, 128)
+            canvas.drawRect(bounds, paint)
+        }
+        override fun setAlpha(alpha: Int) { }
+        override fun setColorFilter(filter: android.graphics.ColorFilter?) { }
+        @Suppress("DEPRECATION") override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
+    }
+
+
+    // Native window synchronization only. This does not identify a retained child recording.
+    private fun synchronizedShot(automation: android.app.UiAutomation): android.graphics.Bitmap {
+        compose.waitForIdle()
+        stage = stage % 24 + 1
+        val requested = stage
+        lateinit var views: List<android.view.View>
+        compose.runOnUiThread {
+            views = listOfNotNull(rootView, popupView).distinct().filter { it.isAttachedToWindow }
+            views.forEachIndexed { index, view ->
+                val marker = markers.getOrPut(view) { FrameMarker(4 + index * 16).also { view.overlay.add(it) } }
+                marker.stage = requested
+                marker.invalidateSelf()
+                view.invalidate()
+            }
+        }
+        var presented: android.graphics.Bitmap? = null
+        compose.waitUntil(5000) {
+            val next = requireNotNull(automation.takeScreenshot())
+            var matches = true
+            compose.runOnUiThread {
+                views.filter { it.isAttachedToWindow }.forEach { view ->
+                    val origin = IntArray(2); view.getLocationOnScreen(origin)
+                    val c = next.getPixel(origin[0] + requireNotNull(markers[view]).x + 4, origin[1] + 104)
+                    val green = android.graphics.Color.green(c)
+                    matches = matches && green > 80 && kotlin.math.abs(android.graphics.Color.red(c).toFloat() / green - requested * 8 / 255f) < .012f
+                }
+            }
+            if (matches) presented = next else next.recycle()
+            matches
+        }
+        return requireNotNull(presented)
     }
 }

@@ -29,6 +29,13 @@ internal val FloatingSurfaceGap = 8.dp
 internal class FloatingSelectionPanelState(
     height: MutableState<Dp>, internal val face: FaceExpansion, visible: State<Boolean>,
 ) {
+    private var previousVisible = visible.value
+    internal var revealGeneration by mutableLongStateOf(0L)
+        private set
+    internal fun observeVisibility(visible: Boolean) {
+        if (visible && !previousVisible) revealGeneration++
+        previousVisible = visible
+    }
     internal var height by height
     internal val progress get() = retainedFaceProgress(face.view)
     internal val visible by visible
@@ -40,8 +47,10 @@ internal fun rememberFloatingSelectionPanel(visible: Boolean, reducedMotion: Boo
     val height = remember { mutableStateOf(0.dp) }
     val visibility = rememberUpdatedState(visible)
     // Access policy comes from the root's validated Engine record, as for all faces.
-    val face = rememberFaceExpansion(visible)
-    return remember(face) { FloatingSelectionPanelState(height, face, visibility) }
+    val face = rememberFaceExpansion(visible && height.value.value > 0f)
+    val state = remember(face) { FloatingSelectionPanelState(height, face, visibility) }
+    SideEffect { state.observeVisibility(visible) }
+    return state
 }
 
 @Composable

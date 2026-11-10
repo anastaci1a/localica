@@ -90,6 +90,12 @@ Typed preference boundaries retain explicit inheritance. Shared enum decoding pr
 
 Artist photo requests run off Main and use fixed HTTPS hosts, disabled redirects, bounded responses and shared request pacing. Provider errors become fixed failures without URLs or transport messages. Metadata responses are limited to 512 KiB and pictures to 4 MiB. Searches inspect five artists and 25 releases per candidate; incomplete coverage falls back conservatively.
 
+Artist photo storage re-encodes decoded images as WebP at the display dimension, capped at 1080 pixels, plus a 256-pixel thumbnail. Chosen photos live with persisted choices outside the evictable cache. Display leases protect visible images, and background reads do not advance LRU order. A promotion journal recovers interrupted choice commits without retiring the previous ready image.
+
+Startup loads artist photo metadata into a shared memory index off Main. Composition uses constant-time metadata and decoded-pixel lookups without filesystem access. Visible and lazily prefetched cells decode off Main at their measured size. Unknown metadata and pending photo decodes retain the neutral placeholder; only confirmed misses admit album artwork.
+
+Artist photo acquisition uses one unique WorkManager chain with connected-network constraints and a persistent per-artist queue. Completed artists checkpoint independently. A new pick supersedes an older generation without cancelling unrelated artists. Provider pacing and consent checks remain in the repository transport. Chooser candidates stream progressively and cache by artist request; decoded images retain the existing artwork fade owners.
+
 Photo entries and consent use atomic file replacement. Match choices live separately from evictable images. A persisted attempt time throttles failed requests across process death. The default-off consent stays closed until its asynchronous load completes. Commons credits are bounded plain text; licence and source links remain structured metadata.
 
 ## Legacy MP3 transitions
@@ -156,9 +162,21 @@ Use persisted Storage Access Framework tree grants without broad storage permiss
 | Operation | Ownership and recovery |
 | --- | --- |
 | Scan | Explicit `dataSync` foreground service, bounded wake lock, app-owned progress/cancellation. Survive Activity recreation/backgrounding, honor service timeouts and report process interruption next launch. Notification permission is optional. |
-| Tag batch | `dataSync` foreground service with bounded wake lock. Dismissing the editor leaves work running; stop after the current verified write. Keep eight local job outcomes and mark unfinished jobs interrupted on restart. |
+| Tag batch | One controller worker and a `dataSync` foreground service with bounded wake lock. Explicit background continuation retains ownership. Keep eight local job outcomes. [Durable batch decisions](#durable-tag-batches) survive restart. |
 | Tag transaction | Edit a private copy with Jaudiotagger; compare encoded audio/unrelated tags and verify requested values/artwork. Sync an original and record the recovery journal before overwrite. On failure attempt verified rollback; keep failed-file recovery separate from the durable batch-refresh journal. |
 | Playback during edits | [Playback during edits rules](#playback-during-edits). |
+
+### Durable tag batches
+
+Store batches in app-files `tag-batches`, beside single-file `tag-recovery`. Immutable ordered targets, patch, copied artwork and draft precede per-file records. A small atomic header owns phase, background intent and the admitted-entry watermark. Missing admitted entries fail closed, including no-undo entries.
+
+Canonical document identities coalesce tree-grant aliases. Capture and hash full first-touch originals before replacement. Bind each write to that original hash. Commit the verified batch outcome before discarding single-file recovery. Reopen uncertain atomic mutations before another decision.
+
+Preflight reserves all undo originals, two largest-file working copies, bounded tag/artwork growth and at least 64 MiB headroom. Count unknown lengths inside existing file scopes. Recheck headroom before each file. [Editing choices](product.md#metadata-and-artwork-editing) own insufficient-space and no-undo behavior.
+
+Cancellation closes next-file admission immediately. Persist its intent, reconcile retained single-file recovery, then restore every attempted entry under a fresh source-bound recovery scope. Verify originals and actual source hashes. External changes, missing originals and uncertain outcomes retain recovery rather than authorize replacement or cleanup.
+
+Done and cancellation arbitrate through durable terminal decisions. Read terminal headers before partially cleaned payloads; remove headers last. Unpublished originals block terminal cleanup. Successful background work commits automatically; failed work retains recovery. Atomic records support process interruption, without claiming arbitrary power-loss durability.
 
 ### Playback during edits
 
@@ -254,6 +272,8 @@ Pinch and scrollbar requests carry cancellation generations. Geometry restoratio
 
 Measure glass from foreground content, then fit its padded backdrop independently. Uniformly scale fixed menu layout into the moving viewport. Search keeps its field unscaled and top-aligned, with one opening rectangle animation and captured rendered geometry for reversible closing.
 
+Dialog height sizing is fixed for a retained presentation. Content-sized dialogs retain measured-height easing and fit. The tag editor declares a viewport fraction once. Immutable sizing and inset presets live in `ui.spec`; `ui.layout.PopupViewportSlot` owns the container, incoming inset consumption and remaining IME measurement that fixes content height. Popup intent still owns opening and return.
+
 `GlassMorphContent` shares the glass spring for in-surface size and face transitions. Only the destination's children are placed; outgoing faces retain drawing without input. The selection panel uses the same spring for its visible occupancy and retains its complete material and shadow during dismissal.
 
 Its own window's reported IME target or safe-bottom compatibility destination drives size and placement together. Retargets retain current position and velocity. Release modal input at dismissal, retaining its drawing until the trigger acknowledges restoration. Trigger and popup share deformation, corner policy and optical parameters. Blend their source recordings before handoff, without discarding unsettled rebound.
@@ -282,11 +302,13 @@ Retain immutable current-song texture at its exact display resolution instead of
 
 Controls and panels use one [lens model](interface.md#materials-and-controls), in Normal mode on Android 13+. Share outline geometry across clipping, refraction, illumination and shadow. Page-owned ink polarity requires no GPU readback. Normal and None use the same ordered brightness mapping. Android versions below 13 use average-colour rendering without optical preparation.
 
-Active sliders and switches render one procedural scene, unchanged outside the lens, with refraction or average colour inside. Resting white thumbs release sampling leases and bypass optics. Active controls capture only the thumb neighborhood and replace pixels only within its silhouette. Track, touch mapping and expanded wall contact share geometry.
+When Normal is requested, active sliders and switches render one procedural scene, unchanged outside the lens, with refraction or fallback average colour inside. Resting white thumbs release sampling leases and bypass optics. Active controls capture only the thumb neighborhood and replace pixels only within its silhouette. Track, touch mapping and expanded wall contact share geometry.
+
+When None is requested, slider and switch knobs remain white 28 dp circles during contact, travel and cancellation. They draw without source leases, lens captures or reductions. Only their private elastic bodies restart across requested-mode changes; gesture and position owners remain mounted.
 
 In Normal mode on Android 13+, controls entirely over explicitly recorded panel material use an 8×8 local GPU average, then the shared tint/contrast mapping and outline. Morphs retain that averaged home source while admitting the destination. Never infer eligibility from color similarity or average a foreground-containing recording.
 
-None uniformly averages the backdrop over each material's own full bounds: controls, pills, switch thumbs and panels. Refraction and blur do not change that region.
+None uniformly averages the backdrop over each surface's own full bounds, including pills and panels. Slider and switch knobs use the separate white resting policy. Refraction and blur do not change that region.
 
 The mean is coverage-weighted over the scene the lens samples: the element's own source, with its parent chain beyond that source's box. Floating controls therefore follow the text and artwork passing behind them. No element chooses a different source or region.
 
@@ -295,6 +317,10 @@ What None samples inside a finished panel material (frosted panels, the Queue dr
 The region stops where the recorded scene ends, so material bounds reaching past a screen or window edge never make a fill translucent. Opaque panels also ignore transparent pixels inside their source.
 
 On Android 13+, None maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes.
+
+Each reduction step is then one exact block mean of up to 8×8 texels in a single shader pass, drawn unscaled so no texture is sampled below half scale.
+
+The tint/contrast shader takes the exact mean of the last level (at most 8×8 texels) directly: four GPU passes for a 512 px side instead of twelve, with the same coverage-weighted result.
 
 None replaces only the optical fill. Floating, panel, lift and selection shadows use the same appearance settings and drawing path in both renderers, so a renderer switch never changes a shadow.
 

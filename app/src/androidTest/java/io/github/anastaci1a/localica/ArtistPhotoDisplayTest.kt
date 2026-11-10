@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.artistphoto.*
 import io.github.anastaci1a.localica.browse.BrowserItem
+import io.github.anastaci1a.localica.browse.BrowseResult
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.network.NetworkConsent
@@ -201,6 +202,53 @@ class ArtistPhotoDisplayTest {
             assertTrue("Ordinary album artwork is independent of online consent", center(tag()).green > .9f)
             assertEquals(0, requests.get())
         } finally { compose.mainClock.autoAdvance = true; consent.allowed.value = false; root.deleteRecursively() }
+    }
+
+    @Test fun undecodableIndexedPhotosAdmitAlbumFallbackForRowsAndHeaders() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val root = File(context.cacheDir, "photo-undecodable-${java.util.UUID.randomUUID()}")
+        val consent = Consent().apply { allowed.value = true }
+        val disk = ArtistPhotoDisk(File(root, "photos"), File(root, "choices"), 8L * 1024 * 1024)
+        val photos = ArtistPhotos(consent, disk, PhotoTransport { _, _ -> error("Fresh metadata must not fetch") })
+        val artists = listOf(MediaKind.Artist, MediaKind.AlbumArtist).map { kind -> item().copy(ref = MediaRef(kind, "fixture")) }
+        val tags = artists.flatMap { listOf("bad-row-${it.ref.kind}", "bad-header-${it.ref.kind}") }
+        val retention = BrowseArtworkScope().apply {
+            hold("album", listOf("album:fixture"), ArtworkCache.CachedArtwork(bitmap(android.graphics.Color.BLUE), 768))
+        }
+        val album = PlayerVisual(bitmap(android.graphics.Color.BLUE).asImageBitmap(), contentKey = "bad-photo-album")
+        try {
+            runBlocking(Dispatchers.IO) {
+                val bytes = ByteArrayOutputStream().also { bitmap(android.graphics.Color.RED).compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+                for (artist in artists) {
+                    val key = "${artist.ref.kind}:${artist.ref.id}"
+                    val photo = disk.savePhoto(key, RemoteArtist(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"), artist.title,
+                        listOf("Fixture Album")), bytes, System.currentTimeMillis())
+                    // Keep valid metadata and a nonempty file, but make its pixels undecodable.
+                    photo.file.writeBytes(ByteArray(bytes.size))
+                }
+                photos.loadIndex()
+                for (artist in artists) {
+                    val photo = requireNotNull(photos.peekKey(artistPhotoCacheKey("${artist.ref.kind}:${artist.ref.id}"))?.photo)
+                    assertNull(ArtistPhotoPixels.read(photo, thumbnail = true))
+                    assertNull(ArtistPhotoPixels.read(photo))
+                }
+            }
+            compose.setContent { LocalicaTheme {
+                CompositionLocalProvider(LocalArtistPhotoEnvironment provides ArtistPhotoEnvironment(photos, consent),
+                    LocalBrowseArtwork provides retention) {
+                    Column {
+                        artists.forEach { artist -> Row {
+                            ArtistMediaArtwork(artist, Modifier.size(80.dp).testTag("bad-row-${artist.ref.kind}"))
+                            val visual = rememberArtistCollectionVisual(artist.ref, artist.title, BrowseResult(), "album:fixture", album)
+                            PlayerArtwork(visual, Modifier.size(80.dp).testTag("bad-header-${artist.ref.kind}"),
+                                androidx.compose.ui.graphics.RectangleShape, androidx.compose.ui.layout.ContentScale.Crop, 240)
+                        } }
+                    }
+                }
+            } }
+            compose.waitUntil(5000) { tags.all { center(it).blue > .98f } }
+            tags.forEach { assertTrue("Completed failed decode must admit album art: $it", center(it).blue > .98f) }
+        } finally { consent.allowed.value = false; root.deleteRecursively() }
     }
 
     @Test fun artistHeaderKeepsAlbumArtUntilLibraryRowsCanSupplyMatchEvidence() {

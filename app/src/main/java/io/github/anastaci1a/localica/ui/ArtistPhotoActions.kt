@@ -67,41 +67,5 @@ internal fun ArtistPhotoDialog(actions: ArtistPhotoActions?) {
             })
     }
     if (!actions.open) return
-    val allowed by actions.environment.consent.allowed.collectAsState()
-    var candidates by remember(actions) { mutableStateOf<List<ArtistPhotoCandidate>?>(null) }
-    var problem by remember { mutableStateOf<String?>(null) }
-    val scope = actions.scope
-    LaunchedEffect(actions, allowed) {
-        candidates = null
-        problem = null
-        if (allowed) {
-            try { candidates = actions.environment.photos.candidates(actions.request) }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { problem = "Could not look up artist photos. Try again."; candidates = emptyList() }
-        }
-    }
-    val matches = candidates.orEmpty()
-    if (allowed && matches.isNotEmpty()) {
-        ChoiceDialog("Choose artist photo", matches, matches.first(), label = { candidate ->
-            "${candidate.name} · ${candidate.choice.provider.name.lowercase()}\n" +
-                candidate.releases.take(3).joinToString(" · ") +
-                if (!candidate.overlapsLibrary) "\nNo matching local release; choose only if this is the right artist." else ""
-        }, onDismiss = { actions.open = false }, onSelect = { candidate ->
-            scope.launch {
-                try { actions.environment.photos.pick(actions.request.artistKey, candidate.choice) }
-                catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { actions.problem = "Could not save photo choice. Try again." }
-            }
-        })
-    } else {
-        val message = when {
-            !allowed -> "Enable Online features before choosing a photo."
-            problem != null -> problem!!
-            candidates == null -> "Finding artist photos…"
-            else -> "No artist photos found. Album art is kept."
-        }
-        GlassAlertDialog({ actions.open = false }, title = { Text("Choose artist photo") },
-            text = { Text("${actions.request.name}\n$message") },
-            confirmButton = { ActionTextButton({ actions.open = false }) { Text("Close") } })
-    }
+    ArtistPhotoChooser(actions)
 }

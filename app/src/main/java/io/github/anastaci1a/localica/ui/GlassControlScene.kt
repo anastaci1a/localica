@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.rememberMaterialAreaReduction
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.*
@@ -23,6 +24,15 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     active: () -> Float = { 1f }, face: () -> Color = { Color.Transparent },
     prepare: () -> Boolean = { false },
     scene: DrawScope.() -> Unit) {
+    if (requestedGlassNone()) {
+        // No recording, source subscription, lens, reduction or exclusive lease in None.
+        Canvas(modifier) {
+            scene()
+            val shape = geometry()
+            drawRoundRect(Color.White, shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
+        }
+        return
+    }
     val renderer = currentGlassRendererGeneration()
     val modern = Build.VERSION.SDK_INT >= 33
     val none by androidx.compose.animation.core.animateFloatAsState(
@@ -66,6 +76,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             if (backing != null) {
                 val delta = backing.origin - location.position() - origin
                 if (modern && backing.recorded && !backing.layer.isReleased) {
+                    if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(backing)
                     translate(delta.x, delta.y) { drawLayer(backing.layer) }
                 } else backing.snapshot?.let { image -> translate(delta.x, delta.y) {
                     // The shared reduction retains transparent power-of-two padding.

@@ -41,7 +41,7 @@ class SettingsSearchTest {
     }
 
     @Test fun deepSearchFindsOptionsAndValuesFromEveryPage() {
-        show("Player")
+        show()
         for ((query, result) in listOf("Lift shadow" to "Lift shadow strength", "Carousel" to "Song-change transition",
             "Preload" to "Preload next track", "Shape damping" to "Shape damping", "grey" to "Interface gray",
             "minimum duration" to "Exclude short files", "sync" to "Lyrics timing correction")) {
@@ -80,7 +80,7 @@ class SettingsSearchTest {
         compose.mainClock.autoAdvance = true
         compose.onNodeWithTag("setting:Control expansion").assertIsDisplayed()
         compose.onNodeWithTag("setting-highlight:Control expansion", useUnmergedTree = true).assertExists()
-        compose.onNodeWithContentDescription("Search settings input").assertExists()
+        compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
     }
 
     @Test fun highlightRemainsVisibleOverOpaqueRowContent() {
@@ -228,6 +228,9 @@ class SettingsSearchTest {
             compose.onNode(hasText("Quick Scan") and isToggleable()).performScrollTo().assertIsOn()
             compose.onNode(hasText("Full scan") and isToggleable()).performScrollTo().assertIsOff()
             compose.onNodeWithText("Include subfolders").performScrollTo().assertIsOff()
+            compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Back from settings").performClick()
+            compose.onNodeWithContentDescription("Back from settings").performClick()
             compose.onNodeWithContentDescription("Search settings input").performTextInput("Songs")
             compose.onNodeWithTag("search-result:Songs").performClick()
             compose.onNode(hasText("Songs") and hasText("Add next")).assertIsDisplayed()

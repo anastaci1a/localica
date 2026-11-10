@@ -5,6 +5,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.components.SettingsActionLayout
+import io.github.anastaci1a.localica.ui.components.SettingsOrderCard
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.MediaKind
 
@@ -14,20 +16,21 @@ internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilt
     Text("Choose the resting order of Library filters. Selecting a filter brings it to the front; tapping it again restores the combined Library view. Global search keeps all item types available.", style = MaterialTheme.typography.bodyMedium)
     SettingsEntry("Visible filters") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     value.visible.forEachIndexed { index, filter ->
-        Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                Text(filter.label, style = MaterialTheme.typography.titleMedium)
-                FlowRow {
-                    ActionTextButton(enabled = index > 0, onClick = {
-                        onChange(value.copy(visible = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.visible, index, -1)))
-                    }) { Text("Move up") }
-                    ActionTextButton(enabled = index < value.visible.lastIndex, onClick = {
-                        onChange(value.copy(visible = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.visible, index, 1)))
-                    }) { Text("Move down") }
-                    ActionTextButton(onClick = { onChange(value.copy(visible = value.visible - filter)) }) { Text("Remove") }
-                }
-            }
-        }
+        SettingsOrderCard(filter.label, SettingsActionLayout.Wrapping,
+            moveUp = {
+                ActionTextButton(enabled = index > 0, onClick = {
+                    onChange(value.copy(visible = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.visible, index, -1)))
+                }) { Text("Move up") }
+            },
+            moveDown = {
+                ActionTextButton(enabled = index < value.visible.lastIndex, onClick = {
+                    onChange(value.copy(visible = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.visible, index, 1)))
+                }) { Text("Move down") }
+            },
+            remove = {
+                ActionTextButton(onClick = { onChange(value.copy(visible = value.visible - filter)) }) { Text("Remove") }
+            },
+        )
     }
     } }
     var adding by remember { mutableStateOf(false) }

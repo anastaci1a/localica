@@ -76,8 +76,10 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
         val successful = !cancel && (target != null || d.remove)
         if (successful) {
             change(if (d.remove) current.remove(d.action) else current.place(d.action, target!!))
-            selected = null; haptic()
+            selected = null
         }
+        // Every finger lift after a drag is Strong, placed or not (#736); a system cancel is silent.
+        if (!cancel) haptics.dragReleased()
         scope.launch {
             // Resolve the actual reflowing destination throughout the landing,
             // including pool items that were initially outside its viewport.

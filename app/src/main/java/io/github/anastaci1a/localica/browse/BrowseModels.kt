@@ -52,6 +52,19 @@ internal fun orderedArtistAlbums(rows: List<SongRow>, query: LibraryQuery,
         is ArtistAlbumOrder.Unsupported -> ArtistAlbumOrder.order(rows, TrackSort.Album, true, checkActive) as ArtistAlbumOrder.Ordered
     }
 
+/** Artist rows with their carousel albums (#694). Grouped rows are contiguous album groups;
+ * ungrouped rows use the ordinary song order across all albums while the carousel keeps the
+ * album order. Unsupported old sorts use the same album fallback in both modes. */
+internal data class ArtistRows(val rows: List<SongRow>, val albums: List<LibraryGroup>)
+
+internal fun artistRows(rows: List<SongRow>, query: LibraryQuery, grouped: Boolean,
+    checkActive: () -> Unit = {}): ArtistRows {
+    val albums = orderedArtistAlbums(rows, query, checkActive)
+    if (grouped) return ArtistRows(albums.rows, albums.albums)
+    val songs = if (query.sort in ArtistAlbumOrder.supportedSorts) query else LibraryQuery(sort = TrackSort.Album)
+    return ArtistRows(LibraryQueries.rows(rows, songs.copy(text = "", folderUri = null), checkActive), albums.albums)
+}
+
 /** UI-independent complete result snapshots; general queries run off Main. */
 object BrowseQueries {
     private fun queueRows(queue: ListeningQueue, snapshot: LibrarySnapshot, currentTracks: Map<String, Track>) =
@@ -196,8 +209,8 @@ object BrowseQueries {
             }
             val order = if (collection.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) effective.copy(sort = TrackSort.Manual, ascending = true) else effective
             if (collection.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)) {
-                val grouped = orderedArtistAlbums(source, order, checkActive)
-                return BrowseResult(songItems(grouped.rows), scope(route), grouped.albums)
+                val artist = artistRows(source, order, sorts.artistAlbumGrouping, checkActive)
+                return BrowseResult(songItems(artist.rows), scope(route), artist.albums)
             }
             return BrowseResult(songItems(LibraryQueries.rows(source, order, checkActive)), scope(route))
         }

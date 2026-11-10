@@ -201,6 +201,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     homeSource: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
+    noneAtlasInput: NoneAtlasInput? = null,
     silhouette: GlassSilhouette? = null, sharedContact: GlassContact? = null,
     contactPresentation: (() -> GlassShape)? = null,
     contactAdmission: () -> Boolean = { true },
@@ -271,6 +272,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
             FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution, padding,
                 homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint,
+                noneAtlasInput = noneAtlasInput,
                 resolutionReader = presentation?.let { read -> { val b = blurRadius * (appearance.blur + (1f - appearance.blur) * read().frost.coerceIn(0f, 1f))
                     val scatter = ((b - 1f) / 5f).coerceIn(0f, 1f); 1f - .5f * scatter * scatter * (3f - 2f * scatter) } },
                 averageReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint * (1f - read().panel.coerceIn(0f, 1f)), tone) } }) { extent, resolution, flatWeight ->

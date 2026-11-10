@@ -11,10 +11,15 @@ import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import java.util.regex.Pattern
 
 class TagEditorFlowTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    private val compose = createAndroidComposeRule<MainActivity>()
+    // The flow navigates the real app's default tab bar (Library) and Songs list; earlier tests in
+    // the same process may persist other tabs or browse filters (#722).
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(BrowsePreferenceIsolation(
+        listOf("interface", "browse-style", "library-query", "library-filters"))).around(compose)
     @Test fun editThroughPickerVerifiesFileAndRefreshesLibrary() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -27,6 +32,15 @@ class TagEditorFlowTest {
             device.clickWhenReady(By.text("Localica test library"))
             device.clickWhenReady(By.text(Pattern.compile("use this folder|select", Pattern.CASE_INSENSITIVE)))
             device.wait(Until.findObject(By.text(Pattern.compile("allow", Pattern.CASE_INSENSITIVE))), 2000)?.click()
+        }
+        fun receipt() = app.tagEditing.state.value.run {
+            "phase=$phase busy=$busy batch=$batchId saved=$saved interrupted=$interruptedBatch error=$error space=$spaceProblem results=$results"
+        }
+        // A timeout names the controller outcome instead of only the elapsed wait.
+        fun awaitEditing(timeout: Long, condition: (io.github.anastaci1a.localica.editing.TagEditorState) -> Boolean) = try {
+            compose.waitUntil(timeout) { condition(app.tagEditing.state.value) }
+        } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
+            throw AssertionError("Tag editing did not settle: ${receipt()}", failure)
         }
         compose.onNodeWithContentDescription("More").performClick()
         compose.onNodeWithText("Settings").performClick()
@@ -59,21 +73,32 @@ class TagEditorFlowTest {
             selectFolder()
             compose.onNodeWithText("Review changes").performClick()
             compose.onNodeWithText("Save changes").performClick()
-            compose.waitUntil(30000) { !app.tagEditing.state.value.busy && app.tagEditing.state.value.results.isNotEmpty() }
-            assertTrue(app.tagEditing.state.value.results.toString(), app.tagEditing.state.value.results.single().saved)
+            awaitEditing(30000) { !it.busy && it.results.isNotEmpty() }
+            assertTrue(receipt(), app.tagEditing.state.value.results.single().saved)
+            assertEquals(receipt(), "AwaitingDecision", app.tagEditing.state.value.phase)
             assertEquals("Retagged tone", runBlocking { AndroidDocuments(context).metadata(uri.toString()).title })
+            // A finished foreground save waits on its progress popup (#700); Done commits it and closes the editor.
+            val edited = app.tagEditing.state.value.tracks
+            compose.onNode(hasText("Done") and hasClickAction()).performClick()
+            awaitEditing(10000) { it.batchId == null && it.tracks.isEmpty() }
+            assertEquals(receipt(), "Complete", app.tagEditing.state.value.jobs.first().status)
             // A second verified write remains alive with no resumed Activity.
+            var completed: Boolean? = null
             compose.activityRule.scenario.onActivity {
+                app.tagEditing.open(edited) { completed = it }
                 app.tagEditing.save(io.github.anastaci1a.localica.editing.TagPatch(mapOf(
                     io.github.anastaci1a.localica.editing.EditField.Title to "Retagged tone")))
-                app.tagEditing.continueInBackground()
             }
+            // Background acceptance needs the admitted batch; it then commits without a Done decision.
+            awaitEditing(30000) { it.batchId != null || (!it.busy && it.error != null) }
+            compose.activityRule.scenario.onActivity { app.tagEditing.continueInBackground() }
             compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
             runBlocking { kotlinx.coroutines.withTimeout(30000) {
-                app.tagEditing.state.first { !it.busy && it.results.isNotEmpty() }
+                app.tagEditing.state.first { !it.busy && it.batchId == null }
             } }
-            assertTrue(app.tagEditing.state.value.results.single().saved)
-            assertEquals("Complete", app.tagEditing.state.value.jobs.first().status)
+            assertEquals(receipt(), true, completed)
+            assertEquals(receipt(), "Complete", app.tagEditing.state.value.jobs.first().status)
+            assertEquals("Retagged tone", runBlocking { AndroidDocuments(context).metadata(uri.toString()).title })
             compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
             compose.activityRule.scenario.recreate()
             compose.activityRule.scenario.onActivity { app.tagEditing.close() }
