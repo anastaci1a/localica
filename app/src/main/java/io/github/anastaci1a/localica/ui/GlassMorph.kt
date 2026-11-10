@@ -344,6 +344,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var searchReturning by remember { mutableStateOf(false) }
     val departingHold = !visible && popupHome?.departing == true && popupHome.mounted
     SideEffect {
+        motion.updateSpeed(speed)
         if (departingHold) {
             motion.hold()
             motion.show(false)
@@ -972,7 +973,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (!holdImeBack && !(placement == GlassPlacement.Search && visible && searchReturning) &&
                             (placement != GlassPlacement.Search || childPanels.intValue == 0 &&
                             (imeSettled || imeHeight > 0 && imeTarget > 0 || searchTransitioning))) {
-                            motion.place(home, envelope, density.density)
+                            motion.place(home, envelope, density.density, detached = detached)
                             if (placement == GlassPlacement.Search) {
                                 if (visible) { searchShapeStarted=true; searchOpeningPositioned=true }
                                 val rect=requireNotNull(motion.bounds)

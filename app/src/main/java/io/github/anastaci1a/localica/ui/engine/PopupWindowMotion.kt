@@ -39,9 +39,11 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     fun show(visible: Boolean) { shown = visible; if (rectangle != null) expansion.target(visible) }
     fun hold() { holding = true; if (rectangle != null) expansion.hold() }
     fun release() { holding = false; expansion.release() }
-    fun place(home: Rect, envelope: Rect, density: Float) {
+    fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false) {
         if (shown || openingEnvelope == null) openingEnvelope = envelope
-        val basis = ExpansionBasis(home, requireNotNull(openingEnvelope), density)
+        val capturedEnvelope = requireNotNull(openingEnvelope)
+        val basis = ExpansionBasis(home, capturedEnvelope, density,
+            if (detached) maxOf(capturedEnvelope.width, capturedEnvelope.height) else null)
         if (rectangle == null) {
             expansion.setBasis(basis)
             val rect = MotionRect(clock, home, ranges, expansion)
@@ -55,6 +57,7 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
         expansion.target(shown)
         if (holding) expansion.hold()
     }
+    fun updateSpeed(speed: Float) = expansion.updateSpeed(speed)
     fun updateSpec(spec: ExpansionSpec) = expansion.updateSpec(spec)
     fun dispose() = expansion.dispose()
 }
