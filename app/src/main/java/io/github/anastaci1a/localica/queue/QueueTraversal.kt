@@ -146,6 +146,29 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
         return window(requireNotNull(state(queueId)))
     }
 
+    /**
+     * The unplayed behind neighbor becomes real history only when its exact token arrives.
+     * The caller must commit queue cursor metadata in this same transaction before publishing it.
+     */
+    fun arriveBehind(queueId: String, visitToken: String): QueuePlaybackWindow? {
+        sequence.checkWorker()
+        check(db.inTransaction())
+        val state = requireNotNull(state(queueId))
+        if (!state.modes.shuffle) return null
+        val visit = behind(state)?.takeIf { it.token == visitToken } ?: return null
+        val historySize = Math.addExact(state.historySize, 1)
+        shiftHistory(queueId, 0, 1)
+        db.execSQL("INSERT INTO queue_sequence_history (token,queueId,position,entryId,cycle) VALUES (?,?,?,?,?)",
+            arrayOf(visit.token, queueId, 0, visit.entryId, visit.cycle))
+        if (visit.cycle == state.cycle) {
+            db.execSQL("UPDATE queue_sequence_plan SET visited = 1 WHERE queueId = ? AND cycle = ? AND entryId = ?",
+                arrayOf(queueId, state.cycle, visit.entryId))
+        }
+        val updated = state.copy(cursor = 0, historySize = historySize)
+        write(updated)
+        return window(updated)
+    }
+
     private fun window(state: State): QueuePlaybackWindow {
         val selected = historyAt(state.queueId, state.cursor)
             ?: return QueuePlaybackWindow(emptyList(), null, emptyMap(), state.modes)
@@ -181,9 +204,7 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
         return QueuePlaybackWindow(visits, selected.token, positions, state.modes)
     }
 
-    private fun shuffledWindow(state: State, selected: QueueVisit): QueuePlaybackWindow {
-        val start = (state.cursor - QueuePlaybackWindow.Radius).coerceAtLeast(0)
-        val behind = if (start != 0) null else db.query("""
+    private fun behind(state: State): QueueVisit? = db.query("""
             SELECT h.entryId,h.cycle,h.token FROM queue_sequence_behind b
             JOIN queue_sequence_history h ON h.queueId = b.queueId AND h.position = 0
             WHERE b.queueId = ?
@@ -206,6 +227,10 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
                 }
             }
         }
+
+    private fun shuffledWindow(state: State, selected: QueueVisit): QueuePlaybackWindow {
+        val start = (state.cursor - QueuePlaybackWindow.Radius).coerceAtLeast(0)
+        val behind = if (start == 0) behind(state) else null
         val end = (state.cursor.toLong() + QueuePlaybackWindow.Radius + 1).let {
             if (behind == null) it else it.coerceAtMost(QueuePlaybackWindow.MaximumVisits.toLong() - 1)
         }
