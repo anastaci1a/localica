@@ -221,6 +221,20 @@ class ScrollbarMotionTest {
         }
     }
 
+    @Test fun activityOnEveryFrameOfAScrollFadesInAsOneUninterruptedTimeline() {
+        EngineHarness().use { h ->
+            val motion = ScrollbarMotion(h.clock)
+            motion.reveal()
+            h.advance(.016); h.advance(1.5)
+            assertEquals(0f, motion.opacity(), 0f)
+            val incoming = TargetBasedAnimation(tween<Float>(220), Float.VectorConverter, 0f, 1f)
+            val seen = List(20) { motion.reveal(); h.advance(.016); motion.opacity() }
+            seen.forEachIndexed { frame, value -> assertEquals("fade-in frame $frame", incoming.getValueFromNanos(frame * 16_000_000L), value, 0f) }
+            assertEquals("full opacity once the fade duration has elapsed", 1f, seen.last(), 0f)
+            motion.dispose()
+        }
+    }
+
     @Test fun holdingAFadingScrollbarFadesItBackInInsteadOfPopping() {
         EngineHarness().use { h ->
             val motion = ScrollbarMotion(h.clock)

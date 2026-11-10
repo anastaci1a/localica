@@ -103,20 +103,25 @@ class ScrollbarBehaviourTest {
         File(dir, "$name-api$api.csv").writeText((listOf(header) + rows).joinToString("\n", postfix = "\n"))
     private fun row(s: Sample, extra: String = "") = "${s.millis},${s.bounds.width},${s.bounds.height},${s.colour.red},${s.colour.green},${s.colour.blue}$extra"
 
-    /** The progress interval a quantized observation allows: value [v] = [from] + ([to] - [from]) * p, ± [q]. */
+    /** The progress interval a quantized observation allows: value [v] = [from] + ([to] - [from]) * p, within +-[q]. */
     private fun interval(v: Float, from: Float, to: Float, q: Float): ClosedFloatingPointRange<Float> {
-        val a = (v - q - from) / (to - from); val b = (v + q - from) / (to - from)
+        val a = (v - q - from) / (to - from) - 1e-4f; val b = (v + q - from) / (to - from) + 1e-4f
         return minOf(a, b)..maxOf(a, b)
     }
     private fun ClosedFloatingPointRange<Float>.meets(o: ClosedFloatingPointRange<Float>) = start <= o.endInclusive && o.start <= endInclusive
 
-    /** Colour and size progress agree within one frame: each frame's colour interval meets a size interval of
-     * that frame or an adjacent one. Size is in whole pixels (±0.5), colour in 8-bit levels (±1). */
-    private fun assertLockstep(name: String, run: List<Sample>, from: Sample, to: Sample) {
-        val k = (0..2).maxBy { abs(channels(to.colour)[it] - channels(from.colour)[it]) }
-        fun colour(s: Sample) = interval(channels(s.colour)[k], channels(from.colour)[k], channels(to.colour)[k], 1f / 255f)
-        fun length(s: Sample) = interval(s.bounds.height, from.bounds.height, to.bounds.height, .5f)
-        fun width(s: Sample) = interval(s.bounds.width, from.bounds.width, to.bounds.width, .5f)
+    private class Endpoints(val colour: Pair<Color, Color>, val width: Pair<Float, Float>, val length: Pair<Float, Float>)
+
+    /** Colour, width and length progress agree within one frame: each frame's colour interval meets the width and
+     * length intervals of that frame or an adjacent one. Colour and width run between their exact spec values
+     * (theme colours, dp widths); length between the observed resting and held lengths. Readbacks are quantized:
+     * 8-bit colour (+-1 level), whole-pixel width (+-0.5 px, so a true 10.5 px end reads 10 or 11) and length
+     * (+-1 px, covering the observed endpoints). */
+    private fun assertLockstep(name: String, run: List<Sample>, end: Endpoints) {
+        val k = (0..2).maxBy { abs(channels(end.colour.second)[it] - channels(end.colour.first)[it]) }
+        fun colour(s: Sample) = interval(channels(s.colour)[k], channels(end.colour.first)[k], channels(end.colour.second)[k], 1f / 255f)
+        fun length(s: Sample) = interval(s.bounds.height, end.length.first, end.length.second, 1f)
+        fun width(s: Sample) = interval(s.bounds.width, end.width.first, end.width.second, .5f)
         for (i in run.indices) {
             val near = (i - 1..i + 1).filter { it in run.indices }
             assertTrue("$name frame $i: colour ${colour(run[i])} vs length ${near.map { length(run[it]) }}",
@@ -146,8 +151,10 @@ class ScrollbarBehaviourTest {
         assertEquals("capped extra length", rest.bounds.height + ScrollbarSpec.heldExtraLength(rest.bounds.height,
             ScrollbarSpec.heldMaxExtraLength.value * density), held.bounds.height, 1f)
         assertEquals(heldColour.red, held.colour.red, 1.5f / 255f)
-        assertLockstep("press", press, rest, held)
-        assertLockstep("release", release, held, rest)
+        val restWidth = ScrollbarSpec.thumbWidth.value * density
+        val heldWidth = (ScrollbarSpec.thumbWidth.value + ScrollbarSpec.heldExtraWidth.value) * density
+        assertLockstep("press", press, Endpoints(restColour to heldColour, restWidth to heldWidth, rest.bounds.height to held.bounds.height))
+        assertLockstep("release", release, Endpoints(heldColour to restColour, heldWidth to restWidth, held.bounds.height to rest.bounds.height))
         assertEquals(rest.bounds.height, release.last().bounds.height, .5f)
     }
 
