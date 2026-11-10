@@ -108,6 +108,9 @@ class QueueListeningEditTest {
         }
         val songs = files.mapIndexed { i, file -> Track(Uri.fromFile(file).toString(), "Before edit",
             fileName = file.name, relativePath = file.name, id = if (i == 0) "one" else "two") }
+        val isolated = preparedTestContext(object : ContextWrapper(context) {
+            override fun getSharedPreferences(ignored: String, mode: Int) = context.getSharedPreferences(name, mode)
+        })
         var fixture: Fixture? = null
         try {
             val active = withContext(Dispatchers.Main) {
@@ -116,9 +119,6 @@ class QueueListeningEditTest {
                 f.session = session
                 f.player = ExoPlayer.Builder(context).build()
                 f.observer = PlaybackStatistics(f.player, session)
-                val isolated = object : ContextWrapper(context) {
-                    override fun getSharedPreferences(ignored: String, mode: Int) = context.getSharedPreferences(name, mode)
-                }
                 f.queues = QueueController(db.queues(), QueuePreferences(isolated),
                     (context.applicationContext as LocalicaApplication).library, actor, listening = session)
                 f.songs = songs

@@ -26,7 +26,7 @@ class TagEditingController(private val context: Context, private val library: Li
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val documents = AndroidDocuments(context)
     private val history = TagJobHistory(context)
-    private val refreshJournal = MetadataRefreshJournal(File(context.filesDir, "pending-metadata-refresh.json"))
+    private val refreshJournal = MetadataRefreshJournal(File(io.github.anastaci1a.localica.preferences.PreparedPreferences.filesDirectory(context), "pending-metadata-refresh.json"))
     private val mutable = MutableStateFlow(TagEditorState(jobs = history.read()))
     private var pendingPatch: TagPatch? = null
     private var pendingDraft: String? = null

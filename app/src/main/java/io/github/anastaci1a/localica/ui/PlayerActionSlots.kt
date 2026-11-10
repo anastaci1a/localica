@@ -40,7 +40,7 @@ internal data class PlayerActionSettings(
 }
 
 internal class PlayerActionPreferences(context: Context) {
-    private val store = context.getSharedPreferences("player-actions", Context.MODE_PRIVATE)
+    private val store = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "player-actions")
     fun read(): PlayerActionSettings {
         val defaults = PlayerActionSettings()
         val centered = store.getBoolean("centered", defaults.centered)

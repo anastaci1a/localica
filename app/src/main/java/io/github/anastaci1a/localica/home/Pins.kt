@@ -20,7 +20,7 @@ object PinEdits {
 }
 
 class PinPreferences(context: Context) {
-    private val store = context.getSharedPreferences("pins", Context.MODE_PRIVATE)
+    private val store = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "pins")
     fun read(): List<MediaRef> {
         val array = JSONArray(store.getString("items", "[]"))
         return (0 until array.length()).mapNotNull { index -> array.getJSONObject(index).run {

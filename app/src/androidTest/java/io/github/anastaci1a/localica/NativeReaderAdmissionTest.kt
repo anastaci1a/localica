@@ -112,9 +112,9 @@ class NativeReaderAdmissionTest {
                 super.setPlayWhenReady(playWhenReady)
             }
         } else player
-        val preferences = QueuePreferences(object : ContextWrapper(context) {
+        val preferences = QueuePreferences(preparedTestContext(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences("reader-probe-$id", mode)
-        })
+        }))
         val scheduler = TestCoroutineScheduler()
         val caller = CoroutineScope(SupervisorJob() + if (timeout) StandardTestDispatcher(scheduler) else Dispatchers.Default)
         var request: Deferred<Result<Unit>>? = null

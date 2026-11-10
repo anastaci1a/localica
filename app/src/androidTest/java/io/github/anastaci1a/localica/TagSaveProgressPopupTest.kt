@@ -136,12 +136,13 @@ class TagSaveProgressPopupTest {
 }
 
 /** Hold foreground-service dispatch without mutating the application controller or using reflection. */
-private class HeldTagServiceContext(base: Context) : ContextWrapper(base) {
+private class HeldTagServiceContext(base: Context) : ContextWrapper(base), io.github.anastaci1a.localica.preferences.PreparedPreferences.Owner {
     private val token = "popup-${UUID.randomUUID()}"
     private val directory = File(base.cacheDir, token).apply { check(mkdirs()) }
     private val preferences = mutableSetOf<String>()
     var started = false
         private set
+    override val preparedPreferences = preparedTestOwner(this)
     override fun getFilesDir(): File = directory
     override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
         val owned = "$token-$name"

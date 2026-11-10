@@ -62,6 +62,13 @@ interface PlaybackActions {
 
 /** Main-thread controller. The service retains playback when this UI connection is released. */
 class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
+    companion object {
+        /** Cold entry point. Readiness suspends the caller; native controller ownership stays on Main. */
+        suspend fun preparedFactory(context: Context): () -> PlaybackConnection {
+            (context.applicationContext as LocalicaApplication).preferences.awaitReady()
+            return { PlaybackConnection(context) }
+        }
+    }
     val queues = (context.applicationContext as LocalicaApplication).queues
     private val mutableState = MutableStateFlow(PlaybackState())
     override val state = mutableState.asStateFlow()

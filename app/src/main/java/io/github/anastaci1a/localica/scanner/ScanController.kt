@@ -12,7 +12,7 @@ data class ScanState(val running: Boolean = false, val count: Int = 0, val folde
 
 /** App-owned state survives activity recreation; the foreground service owns the visible work lifetime. */
 class ScanController(private val context: Context, private val library: LibraryRepository) {
-    private val marker = context.getSharedPreferences("scan-progress", 0)
+    private val marker = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "scan-progress")
     private val mutable = MutableStateFlow(ScanState(message = if (marker.getBoolean("running", false))
         "The previous scan was interrupted. Scan again to finish updating your library." else null))
     val state = mutable.asStateFlow()

@@ -201,9 +201,9 @@ class QueueReusePlaybackTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val name = "queue-reuse-${UUID.randomUUID()}"
-        val preferences = QueuePreferences(object : ContextWrapper(context) {
+        val preferences = QueuePreferences(preparedTestContext(object : ContextWrapper(context) {
             override fun getSharedPreferences(ignored: String, mode: Int) = context.getSharedPreferences(name, mode)
-        }).apply { write(settings) }
+        })).apply { write(settings) }
         val file = File(context.cacheDir, "$name.mp3")
         instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }
         val tracks = listOf("a", "b", "a", "c").map { Track(file.toURI().toString(), it,

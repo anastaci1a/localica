@@ -184,9 +184,9 @@ class OrderCommitPersistenceTest {
     private fun queueFixture(sortSnapshot: suspend () -> LibrarySnapshot = { LibrarySnapshot(tracks = tracks) },
         action: suspend (QueueFixture) -> Unit) = runBlocking {
         val preferencesName = "order-commit-${UUID.randomUUID()}"
-        val preferences = QueuePreferences(object : ContextWrapper(context) {
+        val preferences = QueuePreferences(preparedTestContext(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences(preferencesName, mode)
-        })
+        }))
         preferences.write(QueueSettings(switching = QueueSwitch.Paused))
         val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
