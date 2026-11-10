@@ -467,3 +467,4 @@ io.github.anastaci1a.localica.SelectionInsetScrollTest
 io.github.anastaci1a.localica.SelectionInsetContextsTest
 io.github.anastaci1a.localica.PopupChromeDepthTest
 io.github.anastaci1a.localica.UtilityPopupReturnTest
+io.github.anastaci1a.localica.GlassTonePixelBufferTest
