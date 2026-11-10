@@ -45,7 +45,7 @@ class LastFmWork(private val app: LocalicaApplication) : LastFmBackground {
         // Consent starts closed during its asynchronous disk load. Never cancel a restored job for that transient state.
         CoroutineScope(Dispatchers.IO).launch {
             app.preferences.awaitReady()
-        app.onlineMetadataConsent.load()
+            app.onlineMetadataConsent.load()
             if (!app.onlineMetadataConsent.allowed.value) cancel()
         }
     }
@@ -69,19 +69,26 @@ internal fun interface LastFmWorkRuntime {
     suspend fun controller(): LastFmController
 }
 
+/** Shared by the public worker constructor and delayed-readiness entry tests. */
+internal class ApplicationLastFmWorkRuntime(private val app: LocalicaApplication,
+    private val preferences: io.github.anastaci1a.localica.preferences.PreparedPreferences = app.preferences) : LastFmWorkRuntime {
+    override suspend fun controller(): LastFmController {
+        preferences.awaitReady()
+        app.onlineMetadataConsent.load()
+        return app.lastfm
+    }
+}
+
 class LastFmWorker internal constructor(context: Context, parameters: WorkerParameters,
     private val runtime: LastFmWorkRuntime) : CoroutineWorker(context, parameters) {
-    constructor(context: Context, parameters: WorkerParameters) : this(context, parameters, LastFmWorkRuntime {
-        val app = context.applicationContext as LocalicaApplication
-        app.onlineMetadataConsent.load()
-        app.lastfm
-    })
+    constructor(context: Context, parameters: WorkerParameters) : this(context, parameters,
+        ApplicationLastFmWorkRuntime(context.applicationContext as LocalicaApplication))
     override suspend fun getForegroundInfo(): ForegroundInfo = foreground(LastFmProgress())
     override suspend fun doWork(): Result {
-        val controller = runtime.controller()
-        if (!controller.networkConsent.allowed.value || !controller.enabled) return Result.failure()
-        val username = inputData.getString(LastFmWork.USERNAME) ?: return Result.failure()
         return try {
+            val controller = runtime.controller()
+            if (!controller.networkConsent.allowed.value || !controller.enabled) return Result.failure()
+            val username = inputData.getString(LastFmWork.USERNAME) ?: return Result.failure()
             setForeground(getForegroundInfo())
             if (controller.syncInBackground(username, id.toString(), inputData.getBoolean(LastFmWork.FULL_RESCAN, false)) { progress ->
                 setProgress(workDataOf("page" to progress.page, "totalPages" to progress.totalPages, "songs" to progress.songs,

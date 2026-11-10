@@ -1,8 +1,12 @@
 package io.github.anastaci1a.localica
 
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import io.github.anastaci1a.localica.library.Track
@@ -13,42 +17,64 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
+/** Native menu and saveable-state coverage. The pure resolver tests cover the pre-effect selection. */
 class PreparedLyricsSelectionTest {
     @get:Rule val compose = localicaComposeRule()
 
-    @Test fun savedSourceIsPresentOnTheFirstComposition() = verify("saved")
-    @Test fun legacyAliasIsPresentBeforeMigrationAndLaterChoiceWinsDurably() = verify("saved:plain")
+    @Test fun savedSourceSurvivesMenuSelectionRestorationAndTrackChanges() = verify("saved")
+    @Test fun legacyMigrationCannotOverwriteTheLaterMenuChoiceOrAnotherTrack() = verify("saved:plain")
 
     private fun verify(choice: String) = runBlocking {
         val app = ApplicationProvider.getApplicationContext<LocalicaApplication>()
         app.preferences.awaitReady()
         val preferences = app.preferences.require("lyric-sources")
-        val track = Track("prepared-lyrics-$choice", "Saved source", fileName = "fixture.mp3", relativePath = "fixture.mp3")
+        val first = Track("prepared-lyrics-$choice", "First", fileName = "first.mp3", relativePath = "first.mp3")
+        val second = first.copy(id = "prepared-other-$choice", uri = "file:///second.mp3")
+        var track by mutableStateOf(first)
+        var visible by mutableStateOf(false)
         val sources = listOf(LyricSource("fallback", "Fallback", LrcParser.parse("Fallback text")),
             LyricSource("saved", "Saved", LrcParser.parse("[00:00.00]Saved text")))
-        withContext(Dispatchers.IO) { check(preferences.edit().putString(track.id, choice).commit()) }
-        compose.mainClock.autoAdvance = false
+        withContext(Dispatchers.IO) {
+            check(preferences.edit().putString(first.id, choice).putString(second.id, "saved").commit())
+        }
+        val restoration = StateRestorationTester(compose)
         try {
-            compose.setContent { LocalicaTheme {
-                LyricsPanel(track, 0, true, {}, Modifier.height(360.dp), result = LyricsResult(sources))
+            restoration.setContent { LocalicaTheme {
+                val anchor = rememberGlassAnchor()
+                Column {
+                    Box(Modifier.fillMaxWidth().height(48.dp).glassAnchor(anchor).clickable { visible = true }) {
+                        Text("Open sources")
+                    }
+                    LyricsPanel(track, 0, true, {}, Modifier.fillMaxWidth().height(360.dp), result = LyricsResult(sources),
+                        sourcesAnchor = anchor, sourcesVisible = visible, onSourcesDismiss = { visible = false })
+                }
             } }
-            compose.onNodeWithText("Saved text").assertExists()
+            compose.onNodeWithText("Saved text").assertIsDisplayed()
             compose.onAllNodesWithText("Fallback text").assertCountEquals(0)
-            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithText("Open sources").performClick()
+            compose.onNodeWithText("Fallback").performClick()
+            compose.onNodeWithText("Fallback text").assertIsDisplayed()
+            compose.runOnIdle { assertEquals("fallback", preferences.getString(first.id, null)) }
+            restoration.emulateSavedInstanceStateRestore()
+            compose.onNodeWithText("Fallback text").assertIsDisplayed()
+            // Leave a menu for the old track mounted, then change tracks before another click.
+            compose.onNodeWithText("Open sources").performClick()
+            compose.runOnIdle { track = second }
+            compose.waitForIdle()
+            compose.onNodeWithText("Saved text").assertIsDisplayed()
             compose.runOnIdle {
-                assertEquals("saved", preferences.getString(track.id, null))
-                // Apply the next accepted choice synchronously, as the source menu does.
-                preferences.edit().putString(track.id, "fallback").apply()
-                assertEquals("fallback", preferences.getString(track.id, null))
+                assertEquals("saved", preferences.getString(second.id, null))
+                track = first
             }
+            compose.onNodeWithText("Fallback text").assertIsDisplayed()
             withContext(Dispatchers.IO) {
                 check(preferences.edit().commit())
                 val xml = java.io.File(app.applicationInfo.dataDir, "shared_prefs/lyric-sources.xml").readText()
-                assertTrue(xml.contains("name=" + '"' + track.id + '"' + ">fallback</string>"))
+                assertTrue(xml.contains("name=" + '"' + first.id + '"' + ">fallback</string>"))
+                assertTrue(xml.contains("name=" + '"' + second.id + '"' + ">saved</string>"))
             }
         } finally {
-            compose.mainClock.autoAdvance = true
-            withContext(Dispatchers.IO) { check(preferences.edit().remove(track.id).commit()) }
+            withContext(Dispatchers.IO) { check(preferences.edit().remove(first.id).remove(second.id).commit()) }
         }
     }
 }
