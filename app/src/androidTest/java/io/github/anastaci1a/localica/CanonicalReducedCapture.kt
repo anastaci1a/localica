@@ -205,8 +205,13 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
                 val drawn = CountDownLatch(1)
                 rule.runOnUiThread {
                     if (!p.markerInstalled) {
-                        p.marker.setBounds(1, 1, 9, 9); view.overlay.add(p.marker); p.markerInstalled = true
+                        view.overlay.add(p.marker); p.markerInstalled = true
                     }
+                    // Fixed body-relative placement. No producer is unblocked or forced for observation.
+                    val markerLeft = floor(state.bounds.right).toInt() - 16
+                    val markerTop = ceil(state.bounds.top).toInt() + 4
+                    check(markerLeft >= ceil(state.bounds.left).toInt() && markerTop + 8 <= floor(state.bounds.bottom).toInt())
+                    p.marker.setBounds(markerLeft, markerTop, markerLeft + 8, markerTop + 8)
                     p.marker.requested = generation
                     val listener = object : android.view.ViewTreeObserver.OnDrawListener {
                         override fun onDraw() { view.post {
@@ -228,7 +233,13 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
                 }
                 try {
                     val markerOrigin = rule.runOnUiThread { IntArray(2).also(view::getLocationInWindow) }
-                    val x = markerOrigin[0] + 2; val y = markerOrigin[1] + 2
+                    val markerBounds = rule.runOnUiThread { android.graphics.Rect(p.marker.bounds) }
+                    val x = markerOrigin[0] + markerBounds.left + 2
+                    val y = markerOrigin[1] + markerBounds.top + 2
+                    receipt.put("nativeWitnessPoints", JSONArray(listOf(x, y, x + 4, y)))
+                        .put("displayWitnessPoints", JSONArray(listOf(state.originX + markerBounds.left + 2,
+                            state.originY + markerBounds.top + 2, state.originX + markerBounds.left + 6,
+                            state.originY + markerBounds.top + 2)))
                     check(buffer.getPixel(x, y) == (NativeColor.BLACK or generation))
                     check(buffer.getPixel(x + 4, y) == NativeColor.MAGENTA)
                     save("${point.label}-${p.role}-original.png", buffer)
@@ -274,8 +285,31 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
                 val owner = owners.getJSONObject(i)
                 owner.put("displayIntersection", JSONArray(listOf(r.left, r.top, r.right, r.bottom)))
                     .put("compositedPaintPixels", if (state.attached) counts(screen, r, state.probe.channel) else 0)
-                    .put("currentCompositeClaim", true)
+                    .put("currentCompositeClaim", false)
             }
+            // Independently replayable freshness in the untouched system composite.
+            val witnesses = JSONArray()
+            for (i in before.indices) {
+                val state = before[i]
+                val owner = owners.getJSONObject(i)
+                if (state.attached && !state.blocked && state.probe.role != "child" && owner.has("displayWitnessPoints")) {
+                    val points = owner.getJSONArray("displayWitnessPoints")
+                    val x = points.getInt(0); val y = points.getInt(1)
+                    val mx = points.getInt(2); val my = points.getInt(3)
+                    val inside = x in 0 until screen.width && mx in 0 until screen.width &&
+                        y in 0 until screen.height && my in 0 until screen.height
+                    val code = if (inside) screen.getPixel(x, y) else 0
+                    val sentinel = if (inside) screen.getPixel(mx, my) else 0
+                    val verified = inside && code == (NativeColor.BLACK or generation) && sentinel == NativeColor.MAGENTA
+                    witnesses.put(JSONObject().put("role", state.probe.role).put("points", points)
+                        .put("observedCodeArgb", code).put("observedSentinelArgb", sentinel).put("verified", verified))
+                }
+            }
+            var verified = false
+            for (i in 0 until witnesses.length()) verified = verified || witnesses.getJSONObject(i).getBoolean("verified")
+            row.put("compositeGeneration", generation).put("compositeWitnesses", witnesses)
+                .put("compositeGenerationVerified", verified)
+            for (i in before.indices) owners.getJSONObject(i).put("currentCompositeClaim", verified)
         } finally { screen.recycle() }
         val after = snapshot()
         check(before.map { listOf(it.sequence, it.nanos, it.viewIdentity, it.tokenIdentity, it.localReduced, it.clockAccess, it.clockSpecAccess, it.bounds, it.surfaceBounds) } ==
@@ -288,6 +322,7 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
         rows.put(row)
         File(output, "frames.json").writeText(JSONObject().put("method", method)
             .put("initialClockMs", initialClock).put("frames", rows).toString(2))
+        check(row.getBoolean("compositeGenerationVerified")) { "Incomplete visible system-composite generation at ${point.label}; original images and failed receipt retained" }
     }
     override fun close() {
         rule.runOnUiThread {
