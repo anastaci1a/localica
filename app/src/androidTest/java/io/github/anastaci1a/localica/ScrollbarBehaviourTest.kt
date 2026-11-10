@@ -273,6 +273,7 @@ class ScrollbarBehaviourTest {
         // A fling: visible while it runs; the idle delay starts only once it settles.
         compose.onNodeWithTag("rows").performTouchInput { swipeUp(durationMillis = 80) }
         var settled = -1L
+        var movingSince = -1L
         val flingFade = mutableListOf<Pair<Long, Float>>()
         val flingStart = compose.mainClock.currentTime
         while (compose.mainClock.currentTime < flingStart + 8000) {
@@ -280,7 +281,11 @@ class ScrollbarBehaviourTest {
             val moving = compose.runOnIdle { state.isScrollInProgress }
             val s = sample()
             timeline += row(s, ",fling-$moving,${opacity(s)}")
-            if (moving) assertTrue("Visible throughout the fling", opacity(s) >= .98f)
+            // The fling starts from a faded bar, so it fades in first (as one timeline); once that has run it stays full.
+            if (moving) {
+                if (movingSince < 0) movingSince = compose.mainClock.currentTime
+                if (compose.mainClock.currentTime - movingSince > ScrollbarSpec.fadeMillis + 50) assertTrue("Visible throughout the fling after its fade-in: ${opacity(s)}", opacity(s) >= .98f)
+            }
             else {
                 if (settled < 0) settled = compose.mainClock.currentTime
                 flingFade += compose.mainClock.currentTime - settled to opacity(s)
