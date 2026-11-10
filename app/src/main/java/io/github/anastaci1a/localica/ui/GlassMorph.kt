@@ -345,7 +345,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val departingHold = !visible && popupHome?.departing == true && popupHome.mounted
     SideEffect {
         if (departingHold) {
-            motion.hold()
             motion.show(false)
         } else {
             motion.release()
