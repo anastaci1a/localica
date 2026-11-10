@@ -130,6 +130,8 @@ class ScrollbarMotionTest {
             assertEquals(0, h.clock.activeCount)
             motion.access(false)
             motion.reveal(); motion.release(.2f); motion.contact(false, 1f)
+            assertEquals("An unchanged released target does not restart grip", 2, h.clock.activeCount)
+            motion.contact(true, 1f)
             assertEquals(3, h.clock.activeCount)
             assertThrows(IllegalStateException::class.java) { h.clock.observe { motion.cancel() } }
             motion.cancel()
