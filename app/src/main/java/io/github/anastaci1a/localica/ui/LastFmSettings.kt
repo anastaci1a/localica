@@ -20,7 +20,7 @@ internal fun LastFmSettings(controller: LastFmController) {
     val state by controller.state.collectAsState()
     val onlineAllowed by controller.networkConsent.allowed.collectAsState()
     // Collecting details is the only demand for review lists; the page owns the full match while open (#779).
-    val matches by controller.details.collectAsState(controller.matches.value)
+    val matches by controller.details.collectAsState(controller.matches.collectAsState().value)
     val library by controller.catalog.collectAsState()
     val active by controller.active.collectAsState()
     val saved = state.saved
