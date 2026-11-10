@@ -649,7 +649,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     }
     }
     if (viewing && sampled.trackUri != null) ArtworkViewer(sampled.trackUri) { viewing = false }
-    if (configureTap) GlassUnanchoredPopup("player gesture setting") { GlassAlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
+    if (configureTap) GlassUnanchoredPopup("player setting; anchor tracked in #781") { GlassAlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
         text = { Column { ArtworkAction.entries.forEach { value -> ActionTextButton(onClick = {
             onSettings(settings.copy(artworkTap = value)); configureTap = false
         }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } }) }

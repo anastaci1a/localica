@@ -501,7 +501,7 @@ fun LocalicaScreen(
             LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }
         })
     // The app-owned scanner is the live count source; LibraryUiState carries scan milestones only.
-    if (scannerOpen) GlassUnanchoredPopup("opened from the scan button") { ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan, onQuickScan,
+    if (scannerOpen) GlassUnanchoredPopup("scan button; anchor tracked in #781") { ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan, onQuickScan,
         remember(context) { (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.scanner?.state }) { destination ->
         scannerOpen = false; returnToScanner = true; settingsCategory = destination; settingsOpen = true
     } }
@@ -509,14 +509,14 @@ fun LocalicaScreen(
         text = { Text("Playback will continue.") }, confirmButton = { ActionTextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
         dismissButton = { ActionTextButton(onClick = { exitPrompt = false }) { Text("Cancel") } }) }
     CompositionLocalProvider(LocalGlassDialogAppearance provides playerDialogAppearance) {
-    if (repeatOptions) GlassUnanchoredPopup("player action") { RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) } }
+    if (repeatOptions) GlassUnanchoredPopup("player action; anchor tracked in #781") { RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) } }
     if (customizeActions) CompositionLocalProvider(LocalGlassDialogAppearance provides customizeAppearance) {
-        GlassUnanchoredPopup("player action") { PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false; customizeAppearance = null }, settings.reducedMotion) }
+        GlassUnanchoredPopup("player action; anchor tracked in #781") { PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false; customizeAppearance = null }, settings.reducedMotion) }
     }
-    if (songInfo && indexedTrack != null) GlassUnanchoredPopup("player action") { SongInformation(indexedTrack, { playerCollectionLookup.cancel(); songInfo = false }, folders = library.snapshot.folders, onAction = { playerAction(it) }) }
+    if (songInfo && indexedTrack != null) GlassUnanchoredPopup("player action; anchor tracked in #781") { SongInformation(indexedTrack, { playerCollectionLookup.cancel(); songInfo = false }, folders = library.snapshot.folders, onAction = { playerAction(it) }) }
     if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri, indexedTrack.albumArtist ?: indexedTrack.artist, indexedTrack.album) { viewArt = false }
-    if (addPlaying && indexedTrack != null) GlassUnanchoredPopup("player action") { AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false }) }
-    if (playerMore) GlassUnanchoredPopup("player action") { GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
+    if (addPlaying && indexedTrack != null) GlassUnanchoredPopup("player action; anchor tracked in #781") { AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false }) }
+    if (playerMore) GlassUnanchoredPopup("player action; anchor tracked in #781") { GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
         val editTags = presentedTagEdit()
         Column(Modifier.fillMaxWidth().controlVerticalScroll(rememberScrollState()).padding(16.dp)) {
             PlayerAction.entries.filterNot { it == PlayerAction.More }

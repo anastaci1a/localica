@@ -21,7 +21,7 @@ internal fun LibraryLicenses() {
                 context.assets.open("licenses/$it").bufferedReader().use { reader -> reader.readText() }
             }
         } }
-        GlassUnanchoredPopup("text button has no glass face") { GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Open-source licenses") },
+        GlassUnanchoredPopup("text button; anchor tracked in #781") { GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Open-source licenses") },
             text = { Text(text, Modifier.heightIn(max = 400.dp).controlVerticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
             confirmButton = { ActionTextButton(onClick = { open = false }) { Text("Close") } }) }
     }

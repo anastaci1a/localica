@@ -61,7 +61,7 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
     if (state.recovery != null) SettingsEntry("Recover tag edit") {
         ActionTextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
     }
-    if (confirming) GlassUnanchoredPopup("text button has no glass face") { GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text(if (state.recoveryProblem == null) "Restore original file?" else "Retry tag recovery?") },
+    if (confirming) GlassUnanchoredPopup("text button; anchor tracked in #781") { GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text(if (state.recoveryProblem == null) "Restore original file?" else "Retry tag recovery?") },
         text = { Text(state.recoveryProblem ?: "This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
         confirmButton = { ActionTextButton(onClick = { confirming = false; controller.recover() }) { Text(if (state.recoveryProblem == null) "Restore original" else "Retry recovery") } },
         dismissButton = { ActionTextButton(onClick = { confirming = false }) { Text("Cancel") } }) }

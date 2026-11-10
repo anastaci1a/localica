@@ -125,7 +125,7 @@ internal fun LastFmSettings(controller: LastFmController) {
             SettingsEntry("Reset Last.fm match choices") { GlassActionButton(AppIcon.ActionChevronLeft, "Reset Last.fm match choices", enabled = saved.mappings.isNotEmpty(), onClick = controller::resetMappings) }
         }
     }
-    if (deleting) GlassUnanchoredPopup("glass action button has no anchor") { GlassAlertDialog(onDismissRequest = { deleting = false }, title = { Text("Delete synced Last.fm data?") },
+    if (deleting) GlassUnanchoredPopup("glass action button; anchor tracked in #781") { GlassAlertDialog(onDismissRequest = { deleting = false }, title = { Text("Delete synced Last.fm data?") },
         text = { Text("This deletes only the Last.fm archive, match choices and judgment calls. Your local listening history is kept.") },
         confirmButton = { GlassActionButton(AppIcon.ActionTrash, "Delete synced data") { controller.deleteSyncedData(); deleting = false } },
         dismissButton = { GlassActionButton(AppIcon.ActionClose, "Cancel") { deleting = false } }) }

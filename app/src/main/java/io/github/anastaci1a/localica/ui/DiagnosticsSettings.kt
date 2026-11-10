@@ -17,7 +17,7 @@ internal fun DiagnosticsExportAction() {
     val context = LocalContext.current
     SettingsEntry("Export diagnostics") { ActionTextButton(onClick = { open = true }) { Text("Export diagnostics") } }
     FrameStatsActions()
-    if (open) GlassUnanchoredPopup("text button has no glass face") { GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Export diagnostics") },
+    if (open) GlassUnanchoredPopup("text button; anchor tracked in #781") { GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Export diagnostics") },
         text = {
             Text("Saves the app version, device model, Android version and the last ${Diagnostics.ring.size} recorded pinch and " +
                 "transition events and any opt-in frame capture to a text file, then opens the share sheet. Nothing is sent unless you choose where to share it.",

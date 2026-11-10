@@ -72,13 +72,13 @@ internal fun IconPackSettings(onView: (String?) -> Unit) {
     SettingsEntry("Import icon pack") { ActionTextButton(enabled = !busy, onClick = { importer.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }) { Text("Import icon pack") } }
     SettingsEntry("Export built-in icons as a template") { ActionTextButton(enabled = !busy, onClick = { exporter.launch("localica-icon-template.zip") }) { Text("Export built-in icons as a template") } }
     updating?.let { prepared ->
-        GlassUnanchoredPopup("import result") { GlassAlertDialog({ updating = null }, title = { Text("Update ${prepared.report.info.name}?") },
+        GlassUnanchoredPopup("import button; anchor tracked in #781") { GlassAlertDialog({ updating = null }, title = { Text("Update ${prepared.report.info.name}?") },
             text = { Text("Version ${prepared.report.info.version} is already in your library. Replace its icons with this import?") },
             confirmButton = { ActionTextButton({ updating = null; install(prepared) }) { Text("Update") } },
             dismissButton = { ActionTextButton({ updating = null }) { Text("Cancel") } }) }
     }
     deleting?.let { pack ->
-        GlassUnanchoredPopup("row action") { GlassAlertDialog({ deleting = null }, title = { Text("Delete ${pack.report.info.name}?") },
+        GlassUnanchoredPopup("row button; anchor tracked in #781") { GlassAlertDialog({ deleting = null }, title = { Text("Delete ${pack.report.info.name}?") },
             text = { Text("Remove this pack from your library? If it is active, Localica will use the built-in icons.") },
             confirmButton = { ActionTextButton({
                 deleting = null
