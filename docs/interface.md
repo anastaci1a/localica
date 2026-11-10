@@ -293,6 +293,8 @@ Large titles allow two lines; other list titles remain single-line. Small retain
 
 These three dense sizes keep one-line extra information immediately before the overflow, with smaller single-line titles. Metadata moves between trailing and subtitle positions through the shared layout animation. Long text ellipsizes, and larger system fonts grow rows.
 
+Only intentional layout changes animate placement. Rows and covers that enter through scrolling, a fling, a scrollbar jump or an automatic scroll appear at their final position on their first frame, including in recycled slots.
+
 Normal/Large halve the inter-cover gap, retaining cover sizes and horizontal geometry. Gallery **Items per row** snaps to 1–5. Preserve legacy presets until changed. Use smaller text/tighter padding at three or more columns, with an overlaid scrollbar.
 
 Every gallery size uses one fixed 8 dp gap, independent of zoom: between neighbouring covers and from the bottom of an item's lowest text line to the next cover. Outer margins stay 16 dp.

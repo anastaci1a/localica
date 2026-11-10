@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.animateBounds
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.stopScroll
@@ -1229,9 +1228,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
                         Column(Modifier.browseBeyondBounds(pinchMotion.beyondBounds)
-                            .then(if (pinchMotion.visualSource == null) Modifier.animateBounds(this@LookaheadScope,
+                            // Recycled slots start at their own item's final bounds (#635); a
+                            // change without motion applies in the same frame.
+                            .then(if (pinchMotion.visualSource == null) Modifier.slotBounds(this@LookaheadScope,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp),
-                            boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder || loadingCell != null) 0 else 350) })
+                            spec = { if (reducedMotion || editableOrder || loadingCell != null) null else androidx.compose.animation.core.tween(350) })
                             else Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp)
                                 .pinchItemPlacement(pinchMotion, gridState, item.key, itemIndex, displayedStyle, cellGeometry))
                             // Drag hit testing reads these live coordinates when needed; keeping the

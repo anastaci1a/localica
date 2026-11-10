@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.animateBounds
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
@@ -75,7 +74,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     // The viewport applies distance-aware row visibility to both global passes.
     val incomingAlpha = if (from != null && pinch?.viewportCoordinates?.isAttached != true && item.key !in requireNotNull(pinch).bounds)
         browseViewVisibility(false, true, progress) else 1f
-    fun Modifier.morph() = if (from != null) this else animateBounds(lookahead, boundsTransform = { _, _ -> tween(duration) })
+    fun Modifier.morph() = if (from != null) this else slotBounds(lookahead) { if (duration == 0) null else tween(duration) }
     // One artwork reveal drives the text (#526); pinches keep their own text handling.
     val textReveal = remember(item.key) { ArtworkTextReveal() }
     val gatedText = textReveal.takeIf { from == null && artwork(style) }
@@ -100,9 +99,8 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                     clip = true
                 }, shape = androidx.compose.ui.graphics.RectangleShape)
         }
-        // Lazy reuse retains animateBounds' previous dimensions. Applying that tween to a
-        // paragraph reveals/reflows it across successive widths when a new row enters.
-        // Measure ordinary text at its final width; explicit pinch text owns its own motion.
+        // A bounds tween would reflow a paragraph across successive widths. Measure ordinary
+        // text at its final width; explicit pinch text owns its own motion.
         Box(Modifier.reveal().artworkTextReveal(gatedText, { titleLayout }, { artCorner.floatValue }).testTag("browse-text-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, geometryProgress)
             else Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
