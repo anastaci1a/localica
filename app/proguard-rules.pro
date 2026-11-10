@@ -11,3 +11,13 @@
 # Jaudiotagger instantiates tag FrameBody and format classes by name (Class.forName).
 -keep class org.jaudiotagger.** { *; }
 -dontwarn org.jaudiotagger.**
+
+# Experimental storage diagnostics only, on the disposable queue proof ref.
+# The production actor is not cut over yet, so R8 would otherwise remove these test targets.
+-keep class io.github.anastaci1a.localica.queue.LegacyQueueOrderStream { *; }
+-keep class io.github.anastaci1a.localica.queue.QueueSequence* { *; }
+-keep class io.github.anastaci1a.localica.queue.PositionedQueueEntry { *; }
+-keep class io.github.anastaci1a.localica.queue.QueueStorageState { *; }
+-keep class io.github.anastaci1a.localica.queue.QueuePlaybackWindow* { *; }
+-keep class io.github.anastaci1a.localica.queue.QueueTraversal* { *; }
+-keep class io.github.anastaci1a.localica.queue.QueueWindowStore { *; }
