@@ -51,8 +51,19 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
+  identity:
+    name: Commit identities and attribution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Verify commit identities and attribution
+        run: node .github/check-commit-identity.mjs
   verification-reuse:
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: identity
+    if: ${{ needs.identity.result == 'success' && (!startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -84,8 +95,8 @@ jobs:
 
   test-apks:
     # Debug app and instrumentation APKs only; the R8 distribution APK is built in parallel by `build`.
-    needs: verification-reuse
-    if: ${{ !cancelled() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true' }}
+    needs: [identity, verification-reuse]
+    if: ${{ needs.identity.result == 'success' && (!cancelled() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
@@ -126,8 +137,8 @@ jobs:
           if-no-files-found: error
 
   build:
-    needs: verification-reuse
-    if: ${{ !cancelled() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true' }}
+    needs: [identity, verification-reuse]
+    if: ${{ needs.identity.result == 'success' && (!cancelled() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
@@ -194,8 +205,8 @@ jobs:
   static-checks:
     # Unit tests, lint and the release variant, off the APK critical path. The summary and
     # release-verification.py require this job alongside build and the device shards.
-    needs: verification-reuse
-    if: ${{ !cancelled() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true' }}
+    needs: [identity, verification-reuse]
+    if: ${{ needs.identity.result == 'success' && (!cancelled() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -230,8 +241,8 @@ jobs:
           path: app/build/reports/
 
   device-tests:
-    needs: test-apks
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: [identity, test-apks]
+    if: ${{ needs.identity.result == 'success' && (!startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-24.04
     # Normal shards take 13–19 minutes; bound hangs without trimming coverage.
     timeout-minutes: 35
@@ -358,8 +369,8 @@ jobs:
   device-tests-summary:
     # Proves the shards ran every inventory test exactly once. The tag release job checks this job
     # by name instead of the individual shard jobs.
-    if: ${{ always() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true' }}
-    needs: [device-tests, test-apks, build, static-checks, verification-reuse]
+    if: ${{ needs.identity.result == 'success' && (always() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true') }}
+    needs: [identity, device-tests, test-apks, build, static-checks, verification-reuse]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -408,8 +419,8 @@ jobs:
           if-no-files-found: error
 
   compatibility:
-    needs: verification-reuse
-    if: ${{ needs.verification-reuse.outputs.reused != 'true' && ((github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev/overnight-interactions-20261019' || github.ref == 'refs/heads/dev/recovery-feedback-20261023' || github.ref == 'refs/heads/dev/aac-gapless-20261023') && github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.compatibility) }}
+    needs: [identity, verification-reuse]
+    if: ${{ needs.identity.result == 'success' && (needs.verification-reuse.outputs.reused != 'true' && ((github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev/overnight-interactions-20261019' || github.ref == 'refs/heads/dev/recovery-feedback-20261023' || github.ref == 'refs/heads/dev/aac-gapless-20261023') && github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.compatibility)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -539,7 +550,8 @@ jobs:
           if-no-files-found: warn
 
   release:
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: identity
+    if: ${{ needs.identity.result == 'success' && (startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -600,8 +612,8 @@ jobs:
     # Exercises the exact R8 distribution APK that the build job publishes and the release job ships.
     # The tag release job cannot list this in `needs` (build is skipped on tags); it checks the
     # main run's job conclusions by name instead.
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-    needs: build
+    if: ${{ needs.identity.result == 'success' && (!startsWith(github.ref, 'refs/tags/')) }}
+    needs: [identity, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
