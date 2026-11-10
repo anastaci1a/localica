@@ -215,13 +215,15 @@ class QueueSequenceTest {
     }
 
     @Test fun blankAndDefaultedLegacyOrderFieldsMatchTheExistingCodec() {
-        val ids = listOf("first", "second", "third")
+        val ids = listOf("first", "second", "third", "null")
         fun json() = org.json.JSONObject().put("manual", org.json.JSONArray(listOf("third", "deleted", "first")))
         val cases = listOf("", " \t\n\r", "\u2003\u00a0", json().toString(),
             json().put("ascending", false).toString(), json().put("ascending", "FALSE").toString(),
             json().put("ascending", org.json.JSONObject.NULL).toString(), json().put("ascending", 42).toString(),
             json().put("sort", "Title").toString(), json().put("sort", org.json.JSONObject.NULL).toString(),
-            json().put("sort", org.json.JSONObject().put("unknown", true)).toString())
+            json().put("sort", org.json.JSONObject().put("unknown", true)).toString(),
+            """{"manual":["third"],"manual":["second",null,"first"]}""",
+            """{"manual":false,"manual":[null,"first"]}""")
         for (text in cases) database { sequence, sql ->
             sql.execSQL("INSERT INTO queues (id,name,createdAt,currentEntryId,positionMs,shuffle,repeat,orderState) VALUES ('legacy','Legacy',0,NULL,0,0,'Off',?)", arrayOf(text))
             sql.compileStatement("INSERT INTO queue_entries (id,queueId,ordinal,track) VALUES (?,'legacy',?,?)").use { insert ->
