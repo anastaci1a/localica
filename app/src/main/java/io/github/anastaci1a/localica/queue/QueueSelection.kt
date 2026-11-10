@@ -27,12 +27,14 @@ internal class QueueSelection(private val sequence: QueueSequence) {
         if (ids.isEmpty()) return handle
         db.compileStatement(if (selected == handle.all)
             "DELETE FROM queue_sequence_selection_exceptions WHERE selectionId = ? AND entryId = ?"
-        else "INSERT OR IGNORE INTO queue_sequence_selection_exceptions (selectionId,entryId) VALUES (?,?)").use { change ->
+        else "INSERT OR IGNORE INTO queue_sequence_selection_exceptions (selectionId,entryId,position) VALUES (?,?,?)").use { change ->
             ids.forEach { id ->
                 change.clearBindings()
                 change.bindString(1, handle.id)
                 change.bindString(2, id)
-                change.executeUpdateDelete()
+                val position = requireNotNull(sequence.position(handle.queueId, id))
+                if (selected != handle.all) change.bindLong(3, position.toLong())
+                if (change.executeUpdateDelete() != 0) updateRanges(handle.id, position, selected != handle.all)
             }
         }
         db.execSQL("UPDATE queue_sequence_selections SET revision = revision + 1 WHERE id = ?", arrayOf(handle.id))
@@ -99,8 +101,8 @@ internal class QueueSelection(private val sequence: QueueSequence) {
                 "WHERE p.queueId = ? AND p.entryId = queue_sequence_entries.id) WHERE queueId = ?",
                 arrayOf(handle.queueId, handle.queueId))
             db.execSQL("UPDATE queue_sequence_entries SET manualPosition = position WHERE queueId = ?", arrayOf(handle.queueId))
-            db.execSQL("UPDATE queue_sequence_state SET sort = 'Manual', ascending = 1, revision = revision + 1 WHERE queueId = ?",
-                arrayOf(handle.queueId))
+            db.execSQL("UPDATE queue_sequence_state SET sort = 'Manual', ascending = 1 WHERE queueId = ?", arrayOf(handle.queueId))
+            sequence.changed(handle.queueId)
         }
         db.execSQL("DELETE FROM queue_sequence_edit_positions WHERE queueId = ?", arrayOf(handle.queueId))
         close(handle.id)
@@ -119,14 +121,79 @@ internal class QueueSelection(private val sequence: QueueSequence) {
 
     private fun rows(handle: QueueSelectionHandle, start: Int, end: Int?, selected: Boolean, limit: Int,
         consume: (Int, String) -> Unit) {
-        val membership = if (handle.all == selected) "NOT EXISTS" else "EXISTS"
-        db.query("SELECT e.position,e.id FROM queue_sequence_entries e WHERE e.queueId = ? AND e.position >= ? " +
-            (if (end == null) "" else "AND e.position < ? ") +
-            "AND $membership (SELECT 1 FROM queue_sequence_selection_exceptions x WHERE x.selectionId = ? AND x.entryId = e.id) " +
-            "ORDER BY e.position LIMIT ?", if (end == null) arrayOf(handle.queueId, start, handle.id, limit)
-            else arrayOf(handle.queueId, start, end, handle.id, limit)).use { rows ->
-            while (rows.moveToNext()) consume(rows.getInt(0), rows.getString(1))
+        val finish = end ?: sequence.revision(handle.queueId).count
+        if (handle.all != selected) {
+            db.query("SELECT position,entryId FROM queue_sequence_selection_exceptions " +
+                "WHERE selectionId = ? AND position >= ? AND position < ? ORDER BY position LIMIT ?",
+                arrayOf(handle.id, start, finish, limit)).use { rows ->
+                while (rows.moveToNext()) consume(rows.getInt(0), rows.getString(1))
+            }
+            return
         }
+        // Complement pages seek over whole excluded runs, including an almost entirely deselected queue.
+        var next = start
+        var remaining = limit
+        while (next < finish && remaining > 0) {
+            val excludedThrough = db.query("SELECT rangeEnd FROM queue_sequence_selection_ranges " +
+                "WHERE selectionId = ? AND rangeStart <= ? ORDER BY rangeStart DESC LIMIT 1",
+                arrayOf(handle.id, next)).use { if (it.moveToFirst()) it.getInt(0) else -1 }
+            if (excludedThrough >= next) {
+                next = excludedThrough + 1
+                continue
+            }
+            val until = db.query("SELECT rangeStart FROM queue_sequence_selection_ranges " +
+                "WHERE selectionId = ? AND rangeStart > ? ORDER BY rangeStart LIMIT 1",
+                arrayOf(handle.id, next)).use { if (it.moveToFirst()) minOf(finish, it.getInt(0)) else finish }
+            db.query("SELECT position,id FROM queue_sequence_entries WHERE queueId = ? " +
+                "AND position >= ? AND position < ? ORDER BY position LIMIT ?",
+                arrayOf(handle.queueId, next, until, remaining)).use { rows ->
+                while (rows.moveToNext()) {
+                    consume(rows.getInt(0), rows.getString(1))
+                    remaining--
+                }
+            }
+            next = until
+        }
+    }
+
+    private fun updateRanges(selectionId: String, position: Int, add: Boolean) {
+        if (add) {
+            val left = db.query("SELECT rangeStart FROM queue_sequence_selection_ranges WHERE selectionId = ? AND rangeEnd = ?",
+                arrayOf(selectionId, position - 1)).use { if (it.moveToFirst()) it.getInt(0) else position }
+            val right = db.query("SELECT rangeEnd FROM queue_sequence_selection_ranges WHERE selectionId = ? AND rangeStart = ?",
+                arrayOf(selectionId, position + 1)).use { if (it.moveToFirst()) it.getInt(0) else position }
+            db.execSQL("DELETE FROM queue_sequence_selection_ranges WHERE selectionId = ? AND (rangeStart = ? OR rangeStart = ?)",
+                arrayOf(selectionId, left, position + 1))
+            range(selectionId, left, right)
+        } else {
+            val bounds = db.query("SELECT rangeStart,rangeEnd FROM queue_sequence_selection_ranges " +
+                "WHERE selectionId = ? AND rangeStart <= ? ORDER BY rangeStart DESC LIMIT 1",
+                arrayOf(selectionId, position)).use {
+                check(it.moveToFirst() && it.getInt(1) >= position)
+                it.getInt(0) to it.getInt(1)
+            }
+            db.execSQL("DELETE FROM queue_sequence_selection_ranges WHERE selectionId = ? AND rangeStart = ?",
+                arrayOf(selectionId, bounds.first))
+            if (bounds.first < position) range(selectionId, bounds.first, position - 1)
+            if (position < bounds.second) range(selectionId, position + 1, bounds.second)
+        }
+    }
+
+    private fun range(selectionId: String, start: Int, end: Int) {
+        db.execSQL("INSERT INTO queue_sequence_selection_ranges (selectionId,rangeStart,rangeEnd) VALUES (?,?,?)",
+            arrayOf(selectionId, start, end))
+    }
+
+    fun sweepStale() {
+        transaction()
+        db.execSQL("DELETE FROM queue_sequence_selections WHERE sequenceRevision != " +
+            "(SELECT revision FROM queue_sequence_state WHERE queueId = queue_sequence_selections.queueId)")
+    }
+
+    /** Handles belong to one actor lifetime; a new restore releases abandoned handles from the previous one. */
+    fun reset() {
+        transaction()
+        db.execSQL("DELETE FROM queue_sequence_selections")
     }
 
     private fun validate(handle: QueueSelectionHandle) {
@@ -150,9 +217,15 @@ internal class QueueSelection(private val sequence: QueueSequence) {
                 FOREIGN KEY(queueId) REFERENCES queue_sequence_state(queueId) ON DELETE CASCADE)""")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_sequence_selections_queue ON queue_sequence_selections(queueId)")
             db.execSQL("""CREATE TABLE IF NOT EXISTS queue_sequence_selection_exceptions (
-                selectionId TEXT NOT NULL, entryId TEXT NOT NULL, PRIMARY KEY(selectionId,entryId),
+                selectionId TEXT NOT NULL, entryId TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(selectionId,entryId),
                 FOREIGN KEY(selectionId) REFERENCES queue_sequence_selections(id) ON DELETE CASCADE,
                 FOREIGN KEY(entryId) REFERENCES queue_sequence_entries(id) ON DELETE CASCADE)""")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_queue_sequence_selection_position ON queue_sequence_selection_exceptions(selectionId,position)")
+            db.execSQL("""CREATE TABLE IF NOT EXISTS queue_sequence_selection_ranges (
+                selectionId TEXT NOT NULL, rangeStart INTEGER NOT NULL, rangeEnd INTEGER NOT NULL,
+                PRIMARY KEY(selectionId,rangeStart),
+                FOREIGN KEY(selectionId) REFERENCES queue_sequence_selections(id) ON DELETE CASCADE)""")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_queue_sequence_selection_range_end ON queue_sequence_selection_ranges(selectionId,rangeEnd)")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_sequence_selection_entry ON queue_sequence_selection_exceptions(entryId)")
             db.execSQL("""CREATE TABLE IF NOT EXISTS queue_sequence_edit_positions (
                 queueId TEXT NOT NULL, entryId TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(queueId,entryId),

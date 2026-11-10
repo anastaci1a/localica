@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 internal class QueueWindowStore(private val room: RoomDatabase) {
     suspend fun restore(settings: QueueSettings): QueueLibrary = transaction { sequence ->
         val db = sequence.db
+        QueueSelection(sequence).reset()
         val activeId = db.query("SELECT queueId FROM queue_state WHERE id = 1").use {
             if (!it.moveToFirst() || it.isNull(0)) null else it.getString(0)
         }
@@ -75,7 +76,9 @@ internal class QueueWindowStore(private val room: RoomDatabase) {
             val db = room.openHelper.writableDatabase
             QueueSequence.createSchema(db)
             QueueTraversal.createSchema(db)
-            block(QueueSequence(db))
+            val sequence = QueueSequence(db)
+            QueueSelection(sequence).sweepStale()
+            block(sequence).also { QueueSelection(sequence).sweepStale() }
         }
     }
 }
