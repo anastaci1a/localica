@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -94,21 +95,42 @@ internal fun Modifier.glassPopupHome(home: GlassPopupHome): Modifier {
             androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { backdrop.location.transformRevision++ }
         }
         drawContent()
-        home.flights.forEach { flight ->
-            flight.revision
-            val layer = flight.layer
-            if ((home.departing || flight.handedOff) && flight.prepared && layer != null && !layer.isReleased) {
-                if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
-                val delta = flight.origin - flight.homeOrigin
-                translate(delta.x, delta.y) { drawLayer(layer) }
-                flight.handedOff = true
-                flight.wasProjected = true
-            }
-        }
+        projectFlights(home)
     // Sampling is deliberately inside the overlay. Retained ancestor RenderNodes
     // can contain this home, so merely freezing an ancestor recording is insufficient
     // to prevent a modal from sampling itself during the inline handoff.
     }.then(recording)
+}
+
+/** Reuse the native recording without including the chrome in its source plane. */
+@Composable
+internal fun Modifier.glassPopupProjection(home: GlassPopupHome, source: FrostedBackdrop): Modifier {
+    val view = LocalView.current
+    SideEffect { home.backdrop = source }
+    DisposableEffect(home, source) {
+        home.mounted = true
+        onDispose { home.mounted = false; home.backdrop = null }
+    }
+    return onGloballyPositioned {
+        home.currentOrigin = it.backdropPosition(view)
+    }.drawWithContent {
+        drawContent()
+        projectFlights(home)
+    }
+}
+
+private fun ContentDrawScope.projectFlights(home: GlassPopupHome) {
+    home.flights.forEach { flight ->
+        flight.revision
+        val layer = flight.layer
+        if ((home.departing || flight.handedOff) && flight.prepared && layer != null && !layer.isReleased) {
+            if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
+            val delta = flight.origin - flight.homeOrigin
+            translate(delta.x, delta.y) { drawLayer(layer) }
+            flight.handedOff = true
+            flight.wasProjected = true
+        }
+    }
 }
 
 @Composable
