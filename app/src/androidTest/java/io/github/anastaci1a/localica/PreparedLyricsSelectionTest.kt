@@ -85,9 +85,10 @@ class PreparedLyricsSelectionTest {
         val first = Track("prepared-restore-first", "First", fileName = "first.mp3", relativePath = "first.mp3")
         val second = first.copy(id = "prepared-restore-second", uri = "file:///second.mp3")
         val sources = listOf(LyricSource("fallback", "Fallback", LrcParser.parse("Fallback text")),
-            LyricSource("saved", "Saved", LrcParser.parse("[00:00.00]Saved text")))
+            LyricSource("saved", "Saved", LrcParser.parse("[00:00.00]Saved text")),
+            LyricSource("other", "Other", LrcParser.parse("[00:00.00]Other text")))
         withContext(Dispatchers.IO) {
-            check(preferences.edit().putString(first.id, "saved:plain").putString(second.id, "fallback").commit())
+            check(preferences.edit().putString(first.id, "saved:plain").putString(second.id, "other").commit())
         }
         // A plain captured value does not recompose the old owner before the save/dispose boundary.
         var playbackChangedWhileAbsent = false
@@ -100,12 +101,55 @@ class PreparedLyricsSelectionTest {
             compose.onNodeWithText("Saved text").assertIsDisplayed()
             compose.runOnIdle { playbackChangedWhileAbsent = true }
             restoration.emulateSavedInstanceStateRestore()
-            compose.onNodeWithText("Fallback text").assertIsDisplayed()
+            compose.onNodeWithText("Other text").assertIsDisplayed()
+            compose.onAllNodesWithText("Fallback text").assertCountEquals(0)
             compose.onAllNodesWithText("Saved text").assertCountEquals(0)
-            assertEquals("fallback", preferences.getString(second.id, null))
+            assertEquals("other", preferences.getString(second.id, null))
             assertEquals("saved", preferences.getString(first.id, null))
+            withContext(Dispatchers.IO) {
+                check(preferences.edit().commit())
+                val xml = java.io.File(app.applicationInfo.dataDir, "shared_prefs/lyric-sources.xml").readText()
+                assertTrue(xml.contains("name=" + '"' + first.id + '"' + ">saved</string>"))
+                assertTrue(xml.contains("name=" + '"' + second.id + '"' + ">other</string>"))
+            }
         } finally {
             withContext(Dispatchers.IO) { check(preferences.edit().remove(first.id).remove(second.id).commit()) }
+        }
+    }
+
+
+    @Test fun legacyStringPayloadReloadsThePreparedChoiceAtTheActualSaverBoundary() =
+        verifyRejectedPayload("legacy-source")
+    @Test fun foreignTrackPayloadReloadsThePreparedChoiceAtTheActualSaverBoundary() =
+        verifyRejectedPayload(listOf("another-track", "old-source"))
+    @Test fun malformedPayloadReloadsThePreparedChoiceAtTheActualSaverBoundary() =
+        verifyRejectedPayload(listOf("prepared-saver-boundary", 7))
+
+    private fun verifyRejectedPayload(payload: Any) = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<LocalicaApplication>()
+        app.preferences.awaitReady()
+        val preferences = app.preferences.require("lyric-sources")
+        val trackId = "prepared-saver-boundary"
+        withContext(Dispatchers.IO) { check(preferences.edit().putString(trackId, "non-first-source").commit()) }
+        var restoring = false
+        val producer = androidx.compose.runtime.saveable.Saver<MutableState<String?>, Any>(
+            save = { payload }, restore = { mutableStateOf("old-source") })
+        val restoration = StateRestorationTester(compose)
+        try {
+            restoration.setContent { LocalicaTheme {
+                val saver = if (restoring) lyricChoiceSaver(trackId) else producer
+                val chosen = androidx.compose.runtime.saveable.rememberSaveable(saver = saver) {
+                    mutableStateOf(if (restoring) preferences.getString(trackId, null) else "old-source")
+                }
+                Text(chosen.value.orEmpty())
+            } }
+            compose.onNodeWithText("old-source").assertIsDisplayed()
+            compose.runOnIdle { restoring = true }
+            restoration.emulateSavedInstanceStateRestore()
+            compose.onNodeWithText("non-first-source").assertIsDisplayed()
+            assertEquals("non-first-source", preferences.getString(trackId, null))
+        } finally {
+            withContext(Dispatchers.IO) { check(preferences.edit().remove(trackId).commit()) }
         }
     }
 

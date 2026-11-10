@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.lyrics
 
+import io.github.anastaci1a.localica.ui.lyricChoiceSaver
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -25,19 +26,22 @@ class LyricSelectionTest {
     }
 
     @Test fun restoredChoiceMustCarryTheCurrentTracksIdentity() {
-        assertEquals("saved", restoredLyricChoice("track", listOf("track", "saved")))
-        assertNull(restoredLyricChoice("other", listOf("track", "saved")))
+        assertEquals("saved", lyricChoiceSaver("track").restore(listOf("track", "saved"))?.value)
+        assertNull(lyricChoiceSaver("other").restore(listOf("track", "saved")))
+        val empty = lyricChoiceSaver("track").restore(listOf("track", null))
+        assertNotNull(empty)
+        assertNull(empty!!.value)
     }
 
     @Test fun collidingTrackHashesCannotShareRestoredChoice() {
         assertEquals("Aa".hashCode(), "BB".hashCode())
-        assertNull(restoredLyricChoice("BB", listOf("Aa", "saved")))
+        assertNull(lyricChoiceSaver("BB").restore(listOf("Aa", "saved")))
     }
 
     @Test fun olderOrMalformedStateFallsBackToPreparedPreferences() {
-        assertNull(restoredLyricChoice("track", "saved"))
-        assertNull(restoredLyricChoice("track", listOf("track")))
-        assertNull(restoredLyricChoice("track", listOf("track", 7)))
+        assertNull(lyricChoiceSaver("track").restore("saved"))
+        assertNull(lyricChoiceSaver("track").restore(listOf("track")))
+        assertNull(lyricChoiceSaver("track").restore(listOf("track", 7)))
     }
 
 }
