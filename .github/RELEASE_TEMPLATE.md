@@ -15,6 +15,6 @@ Android APK for Android 8 or newer. Keeps the existing `.debug` application ID a
 
 ## Install
 
-1. Download `localica-v{{VERSION}}-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v{{VERSION}}-pre-release.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.

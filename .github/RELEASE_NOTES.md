@@ -31,7 +31,7 @@ This optimized build is not debuggable and is minified with R8. It updates the e
 
 ## Install
 
-1. Download `localica-v0.33.19-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.33.19-pre-release.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
 
