@@ -123,7 +123,9 @@ Timed lyrics interpolate Media3's latency-aware position between samples, freezi
 
 Online features is one app-level consent switch. It defaults off. Settings groups this switch, Last.fm, and Artist photos under Online features. Search finds their individual controls. Consent covers artist photos and manual Last.fm sync. Turning it off prevents new network requests, hides artist photos and restores local play counts. Cached photos, the Last.fm archive and match choices are retained.
 
-Artist and Album Artist rows, gallery tiles, Home pins, and the artist page show album art immediately. With consent on, a cached or fetched artist photo crossfades over it. Turning consent off immediately restores album art, including when a photo is cached.
+With consent on, Artist and Album Artist items use decoded cached photos on their first frame. Unknown photo availability or pending disk decode shows the neutral artwork placeholder. Confirmed missing photos use album art; newly fetched photos use the existing reveal.
+
+This behavior applies to rows, gallery tiles, Home pins and collection headers. Turning consent off immediately restores album art, including when a photo is cached.
 
 Artist photo lookup sends artist and release names to Deezer, then MusicBrainz, Wikidata and Wikimedia Commons when needed. It never uses Last.fm images. Automatic matching requires a normalized artist name and a release title shared with the local library. Missing matches retain the caller's latest album artwork.
 

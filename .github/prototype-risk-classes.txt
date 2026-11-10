@@ -14,6 +14,7 @@ io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest
 io.github.anastaci1a.localica.ArtistAlbumSelectionTest
 io.github.anastaci1a.localica.ArtistAlbumSortOrderTest
 io.github.anastaci1a.localica.ArtistCollectionActionsTest
+io.github.anastaci1a.localica.ArtistPhotoFirstFrameTest
 io.github.anastaci1a.localica.ArtistSelectionPlacementTest
 io.github.anastaci1a.localica.ArtworkBlendLoadingTest
 io.github.anastaci1a.localica.ArtworkCacheTest
@@ -68,6 +69,7 @@ io.github.anastaci1a.localica.DeviceCornersTest
 io.github.anastaci1a.localica.DialogChromeLayoutTest
 io.github.anastaci1a.localica.DirectComposeDispatcherTest
 io.github.anastaci1a.localica.DragHandoffArtworkTest
+io.github.anastaci1a.localica.DragReleaseHapticsTest
 io.github.anastaci1a.localica.DragReorderTest
 io.github.anastaci1a.localica.DragShadowContinuityTest
 io.github.anastaci1a.localica.DragStackFrameTimeTest
@@ -273,6 +275,7 @@ io.github.anastaci1a.localica.QueueSaveOriginTest
 io.github.anastaci1a.localica.QueueScrollOwnershipTest
 io.github.anastaci1a.localica.QueueSelectionPlacementTest
 io.github.anastaci1a.localica.QueueSelectorDragTest
+io.github.anastaci1a.localica.QueueSelectorUnifiedDragTest
 io.github.anastaci1a.localica.QueueShadowContinuityTest
 io.github.anastaci1a.localica.QueueSongTransitionTest
 io.github.anastaci1a.localica.QueueSqlCountBenchmarkTest
@@ -469,3 +472,9 @@ io.github.anastaci1a.localica.FlatNoneHoverDragTest
 io.github.anastaci1a.localica.BoundaryAdoptionPixelReferenceTest
 
 io.github.anastaci1a.localica.UiPerformanceTest
+io.github.anastaci1a.localica.QueueLibraryHeapTest
+io.github.anastaci1a.localica.QueueRestoreEquivalenceTest
+# Mounted collection-header density regression (#600).
+io.github.anastaci1a.localica.CollectionHeaderDensityContractTest
+io.github.anastaci1a.localica.SelectionInsetScrollTest
+io.github.anastaci1a.localica.SelectionInsetContextsTest
