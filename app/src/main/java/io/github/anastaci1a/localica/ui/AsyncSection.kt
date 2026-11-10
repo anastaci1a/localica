@@ -90,13 +90,13 @@ internal fun AsyncSectionRow(index: Int, content: @Composable () -> Unit) {
     val opacity = remember(clock, delay, reduced) { derivedStateOf {
         if (reduced || clock == null) 1f else BrowseLoadingMotion.fade(clock.value, delay)
     } }
-    Column(Modifier.graphicsLayer { alpha = opacity.value }, verticalArrangement = Arrangement.spacedBy(StockUiSpec.space.getValue(Space.Base))) { content() }
+    Column(Modifier.graphicsLayer { alpha = opacity.value }, verticalArrangement = Arrangement.spacedBy(StockUiSpec.space.getValue(Space.Compact))) { content() }
 }
 
 /** The final text line and loading material reserve the same height in every host. */
 @Composable
 internal fun AsyncValueText(value: String?, placeholder: String, modifier: Modifier = Modifier,
-    style: androidx.compose.ui.text.TextStyle = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+    style: androidx.compose.ui.text.TextStyle = androidx.compose.material3.LocalTextStyle.current,
     maxLines: Int = Int.MAX_VALUE, minLines: Int = 1, softWrap: Boolean = true,
     overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip) {
     val corner = with(LocalDensity.current) { StockUiSpec.space.getValue(Space.Tight).toPx() }

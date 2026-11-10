@@ -3,6 +3,8 @@ package io.github.anastaci1a.localica
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -120,6 +122,29 @@ class AsyncSectionTest {
             assertEquals(beforeBounds, compose.onNodeWithTag("text-face").getUnclippedBoundsInRoot())
             compose.onAllNodesWithText(values[sample]).assertCountEquals(0)
         }
+    }
+
+    @Test fun revealedUndoRowAndFollowingRowKeepOriginalPixelsAndBounds() {
+        var wrapped by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).testTag("undo-face"),
+                verticalArrangement = Arrangement.spacedBy(io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Compact))) {
+                val row: @Composable () -> Unit = {
+                    SettingsLink("Artist — Song", "7 scrobbles · Chosen by you", modifier = Modifier.testTag("undo-link")) { }
+                    GlassActionButton(AppIcon.ActionChevronLeft, "Undo match for Song", modifier = Modifier.testTag("undo-action")) { }
+                }
+                if (wrapped) AsyncSectionRow(0, row) else row()
+                SettingsLink("Following row", "Following summary", modifier = Modifier.testTag("following-row")) { }
+            }
+        } }
+        val beforeBounds = listOf("undo-link", "undo-action", "following-row").map { compose.onNodeWithTag(it).getUnclippedBoundsInRoot() }
+        val before = compose.onNodeWithTag("undo-face").captureToImage()
+        compose.runOnIdle { wrapped = true }
+        assertEquals(beforeBounds, listOf("undo-link", "undo-action", "following-row").map { compose.onNodeWithTag(it).getUnclippedBoundsInRoot() })
+        val after = compose.onNodeWithTag("undo-face").captureToImage()
+        assertEquals(before.width, after.width); assertEquals(before.height, after.height)
+        val a = before.toPixelMap(); val b = after.toPixelMap()
+        for (y in 0 until before.height) for (x in 0 until before.width) assertEquals("pixel=$x,$y", a[x, y], b[x, y])
     }
 
 }
