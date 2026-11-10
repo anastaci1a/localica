@@ -61,16 +61,16 @@ class FlatNoneRendererPopupTest {
             // an unrelated error is a failed fixture precondition, not a missed tap.
             instrumentation.runOnMainSync { fixturePlayback = io.github.anastaci1a.localica.playback.PlaybackConnection(context) }
             val playback = checkNotNull(fixturePlayback)
-                await(15_000) { playback.state.value.connected && !playback.queues.state.value.loading }
-                val active = playback.queues.state.value.library.active
-                if (active != null && active.entries.isNotEmpty() && active.entries.all { it.track.id == "flat-none-walk-740" }) {
-                    instrumentation.runOnMainSync { playback.clear() }
-                    await(15_000) {
-                        var nativeEmpty = false
-                        instrumentation.runOnMainSync { nativeEmpty = playback.queues.playbackSample() == null }
-                        playback.queues.state.value.library.activeId == null && nativeEmpty
-                    }
-                } else assertNull("The touch fixture must not start behind an unrelated playback failure", playback.state.value.problem)
+            await(15_000) { playback.state.value.connected && !playback.queues.state.value.loading }
+            val active = playback.queues.state.value.library.active
+            if (active != null && active.entries.isNotEmpty() && active.entries.all { it.track.id == "flat-none-walk-740" }) {
+                instrumentation.runOnMainSync { playback.clear() }
+                await(15_000) {
+                    var nativeEmpty = false
+                    instrumentation.runOnMainSync { nativeEmpty = playback.queues.playbackSample() == null }
+                    playback.queues.state.value.library.activeId == null && nativeEmpty
+                }
+            } else assertNull("The touch fixture must not start behind an unrelated playback failure", playback.state.value.problem)
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs, MainTab.Albums),
                 reducedMotion = true, glass = GlassAppearance(renderer = GlassRendererMode.FlatNone)))
             ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
