@@ -9,7 +9,7 @@ class LocalicaIssueRegistry : IssueRegistry() {
     override val api = CURRENT_API
     // Compatibility is tested only against the pinned lint API.
     override val minApi = CURRENT_API
-    override val issues = UiRuleId.entries.map { it.issue }
+    override val issues = UiRuleId.entries.map { it.issue } + MenuRuleId.entries.map { it.issue }
 }
 
 internal enum class UiRuleId(val policy: String) {

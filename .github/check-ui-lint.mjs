@@ -6,7 +6,10 @@ import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 export const rules = ['RawUiMotion','IndependentUiClock','RawPresentationTransform','RawShadowOrZOrder',
     'ReplacePersistentShape','UnownedSurfaceLifetime','RawMotionMap','MotionReadInComposition',
-    'LiteralUiSpacing','NonPresetScreenLayout','UnvalidatedUiSpec','UiLayerDependency','UnreviewedUiEscape','GlassPopupWithoutAnchor'];
+    'LiteralUiSpacing','NonPresetScreenLayout','UnvalidatedUiSpec','UiLayerDependency','UnreviewedUiEscape','GlassPopupWithoutAnchor',
+    // #757 menu rules, appended in registry order.
+    'MenuDeclarationPurity','UnownedSettingsTypography','ParallelSettingsRowMetrics','UnownedSettingsSectionSpacing',
+    'UnmeasuredSettingsMarker','UnfittedSegmentedControl','FixedSettingsStatisticGrid','MenuInternalOptIn'];
 const digest = data => crypto.createHash('sha256').update(data).digest('hex');
 const requireThat = (ok, why) => { if (!ok) throw Error(why); };
 const safePath = p => typeof p === 'string' && !path.isAbsolute(p) && !p.split('/').some(s => s === '..' || s === '.') && /^[\w./-]+$/.test(p);

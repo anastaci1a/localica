@@ -13,10 +13,12 @@ import java.util.concurrent.Executors
 
 class RegistryContractTest {
     @org.junit.Before fun initializeLint() { com.android.tools.lint.client.api.LintClient.clientName = "unit-tests" }
-    @Test fun exactlyFourteenErrorsAtTheTestedApi() {
+    @Test fun exactlyFourteenUiAndEightMenuErrorsAtTheTestedApi() {
         val registry = LocalicaIssueRegistry()
-        assertEquals(UiRuleId.entries.map { it.name }.toSet(), registry.issues.map { it.id }.toSet())
-        assertEquals(14, registry.issues.size)
+        // Menu rules (#757) are appended after the UI rules; the order is part of the registry export.
+        assertEquals(UiRuleId.entries.map { it.name } + MenuRuleId.entries.map { it.name }, registry.issues.map { it.id })
+        assertEquals(14, UiRuleId.entries.size)
+        assertEquals(22, registry.issues.size)
         assertTrue(registry.issues.all { it.defaultSeverity == Severity.ERROR })
         assertFalse(registry.issues.any { it.id == "MotionThreshold" })
         assertEquals(CURRENT_API, registry.api)
