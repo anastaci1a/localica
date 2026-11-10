@@ -37,12 +37,19 @@ for mode in playback scan tag lastfm; do
   pid=$(sed -nE 's/.*;pid=([0-9]+);.*/\1/p' <<< "$receipt")
   [[ "$pid" =~ ^[0-9]+$ && -z ${pids[$pid]:-} ]]
   pids[$pid]=$mode
-  printf '%s\ntracks=13400\nstrictmode=fatal\n' "$receipt" >> "$directory/receipt.txt"
+  if [[ "$mode" == playback ]]; then
+    grep -E 'playback-attached=true;play-pause-order=true;controller-released=true;service-stopped=true;durable-position=1234;native-released=true;player-id=[0-9a-f]+' "$directory/instrumentation.txt" > "$directory/playback.txt"
+    player_id=$(sed -nE 's/.*;player-id=([0-9a-f]+).*/\1/p' "$directory/playback.txt")
+    [[ "$player_id" =~ ^[0-9a-f]+$ ]]
+    grep -E "[[:space:]]$pid[[:space:]]+$pid[[:space:]].*ExoPlayerImpl[[:space:]]*: Init $player_id[[:space:]]" "$directory/logcat.txt" > "$directory/player-init.txt"
+    grep -E "[[:space:]]$pid[[:space:]]+$pid[[:space:]].*ExoPlayerImpl[[:space:]]*: Release $player_id[[:space:]]" "$directory/logcat.txt" > "$directory/player-release.txt"
+  fi
   if [[ "$mode" == scan || "$mode" == tag ]]; then
     if [[ "$mode" == scan ]]; then service=ScanService; else service=TagEditService; fi
     # am_create_service includes the app PID even for a short-lived service.
     grep -E "am_create_service.*$service.*[, ]$pid\]" "$directory/events.txt" > "$directory/service-created.txt"
   fi
+  printf '%s\ntracks=13400\nstrictmode=fatal\n' "$receipt" >> "$directory/receipt.txt"
   adb -s "$serial" shell am force-stop "$app"
 done
 trap - EXIT

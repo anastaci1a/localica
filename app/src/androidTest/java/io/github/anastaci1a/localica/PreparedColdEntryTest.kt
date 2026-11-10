@@ -41,22 +41,7 @@ class PreparedColdEntryTest {
         }
         assertNoActivity()
         when (mode) {
-            "playback" -> {
-                val future = withContext(Dispatchers.Main) {
-                    MediaController.Builder(app, SessionToken(app, android.content.ComponentName(app, PlaybackService::class.java))).buildAsync()
-                }
-                val controller = withContext(Dispatchers.IO) { future.get(30, TimeUnit.SECONDS) }
-                try {
-                    withContext(Dispatchers.Main) { controller.play(); controller.pause() }
-                    app.preferences.awaitReady()
-                } finally {
-                    withContext(Dispatchers.Main) { MediaController.releaseFuture(future) }
-                    app.stopService(Intent(app, PlaybackService::class.java))
-                }
-                withTimeout(30_000) {
-                    while (withContext(Dispatchers.Main) { app.queues.playbackSample() != null }) delay(20)
-                }
-            }
+            "playback" -> verifyPlayback(app, instrumentation)
             "scan" -> {
                 ContextCompat.startForegroundService(app, Intent(app, ScanService::class.java))
                 app.preferences.awaitReady()
@@ -93,4 +78,77 @@ class PreparedColdEntryTest {
             ";blockingGcCount=" + stats["art.gc.blocking-gc-count"] + ";blockingGcTimeMs=" + stats["art.gc.blocking-gc-time"]
         instrumentation.sendStatus(0, Bundle().apply { putString("stream", line + "\n") })
     }
+
+    private suspend fun verifyPlayback(app: LocalicaApplication, instrumentation: android.app.Instrumentation) {
+        val future = withContext(Dispatchers.Main) {
+            MediaController.Builder(app, SessionToken(app, android.content.ComponentName(app, PlaybackService::class.java))).buildAsync()
+        }
+        val controller = withContext(Dispatchers.IO) { future.get(30, TimeUnit.SECONDS) }
+        try {
+            // Exercise the cold mailbox first, then require a real service-owned item and native sample.
+            withContext(Dispatchers.Main) { controller.play(); controller.pause() }
+            app.preferences.awaitReady()
+            val track = withTimeout(30_000) { app.library.snapshots.first { it.tracks.isNotEmpty() }.tracks.first() }
+            app.queues.settings { it.copy(songTap = io.github.anastaci1a.localica.queue.SongTap.NewQueue, shuffle = false) }
+            app.queues.tap(listOf(track), 0)
+            suspend fun awaitMain(condition: () -> Boolean) = withTimeout(30_000) {
+                while (!withContext(Dispatchers.Main) { condition() }) delay(20)
+            }
+            awaitMain {
+                controller.currentMediaItem?.mediaMetadata?.extras?.getString("trackId") == track.id &&
+                    app.queues.playbackSample()?.playbackVisit != null
+            }
+            val queueId = checkNotNull(app.queues.state.value.library.activeId)
+            withContext(Dispatchers.Main) { controller.play() }
+            awaitMain { controller.playWhenReady }
+            withContext(Dispatchers.Main) { controller.pause() }
+            awaitMain { !controller.playWhenReady && !controller.isPlaying }
+            withContext(Dispatchers.Main) { controller.seekTo(1234) }
+            awaitMain { app.queues.playbackSample()?.positionMs == 1234L }
+            val playerIds = Regex("ExoPlayerImpl\\s*:\\s*Init ([0-9a-f]+)")
+                .findAll(logcat(instrumentation)).map { it.groupValues[1] }.distinct().toList()
+            assertEquals("Require exactly one actual service-owned engine", 1, playerIds.size)
+            val playerId = playerIds.single()
+            // Drop the binding before stopService; a bound Android service cannot be destroyed yet.
+            withContext(Dispatchers.Main) {
+                MediaController.releaseFuture(future)
+                assertFalse(controller.isConnected)
+            }
+            app.stopService(Intent(app, PlaybackService::class.java))
+            val manager = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            withTimeout(30_000) {
+                while (manager.getRunningServices(Int.MAX_VALUE).any { it.service.className == PlaybackService::class.java.name }) delay(20)
+            }
+            // Read through an independent Room owner after shutdown; the queue writer must finish its cursor checkpoint.
+            val database = androidx.room.Room.databaseBuilder(app,
+                io.github.anastaci1a.localica.queue.QueueDatabase::class.java, "queues.db").build()
+            try {
+                withTimeout(30_000) {
+                    while (true) {
+                        val saved = withContext(Dispatchers.IO) { database.queues().read().active }
+                        if (saved != null && saved.id == queueId && saved.positionMs == 1234L) break
+                        delay(20)
+                    }
+                }
+            } finally { database.close() }
+            val released = Regex("ExoPlayerImpl\\s*:\\s*Release $playerId\\b")
+            withTimeout(30_000) { while (!released.containsMatchIn(logcat(instrumentation))) delay(20) }
+            // The release log is emitted inside release(); an idle Main receipt follows the completed callback.
+            instrumentation.waitForIdleSync()
+            withContext(Dispatchers.Main) { assertNull(app.queues.playbackSample()) }
+            instrumentation.sendStatus(0, Bundle().apply {
+                putString("stream", "playback-attached=true;play-pause-order=true;controller-released=true;" +
+                    "service-stopped=true;durable-position=1234;native-released=true;player-id=$playerId\n")
+            })
+        } finally {
+            withContext(Dispatchers.Main) { MediaController.releaseFuture(future) }
+            app.stopService(Intent(app, PlaybackService::class.java))
+        }
+    }
+
+    private fun logcat(instrumentation: android.app.Instrumentation): String {
+        val descriptor = instrumentation.uiAutomation.executeShellCommand("logcat -d -v threadtime --pid=" + android.os.Process.myPid())
+        return android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }
+    }
+
 }
