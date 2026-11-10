@@ -37,8 +37,10 @@ class QueueJourneyPersistenceWorkTest {
         assertEquals(38_999, dao.visitUpserts.single().size)
         assertTrue(dao.visitUpserts.single().none { it.token in old })
         assertEquals(old - before.journey.current!!.token, dao.deletedVisits.toSet())
-        assertTrue(dao.memberUpserts.isEmpty())
-        assertEquals(before.journey.cycleRecords(before.id).map { it.cycle to it.entryId }.toSet(),
+        // Turning shuffle on adds exactly the reserved neighbor rows: its id and queue index (#826).
+        assertEquals(listOf(Long.MIN_VALUE, Long.MIN_VALUE), dao.memberUpserts.single().map { it.cycle })
+        assertEquals(before.journey.cycleRecords(before.id).map { it.cycle to it.entryId }.toSet() +
+            dao.memberUpserts.single().map { it.cycle to it.entryId },
             after.journey.cycleRecords(after.id).map { it.cycle to it.entryId }.toSet())
         dao.assertRows(after)
     }

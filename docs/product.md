@@ -59,7 +59,11 @@ Each shuffle traversal retains visited membership, history cursor and concrete f
 
 Turning Shuffle off preserves the current occurrence, position and Repeat mode. Next, Previous and autoplay immediately follow the saved visible queue order, including after Back through shuffled history. Projecting neighbors never records them as played.
 
-Turning Shuffle on starts a fresh traversal at the current occurrence, without moving playback or clearing listening statistics. History retracing applies within that traversal, not across mode resets. Reordering preserves shuffled plans, appended songs join them, and removals drop invalid visits.
+Turning Shuffle on starts a fresh traversal at the current occurrence, without moving playback or clearing listening statistics. Reordering preserves shuffled plans, appended songs join them, and removals drop invalid visits.
+
+Previous and the artwork swipe retrace the songs played since Shuffle was turned on. Past the song that was playing then, they follow the visible queue order behind it, one song at a time. With Repeat All, going back past the first song wraps to the last, as in ordered playback. Otherwise Previous restarts.
+
+Songs reached by going back count as visited for the cycle, so Next retraces them and then resumes the shuffle without replaying them. Retracing never crosses a mode reset.
 
 Play Next inserts each requested batch immediately after the current occurrence in both visible order and playback, including before shuffled forward history. Newer batches precede earlier requests; each batch retains its requested order. Keep occurrence identities, current visit and position. Scheduled visits become visited only on arrival and survive saved restoration.
 

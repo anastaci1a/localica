@@ -14,7 +14,8 @@ class QueueJourneyPreparationTest {
         value.orderedTraversalId, value.orderedAnchorToken)
     private fun assertFixed(value: QueueJourney, ids: List<String>, selected: String?, modes: JourneyModes) {
         val expected = current(original(value).reconcile(ids, selected, modes, Random(91)))
-        assertEquals(expected, value)
+        // Enabling shuffle also records the queue-order neighbor behind its start (#826); the rest is the original repair.
+        assertEquals(expected, value.copy(plans = value.plans - Long.MIN_VALUE))
         assertSame(value, value.reconcile(ids.toList(), selected, modes, Random(91)))
     }
 
@@ -52,6 +53,7 @@ class QueueJourneyPreparationTest {
             val changed = prepared.reconcile(ids, "A", nextModes, Random(42))
             assertNotSame(prepared, changed)
             assertFixed(changed, ids, "A", nextModes)
+            assertEquals(if (nextModes.shuffle) listOf("C", "2") else null, changed.plans[Long.MIN_VALUE])
         }
     }
 
