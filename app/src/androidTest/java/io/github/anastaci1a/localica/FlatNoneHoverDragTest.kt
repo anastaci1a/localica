@@ -57,10 +57,21 @@ class FlatNoneHoverDragTest {
                 .put("requestedKey", requested.get(owner).toString()).put("preparedKeyMatches", key != null && key == requested.get(owner))
         }
         fun state() = compose.runOnIdle { shadowState().put("geometryReadCount", drawObservations.length()) }
+        fun assertFreshDraw(priorCount: Int, request: Int, clockMs: Long) {
+            val count = drawObservations.length()
+            assertTrue("Every requested redraw must record two new geometry reads", count >= priorCount + 2)
+            for (index in priorCount until count) {
+                val read = drawObservations.getJSONObject(index)
+                assertEquals("Each new read belongs to this redraw", request, read.getInt("redraw"))
+                assertEquals("Each new read belongs to this frame", clockMs, read.getLong("clockMs"))
+            }
+        }
         fun redrawFrame() {
-            compose.runOnIdle { redraw.intValue++ }
+            val priorCount = compose.runOnIdle { drawObservations.length() }
+            val request = compose.runOnIdle { ++redraw.intValue }
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
+            compose.runOnIdle { assertFreshDraw(priorCount, request, compose.mainClock.currentTime) }
         }
         fun assertPreparedDraw(observed: org.json.JSONObject) {
             assertTrue("The settled capture must have a matching prepared raster", observed.getBoolean("preparedKeyMatches"))
@@ -117,6 +128,20 @@ class FlatNoneHoverDragTest {
             redrawFrame()
             val beforeReference = state()
             assertPreparedDraw(beforeReference)
+            compose.runOnIdle {
+                fun rejects(check: () -> Unit): Boolean = try { check(); false } catch (_: AssertionError) { true }
+                val count = drawObservations.length()
+                val request = redraw.intValue
+                val clock = compose.mainClock.currentTime
+                val controls = org.json.JSONObject()
+                    .put("stalePreparedReadsRejected", rejects { assertFreshDraw(count, request + 1, clock + 16) })
+                    .put("wrongRequestRejected", rejects { assertFreshDraw(count - 2, request + 1, clock) })
+                    .put("wrongClockRejected", rejects { assertFreshDraw(count - 2, request, clock + 16) })
+                java.io.File(output, "freshness-controls.json").writeText(controls.toString(2))
+                assertTrue(controls.getBoolean("stalePreparedReadsRejected"))
+                assertTrue(controls.getBoolean("wrongRequestRejected"))
+                assertTrue(controls.getBoolean("wrongClockRejected"))
+            }
             val reference = compose.onNodeWithTag("flat-drag").captureToImage().asAndroidBitmap()
             val referencePixels = pixels(reference)
             val afterReference = state()
