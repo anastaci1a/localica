@@ -963,6 +963,37 @@ class PlaybackIntentTest {
         rejected()
     }
 
+    @Test fun nativeTimelineMatchesExactlyForEagerAndWindowedQueuePublications() = fixture(duplicateOccurrences = true) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        queues.rename(first.id, first.name)
+        barrier()
+        val eager = queues.state.value.library.active!!
+        val journey = requireNotNull(eager.journey)
+        val visits = journey.window()
+        val positions = eager.entries.withIndex().associate { it.value.id to it.index }
+        val windowed = eager.copy(journey = null, playbackWindow = QueuePlaybackWindow(visits, journey.current?.token,
+            positions.filterKeys { id -> visits.any { it.entryId == id } }, journey.modes))
+        withContext(Dispatchers.Main) {
+            val items = (0 until player.mediaItemCount).map { player.getMediaItemAt(it) }
+            val native = ExoPlayer.Builder(context).build()
+            try {
+                val timeline = QueueTimeline()
+                timeline.resolve(eager.id, items)
+                timeline.sync(native, eager, seek = true, replace = true)
+                val expected = (0 until native.mediaItemCount).map { native.getMediaItemAt(it) }
+                val index = native.currentMediaItemIndex
+                val position = native.currentPosition
+                timeline.sync(native, windowed, seek = true, replace = true)
+                assertEquals(expected, (0 until native.mediaItemCount).map { native.getMediaItemAt(it) })
+                assertEquals(index, native.currentMediaItemIndex)
+                assertEquals(position, native.currentPosition)
+                assertEquals(journey.current?.token, native.currentMediaItem?.queueVisit)
+                assertFalse(timeline.sync(native, windowed, seek = false, replace = false))
+            } finally { native.release() }
+        }
+    }
+
     @Test fun clearingPlaybackRetiresTemplatesAndReactivationRebuildsRetainedOccurrences() = fixture(duplicateOccurrences = true) {
         awaitMain { player.engine.playbackState == Player.STATE_READY }
         queues.rename(first.id, first.name)
