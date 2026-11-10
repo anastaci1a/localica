@@ -447,12 +447,12 @@ fun LocalicaScreen(
         screenScope.PlayerClippedOverlay({ progress.value }, bottomChrome) {
         screenScope.QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },
             onOpeningContact = { queueOpeningRequest++ }, providedPopupHome = queuePopupHome) {
-            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseSelectionPanel provides queueSelectionPanel,
-                LocalBrowseObscuredInset provides queueSelectionPanel.clearance) {
+            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides queueSelectionPanel.clearance) {
+            CompositionLocalProvider(LocalBrowseSelectionPanel provides queueSelectionPanel) {
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false },
                 selectionVisible = queueOpen && expanded, playerOpen = !queueOpen || !expanded,
-                openingRequest = queueOpeningRequest) } }
+                openingRequest = queueOpeningRequest) } } }
             // Floats over the list: it never shortens the viewport, so the items gain no new bottom clip edge.
             FloatingSelectionPanel(queueSelectionPanel, Modifier.align(Alignment.BottomCenter)) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).controlVerticalScroll(rememberScrollState())) {
