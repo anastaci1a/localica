@@ -380,6 +380,7 @@ api,class,tests,total_seconds,skipped
 26,io.github.anastaci1a.localica.StatisticsStorageTest,3,0.215,0
 26,io.github.anastaci1a.localica.SubviewFlingPinchTimelineTest,1,49.694,0
 26,io.github.anastaci1a.localica.SubviewPinchRecoveryTest,1,5.319,0
+26,io.github.anastaci1a.localica.SubviewScrollJitterTest,3,30.0,0
 26,io.github.anastaci1a.localica.TabPagerTest,1,0.864,0
 26,io.github.anastaci1a.localica.TabResetTest,1,36.258,0
 26,io.github.anastaci1a.localica.TagEditorChromeLayoutTest,3,16.273,1
@@ -780,6 +781,7 @@ api,class,tests,total_seconds,skipped
 36,io.github.anastaci1a.localica.StatisticsStorageTest,3,0.459,0
 36,io.github.anastaci1a.localica.SubviewFlingPinchTimelineTest,1,58.085,0
 36,io.github.anastaci1a.localica.SubviewPinchRecoveryTest,1,4.3,0
+36,io.github.anastaci1a.localica.SubviewScrollJitterTest,3,30.0,0
 36,io.github.anastaci1a.localica.TabPagerTest,1,1.417,0
 36,io.github.anastaci1a.localica.TabResetTest,1,31.983,0
 36,io.github.anastaci1a.localica.TagEditorChromeLayoutTest,3,18.557,1
