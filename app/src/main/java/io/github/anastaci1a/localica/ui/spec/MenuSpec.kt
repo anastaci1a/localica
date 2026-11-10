@@ -8,7 +8,7 @@ import java.util.Collections
 /** #757 menu tokens: closed data only. Every key is an enum; pages cannot pass a size, style or colour. */
 enum class MenuTextRole { PageTitle, SectionHeading, RowTitle, RowValue, RowSummary, Helper, ControlLabel, TabLabel, ButtonLabel, StatValue, StatLabel, NoticeText, FieldLabel, FieldText, PopupBody }
 /** The four type sizes menus may use, with their line heights (sp). */
-enum class MenuTypeSize(val sp: Int, val lineSp: Int, val trackingSp: Float = 0f) { Small(12, 16), Body(14, 20), Title(16, 24), Display(22, 28) }
+enum class MenuTypeSize(val sp: Int, val lineSp: Int, val trackingSp: Int) { Small(12, 16, 0), Body(14, 20, 0), Title(16, 24, 0), Display(22, 28, 0) }
 enum class MenuWeight(val value: Int) { Regular(400), Medium(500), Bold(700) }
 enum class MenuInk { Primary, Secondary, Accent, Error, Tone }
 enum class MenuSize { PageInset, RowInset, LeadingBox, LeadingGap, Marker, LinkRow, ControlRow, CompactRow, LinkRowPadding, ControlRowPadding,
