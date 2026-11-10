@@ -67,11 +67,11 @@ class ArtworkGrantsTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val base = instrumentation.targetContext
         val prefs = base.getSharedPreferences("artwork-production-" + java.util.UUID.randomUUID(), 0)
-        val context = object : android.content.ContextWrapper(base) {
+        val context = preparedTestContext(object : android.content.ContextWrapper(base) {
             override fun getApplicationContext(): android.content.Context = this
             override fun getSharedPreferences(name: String, mode: Int): android.content.SharedPreferences =
                 if (name == "cover-images") prefs else super.getSharedPreferences(name, mode)
-        }
+        })
         val resolver = base.contentResolver
         val authority = ArtworkGrantActivity.AUTHORITY
         fun uri(id: Int) = "content://$authority/document/$id"

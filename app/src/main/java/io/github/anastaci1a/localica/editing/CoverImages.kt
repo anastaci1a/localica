@@ -98,7 +98,7 @@ class CoverImages(private val context: Context) {
         private val owners = mutableMapOf<android.content.SharedPreferences, ArtworkGrants>()
         @Synchronized private fun sharedGrants(context: Context): ArtworkGrants {
             val app = context.applicationContext
-            val prefs = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(app, "cover-images")
+            val prefs = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "cover-images")
             owners[prefs]?.let { return it }
             fun entries(key: String): Set<String> {
                 val array = JSONArray(prefs.getString(key, "[]"))

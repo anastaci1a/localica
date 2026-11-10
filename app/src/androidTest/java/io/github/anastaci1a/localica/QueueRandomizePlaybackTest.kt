@@ -216,9 +216,9 @@ class QueueRandomizePlaybackTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val preferencesName = "randomize-${UUID.randomUUID()}"
-        val preferences = QueuePreferences(object : ContextWrapper(context) {
+        val preferences = QueuePreferences(preparedTestContext(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences(preferencesName, mode)
-        })
+        }))
         val settings = QueueSettings(shuffle = shuffle, repeat = QueueRepeat.All, switching = QueueSwitch.Paused)
         preferences.write(settings)
         val file = File(context.cacheDir, "$preferencesName.mp3")

@@ -91,4 +91,82 @@ class PreparedPreferencesTest {
         } finally { release.countDown(); scope.cancel() }
     }
 
+
+    @Test fun delayedEntryCommandsKeepAttachmentAndUserCommandOrder() = verifyLifecycle("ordered")
+    @Test fun destructionBeforeReadinessCancelsEntriesWithoutCancellingPreparation() = verifyLifecycle("before")
+    @Test fun readinessRacingShutdownCannotResurrectACancelledEntry() = verifyLifecycle("racing")
+
+    private fun verifyLifecycle(mode: String) = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<LocalicaApplication>()
+        app.preferences.awaitReady()
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val entryScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val context = object : ContextWrapper(app) {
+            override fun getSharedPreferences(name: String, flags: Int): SharedPreferences {
+                entered.countDown()
+                check(release.await(10, TimeUnit.SECONDS))
+                return super.getSharedPreferences(name, flags)
+            }
+        }
+        val owner = PreparedPreferences(context, preparationScope)
+        val events = java.util.concurrent.CopyOnWriteArrayList<String>()
+        try {
+            withContext(Dispatchers.IO) { check(entered.await(10, TimeUnit.SECONDS)) }
+            val jobs = withContext(Dispatchers.Main) {
+                listOf("attach", "play", "pause").map { event ->
+                    owner.launchWhenReady(entryScope) { events += event }
+                }
+            }
+            assertTrue(events.isEmpty())
+            if (mode == "ordered") release.countDown()
+            else withContext(Dispatchers.Main) {
+                if (mode == "racing") release.countDown()
+                entryScope.cancel()
+                if (mode == "before") release.countDown()
+            }
+            withTimeout(10_000) { owner.awaitReady(); jobs.joinAll() }
+            assertTrue(owner.ready.value)
+            assertEquals(if (mode == "ordered") listOf("attach", "play", "pause") else emptyList<String>(), events.toList())
+        } finally { release.countDown(); entryScope.cancel(); preparationScope.cancel() }
+    }
+
+
+    @Test fun isolatedPreparedContextRetainsItsStoreEditorAndDirectoryAcrossThemeWrappers() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<LocalicaApplication>()
+        app.preferences.awaitReady()
+        val name = "prepared-isolation-" + java.util.UUID.randomUUID()
+        val raw = app.getSharedPreferences(name, 0)
+        val previousMaximum = app.preferences.require("queue-settings").getInt("maximum", 0)
+        val opens = AtomicInteger()
+        val edits = AtomicInteger()
+        val directory = java.io.File(app.cacheDir, name)
+        val retained = object : SharedPreferences by raw {
+            override fun edit(): SharedPreferences.Editor { edits.incrementAndGet(); return raw.edit() }
+        }
+        val context = preparedTestContext(object : ContextWrapper(app) {
+            override fun getFilesDir() = directory
+            override fun getSharedPreferences(store: String, mode: Int): SharedPreferences {
+                check(store == "queue-settings")
+                check(Looper.myLooper() != Looper.getMainLooper())
+                opens.incrementAndGet()
+                return retained
+            }
+        }, listOf("queue-settings"))
+        try {
+            val themed = android.view.ContextThemeWrapper(context, android.R.style.Theme_Material)
+            withContext(Dispatchers.Main) {
+                assertSame(retained, PreparedPreferences.get(themed, "queue-settings"))
+                assertSame(directory, PreparedPreferences.filesDirectory(themed))
+                val preferences = io.github.anastaci1a.localica.queue.QueuePreferences(themed)
+                preferences.write(preferences.read().copy(maximum = 37))
+                assertEquals(37, preferences.read().maximum)
+                assertEquals(previousMaximum, app.preferences.require("queue-settings").getInt("maximum", 0))
+            }
+            assertEquals(1, opens.get())
+            assertEquals(1, edits.get())
+        } finally { app.deleteSharedPreferences(name) }
+    }
+
 }

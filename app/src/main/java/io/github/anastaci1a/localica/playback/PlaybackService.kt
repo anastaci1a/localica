@@ -36,8 +36,7 @@ class PlaybackService : MediaSessionService() {
             shuffleModeEnabled = false
         }
         engine = player
-        readiness.launch {
-            app.preferences.awaitReady()
+        app.preferences.launchWhenReady(readiness) {
             statistics = io.github.anastaci1a.localica.statistics.PlaybackStatistics(player, app.listening)
             app.queues.attach(player)
         }
@@ -45,8 +44,7 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         // A cold system controller gets a session immediately; its commands suspend in arrival order.
         val controls = QueueTransportPlayer(player) { command ->
-            readiness.launch {
-                app.preferences.awaitReady()
+            app.preferences.launchWhenReady(readiness) {
                 command(app.queues)
             }
         }

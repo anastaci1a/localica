@@ -199,9 +199,9 @@ class ReverseOrderPersistenceTest {
         sortSnapshot: suspend () -> LibrarySnapshot = { LibrarySnapshot(tracks = tracks) },
         action: suspend (QueueFixture) -> Unit) = runBlocking {
         val preferencesName = "reverse-${UUID.randomUUID()}"
-        val preferences = QueuePreferences(object : ContextWrapper(context) {
+        val preferences = QueuePreferences(preparedTestContext(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences(preferencesName, mode)
-        })
+        }))
         val settings = QueueSettings(shuffle = true)
         preferences.write(settings)
         val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()

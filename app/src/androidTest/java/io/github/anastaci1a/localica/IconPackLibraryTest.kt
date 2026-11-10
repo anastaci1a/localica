@@ -32,7 +32,7 @@ class IconPackLibraryTest {
     private val root = File(app.cacheDir, "icon-library-tests")
     private var forbidSource = false
     private var resolverAccesses = 0
-    private val context = object : ContextWrapper(app) {
+    private val context = preparedTestContext(object : ContextWrapper(app) {
         override fun getFilesDir() = root
         override fun getApplicationContext(): Context = this
         override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences("icon-library-tests-$name", mode)
@@ -41,7 +41,7 @@ class IconPackLibraryTest {
             check(!forbidSource) { "Switching must never reopen a source URI" }
             return super.getContentResolver()
         }
-    }
+    })
     @Before fun setup() {
         root.deleteRecursively(); root.mkdirs()
         context.getSharedPreferences("icon-packs", 0).edit().clear().commit()

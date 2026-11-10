@@ -86,7 +86,7 @@ Appears On and Similar Artists currently return empty through an enrichment inte
 
 ### Settings/selection
 
-The application owns prepared preference handles. An IO coroutine loads every preference file and its values before publishing readiness. Activity content, cold service commands and background controller entry points await readiness asynchronously. The startup window uses in-memory state; preference consumers never open files or wait for XML on Main.
+The application owns prepared preference handles. An IO coroutine loads every preference file, its values and constructor directory handles before publishing readiness. Activity content, cold service commands and background controller entry points await readiness asynchronously. The startup window uses in-memory state; preference consumers never open files or wait for XML on Main.
 
 Saved lyrics selections resolve before their first presentation, including legacy synced-source aliases. Migration and subsequent choices use the same prepared handle and retain synchronous memory updates and ordered framework writes.
 

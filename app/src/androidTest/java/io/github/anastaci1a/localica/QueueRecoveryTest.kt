@@ -483,9 +483,9 @@ class QueueRecoveryTest {
         val original = ListeningQueue(name = "Recovery", entries = entries, currentEntryId = entries[current].id, positionMs = 1000)
         val database = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         withContext(Dispatchers.IO) { database.queues().save(QueueLibrary(), QueueLibrary(listOf(original), original.id)) }
-        val preferences = QueuePreferences(object : ContextWrapper(context) {
+        val preferences = QueuePreferences(preparedTestContext(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences("queue-recovery-$id", mode)
-        })
+        }))
         val actor = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val opened = CopyOnWriteArrayList<String>()
         val delegate = DefaultDataSource.Factory(context)

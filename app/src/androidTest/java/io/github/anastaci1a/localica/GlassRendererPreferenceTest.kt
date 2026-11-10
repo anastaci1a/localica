@@ -19,12 +19,12 @@ class GlassRendererPreferenceTest {
     private fun withPreferences(test: (Context, SharedPreferences) -> Unit) {
         val base = InstrumentationRegistry.getInstrumentation().targetContext
         val ownedName = "glass-renderer-test-${UUID.randomUUID()}"
-        val context = object : ContextWrapper(base) {
+        val context = preparedTestContext(object : ContextWrapper(base) {
             override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
                 check(name == "interface")
                 return base.getSharedPreferences(ownedName, mode)
             }
-        }
+        }, listOf("interface"))
         val raw = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
         try { test(context, raw) } finally {
             raw.edit().clear().commit()

@@ -31,8 +31,7 @@ class ScanService : Service() {
                     if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0)
             } catch (_: Exception) { stopSelf(); return START_NOT_STICKY }
         }
-        scope.launch {
-            (application as LocalicaApplication).preferences.awaitReady()
+        (application as LocalicaApplication).preferences.launchWhenReady(scope) {
             startPrepared(intent, startId)
         }
         return START_NOT_STICKY

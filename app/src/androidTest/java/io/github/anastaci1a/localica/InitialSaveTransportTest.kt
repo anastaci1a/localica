@@ -127,9 +127,9 @@ class InitialSaveTransportTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val name = "initial-save-" + UUID.randomUUID()
-        val preferences = QueuePreferences(object : ContextWrapper(context) {
+        val preferences = QueuePreferences(preparedTestContext(object : ContextWrapper(context) {
             override fun getSharedPreferences(ignored: String, mode: Int) = context.getSharedPreferences(name, mode)
-        })
+        }))
         preferences.write(QueueSettings())
         val file = File(context.cacheDir, "$name.mp3")
         instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }

@@ -1258,9 +1258,9 @@ class PlaybackIntentTest {
         val dao = IntentDao(QueueLibrary(listOf(first, second), first.id), if (blockRestore) Gate() else null)
         val store = IntentStore()
         val library = LibraryRepository(store, TreeScanner(AndroidDocuments(context)), permissions ?: PersistedFolderPermissions(context.contentResolver))
-        val preferences = QueuePreferences(object : ContextWrapper(context) {
+        val preferences = QueuePreferences(preparedTestContext(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences("intent-$id", mode)
-        })
+        }))
         val actor = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val readers = NativeReaders()
         val itemBuilds = AtomicInteger()
