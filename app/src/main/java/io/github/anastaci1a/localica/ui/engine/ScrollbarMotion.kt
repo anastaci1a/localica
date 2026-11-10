@@ -15,11 +15,10 @@ import io.github.anastaci1a.localica.ui.spec.ScrollbarSpec
 /** An incoming tween evaluator driven only by registered shared Engine frames.
  * Fresh work admits time zero on the next frame, as Animatable did. An interrupted grip
  * rejoins at its last presented frame, retaining the incoming evaluator and velocity.
- * A completed tween runs its continuation on that Engine frame. A global Engine reduction
- * settles at [reducedValue] when one is given, and never runs a continuation.
+ * A completed tween runs its continuation on that Engine frame. App Reduced, local or through the root clock,
+ * never cancels a running timeline.
  */
-internal class ScrollbarTween(private val clock: UiClock, initial: Float,
-    private val reducedValue: Float? = null) : ActiveMotion {
+internal class ScrollbarTween(private val clock: UiClock, initial: Float) : ActiveMotion {
     private var resting by mutableFloatStateOf(initial)
     private var animation by mutableStateOf<VectorizedTweenSpec<AnimationVector1D>?>(null)
     private var initialVector = AnimationVector1D(initial)
@@ -35,6 +34,7 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float,
     var target: Float = initial
         private set
     override val id = clock.allocateId()
+    override val reducesWithAccess = false
     override var presented = false
         private set
     override val settled: Boolean get() = animation == null
@@ -95,7 +95,8 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float,
             then?.invoke()
         }
     }
-    override fun reduce(stamp: FrameStamp) = cancel(reducedValue ?: target)
+    // App Reduced never retires a running timeline (#838); only future grip durations change.
+    override fun reduce(stamp: FrameStamp) = Unit
     fun cancel(value: Float) {
         clock.checkMutation()
         clock.unregister(this)
@@ -117,14 +118,14 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float,
  * scrollbar, or a list scroll in progress including its fling) it stays fully visible; the idle
  * delay and the fade out start only once it is released and still. App Reduced changes future grip-target
  * durations only (the grip, and so its colour, snaps); the fades, idle delay and release keep their base
- * timelines. A global Engine reduction retires every channel and hides the scrollbar. The grip channel is one 0..1 progress: the held width, length
+ * timelines. Neither a local nor a root Reduced change retires a running channel (#838). The grip channel is one 0..1 progress: the held width, length
  * and colour all derive from it, so they move in lockstep on one timeline and easing.
  */
 @Stable
 internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolean = false,
     private var reduced: Boolean = false) {
     private val release = ScrollbarTween(clock, 0f)
-    private val opacity = ScrollbarTween(clock, 1f, reducedValue = 0f)
+    private val opacity = ScrollbarTween(clock, 1f)
     private val grip = ScrollbarTween(clock, if (initiallyHeld) 1f else 0f)
     private var disposed = false
     private var held = false

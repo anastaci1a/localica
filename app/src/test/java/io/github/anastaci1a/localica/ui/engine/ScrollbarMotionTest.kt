@@ -269,7 +269,7 @@ class ScrollbarMotionTest {
         }
     }
 
-    @Test(timeout = 5000) fun localReductionPreservesBaseCurvesAndGlobalReductionRetiresWork() {
+    @Test(timeout = 5000) fun localAndRootReductionPreserveEveryInFlightBaseCurve() {
         for (global in listOf(false, true)) for (seconds in listOf(.064, .8, 1.3)) EngineHarness().use { h ->
             val motion = ScrollbarMotion(h.clock)
             motion.reveal(); motion.release(.2f); motion.contact(true, 1f)
@@ -277,24 +277,25 @@ class ScrollbarMotionTest {
             val opacity = motion.opacity()
             val release = motion.releaseOffset()
             val grip = motion.grip()
-            if (global) {
-                h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Reduced), StockUiSpec)
-                assertEquals(0, h.clock.activeCount)
-                assertEquals(0f, motion.opacity(), 0f)
-                assertEquals(0f, motion.releaseOffset(), 0f)
-                assertEquals(1f, motion.grip(), 0f)
-            } else {
-                motion.access(true)
-                assertEquals(if (seconds < .18) 3 else 1, h.clock.activeCount)
-                assertEquals(opacity.toRawBits(), motion.opacity().toRawBits())
-                assertEquals(release.toRawBits(), motion.releaseOffset().toRawBits())
-                assertEquals("Changing only the spec does not retarget the base grip", grip.toRawBits(), motion.grip().toRawBits())
-                h.advance(.016)
-                val incoming = TargetBasedAnimation(tween<Float>(240, easing = CubicBezierEasing(0f, 0f, .2f, 1f)),
-                    Float.VectorConverter, 0f, 1f)
-                val nanos = (seconds * 1e9).toLong() + 16_000_000L
-                assertEquals("The in-flight base grip keeps its curve", incoming.getValueFromNanos(nanos).toRawBits(), motion.grip().toRawBits())
-            }
+            if (global) h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Reduced), StockUiSpec)
+            motion.access(true)
+            assertEquals(if (seconds < .18) 3 else 1, h.clock.activeCount)
+            assertEquals(opacity.toRawBits(), motion.opacity().toRawBits())
+            assertEquals(release.toRawBits(), motion.releaseOffset().toRawBits())
+            assertEquals("App reduction does not retarget the running grip", grip.toRawBits(), motion.grip().toRawBits())
+            h.advance(.016)
+            val nanos = (seconds * 1e9).toLong() + 16_000_000L
+            val incoming = TargetBasedAnimation(tween<Float>(240, easing = CubicBezierEasing(0f, 0f, .2f, 1f)),
+                Float.VectorConverter, 0f, 1f)
+            val fade = TargetBasedAnimation(tween<Float>(220, 1200), Float.VectorConverter, 1f, 0f)
+            val offset = TargetBasedAnimation(tween<Float>(180), Float.VectorConverter, .2f, 0f)
+            assertEquals("In-flight grip keeps its exact curve", incoming.getValueFromNanos(nanos).toRawBits(), motion.grip().toRawBits())
+            assertEquals("In-flight reveal keeps its exact curve", fade.getValueFromNanos(nanos).toRawBits(), motion.opacity().toRawBits())
+            assertEquals("In-flight release keeps its exact curve", offset.getValueFromNanos(nanos).toRawBits(), motion.releaseOffset().toRawBits())
+            motion.contact(false, 1f)
+            assertEquals("A new Reduced target keeps the presented grip until admission", incoming.getValueFromNanos(nanos).toRawBits(), motion.grip().toRawBits())
+            h.advance(.016)
+            assertEquals("Only the new Reduced grip target snaps on admission", 0f, motion.grip(), 0f)
             motion.access(false)
             if (global) h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Standard), StockUiSpec)
             h.advance(2.0)

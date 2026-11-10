@@ -337,7 +337,7 @@ class ScrollbarBehaviourTest {
         val heapAfter = heap(); val gcAfter = gcs()
         fun key(p: Pair<Int, Int>) = p.first.toLong() * 1_000_000L + p.second
         csv("cold-drag-$items", "direction,index,offset", down.map { "down,${it.first},${it.second}" } + up.map { "up,${it.first},${it.second}" })
-        File(dir, "cold-drag-$items-memory-api$api.txt").writeText("items=$items "heapBeforeBytes=$heapBefore heapAfterBytes=$heapAfter " +
+        File(dir, "cold-drag-$items-memory-api$api.txt").writeText("items=$items heapBeforeBytes=$heapBefore heapAfterBytes=$heapAfter " +
             "heapDeltaBytes=${heapAfter - heapBefore} gcBefore=$gcBefore gcAfter=$gcAfter gcDelta=${gcAfter - gcBefore} " +
             "maxHeapBytes=${runtime.maxMemory()}\n")
         assertTrue("Down drag never reverses: $down", down.zipWithNext().all { (a, b) -> key(b) >= key(a) })
