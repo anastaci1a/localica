@@ -36,8 +36,8 @@ internal class QueueTimeline {
     fun contains(queue: ListeningQueue) = queueId == queue.id && queue.entries.all { it.id in templates }
 
     fun sync(player: Player, queue: ListeningQueue, seek: Boolean, replace: Boolean,
-        window: List<QueueVisit> = requireNotNull(queue.journey).window()): Boolean {
-        val journey = requireNotNull(queue.journey)
+        window: List<QueueVisit> = queue.playbackVisits()): Boolean {
+        val currentToken = queue.currentVisit?.token
         val wanted = window.map { it.token }.toSet()
         decorated.keys.retainAll(wanted)
         val items = window.map { visit -> decorated.getOrPut(visit.token) {
@@ -48,7 +48,7 @@ internal class QueueTimeline {
             }
             item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build()).build()
         } }
-        val index = window.indexOfFirst { it.token == journey.current?.token }.coerceAtLeast(0)
+        val index = window.indexOfFirst { it.token == currentToken }.coerceAtLeast(0)
         if (replace) {
             player.setMediaItems(items, index, queue.positionMs)
             player.prepare()
@@ -74,7 +74,7 @@ internal class QueueTimeline {
                 }
             }
         }
-        if (seek || player.currentMediaItem?.queueVisit != journey.current?.token) player.seekTo(index, queue.positionMs)
+        if (seek || player.currentMediaItem?.queueVisit != currentToken) player.seekTo(index, queue.positionMs)
         if (player.playbackState == Player.STATE_IDLE) player.prepare()
         return changed
     }
