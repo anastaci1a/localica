@@ -5,6 +5,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
 import io.github.anastaci1a.localica.ui.spec.ControlSize
 import io.github.anastaci1a.localica.ui.spec.Space
 import io.github.anastaci1a.localica.ui.spec.StockUiSpec
@@ -24,5 +25,6 @@ internal fun AsyncSectionRowSlot(modifier: Modifier, content: @Composable () -> 
 
 @Composable
 internal fun AsyncValueSlot(modifier: Modifier, text: @Composable () -> Unit, placeholder: @Composable BoxScope.() -> Unit) {
-    Box(modifier) { text(); placeholder() }
+    // Keep Text semantics on the caller's modifier while its visual slot also owns the placeholder.
+    Box(modifier.semantics(mergeDescendants = true) {}) { text(); placeholder() }
 }
