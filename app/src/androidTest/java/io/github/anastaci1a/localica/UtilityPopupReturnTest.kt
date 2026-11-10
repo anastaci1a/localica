@@ -12,6 +12,7 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Rule
@@ -46,17 +47,49 @@ class UtilityPopupReturnTest {
         val output = File(nativeEvidenceDirectory("utility-popup-return", context.getExternalFilesDir(null)),
             "${mode.name}-$action-$reduced.json")
         fun flights(h: GlassPopupHome): List<GlassPopupFlight> = h.flights.toList() + h.children.flatMap(::flights)
-        fun advanceUntil(message: String, condition: () -> Boolean) {
-            compose.waitUntil(10_000) {
-                compose.mainClock.advanceTimeByFrame()
-                compose.waitForIdle()
-                condition()
-            }
-            assertTrue(message, condition())
+        fun snapshot(): JSONObject = compose.runOnUiThread {
+            JSONObject().put("clockMs", compose.mainClock.currentTime)
+                .put("windows", JSONArray(windows.map { window -> JSONObject()
+                    .put("identity", System.identityHashCode(window))
+                    .put("attached", window.decorView.isAttachedToWindow)
+                    .put("focused", window.decorView.hasWindowFocus())
+                    .put("flags", window.attributes.flags)
+                    .put("phase", phases[window] ?: JSONObject.NULL) }))
+                .put("flights", JSONArray(flights(home).map { flight -> JSONObject()
+                    .put("identity", System.identityHashCode(flight))
+                    .put("prepared", flight.prepared).put("handedOff", flight.handedOff)
+                    .put("wasProjected", flight.wasProjected)
+                    .put("layerPresent", flight.layer != null)
+                    .put("layerReleased", flight.layer?.isReleased ?: JSONObject.NULL) }))
         }
+        fun advanceUntil(message: String, condition: () -> Boolean) {
+            report.put("waitLabel", message).put("waitStartClockMs", compose.mainClock.currentTime)
+            try {
+                compose.waitUntil(10_000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.waitForIdle()
+                    condition()
+                }
+                assertTrue(message, condition())
+            } finally {
+                report.put("waitEndClockMs", compose.mainClock.currentTime)
+            }
+        }
+        val backReceipts = JSONArray().also { report.put("nativeBackActions", it) }
         fun back(window: Window) {
-            compose.waitUntil(5000) { window.decorView.hasWindowFocus() }
-            assertTrue(device.pressBack())
+            advanceUntil("Back target admits native input") {
+                window.decorView.hasWindowFocus() && window.attributes.flags and
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE == 0
+            }
+            val receipt = JSONObject().put("targetIdentity", System.identityHashCode(window))
+                .put("before", snapshot())
+            backReceipts.put(receipt)
+            receipt.put("injectionResult", device.pressKeyCode(android.view.KeyEvent.KEYCODE_BACK))
+            advanceUntil("Native Back changes the same window to returning input policy") {
+                !window.decorView.isAttachedToWindow || window.attributes.flags and
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0
+            }
+            receipt.put("after", snapshot()).put("actualDismissalObserved", true)
         }
         fun outside() {
             val origin = IntArray(2).also { compose.runOnUiThread { root.getLocationOnScreen(it) } }
@@ -127,7 +160,20 @@ class UtilityPopupReturnTest {
                 advanceUntil("Real utility recording hands off before retirement") { compose.runOnUiThread { flight.handedOff } }
                 report.put("observedHandoff", true)
             }
-            advanceUntil("Utility native window retires") { !popup.decorView.isAttachedToWindow }
+            try {
+                advanceUntil("Utility native window retires") { !popup.decorView.isAttachedToWindow }
+            } catch (retirementFailure: Throwable) {
+                report.put("retirementFailureBeforeControl", snapshot())
+                // Diagnose the frozen-clock driver only after preserving its actual failure.
+                // This control never converts the failed route to a pass.
+                runCatching {
+                    compose.mainClock.advanceTimeBy(2000)
+                    compose.waitForIdle()
+                    report.put("postFailureClockAdvanceMs", 2000)
+                        .put("retirementFailureAfterControl", snapshot())
+                }.onFailure { report.put("postFailureControlError", it.toString()) }
+                throw retirementFailure
+            }
             compose.runOnUiThread {
                 assertFalse("The retired flight leaves its source owner", flights(home).any { it === flight })
                 assertNull("The retired flight releases its layer reference", flight.layer)
@@ -154,6 +200,8 @@ class UtilityPopupReturnTest {
             report.put("status", "passed")
         } catch (failure: Throwable) {
             report.put("status", "failed").put("failure", failure.toString())
+            runCatching { report.put("failureState", snapshot()) }
+                .onFailure { report.put("snapshotError", it.toString()) }
             throw failure
         } finally {
             try {
