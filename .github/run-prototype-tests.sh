@@ -105,6 +105,7 @@ raise SystemExit(0 if receipt['monitoring_complete'] is True and receipt['superv
 PYSUP
 }
 set +e
+sha256sum --check prototype-evidence/test-input-apks.sha256 || exit 1
 run_gate
 result=$?
 if [[ "$result" != 0 && "$method_iteration" == false ]] \
