@@ -39,6 +39,8 @@ class PopupParentPendingHandoffTest {
         ExpandCollapse::class.java.getDeclaredField("bound").apply { isAccessible = true }.get(owner) as MotionRectView?)
 
     @Test fun pendingDescendantHandoffCanBeReopenedWithoutReplacingOwners() {
+        var parentCallerMounted by mutableStateOf(true)
+        var parentCallerDisposed = false
         var parentOpen by mutableStateOf(false)
         var childOpen by mutableStateOf(false)
         var parentActions = 0
@@ -66,6 +68,8 @@ class PopupParentPendingHandoffTest {
                         ActionIcon(AppIcon.ActionEllipsis, "Open parent", anchor = parentAnchor, glass = false) { parentOpen = true }
                         ActionIcon(AppIcon.ActionEllipsis, "Root action", glass = false) { rootActions++ }
                     }
+                    if (parentCallerMounted) {
+                    DisposableEffect(Unit) { onDispose { parentCallerDisposed = true } }
                     GlassMenu(parentOpen, parentAnchor, { parentOpen = false }) {
                         parentView = LocalView.current
                         parentHome = LocalGlassPopupHome.current
@@ -78,6 +82,7 @@ class PopupParentPendingHandoffTest {
                                 Box(Modifier.fillMaxWidth().height(180.dp)) { Text("Child") }
                             }
                         }
+                    }
                     }
                 }
             }
@@ -98,6 +103,7 @@ class PopupParentPendingHandoffTest {
             Log.i("Stage3HandoffReopen", org.json.JSONObject()
                 .put("stage", stage).put("clock", compose.mainClock.currentTime)
                 .put("blockedDraws", blockedDraws.get()).put("parentOpen", parentOpen).put("childOpen", childOpen)
+                .put("parentCallerMounted", parentCallerMounted).put("parentCallerDisposed", parentCallerDisposed)
                 .put("departing", parentHome?.departing).put("handedOff", parentHome?.handedOff)
                 .put("target", parentAnchor.contact.expansion.targetValue).put("phase", parentAnchor.contact.expansion.value)
                 .put("owner", currentOwner?.let { System.identityHashCode(it) })
@@ -188,7 +194,15 @@ class PopupParentPendingHandoffTest {
             compose.runOnUiThread {
                 assertFalse(parentAnchor.hidden)
                 assertTrue(parentAnchor.restoredDrawn)
-                assertTrue(ExpandCollapse::class.java.getDeclaredField("disposed").apply { isAccessible = true }.getBoolean(retainedOwner))
+                // A closed GlassMenu deliberately keeps its owner while its caller is composed.
+                parentCallerMounted = false
+            }
+            repeat(2) { compose.mainClock.advanceTimeByFrame() }
+            compose.waitForIdle()
+            compose.runOnUiThread {
+                assertTrue("The actual caller scope has left composition", parentCallerDisposed)
+                assertTrue("The retained owner is disposed with its caller", ExpandCollapse::class.java
+                    .getDeclaredField("disposed").apply { isAccessible = true }.getBoolean(retainedOwner))
             }
             nativeClick("Root action", requireNotNull(rootView))
             compose.waitUntil(5_000) { rootActions == 1 }
