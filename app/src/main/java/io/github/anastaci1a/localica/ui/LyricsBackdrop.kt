@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -96,6 +97,7 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
         cancel
     } }
     val flat = flatGlass()
+    val displayCutout: DrawScope.() -> Path? = { Path().apply { addRect(Rect(Offset.Zero, size)) } }
     val observer by rememberUpdatedState(LocalLyricsBackdropObserver.current)
     if (!flat) {
         SideEffect { source.parent = backing; source.readbackBarrier = scene.readback; observer?.invoke(scene, true) }
@@ -121,9 +123,8 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
         CompositionLocalProvider(LocalLyricsBackdropScene provides scene, content = content)
         // Compose the real artwork plus all retained Crossfade documents for sampling
         // only. Displaying this backing again would strengthen translucent player art.
-        if (!flat) Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = {
-            Path().apply { addRect(Rect(Offset.Zero, size)) }
-        }, readbackRequest = { source.readbackRequest }, onRecorded = { request ->
+        if (!flat) Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = displayCutout,
+            readbackRequest = { source.readbackRequest }, onRecorded = { request ->
             scene.readback.compositeRecorded(request, scene.compositeDraws)
         }).then(LyricsReadbackDraw(scene.readback))) {
             scene.compositeDraws = emptyMap()
