@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
                     else null)) {
             // One shared None reduction for every material in this window (#691).
             NoneReductionAtlasHost(GlassColorShader, enabled = !io.github.anastaci1a.localica.ui.flatGlass()) {
+            io.github.anastaci1a.localica.ui.LocalicaUiRoot {
             LocalicaTheme {
                 io.github.anastaci1a.localica.ui.TagEditorHost((application as LocalicaApplication).tagEditing) {
                 LocalicaScreen(library, playback, model::play, model.playback::toggle, model.playback::seekTo,
@@ -100,6 +101,7 @@ class MainActivity : ComponentActivity() {
                     onScanAll = model::scanAll, onQuickScan = model::scanNewFiles, scannerRequest = scannerRequest, lastFmSettingsRequest = lastFmSettingsRequest, onRetryPlayback = model.playback::retry,
                     onSeekRequest = model.playback::requestSeek, playbackSample = playbackObservation.sample)
                 }
+            }
             }
             }
             }

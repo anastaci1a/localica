@@ -66,7 +66,8 @@ fun LocalicaScreen(
     val session: SessionSelection = androidx.lifecycle.viewmodel.compose.viewModel()
     val browseSorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { io.github.anastaci1a.localica.navigation.InterfacePreferences(context) }
-    var settings by remember { mutableStateOf(preferences.read()) }
+    val uiRoot = LocalLocalicaUiRoot.current ?: rememberLocalicaUiRoot()
+    var settings by uiRoot.settings
     val glassRenderer = LocalGlassRendererRuntime.current
     SideEffect { glassRenderer?.request(settings.glass.renderer) }
     val libraryFilterPreferences = remember(context) { io.github.anastaci1a.localica.browse.LibraryFilterPreferences(context) }
@@ -158,17 +159,10 @@ fun LocalicaScreen(
     val chromeVisibility by androidx.compose.animation.core.animateFloatAsState(if (insideCollection) 0f else 1f,
         androidx.compose.animation.core.tween(settings.motionDuration(300)), label = "Detail navigation")
     val bottomChrome = 8.dp + 72.dp * chromeVisibility
-    // U11.00: one root record publishes the full player's reference travel, display interval and admitted geometry.
     val density = androidx.compose.ui.platform.LocalDensity.current
-    // Endpoint bases follow the measured root layout (the window until first measure); Rebase keeps changes continuous.
-    var rootSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
-    val window = rootSize.takeIf { it.height > 0 } ?: androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val window = uiRoot.window
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val refreshHz = rememberPeakRefreshHz()
-    val referenceTravel = playerBasis(density, window, navigationInset, StockUiSpec.clearance.getValue(Clearance.BottomChrome)).edgeTravelPx
-    val resolvedSpec = remember(settings.glass, settings.reducedMotion, settings.fasterMotion, referenceTravel, window, density) {
-        uiSpec(settings, ExpansionGeometryDomain(referenceTravel, maxOf(1f, kotlin.math.hypot(window.width.toFloat(), window.height.toFloat())), 1f / 24), density) }
-    CompositionLocalProvider(LocalEngineContext provides remember(refreshHz, referenceTravel, resolvedSpec) { EngineContext(1f / refreshHz, referenceTravel, resolvedSpec.spec.access) }, LocalUiSpec provides resolvedSpec) {
+    LocalicaUiRoot(uiRoot) {
     val sheet = rememberSheetState("player", expanded, playerBasis(density, window, navigationInset, bottomChrome))
     val phase = sheet.expansion.phase
     val queueSheet = rememberSheetState("queue", queueOpen, queueBasis(density, window, navigationInset, WindowInsets.statusBars.asPaddingValues().calculateTopPadding()))
@@ -316,7 +310,7 @@ fun LocalicaScreen(
         Modifier.testTag("browse-background"), WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val screenScope = this
-        SideEffect { rootSize = androidx.compose.ui.unit.IntSize(constraints.maxWidth, constraints.maxHeight) }
+        SideEffect { uiRoot.size = androidx.compose.ui.unit.IntSize(constraints.maxWidth, constraints.maxHeight) }
         val queueSelectionMaxHeight = maxHeight / 3
         SongDragScene(dragHost, Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalGlassPopupHome provides browsePopupHome) {
@@ -573,23 +567,8 @@ internal fun LibraryNotice(state: LibraryUiState) {
 
 
 
-/** U11.00: peak display refresh, re-published when the display changes (the engine's two-frame floor). */
-@Composable private fun rememberPeakRefreshHz(): Float {
-    val view = androidx.compose.ui.platform.LocalView.current
-    fun peak() = (view.display?.supportedModes?.maxOfOrNull { it.refreshRate } ?: 60f).coerceAtLeast(1f)
-    var refreshHz by remember(view) { mutableFloatStateOf(peak()) }
-    DisposableEffect(view) {
-        val displays = view.context.getSystemService(android.hardware.display.DisplayManager::class.java)
-        val listener = object : android.hardware.display.DisplayManager.DisplayListener {
-            override fun onDisplayAdded(id: Int) {}
-            override fun onDisplayRemoved(id: Int) {}
-            override fun onDisplayChanged(id: Int) { refreshHz = peak() } }
-        displays.registerDisplayListener(listener, null); onDispose { displays.unregisterDisplayListener(listener) }
-    }
-    return refreshHz
-}
 /** U11.00: the player's unclipped endpoint frames from the same solver PlayerSurface lays out with. */
-private fun playerBasis(density: androidx.compose.ui.unit.Density, window: androidx.compose.ui.unit.IntSize, navigationInset: androidx.compose.ui.unit.Dp,
+internal fun playerBasis(density: androidx.compose.ui.unit.Density, window: androidx.compose.ui.unit.IntSize, navigationInset: androidx.compose.ui.unit.Dp,
     chrome: androidx.compose.ui.unit.Dp) = with(density) { listOf(0f, 1f).map { p -> playerSurfaceFrame(window.width.toDp(), window.height.toDp(), navigationInset, chrome, p, DeviceCorners())
         .let { androidx.compose.ui.geometry.Rect(it.x.toPx(), it.y.toPx(), (it.x + it.width).toPx(), (it.y + it.height).toPx()) } } }.let { ExpansionBasis(it[0], it[1], density.density) }
 /** U10.02: the Queue drawer's lip top travels from its collapsed shelf to the status inset (operator, 2026-11-06). */
