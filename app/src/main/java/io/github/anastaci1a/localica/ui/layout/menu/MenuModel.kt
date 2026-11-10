@@ -199,51 +199,62 @@ fun singleChoice(title: String, options: List<Option>, selected: String, onSelec
         listOfNotNull((if (staged) ActionSlot.Confirm else ActionSlot.Select) to Binding.Id(onSelect), onDismiss?.let { ActionSlot.Dismiss to Binding.Click(it) }))
 
 fun page(ref: PageRef, build: PageScope.() -> Unit): PageDraft {
-    val scope = PageScope(ref.key)
-    scope.build()
-    return Draft(PageNode(ref.key, ref.title, scope.body()), scope.bindings)
+    val part = PagePart(ref.key)
+    PageScope(part).build()
+    return Draft(PageNode(ref.key, ref.title, part.body()), part.bindings)
 }
 
-@MenuDsl class PageScope internal constructor(private val page: String) {
-    internal val bindings = HashMap<String, Binding>()
-    private val sections = ArrayList<SectionContent>()
-    private var tabs: TabsNode? = null
+/**
+ * Opaque builder storage. Scopes hold their unchecked nodes only through this type, whose implementations are private to
+ * this file, so a scope has no member that returns content: the draft is the only thing that leaves the builder.
+ */
+sealed class DraftPart
+
+@MenuDsl class PageScope internal constructor(private val part: DraftPart) {
+    private val state get() = part as PagePart
+    private val page get() = state.page
+    private val bindings get() = state.bindings
 
     fun section(id: String, heading: String? = null, caption: String? = null, build: SectionScope.() -> Unit) {
-        sections += SectionScope("$page/$id", bindings).apply(build).node(heading, caption)
+        val section = SectionPart("$page/$id", bindings)
+        SectionScope(section).build()
+        state.sections += section.node(heading, caption)
     }
 
     /** Page level only; a page declares tabs or sections. A second call replaces nothing: admission reports the duplicate key. */
     fun <T : TabId> tabs(selected: T, onSelect: (T) -> Unit, build: TabsScope<T>.() -> Unit) {
-        val scope = TabsScope<T>(page, bindings).apply(build)
+        val scope = TabsPart<T>(page, bindings)
+        TabsScope<T>(scope).build()
         val byKey = scope.ids
         bindings[actionKey(page, ActionSlot.Select)] = Binding.Id { key -> byKey[key]?.let(onSelect) }
         val node = TabsNode(QualifiedKey(page), frozen(scope.tabs), selected.key)
-        tabs = tabs?.let { TabsNode(it.key, frozen(it.tabs + node.tabs), it.selected) } ?: node
+        state.tabs = state.tabs?.let { TabsNode(it.key, frozen(it.tabs + node.tabs), it.selected) } ?: node
     }
-
-    internal fun body(): BodyContent = tabs ?: SectionsNode(frozen(sections))
 }
 
-@MenuDsl class TabsScope<T : TabId> internal constructor(private val page: String, private val bindings: HashMap<String, Binding>) {
-    internal val tabs = ArrayList<TabContent>()
-    internal val ids = HashMap<String, T>()
+@MenuDsl class TabsScope<T : TabId> internal constructor(private val part: DraftPart) {
     fun tab(id: T, label: String, build: TabScope.() -> Unit) {
-        ids[id.key] = id
-        tabs += TabNode(QualifiedKey("$page/${id.key}"), id.key, label, frozen(TabScope("$page/${id.key}", bindings).apply(build).sections))
+        @Suppress("UNCHECKED_CAST") val state = part as TabsPart<T>
+        state.ids[id.key] = id
+        val tab = TabPart("${state.page}/${id.key}", state.bindings)
+        TabScope(tab).build()
+        state.tabs += TabNode(QualifiedKey(tab.tab), id.key, label, frozen(tab.sections))
     }
 }
 
-@MenuDsl class TabScope internal constructor(private val tab: String, private val bindings: HashMap<String, Binding>) {
-    internal val sections = ArrayList<SectionContent>()
+@MenuDsl class TabScope internal constructor(private val part: DraftPart) {
     fun section(id: String, heading: String? = null, caption: String? = null, build: SectionScope.() -> Unit) {
-        sections += SectionScope("$tab/$id", bindings).apply(build).node(heading, caption)
+        val state = part as TabPart
+        val section = SectionPart("${state.tab}/$id", state.bindings)
+        SectionScope(section).build()
+        state.sections += section.node(heading, caption)
     }
 }
 
-@MenuDsl class SectionScope internal constructor(private val section: String, private val bindings: HashMap<String, Binding>) {
-    private val rows = ArrayList<RowContent>()
-    internal fun node(heading: String?, caption: String?): SectionContent = SectionNode(QualifiedKey(section), heading, caption, frozen(rows))
+@MenuDsl class SectionScope internal constructor(private val part: DraftPart) {
+    private val section get() = (part as SectionPart).section
+    private val bindings get() = (part as SectionPart).bindings
+    private val rows get() = (part as SectionPart).rows
 
     private fun key(source: RowKeySource) = QualifiedKey(when (source) {
         is SettingKey -> "$section/setting:${source.id}"
@@ -336,14 +347,15 @@ fun page(ref: PageRef, build: PageScope.() -> Unit): PageDraft {
 
     fun statusCard(key: RowKeySource, build: StatusCardScope.() -> Unit) {
         val k = key(key)
-        val scope = StatusCardScope(k.path) { actionKey, title, icon, role, enabled, opens, onClick -> actionNode(actionKey, title, icon, role, enabled, opens, onClick) }
-        scope.build()
+        val scope = CardPart(k.path) { actionKey, title, icon, role, enabled, opens, onClick -> actionNode(actionKey, title, icon, role, enabled, opens, onClick) }
+        StatusCardScope(scope).build()
         rows += StatusCardNode(k, scope.progress, scope.icon, scope.title, frozen(scope.infos), frozen(scope.stats), frozen(scope.actions))
     }
 
     fun legend(key: RowKeySource, bar: Boolean = false, build: LegendScope.() -> Unit) {
         val k = key(key)
-        val scope = LegendScope(k.path).apply(build)
+        val scope = LegendPart(k.path)
+        LegendScope(scope).build()
         val handlers = scope.handlers
         if (handlers.isNotEmpty()) bind(k, ActionSlot.Click, Binding.Id { id -> handlers[id]?.invoke() })
         rows += LegendNode(k, bar, frozen(scope.entries))
@@ -373,47 +385,76 @@ fun page(ref: PageRef, build: PageScope.() -> Unit): PageDraft {
     }
 }
 
-@MenuDsl class StatusCardScope internal constructor(private val card: String,
-    private val action: (QualifiedKey, String, MenuIcon, ActionRole, Boolean, PopupSpec?, (() -> Unit)?) -> ActionContent) {
-    internal var progress: Float? = null
-    internal var icon: String? = null
-    internal var title: String = ""
-    internal val infos = ArrayList<InfoLineContent>()
-    internal val stats = ArrayList<StatContent>()
-    internal val actions = ArrayList<ActionContent>()
-
+@MenuDsl class StatusCardScope internal constructor(private val part: DraftPart) {
     fun header(title: String, progress: Float? = null, icon: MenuIcon? = null, build: HeaderScope.() -> Unit = {}) {
-        this.title = title; this.progress = progress; this.icon = icon?.key
-        HeaderScope(card, infos).build()
+        val state = part as CardPart
+        state.title = title; state.progress = progress; state.icon = icon?.key
+        HeaderScope(part).build()
     }
     /** Any count; the grid reflows. */
-    fun stats(build: StatsScope.() -> Unit) { StatsScope(card, stats).build() }
-    fun actions(build: CardActionsScope.() -> Unit) { CardActionsScope(card, actions, action).build() }
+    fun stats(build: StatsScope.() -> Unit) { StatsScope(part).build() }
+    fun actions(build: CardActionsScope.() -> Unit) { CardActionsScope(part).build() }
 }
 
-@MenuDsl class HeaderScope internal constructor(private val card: String, private val infos: ArrayList<InfoLineContent>) {
-    fun info(info: InfoKey, value: Value<String>) { infos += InfoLineNode(QualifiedKey("$card/info:${info.key}"), info.key, data(info), value) }
+@MenuDsl class HeaderScope internal constructor(private val part: DraftPart) {
+    fun info(info: InfoKey, value: Value<String>) {
+        val state = part as CardPart
+        state.infos += InfoLineNode(QualifiedKey("${state.card}/info:${info.key}"), info.key, data(info), value)
+    }
 }
 
-@MenuDsl class StatsScope internal constructor(private val card: String, private val stats: ArrayList<StatContent>) {
-    fun stat(info: InfoKey, label: String, value: Value<String>) { stats += StatNode(QualifiedKey("$card/info:${info.key}"), info.key, data(info), label, value) }
+@MenuDsl class StatsScope internal constructor(private val part: DraftPart) {
+    fun stat(info: InfoKey, label: String, value: Value<String>) {
+        val state = part as CardPart
+        state.stats += StatNode(QualifiedKey("${state.card}/info:${info.key}"), info.key, data(info), label, value)
+    }
 }
 
-@MenuDsl class CardActionsScope internal constructor(private val card: String, private val actions: ArrayList<ActionContent>,
-    private val action: (QualifiedKey, String, MenuIcon, ActionRole, Boolean, PopupSpec?, (() -> Unit)?) -> ActionContent) {
+@MenuDsl class CardActionsScope internal constructor(private val part: DraftPart) {
     fun action(key: SettingKey, icon: MenuIcon, role: ActionRole = ActionRole.Default, enabled: Boolean = true, opens: PopupSpec? = null,
         onClick: (() -> Unit)? = null) {
-        actions += action(QualifiedKey("$card/setting:${key.id}"), key.title, icon, role, enabled, opens, onClick)
+        val state = part as CardPart
+        state.actions += state.action(QualifiedKey("${state.card}/setting:${key.id}"), key.title, icon, role, enabled, opens, onClick)
     }
 }
 
-@MenuDsl class LegendScope internal constructor(private val legend: String) {
-    internal val entries = ArrayList<LegendEntryContent>()
-    internal val handlers = HashMap<String, () -> Unit>()
+@MenuDsl class LegendScope internal constructor(private val part: DraftPart) {
     fun entry(id: String, tone: MarkerTone, title: String, count: Value<Long>, onClick: (() -> Unit)? = null) {
-        if (onClick != null) handlers[id] = onClick
-        entries += LegendEntryNode(QualifiedKey("$legend/item:$id"), id, tone, title, count, onClick != null)
+        val state = part as LegendPart
+        if (onClick != null) state.handlers[id] = onClick
+        state.entries += LegendEntryNode(QualifiedKey("${state.legend}/item:$id"), id, tone, title, count, onClick != null)
     }
+}
+
+// ---- Builder storage: unchecked nodes stay in these file-private classes until admission. ----
+
+private class PagePart(val page: String) : DraftPart() {
+    val bindings = HashMap<String, Binding>()
+    val sections = ArrayList<SectionContent>()
+    var tabs: TabsNode? = null
+    fun body(): BodyContent = tabs ?: SectionsNode(frozen(sections))
+}
+private class TabsPart<T : TabId>(val page: String, val bindings: HashMap<String, Binding>) : DraftPart() {
+    val tabs = ArrayList<TabContent>()
+    val ids = HashMap<String, T>()
+}
+private class TabPart(val tab: String, val bindings: HashMap<String, Binding>) : DraftPart() { val sections = ArrayList<SectionContent>() }
+private class SectionPart(val section: String, val bindings: HashMap<String, Binding>) : DraftPart() {
+    val rows = ArrayList<RowContent>()
+    fun node(heading: String?, caption: String?): SectionContent = SectionNode(QualifiedKey(section), heading, caption, frozen(rows))
+}
+private class CardPart(val card: String,
+    val action: (QualifiedKey, String, MenuIcon, ActionRole, Boolean, PopupSpec?, (() -> Unit)?) -> ActionContent) : DraftPart() {
+    var progress: Float? = null
+    var icon: String? = null
+    var title: String = ""
+    val infos = ArrayList<InfoLineContent>()
+    val stats = ArrayList<StatContent>()
+    val actions = ArrayList<ActionContent>()
+}
+private class LegendPart(val legend: String) : DraftPart() {
+    val entries = ArrayList<LegendEntryContent>()
+    val handlers = HashMap<String, () -> Unit>()
 }
 
 // ---- File-private implementations. Final, not data classes (no copy), structural equality, immutable lists. ----

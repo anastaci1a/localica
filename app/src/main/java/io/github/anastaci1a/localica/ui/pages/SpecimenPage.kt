@@ -33,14 +33,21 @@ internal class SpecimenState(val tab: SpecimenTab = SpecimenTab.Rows, val toggle
     val order: List<String> = listOf("Songs", "Albums", "Artists"), val records: RecordSnapshot = specimenRecords(3, false),
     val on: SpecimenActions = SpecimenActions())
 
-internal fun specimenRecords(count: Int, long: Boolean): RecordSnapshot {
-    val entries = LinkedHashMap<String, RecordFace>()
-    repeat(count) { index ->
-        entries["record-$index"] = RecordFace(if (long && index == 0) "Supercalifragilisticexpialidocious_unbreakable_file_name_without_any_spaces_at_all.flac" else "Record ${index + 1}",
-            "Detail ${index + 1}", AppIcon.TabSongs)
-    }
-    return (RecordSnapshot.fromMap("specimen-records", (count * 2 + if (long) 1 else 0).toLong(), entries) as RecordSnapshotResult.Accepted).snapshot
+/** A computed source: the specimen owns no list, at any count. */
+private class SpecimenRecords(count: Int, private val long: Boolean) : RecordSource {
+    override val sourceId get() = "specimen-records"
+    override val version = (count * 2 + if (long) 1 else 0).toLong()
+    override val size = count
+    override fun id(index: Int) = "record-$index"
+    override fun title(index: Int) =
+        if (long && index == 0) "Supercalifragilisticexpialidocious_unbreakable_file_name_without_any_spaces_at_all.flac" else "Record ${index + 1}"
+    override fun subtitle(index: Int) = "Detail ${index + 1}"
+    override fun icon(index: Int) = AppIcon.TabSongs
+    override fun indexOf(id: String) = id.removePrefix("record-").toIntOrNull()?.takeIf { it in 0 until size && id(it) == id } ?: -1
 }
+
+internal fun specimenRecords(count: Int, long: Boolean): RecordSnapshot =
+    (RecordSnapshot.validateBlocking(SpecimenRecords(count, long)) as RecordSnapshotResult.Accepted).snapshot
 
 private fun loadable(state: SpecimenState, value: String): Value<String> = if (state.loading) Value.Loading() else Value.Ready(value)
 

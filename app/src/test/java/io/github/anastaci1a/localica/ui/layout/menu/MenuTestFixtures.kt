@@ -27,11 +27,19 @@ internal fun PageContent.sections(): List<SectionContent> = when (val body = bod
 internal fun PageContent.rows(): List<RowContent> = sections().flatMap { it.rows }
 internal inline fun <reified T : RowContent> PageContent.row(): T = rows().filterIsInstance<T>().single()
 
-internal fun snapshot(size: Int, source: String = "records", version: Long = 1): RecordSnapshot {
-    val entries = LinkedHashMap<String, RecordFace>(size * 2)
-    repeat(size) { entries["id-$it"] = RecordFace("Record $it", "Detail $it") }
-    return (RecordSnapshot.fromMap(source, version, entries) as RecordSnapshotResult.Accepted).snapshot
+/** A computed data-layer stand-in that owns no per-entry memory; [duplicateAt] repeats id-0 at that position. */
+internal class GeneratedRecords(override val size: Int, override val sourceId: String = "records", override val version: Long = 1,
+    private val duplicateAt: Int = -1, private val blankAt: Int = -1) : RecordSource {
+    override fun id(index: Int) = if (index == duplicateAt) "id-0" else if (index == blankAt) " " else "id-$index"
+    override fun title(index: Int) = "Record $index"
+    override fun subtitle(index: Int) = "Detail $index"
+    override fun indexOf(id: String) = id.removePrefix("id-").toIntOrNull()?.takeIf { it in 0 until size } ?: -1
 }
+
+internal fun validated(source: RecordSource): RecordSnapshotResult = RecordSnapshot.validateBlocking(source)
+
+internal fun snapshot(size: Int, source: String = "records", version: Long = 1): RecordSnapshot =
+    (validated(GeneratedRecords(size, source, version)) as RecordSnapshotResult.Accepted).snapshot
 
 /** A page touching every row kind, used by the boundary, flow and dispatch tests. */
 internal fun everyKind(records: RecordSnapshot = snapshot(3), toggled: Boolean = false, onToggle: (Boolean) -> Unit = {},

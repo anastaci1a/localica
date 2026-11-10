@@ -67,6 +67,31 @@ class MenuModelBoundaryTest {
         assertEquals("a draft exposes nothing", emptyList<String>(), PageDraft::class.java.declaredMethods.map { it.name })
     }
 
+    /** agent-19 M0 ruling 1: `internal` is module-wide, so no builder scope may hand out an unchecked node or its collections. */
+    @Test fun builderScopesHaveNoMemberThatYieldsUncheckedContent() {
+        val scopes = classes.filter { it.simpleName.endsWith("Scope") || it == DraftPart::class.java }
+        assertEquals(9, scopes.count { it.simpleName.endsWith("Scope") })
+        val content = contracts.minus(listOf(PageDraft::class.java, PopupSpec::class.java))
+        fun yields(type: Class<*>) = content.any { it.isAssignableFrom(type) } || Collection::class.java.isAssignableFrom(type) || Map::class.java.isAssignableFrom(type)
+        for (scope in scopes) {
+            assertEquals("${scope.simpleName} members", emptyList<String>(), scope.declaredMethods
+                .filter { !Modifier.isPrivate(it.modifiers) && !it.isSynthetic && yields(it.returnType) }.map { it.name })
+            assertEquals("${scope.simpleName} fields", emptyList<String>(), scope.declaredFields
+                .filter { !it.name.startsWith("$") && (!Modifier.isPrivate(it.modifiers) || it.type != DraftPart::class.java) }.map { it.name })
+            // A scope is built only around opaque storage, so a caller cannot pass in a collection and read nodes back out of it.
+            if (scope != DraftPart::class.java) assertEquals(scope.simpleName, listOf(listOf(DraftPart::class.java)), scope.declaredConstructors.map { it.parameterTypes.toList() })
+        }
+        assertTrue("builder storage is file-private", classes.filter { DraftPart::class.java.isAssignableFrom(it) && it != DraftPart::class.java }
+            .let { parts -> parts.size == 6 && parts.all { Modifier.isFinal(it.modifiers) } })
+    }
+
+    /** Source gate for the same ruling: the model file declares nothing `internal` except constructors and the two binding lookups. */
+    @Test fun theModelFileDeclaresNoInternalMemberBeyondTheBindingLookups() {
+        val source = File("src/main/java/io/github/anastaci1a/localica/ui/layout/menu/MenuModel.kt").readLines()
+        val internal = source.map { it.trim() }.filter { Regex("""\binternal\s+(?!constructor)""").containsMatchIn(it.substringBefore("//")) }
+        assertEquals(listOf("internal operator fun get(", "internal fun actionKey("), internal.map { it.substringBefore("(") + "(" })
+    }
+
     @Test fun contentStoresOnlyPlainValuesAndNeverACallerObjectOrALambda() {
         val allowed = setOf(String::class.java, Boolean::class.javaPrimitiveType, Int::class.javaPrimitiveType, Float::class.javaPrimitiveType,
             java.lang.Float::class.java, List::class.java, Value::class.java, RecordSnapshot::class.java, BindingTable::class.java, ContentIndex::class.java)

@@ -98,4 +98,89 @@ class MenuFlowTest {
         val base = results.first().first
         assertTrue("declaration cost grew with record count: $report", results.all { it.first < base * 4 + 50 })
     }
+
+    /** Canonical data as the data layer would own it: one id array, read in place. */
+    private class OwnedRecords(override val size: Int) : RecordSource {
+        private val ids = Array(size) { "id-$it" }
+        override val sourceId get() = "owned"
+        override val version get() = 1L
+        override fun id(index: Int) = ids[index]
+        override fun title(index: Int) = ids[index]
+        override fun subtitle(index: Int): String? = ids[index]
+        // Allocation-free, like the hash lookup a real owner already has, so the columns below show menu cost only.
+        override fun indexOf(id: String): Int {
+            if (!id.startsWith("id-") || id.length == 3) return -1
+            var value = 0
+            for (at in 3 until id.length) { val digit = id[at] - '0'; if (digit !in 0..9) return -1; value = value * 10 + digit }
+            return if (value < size && ids[value] == id) value else -1
+        }
+    }
+
+    /**
+     * Operator scale (HARD RULE 5, agent-19 M0 ruling 3): the whole snapshot lifecycle. The dataset is built and
+     * measured first; what the menu then adds (create, page entry, scrolling, replacement, disposal) is reported
+     * as allocated bytes, retained heap and GC count, and must not grow with the dataset.
+     */
+    @Test fun theRecordSnapshotLifecycleAddsNoMemoryThatGrowsWithTheDataset() {
+        val runtime = Runtime.getRuntime()
+        val management = Class.forName("java.lang.management.ManagementFactory")
+        val beans = management.getMethod("getGarbageCollectorMXBeans").invoke(null) as List<*>
+        fun gcCount() = beans.sumOf { bean -> (bean!!.javaClass.interfaces.first { it.name.endsWith("GarbageCollectorMXBean") }.getMethod("getCollectionCount").invoke(bean) as Long).coerceAtLeast(0) }
+        val threads = management.getMethod("getThreadMXBean").invoke(null)
+        val allocatedBytes = Class.forName("com.sun.management.ThreadMXBean").getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
+        fun allocated() = allocatedBytes.invoke(threads, Thread.currentThread().id) as Long
+        fun used(): Long { repeat(3) { System.gc(); Thread.sleep(20) }; return runtime.totalMemory() - runtime.freeMemory() }
+        class Row(val size: Int, val dataset: Long, val create: Long, val entry: Long, val scroll: Long, val replace: Long, val retained: Long, val disposed: Long, val gc: Long)
+        fun lifecycle(size: Int): Row {
+            val empty = used()
+            val source = OwnedRecords(size)
+            val owned = used()
+            val gcBefore = gcCount()
+            var mark = allocated()
+            var snapshot: RecordSnapshot? = (RecordSnapshot.validateBlocking(source) as RecordSnapshotResult.Accepted).snapshot
+            val create = allocated() - mark; mark = allocated()
+            var flat: FlatPage? = flatten(accepted(everyKind(snapshot!!)).content.panel())
+            val entry = allocated() - mark; mark = allocated()
+            // 200 windows of 30 visible items spread over the whole list, plus a deep link per window.
+            var read = 0
+            val first = flat!!.indexOf("Main/data/local:records/item:id-0")
+            if (size > 0) repeat(200) { window ->
+                val start = (size.toLong() * window / 200).toInt()
+                for (index in start until minOf(size, start + 30)) {
+                    read += flat!!.item(first + index).key.length + snapshot!!.title(index).length + (snapshot!!.subtitle(index)?.length ?: 0)
+                }
+                assertEquals(first + start, flat!!.indexOf("Main/data/local:records/item:id-$start"))
+            }
+            val scroll = allocated() - mark; mark = allocated()
+            assertTrue(size == 0 || read > 0)
+            snapshot = (RecordSnapshot.validateBlocking(source) as RecordSnapshotResult.Accepted).snapshot
+            flat = flatten(accepted(everyKind(snapshot)).content.panel())
+            val replace = allocated() - mark
+            val gcs = gcCount() - gcBefore
+            val retained = used() - owned
+            assertEquals(size, snapshot.size); assertTrue(flat.count > 0)
+            snapshot = null; flat = null
+            val disposed = used() - owned
+            assertEquals(size, source.size)
+            return Row(size, owned - empty, create, entry, scroll, replace, retained, disposed, gcs)
+        }
+        lifecycle(1_000) // warm-up, so class loading is not charged to the first size
+        val rows = listOf(0, 13_400, 50_000, 1_000_000).map(::lifecycle)
+        val report = buildString {
+            appendLine("records,dataset_heap_bytes,create_alloc_bytes,entry_alloc_bytes,scroll_alloc_bytes,replace_alloc_bytes,retained_heap_delta_bytes,after_dispose_heap_delta_bytes,gc_count")
+            rows.forEach { appendLine("${it.size},${it.dataset},${it.create},${it.entry},${it.scroll},${it.replace},${it.retained},${it.disposed},${it.gc}") }
+            appendLine("# JVM unit test on the build host. Allocated bytes are exact per thread and bound the peak; heap deltas are after forced GC.")
+            appendLine("# The dataset column is the data layer's own cost and is not menu memory. Not a device measurement.")
+        }
+        File("build/reports/menu").apply { mkdirs() }.resolve("record-lifecycle-scale.csv").writeText(report)
+        println(report)
+        val base = rows[1]
+        for (row in rows.drop(1)) {
+            assertTrue("creating a snapshot allocated with the list: $report", row.create < 4_096)
+            assertTrue("page entry allocated with the list: $report", row.entry < base.entry * 2 + 16_384)
+            assertTrue("scrolling allocated with the list: $report", row.scroll < base.scroll * 2 + 16_384)
+            assertTrue("replacement allocated with the list: $report", row.replace < base.replace * 2 + 16_384)
+            assertTrue("the menu retained memory with the list: $report", row.retained < 1_048_576)
+        }
+    }
 }

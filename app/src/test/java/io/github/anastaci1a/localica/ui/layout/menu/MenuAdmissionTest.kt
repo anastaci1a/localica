@@ -157,15 +157,14 @@ class MenuAdmissionTest {
         val flat = flatten(accepted(everyKind(showing)).content.panel())
         val anchor = flat.indexOf("Main/data/local:records/item:id-0")
         assertTrue(anchor >= 0)
-        val next = List(50_000) { RecordEntry(if (it == 40_000) "id-0" else "id-$it", RecordFace("Record $it")) }
-        val rejected = RecordSnapshot.validate("records", 2, next) as RecordSnapshotResult.Rejected
+        val rejected = RecordSnapshot.validate(GeneratedRecords(50_000, version = 2, duplicateAt = 40_000)) as RecordSnapshotResult.Rejected
         assertEquals(1, rejected.duplicateIds)
         assertEquals(2L, rejected.version)
         // No snapshot of version 2 exists, so nothing can declare it: the page keeps version 1 and its anchor.
         assertEquals(anchor, flatten(accepted(everyKind(showing)).content.panel()).indexOf("Main/data/local:records/item:id-0"))
-        assertTrue(RecordSnapshot.validate("records", 2, next.mapIndexed { index, entry -> if (index == 40_000) RecordEntry("id-40000", entry.face) else entry })
-            is RecordSnapshotResult.Accepted)
-        assertTrue(RecordSnapshot.validate("records", 3, listOf(RecordEntry(" ", RecordFace("Blank")))) is RecordSnapshotResult.Rejected)
+        assertTrue(RecordSnapshot.validate(GeneratedRecords(50_000, version = 2)) is RecordSnapshotResult.Accepted)
+        assertTrue(validated(GeneratedRecords(1, version = 3, blankAt = 0)) is RecordSnapshotResult.Rejected)
+        assertTrue(validated(GeneratedRecords(1, sourceId = " ")) is RecordSnapshotResult.Rejected)
     }
 
     @Test fun aRecordRowIsEqualByCertificateSoARebuildNeverScansTheList() {
