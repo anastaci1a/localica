@@ -95,13 +95,24 @@ internal class QueueSequenceMigration(private val sequence: QueueSequence) {
             reader.unread(first)
             val json = JsonReader(reader)
             var manualSeen = false
+            var manualArray = false
             json.beginObject()
             while (json.hasNext()) when (json.nextName()) {
                 "manual" -> {
                     manualSeen = true
+                    manualArray = json.peek() == JsonToken.BEGIN_ARRAY
+                    // JSONObject retains the last duplicate key, including a later replacement of an invalid value.
+                    db.execSQL("DELETE FROM queue_sequence_manual_links WHERE queueId = ?", arrayOf(queueId))
+                    head = null
+                    previous = null
+                    if (!manualArray) { json.skipValue(); continue }
                     json.beginArray()
                     while (json.hasNext()) {
-                        val id = json.nextString()
+                        val id = when (json.peek()) {
+                            JsonToken.NULL -> { json.nextNull(); "null" }
+                            JsonToken.BOOLEAN -> json.nextBoolean().toString()
+                            else -> json.nextString()
+                        }
                         db.compileStatement("""
                             INSERT OR IGNORE INTO queue_sequence_manual_links (queueId,id,nextId)
                             SELECT queueId,id,NULL FROM queue_sequence_entries WHERE queueId = ? AND id = ?
@@ -127,7 +138,7 @@ internal class QueueSequenceMigration(private val sequence: QueueSequence) {
                 else -> json.skipValue()
             }
             json.endObject()
-            require(manualSeen) { "The saved manual order is missing" }
+            require(manualSeen && manualArray) { "The saved manual order is missing or is not an array" }
         }
         // Reproduce SavedOrder.reconcile: insert a missing occurrence after its physical predecessor,
         // retaining the independent manual order of all surviving saved occurrences.
