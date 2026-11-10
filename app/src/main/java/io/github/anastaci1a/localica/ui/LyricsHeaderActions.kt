@@ -5,16 +5,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.engine.*
+import io.github.anastaci1a.localica.ui.components.rememberLyricsHeaderSurface
+import io.github.anastaci1a.localica.ui.layout.LyricsHeaderLayout
+import io.github.anastaci1a.localica.ui.layout.LyricsHeaderJoinedLayout
 
 /** One joined surface narrows its neck before handing two tangent bodies their
  * independent clocks. Rejoining follows the same geometry in reverse. */
@@ -26,7 +26,7 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
         if (contact.vertical) shape.copy(strain = -shape.strain) else shape
     val separated=preparation.separated
     fun gap()=originGap(preparation.progress)
-    fun expanded()=originExpansion(reveal,preparation.progress)
+    val surface = rememberLyricsHeaderSurface(reveal) { preparation.progress }
     val originPresentation: (Float) -> GlassOriginPresentation = remember(anchor, contacts, preparation) {
         { homeHeight ->
             val separation = originGap(preparation.progress)
@@ -88,25 +88,15 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
             Icon(appIconPainter(AppIcon.ActionEyeOff), null, Modifier.size(24.dp), tint = foreground)
         }
     }
-    Box(Modifier.height(CompactControlSize).preparedOrigin(preparation) { preparation.captured(separated) }
-        .layout { measurable,constraints ->
-            val width=(CompactControlSize * (1f + expanded() + gap() / 6f)).roundToPx()
-            val child=measurable.measure(constraints.copy(minWidth=width,maxWidth=width))
-            layout(child.width,child.height) { child.place(0,0) }
-        }
-        .then(pill.follow).testTag("player-lyrics-pill").splitGlassShadow(anchor, shadow)) {
+    LyricsHeaderLayout(CompactControlSize, reveal, { preparation.progress },
+        origin = Modifier.preparedOrigin(preparation) { preparation.captured(separated) },
+        decoration = pill.follow.testTag("player-lyrics-pill").splitGlassShadow(anchor, shadow)) {
         if (!separated) {
             LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = pill.silhouette, shadow = false,
                 sharedContact = contacts.joined, depthScale = RaisedGlassDepthScale) {
-                Box(Modifier.align(Alignment.CenterStart).size(CompactControlSize).glassAnchor(anchor)) { leftAction() }
-                if (reveal > 0f || preparation.active) {
-                    GlassPillDivider(Modifier.align(Alignment.Center).graphicsLayer {
-                        alpha = originDividerAlpha(reveal,preparation.progress)
-                    })
-                    Box(Modifier.align(Alignment.CenterEnd).size(CompactControlSize)
-                        .graphicsLayer { alpha = originRightAlpha(reveal,preparation.progress) }
-                        .then(if (!lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { rightAction() }
-                }
+                LyricsHeaderJoinedLayout(CompactControlSize, reveal > 0f || preparation.active, lyricsOpen,
+                    surface, Modifier.glassAnchor(anchor), { leftAction() },
+                    { GlassPillDivider(it) }, { rightAction() })
             }
         } else {
             fun Modifier.pivotCompensation(side: Float) = drawWithContent {
