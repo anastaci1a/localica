@@ -23,8 +23,15 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
     override val target: Float get()=destination.floatValue
     override val settled: Boolean get()=segment.kind==0
     init { clock.checkMutation(); require(initial.isFinite() && range.isFinite() && range>0 && (bounds==null || initial.toDouble() in bounds)); id=clock.allocateId(); clock.events?.let { sink -> clock.observe { sink.created(this); sink.joined(this,MotionJoin(0,started,Kinematic(initial,0f),Kinematic(initial,0f),0,0,"Initial")) } } }
-    private fun elapsed(stamp: FrameStamp)=(stamp.nanos-started.nanos)/1e9
-    private fun raw(stamp: FrameStamp,derivative: Boolean): Double { var selected=segment; var start=started; var old=past; while(stamp.nanos<start.nanos && old!=null) { selected=old.trajectory; start=old.started; old=old.previous }; val t=(stamp.nanos-start.nanos)/1e9; return if(derivative) selected.velocity(t) else selected.value(t) }
+    // Compose keeps evaluator velocity in play-time units; only timed elapsed is scaled.
+    // Driven values and their input velocities always retain real timestamp units.
+    private fun elapsed(trajectory: Trajectory,start: FrameStamp,stamp: FrameStamp): Double {
+        val seconds=(stamp.nanos-start.nanos)/1e9
+        if(trajectory.kind !in 1..2) return seconds
+        val scale=clock.context?.durationScale?:1f
+        return when(scale) { 1f -> seconds; 0f -> trajectory.duration; else -> seconds/scale }
+    }
+    private fun raw(stamp: FrameStamp,derivative: Boolean): Double { var selected=segment; var start=started; var old=past; while(stamp.nanos<start.nanos && old!=null) { selected=old.trajectory; start=old.started; old=old.previous }; val t=elapsed(selected,start,stamp); return if(derivative) selected.velocity(t) else selected.value(t) }
     internal fun rawValue(stamp: FrameStamp)=raw(stamp,false)
     internal fun rawVelocity(stamp: FrameStamp)=raw(stamp,true)
     private fun presentedRead() { if(!presented && !clock.isObserving) presented=true }
@@ -68,7 +75,7 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
         clock.checkMutation(); check(segment.kind==3); require(releaseVelocity.isFinite()); val stamp=clock.stampNow; val data=clock.spec.motion[MotionProfile.valueOf(profile.name)] as? MotionProfileSpec?:throw IllegalArgumentException("Scalar release profile required"); val context=context(); val sigma=if(context.access==MotionAccess.Faster) 2.0/3 else 1.0; val next=if(context.access==MotionAccess.Reduced || rawValue(stamp)==target.toDouble() && releaseVelocity==0f) Rest(target.toDouble()) else Eased(rawValue(stamp),releaseVelocity.toDouble(),target.toDouble(),data.easing,data.durationMs*sigma/1000,sigma,bounds); commit(prepareSegment(next,target,stamp,listOf(profile,data,sigma),if(context.access==MotionAccess.Reduced) "Reduced" else "DrivenRelease",releaseVelocity)); drivenStamp=null
     }
     internal fun initialize(value: Float) { clock.checkMutation(); require(value.isFinite()); check(!presented || context().access==MotionAccess.Reduced); commit(prepareSegment(Rest(value.toDouble()),value,clock.stampNow,policy=if(context().access==MotionAccess.Reduced) "Reduced" else "Initial")) }
-    override fun endsAt(stamp: FrameStamp): Boolean { if(stamp.nanos>=started.nanos) past=null; return segment.kind in 1..2 && elapsed(stamp)>=segment.duration }
+    override fun endsAt(stamp: FrameStamp): Boolean { if(stamp.nanos>=started.nanos) past=null; return segment.kind in 1..2 && elapsed(segment,started,stamp)>=segment.duration }
     override fun finish(stamp: FrameStamp) { val intent=prepareSegment(Rest(target.toDouble()),target,stamp,descriptor); segment=intent.next; started=stamp; past=null; epochState.intValue++; emit(intent) }
     override fun reduce(stamp: FrameStamp) { commit(prepareSegment(Rest(target.toDouble()),target,stamp,policy="Reduced")) }
     internal fun dispose() { clock.checkMutation(); if(disposed) return; clock.unregister(this); clock.events?.let { sink -> clock.observe { sink.retired(this,clock.stampNow) } }; disposed=true }

@@ -12,7 +12,7 @@ import kotlinx.coroutines.channels.Channel
 interface FrameSource { suspend fun awaitFrame(): Long; suspend fun <R> awaitFrame(onFrame: (Long)->R): R=onFrame(awaitFrame()) }
 internal interface ActiveMotion { val id: Long; val presented: Boolean; val settled: Boolean; val reducesWithAccess: Boolean get()=true; fun frame(stamp: FrameStamp) {}; fun endsAt(stamp: FrameStamp): Boolean; fun finish(stamp: FrameStamp); fun reduce(stamp: FrameStamp) }
 internal fun interface FrameObserver { fun onFrame(stamp: FrameStamp,active: List<ActiveMotion>) }
-internal data class EngineContext(val displayIntervalSeconds: Float,val fullPlayerReferenceTravelPx: Float,val access: MotionAccess) { init { require(displayIntervalSeconds.isFinite() && displayIntervalSeconds>0 && (2*displayIntervalSeconds).isFinite() && 2e9*displayIntervalSeconds<=Long.MAX_VALUE.toDouble() && fullPlayerReferenceTravelPx.isFinite() && fullPlayerReferenceTravelPx>0) } }
+internal data class EngineContext(val displayIntervalSeconds: Float,val fullPlayerReferenceTravelPx: Float,val access: MotionAccess,val durationScale: Float=1f) { init { require(durationScale.isFinite() && durationScale>=0); require(displayIntervalSeconds.isFinite() && displayIntervalSeconds>0 && (2*displayIntervalSeconds).isFinite() && 2e9*displayIntervalSeconds<=Long.MAX_VALUE.toDouble() && fullPlayerReferenceTravelPx.isFinite() && fullPlayerReferenceTravelPx>0) } }
 internal val LocalUiClock=staticCompositionLocalOf<UiClock> { error("UiClock is provided by LocalicaTheme") }
 internal val LocalClockOwner=staticCompositionLocalOf<UiClock?> { null }
 internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requireNotNull<EngineContext>(null) { "Publish real EngineContext through U11.00 before creating a motion owner" } }
@@ -33,7 +33,7 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     internal fun register(motion: ActiveMotion) { checkMutation(); if(active.add(motion)) wake.trySend(Unit) }
     internal fun unregister(motion: ActiveMotion) { checkMutation(); active.remove(motion) }
     internal fun observe(block: ()->Unit) { checkOwner(); check(!observing); observing=true; try { Snapshot.withoutReadObservation(block) } finally { observing=false } }
-    internal fun configure(value: EngineContext,data: UiSpec) { checkMutation(); val reduced=context?.access!=MotionAccess.Reduced && value.access==MotionAccess.Reduced; context=value; spec=data; if(reduced) { val s=stampNow; while(true) { val motion=active.firstOrNull { it.reducesWithAccess }?:break; motion.reduce(s) } } }
+    internal fun configure(value: EngineContext,data: UiSpec) { checkMutation(); val previous=context; val reduced=previous?.access!=MotionAccess.Reduced && value.access==MotionAccess.Reduced; context=value; spec=data; if(previous!=null && previous.durationScale!=value.durationScale) state.value=FrameStamp(last.nanos,last.sequence); if(reduced) { val s=stampNow; while(true) { val motion=active.firstOrNull { it.reducesWithAccess }?:break; motion.reduce(s) } } }
     internal suspend fun run(): Nothing {
         checkMutation()
         try { while(true) {

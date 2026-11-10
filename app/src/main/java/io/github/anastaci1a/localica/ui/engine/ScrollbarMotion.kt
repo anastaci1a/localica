@@ -35,7 +35,13 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
     override var presented = false
         private set
     override val settled: Boolean get() = animation == null
-    private fun elapsed(stamp: FrameStamp) = if (awaiting) 0L else (stamp.nanos - started.nanos).coerceAtLeast(0L)
+    private fun elapsed(stamp: FrameStamp): Long {
+        if (awaiting) return 0L
+        val nanos = (stamp.nanos - started.nanos).coerceAtLeast(0L)
+        val scale = clock.context?.durationScale ?: 1f
+        // Match SuspendAnimation's Long/Float conversion, including live backward sampling.
+        return when (scale) { 1f -> nanos; 0f -> durationNanos; else -> (nanos / scale).toLong() }
+    }
     fun value(): Float {
         presented = true
         val active = animation ?: return resting
@@ -80,7 +86,7 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
         if (awaiting) {
             awaiting = false
             started = stamp
-            if (durationNanos == 0L) cancel(target) else clock.register(this)
+            if (durationNanos == 0L || clock.context?.durationScale == 0f) cancel(target) else clock.register(this)
         } else if (holding && elapsed(stamp) < durationNanos) {
             holding = false
             clock.register(this)
@@ -150,7 +156,7 @@ internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolea
 @Composable
 internal fun rememberScrollbarMotion(key: Any, movement: () -> Pair<Int, Int>, activity: () -> Int,
     held: Boolean, speed: Float, reduced: Boolean): ScrollbarMotion {
-    val clock = LocalUiClock.current
+    val clock = ownerClock()
     val owner = remember(clock) { ScrollbarMotion(clock, held, reduced) }
     val latestMovement by rememberUpdatedState(movement)
     val latestActivity by rememberUpdatedState(activity)
