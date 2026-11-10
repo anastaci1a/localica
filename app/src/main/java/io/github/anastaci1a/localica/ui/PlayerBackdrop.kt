@@ -99,7 +99,7 @@ internal suspend fun playerPalette(bitmap: android.graphics.Bitmap): PlayerPalet
 internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifier, fullArtBlend: Float = 0f,
     artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f, softness: Float = 0f, tone: GlassTone = GlassTone(),
     artTopReader: (() -> Float)? = null,
-    onBackgroundDescriptor: ((PlayerBackdropDescriptor) -> Unit)? = null, ready: Boolean = true) {
+    onBackgroundDescriptor: ((PlayerBackdropDescriptor) -> Unit)? = null, ready: Boolean = true, groupAlpha: Float? = null) {
     var washProvenance: ToneSnapshotProvenance? = null
     var softWashProvenance: ToneSnapshotProvenance? = null
     var washReceipt: ToneSnapshotReceipt<android.graphics.Bitmap>? = null
@@ -142,12 +142,21 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
         }
     }
     val painter = remember { BackdropPainter() }
-    Canvas(modifier) {
+    val alphaPainter = if (groupAlpha != null && android.os.Build.VERSION.SDK_INT >= 33) remember { PlayerBackdropAlphaShader() } else null
+    // RenderNode.setAlpha snaps these endpoints before choosing a compositing layer.
+    // Preserve its direct opaque path: repeated AA clips need not equal one grouped clip.
+    val nativeAlpha = groupAlpha?.let { if (it <= .001f) 0f else if (it >= .999f) 1f else it }
+    val fusedAlpha = alphaPainter != null && nativeAlpha != null && nativeAlpha > 0f && nativeAlpha < 1f && step.from == null
+    val alphaModifier = if (nativeAlpha != null && nativeAlpha < 1f && !fusedAlpha) Modifier.graphicsLayer { alpha = nativeAlpha } else Modifier
+    Canvas(modifier.then(alphaModifier)) {
         val shown = step.shown ?: return@Canvas
         val from = step.from
         val blend = if (from == null) 1f else ease.value
         val geometry = BackdropDrawGeometry(fullArtBlend, artTopReader?.invoke() ?: artTop, artHeight, artLeft, artWidth, softness)
-        if (from != null && blend < 1f) {
+        if (fusedAlpha && android.os.Build.VERSION.SDK_INT >= 33) {
+            requireNotNull(alphaPainter).draw(this, shown.palette, shown.tone, shown.wash, shown.softWash,
+                geometry.fullArtBlend, geometry.artTop, geometry.artHeight, geometry.artLeft, geometry.artWidth, geometry.softness, requireNotNull(nativeAlpha))
+        } else if (from != null && blend < 1f) {
             painter.draw(this, from, geometry)
             drawIntoCanvas { canvas ->
                 canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint().apply { alpha = blend })

@@ -489,10 +489,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     lyricsInk?.shift(backgroundRole, lyricVisibility) ?: grade?.shift ?: 0f else 0f)
                 val destination = artSwipe.destination
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
-                if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {
+                val directBackdropAlpha = flatGlass() && android.os.Build.VERSION.SDK_INT >= 33 && destination == null
+                if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().then(if (directBackdropAlpha) Modifier else Modifier.graphicsLayer { alpha = backgroundReveal })) {
                     PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), backgroundProgress * (1f - lyricProgress),
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
-                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = roleTone, ready = gradeReady,
+                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = roleTone, ready = gradeReady, groupAlpha = backgroundReveal.takeIf { directBackdropAlpha },
                         onBackgroundDescriptor = { descriptor -> backgroundRole?.let { polarity.backdrop(it, descriptor) } })
                     if (destination != null) PlayerBackdrop(destination.visual.palette,
                         Modifier.fillMaxSize().graphicsLayer { alpha = swipeFraction }, backgroundProgress,
