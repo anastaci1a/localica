@@ -107,7 +107,7 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
 }
 
 /** One component owns reveal, grip and release, with separate registered motion channels.
- * App Reduced changes grip motion only, preserving the incoming reveal and release timelines.
+ * App Reduced changes future grip-target durations; all in-flight base timelines continue.
  */
 @Stable
 internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolean = false,
@@ -136,11 +136,6 @@ internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolea
     }
     fun access(reduced: Boolean) {
         clock.checkMutation()
-        if (reduced && !this.reduced) {
-            val stamp = clock.stampNow
-            // The pinned component changes only grip when app Reduced changes.
-            grip.reduce(stamp)
-        }
         this.reduced = reduced
     }
     fun cancel() {

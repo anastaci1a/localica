@@ -77,18 +77,25 @@ class ScrollbarMotionTest {
             h.advance(.016); h.advance(seconds)
             val opacity = motion.opacity()
             val release = motion.releaseOffset()
+            val scale = motion.scale()
             if (global) {
                 h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Reduced), StockUiSpec)
                 assertEquals(0, h.clock.activeCount)
                 assertEquals(0f, motion.opacity(), 0f)
                 assertEquals(0f, motion.releaseOffset(), 0f)
+                assertEquals(1.5f, motion.scale(), 0f)
             } else {
                 motion.access(true)
-                assertEquals(if (seconds < .18) 2 else 1, h.clock.activeCount)
+                assertEquals(if (seconds < .18) 3 else 1, h.clock.activeCount)
                 assertEquals(opacity.toRawBits(), motion.opacity().toRawBits())
                 assertEquals(release.toRawBits(), motion.releaseOffset().toRawBits())
+                assertEquals("Changing only the spec does not retarget the base grip", scale.toRawBits(), motion.scale().toRawBits())
+                h.advance(.016)
+                val incoming = TargetBasedAnimation(tween<Float>(240, easing = CubicBezierEasing(0f, 0f, .2f, 1f)),
+                    Float.VectorConverter, 1f, 1.5f)
+                val nanos = (seconds * 1e9).toLong() + 16_000_000L
+                assertEquals("The in-flight base grip keeps its curve", incoming.getValueFromNanos(nanos).toRawBits(), motion.scale().toRawBits())
             }
-            assertEquals(1.5f, motion.scale(), 0f)
             motion.access(false)
             if (global) h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Standard), StockUiSpec)
             h.advance(2.0)
