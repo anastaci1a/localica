@@ -1,50 +1,144 @@
 package io.github.anastaci1a.localica.ui.engine
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import io.github.anastaci1a.localica.ui.spec.ScrollbarSpec
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
-/** Retains the incoming three motion channels and their independent cancellation domains.
- * Activity restarts the idle fade, contact retargets the grip, and release bridges list settling.
+/** An incoming tween evaluator driven only by registered shared Engine frames.
+ * Fresh work admits time zero on the next frame, as Animatable did. An interrupted grip
+ * rejoins at its last presented frame, retaining the incoming evaluator and velocity.
+ */
+internal class ScrollbarTween(private val clock: UiClock, initial: Float) : ActiveMotion {
+    private var resting by mutableFloatStateOf(initial)
+    private var animation by mutableStateOf<TargetBasedAnimation<Float, androidx.compose.animation.core.AnimationVector1D>?>(null)
+    private var awaiting by mutableStateOf(false)
+    private var started = clock.stampNow
+    private var disposed = false
+    var target: Float = initial
+        private set
+    override val id = clock.allocateId()
+    override var presented = false
+        private set
+    override val settled: Boolean get() = animation == null
+    private fun elapsed(stamp: FrameStamp) = if (awaiting) 0L else (stamp.nanos - started.nanos).coerceAtLeast(0L)
+    fun value(): Float {
+        presented = true
+        val active = animation ?: return resting
+        return active.getValueFromNanos(elapsed(clock.stamp))
+    }
+    private fun velocity(): Float = animation?.getVelocityVectorFromNanos(elapsed(clock.stamp))?.value ?: 0f
+    fun start(from: Float, to: Float, duration: Int, delay: Int = 0,
+        easing: Easing = FastOutSlowInEasing, sequential: Boolean = false, reduced: Boolean = false) {
+        clock.checkMutation()
+        check(!disposed)
+        val running = !settled
+        val velocity = if (sequential && running) velocity() else 0f
+        target = to
+        resting = from
+        if (reduced) {
+            cancel(to)
+            return
+        }
+        animation = TargetBasedAnimation(tween(duration, delay, easing), Float.VectorConverter, from, to, velocity)
+        awaiting = !sequential || !running
+        started = clock.stamp
+        clock.register(this)
+    }
+    override fun endsAt(stamp: FrameStamp) = awaiting || animation?.isFinishedFromNanos(elapsed(stamp)) == true
+    override fun finish(stamp: FrameStamp) {
+        clock.checkMutation()
+        if (awaiting) {
+            awaiting = false
+            started = stamp
+            clock.register(this)
+        } else cancel(target)
+    }
+    override fun reduce(stamp: FrameStamp) = cancel(target)
+    fun cancel(value: Float) {
+        clock.checkMutation()
+        clock.unregister(this)
+        animation = null
+        awaiting = false
+        resting = value
+        target = value
+    }
+    fun dispose(value: Float) {
+        cancel(value)
+        disposed = true
+    }
+}
+
+/** One component owns reveal, grip and release, with separate registered motion channels.
+ * Entering Reduced retires every channel immediately and never replays stale activity.
  */
 @Stable
-internal class ScrollbarMotion(private val scope: CoroutineScope, private val grip: State<Float>) {
-    private val release = Animatable(0f)
-    private val opacity = Animatable(1f)
-    fun scale() = grip.value
-    fun releaseOffset() = release.value
-    internal fun opacity() = opacity.value
-    suspend fun reveal() {
-        opacity.snapTo(1f)
-        opacity.animateTo(0f, tween(durationMillis = ScrollbarSpec.fadeMillis, delayMillis = ScrollbarSpec.idleMillis))
+internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolean = false,
+    private var reduced: Boolean = false) {
+    private val release = ScrollbarTween(clock, 0f)
+    private val opacity = ScrollbarTween(clock, 1f)
+    private val grip = ScrollbarTween(clock, if (initiallyHeld) ScrollbarSpec.heldScale else 1f)
+    private var disposed = false
+    fun scale() = grip.value()
+    fun releaseOffset() = release.value()
+    internal fun opacity() = opacity.value()
+    fun reveal() {
+        check(!disposed)
+        opacity.start(1f, 0f, ScrollbarSpec.fadeMillis, ScrollbarSpec.idleMillis, reduced = reduced)
     }
     fun release(gap: Float) {
-        scope.launch { release.snapTo(gap); release.animateTo(0f, tween(ScrollbarSpec.releaseMillis)) }
+        check(!disposed)
+        release.start(gap, 0f, ScrollbarSpec.releaseMillis, reduced = reduced)
+    }
+    fun contact(held: Boolean, speed: Float) {
+        check(!disposed)
+        val target = if (held) ScrollbarSpec.heldScale else 1f
+        if (target == grip.target) return
+        grip.start(grip.value(), target, if (reduced) 0 else (ScrollbarSpec.gripMillis / speed).toInt(),
+            easing = CubicBezierEasing(0f, 0f, .2f, 1f), sequential = true, reduced = reduced)
+    }
+    fun access(reduced: Boolean) {
+        clock.checkMutation()
+        if (reduced && !this.reduced) {
+            val stamp = clock.stampNow
+            release.reduce(stamp)
+            opacity.reduce(stamp)
+            grip.reduce(stamp)
+        }
+        this.reduced = reduced
+    }
+    fun cancel() {
+        release.cancel(0f)
+        opacity.cancel(0f)
+        grip.cancel(1f)
+    }
+    fun dispose() {
+        release.dispose(0f)
+        opacity.dispose(0f)
+        grip.dispose(1f)
+        disposed = true
     }
 }
 
 @Composable
 internal fun rememberScrollbarMotion(key: Any, movement: () -> Pair<Int, Int>, activity: () -> Int,
     held: Boolean, speed: Float, reduced: Boolean): ScrollbarMotion {
-    val scope = rememberCoroutineScope()
-    val grip = animateFloatAsState(if (held) ScrollbarSpec.heldScale else 1f,
-        tween(if (reduced) 0 else (ScrollbarSpec.gripMillis / speed).toInt(), easing = CubicBezierEasing(0f, 0f, .2f, 1f)),
-        label = "Scrollbar grip")
-    val owner = remember { ScrollbarMotion(scope, grip) }
+    val clock = LocalUiClock.current
+    val owner = remember(clock) { ScrollbarMotion(clock, held, reduced) }
     val latestMovement by rememberUpdatedState(movement)
     val latestActivity by rememberUpdatedState(activity)
+    SideEffect { owner.access(reduced); owner.contact(held, speed) }
     LaunchedEffect(key) {
-        snapshotFlow { latestMovement() to latestActivity() }.collectLatest { owner.reveal() }
+        snapshotFlow { latestMovement() to latestActivity() }.collect { owner.reveal() }
     }
+    DisposableEffect(owner) { onDispose { owner.dispose() } }
     return owner
 }
 
