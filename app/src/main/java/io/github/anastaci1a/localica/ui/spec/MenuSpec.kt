@@ -27,6 +27,12 @@ enum class MenuColor(val argb: Long) { Positive(0xFF71C9A2), Caution(0xFFE6BC64)
     data class OfControl(val token: ControlSize) : MenuDimension
     data class OfClearance(val token: Clearance) : MenuDimension
     data class Own(val dp: Float) : MenuDimension
+    /**
+     * The paint envelope policy (I7): the [layout] size, widened to [paint] when the base's paint clearance is larger.
+     * With the stock base the layout size wins and geometry is unchanged. With a wider shadow every role that derives
+     * from this token moves together, so alignment holds and nothing is clipped; the appearance value is never clamped.
+     */
+    data class Envelope(val layout: MenuDimension, val paint: MenuDimension) : MenuDimension
 }
 
 /** A menu token proposal. Maps are copied on construction; a missing key is an admission failure, not a default. */
@@ -66,15 +72,17 @@ sealed interface MenuSpecResult {
     internal companion object {
         fun admit(base: UiSpec, proposed: MenuSpec): MenuSpecResult {
             val errors = mutableListOf<String>()
+            fun value(d: MenuDimension?): Dp? = when (d) {
+                null -> null
+                is MenuDimension.OfSpace -> base.space[d.token]
+                is MenuDimension.OfRadius -> base.radius[d.token]
+                is MenuDimension.OfControl -> base.control[d.token]
+                is MenuDimension.OfClearance -> base.clearance[d.token]
+                is MenuDimension.Own -> d.dp.dp
+                is MenuDimension.Envelope -> value(d.layout)?.let { layout -> value(d.paint)?.let { paint -> maxOf(layout, paint) } }
+            }
             fun resolve(name: String, d: MenuDimension?): Dp? {
-                val value = when (d) {
-                    null -> null
-                    is MenuDimension.OfSpace -> base.space[d.token]
-                    is MenuDimension.OfRadius -> base.radius[d.token]
-                    is MenuDimension.OfControl -> base.control[d.token]
-                    is MenuDimension.OfClearance -> base.clearance[d.token]
-                    is MenuDimension.Own -> d.dp.dp
-                }
+                val value = value(d)
                 if (value == null) errors += "$name is missing or refers to a base token the base does not define"
                 else if (!value.value.isFinite() || value.value <= 0f) errors += "$name must be a positive finite size"
                 return value?.takeIf { it.value.isFinite() && it.value > 0f }
@@ -90,6 +98,11 @@ sealed interface MenuSpecResult {
             listOf(MenuSize.LinkRow, MenuSize.ControlRow, MenuSize.CompactRow).forEach { atMost(MenuSize.TouchTarget, it, "touch minimum fits every row minimum") }
             atMost(MenuSize.Marker, MenuSize.LeadingBox, "marker fits the leading box")
             atMost(MenuSize.ShadowOutset, MenuSize.PageInset, "shadow outset fits the page inset")
+            // The stream's clipping ancestor is the scroll container: its edge gaps must hold the same paint (I7).
+            listOf(MenuGap.PageTop, MenuGap.TabsToFirst, MenuGap.PageBottom).forEach { edge ->
+                val outset = sizes[MenuSize.ShadowOutset]; val gap = gaps[edge]
+                if (outset != null && gap != null && outset > gap) errors += "shadow outset fits the stream edge: size.ShadowOutset (${outset.value}) exceeds gap.$edge (${gap.value})"
+            }
             return if (errors.isEmpty()) MenuSpecResult.Accepted(AcceptedMenuSpec(base, proposed,
                 Collections.unmodifiableMap(LinkedHashMap(sizes)), Collections.unmodifiableMap(LinkedHashMap(gaps))))
             else MenuSpecResult.Rejected(errors.toList())
@@ -98,6 +111,8 @@ sealed interface MenuSpecResult {
 }
 
 private fun type(size: MenuTypeSize, weight: MenuWeight, ink: MenuInk) = MenuTypeSpec(size, weight, ink)
+/** One shared envelope for the page inset and the stream's clipped edges: the section space, or the shadow clearance when that is larger. */
+private val PaintEnvelope = MenuDimension.Envelope(MenuDimension.OfSpace(Space.Section), MenuDimension.OfClearance(Clearance.ShadowInset))
 
 /** Stock menu tokens (DESIGN 5.1 to 5.4). ButtonLabel is pinned from the action button's label style (14/20 Medium). */
 val StockMenuSpec: MenuSpec = MenuSpec(
@@ -118,7 +133,7 @@ val StockMenuSpec: MenuSpec = MenuSpec(
         MenuTextRole.FieldText to type(MenuTypeSize.Title, MenuWeight.Regular, MenuInk.Primary),
         MenuTextRole.PopupBody to type(MenuTypeSize.Body, MenuWeight.Regular, MenuInk.Primary)),
     size = mapOf(
-        MenuSize.PageInset to MenuDimension.OfSpace(Space.Section),
+        MenuSize.PageInset to PaintEnvelope,
         MenuSize.RowInset to MenuDimension.OfSpace(Space.Comfortable),
         MenuSize.LeadingBox to MenuDimension.OfControl(ControlSize.SettingsIcon),
         MenuSize.LeadingGap to MenuDimension.OfSpace(Space.Comfortable),
@@ -143,12 +158,12 @@ val StockMenuSpec: MenuSpec = MenuSpec(
         MenuSize.RowCorner to MenuDimension.OfRadius(Radius.Menu),
         MenuSize.ShadowOutset to MenuDimension.OfClearance(Clearance.ShadowInset)),
     gap = mapOf(
-        MenuGap.PageTop to MenuDimension.OfSpace(Space.Section),
+        MenuGap.PageTop to PaintEnvelope,
         MenuGap.HeadingToRow to MenuDimension.OfSpace(Space.Base),
         MenuGap.RowToRow to MenuDimension.OfSpace(Space.Compact),
         MenuGap.RowToCaption to MenuDimension.OfSpace(Space.Compact),
         MenuGap.SectionToSection to MenuDimension.OfSpace(Space.Section),
-        MenuGap.TabsToFirst to MenuDimension.OfSpace(Space.Section),
-        MenuGap.PageBottom to MenuDimension.OfSpace(Space.Section)),
+        MenuGap.TabsToFirst to PaintEnvelope,
+        MenuGap.PageBottom to PaintEnvelope),
     marker = mapOf(MarkerTone.Positive to MenuColor.Positive, MarkerTone.Caution to MenuColor.Caution, MarkerTone.Negative to MenuColor.Negative,
         MarkerTone.Neutral to MenuColor.Neutral, MarkerTone.Accent to MenuColor.AccentSoft))

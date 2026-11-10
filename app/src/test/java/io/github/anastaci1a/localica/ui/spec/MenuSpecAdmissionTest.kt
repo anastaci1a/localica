@@ -61,10 +61,36 @@ class MenuSpecAdmissionTest {
             rejected(menu = StockMenuSpec.with(size = mapOf(MenuSize.RowCorner to MenuDimension.OfRadius(Radius.Pill)))))
     }
 
-    @Test fun aShadowOutsetLargerThanThePageInsetIsRejected() {
+    /** agent-19 M0 ruling 2: a caller proposal whose inset cannot hold the base's shadow is still rejected, never clamped. */
+    @Test fun aProposalWhoseInsetCannotHoldTheShadowIsRejected() {
         val wide = (uiSpec(InterfaceSettings(glass = GlassAppearance(shadowSpread = 1f))) as SpecResult.Accepted).spec
         assertTrue(wide.clearance.getValue(Clearance.ShadowInset) > 24.dp)
-        assertEquals(1, rejected(wide, StockMenuSpec).count { "shadow outset fits the page inset" in it })
+        val fixed = StockMenuSpec.with(size = mapOf(MenuSize.PageInset to MenuDimension.OfSpace(Space.Section)),
+            gap = mapOf(MenuGap.PageTop to MenuDimension.OfSpace(Space.Section)))
+        val reasons = rejected(wide, fixed)
+        assertEquals(1, reasons.count { "shadow outset fits the page inset" in it })
+        assertEquals(1, reasons.count { "shadow outset fits the stream edge" in it && "PageTop" in it })
+    }
+
+    /** The default join admits every accepted shadow spread: the shared envelope widens, and stock geometry is unchanged. */
+    @Test fun theStockMenuIsAdmittedOverTheWholeAcceptedShadowDomainThroughOneEnvelope() {
+        val edges = listOf(MenuGap.PageTop, MenuGap.TabsToFirst, MenuGap.PageBottom)
+        for (step in 0..20) {
+            val spread = step / 20f
+            val base = (uiSpec(InterfaceSettings(glass = GlassAppearance(shadowSpread = spread))) as SpecResult.Accepted).spec
+            val spec = (MenuSpec.admit(base, StockMenuSpec) as MenuSpecResult.Accepted).spec
+            val outset = base.clearance.getValue(Clearance.ShadowInset)
+            val expected = maxOf(base.space.getValue(Space.Section), outset)
+            assertEquals("spread $spread", outset, spec.dp(MenuSize.ShadowOutset))
+            assertEquals("spread $spread", expected, spec.dp(MenuSize.PageInset))
+            edges.forEach { assertEquals("spread $spread $it", expected, spec.dp(it)) }
+            // Only the envelope moves: every other size and gap is the stock value.
+            val stock = (MenuSpec.admit(StockUiSpec, StockMenuSpec) as MenuSpecResult.Accepted).spec
+            MenuSize.entries.minus(listOf(MenuSize.PageInset, MenuSize.ShadowOutset)).forEach { assertEquals("spread $spread $it", stock.dp(it), spec.dp(it)) }
+            MenuGap.entries.minus(edges).forEach { assertEquals("spread $spread $it", stock.dp(it), spec.dp(it)) }
+        }
+        val stock = (MenuSpec.admit(StockUiSpec, StockMenuSpec) as MenuSpecResult.Accepted).spec
+        assertEquals(24.dp, stock.dp(MenuSize.PageInset)); edges.forEach { assertEquals(24.dp, stock.dp(it)) }
     }
 
     @Test fun aProposalCopiesItsMaps() {
