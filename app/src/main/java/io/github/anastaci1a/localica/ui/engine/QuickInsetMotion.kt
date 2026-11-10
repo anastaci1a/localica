@@ -10,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import io.github.anastaci1a.localica.ui.spec.ListMotionSpec
-import io.github.anastaci1a.localica.ui.spec.LocalUiSpec
 import io.github.anastaci1a.localica.ui.spec.MotionProfile
 import io.github.anastaci1a.localica.ui.spec.MotionProfileSpec
 import io.github.anastaci1a.localica.ui.spec.UiSpec
@@ -26,8 +25,7 @@ internal fun quickInsetAnimationSpec(spec: UiSpec, reduced: Boolean, speed: Floa
 
 /** One clock for the pill and its admitted scroll room. Hosts receive only its displayed state. */
 @Composable
-internal fun rememberQuickInsetProgress(visible: Boolean, measured: Boolean, reduced: Boolean, speed: Float): State<Float> {
-    val spec = LocalUiSpec.current
+internal fun rememberQuickInsetProgress(spec: UiSpec, visible: Boolean, measured: Boolean, reduced: Boolean, speed: Float): State<Float> {
     val animation = remember(spec, reduced, speed) { quickInsetAnimationSpec(spec, reduced, speed) }
     return animateFloatAsState(if (visible && measured) 1f else 0f, animation, label = "Selection panel occupancy")
 }
