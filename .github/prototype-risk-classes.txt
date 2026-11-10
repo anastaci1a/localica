@@ -465,3 +465,5 @@ io.github.anastaci1a.localica.QueueRestoreEquivalenceTest
 io.github.anastaci1a.localica.CollectionHeaderDensityContractTest
 io.github.anastaci1a.localica.SelectionInsetScrollTest
 io.github.anastaci1a.localica.SelectionInsetContextsTest
+io.github.anastaci1a.localica.QueueSequenceTest
+io.github.anastaci1a.localica.QueueTraversalTest
