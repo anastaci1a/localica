@@ -61,7 +61,7 @@ class MainThreadGuardTest {
 
     @Test fun galleryPlayerLastFmSettingsAndSearch() {
         androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java).use {
-        compose.waitUntil(60_000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
+        waitForBrowserDiagnosing()
         // Every URI is new for this invocation. Invalidate before the first fling as well.
         ArtworkCache.invalidate()
         repeat(6) { compose.onNodeWithTag("browser-list").performTouchInput { swipeUp(durationMillis = 180) } }
@@ -133,6 +133,44 @@ class MainThreadGuardTest {
             database.close()
             context.deleteDatabase(name)
         }
+    }
+
+    // #817 DIAGNOSTIC ARM ONLY: sample what Main and the workers do while the wait runs.
+    private fun waitForBrowserDiagnosing() {
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        val main = android.os.Looper.getMainLooper().thread
+        Thread {
+            var tick = 0
+            while (!done.get()) {
+                Thread.sleep(2_000); tick++
+                val mainTop = main.stackTrace.take(14).joinToString(" <- ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" }
+                Log.i("Guard817", "t=${tick * 2}s main state=${main.state} $mainTop")
+                if (tick % 5 == 0) {
+                    Thread.getAllStackTraces().forEach { (thread, stack) ->
+                        if (thread === main) return@forEach
+                        val local = stack.filter { it.className.contains("localica") }.take(10)
+                        if (local.isNotEmpty()) Log.i("Guard817", "t=${tick * 2}s thread=${thread.name} state=${thread.state} " +
+                            stack.take(4).joinToString(" <- ") { "${it.className.substringAfterLast('.')}.${it.methodName}" } + " || " +
+                            local.joinToString(" <- ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" })
+                    }
+                    val future = java.util.concurrent.Executors.newSingleThreadExecutor().submit<String> {
+                        compose.onAllNodes(isRoot()).fetchSemanticsNodes().joinToString("\n") { root ->
+                            fun walk(node: androidx.compose.ui.semantics.SemanticsNode, depth: Int): String =
+                                (if (depth < 8) "  ".repeat(depth) + node.config.joinToString(",") { it.key.name } + "\n" else "") +
+                                    node.children.joinToString("") { walk(it, depth + 1) }
+                            walk(root, 0)
+                        }
+                    }
+                    try { Log.i("Guard817", "t=${tick * 2}s semantics:\n" + future.get(8, java.util.concurrent.TimeUnit.SECONDS).take(3000)) }
+                    catch (e: Exception) { Log.i("Guard817", "t=${tick * 2}s semantics unavailable: $e") }
+                }
+            }
+        }.also { it.isDaemon = true; it.start() }
+        val started = android.os.SystemClock.uptimeMillis()
+        try {
+            compose.waitUntil(60_000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
+            Log.i("Guard817", "browser-list present after ${android.os.SystemClock.uptimeMillis() - started} ms")
+        } finally { done.set(true) }
     }
 
     private fun reportMemory(point: String) {
