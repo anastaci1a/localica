@@ -40,6 +40,8 @@ class PopupOutgoingCodeProposalTest {
     private var retainedLayerIdentity = 0
     private var retainedRecordings = 0
     private var injectAfterExit by mutableStateOf(false)
+    private var injectionDraws = 0
+    private var injectionDrawClock = -1L
     private var mutation = Mutation.None
     private var removeCode by mutableStateOf(false)
 
@@ -110,6 +112,7 @@ class PopupOutgoingCodeProposalTest {
                 .put("hostAlpha", parentHome?.let { hostAlphas[it]?.invoke() } ?: -1f)
                 .put("retainedLayerIdentity", retainedLayerIdentity).put("retainedRecordings", retainedRecordings)
                 .put("injectAfterExit", injectAfterExit)
+                .put("injectionDraws", injectionDraws).put("injectionDrawClock", injectionDrawClock)
                 .put("entries", org.json.JSONArray(dialogs?.entries?.map { entry -> org.json.JSONObject()
                     .put("mounted", entry.mounted).put("anchor", anchorState(entry.anchor))
                     .put("home", homeState(entry.popupHome)) }.orEmpty()))
@@ -179,11 +182,17 @@ class PopupOutgoingCodeProposalTest {
                 }
             } else if (settings) FolderSettings(LibraryUiState(), { page = false }, {}, {}, interfaceContent = { Body() })
             else if (page) GlassDialog({ page = false }, GlassPlacement.Page) { Body() }
-            if (injectAfterExit) Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Canvas(Modifier.size(240.dp)) {
-                    if (mutation == Mutation.RetainedLayer) drawLayer(retainedLayer)
-                    else repeat(4) { band -> drawRect(if (band % 2 == 0) Color.Red else Color.Green,
-                        Offset(size.width * band / 4f, 0f), Size(size.width / 4f, size.height)) }
+                    // The frozen-clock checkpoint already invalidates drawing. Admit the
+                    // deliberate mutant there, without waiting for a new composition frame.
+                    if (injectAfterExit) {
+                        injectionDraws++
+                        injectionDrawClock = compose.mainClock.currentTime
+                        if (mutation == Mutation.RetainedLayer) drawLayer(retainedLayer)
+                        else repeat(4) { band -> drawRect(if (band % 2 == 0) Color.Red else Color.Green,
+                            Offset(size.width * band / 4f, 0f), Size(size.width / 4f, size.height)) }
+                    }
                 }
             }
             if (naming) AddToPlaylistDialog(emptyList(), io.github.anastaci1a.localica.playlist.PlaylistState(loading = false), null, { naming = false }, { naming = false })
