@@ -35,6 +35,9 @@ class CollapsedPlayerCollectionNavigationTest {
     private val contentEvents = mutableListOf<Pair<String, Boolean>>()
     private lateinit var records: File
     private lateinit var access: MotionAccess
+    private data class FrameRecord(val source: String, val api: Int, val frameMs: Long,
+        val access: MotionAccess, val referenceTravel: Float, val phase: Float, val queuePhase: Float,
+        val basisJoins: Int, val contentEvents: List<Pair<String, Boolean>>)
 
     private class SheetEvents : MotionEvents {
         var phase: MotionFloat? = null
@@ -98,11 +101,13 @@ class CollapsedPlayerCollectionNavigationTest {
             assertEquals(0f, queue.value(), 0f)
             assertTrue("No transient phase segment is admitted", events.movingJoins.isEmpty())
             assertTrue("No retained Player or Queue content may mount, even with cleared semantics", contentEvents.isEmpty())
-            listOf(BuildConfig.SOURCE_SHA, Build.VERSION.SDK_INT, compose.mainClock.currentTime,
+            FrameRecord(BuildConfig.SOURCE_SHA, Build.VERSION.SDK_INT, compose.mainClock.currentTime,
                 context.access, context.fullPlayerReferenceTravelPx, phase.value(), queue.value(),
-                events.basisJoins, contentEvents.toList()).joinToString("\t") + "\n"
+                events.basisJoins, contentEvents.toList())
         }
-        records.appendText(record)
+        records.appendText(listOf(record.source, record.api, record.frameMs, record.access,
+            record.referenceTravel, record.phase, record.queuePhase, record.basisJoins,
+            record.contentEvents).joinToString("\t") + "\n")
         compose.onAllNodesWithTag("queue-surface", useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodesWithContentDescription("Collapse player", useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodesWithTag("browser-list").assertCountEquals(1)
