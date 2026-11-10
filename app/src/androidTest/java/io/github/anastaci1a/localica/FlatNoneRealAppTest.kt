@@ -43,6 +43,11 @@ class FlatNoneRealAppTest {
             artist = "Localica", fileName = file.name, relativePath = file.name, id = root)
         var playback: PlaybackConnection? = null
         var walkFailure: Throwable? = null
+        fun nativePlaybackEmpty(connection: PlaybackConnection): Boolean {
+            var empty = false
+            instrumentation.runOnMainSync { empty = connection.queues.playbackSample() == null }
+            return empty
+        }
         fun visible(selector: androidx.test.uiautomator.BySelector): androidx.test.uiautomator.UiObject2 =
             requireNotNull(device.findFresh(selector, 15000)) { "Missing $selector" }
         fun checkpoint(name: String) {
@@ -104,9 +109,10 @@ class FlatNoneRealAppTest {
                 try {
                     instrumentation.runOnMainSync { connection.clear() }
                     // The actor publishes activeId only after its durable save;
-                    // the live metadata then proves the native timeline is empty.
+                    // the service-owned Main-thread sample proves no native item
+                    // remains, even if the remote controller has disconnected.
                     await(15000) { connection.queues.state.value.library.activeId == null &&
-                        connection.state.value.trackUri == null && connection.state.value.problem == null }
+                        nativePlaybackEmpty(connection) }
                     val ownedQueues = connection.queues.state.value.library.queues.filter { queue ->
                         queue.entries.isNotEmpty() && queue.entries.all { it.track.id == root }
                     }.map { it.id }.toSet()
@@ -115,8 +121,10 @@ class FlatNoneRealAppTest {
                     assertFalse("No retained queue may reference the fixture being deleted",
                         connection.queues.state.value.library.queues.any { queue -> queue.entries.any { it.track.id == root } })
                     retirement.put("durableActiveEmpty", connection.queues.state.value.library.activeId == null)
-                        .put("nativeTrackEmpty", connection.state.value.trackUri == null)
-                        .put("nativeProblemEmpty", connection.state.value.problem == null)
+                        .put("nativeSampleEmpty", nativePlaybackEmpty(connection))
+                        .put("controllerConnected", connection.state.value.connected)
+                        .put("controllerTrackEmpty", connection.state.value.trackUri == null)
+                        .put("controllerProblem", connection.state.value.problem?.name ?: org.json.JSONObject.NULL)
                         .put("removedOwnedQueues", org.json.JSONArray(ownedQueues.toList()))
                         .put("sourceExistedBeforeDelete", file.exists())
                     retired = true
