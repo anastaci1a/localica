@@ -30,7 +30,7 @@ class QueueTraversalTest {
         }
         val scheduled = journey.history.drop(journey.cursor + 1)
             .filter { it.cycle == journey.cycle && it.entryId !in journey.visited }.map { it.entryId }.toSet()
-        val expectedPlans = journey.plans.filterKeys { it != QueueJourney.BEHIND_START }.toSortedMap().flatMap { (cycle, ids) ->
+        val expectedPlans = journey.plans.filterKeys { it != QueueBehindStartCycle }.toSortedMap().flatMap { (cycle, ids) ->
             ids.mapIndexed { index, id -> listOf(cycle, index, id,
                 cycle == journey.cycle && id in journey.visited, cycle == journey.cycle && id in scheduled) }
         }
@@ -80,10 +80,10 @@ class QueueTraversalTest {
                 assertEquals(window, traversal.window(queue.id))
                 assertEquals(window, traversal.restore(queue.id, queue.currentEntryId, queue.journey!!.modes))
                 db.query("SELECT COUNT(*) FROM queue_sequence_plan WHERE queueId = ? AND cycle = ?",
-                    arrayOf(queue.id, QueueJourney.BEHIND_START)).use {
+                    arrayOf(queue.id, QueueBehindStartCycle)).use {
                     assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
                 }
-                val behind = queue.journey!!.plans[QueueJourney.BEHIND_START].orEmpty()
+                val behind = queue.journey!!.plans[QueueBehindStartCycle].orEmpty()
                 db.query("SELECT entryId,queuePosition FROM queue_sequence_behind WHERE queueId = ?",
                     arrayOf(queue.id)).use {
                     assertEquals(behind.isNotEmpty(), it.moveToFirst())
@@ -167,7 +167,7 @@ class QueueTraversalTest {
                 val first = QueueWindowStore(room).restore(QueueSettings()).active!!.playbackWindow!!
                 assertEquals(journey.window(), first.visits)
                 room.openHelper.writableDatabase.execSQL("DELETE FROM queue_cycle_members WHERE queueId = ? AND cycle = ?",
-                    arrayOf(queue.id, QueueJourney.BEHIND_START))
+                    arrayOf(queue.id, QueueBehindStartCycle))
                 room.close()
                 room = Room.databaseBuilder(context, QueueDatabase::class.java, name).build()
                 val restored = QueueWindowStore(room).restore(QueueSettings()).active!!.playbackWindow!!
@@ -189,7 +189,7 @@ class QueueTraversalTest {
             // Concrete forward history isolates this projection oracle from the still-unimplemented plan edit seam.
             val neighbor = if (current > 0) ids[current - 1] else if (loop) ids.last() else null
             // An empty reserved plan has no legacy rows and therefore no persisted marker on reopen.
-            if (neighbor == null) journey = journey.copy(plans = journey.plans - QueueJourney.BEHIND_START)
+            if (neighbor == null) journey = journey.copy(plans = journey.plans - QueueBehindStartCycle)
             ids.filter { it != queue.currentEntryId && it != neighbor }.take(150).forEach {
                 journey = journey.select(it, ids)
             }

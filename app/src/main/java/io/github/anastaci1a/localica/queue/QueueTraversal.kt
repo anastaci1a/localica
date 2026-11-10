@@ -2,6 +2,9 @@ package io.github.anastaci1a.localica.queue
 
 import java.util.UUID
 
+/** Reserved legacy plan encoding, also readable when the compatibility bridge replaces QueueJourney. */
+internal const val QueueBehindStartCycle = Long.MIN_VALUE
+
 /** Durable traversal pages. Actual history remains in SQL; projected ordered neighbors are not history. */
 internal class QueueTraversal(private val sequence: QueueSequence) {
     private val db get() = sequence.db
@@ -44,10 +47,10 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
                             AND v.entryId = m.entryId AND v.ordinal >= ? ORDER BY v.ordinal LIMIT 1)
                     FROM queue_cycle_members m JOIN queue_sequence_entries e ON e.id = m.entryId AND e.queueId = m.queueId
                     WHERE m.queueId = ? AND m.cycle != ?
-                """.trimIndent(), arrayOf(old.cycle, old.cursor, old.historySize, queueId, QueueJourney.BEHIND_START))
+                """.trimIndent(), arrayOf(old.cycle, old.cursor, old.historySize, queueId, QueueBehindStartCycle))
                 // This reserved plan contains [neighbor id, queue index], not two occurrence IDs.
                 val behind = db.query("SELECT entryId,ordinal FROM queue_cycle_members WHERE queueId = ? AND cycle = ? ORDER BY ordinal",
-                    arrayOf(queueId, QueueJourney.BEHIND_START)).use { rows ->
+                    arrayOf(queueId, QueueBehindStartCycle)).use { rows ->
                     var id: String? = null
                     var position: Int? = null
                     while (rows.moveToNext()) when (rows.getInt(1)) {
