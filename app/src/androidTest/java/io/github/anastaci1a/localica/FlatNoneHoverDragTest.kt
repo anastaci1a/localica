@@ -67,11 +67,12 @@ class FlatNoneHoverDragTest {
             }
         }
         fun redrawFrame() {
-            val priorCount = compose.runOnIdle { drawObservations.length() }
-            val request = compose.runOnIdle { ++redraw.intValue }
             compose.mainClock.advanceTimeByFrame()
+            val (priorCount, request, clockMs) = compose.runOnIdle {
+                Triple(drawObservations.length(), ++redraw.intValue, compose.mainClock.currentTime)
+            }
             compose.waitForIdle()
-            compose.runOnIdle { assertFreshDraw(priorCount, request, compose.mainClock.currentTime) }
+            compose.runOnIdle { assertFreshDraw(priorCount, request, clockMs) }
         }
         fun assertPreparedDraw(observed: org.json.JSONObject) {
             assertTrue("The settled capture must have a matching prepared raster", observed.getBoolean("preparedKeyMatches"))
