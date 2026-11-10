@@ -201,8 +201,14 @@ class PopupParentPendingHandoffTest {
             compose.waitForIdle()
             compose.runOnUiThread {
                 assertTrue("The actual caller scope has left composition", parentCallerDisposed)
-                assertTrue("The retained owner is disposed with its caller", ExpandCollapse::class.java
-                    .getDeclaredField("disposed").apply { isAccessible = true }.getBoolean(retainedOwner))
+                val disposedGetter = ExpandCollapse::class.java.declaredMethods.singleOrNull {
+                    it.name == "getDisposed" && it.parameterCount == 0 && it.returnType == Boolean::class.javaPrimitiveType
+                }
+                val ownerDisposed = if (disposedGetter != null) {
+                    disposedGetter.apply { isAccessible = true }.invoke(retainedOwner) as Boolean
+                } else ExpandCollapse::class.java.getDeclaredField("disposed")
+                    .apply { isAccessible = true }.getBoolean(retainedOwner)
+                assertTrue("The retained owner is disposed with its caller", ownerDisposed)
             }
             nativeClick("Root action", requireNotNull(rootView))
             compose.waitUntil(5_000) { rootActions == 1 }
