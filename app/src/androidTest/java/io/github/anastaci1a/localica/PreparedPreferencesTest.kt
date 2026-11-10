@@ -198,6 +198,7 @@ class PreparedPreferencesTest {
             inline.set(false)
             release.countDown()
             withTimeout(10_000) { owner.awaitReady() }
+            withTimeout(10_000) { while (pending.isEmpty()) delay(1) }
             assertTrue("The older readiness continuation must still be queued", pending.isNotEmpty())
             inline.set(true)
             val pause = owner.launchWhenReady(entryScope) { events += "pause" }
