@@ -7,6 +7,8 @@ import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import kotlin.coroutines.ContinuationInterceptor
@@ -21,6 +23,9 @@ import kotlinx.coroutines.test.TestCoroutineScheduler
 private fun queuedEffects(context: CoroutineContext): CoroutineContext =
     if (context[ContinuationInterceptor] != null) context
     else context + StandardTestDispatcher(context[TestCoroutineScheduler])
+
+/** Observe a production ActivityScenario without launching a synthetic activity before fixture setup. */
+internal fun localicaEmptyComposeRule(): ComposeTestRule = createEmptyComposeRule()
 
 @OptIn(ExperimentalTestApi::class)
 internal fun localicaComposeRule(

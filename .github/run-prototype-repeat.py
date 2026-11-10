@@ -10,7 +10,7 @@ import signal
 import subprocess
 
 REQUIRED = {'io.github.anastaci1a.localica.' + cls for cls in
-            ('SearchImeMotionTest', 'ListSearchTest', 'FrostedSurfaceTest')}
+            ('SearchImeMotionTest', 'ListSearchTest', 'FrostedSurfaceTest', 'MainThreadGuardTest')}
 
 
 def repeat_count(value):
