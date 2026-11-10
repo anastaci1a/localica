@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.ui.components.rememberSelectionPanelProgress
+import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -46,7 +47,7 @@ internal fun rememberFloatingSelectionPanel(visible: Boolean, reducedMotion: Boo
     val reduced = reducedMotion || LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
     // Start only after measurement, so the first reveal cannot lift controls a frame late.
-    val progress = rememberSelectionPanelProgress(visible, height.value.value > 0f, reduced, speed)
+    val progress = rememberSelectionPanelProgress(visible, height.value.value > 0f, reduced, speed, StockUiSpec)
     val state = remember { FloatingSelectionPanelState(height, progress, visibility) }
     SideEffect { state.observeVisibility(visible) }
     return state
