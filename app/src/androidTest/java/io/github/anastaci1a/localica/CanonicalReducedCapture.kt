@@ -102,7 +102,7 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
     private val probes: List<CanonicalReducedProbe>, private val intendedPolicy: () -> Boolean) : AutoCloseable {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val output = File(requireNotNull(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")),
-        "canonical-reduced/$method").apply { check(isDirectory || mkdirs()) }
+        "canonical-reduced/$method").apply { check(!exists() && mkdirs()) { "Refuse to overwrite an existing native journey" } }
     private val initialClock = rule.mainClock.currentTime
     private val enabled = HardwareRendererCompat.isDrawingEnabled()
     private val rows = JSONArray()
@@ -138,7 +138,9 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
     }
     private fun rectangle(r: Rect) = JSONArray(listOf(r.left, r.top, r.right, r.bottom))
     private fun save(name: String, image: Bitmap) {
-        File(output, name).outputStream().use { check(image.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        val target = File(output, name)
+        check(!target.exists()) { "Refuse to overwrite original native image $name" }
+        target.outputStream().use { check(image.compress(Bitmap.CompressFormat.PNG, 100, it)) }
     }
     private fun counts(image: Bitmap, r: android.graphics.Rect, channel: Int): Int {
         var count = 0
@@ -321,7 +323,7 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
         row.put("owners", owners).put("supplemental", JSONObject(serializedValues))
         rows.put(row)
         File(output, "frames.json").writeText(JSONObject().put("method", method)
-            .put("initialClockMs", initialClock).put("frames", rows).toString(2))
+            .put("initialClockMs", initialClock).put("sourceSha", BuildConfig.SOURCE_SHA).put("frames", rows).toString(2))
         check(row.getBoolean("compositeGenerationVerified")) { "Incomplete visible system-composite generation at ${point.label}; original images and failed receipt retained" }
     }
     override fun close() {
