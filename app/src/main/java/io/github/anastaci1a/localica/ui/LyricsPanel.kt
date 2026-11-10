@@ -78,9 +78,12 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
     }
     val context = LocalContext.current
     val preferences = remember { io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "lyric-sources") }
-    // The composition key also namespaces restored state. rememberSaveable inputs alone do not
-    // validate a restored value when playback changed tracks while this owner was absent.
-    var chosen by key(track?.id) { rememberSaveable { mutableStateOf(preferences.getString(track?.id ?: "", null)) } }
+    // Inputs reset a live owner, but restored state must also prove which track saved it.
+    val choiceSaver = remember(track?.id) { androidx.compose.runtime.saveable.Saver<String?, Any>(
+        save = { arrayListOf(track?.id, it) }, restore = { restoredLyricChoice(track?.id, it) }) }
+    var chosen by rememberSaveable(track?.id, stateSaver = choiceSaver) {
+        mutableStateOf(preferences.getString(track?.id ?: "", null))
+    }
     LaunchedEffect(track?.id, result, chosen) {
         val legacy = chosen?.takeIf { it.endsWith(":plain") } ?: return@LaunchedEffect
         val original = legacy.removeSuffix(":plain")

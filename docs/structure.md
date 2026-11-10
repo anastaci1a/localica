@@ -88,7 +88,7 @@ Appears On and Similar Artists currently return empty through an enrichment inte
 
 The application owns prepared preference handles. An IO coroutine loads every preference file, its values and constructor directory handles before publishing readiness. Activity content, cold service commands and background controller entry points await readiness asynchronously. The startup window uses in-memory state; preference consumers never open files or wait for XML on Main.
 
-Saved lyrics selections resolve before their first presentation, including legacy synced-source aliases. Migration and subsequent choices use the same prepared handle and retain synchronous memory updates and ordered framework writes.
+Saved lyrics selections resolve before their first presentation, including legacy synced-source aliases. Restored selections carry track identity and reject another track’s saved state. Migration and subsequent choices use the same prepared handle and retain synchronous memory updates and ordered framework writes.
 
 Typed preference boundaries retain explicit inheritance. Shared enum decoding preserves unknown-value fallbacks. Pure ordering/move helpers are shared across collection types. Selection retains source occurrence IDs and clears only after command completion. Pins retain typed identity/manual order independently of tabs.
 

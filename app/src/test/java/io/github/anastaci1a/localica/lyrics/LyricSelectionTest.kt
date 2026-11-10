@@ -23,4 +23,21 @@ class LyricSelectionTest {
         val literal = saved.copy(id = "saved:plain")
         assertSame(literal, selectedLyricSource(listOf(first, saved, literal), "saved:plain"))
     }
+
+    @Test fun restoredChoiceMustCarryTheCurrentTracksIdentity() {
+        assertEquals("saved", restoredLyricChoice("track", listOf("track", "saved")))
+        assertNull(restoredLyricChoice("other", listOf("track", "saved")))
+    }
+
+    @Test fun collidingTrackHashesCannotShareRestoredChoice() {
+        assertEquals("Aa".hashCode(), "BB".hashCode())
+        assertNull(restoredLyricChoice("BB", listOf("Aa", "saved")))
+    }
+
+    @Test fun olderOrMalformedStateFallsBackToPreparedPreferences() {
+        assertNull(restoredLyricChoice("track", "saved"))
+        assertNull(restoredLyricChoice("track", listOf("track")))
+        assertNull(restoredLyricChoice("track", listOf("track", 7)))
+    }
+
 }
