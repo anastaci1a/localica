@@ -110,33 +110,35 @@ class SelectionInsetContextsTest {
         if (interrupt != null || animationProof) compose.mainClock.autoAdvance = false
         compose.runOnIdle { session.select(route.collection, listOf(SongRow(tracks.first().id, tracks.first()))) }
         if (animationProof) {
+            val rows = mutableListOf("phase,frame,progress,clearance,scroll")
             try {
-                val rows = mutableListOf("phase,frame,progress,clearance,scroll")
                 var previous = 0f
                 repeat(30) { frame ->
                     compose.mainClock.advanceTimeByFrame()
                     compose.waitForIdle()
                     val delta = before - last.fetchSemanticsNode().boundsInRoot.top
+                    rows += "reveal,$frame,${panel.progress},$inset,$delta"
+                    saveFrame("reveal-${frame.toString().padStart(2, '0')}.png")
                     assertTrue("Native reveal stays monotonic", delta >= previous - 1f)
                     assertEquals("Native reveal follows the pill on each frame", inset, delta, 1.1f)
-                    rows += "reveal,$frame,${panel.progress},$inset,$delta"
                     previous = delta
-                    saveFrame("reveal-${frame.toString().padStart(2, '0')}.png")
                 }
                 compose.runOnIdle { session.clear() }
                 repeat(30) { frame ->
                     compose.mainClock.advanceTimeByFrame()
                     compose.waitForIdle()
                     val delta = before - last.fetchSemanticsNode().boundsInRoot.top
+                    rows += "dismiss,$frame,${panel.progress},$inset,$delta"
+                    saveFrame("dismiss-${frame.toString().padStart(2, '0')}.png")
                     assertTrue("Native dismissal stays monotonic", delta <= previous + 1f)
                     assertEquals("Native dismissal follows the removed room", inset, delta, 1.1f)
-                    rows += "dismiss,$frame,${panel.progress},$inset,$delta"
                     previous = delta
-                    saveFrame("dismiss-${frame.toString().padStart(2, '0')}.png")
                 }
                 assertEquals("Dismissal returns exactly to the old bottom", 0f, previous, 1.1f)
+            } finally {
                 output("frames.csv").writeText(rows.joinToString("\n") + "\n")
-            } finally { compose.mainClock.autoAdvance = true }
+                compose.mainClock.autoAdvance = true
+            }
             return
         }
         if (interrupt != null) {
