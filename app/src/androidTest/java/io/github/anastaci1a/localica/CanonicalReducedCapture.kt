@@ -85,7 +85,7 @@ internal class CanonicalReducedMarker : Drawable() {
     private val paint = Paint()
     override fun draw(canvas: Canvas) {
         drawn = requested
-        paint.color = NativeColor.BLACK or drawn
+        paint.color = NativeColor.BLACK or 0x00400000 or drawn
         canvas.drawRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bounds.bottom.toFloat(), paint)
         paint.color = NativeColor.MAGENTA
         canvas.drawRect((bounds.left + 4).toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bounds.bottom.toFloat(), paint)
@@ -240,7 +240,7 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
                         .put("displayWitnessPoints", JSONArray(listOf(state.originX + markerBounds.left + 2,
                             state.originY + markerBounds.top + 2, state.originX + markerBounds.left + 6,
                             state.originY + markerBounds.top + 2)))
-                    check(buffer.getPixel(x, y) == (NativeColor.BLACK or generation))
+                    check(buffer.getPixel(x, y) == (NativeColor.BLACK or 0x00400000 or generation))
                     check(buffer.getPixel(x + 4, y) == NativeColor.MAGENTA)
                     save("${point.label}-${p.role}-original.png", buffer)
                     val originInWindow = markerOrigin
@@ -300,7 +300,7 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
                         y in 0 until screen.height && my in 0 until screen.height
                     val code = if (inside) screen.getPixel(x, y) else 0
                     val sentinel = if (inside) screen.getPixel(mx, my) else 0
-                    val verified = inside && code == (NativeColor.BLACK or generation) && sentinel == NativeColor.MAGENTA
+                    val verified = inside && code == (NativeColor.BLACK or 0x00400000 or generation) && sentinel == NativeColor.MAGENTA
                     witnesses.put(JSONObject().put("role", state.probe.role).put("points", points)
                         .put("observedCodeArgb", code).put("observedSentinelArgb", sentinel).put("verified", verified))
                 }
