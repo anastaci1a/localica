@@ -141,6 +141,12 @@ class PlayerPresentationSliceEqualityTest {
         } }
         compose.waitForIdle()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val runtimeSource = runCatching {
+            instrumentation.targetContext.classLoader.loadClass("io.github.anastaci1a.localica.BuildConfig")
+                .getDeclaredField("SOURCE_SHA").get(null) as String
+        }.getOrElse { "Unavailable:${it.javaClass.name}" }
+        val installedApp = fileHash(File(instrumentation.targetContext.applicationInfo.sourceDir))
+        val installedTest = fileHash(File(instrumentation.context.applicationInfo.sourceDir))
         val output = nativeEvidenceDirectory("player-presentation-slice-i", instrumentation.targetContext.getExternalFilesDir(null))
         val receipts = JSONArray()
         val phases = listOf(0f, .7f, .72f, .73f, .78f, .8f, .83f, .84f, .9f, .97f, 1f, .9f, .8f, .72f, 0f, 1f)
@@ -166,6 +172,7 @@ class PlayerPresentationSliceEqualityTest {
                 save(File(output, "$name.png"), image.asAndroidBitmap())
                 save(File(output, "$name-display.png"), display)
                 val record = JSONObject().put("name", name).put("source", BuildConfig.SOURCE_SHA)
+                    .put("runtimeAppSource", runtimeSource).put("installedAppSha256", installedApp).put("installedTestSha256", installedTest)
                     .put("api", Build.VERSION.SDK_INT).put("policy", policy).put("requestedPhaseBits", requested.toRawBits())
                     .put("capture", rect(capture)).put("before", snapshotJson(before)).put("afterOriginal", snapshotJson(afterOriginal))
                     .put("sourceBitmapSha256", sourceHash).put("grainBitmapSha256", grainHash)
@@ -208,6 +215,7 @@ class PlayerPresentationSliceEqualityTest {
                 File(output, "$name.json").writeText(record.toString(2))
                 receipts.put(record)
                 // All images and immutable receipts above survive an assertion failure below.
+                assertEquals("The target application's runtime source is the intended source", BuildConfig.SOURCE_SHA, runtimeSource)
                 listOfNotNull(before, afterOriginal, oracleObserved, after).forEach { actual ->
                     assertEquals("Actual held phase is the requested phase", requested.toRawBits(), actual.phaseBits)
                     val actualProbe = requireNotNull(actual.probe)
@@ -326,5 +334,14 @@ class PlayerPresentationSliceEqualityTest {
         val pixels = IntArray(image.width * image.height).also { image.getPixels(it, 0, image.width, 0, 0, image.width, image.height) }
         val bytes = ByteBuffer.allocate(pixels.size * 4).apply { pixels.forEach { pixel -> putInt(pixel) } }.array()
         return MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    }
+    private fun fileHash(file: File): String {
+        check(android.os.Looper.myLooper() != android.os.Looper.getMainLooper())
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val bytes = ByteArray(65536)
+            while (true) { val count = input.read(bytes); if (count < 0) break; digest.update(bytes, 0, count) }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 }
