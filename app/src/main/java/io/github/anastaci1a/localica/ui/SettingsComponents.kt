@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.layout.settingsLinkMarker
+import io.github.anastaci1a.localica.ui.layout.preferenceHeadingInset
 import androidx.compose.ui.graphics.Color
 
 @Composable
@@ -82,7 +83,7 @@ internal fun SettingsLink(markerColor: Color?, title: String, summary: String? =
 @Composable
 internal fun SettingsHeading(title: String) {
     Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(start = LocalSettingsRowMetrics.current.textStart, top = 16.dp, bottom = 4.dp)
+        modifier = Modifier.preferenceHeadingInset(LocalSettingsRowMetrics.current.textStart)
             .settingsRowPart(SettingsRowPart.Heading))
 }
 

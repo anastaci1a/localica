@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.constrainHeight
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.ui.layout.*
+import io.github.anastaci1a.localica.ui.spec.PreferenceFrameSpec
 
 /** Opt-in compact rows keep the shared switch and the full 48dp input target. */
 internal val LocalCompactPreferenceFrames = androidx.compose.runtime.compositionLocalOf { false }
@@ -28,7 +30,7 @@ internal fun Modifier.settingsRowPart(part: SettingsRowPart) =
 internal val SettingsRowInset = 16.dp
 internal val SettingsIconSize = 24.dp
 /** The leading icon slot: the icon plus its gap to the text. */
-internal val SettingsIconSlotWidth = 40.dp
+internal val SettingsIconSlotWidth = PreferenceFrameSpec.iconSlotWidth
 
 /**
  * One settings-row standard (#655): links, switches, sliders, choices and headings start their text at [textStart].
@@ -51,20 +53,17 @@ internal fun SettingsLinkFace(title: String, summary: String?, icon: AppIcon?, m
     summaryStyle: TextStyle = MaterialTheme.typography.bodyMedium,
     colors: ListItemColors = ListItemDefaults.colors(containerColor = Color.Transparent),
     metrics: SettingsRowMetrics = LocalSettingsRowMetrics.current) {
-    Row(modifier.heightIn(min = 64.dp).settingsRowPart(SettingsRowPart.Row)
-        .padding(horizontal = SettingsRowInset, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (icon != null || metrics.iconSlot) Box(Modifier.width(SettingsIconSlotWidth), contentAlignment = Alignment.CenterStart) {
-            icon?.let { Icon(appIconPainter(it), null, Modifier.size(SettingsIconSize).settingsRowPart(SettingsRowPart.Icon),
-                tint = colors.leadingIconColor) }
-        }
-        Column(Modifier.weight(1f)) {
-            Text(title, Modifier.settingsRowPart(SettingsRowPart.Text), style = headlineStyle, color = colors.headlineColor)
-            summary?.let { Text(it, style = summaryStyle, color = colors.supportingTextColor) }
-        }
-        // The test handle sits outside the rotation so its bounds are the drawn bounds.
-        Icon(appIconPainter(AppIcon.ActionChevronLeft), null, Modifier.padding(start = 16.dp).size(20.dp)
-            .settingsRowPart(SettingsRowPart.Trailing).rotate(180f), tint = colors.trailingIconColor)
-    }
+    PreferenceLinkFrameSlot(modifier, Modifier.settingsRowPart(SettingsRowPart.Row), metrics.iconSlot,
+        icon = icon?.let { value -> { modifier ->
+            Icon(appIconPainter(value), null, modifier.settingsRowPart(SettingsRowPart.Icon), tint = colors.leadingIconColor)
+        } },
+        headline = { Text(title, Modifier.settingsRowPart(SettingsRowPart.Text), style = headlineStyle, color = colors.headlineColor) },
+        summary = summary?.let { value -> { Text(value, style = summaryStyle, color = colors.supportingTextColor) } },
+        trailing = { modifier ->
+            // The test handle sits outside the rotation so its bounds are the drawn bounds.
+            Icon(appIconPainter(AppIcon.ActionChevronLeft), null,
+                modifier.settingsRowPart(SettingsRowPart.Trailing).rotate(180f), tint = colors.trailingIconColor)
+        })
 }
 
 internal val ChoiceOuterVerticalInset = 4.dp
@@ -78,26 +77,26 @@ internal val InterfaceSwitchHeight = 48.dp
 @Composable
 internal fun SliderPreferenceFrame(label: String, low: String?, high: String?, description: String?,
     track: @Composable () -> Unit) {
-    SettingsEntry(label) { Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-        val textStart = LocalSettingsRowMetrics.current.textStart
-        Text(label, Modifier.padding(start = textStart).settingsRowPart(SettingsRowPart.Text), style = MaterialTheme.typography.titleMedium)
-        track()
-        if (low != null && high != null) SliderEndpoints(low, high)
-        if (description != null) Text(description, Modifier.padding(start = textStart), style = MaterialTheme.typography.bodySmall)
+    SettingsEntry(label) {
+        PreferenceSliderFrameSlot(LocalSettingsRowMetrics.current.textStart,
+            label = { modifier -> Text(label, modifier.settingsRowPart(SettingsRowPart.Text), style = MaterialTheme.typography.titleMedium) },
+            track = track,
+            endpoints = if (low != null && high != null) { { SliderEndpoints(low, high) } } else null,
+            description = description?.let { value -> { modifier -> Text(value, modifier, style = MaterialTheme.typography.bodySmall) } })
     }
-} }
+}
 
 @Composable
 internal fun BooleanPreferenceFrame(label: String, modifier: Modifier = Modifier, control: @Composable () -> Unit) {
     val compact = LocalCompactPreferenceFrames.current
     val metrics = LocalSettingsRowMetrics.current
-    SettingsEntry(label) { Row(modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp)
-        .padding(vertical = if (compact) 0.dp else 4.dp).settingsRowPart(SettingsRowPart.Row).padding(horizontal = metrics.inset),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f).padding(start = metrics.textStart - metrics.inset, end = 12.dp).settingsRowPart(SettingsRowPart.Text))
-        Box(Modifier.settingsRowPart(SettingsRowPart.Trailing)) { control() }
+    SettingsEntry(label) {
+        SettingsPreferenceRow(compact, metrics.inset, metrics.textStart - metrics.inset, modifier,
+            Modifier.settingsRowPart(SettingsRowPart.Row),
+            label = { modifier -> Text(label, modifier.settingsRowPart(SettingsRowPart.Text)) },
+            control = { PreferenceTrailingSlot(Modifier.settingsRowPart(SettingsRowPart.Trailing), control) })
     }
-} }
+}
 
 /** One width decision for live choices and their inert measurement faces. */
 internal fun choiceFitsInline(count: Int, cellWidth: Float, availableWidth: Float, popup: Boolean) =
@@ -131,20 +130,14 @@ internal fun ChoicePreferenceFrame(title: String, labels: List<String>, popup: B
 /** Material text-button sizing without installing its interaction or semantics owners. */
 @Composable
 internal fun TextButtonMeasurement(label: String, labelStyle: TextStyle? = null) {
-    Box(Modifier.minimumInteractiveComponentSize()) {
-        Row(Modifier.defaultMinSize(minWidth = ButtonDefaults.MinWidth, minHeight = ButtonDefaults.MinHeight)
-            .padding(ButtonDefaults.TextButtonContentPadding),
-            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = labelStyle ?: MaterialTheme.typography.labelLarge)
-        }
+    SettingsTextButtonMeasurement {
+        Text(label, style = labelStyle ?: MaterialTheme.typography.labelLarge)
     }
 }
 
 @Composable
 internal fun GlassChoiceFace(label: String, icon: AppIcon? = null, tab: Boolean = false, labelStyle: TextStyle? = null) {
-    Row(Modifier.padding(horizontal = ChoiceLabelHorizontalInset), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        icon?.let { Icon(appIconPainter(it), null, Modifier.size(24.dp)) }
+    SettingsChoiceFace(icon = icon?.let { value -> { modifier -> Icon(appIconPainter(value), null, modifier) } }) {
         Text(label, style = labelStyle ?: if (tab) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
             maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
