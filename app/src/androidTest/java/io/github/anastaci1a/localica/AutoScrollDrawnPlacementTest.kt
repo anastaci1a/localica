@@ -8,12 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.background
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.boundsInRoot
@@ -528,52 +522,6 @@ class AutoScrollDrawnPlacementTest {
         check(done.await(30, java.util.concurrent.TimeUnit.SECONDS))
         android.util.Log.i("AutoScroll635Counts", "scrollFrames=" + scrollFrames + " recordedFrames=" + recordedFrames + " totalDraws=" + draws.get())
         assertTrue("Every steady scroll frame must record exactly once: $badFrames", badFrames.isEmpty() && recordedFrames == scrollFrames - 1)
-    }
-
-    /** One placement-only contraction after scroll stops must publish one new recording. */
-    @Test fun postScrollContractionRecordsExactlyOnce() {
-        val motion = BrowsePinchMotion()
-        val grid = androidx.compose.foundation.lazy.grid.LazyGridState()
-        val gap = mutableIntStateOf(40)
-        scenario = ActivityScenario.launch(ComponentActivity::class.java)
-        requireNotNull(scenario).onActivity { activity = it }
-        main { a -> a.setContent { LocalicaTheme {
-            Box(Modifier.fillMaxSize().pinchRetainedOverlay(motion, grid, (0 until 30).associate { it.toString() to it })) {
-                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(1), state = grid,
-                    modifier = Modifier.fillMaxSize().testTag("browser-list")) {
-                    items(30, key = { it.toString() }) { index ->
-                        Box(Modifier.height(200.dp)) {
-                            Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(0, gap.intValue) }
-                                .size(80.dp).retainPinchArtwork(index.toString(), motion)
-                                .background(androidx.compose.ui.graphics.Color.Red))
-                        }
-                    }
-                }
-            }
-        } } }
-        repeat(10) { nativeFrame() }
-        main { grid.dispatchRawDelta(100f) }
-        repeat(5) { nativeFrame() }
-        val drawNode = overlay().second
-        val draws = java.util.concurrent.atomic.AtomicInteger()
-        observeViewportDraw(drawNode) { draws.incrementAndGet() }
-        main { drawNode.invalidateDraw() }
-        repeat(3) { nativeFrame() }
-        val idleStart = draws.get()
-        repeat(20) { nativeFrame() }
-        val idleDraws = draws.get() - idleStart
-        val before = draws.get()
-        main { gap.intValue = 0 }
-        repeat(5) { nativeFrame() }
-        val contractionDraws = draws.get() - before
-        val after = draws.get()
-        repeat(20) { nativeFrame() }
-        val laterDraws = draws.get() - after
-        android.util.Log.i("AutoScroll635Counts", "postScroll idleDraws=" + idleDraws +
-            " contractionDraws=" + contractionDraws + " laterIdleDraws=" + laterDraws)
-        assertTrue("No idle recordings", idleDraws == 0 && laterDraws == 0)
-        assertTrue("A single contraction must record exactly once", contractionDraws == 1)
     }
 
     @Test fun albumsTopRequest() = loop(BrowseRoute(MainTab.Albums)) { h -> main { h.topRequest++ } }

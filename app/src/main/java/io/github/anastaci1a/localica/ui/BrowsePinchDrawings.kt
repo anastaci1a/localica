@@ -16,11 +16,6 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.graphics.drawscope.ContentDrawScope
-import androidx.compose.ui.node.DrawModifierNode
-import androidx.compose.ui.node.ModifierNodeElement
-import androidx.compose.ui.node.invalidateDraw
-import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -92,12 +87,7 @@ private fun Modifier.retainPinchPass(key: Any, motion: BrowsePinchMotion, upper:
     }
     // Keep the live coordinates reference; the overlay maps it when drawing. A
     // placement callback avoids a global-position dispatch for every scrolled frame.
-    return onPlaced {
-        recording.coordinates = it
-        // Approach placement can settle after the lookahead grid result last changed.
-        // Its separate viewport recording must consume the new live coordinates too.
-        motion.invalidateViewport?.invoke()
-    }.drawWithContent {
+    return onPlaced { recording.coordinates = it }.drawWithContent {
         if (!motion.recordingFrozen || layer.size.width == 0 || layer.size.height == 0)
             layer.record { this@drawWithContent.drawContent() }
         // Standalone row/geometry previews have no viewport compositor.
@@ -317,7 +307,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         scene?.retainedHover = emptyList()
     } }
     // Keep geometry-clock reads in this producer, including inside an ancestor sampling recording.
-    return backdropLocation(location).onGloballyPositioned { motion.viewportCoordinates = it }.drawPinchViewport(motion) {
+    return backdropLocation(location).onGloballyPositioned { motion.viewportCoordinates = it }.drawWithContent {
         // Publish retained bodies before the host draws its one joined shadow/surface.
         val visible = grid.layoutInfo.visibleItemsInfo
         val p = motion.progress.value.coerceIn(0f, 1f)
@@ -362,7 +352,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 order.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
                 order.forEach { entry -> motion.artwork[entry.key]?.let { drawLive(it, entry.key) } }
             }
-            return@drawPinchViewport
+            return@drawWithContent
         }
         val retained = linkedMapOf<Any, RetainedPinchPlacement>()
         val row = visible.firstOrNull { it.key != "browser-notice" }
@@ -520,34 +510,5 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         }
         if (probe != null && drawn != null) probe(PinchDrawnFrame(p, motion.fingerProgress, motion.held,
             motion.destinationReady, Rect(0f, 0f, size.width, size.height), drawn, fades))
-    }
-}
-
-/** The viewport consumes row coordinates outside the rows' own layer hierarchy. */
-private fun Modifier.drawPinchViewport(motion: BrowsePinchMotion,
-    block: ContentDrawScope.() -> Unit): Modifier = then(PinchViewportDraw(motion, block))
-
-private data class PinchViewportDraw(val motion: BrowsePinchMotion,
-    val block: ContentDrawScope.() -> Unit) : ModifierNodeElement<PinchViewportDrawNode>() {
-    override fun create() = PinchViewportDrawNode(motion, block)
-    override fun update(node: PinchViewportDrawNode) { node.update(motion, block) }
-    override fun InspectorInfo.inspectableProperties() { name = "pinchViewportDraw" }
-}
-
-private class PinchViewportDrawNode(private var motion: BrowsePinchMotion,
-    private var block: ContentDrawScope.() -> Unit) : Modifier.Node(), DrawModifierNode {
-    private val invalidate = { invalidateDraw() }
-    override fun ContentDrawScope.draw() { block() }
-    override fun onAttach() { motion.invalidateViewport = invalidate }
-    override fun onDetach() {
-        if (motion.invalidateViewport === invalidate) motion.invalidateViewport = null
-    }
-    fun update(value: BrowsePinchMotion, draw: ContentDrawScope.() -> Unit) {
-        if (motion !== value) {
-            if (isAttached) onDetach()
-            motion = value
-            if (isAttached) onAttach()
-        }
-        block = draw
     }
 }
