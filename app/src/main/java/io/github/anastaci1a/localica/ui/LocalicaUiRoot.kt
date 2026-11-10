@@ -11,7 +11,8 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntSize
 import io.github.anastaci1a.localica.navigation.InterfacePreferences
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
-import io.github.anastaci1a.localica.ui.engine.*
+import io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext
+import io.github.anastaci1a.localica.ui.layout.expansionReferenceTravel
 import io.github.anastaci1a.localica.ui.spec.*
 
 /** One live settings and measured-window record for the screen and its sibling dialog hosts. */
@@ -42,15 +43,13 @@ internal fun LocalicaUiRoot(state: LocalicaUiRootState = rememberLocalicaUiRoot(
     val window = state.window
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val refreshHz = rememberPeakRefreshHz()
-    val referenceTravel = playerBasis(density, window, navigationInset, StockUiSpec.clearance.getValue(Clearance.BottomChrome)).edgeTravelPx
+    val referenceTravel = expansionReferenceTravel(playerBasis(density, window, navigationInset, StockUiSpec.clearance.getValue(Clearance.BottomChrome)))
     val resolvedSpec = remember(settings.glass, settings.reducedMotion, settings.fasterMotion, referenceTravel, window, density) {
         uiSpec(settings, ExpansionGeometryDomain(referenceTravel, maxOf(1f, kotlin.math.hypot(window.width.toFloat(), window.height.toFloat())), 1f / 24), density)
     }
-    val engine = remember(refreshHz, referenceTravel, resolvedSpec, durationScale) {
-        EngineContext(1f / refreshHz, referenceTravel, resolvedSpec.spec.access, durationScale)
+    ProvideLocalicaEngineContext(refreshHz, referenceTravel, resolvedSpec, durationScale) {
+        CompositionLocalProvider(LocalLocalicaUiRoot provides state, LocalUiSpec provides resolvedSpec, content = content)
     }
-    CompositionLocalProvider(LocalLocalicaUiRoot provides state, LocalEngineContext provides engine,
-        LocalUiSpec provides resolvedSpec, content = content)
 }
 
 /** U11.00: peak display refresh, re-published when the display changes (the engine's two-frame floor). */
