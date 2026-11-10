@@ -9,8 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.artistphoto.*
+import io.github.anastaci1a.localica.ui.layout.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -55,25 +55,25 @@ internal fun ArtistPhotoChooser(actions: ArtistPhotoActions) {
     }
     GlassAlertDialog({ actions.open = false }, title = { Text("Choose artist photo") }, text = {
         val scroll = rememberScrollState()
-        Column(Modifier.heightIn(max = 420.dp).controlVerticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ArtistPhotoChooserBody(Modifier.controlVerticalScroll(scroll)) {
             Text(actions.request.name)
             if (!allowed) Text("Enable Online features before choosing a photo.")
             else {
                 if (page.loading) {
                     Text("Finding artist photos…")
-                    if (page.items.isEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (page.items.isEmpty()) ArtistPhotoChooserRow(loading = true) {
                         repeat(2) { ArtworkImage(null, true, Modifier.weight(1f).aspectRatio(1f)) }
                     }
                 }
                 page.items.chunked(2).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ArtistPhotoChooserRow {
                         row.forEach { candidate -> key(candidate.choice) {
                             val choice = candidate.choice
                             val isFailed = failed == choice || selection.pending == choice &&
                                 (selection.failed || work?.failed?.contains(actions.request.artistKey) == true)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            ArtistPhotoChooserCell {
                                 ActionTextButton({ draft = choice }, Modifier.fillMaxWidth(), enabled = allowed, shape = Corners.artwork) {
-                                    Column(Modifier.fillMaxWidth()) {
+                                    ArtistPhotoChooserFace {
                                         ArtistPhotoPreview(environment, candidate, allowed)
                                         Text("${candidate.name} · ${choice.provider.name.lowercase()}", style = MaterialTheme.typography.labelLarge)
                                         if (draft == choice) Text("Selected")
@@ -91,7 +91,7 @@ internal fun ArtistPhotoChooser(actions: ArtistPhotoActions) {
                                 }
                             }
                         } }
-                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                        if (row.size == 1) ArtistPhotoChooserEmptyCell()
                     }
                 }
                 if (!page.loading && page.items.isEmpty()) Text("No artist photos found. Album art is kept.")
