@@ -31,6 +31,50 @@ class MarqueeMotionTest {
         assertTrue(motion.at(2036).offset > 0f)
     }
 
+    @Test fun leftTaperFullyFadesInBeforeMotionAndLandsWithoutTaper() {
+        val motion = MarqueeMotion()
+        val text = 300f
+        val fade = 20f
+        var fullAt = -1L
+        var firstMoveAt = -1L
+        var previousAlpha = 0f
+        var sawLandingFrames = false
+        for (time in 0L..7000L step 8L) {
+            val frame = motion.at(time)
+            val alpha = marqueeLeftFade(text, fade, frame)
+            motion.recordRenderedLeftFade(alpha)
+            if (alpha == 1f && fullAt < 0) {
+                fullAt = time
+                assertEquals("taper reaches 1 while the text is still", 0f, frame.offset, 0f)
+            }
+            if (frame.offset > 0f && firstMoveAt < 0) firstMoveAt = time
+            if (firstMoveAt < 0) assertEquals("no motion before the first moving frame", 0f, frame.offset, 0f)
+            if (frame.phase == MarqueePhase.LeadingIn) {
+                assertEquals(0f, frame.offset, 0f)
+                assertTrue("taper never decreases during the pre-fade", alpha >= previousAlpha)
+            }
+            if (frame.offset > 0f && firstMoveAt == time) assertEquals("taper already full when motion starts", 1f, alpha, 0f)
+            // #716 landing: once the ink has left, no left taper until rest.
+            if (frame.phase == MarqueePhase.Scrolling && frame.offset >= text) { assertEquals(0f, alpha, 0f); sawLandingFrames = true }
+            if (frame.phase == MarqueePhase.LeadingOut) assertEquals(0f, alpha, 0f)
+            previousAlpha = alpha
+        }
+        assertTrue("taper completed before motion", fullAt in 0 until firstMoveAt)
+        assertTrue(sawLandingFrames)
+    }
+
+    @Test fun interruptedPreFadeEasesTheTaperOutWithoutMovingText() {
+        val motion = MarqueeMotion()
+        motion.at(0); motion.at(1800)
+        val half = motion.at(1910)
+        val alpha = marqueeLeftFade(300f, 20f, half)
+        assertEquals(.5f, alpha, .001f)
+        val interrupted = motion.at(1910, false)
+        assertEquals(alpha, marqueeLeftFade(300f, 20f, interrupted), 0f)
+        assertEquals(0f, marqueeLeftFade(300f, 20f, motion.at(2130, false)), 0f)
+        assertEquals(0f, interrupted.offset, 0f)
+    }
+
     @Test fun restingDelayReportsOnlyItsRemainingTime() {
         val motion = MarqueeMotion()
         motion.at(100)
@@ -184,32 +228,32 @@ class MarqueeMotionTest {
         assertEquals(1f, marqueeTrailingFade(300f, 120f, 24f, wrap), 0f)
     }
 
-    @Test fun outgoingLeftMaskRampsAtFirstPixelAndTailAndStaysOffDuringWrapLanding() {
+    @Test fun outgoingLeftMaskHoldsFullThenRampsAtTailAndStaysOffDuringWrapLanding() {
         fun mask(offset: Float) = marqueeLeftFade(500f, 20f,
-            MarqueeFrame(offset = offset, repeatDistance = 566.6667f, phase = MarqueePhase.Scrolling))
-        assertEquals(0f, mask(0f), 0f)
-        assertTrue(mask(.01f) in 0f.. .00001f)
-        assertEquals(.5f, mask(10f), .00001f)
-        assertEquals(1f, mask(20f), 0f)
+            MarqueeFrame(offset = offset, repeatDistance = 566.6667f, leadingFade = 1f, phase = MarqueePhase.Scrolling))
+        assertEquals(1f, mask(0f), 0f)
+        assertEquals(1f, mask(.01f), .0001f)
         assertEquals(1f, mask(480f), 0f)
         assertEquals(.5f, mask(490f), .00001f)
         assertEquals(0f, mask(500f), 0f)
         assertEquals(0f, mask(550f), 0f)
-        for (phase in listOf(MarqueePhase.Rest, MarqueePhase.LeadingIn, MarqueePhase.LeadingOut)) {
+        for (phase in listOf(MarqueePhase.Rest, MarqueePhase.LeadingOut)) {
             assertEquals(0f, marqueeLeftFade(500f, 20f,
                 MarqueeFrame(offset = 10f, leadingFade = 1f, phase = phase)), 0f)
         }
+        assertEquals(.5f, marqueeLeftFade(500f, 20f,
+            MarqueeFrame(leadingFade = .5f, phase = MarqueePhase.LeadingIn)), 0f)
     }
 
     @Test fun recordedDrawAmountSurvivesFlipGeometryAndReleaseGeometryChanges() {
         val (motion, now) = scrollingAt(10f)
         // The same helper/result handoff used by the production LTR draw callback.
         val drawn = marqueeLeftFade(300f, 20f, motion.frame)
-        assertEquals(.5f, drawn, .00001f)
+        assertEquals(1f, drawn, .00001f)
         motion.recordRenderedLeftFade(drawn)
         val flip = motion.at(now, allowed = false, width = 200f)
-        assertEquals(.5f, marqueeLeftFade(5f, 40f, flip), .00001f)
-        assertEquals(.25f, marqueeLeftFade(5f, 80f,
+        assertEquals(1f, marqueeLeftFade(5f, 40f, flip), .00001f)
+        assertEquals(.5f, marqueeLeftFade(5f, 80f,
             motion.at(now + 75, allowed = false, width = 260f)), .00001f)
         assertEquals(0f, marqueeLeftFade(500f, 20f,
             motion.at(now + 150, allowed = false)), 0f)
@@ -258,7 +302,7 @@ class MarqueeMotionTest {
                 assertEquals(0f, amount, 0f)
                 sawLanding = true
             }
-            if (frame.phase != MarqueePhase.Scrolling) assertEquals(0f, amount, 0f)
+            if (frame.phase == MarqueePhase.Rest || frame.phase == MarqueePhase.LeadingOut) assertEquals(0f, amount, 0f)
         }
         assertTrue(sawOutgoing)
         assertTrue(sawLanding)

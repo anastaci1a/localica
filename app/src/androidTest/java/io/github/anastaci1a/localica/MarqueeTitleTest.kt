@@ -68,7 +68,7 @@ class MarqueeTitleTest {
         compose.mainClock.autoAdvance = true
     }
 
-    @Test fun preparationKeepsLeadingGlyphsUnfadedBeforeAnyOutgoingPixel() {
+    @Test fun preparationFadesTheStationaryLeadingGlyphsBeforeAnyMotion() {
         val title = "MMMMMMMMMMMMMMMMMMMMMMMM"
         val style = TextStyle(fontSize = 24.sp, fontFamily = FontFamily.Monospace, color = Color.Black)
         compose.mainClock.autoAdvance = false
@@ -89,7 +89,7 @@ class MarqueeTitleTest {
             if (reference[x, y].red < .5f) darkPixels++
         }
         assertTrue("The comparison includes leading glyph ink", darkPixels > 10)
-        assertTrue("Preparation must not dim stationary leading glyphs: $difference", difference < 2f)
+        assertTrue("The taper fades in over the still text before it moves: $difference", difference > 2f)
         compose.mainClock.autoAdvance = true
     }
 
@@ -305,21 +305,21 @@ class MarqueeTitleTest {
             val pixels = compose.onNodeWithTag("draw-owner").captureToImage().toPixelMap()
             assertEquals("Native mask swatch", 1f - expected, pixels[pixels.width / 2, pixels.height / 2].red, .02f)
         }
-        assertDrawn(.5f)
+        assertDrawn(1f)
         compose.runOnIdle {
             fadeWidth = 40f
             frame = advance(2120, false)
         }
         compose.mainClock.advanceTimeByFrame()
-        assertEquals(.5f, requireNotNull(frame.backwardFadeStart), 0f)
-        assertDrawn(.5f)
+        assertEquals(1f, requireNotNull(frame.backwardFadeStart), 0f)
+        assertDrawn(1f)
         compose.runOnIdle {
             textWidth = 5f
             fadeWidth = 80f
             frame = advance(2195, false)
         }
         compose.mainClock.advanceTimeByFrame()
-        assertDrawn(.25f)
+        assertDrawn(.5f)
         compose.runOnIdle { frame = advance(2270, false) }
         compose.mainClock.advanceTimeByFrame()
         assertDrawn(0f)

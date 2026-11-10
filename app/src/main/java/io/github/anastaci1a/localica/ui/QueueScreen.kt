@@ -47,11 +47,15 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     var sorting by remember { mutableStateOf(false) }
     val active = state.library.queues.firstOrNull { it.id == state.browsedId } ?: state.library.active
     val queueNumber = state.library.queues.indexOfFirst { it.id == active?.id } + 1
-    val selectorLabel = active?.let { "$queueNumber. ${it.name}" } ?: "Queues"
     @Composable fun SelectorFace() {
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(selectorLabel, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+            if (active == null) Text("Queues", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
+            else {
+                // #737: the shared marquee scrolls the title only; the number stays fixed.
+                Text("$queueNumber. ", style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                MarqueeTitle(active.name, reducedMotion, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            }
             Icon(appIconPainter(AppIcon.ActionChevronDown), "Select queue", Modifier.size(24.dp))
         }
     }

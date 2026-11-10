@@ -155,8 +155,15 @@ private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean
             Row(Modifier.weight(1f).testTag("queue-select-${queue.id}").selectable(chosen, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
                 .heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                    if (chosen) MarqueeTitle("$number. ${queue.name}", reducedMotion, style = MaterialTheme.typography.bodyLarge)
-                    else Text("$number. ${queue.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // #737: only the title scrolls (the shared player marquee); the number stays fixed.
+                    // A disabled row (drag in progress, drag overlay) holds the title at its start.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val numberStyle = MaterialTheme.typography.bodyLarge
+                        Text("$number. ", maxLines = 1, style = numberStyle, modifier = Modifier.testTag("queue-number-${queue.id}"))
+                        if (chosen || playing) MarqueeTitle(queue.name, reducedMotion, Modifier.weight(1f).testTag("queue-title-${queue.id}"),
+                            style = numberStyle, motionPaused = !enabled)
+                        else Text(queue.name, Modifier.weight(1f).testTag("queue-title-${queue.id}"), maxLines = 1, overflow = TextOverflow.Ellipsis, style = numberStyle)
+                    }
                     if (playing) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
                 }
             }

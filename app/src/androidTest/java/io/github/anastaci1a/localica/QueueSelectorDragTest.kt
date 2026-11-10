@@ -215,6 +215,19 @@ class QueueSelectorDragTest {
         assertNoActions()
     }
 
+    @Test fun queueNumberStaysFixedBesideTheSharedMarqueeTitle() = fixture { _, _ ->
+        // #737: the browsed (q2) and playing (q0) rows use MarqueeTitle for the name only.
+        for ((id, number) in listOf("q2" to 3, "q0" to 1)) {
+            val numberBox = compose.onNodeWithTag("queue-number-$id", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            val titleBox = compose.onNodeWithTag("queue-title-$id", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            compose.onNodeWithTag("queue-number-$id", useUnmergedTree = true).assertTextEquals("$number. ")
+            assertTrue("Title sits after the number", titleBox.left >= numberBox.right - 1f)
+            compose.mainClock.advanceTimeBy(4000)
+            val after = compose.onNodeWithTag("queue-number-$id", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertEquals(numberBox, after)
+        }
+    }
+
     @Test fun ordinaryBodyTapSelectsWithoutReordering() = fixture { _, _ ->
         val start = localBody("q1")
         list().performTouchInput { click(start) }

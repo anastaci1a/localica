@@ -16,6 +16,8 @@ internal data class MarqueeFrame(
     val phase: MarqueePhase = MarqueePhase.Rest,
     val backwardFadeStart: Float? = null,
     val backwardFadeRemaining: Float = 0f,
+    /** True while an interrupted pre-fade eases the left taper back out (#768). */
+    val releasingPreFade: Boolean = false,
 )
 
 /** One retained clock per line. Viewport changes never recreate the text or its motion. */
@@ -47,7 +49,7 @@ internal class MarqueeMotion {
                     backwardFadeRemaining = if (returnForward) 0f else 1f)
                 phaseStarted = timeMillis
             }
-            MarqueePhase.LeadingIn -> beginFadeOut(timeMillis)
+            MarqueePhase.LeadingIn -> beginFadeOut(timeMillis, preFade = true)
             else -> Unit
         }
         // Keep the incoming copy beyond the resting viewport if expansion makes
@@ -98,7 +100,7 @@ internal class MarqueeMotion {
             MarqueePhase.LeadingOut -> {
                 frame = frame.copy(leadingFade = fadeStart * (1f - marqueeEase(elapsed.toFloat() / MarqueeFadeMillis)))
                 if (elapsed >= MarqueeFadeMillis) {
-                    frame = frame.copy(phase = MarqueePhase.Rest, leadingFade = 0f)
+                    frame = frame.copy(phase = MarqueePhase.Rest, leadingFade = 0f, releasingPreFade = false)
                     phaseStarted = timeMillis
                 }
             }
@@ -109,20 +111,27 @@ internal class MarqueeMotion {
     fun pauseRemaining(timeMillis: Long): Long =
         (MarqueePauseMillis - (timeMillis - phaseStarted)).coerceAtLeast(0L)
 
-    private fun beginFadeOut(timeMillis: Long) {
+    private fun beginFadeOut(timeMillis: Long, preFade: Boolean = false) {
         fadeStart = frame.leadingFade
-        frame = frame.copy(phase = MarqueePhase.LeadingOut)
+        frame = frame.copy(phase = MarqueePhase.LeadingOut, releasingPreFade = preFade)
         phaseStarted = timeMillis
     }
 }
 
 internal fun marqueeEase(fraction: Float): Float = fraction.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
-/** Follow exiting LTR text; a backward cancellation only releases the existing mask. */
+/**
+ * The left taper exists only while text is, or is about to be, disappearing leftward (#716, #737, #768).
+ * It fades fully in during LeadingIn while the offset is exactly 0 (a phase gate: motion starts only
+ * afterwards), holds through the outgoing scroll, ramps down as the last ink leaves, and is absent for
+ * the whole landing and at rest. A backward cancellation only releases the existing mask.
+ */
 internal fun marqueeLeftFade(textWidth: Float, fadeWidth: Float, frame: MarqueeFrame): Float {
     fun spatial(offset: Float): Float = if (fadeWidth <= 0f) 0f else
-        marqueeEase(minOf(offset, textWidth - offset) / fadeWidth)
+        marqueeEase(((textWidth - offset) / fadeWidth).coerceAtMost(1f))
     return when (frame.phase) {
+        MarqueePhase.LeadingIn -> if (fadeWidth <= 0f) 0f else frame.leadingFade
+        MarqueePhase.LeadingOut -> if (frame.releasingPreFade && fadeWidth > 0f) frame.leadingFade else 0f
         MarqueePhase.Scrolling -> spatial(frame.offset)
         MarqueePhase.Returning -> frame.backwardFadeStart?.let {
             it * frame.backwardFadeRemaining
