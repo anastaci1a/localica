@@ -58,7 +58,7 @@ Search/More follows the deeper profile because its surface opens a menu. Separat
 
 Action-menu width fits measured labels, icons and padding within the screen. Returning flyouts gradually restore the shared trigger foreground with its original ink/tint. Keep system pickers/permissions native and artwork/timed-lyric taps ripple-free.
 
-Popups belong to their opening screen. Back during expansion or return preserves the retract inside the outgoing screen’s movement, fade and clip. The destination never inherits an independently floating popup.
+Popups belong to their opening screen. When that screen departs, each popup holds its current geometry and foreground while the screen supplies movement, fade and clip. After screen disposal, the same popup owner resumes its return and retires through native receipts. Reopening resumes that owner. The destination never inherits an independently floating popup.
 
 Corner tokens: small art 8 dp, cards 16, inputs/menus 20, large art 24, panels 28. Compact shelves/chips use pills. Transport uses circles. Icons start at 24 dp with a unified icon/label/surface target of at least 48 dp. Clip feedback to that shape.
 
