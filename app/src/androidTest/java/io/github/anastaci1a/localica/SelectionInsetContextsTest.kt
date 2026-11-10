@@ -47,19 +47,25 @@ class SelectionInsetContextsTest {
     @Test fun popupSearch() = verify(search = true, popup = true)
     @Test fun queue() = verify(queue = true)
     @Test fun albumSubview() = verify(album = true)
+    @Test fun artistSubviewWithAlbumCarousel() = verify(artist = true)
+    @Test fun playlistSubview() = verify(playlist = true)
     @Test fun freshPointerStopsRealBrowserReveal() = verify(interrupt = "touch")
     @Test fun openingModalStopsRealBrowserReveal() = verify(interrupt = "modal")
 
     private fun verify(presentation: Presentation = Presentation.List, search: Boolean = false,
-        popup: Boolean = false, queue: Boolean = false, album: Boolean = false, interrupt: String? = null, animationProof: Boolean = false) {
+        popup: Boolean = false, queue: Boolean = false, album: Boolean = false, artist: Boolean = false, playlist: Boolean = false, interrupt: String? = null, animationProof: Boolean = false) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
         context.getSharedPreferences("library-query", 0).edit().clear().commit()
         val library = LibrarySnapshot(tracks = tracks)
         val albumRef = if (album) MediaRef(MediaKind.Album,
             LibraryViews.groups(library, SongListView.Albums, LibraryQuery()).single().id) else null
+        val artistRef = if (artist) MediaRef(MediaKind.Artist,
+            LibraryViews.groups(library, SongListView.Artists, LibraryQuery()).single().id) else null
+        val playlistState = PlaylistState(listOf(ManualPlaylist(id = "inset-playlist", name = "Inset",
+            entries = tracks.map { SongRow(it.id, it) })), loading = false)
         val route = BrowseRoute(if (queue) MainTab.Queues else MainTab.Songs,
-            collection = if (queue) MediaRef(MediaKind.Queue, "inset-queue") else albumRef,
+            collection = if (queue) MediaRef(MediaKind.Queue, "inset-queue") else if (playlist) MediaRef(MediaKind.Playlist, "inset-playlist") else albumRef ?: artistRef,
             search = search, text = if (search) "Song" else "", queryCommitted = search)
         val preferences = BrowsePreferences(context)
         preferences.write(route, preferences.read(route).copy(presentation = presentation, itemsPerRow = if (presentation == Presentation.Large) 1 else 3, quickSearch = false), false)
@@ -78,7 +84,7 @@ class SelectionInsetContextsTest {
             CompositionLocalProvider(LocalBrowseObscuredInset provides (if (popup) 0.dp else 40.dp + panel.clearance),
                 LocalBrowseSelectionPanel provides (if (popup) null else panel), LocalSessionSelection provides session) {
                 Box(Modifier.fillMaxSize().testTag("inset-context-scene")) {
-                    BrowserScreen(LibraryUiState(library, loading = false), PlaylistState(loading = false), route,
+                    BrowserScreen(LibraryUiState(library, loading = false), playlistState, route,
                         {}, {}, {}, { _, _, _ -> }, null, null, true, false, reducedMotion = interrupt == null && !animationProof,
                         queueState = state, popupDismiss = if (popup) ({}) else null)
                     val anchor = rememberGlassAnchor()

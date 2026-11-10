@@ -27,6 +27,7 @@ class SelectionInsetScrollTest {
     private var scale by mutableFloatStateOf(1f)
     private var fontScale by mutableFloatStateOf(1f)
     private var panelHeight by mutableStateOf(80.dp)
+    private var attached by mutableStateOf(true)
 
     private fun fixture(columns: Int = 1, reduced: Boolean = false) {
         columnCount = columns
@@ -36,7 +37,7 @@ class SelectionInsetScrollTest {
             pixels = LocalDensity.current.density
             grid = rememberLazyGridState()
             panel = rememberFloatingSelectionPanel(visible, reduced)
-            motion = SelectionInsetScroll(grid, panel, remember { BrowseScrollOwnership() },
+            if (attached) motion = SelectionInsetScroll(grid, panel, remember { BrowseScrollOwnership() },
                 baseInset = { 40f * pixels }, enabled = { true }, selected = { it == selection })
             Box(Modifier.size(320.dp, 480.dp)) {
                 LazyVerticalGrid(GridCells.Fixed(columns), Modifier.fillMaxSize().testTag("inset-list"), grid,
@@ -166,6 +167,43 @@ class SelectionInsetScrollTest {
             val unchanged = position()
             assertEquals(0f, position() - unchanged, 0f)
         }
+    }
+
+    @Test fun reattachingAUsedSettledPanelDoesNotReplayItsGeneration() {
+        fixture(); bottom()
+        compose.runOnIdle { visible = true }
+        compose.waitForIdle()
+        var before = 0f
+        compose.runOnIdle { before = position(); attached = false }
+        compose.waitForIdle()
+        compose.runOnIdle { attached = true }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(before, position(), 1.1f)
+            assertFalse(grid.isScrollInProgress)
+            assertFalse(motion.job?.isActive == true)
+        }
+    }
+    @Test fun reattachingMidRevealSkipsTheRetiredOwnersGeneration() {
+        fixture(); bottom()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { visible = true }
+            compose.mainClock.advanceTimeBy(64)
+            compose.waitForIdle()
+            compose.runOnIdle { attached = false }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            var retiredPosition = 0f
+            compose.runOnIdle { retiredPosition = position(); attached = true }
+            compose.mainClock.advanceTimeBy(2000)
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertEquals(retiredPosition, position(), 1.1f)
+                assertFalse(grid.isScrollInProgress)
+                assertFalse(motion.job?.isActive == true)
+            }
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
 }
