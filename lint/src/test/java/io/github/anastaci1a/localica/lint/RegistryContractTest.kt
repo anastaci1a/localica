@@ -13,10 +13,10 @@ import java.util.concurrent.Executors
 
 class RegistryContractTest {
     @org.junit.Before fun initializeLint() { com.android.tools.lint.client.api.LintClient.clientName = "unit-tests" }
-    @Test fun exactlyThirteenErrorsAtTheTestedApi() {
+    @Test fun exactlyFourteenErrorsAtTheTestedApi() {
         val registry = LocalicaIssueRegistry()
         assertEquals(UiRuleId.entries.map { it.name }.toSet(), registry.issues.map { it.id }.toSet())
-        assertEquals(13, registry.issues.size)
+        assertEquals(14, registry.issues.size)
         assertTrue(registry.issues.all { it.defaultSeverity == Severity.ERROR })
         assertFalse(registry.issues.any { it.id == "MotionThreshold" })
         assertEquals(CURRENT_API, registry.api)

@@ -202,6 +202,9 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
             edge(node, "$owner.$name")
             if (layer != null && layer != "engine" && owner.startsWith("$UI.engine.") && ((method.isConstructor && method.containingClass?.name in setOf("UiClock", "FrameStamp", "ExpandCollapse", "MotionFloat", "MotionRect", "MotionColor", "MotionProfileId", "SpringProfileId", "Eased", "Damped", "Rest", "Driven", "EasedPlan", "MotionIntent", "PersistentShape", "SurfaceNode", "ShadowPlane", "HostKey")) || (name == "copy" && method.containingClass?.name in setOf("MotionProfileId", "SpringProfileId")) || name in setOf("prepare", "prepareSegment", "prepareDrive", "commit", "commitDrive", "commitAtomic", "emit", "emitDrive", "claim", "rawValue", "rawVelocity", "finish", "reduce", "configure", "register", "unregister", "dispose", "ownerClock", "updateSpec", "expansionPlan", "boundedPlan", "expansionDuration", "observe", "allocateId"))) report(UiRuleId.RawUiMotion, node)
             val compose = owner.startsWith("androidx.compose.")
+            if (layer != null && isGlassPopupOpener(method) && !glassOriginProvided(node)) {
+                report(UiRuleId.GlassPopupWithoutAnchor, node, "Open this glass popup from its button: wrap it in GlassPopupFrom(anchor), or in GlassUnanchoredPopup when no button owns it")
+            }
             if (policy) {
                 if (owner.startsWith("androidx.compose.animation.") ||
                     (name in setOf("animateScrollToItem", "animateScrollBy", "scrollBy") && foundation(owner) && !scrollAllowed(node))) {
@@ -700,4 +703,62 @@ private fun unwrap(expression: UExpression?): UExpression? = when (expression) {
 private fun suppliedArgument(call: UCallExpression, name: String): UExpression? {
     val index = call.resolve()?.parameterList?.parameters?.indexOfFirst { it.name == name } ?: return null
     return if (index >= 0) call.getArgumentForParameter(index) else null
+}
+
+private const val OPENER_ANNOTATION = "$UI.GlassPopupOpener"
+private const val POPUP_ORIGIN_FILE = "$UI.GlassPopupOriginKt"
+private val originScopes = setOf("GlassPopupFrom", "GlassUnanchoredPopup", "GlassPopupInherited")
+
+/** A function the host declares as opening a glass popup; resolution sees through imports and aliases. */
+private fun isGlassPopupOpener(method: PsiMethod) = method.annotations.any { it.qualifiedName == OPENER_ANNOTATION }
+
+/**
+ * A popup opened inside a declared origin scope, a CompositionLocalProvider supplying
+ * LocalGlassOrigin, the body of another declared opener (which forwards its caller's origin),
+ * or as a full page (which the host never anchors) names its origin.
+ */
+private fun glassOriginProvided(call: UCallExpression): Boolean {
+    if (enclosingMethod(call)?.let { enclosing -> enclosing.javaPsi.annotations.any { it.qualifiedName == OPENER_ANNOTATION } } == true) return true
+    if (call.valueArguments.any { pageOrigin(it) }) return true
+    return parents(call).takeWhile { it !is UMethod }.any { ancestor ->
+        ancestor is ULambdaExpression && (ancestor.uastParent as? UCallExpression)?.let { scope ->
+            val target = scope.resolve()
+            val owner = target?.containingClass?.qualifiedName
+            (owner == POPUP_ORIGIN_FILE && target.name in originScopes) ||
+                (target?.name == "CompositionLocalProvider" && owner?.startsWith("androidx.compose.runtime.") == true &&
+                    scope.valueArguments.any { providesGlassOrigin(it) })
+        } == true
+    }
+}
+
+private fun uiPackage(element: PsiElement?) = (element?.containingFile as? PsiClassOwner)?.packageName == UI
+
+private fun pageOrigin(argument: UExpression): Boolean {
+    val target: PsiElement = (argument as? UResolvable)?.resolve() ?: return false
+    return (target as? PsiNamedElement)?.name == "Page" && uiPackage(target) &&
+        generateSequence<PsiElement>(target) { it.parent }.any { (it as? PsiNamedElement)?.name == "GlassPlacement" }
+}
+
+private fun providesGlassOrigin(argument: UExpression): Boolean {
+    var found = false
+    // A vararg of provided values may arrive as one wrapper expression.
+    argument.accept(object : AbstractUastVisitor() {
+        private fun check(receiver: UExpression?) {
+            val local = (receiver as? UResolvable)?.resolve()
+            val name = (local as? PsiNamedElement)?.name
+            if ((name == "LocalGlassOrigin" || name == "getLocalGlassOrigin") &&
+                uiPackage(local)) found = true
+        }
+        // Provided values are arguments; the content lambda is a different scope.
+        override fun visitLambdaExpression(node: ULambdaExpression) = true
+        override fun visitCallExpression(node: UCallExpression): Boolean {
+            if (node.methodName == "provides") check(node.receiver)
+            return found
+        }
+        override fun visitBinaryExpression(node: UBinaryExpression): Boolean {
+            if (node.operator.text == "provides" || node.operatorIdentifier?.name == "provides" || node.resolveOperator()?.name == "provides") check(node.leftOperand)
+            return found
+        }
+    })
+    return found
 }

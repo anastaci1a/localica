@@ -450,7 +450,69 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         check(UiRuleId.RawUiMotion, "fun bad() = io.github.anastaci1a.localica.ui.engine.boundedPlan()", 1)
     }
 
+    fun testGlassPopupOpenersNameTheirOrigin() {
+        val imports = """
+            import androidx.compose.runtime.*
+            import io.github.anastaci1a.localica.ui.*
+        """
+        fun popup(body: String, count: Int) = check(UiRuleId.GlassPopupWithoutAnchor, "$imports\n$body", count, "screens", *popupStubs)
+        // Positive: an opener with no origin, through an alias, through an unannotated wrapper,
+        // through an annotated wrapper whose caller names nothing, beside (not inside) a scope,
+        // and inside a provider of some other local.
+        popup("@Composable fun a() { GlassDialog({ }) { } }", 1)
+        popup("import io.github.anastaci1a.localica.ui.GlassDialog as Open\n@Composable fun a() { Open({ }) { } }", 1)
+        popup("@Composable fun wrapper() { GlassAlertDialog({ }) }", 1)
+        popup("@Composable fun a() { Wrapped() }", 1)
+        popup("@Composable fun a(anchor: GlassAnchor) { GlassPopupFrom(anchor) { }; GlassDialog({ }) { } }", 1)
+        popup("@Composable fun a() { CompositionLocalProvider(LocalOther provides 1) { GlassDialog({ }) { } } }", 1)
+        popup("@Composable fun a(anchor: GlassAnchor) { Forward(anchor) { GlassDialog({ }) { } } }", 1)
+        popup("@Composable fun a(show: Boolean) { if (show) GlassDialog({ }, GlassPlacement.Sheet) { } }", 1)
+        popup("@Composable fun a(anchor: GlassAnchor) { CompositionLocalProvider(LocalOther provides 1) { GlassDialog({ }) { }; CompositionLocalProvider(LocalGlassOrigin provides anchor) { } } }", 1)
+        // Negative: every accepted way of naming the origin, including aliases of the scopes.
+        popup("@Composable fun a(anchor: GlassAnchor) { GlassPopupFrom(anchor) { GlassDialog({ }) { } } }", 0)
+        popup("import io.github.anastaci1a.localica.ui.GlassPopupFrom as From\n@Composable fun a(anchor: GlassAnchor) { From(anchor) { Wrapped() } }", 0)
+        popup("@Composable fun a() { GlassUnanchoredPopup(\"failure notice\") { GlassAlertDialog({ }) } }", 0)
+        popup("@Composable fun a() { GlassPopupInherited(\"caller sets it\") { GlassDialog({ }) { } } }", 0)
+        popup("@Composable fun a(anchor: GlassAnchor) { CompositionLocalProvider(LocalGlassOrigin provides anchor) { GlassDialog({ }) { } } }", 0)
+        popup("@Composable fun a(anchor: GlassAnchor) { CompositionLocalProvider(LocalOther provides 1, LocalGlassOrigin provides anchor) { Wrapped() } }", 0)
+        popup("@Composable fun a(anchor: GlassAnchor) { CompositionLocalProvider(LocalOther provides 1) { CompositionLocalProvider(LocalGlassOrigin provides anchor) { GlassDialog({ }) { } } } }", 0)
+        popup("@Composable fun a() { GlassDialog({ }, GlassPlacement.Page) { } }", 0)
+        popup("@Composable @GlassPopupOpener fun forwarding() { GlassDialog({ }) { }; Wrapped() }", 0)
+        popup("@Composable fun a() { Unrelated() }\n@Composable fun Unrelated() { }\nclass Lookalike { fun GlassDialog() {} }", 0)
+        popup("class Lookalike { fun GlassDialog() {} }\nfun a() { Lookalike().GlassDialog() }", 0)
+    }
+
     companion object {
+        private val popupStubs = arrayOf(
+            """
+                package androidx.compose.runtime
+                class ProvidedValue<T>(val value: T)
+                class ProvidableCompositionLocal<T>(val value: T) { infix fun provides(value: T) = ProvidedValue(value) }
+                @Composable fun CompositionLocalProvider(vararg values: ProvidedValue<*>, content: @Composable () -> Unit) { content() }
+            """.trimIndent(),
+            """
+                package io.github.anastaci1a.localica.ui
+                import androidx.compose.runtime.*
+                class GlassAnchor
+                enum class GlassPlacement { Center, Sheet, Page }
+                @Retention(AnnotationRetention.BINARY) @Target(AnnotationTarget.FUNCTION) annotation class GlassPopupOpener
+                val LocalGlassOrigin = ProvidableCompositionLocal<GlassAnchor?>(null)
+                val LocalOther = ProvidableCompositionLocal<Int>(0)
+                @Composable @GlassPopupOpener fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = GlassPlacement.Center, content: @Composable () -> Unit) { content() }
+                @Composable @GlassPopupOpener fun GlassAlertDialog(onDismiss: () -> Unit) { }
+                @Composable @GlassPopupOpener fun Wrapped() { GlassDialog({ }) { } }
+                @Composable fun Forward(anchor: GlassAnchor, content: @Composable () -> Unit) { content() }
+            """.trimIndent(),
+            """
+                @file:JvmName("GlassPopupOriginKt")
+                package io.github.anastaci1a.localica.ui
+                import androidx.compose.runtime.*
+                @Composable fun GlassPopupFrom(anchor: GlassAnchor, content: @Composable () -> Unit) { CompositionLocalProvider(LocalGlassOrigin provides anchor, content = content) }
+                @Composable fun GlassUnanchoredPopup(reason: String, content: @Composable () -> Unit) { content() }
+                @Composable fun GlassPopupInherited(reason: String, content: @Composable () -> Unit) { content() }
+            """.trimIndent(),
+        )
+
         internal val stubs = listOf(
             kotlin("""
                 package androidx.compose.runtime

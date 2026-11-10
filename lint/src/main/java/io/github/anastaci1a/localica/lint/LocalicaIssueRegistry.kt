@@ -25,7 +25,8 @@ internal enum class UiRuleId(val policy: String) {
     NonPresetScreenLayout("Use stock screen layout slots"),
     UnvalidatedUiSpec("Construct validated specs at uiSpec ingress"),
     UiLayerDependency("Respect the UI package dependency matrix"),
-    UnreviewedUiEscape("Require an exact live lead-reviewed adapter escape");
+    UnreviewedUiEscape("Require an exact live lead-reviewed adapter escape"),
+    GlassPopupWithoutAnchor("Open glass popups from their anchor");
 
     val issue: Issue by lazy {
         Issue.create(name, policy, "$policy. Enforces the Localica UI architecture.",
