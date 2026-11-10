@@ -169,4 +169,43 @@ class PreparedPreferencesTest {
         } finally { app.deleteSharedPreferences(name) }
     }
 
+
+    @Test fun newlyReadyInlineCommandCannotOvertakeAnOlderQueuedContinuation() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<LocalicaApplication>()
+        app.preferences.awaitReady()
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val pending = java.util.concurrent.ConcurrentLinkedQueue<Runnable>()
+        val inline = java.util.concurrent.atomic.AtomicBoolean(true)
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun isDispatchNeeded(context: kotlin.coroutines.CoroutineContext) = !inline.get()
+            override fun dispatch(context: kotlin.coroutines.CoroutineContext, block: Runnable) { pending.add(block) }
+        }
+        val entryScope = CoroutineScope(SupervisorJob() + dispatcher)
+        val context = object : ContextWrapper(app) {
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
+                entered.countDown()
+                check(release.await(10, TimeUnit.SECONDS))
+                return super.getSharedPreferences(name, mode)
+            }
+        }
+        val owner = PreparedPreferences(context, preparationScope)
+        val events = mutableListOf<String>()
+        try {
+            withContext(Dispatchers.IO) { check(entered.await(10, TimeUnit.SECONDS)) }
+            val play = owner.launchWhenReady(entryScope) { events += "play" }
+            inline.set(false)
+            release.countDown()
+            withTimeout(10_000) { owner.awaitReady() }
+            assertTrue("The older readiness continuation must still be queued", pending.isNotEmpty())
+            inline.set(true)
+            val pause = owner.launchWhenReady(entryScope) { events += "pause" }
+            assertTrue("The new immediate entry must remain behind the queued entry", events.isEmpty())
+            while (true) { val continuation = pending.poll() ?: break; continuation.run() }
+            withTimeout(10_000) { play.join(); pause.join() }
+            assertEquals(listOf("play", "pause"), events)
+        } finally { release.countDown(); entryScope.cancel(); preparationScope.cancel() }
+    }
+
 }

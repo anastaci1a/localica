@@ -5,6 +5,8 @@ import android.content.ContextWrapper
 import android.content.SharedPreferences
 import io.github.anastaci1a.localica.LocalicaApplication
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -30,10 +32,24 @@ class PreparedPreferences(context: Context, scope: CoroutineScope, names: List<S
 
     suspend fun awaitReady() { preparation.await() }
 
-    /** Entry commands belong to their caller's lifecycle, independently of process preparation. */
-    fun launchWhenReady(scope: CoroutineScope, action: suspend () -> Unit) = scope.launch {
-        awaitReady()
-        action()
+    private val entryTails = mutableMapOf<CoroutineScope, Job>()
+
+    /** Link entries before starting them, so a newly ready call cannot overtake a queued continuation. */
+    fun launchWhenReady(scope: CoroutineScope, action: suspend () -> Unit): Job {
+        // This lock only links lazy jobs. Neither preference preparation nor consumer work runs inside it.
+        val job = synchronized(entryTails) {
+            val previous = entryTails[scope]
+            scope.launch(start = CoroutineStart.LAZY) {
+                previous?.join()
+                awaitReady()
+                action()
+            }.also { entryTails[scope] = it }
+        }
+        job.invokeOnCompletion {
+            synchronized(entryTails) { if (entryTails[scope] === job) entryTails.remove(scope) }
+        }
+        job.start()
+        return job
     }
 
     /** Never opens a file, falls back to an unprepared handle, or waits for preparation. */
