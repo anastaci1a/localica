@@ -160,9 +160,26 @@ class PreparedColdEntryTest {
             }
             app.stopService(Intent(app, PlaybackService::class.java))
             val manager = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            withTimeout(30_000) {
-                while (manager.getRunningServices(Int.MAX_VALUE).any { it.service.className == PlaybackService::class.java.name }) delay(20)
+            android.util.Log.i("PreparedEntryProof", "stage=service-stop pid=" + android.os.Process.myPid())
+            var stopRequests = 1
+            try {
+                withTimeout(30_000) {
+                    while (manager.getRunningServices(Int.MAX_VALUE).any { it.service.className == PlaybackService::class.java.name }) {
+                        // Media3 notification updates may already have posted a self-start before the
+                        // client unbind. Reissue the platform stop after that request is delivered.
+                        // A retained binding still fails this deadline; no service cleanup is invoked here.
+                        app.stopService(Intent(app, PlaybackService::class.java))
+                        stopRequests++
+                        delay(20)
+                    }
+                }
+            } catch (timeout: TimeoutCancellationException) {
+                val observed = manager.getRunningServices(Int.MAX_VALUE).filter { it.service.className == PlaybackService::class.java.name }
+                    .joinToString { "pid=" + it.pid + ";started=" + it.started + ";foreground=" + it.foreground + ";clients=" + it.clientCount }
+                throw AssertionError("service-stop timed out after $stopRequests platform requests: $observed", timeout)
             }
+            android.util.Log.i("PreparedEntryProof", "service-stop-requests=$stopRequests")
+            android.util.Log.i("PreparedEntryProof", "stage=durable-cursor pid=" + android.os.Process.myPid())
             // Read through an independent Room owner after shutdown; the queue writer must finish its cursor checkpoint.
             val database = androidx.room.Room.databaseBuilder(app,
                 io.github.anastaci1a.localica.queue.QueueDatabase::class.java, "queues.db").build()
@@ -175,11 +192,14 @@ class PreparedColdEntryTest {
                     }
                 }
             } finally { database.close() }
+            android.util.Log.i("PreparedEntryProof", "stage=native-release pid=" + android.os.Process.myPid())
             val released = Regex("ExoPlayerImpl\\s*:\\s*Release $playerId\\b")
             withTimeout(30_000) { while (!released.containsMatchIn(episodeLog())) delay(20) }
             // The release log is emitted inside release(); an idle Main receipt follows the completed callback.
             instrumentation.waitForIdleSync()
             withContext(Dispatchers.Main) { assertNull(app.queues.playbackSample()) }
+            assertEquals("Shutdown must not create another native engine", listOf(playerId),
+                Regex("ExoPlayerImpl\\s*:\\s*Init ([0-9a-f]+)").findAll(episodeLog()).map { it.groupValues[1] }.distinct().toList())
             instrumentation.sendStatus(0, Bundle().apply {
                 putString("stream", "playback-attached=true;play-pause-order=true;controller-released=true;" +
                     "service-stopped=true;durable-position=1234;native-released=true;player-id=$playerId\n")
