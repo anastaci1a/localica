@@ -87,7 +87,7 @@ class PlayerPresentationSliceEqualityTest {
             probe = PlayerPresentationHarnessSnapshot(generation, context.access.name, spec.spec.access.name,
                 clock.context?.access?.name ?: "Unapplied", clock.spec.access.name, localReduced, clock === owner,
                 context.displayIntervalSeconds, context.fullPlayerReferenceTravelPx, localDensity.density,
-                localDensity.fontScale, appearance.renderer.name, appearance.contrast)
+                localDensity.fontScale, appearance.renderer.name, appearance.contrast, appearance.shadowStrength, appearance.liftShadowStrength)
         }
     }
 
@@ -106,7 +106,7 @@ class PlayerPresentationSliceEqualityTest {
             val generation = checkpoint
             SideEffect { density = actualDensity; view = actualView; insetTop = top; insetBottom = bottom }
             val backdrop = rememberFrostedBackdrop(Unit, enabled = false, dark = true, lightMix = 1f, retainRaster = false)
-            val appearance = GlassAppearance(renderer = GlassRendererMode.None, contrast = 0f)
+            val appearance = GlassAppearance(renderer = GlassRendererMode.None, contrast = 0f, shadowStrength = 0f, liftShadowStrength = 0f)
             CompositionLocalProvider(LocalFrostedBackdrop provides backdrop, LocalReducedMotion provides reduced,
                 LocalGlassAppearance provides appearance,
                 LocalPlayerPresentationHarnessProbe provides { ObserveHarness(generation) },
@@ -162,8 +162,10 @@ class PlayerPresentationSliceEqualityTest {
                 val captureNode = compose.onNodeWithTag("slice-i-capture", useUnmergedTree = true)
                 val capture = captureNode.fetchSemanticsNode().boundsInRoot
                 val tags = listOf("player-surface", "player-background-space", "player-title", "player-artist", "player-artwork",
-                    "player-handle", "player-actions-row", "slice-i-action-ink", "player-seek-row", "player-transport-row", "lyrics-panel", "empty-lyrics")
-                val geometry = tags.associateWith { tag -> nodes(tag).map { it.boundsInRoot } }
+                    "player-handle", "player-lyrics-pill", "player-actions-row", "slice-i-action-ink", "player-seek-row", "player-transport-row", "lyrics-panel", "empty-lyrics")
+                val geometry = tags.associateWith { tag -> nodes(tag).map { it.boundsInRoot } } +
+                    ("collapse-button" to compose.onAllNodesWithContentDescription("Collapse player", useUnmergedTree = true)
+                        .fetchSemanticsNodes().map { it.boundsInRoot })
                 val before = snapshot(visual)
                 val image = captureNode.captureToImage()
                 val display = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
@@ -228,6 +230,7 @@ class PlayerPresentationSliceEqualityTest {
                     assertEquals(expected, actualProbe.clockAccess); assertEquals(expected, actualProbe.clockSpecAccess)
                     assertEquals(reduced, actualProbe.localReduced); assertTrue(actualProbe.ownsRootClock)
                     assertEquals("None", actualProbe.renderer); assertEquals(0f, actualProbe.contrast, 0f)
+                    assertEquals(0f, actualProbe.shadowStrength, 0f); assertEquals(0f, actualProbe.liftShadowStrength, 0f)
                     val profile = if (Build.VERSION.SDK_INT == 26) listOf(1080f, 1920f, 2.625f, 1f) else listOf(720f, 1280f, 1.75f, 1f)
                     assertEquals("The real window uses its declared profile", profile, actual.window.take(4))
                     assertTrue(capture.top >= actual.window[4]); assertTrue(capture.bottom <= actual.window[1] - actual.window[5])
@@ -249,16 +252,28 @@ class PlayerPresentationSliceEqualityTest {
                     assertEquals("The restored original state is unchanged", snapshotJson(before).toString(), snapshotJson(after).toString())
                     assertEquals("The original and oracle have the same measured handle backing coordinates", 0, record.getInt("handleBackingRingDifference"))
                     assertTrue("$policy paints its handle", record.getBoolean("handleContrast") && record.getInt("handleDifference") > 0)
+                    val handleBounds = geometry.getValue("player-handle").single()
+                    assertEquals(1, geometry.getValue("collapse-button").size)
+                    for (other in listOf("collapse-button", "player-lyrics-pill", "player-title", "player-artist", "player-seek-row", "player-transport-row"))
+                        geometry.getValue(other).forEach { assertFalse("$other does not paint beneath the handle", it.overlaps(handleBounds)) }
                     compose.onNodeWithTag("player-handle", true).assertIsDisplayed()
                     if (selected) {
                         assertEquals(1f, requireNotNull(before.ink).lyricsProgress, 0f)
                         assertEquals(0f, playerLyricsMotion(1f, requireNotNull(before.ink).lyricsProgress).artworkAlpha, 0f)
                         assertEquals("The original and oracle have the same measured lyrics backing coordinates", 0, record.getInt("lyricsBackingRingDifference"))
+                        val target = geometry.getValue("empty-lyrics").single()
+                        for (other in listOf("collapse-button", "player-lyrics-pill", "player-title", "player-artist", "player-seek-row", "player-transport-row"))
+                            geometry.getValue(other).forEach { assertFalse("$other does not paint beneath the lyrics icon", it.overlaps(target)) }
                         assertTrue("$policy paints its lyrics icon", record.getInt("lyricsPaint") > 0 && record.getInt("lyricsDifference") > 0)
                         compose.onNodeWithTag("empty-lyrics", true).assertIsDisplayed()
                     } else {
                         assertNotNull(before.retained)
                         assertEquals(record.getJSONObject("oracle").getDouble("blend").toFloat(), requireNotNull(before.retained).fullArtBlend, 0f)
+                        val target = geometry.getValue("slice-i-action-ink").single()
+                        for (other in listOf("collapse-button", "player-lyrics-pill", "player-title", "player-artist", "player-seek-row", "player-transport-row"))
+                            geometry.getValue(other).forEach { assertFalse("$other does not paint beneath the action marker", it.overlaps(target)) }
+                        val cover = requireNotNull(before.retained).cover.translate(capture.left, capture.top)
+                        assertFalse("The artwork does not paint beneath the action marker", cover.overlaps(target))
                         assertTrue(requireNotNull(before.retained).cover.top + capture.top > geometry.getValue("player-handle").single().bottom)
                         assertTrue("$policy paints its action row", record.getInt("actionPaint") > 0 && record.getInt("actionDifference") > 0)
                         compose.onNodeWithTag("slice-i-action-ink", true).assertIsDisplayed()
@@ -291,7 +306,8 @@ class PlayerPresentationSliceEqualityTest {
             .put("clockAccess", p.clockAccess).put("clockSpecAccess", p.clockSpecAccess).put("localReduced", p.localReduced)
             .put("ownsRootClock", p.ownsRootClock).put("displayIntervalSeconds", p.displayIntervalSeconds)
             .put("referenceTravelPx", p.referenceTravelPx).put("density", p.density).put("fontScale", p.fontScale)
-            .put("renderer", p.renderer).put("contrast", p.contrast) } ?: JSONObject.NULL)
+            .put("renderer", p.renderer).put("contrast", p.contrast).put("shadowStrength", p.shadowStrength)
+            .put("liftShadowStrength", p.liftShadowStrength) } ?: JSONObject.NULL)
         .put("inkGeneration", value.inkGeneration).put("ink", value.ink?.let { i -> JSONObject()
             .put("rgba", JSONArray(listOf(i.contentColor.red, i.contentColor.green, i.contentColor.blue, i.contentColor.alpha)))
             .put("lyricsVisibility", i.lyricsProgress).put("decisionLightInk", i.decision.lightInk) } ?: JSONObject.NULL)

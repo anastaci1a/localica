@@ -21,4 +21,6 @@ internal data class PlayerPresentationHarnessSnapshot(
     val fontScale: Float,
     val renderer: String,
     val contrast: Float,
+    val shadowStrength: Float,
+    val liftShadowStrength: Float,
 )
