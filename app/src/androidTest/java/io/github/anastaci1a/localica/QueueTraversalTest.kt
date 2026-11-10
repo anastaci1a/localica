@@ -11,9 +11,10 @@ import org.junit.Test
 class QueueTraversalTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun queue(size: Int, current: Int, modes: JourneyModes): ListeningQueue {
-        val entries = List(size) { QueueEntry(id = "occurrence:$it", track = Track("song:${it % 11}", "Song ${it % 11}",
+        val namespace = java.util.UUID.randomUUID().toString()
+        val entries = List(size) { QueueEntry(id = "$namespace:occurrence:$it", track = Track("song:${it % 11}", "Song ${it % 11}",
             fileName = "song.mp3", relativePath = "song.mp3")) }
-        return ListeningQueue(name = "Traversal", entries = entries, currentEntryId = entries[current].id,
+        return ListeningQueue(id = namespace, name = "Traversal", entries = entries, currentEntryId = entries[current].id,
             journey = QueueJourney.start(entries.map { it.id }, entries[current].id, modes, kotlin.random.Random(31)))
     }
 
