@@ -167,9 +167,10 @@ class MainThreadGuardTest {
                     val seen = mutableListOf<String>()
                     fun walk(node: androidx.compose.ui.semantics.SemanticsNode) {
                         val cfg = node.config
-                        val tag = cfg.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag)
-                        val text = cfg.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.joinToString("|") { it.text }
-                        val desc = cfg.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)?.joinToString("|")
+                        val props = androidx.compose.ui.semantics.SemanticsProperties
+                        val tag = if (props.TestTag in cfg) cfg[props.TestTag] else null
+                        val text = if (props.Text in cfg) cfg[props.Text].joinToString("|") { it.text } else null
+                        val desc = if (props.ContentDescription in cfg) cfg[props.ContentDescription].joinToString("|") else null
                         if (tag != null || text != null || desc != null) seen += "${tag ?: ""}[${(text ?: desc ?: "").take(30)}]"
                         node.children.forEach(::walk)
                     }
