@@ -54,7 +54,7 @@ object IconPacks {
     val activeId: StateFlow<String?> get() = activeState
     private var loadedRoot: String? = null
     private fun directory(context: Context) = File(context.filesDir, "icon-packs")
-    private fun preferences(context: Context) = context.getSharedPreferences("icon-packs", Context.MODE_PRIVATE)
+    private fun preferences(context: Context) = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "icon-packs")
 
     /** Loads all images once per process, and migrates the previous single-pack directory. */
     @Synchronized fun load(context: Context) {

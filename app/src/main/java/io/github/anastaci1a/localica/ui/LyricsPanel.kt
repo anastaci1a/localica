@@ -77,7 +77,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
         } while (true)
     }
     val context = LocalContext.current
-    val preferences = remember { context.getSharedPreferences("lyric-sources", 0) }
+    val preferences = remember { io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "lyric-sources") }
     var chosen by rememberSaveable(track?.id) { mutableStateOf(preferences.getString(track?.id ?: "", null)) }
     LaunchedEffect(result, chosen) {
         val legacy = chosen?.takeIf { it.endsWith(":plain") } ?: return@LaunchedEffect
@@ -87,7 +87,8 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
             preferences.edit().putString(track?.id ?: "", original).apply()
         }
     }
-    val source = result?.sources?.firstOrNull { it.id == chosen } ?: result?.sources?.firstOrNull()
+    // Resolve the legacy alias before presentation; its durable migration follows in the effect.
+    val source = result?.sources?.let { selectedLyricSource(it, chosen) }
     // Crossfade retains outgoing content. Capture availability in its target so a completed
     // read cannot turn an outgoing loading layer into a false missing-lyrics indicator.
     val presentation = when {

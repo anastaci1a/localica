@@ -25,12 +25,26 @@ class ScanService : Service() {
             NotificationChannel("scanner", "Library scanning", NotificationManager.IMPORTANCE_LOW))
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!(application as LocalicaApplication).preferences.ready.value) {
+            try {
+                ServiceCompat.startForeground(this, 9001, notification(ScanState()),
+                    if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0)
+            } catch (_: Exception) { stopSelf(); return START_NOT_STICKY }
+        }
+        scope.launch {
+            (application as LocalicaApplication).preferences.awaitReady()
+            startPrepared(intent, startId)
+        }
+        return START_NOT_STICKY
+    }
+
+    private fun startPrepared(intent: Intent?, startId: Int) {
         latestStart = startId
-        if (intent?.action == "cancel") { scanner.cancel(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY }
+        if (intent?.action == "cancel") { scanner.cancel(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return }
         try {
             ServiceCompat.startForeground(this, 9001, notification(scanner.state.value),
                 if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0)
-        } catch (_: Exception) { scanner.failedToStart(); stopSelf(); return START_NOT_STICKY }
+        } catch (_: Exception) { scanner.failedToStart(); stopSelf(); return }
         if (wake == null) {
             wake = (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "localica:scan")
                 .apply { acquire(6 * 60 * 60 * 1000L) }
@@ -45,7 +59,6 @@ class ScanService : Service() {
             intent?.getBooleanExtra("full-after-quick", false) == true) {
             stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(latestStart)
         }
-        return START_NOT_STICKY
     }
     // Both intents are constant for this service instance; resolve them once rather than per update.
     private val open by lazy {
@@ -64,11 +77,12 @@ class ScanService : Service() {
             .addAction(0, "Cancel", cancel).build()
     }
     override fun onTimeout(startId: Int, fgsType: Int) {
-        scanner.cancel("Android stopped the background scan at its time limit. Completed folders were saved.")
+        if ((application as LocalicaApplication).preferences.ready.value) scanner.cancel("Android stopped the background scan at its time limit. Completed folders were saved.")
         stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
     }
     override fun onDestroy() {
-        scanner.cancel(); scope.cancel()
+        if ((application as LocalicaApplication).preferences.ready.value) scanner.cancel()
+        scope.cancel()
         wake?.let { if (it.isHeld) it.release() }; wake = null
         super.onDestroy()
     }

@@ -44,7 +44,8 @@ class LastFmWork(private val app: LocalicaApplication) : LastFmBackground {
     override fun cancelIfConsentDenied() {
         // Consent starts closed during its asynchronous disk load. Never cancel a restored job for that transient state.
         CoroutineScope(Dispatchers.IO).launch {
-            app.onlineMetadataConsent.load()
+            app.preferences.awaitReady()
+        app.onlineMetadataConsent.load()
             if (!app.onlineMetadataConsent.allowed.value) cancel()
         }
     }

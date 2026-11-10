@@ -5,7 +5,7 @@ import android.content.Context
 import io.github.anastaci1a.localica.library.SongListView
 
 class QueuePreferences(context: Context) {
-    private val preferences = context.getSharedPreferences("queue-settings", Context.MODE_PRIVATE)
+    private val preferences = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "queue-settings")
     fun read() = QueueSettings(
         songTap = preferences.enumValue<SongTap>("tap") ?: SongTap.NewQueue,
         switching = preferences.enumValue<QueueSwitch>("switch-browse") ?: QueueSwitch.Browse,

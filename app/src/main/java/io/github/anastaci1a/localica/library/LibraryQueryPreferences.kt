@@ -8,7 +8,7 @@ interface LibraryQueryPreferences {
 }
 
 class AndroidLibraryQueryPreferences(context: Context) : LibraryQueryPreferences {
-    private val preferences = context.getSharedPreferences("library-query", Context.MODE_PRIVATE)
+    private val preferences = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "library-query")
     private fun key(view: SongListView, name: String) = if (view == SongListView.Songs) name else "${view.name}.$name"
     override fun read(view: SongListView) = LibraryQuery(
         text = preferences.getString(key(view, "text"), "").orEmpty(),
