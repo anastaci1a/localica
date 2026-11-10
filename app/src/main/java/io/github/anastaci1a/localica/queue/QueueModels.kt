@@ -19,7 +19,13 @@ data class ListeningQueue(
     val lastActivatedAt: Long = createdAt,
     val journey: QueueJourney? = null,
     val order: SavedOrder = SavedOrder(entries.map { it.id }),
-)
+    val storage: QueueStorageState? = null,
+    val playbackWindow: QueuePlaybackWindow? = null,
+) {
+    /** Logical count remains exact when only the active playback window is loaded. */
+    val entryCount: Int get() = storage?.entryCount ?: entries.size
+    val currentIndex: Int get() = storage?.currentIndex ?: entries.indexOfFirst { it.id == currentEntryId }
+}
 enum class QueueRepeat { Off, All, One }
 enum class SongEnd(val label: String) { Stop("Stop here"), NextPaused("Load next song and pause"), Next("Play next song"), Repeat("Repeat this song") }
 enum class QueueEnd(val label: String) { Stop("Stop here"), NextQueue("Go to next queue"), Repeat("Repeat this queue") }
