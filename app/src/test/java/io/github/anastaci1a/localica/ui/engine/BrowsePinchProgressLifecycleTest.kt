@@ -8,6 +8,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import org.junit.Assert.*
 import org.junit.Test
+import kotlin.coroutines.CoroutineContext
 
 /** Cross-owner and component lifecycle controls for the reviewed root-clock seam. */
 class BrowsePinchProgressLifecycleTest {
@@ -19,7 +20,7 @@ class BrowsePinchProgressLifecycleTest {
             override suspend fun awaitFrame() = frames.receive()
             override suspend fun <R> awaitFrame(onFrame: (Long) -> R): R = onFrame(frames.receive())
         }, { Long.MIN_VALUE / 4 }, {})
-        val owner = BrowsePinchProgressOwner().also { it.bind(clock) }
+        val owner = BrowsePinchProgressOwner().also { it.bind(clock, Dispatchers.Unconfined) }
         init {
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 try { clock.run() }
@@ -44,14 +45,80 @@ class BrowsePinchProgressLifecycleTest {
 
     @Test fun bindingIsIdempotentForOneRootAndRejectsAnotherRoot() {
         Pump().use { first -> Pump().use { second ->
-            first.owner.bind(first.clock)
-            first.owner.bind(first.clock)
+            first.owner.bind(first.clock, Dispatchers.Unconfined)
+            first.owner.bind(first.clock, Dispatchers.Unconfined)
             assertEquals(0, first.clock.activeCount)
             var rejected = false
-            try { first.owner.bind(second.clock) } catch (_: IllegalStateException) { rejected = true }
+            try { first.owner.bind(second.clock, Dispatchers.Unconfined) } catch (_: IllegalStateException) { rejected = true }
             assertTrue(rejected)
             assertEquals(0, second.clock.activeCount)
+            rejected = false
+            try { first.owner.bind(first.clock, Dispatchers.Default) } catch (_: IllegalStateException) { rejected = true }
+            assertTrue("A bound root cannot replace its retirement dispatcher", rejected)
         } }
+    }
+
+    @Test fun offOwnerCompletionCancellationAndDisposalRetireWithoutExtraWrites() {
+        for (mode in listOf("completed", "cancelled", "disposed")) {
+            var onOwner = true
+            var callerDispatches = 0
+            var ownerDispatches = 0
+            fun dispatcher(owner: Boolean) = object : CoroutineDispatcher() {
+                override fun isDispatchNeeded(context: CoroutineContext) = true
+                override fun dispatch(context: CoroutineContext, block: Runnable) {
+                    if (owner) ownerDispatches++ else callerDispatches++
+                    val previous = onOwner
+                    onOwner = owner
+                    try { block.run() } finally { onOwner = previous }
+                }
+            }
+            val ownerDispatcher = dispatcher(true)
+            val callerDispatcher = dispatcher(false)
+            val errors = mutableListOf<Throwable>()
+            val handler = CoroutineExceptionHandler { _, failure -> errors += failure }
+            val rootScope = CoroutineScope(SupervisorJob() + ownerDispatcher + handler)
+            val callerScope = CoroutineScope(SupervisorJob() + callerDispatcher + handler)
+            val frames = Channel<Long>(Channel.UNLIMITED)
+            val clock = UiClock(object : FrameSource {
+                override suspend fun awaitFrame() = frames.receive()
+                override suspend fun <R> awaitFrame(onFrame: (Long) -> R): R = onFrame(frames.receive())
+            }, { Long.MIN_VALUE / 4 }, { check(onOwner) { "Engine mutation requires Main" } })
+            val owner = BrowsePinchProgressOwner().also { it.bind(clock, ownerDispatcher) }
+            rootScope.launch(start = CoroutineStart.UNDISPATCHED) { clock.run() }
+            var writes = 0
+            try {
+                // Start on the owner, then resume this same caller on its own dispatcher.
+                val caller = callerScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    owner.catchUp(100) { _, _ -> writes++ }
+                }
+                onOwner = false
+                check(frames.trySend(1_000_000_000L).isSuccess)
+                assertEquals(1, writes)
+                when (mode) {
+                    "completed" -> {
+                        repeat(9) { check(frames.trySend(1_016_666_667L + it * 16_666_667L).isSuccess) }
+                        assertTrue(caller.isCompleted)
+                        assertFalse(caller.isCancelled)
+                        caller.cancel() // Already-completed work remains retired.
+                    }
+                    "cancelled" -> caller.cancel()
+                    "disposed" -> { rootScope.cancel(); callerScope.cancel() }
+                }
+                assertTrue("$mode must finish without leaving a suspended caller", caller.isCompleted)
+                assertEquals("$mode must leave no registered motion", 0, clock.activeCount)
+                assertTrue("The caller must actually resume away from the owner", callerDispatches > 0)
+                assertTrue("Cleanup must dispatch back to the owner", ownerDispatches > 1)
+                assertTrue("$mode must preserve Main enforcement: $errors", errors.isEmpty())
+                val terminalWrites = writes
+                check(frames.trySend(2_000_000_000L).isSuccess)
+                assertEquals("$mode cannot publish another value", terminalWrites, writes)
+                assertEquals(0, clock.activeCount)
+            } finally {
+                callerScope.cancel()
+                rootScope.cancel()
+                frames.close()
+            }
+        }
     }
 
     @Test fun idleResumeEmitsTheRetainedValueOnItsFirstPresentedFrame() {
@@ -77,6 +144,52 @@ class BrowsePinchProgressLifecycleTest {
             assertTrue(progress.value > retained * .8f)
             resumed.cancel()
             assertEquals(0, pump.clock.activeCount)
+        }
+    }
+
+    @Test fun cancellationDuringRetirementPreservesAnAlreadyObservedCallbackFailure() {
+        var onOwner = true
+        var deferCleanup = false
+        val queued = ArrayDeque<Runnable>()
+        fun dispatcher(owner: Boolean, defer: Boolean = false) = object : CoroutineDispatcher() {
+            override fun isDispatchNeeded(context: CoroutineContext) = true
+            override fun dispatch(context: CoroutineContext, block: Runnable) {
+                val guarded = Runnable {
+                    val previous = onOwner
+                    onOwner = owner
+                    try { block.run() } finally { onOwner = previous }
+                }
+                if (defer && deferCleanup) queued.addLast(guarded) else guarded.run()
+            }
+        }
+        val rootScope = CoroutineScope(SupervisorJob() + dispatcher(true))
+        val callerScope = CoroutineScope(SupervisorJob() + dispatcher(false))
+        val frames = Channel<Long>(Channel.UNLIMITED)
+        val clock = UiClock(object : FrameSource {
+            override suspend fun awaitFrame() = frames.receive()
+            override suspend fun <R> awaitFrame(onFrame: (Long) -> R): R = onFrame(frames.receive())
+        }, { Long.MIN_VALUE / 4 }, { check(onOwner) { "Engine mutation requires Main" } })
+        val owner = BrowsePinchProgressOwner().also { it.bind(clock, dispatcher(true, true)) }
+        rootScope.launch(start = CoroutineStart.UNDISPATCHED) { clock.run() }
+        val witness = IllegalStateException("callback failure precedes cancellation")
+        var observed: Throwable? = null
+        try {
+            val caller = callerScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                try { owner.catchUp(100) { _, _ -> throw witness } }
+                catch (failure: Throwable) { observed = failure }
+            }
+            deferCleanup = true
+            onOwner = false
+            check(frames.trySend(1_000_000_000L).isSuccess)
+            assertEquals(1, queued.size)
+            caller.cancel()
+            while (queued.isNotEmpty()) queued.removeFirst().run()
+            assertTrue(caller.isCompleted)
+            assertTrue(observed is IllegalStateException)
+            assertEquals(witness.message, observed?.message)
+            assertEquals(0, clock.activeCount)
+        } finally {
+            callerScope.cancel(); rootScope.cancel(); frames.close()
         }
     }
 

@@ -8,6 +8,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.MotionDurationScale
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -20,11 +24,14 @@ internal const val PinchEaseMinimumFrames = 5
 /** A transaction family binds to its root's clock; an unbound fixture cannot animate. */
 internal class BrowsePinchProgressOwner {
     private var clock: UiClock? = null
+    private var retirementDispatcher: CoroutineDispatcher? = null
 
-    internal fun bind(value: UiClock) {
+    internal fun bind(value: UiClock, dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate) {
         value.checkMutation()
         check(clock == null || clock === value) { "A pinch transaction family keeps its root clock" }
+        check(retirementDispatcher == null || retirementDispatcher === dispatcher) { "A pinch transaction family keeps its owner dispatcher" }
         clock = value
+        retirementDispatcher = dispatcher
     }
 
     suspend fun settle(from: Float, target: Float, frame: (Float) -> Unit) =
@@ -50,10 +57,21 @@ internal class BrowsePinchProgressOwner {
         val intent = BrowsePinchProgressIntent(root.allocateId(), currentCoroutineContext().job,
             durationNanos, scale, frame)
         root.register(intent)
+        var primaryFailure: Throwable? = null
         try {
             intent.completed.await()
+        } catch (failure: Throwable) {
+            primaryFailure = failure
+            throw failure
         } finally {
-            root.unregister(intent)
+            // The caller may resume on a test scheduler or be cancelled away from the
+            // owner thread. Retirement must still finish on the bound root owner.
+            try {
+                withContext(NonCancellable + checkNotNull(retirementDispatcher)) { root.unregister(intent) }
+            } catch (retirementFailure: Throwable) {
+                val primary = primaryFailure ?: throw retirementFailure
+                if (retirementFailure !== primary) primary.addSuppressed(retirementFailure)
+            }
         }
     }
 }
