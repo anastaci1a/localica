@@ -34,6 +34,7 @@ class FlatNoneRendererPopupTest {
         val device = UiDevice.getInstance(instrumentation)
         val preferences = InterfacePreferences(context)
         val original = preferences.read()
+        var fixturePlayback: io.github.anastaci1a.localica.playback.PlaybackConnection? = null
         var step = "settings-ingress"
         fun visible(selector: BySelector): androidx.test.uiautomator.UiObject2 {
             val found = device.findFresh(selector, 15_000)
@@ -58,12 +59,11 @@ class FlatNoneRendererPopupTest {
             // An earlier real-app walk can have left an asynchronous clear behind
             // its deleted cache MP3. Retire only that known test-owned playback;
             // an unrelated error is a failed fixture precondition, not a missed tap.
-            lateinit var playback: io.github.anastaci1a.localica.playback.PlaybackConnection
-            instrumentation.runOnMainSync { playback = io.github.anastaci1a.localica.playback.PlaybackConnection(context) }
-            try {
+            instrumentation.runOnMainSync { fixturePlayback = io.github.anastaci1a.localica.playback.PlaybackConnection(context) }
+            val playback = checkNotNull(fixturePlayback)
                 await(15_000) { playback.state.value.connected && !playback.queues.state.value.loading }
                 val active = playback.queues.state.value.library.active
-                if (active?.entries?.all { it.track.id == "flat-none-walk-740" } == true) {
+                if (active != null && active.entries.isNotEmpty() && active.entries.all { it.track.id == "flat-none-walk-740" }) {
                     instrumentation.runOnMainSync { playback.clear() }
                     await(15_000) {
                         var nativeEmpty = false
@@ -71,7 +71,6 @@ class FlatNoneRendererPopupTest {
                         playback.queues.state.value.library.activeId == null && nativeEmpty
                     }
                 } else assertNull("The touch fixture must not start behind an unrelated playback failure", playback.state.value.problem)
-            } finally { instrumentation.runOnMainSync { playback.close() } }
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs, MainTab.Albums),
                 reducedMotion = true, glass = GlassAppearance(renderer = GlassRendererMode.FlatNone)))
             ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
@@ -98,6 +97,9 @@ class FlatNoneRendererPopupTest {
                     assertNull(device.findObject(By.textContains("keeps stopping")))
                 }
             }
-        } finally { preferences.write(original) }
+        } finally {
+            fixturePlayback?.let { playback -> instrumentation.runOnMainSync { playback.close() } }
+            preferences.write(original)
+        }
     }
 }
