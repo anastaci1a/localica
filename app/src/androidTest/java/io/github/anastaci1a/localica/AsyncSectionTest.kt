@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -25,6 +28,13 @@ import java.util.concurrent.TimeUnit
 
 class AsyncSectionTest {
     @get:Rule val compose = localicaComposeRule()
+    private fun captureSection(name: String) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val dir = nativeEvidenceDirectory("async-section", context.getExternalFilesDir(null))
+        File(dir, "$name-api${android.os.Build.VERSION.SDK_INT}.png").outputStream().use { output ->
+            assertTrue(compose.onNodeWithTag("async-scene").captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output))
+        }
+    }
 
     @Test fun supersededBackgroundRequestCannotOverwriteCurrentValue() {
         val started = CountDownLatch(1)
@@ -55,18 +65,26 @@ class AsyncSectionTest {
         compose.mainClock.autoAdvance = false
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
-                Column { AsyncSection(value, rowCount = 2) { result ->
+                Column(Modifier.testTag("async-scene")) { AsyncSection(value, rowCount = 2) { result ->
                     AsyncSectionRow(0) { Text(result) }
                     AsyncSectionRow(1) { Text("second") }
                 } }
             }
         } }
         compose.onNodeWithTag("async-section-loading").assertExists()
+        captureSection("01-pending")
         compose.runOnIdle { value = "first" }
         compose.mainClock.advanceTimeByFrame()
         compose.onNodeWithTag("async-section-loading").assertExists()
         compose.onNodeWithText("first").assertDoesNotExist()
-        compose.mainClock.advanceTimeBy(2400)
+        compose.mainClock.advanceTimeBy(110)
+        captureSection("02-spinner-exit")
+        compose.mainClock.advanceTimeBy(300)
+        captureSection("03-wave-start")
+        compose.mainClock.advanceTimeBy(70)
+        captureSection("04-wave-stagger")
+        compose.mainClock.advanceTimeBy(1920)
+        captureSection("05-settled")
         compose.onNodeWithTag("async-section-loading").assertDoesNotExist()
         compose.onNodeWithText("first").assertExists()
         compose.onNodeWithText("second").assertExists()
