@@ -620,7 +620,7 @@ jobs:
     name: Prototype preserved-data compatibility API 36
   evidence:
     name: Prototype evidence and delivery decision
-    if: ${{ needs.identity.result == 'success' && (always()) }}
+    if: ${{ always() }}
     needs:
     - identity
     - build

@@ -1197,7 +1197,7 @@ class WorkflowContract(unittest.TestCase):
         self.assertFalse(workflow['on']['workflow_call']['secrets']['LASTFM_API_KEY']['required'])
         self.assertEqual({'contents':'read'},workflow['permissions'])
         jobs=workflow['jobs']
-        self.assertEqual({'build','focused_26','focused_36','compatibility_26','compatibility_36'},set(jobs['evidence']['needs']))
+        self.assertEqual({'identity','build','focused_26','focused_36','compatibility_26','compatibility_36'},set(jobs['evidence']['needs']))
         self.assertEqual('${{ always() }}',jobs['evidence']['if'])
         for name in ('focused_26','focused_36'):
             script='\n'.join(s.get('with',{}).get('script','') for s in jobs[name]['steps'])

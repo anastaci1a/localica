@@ -25,7 +25,7 @@ class SharedApksTest(unittest.TestCase):
         self.assertNotIn('assembleDebugAndroidTest', delivery)
         self.assertNotIn('shared-test-apks.py', delivery)
         self.assertNotIn('assembleDebug', shard)
-        self.assertEqual('test-apks', jobs['device-tests']['needs'])
+        self.assertEqual({'identity', 'test-apks'}, set(jobs['device-tests']['needs']))
         self.assertIn('shared-test-apks.py verify', shard)
         self.assertIn('needs.test-apks.outputs.test-apks-sha256', str(jobs['device-tests']))
 
