@@ -35,6 +35,22 @@ internal class QueueWindowStore(private val room: RoomDatabase) {
         it.page(queueId, start, size)
     }
 
+    suspend fun select(queueId: String, all: Boolean = false): QueueSelectionHandle = transaction {
+        QueueSelection(it).create(queueId, all)
+    }
+
+    suspend fun setSelection(handle: QueueSelectionHandle, ids: Set<String>, selected: Boolean): QueueSelectionHandle = transaction {
+        QueueSelection(it).set(handle, ids, selected)
+    }
+
+    suspend fun selectionCount(handle: QueueSelectionHandle): Int = transaction { QueueSelection(it).count(handle) }
+
+    suspend fun selectionPage(handle: QueueSelectionHandle, start: Int, size: Int): QueueSequencePage = transaction {
+        QueueSelection(it).page(handle, start, size)
+    }
+
+    suspend fun closeSelection(selectionId: String) = transaction { QueueSelection(it).close(selectionId) }
+
     private fun project(sequence: QueueSequence, record: QueueRecord, active: Boolean,
         settings: QueueSettings): ListeningQueue {
         val summary = sequence.revision(record.id)

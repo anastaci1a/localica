@@ -7,6 +7,7 @@ import io.github.anastaci1a.localica.queue.QueueDatabase
 import io.github.anastaci1a.localica.queue.QueueEdits
 import io.github.anastaci1a.localica.queue.QueueEntry
 import io.github.anastaci1a.localica.queue.QueueSequence
+import io.github.anastaci1a.localica.queue.QueueSelection
 import io.github.anastaci1a.localica.queue.QueueSequenceMigration
 import io.github.anastaci1a.localica.library.SavedOrder
 import io.github.anastaci1a.localica.library.SavedOrderCodec
@@ -258,4 +259,79 @@ class QueueSequenceTest {
             sql.query("SELECT COUNT(*) FROM queue_sequence_entries").use { it.moveToFirst(); assertEquals(0, it.getInt(0)) }
         } finally { room.close() }
     }
+    @Test fun durableSelectionsMoveOffWindowOccurrencesInExactSourceOrder() {
+        for (all in listOf(false, true)) for (before in listOf(0, 401, 403, 800, 801)) database { sequence, _ ->
+            val entries = List(801) { QueueEntry(id = "entry:$it", track = song(it % 13),
+                sourcePlaylistId = if (it % 2 == 0) "origin" else null) }
+            entries.chunked(QueueSequence.PageSize).forEach { sequence.append("q", it) }
+            val selection = QueueSelection(sequence)
+            var handle = selection.create("q", all)
+            val exceptions = entries.filterIndexed { index, _ -> index % 5 == 1 }.map { it.id }.toSet()
+            exceptions.chunked(QueueSequence.PageSize).forEach { handle = selection.set(handle, it.toSet(), !all) }
+            val selected = entries.filter { (it.id in exceptions) != all }.map { it.id }.toSet()
+            val target = entries.getOrNull(before)?.id
+            if (target != null && target in selected) {
+                assertTrue(runCatching { selection.moveBefore(handle, target) }.exceptionOrNull() is IllegalArgumentException)
+            } else {
+                val original = io.github.anastaci1a.localica.queue.ListeningQueue(name = "Queue", entries = entries)
+                val expected = QueueEdits.moveBefore(original, selected, target)
+                assertEquals(selected.size, selection.count(handle))
+                val projected = buildList {
+                    var next = 0
+                    while (true) {
+                        val page = selection.page(handle, next, 37)
+                        addAll(page.entries.map { it.entry })
+                        if (page.entries.isEmpty()) break
+                        next = page.entries.last().position + 1
+                    }
+                }
+                assertEquals(entries.filter { it.id in selected }, projected)
+                selection.moveBefore(handle, target)
+                val actual = (entries.indices step QueueSequence.PageSize).flatMap {
+                    sequence.page("q", it, QueueSequence.PageSize).entries.map { row -> row.entry }
+                }
+                assertEquals(expected.entries, actual)
+                assertEquals(expected.order, savedOrder(sequence.db, "q"))
+                assertTrue(runCatching { selection.count(handle) }.exceptionOrNull() is IllegalStateException)
+            }
+        }
+    }
+
+    @Test fun durableSelectionsRejectStaleHandlesAndMissingOccurrencesBeforeWriting() = database { sequence, sql ->
+        sequence.append("q", List(600) { QueueEntry(id = "entry:$it", track = song(it % 7)) })
+        val selection = QueueSelection(sequence)
+        val first = selection.create("q")
+        val updated = selection.set(first, setOf("entry:599"), true)
+        assertTrue(runCatching { selection.count(first) }.exceptionOrNull() is IllegalStateException)
+        assertEquals(1, selection.count(updated))
+        assertTrue(runCatching { selection.set(updated, setOf("entry:0", "missing"), true) }.exceptionOrNull() is IllegalArgumentException)
+        assertEquals(1, selection.count(updated))
+        assertEquals(listOf("entry:599"), selection.page(updated, 0, 5).entries.map { it.entry.id })
+        sequence.reverse("q")
+        assertTrue(runCatching { selection.page(updated, 0, 5) }.exceptionOrNull() is IllegalStateException)
+        selection.close(updated.id)
+        sql.query("SELECT COUNT(*) FROM queue_sequence_selection_exceptions").use {
+            assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+        }
+    }
+
+    @Test fun durableSelectionNoOpRetainsAutomaticSortAndSequenceRevision() = database { sequence, sql ->
+        sequence.append("q", List(9) { QueueEntry(id = "entry:$it", track = song(it)) })
+        sql.execSQL("UPDATE queue_sequence_state SET sort = 'Title', ascending = 0 WHERE queueId = 'q'")
+        val before = sequence.revision("q")
+        val order = savedOrder(sql, "q")
+        val selection = QueueSelection(sequence)
+        val all = selection.create("q", true)
+        selection.moveBefore(all, null)
+        assertEquals(before, sequence.revision("q"))
+        assertEquals(order, savedOrder(sql, "q"))
+        val block = selection.set(selection.create("q"), setOf("entry:2", "entry:3"), true)
+        selection.moveBefore(block, "entry:4")
+        assertEquals(before, sequence.revision("q"))
+        assertEquals(order, savedOrder(sql, "q"))
+        sql.query("SELECT COUNT(*) FROM queue_sequence_edit_positions").use {
+            assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+        }
+    }
+
 }
