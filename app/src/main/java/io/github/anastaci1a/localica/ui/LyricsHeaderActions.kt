@@ -89,7 +89,7 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
         }
     }
     LyricsHeaderLayout(CompactControlSize, reveal, { preparation.progress },
-        origin = Modifier.preparedOrigin(preparation) { preparation.captured(separated) },
+        modifier = Modifier.preparedOrigin(preparation) { preparation.captured(separated) },
         decoration = pill.follow.testTag("player-lyrics-pill").splitGlassShadow(anchor, shadow)) {
         if (!separated) {
             LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = pill.silhouette, shadow = false,
