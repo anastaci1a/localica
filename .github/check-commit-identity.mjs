@@ -33,8 +33,7 @@ function range(head, base, remote) {
   ensureCommit(head);
   if (base && !zero.test(base)) return git('rev-list', head, `^${ensureCommit(base)}`).trim().split('\n').filter(Boolean);
   if (remote) return git('rev-list', head, '--not', `--remotes=${remote}`).trim().split('\n').filter(Boolean);
-  const mainBase = git('merge-base', 'refs/remotes/origin/main', head).trim();
-  return git('rev-list', head, `^${mainBase}`).trim().split('\n').filter(Boolean);
+  return git('rev-list', head).trim().split('\n').filter(Boolean);
 }
 
 let commits = [];

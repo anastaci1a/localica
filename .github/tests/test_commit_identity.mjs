@@ -52,21 +52,31 @@ const merge=commit('Merge',operator,operator,[good,invalid]);test('invalid merge
 test('PR body trailer',good,false,{pull_request:{base:{sha:base},head:{sha:good},body:'Co-authored-by: Claude <noreply@anthropic.com>'}});
 test('valid PR body',good,true,{pull_request:{base:{sha:base},head:{sha:good},body:'Review the identity guard.'}});
 test('branch deletion event',good,true,{deleted:true,before:good,after:'0'.repeat(40)});
-// Main contains an operator-only trailer verified before the prospective policy.
-const historical=commit('Verified historical commit\n\nCo-authored-by: '+operator,operator,operator,[base]);
+// Full-history dispatch and new refs must reject forbidden main ancestry too.
+const historical=commit('Historical commit\n\nCo-authored-by: '+operator,operator,operator,[base]);
 git('update-ref','refs/remotes/origin/main',historical);
 const feature=commit('Clean new commit',operator,operator,[historical]);
-test('manual dispatch grandfathers verified main',feature,true,{eventName:'workflow_dispatch'});
-test('manual dispatch on main checks zero new commits',historical,true,{eventName:'workflow_dispatch'});
-test('new branch push grandfathers verified main',feature,true,{eventName:'push',before:'0'.repeat(40),after:feature});
+test('manual dispatch rejects operator coauthor ancestor on main',feature,false,{eventName:'workflow_dispatch'});
+test('manual dispatch audits main itself',historical,false,{eventName:'workflow_dispatch'});
+test('new branch push rejects operator coauthor ancestor',feature,false,{eventName:'push',before:'0'.repeat(40),after:feature});
+const cleanMain=commit('Clean main',operator,operator,[base]);
+git('update-ref','refs/remotes/origin/main',cleanMain);
+const cleanFeature=commit('Clean feature',operator,operator,[cleanMain]);
+test('manual dispatch accepts clean full history',cleanFeature,true,{eventName:'workflow_dispatch'});
+test('new ref accepts clean full history',cleanFeature,true,{eventName:'push',before:'0'.repeat(40),after:cleanFeature});
 for(const trailer of forbiddenTrailers){
- const head=commit('New attribution\n\n'+trailer,operator,operator,[historical]);
+ const head=commit('New attribution\n\n'+trailer,operator,operator,[cleanMain]);
  test('manual dispatch rejects new '+trailer,head,false,{eventName:'workflow_dispatch'});
  test('new branch push rejects new '+trailer,head,false,{eventName:'push',before:'0'.repeat(40),after:head});
+ git('update-ref','refs/remotes/origin/main',head);
+ const tip=commit('Clean tip over forbidden ancestor',operator,operator,[head]);
+ test('manual dispatch rejects main ancestor '+trailer,tip,false,{eventName:'workflow_dispatch'});
+ test('new ref rejects main ancestor '+trailer,tip,false,{eventName:'push',before:'0'.repeat(40),after:tip});
 }
-git('update-ref','-d','refs/remotes/origin/main',historical);
-test('manual dispatch without verified main fails closed',feature,false,{eventName:'workflow_dispatch'});
-git('update-ref','refs/remotes/origin/main',historical);
+git('update-ref','refs/remotes/origin/main',cleanMain);
+git('update-ref','-d','refs/remotes/origin/main',cleanMain);
+test('manual dispatch needs no main ref to audit full history',cleanFeature,true,{eventName:'workflow_dispatch'});
+test('manual dispatch rejects bad ancestry without main ref',feature,false,{eventName:'workflow_dispatch'});
 const input=`refs/heads/test ${invalid} refs/heads/test ${base}\n`,r=spawnSync('node',[guard,'--pre-push','origin'],{cwd:fixture,input,encoding:'utf8'});results.push({name:'pre-push stdin',passed:r.status===1,exit:r.status,output:r.stderr.trim()});
 console.log(`${results.filter(r=>r.passed).length}/${results.length} passed`);
 if(results.some(r=>!r.passed))process.exitCode=1;
