@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -68,7 +67,7 @@ internal fun LibraryDataSettings(library: LibraryRepository) {
     }
     Text("Tools outside Localica can edit an exported file. Import shows what will change before applying it. Later scans keep imported dates.",
         style = MaterialTheme.typography.bodySmall)
-    if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+    AsyncSection(if (busy) null else Unit) { }
     preview?.let { (document, plan) -> CompositionLocalProvider(LocalGlassOrigin provides importOrigin) {
         val changes = plan.changes
         GlassAlertDialog(onDismissRequest = { preview = null }, title = { Text(if (changes > 0) "Import library data?" else "Nothing to import") },

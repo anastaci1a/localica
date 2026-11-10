@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.LayoutDirection
  * Animation frames invalidate drawing; only the menu's visibility boundary changes its input.
  */
 @Stable
-internal class ArtworkTextReveal {
+internal class ArtworkTextReveal(private val sourceOpacity: (() -> Float)? = null) {
     internal var reveal: Animatable<Float, AnimationVector1D>? = null
     private val gate = mutableStateOf(false)
     private var released = false
@@ -58,7 +58,7 @@ internal class ArtworkTextReveal {
         if (menuGate.value) menuGate.value = false
     }
     val waiting: Boolean get() = gate.value
-    val textAlpha: Float get() = if (!gate.value) 1f else reveal?.value ?: 0f
+    val textAlpha: Float get() = if (!gate.value) 1f else sourceOpacity?.invoke() ?: reveal?.value ?: 0f
     internal fun menuAlpha(artworkVisibility: Float): Float {
         val alpha = if (!menuGate.value) 1f else reveal?.value ?: 0f
         // The existing artwork-slot transition also owns the no-art endpoint. This
