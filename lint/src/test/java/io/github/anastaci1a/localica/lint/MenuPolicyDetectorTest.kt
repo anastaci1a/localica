@@ -53,6 +53,8 @@ class MenuPolicyDetectorTest : LintDetectorTest() {
         check(rule, body, 0, "components")
         check(rule, "import androidx.compose.material3.Text as Label\nimport androidx.compose.runtime.Composable\n@Composable fun Row() { Label(\"a\") }", 1)
         check(rule, "import androidx.compose.runtime.Composable\n@Composable fun Row() { androidx.compose.material3.Text(\"a\") }", 1)
+        // Compiled Compose functions with value-class parameters carry a mangled JVM name.
+        check(rule, "fun Row() { androidx.compose.material3.mangled.Text(\"a\", 1) }", 1)
         check(rule, "class Binding { class Text(val run: (String) -> Unit) }\nfun bind() = Binding.Text {}", 0)
         check(rule, "fun Text(value: Int) = value\nfun use() = Text(1)", 0)
         check(rule, "fun use() { Text(\"missing\") }", 1, errors = true)
@@ -187,6 +189,7 @@ class MenuPolicyDetectorTest : LintDetectorTest() {
         kotlin("package androidx.compose.runtime\n@Target(AnnotationTarget.FUNCTION, AnnotationTarget.TYPE) annotation class Composable\nfun <T> remember(factory: () -> T): T = factory()"),
         kotlin("package androidx.compose.material3\nfun Text(text: String, fontSize: Int = 0) {}\nobject MaterialTheme { val typography = 0 }"),
         kotlin("package androidx.compose.ui.text\nclass TextStyle(val fontSize: Int = 0)"),
+        kotlin("@file:JvmName(\"TextKt\")\npackage androidx.compose.material3.mangled\n@JvmName(\"Text--4IGK_g\") fun Text(text: String, size: Int) {}"),
         kotlin("package androidx.compose.ui\nobject Modifier"),
         kotlin("package androidx.compose.foundation.layout\nimport androidx.compose.ui.Modifier\n" +
             "fun Modifier.padding(all: Int = 0, start: Int = 0, top: Int = 0, end: Int = 0, bottom: Int = 0, horizontal: Int = 0, vertical: Int = 0): Modifier = this\n" +

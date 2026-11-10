@@ -150,8 +150,9 @@ internal class MenuPolicyDetector : Detector(), SourceCodeScanner {
             if (!menu) return
             // The declared name, so an import alias cannot hide a call; a constructor is named by its class.
             val resolved = node.resolve()
-            val name = (if (node.kind == UastCallKind.CONSTRUCTOR_CALL || resolved?.isConstructor == true) resolved?.containingClass?.name ?: node.classReference?.resolvedName else resolved?.name)
-                ?: node.methodName ?: node.methodIdentifier?.name ?: node.classReference?.resolvedName ?: return
+            // A function with value-class parameters has a mangled JVM name (Text--4IGK_g): the part before the dash is the declared name.
+            val name = ((if (node.kind == UastCallKind.CONSTRUCTOR_CALL || resolved?.isConstructor == true) resolved?.containingClass?.name ?: node.classReference?.resolvedName else resolved?.name)
+                ?: node.methodName ?: node.methodIdentifier?.name ?: node.classReference?.resolvedName ?: return).substringBefore('-')
             val names = argumentNames(node)
             if ("fontSize" in names && !owner("MenuMetrics.kt")) report(MenuRuleId.UnownedSettingsTypography, node, "fontSize outside the role table")
             when (name) {
