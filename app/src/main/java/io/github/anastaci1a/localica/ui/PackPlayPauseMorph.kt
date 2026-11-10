@@ -1,11 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.anastaci1a.localica.icons.IconPackImages
 import io.github.anastaci1a.localica.icons.flattenSubpaths
@@ -96,28 +91,6 @@ internal object PackPlayPauseMorphs {
             }
         }
         return planPackPlayPause(vectors[0], vectors[1])
-    }
-}
-
-/** At the ends the static painters draw, so those frames equal the pack icons pixel for pixel. */
-internal fun DrawScope.drawPackPlayPause(pause: Float, color: Color, morph: PackPlayPauseMorph,
-    playPainter: Painter, pausePainter: Painter) {
-    when {
-        pause <= 0f -> with(playPainter) { draw(size, colorFilter = ColorFilter.tint(color)) }
-        pause >= 1f -> with(pausePainter) { draw(size, colorFilter = ColorFilter.tint(color)) }
-        else -> {
-            // One path for both pieces: shared winding unions them without an anti-aliased seam.
-            val path = Path()
-            for (piece in listOf(morph.left, morph.right)) {
-                for (i in piece.from.indices) {
-                    val p = piece.from[i] + (piece.to[i] - piece.from[i]) * pause
-                    if (i == 0) path.moveTo(p.x * size.width, p.y * size.height)
-                    else path.lineTo(p.x * size.width, p.y * size.height)
-                }
-                path.close()
-            }
-            drawPath(path, color)
-        }
     }
 }
 

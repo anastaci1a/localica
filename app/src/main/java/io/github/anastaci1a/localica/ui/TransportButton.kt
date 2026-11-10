@@ -18,6 +18,7 @@ import io.github.anastaci1a.localica.icons.IconPacks
 import io.github.anastaci1a.localica.icons.SvgIconParser
 import io.github.anastaci1a.localica.icons.builtinSvg
 import io.github.anastaci1a.localica.icons.toImageVector
+import io.github.anastaci1a.localica.ui.components.rememberTransportOutline
 
 internal enum class TransportGlyph { Previous, PlayPause, Next }
 
@@ -41,6 +42,9 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
         io.github.anastaci1a.localica.icons.BuiltinIcons.vector(
             SvgIconParser.parse(builtinSvg(context, icon)).toImageVector(shiftY = 0f), icon)
     }) as? PackPlayPausePlan.Morph)?.morph else null
+    val outline = morph?.let {
+        rememberTransportOutline(it, it.left.from, it.left.to, it.right.from, it.right.to)
+    }
     val painter = appIconPainter(icon)
     val pausePainter = if (glyph == TransportGlyph.PlayPause) appIconPainter(AppIcon.TransportPause) else painter
     val pause by animateFloatAsState(if (playing) 1f else 0f,
@@ -79,7 +83,7 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
             val progress = if (reduced) { if (playing) 1f else 0f } else pause
             val cycle = if (reduced) 0f else travel.value
             val color = tint.copy(alpha = tint.alpha * opacity)
-            if (morph != null) drawPackPlayPause(progress, color, morph, painter, pausePainter)
+            if (outline != null) with(outline) { draw(progress, color, painter, pausePainter) }
             else if (custom) drawTransportPainters(glyph, progress, cycle, color, painter, pausePainter)
             else drawTransportGlyph(glyph, progress, cycle, color, shapes)
         }
