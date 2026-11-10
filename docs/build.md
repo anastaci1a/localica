@@ -255,7 +255,7 @@ Main pushes reuse retained exact-tree evidence when available; otherwise they ru
 
 ### Step 4
 
-Verify published assets, close resolved issues/remove workflow labels, and replace completed roadmap outcomes with the next checkpoint.
+Verify published assets, close resolved issues/remove workflow labels, and replace completed roadmap outcomes with the next checkpoint. Release assets are `localica-vX.Y.Z-pre-release.apk` and its `.sha256`, named by the release job.
 
 ## Previews
 

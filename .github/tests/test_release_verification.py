@@ -64,6 +64,12 @@ class ReleaseVerificationTest(unittest.TestCase):
         self.assertIn('python3 .github/release-verification.py record',text)
         self.assertIn('name: complete-verification',text)
 
+    def test_release_assets_use_pre_release_name(self):
+        text=(ROOT/'.github/workflows/android.yml').read_text()
+        self.assertIn('artifacts/localica-$GITHUB_REF_NAME-pre-release.apk',text)
+        self.assertIn('"localica-$GITHUB_REF_NAME-pre-release.apk.sha256"',text)
+        self.assertNotIn('localica-$GITHUB_REF_NAME-debug',text)
+
     def test_distribution_smoke_binds_expected_hash_to_the_build_output(self):
         import yaml
         jobs=yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']
