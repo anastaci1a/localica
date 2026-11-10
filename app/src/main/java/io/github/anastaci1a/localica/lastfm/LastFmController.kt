@@ -13,7 +13,13 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     library: Flow<LibrarySnapshot>, val enabled: Boolean, val networkConsent: NetworkConsent,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val now: () -> Long = System::currentTimeMillis, private val background: LastFmBackground? = null,
-    private val localStatistics: Flow<ListeningStatistics> = flowOf(ListeningStatistics())) : PlayCountSource {
+    private val localStatistics: Flow<ListeningStatistics> = flowOf(ListeningStatistics()),
+    private val matchCache: LastFmMatchCacheStore = NoLastFmMatchCacheStore,
+    /** Tests inject a gated matcher to prove cancellation and publication ownership; `countsOnly` selects the streamed fold. */
+    private val matcher: (LastFmSnapshot, List<io.github.anastaci1a.localica.library.Track>, Map<String, String>, Boolean, () -> Unit) -> LastFmMatches =
+        { snapshot, tracks, mappings, countsOnly, checkActive ->
+            if (countsOnly) LastFmMatcher.matchCounts(snapshot, tracks, mappings, checkActive) else LastFmMatcher.match(snapshot, tracks, mappings, checkActive)
+        }) : PlayCountSource {
     private val mutable = MutableStateFlow(LastFmState())
     val state = mutable.asStateFlow()
     private val summaryState = MutableStateFlow<LastFmSettingsSummary?>(null)
@@ -29,17 +35,88 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
         RankingSettings(enabled && allowed && (requested ?: saved.active) && saved.useCounts && saved.snapshot != null &&
             saved.username.equals(saved.snapshot.username, true), authoritativeZero = true)
     }.distinctUntilChanged()
-    val catalog: StateFlow<LibrarySnapshot> = library.stateIn(scope, SharingStarted.Eagerly, LibrarySnapshot())
-    val matches: StateFlow<LastFmMatches> = combine(state.map { it.saved.snapshot to it.saved.mappings }.distinctUntilChanged(), library) { (snapshot, mappings), catalog ->
-        LastFmMatcher.match(snapshot, catalog.tracks, mappings)
-    }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.Eagerly, LastFmMatches(emptyMap(), emptyList()))
-    val overlay: StateFlow<LastFmOverlay> = combine(matches, local) { matched, counts ->
+    /** One library subscription serves the settings page and matching; each is one database read per change. */
+    private val sharedLibrary: SharedFlow<LibrarySnapshot> = library.shareIn(scope, SharingStarted.Eagerly, replay = 1)
+    val catalog: StateFlow<LibrarySnapshot> = sharedLibrary.stateIn(scope, SharingStarted.Eagerly, LibrarySnapshot())
+    private class MatchInput(val snapshot: LastFmSnapshot?, val mappings: Map<String, String>, val catalog: LibrarySnapshot) {
+        fun sameAs(other: MatchInput?) = other != null && snapshot === other.snapshot && mappings == other.mappings && catalog === other.catalog
+    }
+    private val matchInputs: Flow<MatchInput> = combine(state.map { it.saved.snapshot to it.saved.mappings }.distinctUntilChanged(), sharedLibrary) {
+        (snapshot, mappings), catalog -> MatchInput(snapshot, mappings, catalog)
+    }
+    private val detailDemand = MutableStateFlow(0)
+    private val mutableMatches = MutableStateFlow(LastFmMatches(emptyMap(), emptyList()))
+    private val countSource = MutableStateFlow(LastFmMatches(emptyMap(), emptyList()))
+    /**
+     * The current result for the current archive, mappings and library (#779). Without detail demand it is a
+     * counts-only result: sourced, `complete = false`, with per-song counts and [LastFmMatches.buckets] but no
+     * review or resolution lists (restored from the cache, or streamed with bounded live data). Collecting
+     * [details] is the only thing that makes it complete. Observing this flow never starts matching.
+     */
+    val matches: StateFlow<LastFmMatches> = mutableMatches.asStateFlow()
+    /** Current per-song counts and recording groups: complete, or restored from the cache (`complete = false`). */
+    val counts: StateFlow<LastFmMatches> = countSource.asStateFlow()
+    /** Collecting this is the only demand for review and resolution lists; the full match runs while collected. */
+    val details: Flow<LastFmMatches> = flow {
+        detailDemand.update { it + 1 }
+        try { emitAll(mutableMatches) } finally { detailDemand.update { it - 1 } }
+    }
+    private val cacheLock = Mutex()
+    private var cache: LastFmMatchCache? = null
+    private var cacheLoaded = false
+    /** Written only by the request owner; the last complete result and its inputs. */
+    private var complete: Pair<MatchInput, LastFmMatches>? = null
+    private suspend fun loadedCache(): LastFmMatchCache? = cacheLock.withLock {
+        if (!cacheLoaded) {
+            cache = try { matchCache.read() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+            cacheLoaded = true
+        }
+        cache
+    }
+    private suspend fun cachedMatches(input: MatchInput): LastFmMatches? {
+        val snapshot = input.snapshot ?: return null
+        val current = loadedCache() ?: return null
+        val key = withContext(Dispatchers.Default) { LastFmMatchKey.of(input.catalog, snapshot, input.mappings) }
+        return current.takeIf { it.matches(key) }?.toMatches(snapshot)
+    }
+    /**
+     * Runs only inside the request owner, so a newer input or demand change cancels it before any publication.
+     * `countsOnly` streams the archive into totals (bounded live data, no per-song results); the full result
+     * with review and resolution lists exists only for explicit detail demand.
+     */
+    private suspend fun fullMatch(input: MatchInput, countsOnly: Boolean = false): LastFmMatches {
+        val snapshot = input.snapshot ?: return LastFmMatches(emptyMap(), emptyList())
+        val started = now()
+        val result = withContext(Dispatchers.Default) {
+            val context = currentCoroutineContext()
+            matcher(snapshot, input.catalog.tracks, input.mappings, countsOnly) { context.ensureActive() }
+        }
+        io.github.anastaci1a.localica.diagnostics.Diagnostics.info("LastFm",
+            "Matched ${snapshot.tracks.size} archive songs against ${input.catalog.tracks.size} library songs in ${now() - started} ms" +
+                if (countsOnly) " (counts only)" else "")
+        val key = withContext(Dispatchers.Default) { LastFmMatchKey.of(input.catalog, snapshot, input.mappings) }
+        currentCoroutineContext().ensureActive()
+        if (!countsOnly) complete = input to result
+        val entry = LastFmMatchCache.of(key, result)
+        cacheLock.withLock {
+            cache = entry; cacheLoaded = true
+            try { matchCache.write(entry) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* A lost cache only costs one full match on the next launch. */ }
+        }
+        return result
+    }
+    private fun publish(countsValue: LastFmMatches, matchesValue: LastFmMatches) {
+        countSource.value = countsValue
+        mutableMatches.value = matchesValue
+    }
+    val overlay: StateFlow<LastFmOverlay> = combine(countSource, local) { matched, counts ->
         matched.withLocalOverlay(matched.sourceSnapshot, counts)
     }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.Eagerly, LastFmOverlay(emptyMap(), 0))
     private val selection = combine(state, requestedActive) { current, requested ->
         Triple(requested ?: current.saved.active, current.saved.useCounts, current.saved.username)
     }.distinctUntilChanged()
-    private val selectedCounts: Flow<Map<String, Long>> = combine(matches, local, selection, networkConsent.allowed) { matched, localCounts, selected, allowed ->
+    private val selectedCounts: Flow<Map<String, Long>> = combine(countSource, local, selection, networkConsent.allowed) { matched, localCounts, selected, allowed ->
         if (enabled && allowed && selected.first && selected.second && matched.sourceSnapshot != null &&
             selected.third.equals(matched.sourceSnapshot.username, true)) matched.withLocalOverlay(matched.sourceSnapshot, localCounts).counts else emptyMap()
     }.flowOn(Dispatchers.Default).distinctUntilChanged()
@@ -50,6 +127,27 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     private var syncJob: Job? = null
     private var workerJob: Job? = null
     init {
+        scope.launch {
+            // The single request owner: a newer input or a demand change cancels the running match whole,
+            // so nothing stale is ever published or persisted (#779).
+            combine(matchInputs, detailDemand.map { it > 0 }.distinctUntilChanged()) { input, demand -> input to demand }
+                .collectLatest { (input, demand) ->
+                    val empty = LastFmMatches(emptyMap(), emptyList())
+                    val memo = complete?.takeIf { input.sameAs(it.first) }?.second
+                    when {
+                        input.snapshot == null -> publish(empty, empty)
+                        memo != null -> publish(memo, memo)
+                        demand -> fullMatch(input).let { publish(it, it) }
+                        else -> {
+                            // Without demand only counts and bucket metadata are needed: restored from the cache, or streamed
+                            // with bounded live data. The result is sourced and `complete = false`: background observers
+                            // (the dashboard summary) read its buckets; review lists appear once details are demanded.
+                            val countsValue = cachedMatches(input) ?: fullMatch(input, countsOnly = true)
+                            publish(countsValue, countsValue)
+                        }
+                    }
+                }
+        }
         scope.launch {
             ready.await()
             var statsSnapshot: LastFmSnapshot? = null
@@ -128,6 +226,7 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
 
     fun applyTo(local: Flow<ListeningStatistics>): Flow<ListeningStatistics> = combine(local, selectedCounts, settings) { own, remote, options ->
         if (!options.useExternalCounts) own else {
+            io.github.anastaci1a.localica.diagnostics.WorkCounters.lastFmApplications.incrementAndGet()
             val selected = RankingCounts(own.tracks, remote, options)
             own.copy(tracks = (own.tracks.keys + remote.keys).associateWith(selected::plays))
         }
@@ -193,7 +292,14 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
             background?.cancelAndAwait()
             writes.withLock {
                 generation++
-                try { save(change(state.value.saved)); mutable.value = state.value.copy(syncing = false, progress = null) }
+                try {
+                    save(change(state.value.saved)); mutable.value = state.value.copy(syncing = false, progress = null)
+                    if (state.value.saved.snapshot == null) cacheLock.withLock {
+                        cache = null; cacheLoaded = true; complete = null
+                        try { matchCache.write(null) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {}
+                    }
+                }
+                catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { mutable.value = state.value.copy(syncing = false, progress = null, problem = "Could not save Last.fm data. Try again.") }
             }
         }

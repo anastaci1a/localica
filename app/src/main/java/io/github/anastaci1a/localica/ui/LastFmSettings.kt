@@ -19,7 +19,8 @@ import io.github.anastaci1a.localica.ui.spec.Space
 internal fun LastFmSettings(controller: LastFmController) {
     val state by controller.state.collectAsState()
     val onlineAllowed by controller.networkConsent.allowed.collectAsState()
-    val matches by controller.matches.collectAsState()
+    // Collecting details is the only demand for review lists; the page owns the full match while open (#779).
+    val matches by controller.details.collectAsState(controller.matches.collectAsState().value)
     val library by controller.catalog.collectAsState()
     val active by controller.active.collectAsState()
     val saved = state.saved

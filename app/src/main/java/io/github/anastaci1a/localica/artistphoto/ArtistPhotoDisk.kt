@@ -190,7 +190,12 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
     }
     private fun isVisible(hash: String) = (visible[hash]?.get() ?: 0) > 0
 
+    // Journals only outlive an interrupted process. Recover them once; this process cleans up its own
+    // writes in saveLocal, so later lookups never list the whole cache directory again (#779).
+    @Volatile private var recovered = false
     private fun recoverTransactions() {
+        if (recovered) return
+        recovered = true
         cache.listFiles().orEmpty().filter { it.name.endsWith(".json.transaction") }.forEach { journal ->
             val metadata = File(cache, journal.name.removeSuffix(".transaction"))
             val current = read(metadata)

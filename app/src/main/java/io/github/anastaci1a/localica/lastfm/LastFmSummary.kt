@@ -25,8 +25,8 @@ internal fun LastFmSnapshot.accountStats(): LastFmAccountStats {
 data class LastFmDashboardCounts(val matched: Int, val clear: Int, val judgments: Int, val review: Int,
     val absent: Int, val editions: Int) {
     companion object {
-        fun from(matches: LastFmMatches) = LastFmDashboardCounts(matches.matched, matches.clearCount,
-            matches.judgments.size, matches.review.size, matches.notInLibrary, matches.editions.size)
+        fun from(matches: LastFmMatches) = LastFmDashboardCounts(matches.buckets.matched, matches.buckets.clear,
+            matches.buckets.judgments, matches.buckets.review, matches.buckets.absent, matches.buckets.editions)
     }
 }
 

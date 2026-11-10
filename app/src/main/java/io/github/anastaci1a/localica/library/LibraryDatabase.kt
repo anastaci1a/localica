@@ -281,7 +281,10 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
     // Room re-queries after any write to these tables, including writes that leave the rows unchanged.
     // Equal snapshots are dropped here, off Main, so an unchanged re-read never republishes the
     // catalog (search index, statistics overlay, every browse query and a full grid recomposition).
-    override val sortSnapshots = dao.observe().map { it.toSnapshot() }.distinctUntilChanged().flowOn(Dispatchers.Default)
+    override val sortSnapshots = dao.observe().map {
+        io.github.anastaci1a.localica.diagnostics.WorkCounters.libraryReads.incrementAndGet()
+        it.toSnapshot()
+    }.distinctUntilChanged().flowOn(Dispatchers.Default)
     override val snapshots = sortSnapshots.map {
         val context = currentCoroutineContext()
         searchIndex.prepare(it) { context.ensureActive() }

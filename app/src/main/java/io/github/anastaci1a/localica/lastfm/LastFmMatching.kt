@@ -5,13 +5,37 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** Indexed, deterministic multi-clue matching. A score cannot override conflicting recording clues. */
+/**
+ * Indexed, deterministic multi-clue matching. A score cannot override conflicting recording clues.
+ *
+ * The archive streams through [resolve] one song at a time. Counts-only matching (#779, every launch
+ * whose cache missed) folds each resolution into per-song totals immediately and keeps no per-song
+ * result, so its live data is the library index plus the totals; the full result with review and
+ * resolution lists is built only for explicit detail demand. Everything derived from a library song
+ * or an archive song is computed once, so scoring a candidate allocates almost nothing.
+ */
 internal class LastFmMatchingEngine(tracks: List<Track>) {
-    private data class Local(val track: Track, val name: LastFmNames.Name, val album: String,
-        val artist: Set<String>, val albumArtist: Set<String>, val tokens: List<String>, val version: Set<String>)
-    private data class Query(val name: LastFmNames.Name, val artist: Set<String>, val album: String,
-        val tokens: List<String>, val version: Set<String>, val uploader: Boolean)
-    private data class Evidence(val local: Local, val score: Int, val tier: LastFmMatchTier, val reason: String)
+    private class Local(val track: Track, val name: LastFmNames.Name, val album: String,
+        val artist: Set<String>, val albumArtist: Set<String>, val tokens: List<String>, val version: Set<String>) {
+        val tokenSet: Set<String> = tokens.toHashSet()
+        val numbers: Set<String> = tokens.filter { it.all(Char::isDigit) }.toSet()
+        val words: Set<String> = tokens.filterNot { it in stop }.toSet()
+        val protectedTokens: Set<String> = tokens.filter { it in protected }.toSet()
+        val partLabel: String? = part.find(name.title)?.value
+        val mbid: String? = track.musicBrainzId?.takeIf(String::isNotBlank)?.let(::normalize)
+        val variousOrUnknown = albumArtist == setOf("various", "artists") || albumArtist == setOf("unknown")
+    }
+    private class Query(val name: LastFmNames.Name, val artist: Set<String>, val album: String,
+        val tokens: List<String>, val version: Set<String>, val uploader: Boolean) {
+        val numbers: Set<String> = tokens.filter { it.all(Char::isDigit) }.toSet()
+        val words: Set<String> = tokens.filterNot { it in stop }.toSet()
+        val protectedTokens: Set<String> = tokens.filter { it in protected }.toSet()
+        val partLabel: String? = part.find(name.title)?.value
+        val generic = tokens.all { it.length <= 1 || it in genericTitles }
+        val lookupTokens: List<String> = tokens.distinct().filterNot { it in stop }
+        val knownAlbum = knownAlbum(album)
+    }
+    private class Evidence(val local: Local, val score: Int, val tier: LastFmMatchTier, val reason: String)
     private val locals = tracks.distinctBy { it.id }.map { track ->
         val name = LastFmNames.name(track.artist?.takeIf(String::isNotBlank) ?: track.albumArtist, track.title)
         Local(track, name, LastFmNames.album(track.album), artistTokens(name.artist),
@@ -21,72 +45,128 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
     private val byTitle = locals.groupBy { it.name.title }
     private val byArtist = locals.groupBy { it.name.artist }
     private val byAlbum = locals.filter { knownAlbum(it.album) }.groupBy { it.album }
-    private val byMbid = locals.filter { !it.track.musicBrainzId.isNullOrBlank() }.groupBy { normalize(it.track.musicBrainzId) }
+    private val byMbid = locals.filter { it.mbid != null }.groupBy { requireNotNull(it.mbid) }
     private val tokenIndex = buildMap<String, MutableList<Local>> {
         locals.forEach { local -> local.tokens.distinct().filterNot { it in stop }.forEach { getOrPut(it) { mutableListOf() } += local } }
     }
+    private val candidateScratch = LinkedHashSet<Local>()
 
-    fun match(snapshot: LastFmSnapshot, mappings: Map<String, String>): LastFmMatches {
-        val counts = linkedMapOf<String, Long>(); val review = mutableListOf<LastFmReview>()
-        val resolved = mutableListOf<LastFmResolution>(); val editions = mutableListOf<LastFmReview>()
-        val absent = mutableListOf<LastFmTrack>(); var dismissed = 0
-        for (remote in snapshot.tracks) {
-            val mapping = mappings[remote.key]
-            if (mapping == LastFmMatcher.NONE) { dismissed++; absent += remote; continue }
-            val manual = mapping?.let(byId::get)
-            val strong = remote.mbid?.takeIf(String::isNotBlank)?.let { byMbid[normalize(it)] }.orEmpty()
-            var chosen = emptyList<Local>(); var tier = LastFmMatchTier.CLEAR; var reason = ""; var score = 0
-            if (manual != null) {
-                chosen = expand(listOf(manual)); reason = "Chosen by you"; score = 100
-            } else if (strong.isNotEmpty() && mapping != LastFmMatcher.REVIEW) {
-                chosen = expand(strong); reason = "Recording MusicBrainz ID agrees"; score = 100
-            } else {
-                val evidence = queries(remote).flatMap { query -> candidates(query).mapNotNull { score(remote, query, it) } }
-                    .groupBy { it.local.track.id }.values.map { rows -> rows.maxBy { it.score } }
-                    .sortedWith(compareByDescending<Evidence> { it.score }.thenBy { it.local.track.id })
-                val top = evidence.firstOrNull()
-                if (mapping == LastFmMatcher.REVIEW) {
-                    val candidates = (strong + evidence.map { it.local }).distinctBy { it.track.id }.map { it.track }
-                    review += LastFmReview(remote, candidates, "Automatic match undone by you")
-                    continue
-                }
-                if (top == null) { absent += remote; continue }
-                val family = evidence.filter { sameFamily(listOf(top.local, it.local)) }
-                val competitor = evidence.firstOrNull { candidate -> family.none { it.local.track.id == candidate.local.track.id } }
-                if (top.tier == LastFmMatchTier.UNCERTAIN || competitor != null && top.score - competitor.score < 10) {
-                    review += LastFmReview(remote, evidence.map { it.local.track },
-                        if (competitor != null && top.score - competitor.score < 10) "Several plausible local recordings" else top.reason)
-                    continue
-                }
-                chosen = expand(family.map { it.local }); tier = top.tier; reason = top.reason; score = top.score
-            }
-            val selected = chosen.map { it.track }.distinctBy { it.id }
-            resolved += LastFmResolution(remote, selected, tier, reason, score, manual != null)
-            if (selected.size > 1) editions += LastFmReview(remote, selected, reason, tier)
-            selected.forEach { track ->
-                val previous = counts[track.id] ?: 0; val plays = remote.plays.coerceAtLeast(0)
-                counts[track.id] = if (previous > Long.MAX_VALUE - plays) Long.MAX_VALUE else previous + plays
-            }
-        }
-        val parent = counts.keys.associateWith { it }.toMutableMap()
-        fun root(id: String): String {
+    /** Receives each archive song's outcome in archive order; implementations decide what to retain. */
+    private interface Sink {
+        fun resolved(remote: LastFmTrack, tracks: List<Track>, tier: LastFmMatchTier, reason: String, score: Int, manual: Boolean)
+        fun review(remote: LastFmTrack, candidates: () -> List<Track>, reason: String)
+        fun absent(remote: LastFmTrack)
+        fun dismissed(remote: LastFmTrack)
+    }
+
+    /** Per-song totals and recording groups, folded as resolutions stream in (weighted union-find). */
+    private class CountFolder {
+        private val seen = LinkedHashSet<String>()
+        private val parent = HashMap<String, String>()
+        private val totals = HashMap<String, Long>()
+        private fun root(id: String): String {
             var found = id
             while (parent.getValue(found) != found) found = parent.getValue(found)
             var current = id
             while (parent.getValue(current) != found) { val next = parent.getValue(current); parent[current] = found; current = next }
             return found
         }
-        resolved.forEach { resolution -> resolution.tracks.drop(1).forEach { track ->
-            val first = root(resolution.tracks.first().id); val other = root(track.id)
-            if (first != other) parent[other] = first
-        } }
-        val groups = counts.keys.associateWith(::root)
-        val totals = mutableMapOf<String, Long>()
-        resolved.forEach { resolution -> val group = groups.getValue(resolution.tracks.first().id)
-            totals[group] = addPlays(totals[group] ?: 0, resolution.remote.plays.coerceAtLeast(0)) }
-        val versionCounts = groups.mapValues { (_, group) -> totals.getValue(group) }
-        return LastFmMatches(versionCounts, review.sortedByDescending { it.remote.plays }, absent.size,
+        private fun union(a: String, b: String) {
+            val first = root(a); val other = root(b)
+            if (first == other) return
+            parent[other] = first
+            totals[first] = addPlays(totals[first] ?: 0, totals[other] ?: 0); totals.remove(other)
+        }
+        fun add(ids: List<String>, plays: Long) {
+            ids.forEach { id -> if (seen.add(id)) parent[id] = id }
+            for (index in 1 until ids.size) union(ids[0], ids[index])
+            val group = root(ids[0])
+            totals[group] = addPlays(totals[group] ?: 0, plays.coerceAtLeast(0))
+        }
+        fun groups(): Map<String, String> = seen.associateWith(::root)
+        fun versionCounts(groups: Map<String, String>): Map<String, Long> = groups.mapValues { (_, group) -> totals.getValue(group) }
+    }
+
+    fun match(snapshot: LastFmSnapshot, mappings: Map<String, String>, checkActive: () -> Unit = {}): LastFmMatches {
+        val review = mutableListOf<LastFmReview>(); val resolved = mutableListOf<LastFmResolution>()
+        val editions = mutableListOf<LastFmReview>(); val absent = mutableListOf<LastFmTrack>()
+        val folder = CountFolder(); var dismissed = 0
+        resolve(snapshot, mappings, checkActive, object : Sink {
+            override fun resolved(remote: LastFmTrack, tracks: List<Track>, tier: LastFmMatchTier, reason: String, score: Int, manual: Boolean) {
+                resolved += LastFmResolution(remote, tracks, tier, reason, score, manual)
+                if (tracks.size > 1) editions += LastFmReview(remote, tracks, reason, tier)
+                folder.add(tracks.map { it.id }, remote.plays)
+            }
+            override fun review(remote: LastFmTrack, candidates: () -> List<Track>, reason: String) { review += LastFmReview(remote, candidates(), reason) }
+            override fun absent(remote: LastFmTrack) { absent += remote }
+            override fun dismissed(remote: LastFmTrack) { dismissed++; absent += remote }
+        })
+        val groups = folder.groups()
+        return LastFmMatches(folder.versionCounts(groups), review.sortedByDescending { it.remote.plays }, absent.size,
             editions.sortedByDescending { it.remote.plays }, resolved.size, dismissed, resolved, absent, groups, snapshot)
+    }
+
+    /** Counts and groups only: identical to [match] for those fields, with no per-song result retained. */
+    fun matchCounts(snapshot: LastFmSnapshot, mappings: Map<String, String>, checkActive: () -> Unit = {}): LastFmMatches {
+        val folder = CountFolder(); var matched = 0; var absent = 0; var dismissed = 0
+        var clear = 0; var judgments = 0; var reviews = 0; var editions = 0
+        resolve(snapshot, mappings, checkActive, object : Sink {
+            override fun resolved(remote: LastFmTrack, tracks: List<Track>, tier: LastFmMatchTier, reason: String, score: Int, manual: Boolean) {
+                matched++; folder.add(tracks.map { it.id }, remote.plays)
+                if (tier == LastFmMatchTier.CLEAR) clear++ else if (tier == LastFmMatchTier.PROBABLE) judgments++
+                if (tracks.size > 1) editions++
+            }
+            override fun review(remote: LastFmTrack, candidates: () -> List<Track>, reason: String) { reviews++ }
+            override fun absent(remote: LastFmTrack) { absent++ }
+            override fun dismissed(remote: LastFmTrack) { dismissed++; absent++ }
+        })
+        val groups = folder.groups()
+        return LastFmMatches(folder.versionCounts(groups), emptyList(), absent, matched = matched, dismissed = dismissed,
+            recordingGroups = groups, sourceSnapshot = snapshot, complete = false,
+            buckets = LastFmMatchBuckets(matched, clear, judgments, reviews, absent, editions))
+    }
+
+    private fun resolve(snapshot: LastFmSnapshot, mappings: Map<String, String>, checkActive: () -> Unit, sink: Sink) {
+        for ((index, remote) in snapshot.tracks.withIndex()) {
+            if (index % 64 == 0) checkActive()
+            val mapping = mappings[remote.key]
+            if (mapping == LastFmMatcher.NONE) { sink.dismissed(remote); continue }
+            val manual = mapping?.let(byId::get)
+            val strong = remote.mbid?.takeIf(String::isNotBlank)?.let { byMbid[normalize(it)] }.orEmpty()
+            var chosen: List<Local>; var tier = LastFmMatchTier.CLEAR; var reason: String; var score: Int
+            if (manual != null) {
+                chosen = expand(listOf(manual)); reason = "Chosen by you"; score = 100
+            } else if (strong.isNotEmpty() && mapping != LastFmMatcher.REVIEW) {
+                chosen = expand(strong); reason = "Recording MusicBrainz ID agrees"; score = 100
+            } else {
+                // Best evidence per library song, first maximum kept (as maxBy did), then a total order:
+                // the same list the former flatMap/groupBy/sortedWith pipeline produced, without its temporaries.
+                bestByTrack.clear(); evidence.clear()
+                for (query in queries(remote)) forEachCandidate(query) { local ->
+                    val found = score(remote, query, local) ?: return@forEachCandidate
+                    val id = local.track.id
+                    val current = bestByTrack[id]
+                    if (current == null || found.score > current.score) bestByTrack[id] = found
+                }
+                evidence.addAll(bestByTrack.values); evidence.sortWith(evidenceOrder)
+                val top = evidence.firstOrNull()
+                if (mapping == LastFmMatcher.REVIEW) {
+                    sink.review(remote, { (strong + evidence.map { it.local }).distinctBy { it.track.id }.map { it.track } }, "Automatic match undone by you")
+                    continue
+                }
+                if (top == null) { sink.absent(remote); continue }
+                val family = evidence.filter { sameFamily(top.local, it.local) }
+                val competitor = evidence.firstOrNull { candidate -> family.none { it.local.track.id == candidate.local.track.id } }
+                if (top.tier == LastFmMatchTier.UNCERTAIN || competitor != null && top.score - competitor.score < 10) {
+                    sink.review(remote, { evidence.map { it.local.track } },
+                        if (competitor != null && top.score - competitor.score < 10) "Several plausible local recordings" else top.reason)
+                    continue
+                }
+                chosen = expand(family.map { it.local }); tier = top.tier; reason = top.reason; score = top.score
+            }
+            val selected = chosen.map { it.track }.distinctBy { it.id }
+            sink.resolved(remote, selected, tier, reason, score, manual != null)
+        }
     }
 
     private fun queries(remote: LastFmTrack): List<Query> {
@@ -106,54 +186,56 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
         return listOfNotNull(original, parsed).distinctBy { it.name }
     }
 
-    private fun candidates(query: Query): List<Local> = buildList {
-        addAll(byTitle[query.name.title].orEmpty())
-        addAll(byArtist[query.name.artist].orEmpty())
-        if (knownAlbum(query.album)) addAll(byAlbum[query.album].orEmpty())
-        query.tokens.distinct().filterNot { it in stop }.forEach { token ->
-            tokenIndex[token]?.takeIf { it.size <= 256 }?.let(::addAll)
-        }
-    }.distinctBy { it.track.id }
+    private val bestByTrack = HashMap<String, Evidence>()
+    private val evidence = ArrayList<Evidence>()
+    private val evidenceOrder = compareByDescending<Evidence> { it.score }.thenBy { it.local.track.id }
+
+    /** Insertion order equals the former list order; locals are unique per track id, so the set deduplicates identically. */
+    private inline fun forEachCandidate(query: Query, action: (Local) -> Unit) {
+        val scratch = candidateScratch
+        scratch.clear()
+        byTitle[query.name.title]?.let(scratch::addAll)
+        byArtist[query.name.artist]?.let(scratch::addAll)
+        if (query.knownAlbum) byAlbum[query.album]?.let(scratch::addAll)
+        query.lookupTokens.forEach { token -> tokenIndex[token]?.takeIf { it.size <= 256 }?.let(scratch::addAll) }
+        for (local in scratch) action(local)
+    }
+
+    /** [sameFamily] for exactly two rows, without building the intermediate lists. */
+    private fun sameFamily(a: Local, b: Local): Boolean =
+        a.name.artist == b.name.artist && a.name.title == b.name.title &&
+            a.album == b.album && a.album.isNotBlank() &&
+            !(a.name.featured.isNotBlank() && b.name.featured.isNotBlank() && a.name.featured != b.name.featured) &&
+            !(a.mbid != null && b.mbid != null && a.mbid != b.mbid) &&
+            duration(a.track.durationMs, b.track.durationMs) != -1
 
     private fun score(remote: LastFmTrack, q: Query, local: Local): Evidence? {
         val exactTitle = q.name.title == local.name.title && q.name.title.isNotBlank()
         val similarity = if (exactTitle) 1.0 else orderedSimilarity(q.tokens, local.tokens)
         val mainArtist = setSimilarity(q.artist, local.artist)
-        val albumArtist = if (local.albumArtist == setOf("various", "artists") || local.albumArtist == setOf("unknown")) 0.0
-            else setSimilarity(q.artist, local.albumArtist)
+        val albumArtist = if (local.variousOrUnknown) 0.0 else setSimilarity(q.artist, local.albumArtist)
         val artist = max(mainArtist, albumArtist)
         val exactArtist = q.name.artist.isNotBlank() && q.name.artist == local.name.artist
-        val album = knownAlbum(q.album) && q.album == local.album
-        val meaningfulOverlap = exactTitle || q.tokens.any { it !in stop && !it.all(Char::isDigit) && it in local.tokens }
-        val generic = q.tokens.all { it.length <= 1 || it in genericTitles }
+        val album = q.knownAlbum && q.album == local.album
+        val meaningfulOverlap = exactTitle || q.words.any { !it.all(Char::isDigit) && it in local.tokenSet }
+        val generic = q.generic
         if (!(exactTitle && (!generic || artist >= .5 || album) || meaningfulOverlap && similarity >= .4 && (artist >= .9 || album))) return null
-        val qNumbers = q.tokens.filter { it.all(Char::isDigit) }.toSet()
-        val localNumbers = local.tokens.filter { it.all(Char::isDigit) }.toSet()
-        if (qNumbers.isNotEmpty() && localNumbers.isNotEmpty() && qNumbers != localNumbers) return null
-        val qPart = part.find(q.name.title)?.value
-        val localPart = part.find(local.name.title)?.value
-        if (qPart != null && localPart != null && qPart != localPart) return null
+        if (q.numbers.isNotEmpty() && local.numbers.isNotEmpty() && q.numbers != local.numbers) return null
+        if (q.partLabel != null && local.partLabel != null && q.partLabel != local.partLabel) return null
         if (q.version.isNotEmpty() && local.version.isNotEmpty() && q.version != local.version) return null
         if (q.name.featured.isNotBlank() && local.name.featured.isNotBlank() && q.name.featured != local.name.featured) return null
         val duration = duration(remote.durationMs, local.track.durationMs)
-        val idConflict = !remote.mbid.isNullOrBlank() && !local.track.musicBrainzId.isNullOrBlank() &&
-            normalize(remote.mbid) != normalize(local.track.musicBrainzId)
-        val versionUnknown = q.version != local.version ||
-            q.tokens.filter { it in protected }.toSet() != local.tokens.filter { it in protected }.toSet()
+        val remoteId = remote.mbid?.takeIf(String::isNotBlank)
+        val idConflict = remoteId != null && local.mbid != null && normalize(remoteId) != local.mbid
+        val versionUnknown = q.version != local.version || q.protectedTokens != local.protectedTokens
         val guestUnknown = q.name.featured != local.name.featured
-        val remoteWords = q.tokens.filterNot { it in stop }.toSet()
-        val localWords = local.tokens.filterNot { it in stop }.toSet()
+        val remoteWords = q.words
+        val localWords = local.words
         val sameContent = remoteWords.isNotEmpty() && remoteWords == localWords
-        val titleClash = remoteWords.minus(localWords).isNotEmpty() && localWords.minus(remoteWords).isNotEmpty()
+        val titleClash = remoteWords.any { it !in localWords } && localWords.any { it !in remoteWords }
         val titleScore = (45 * similarity).roundToInt().coerceAtLeast(if (sameContent && similarity >= .8) 40 else 0)
         val value = titleScore + (30 * mainArtist).roundToInt().coerceAtLeast((25 * albumArtist).roundToInt()) +
             (if (album) 15 else 0) + (if (duration == 2) 10 else if (duration == 1) 5 else 0)
-        val clues = buildList {
-            if (artist >= .9) add(if (q.uploader) "artist parsed from upload title" else if (exactArtist) "artist" else "artist wording")
-            if (similarity >= .8) add(if (exactTitle) "title" else "ordered title tokens")
-            if (album) add("album")
-            if (duration == 2) add("duration")
-        }.joinToString(" + ")
         val canAuto = !idConflict && !versionUnknown && !titleClash && duration != -1
         val tier = when {
             canAuto && exactArtist && exactTitle && !q.uploader && !guestUnknown -> LastFmMatchTier.CLEAR
@@ -165,7 +247,12 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
             versionUnknown -> "Version needs a decision"
             titleClash -> "Title wording may identify different songs"
             duration == -1 -> "Duration differs substantially"
-            tier != LastFmMatchTier.UNCERTAIN -> clues + if (guestUnknown) "; featured credit only on one side" else ""
+            tier != LastFmMatchTier.UNCERTAIN -> buildList {
+                if (artist >= .9) add(if (q.uploader) "artist parsed from upload title" else if (exactArtist) "artist" else "artist wording")
+                if (similarity >= .8) add(if (exactTitle) "title" else "ordered title tokens")
+                if (album) add("album")
+                if (duration == 2) add("duration")
+            }.joinToString(" + ") + if (guestUnknown) "; featured credit only on one side" else ""
             exactTitle && artist < .9 -> "Title only; artist differs"
             else -> "Artist agrees; title needs a decision"
         }
@@ -178,10 +265,10 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
             it.name.artist == anchor.name.artist && anchor.album.isNotBlank() && it.album == anchor.album &&
                 (it.name.featured.isBlank() || anchor.name.featured.isBlank() || it.name.featured == anchor.name.featured)
         }
-        val known = family.mapNotNull { it.track.musicBrainzId?.takeIf(String::isNotBlank)?.let(::normalize) }.distinct()
-        val anchorId = anchor.track.musicBrainzId?.takeIf(String::isNotBlank)?.let(::normalize)
+        val known = family.mapNotNull { it.mbid }.distinct()
+        val anchorId = anchor.mbid
         val compatible = family.filter { candidate ->
-            val id = candidate.track.musicBrainzId?.takeIf(String::isNotBlank)?.let(::normalize)
+            val id = candidate.mbid
             when {
                 candidate.track.id == anchor.track.id -> true
                 anchorId != null && id != null -> anchorId == id
@@ -196,7 +283,7 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
         rows.map { it.name.artist to it.name.title }.distinct().size == 1 &&
         rows.map { it.album }.distinct().singleOrNull()?.isNotBlank() == true &&
         rows.mapNotNull { it.name.featured.takeIf(String::isNotBlank) }.distinct().size <= 1 &&
-        rows.mapNotNull { it.track.musicBrainzId?.takeIf(String::isNotBlank)?.let(::normalize) }.distinct().size <= 1 &&
+        rows.mapNotNull { it.mbid }.distinct().size <= 1 &&
         rows.all { duration(rows.first().track.durationMs, it.track.durationMs) != -1 }
 
     private companion object {
@@ -210,7 +297,7 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
         fun artistTokens(value: String) = tokens(LastFmNames.text(value)).filterNot { it == "the" || it == "and" }.toSet()
         fun knownAlbum(value: String) = value.isNotBlank() && value !in setOf("unknown", "unknown album", "none", "compilation")
         fun setSimilarity(a: Set<String>, b: Set<String>) = if (a.isEmpty() || b.isEmpty()) 0.0 else
-            2.0 * a.intersect(b).size / (a.size + b.size)
+            2.0 * a.count { it in b } / (a.size + b.size)
         fun orderedSimilarity(a: List<String>, b: List<String>): Double {
             if (a.isEmpty() || b.isEmpty() || a.size > 64 || b.size > 64) return 0.0
             val previous = IntArray(b.size + 1)
