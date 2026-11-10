@@ -456,3 +456,6 @@ io.github.anastaci1a.localica.PopupImeGeometryTest
 io.github.anastaci1a.localica.TagBatchControllerTest
 io.github.anastaci1a.localica.TagBatchTransactionTest
 io.github.anastaci1a.localica.TagSaveProgressPopupTest
+io.github.anastaci1a.localica.AsyncSectionTest
+io.github.anastaci1a.localica.LastFmCachedOpenTest
+io.github.anastaci1a.localica.LastFmPreparationThreadTest
