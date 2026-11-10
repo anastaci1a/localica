@@ -60,6 +60,10 @@ class UiPerformanceTest {
     private var tone by mutableFloatStateOf(.4f)
     private var lyrics by mutableStateOf(LyricsResult())
 
+    @Test fun performanceRendererUsesExplicitFlatNone() {
+        org.junit.Assert.assertEquals(GlassRendererMode.FlatNone, glassMode)
+    }
+
     @Test fun measurePureUiScenarios() {
         assumeTrue("Pass uiPerformance=true on an owned disposable test device", args.getString("uiPerformance") == "true")
         val repetitions = (args.getString("uiPerformanceRepetitions")?.toInt() ?: 3).also { require(it in 1..10) }

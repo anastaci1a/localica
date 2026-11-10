@@ -13,4 +13,11 @@ class GlassModesContractTest {
     @Test fun normalIsTheDefault() {
         assertEquals("Normal", GlassAppearance().renderer.name)
     }
+    @Test fun materialSpecificationReportsEveryCurrentRenderer() {
+        for (mode in GlassRendererMode.entries) {
+            val settings = io.github.anastaci1a.localica.navigation.InterfaceSettings(glass = GlassAppearance(renderer = mode))
+            val accepted = io.github.anastaci1a.localica.ui.spec.uiSpec(settings) as io.github.anastaci1a.localica.ui.spec.SpecResult.Accepted
+            for (tokens in accepted.spec.material.values) assertEquals(mode.name, tokens.mode.name)
+        }
+    }
 }
