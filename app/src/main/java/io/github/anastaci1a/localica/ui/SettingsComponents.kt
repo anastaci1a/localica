@@ -109,11 +109,13 @@ internal fun <T> ChoicePreference(title: String, selected: T, choices: List<T>, 
     var open by remember { mutableStateOf(false) }
     val anchor = rememberGlassAnchor()
     val labels = choices.map(label)
+    // The selector leaves with the tab or page holding this control (#767).
+    val owner = rememberGlassPopupOwner(anchor)
     SettingsEntry(title) { ChoicePreferenceFrame(title, labels, popup, choices = {
         GlassChoices(labels, choices.indexOf(selected).coerceAtLeast(0), horizontal = true) { onSelect(choices[it]) }
     }, link = { SettingsLink(title, label(selected), anchor = anchor) { open = true } })
     }
-    if (open) CompositionLocalProvider(LocalGlassOrigin provides anchor) {
+    if (open) CompositionLocalProvider(LocalGlassOrigin provides anchor, LocalGlassPopupOwner provides owner) {
         ChoiceDialog(title, choices, selected, label, { open = false }, onSelect)
     }
 }

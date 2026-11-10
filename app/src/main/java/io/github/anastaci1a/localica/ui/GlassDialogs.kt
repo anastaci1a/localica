@@ -38,7 +38,7 @@ internal class GlassDialogs {
 }
 
 internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLocalContext,
-    dismiss: () -> Unit, dark: Boolean, val placement: GlassPlacement,
+    val owner: GlassPopupOwner?, dismiss: () -> Unit, dark: Boolean, val placement: GlassPlacement,
     val heightSizing: GlassDialogHeight, content: @Composable () -> Unit) {
     var mounted by mutableStateOf(true)
     var locals by mutableStateOf(locals)
@@ -62,6 +62,13 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalGlassDialogs provides host) {
         content()
         host.entries.toList().forEach { entry -> key(entry) {
+            if (entry.owner?.live == false) {
+                // The owning tab is gone or deselected: the popup leaves with it, never over the incoming tab.
+                SideEffect {
+                    if (entry.mounted) entry.dismiss()
+                    host.entries.remove(entry)
+                }
+            } else {
             // Restore caller locals before creating the window. Dialog installs its own
             // view/focus locals; replacing those with Activity locals breaks keyboard input.
             CompositionLocalProvider(entry.locals) {
@@ -75,6 +82,7 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
             }
             LaunchedEffect(entry.mounted, entry.anchor.modalPresent) {
                 if (!entry.mounted && !entry.anchor.modalPresent) host.entries.remove(entry)
+            }
             }
         } }
     }
@@ -95,6 +103,7 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
     val appearance = LocalGlassDialogAppearance.current.takeIf { trigger == null }
     val popupHome = trigger?.popupHome ?: appearance?.popupHome ?: LocalGlassPopupHome.current
     val source = appearance?.backdrop ?: LocalModalBackdrop.current ?: LocalFrostedBackdrop.current ?: host.backdrop
+    val owner = LocalGlassPopupOwner.current
     val locals = currentCompositionLocalContext
     // Dialog declarations may live outside the artwork theme containing their trigger.
     // Detached callbacks carry their launching scope; ordinary unanchored windows
@@ -112,7 +121,7 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
         require(returning == null || returning.heightSizing == heightSizing) {
             "Height sizing is fixed while a dialog presentation returns"
         }
-        returning ?: GlassDialogEntry(origin, locals, onDismiss, dark, placement, heightSizing, resolvedContent)
+        returning ?: GlassDialogEntry(origin, locals, owner, onDismiss, dark, placement, heightSizing, resolvedContent)
     }
     require(entry.heightSizing == heightSizing) { "Height sizing is fixed for a dialog presentation" }
     SideEffect {

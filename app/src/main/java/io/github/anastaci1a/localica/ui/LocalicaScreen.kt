@@ -308,6 +308,8 @@ fun LocalicaScreen(
             .then(if (hasPlayer && playerCoversBrowse) Modifier.clearAndSetSemantics {} else Modifier)) {
             TabPager(pager, tabs, Modifier.weight(1f), userScrollEnabled = !expanded) { page ->
             val tab = settings.tabs[page]
+            // Popups opened in this tab leave with it when another tab becomes the target (#767).
+            GlassPopupScope(tab, active = page == pager.targetPage) {
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute
             val routeArtwork = artworkStore.scope(route.key)
@@ -366,6 +368,7 @@ fun LocalicaScreen(
                     })
             } } }
                 }
+            }
             }
             }
             }

@@ -89,6 +89,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
         Layout(modifier = Modifier.fillMaxWidth(), content = {
         repeat(2) { page ->
             val scroll = if (page == 0) sortScroll else viewScroll
+            GlassPopupScope(page, active = page == tab) {
             Column(Modifier.fillMaxWidth().then(if (page != tab) Modifier.clearAndSetSemantics { }
                 .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } } }
                 else Modifier)
@@ -139,6 +140,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                         BooleanPreference("Group by album", edited.albumGrouping) { edited = edited.copy(albumGrouping = it) }
                     if (failure) Text("Couldn’t save this order. Try again.", color = MaterialTheme.colorScheme.error)
                 }
+            }
             }
         }
         }) { children, constraints ->
