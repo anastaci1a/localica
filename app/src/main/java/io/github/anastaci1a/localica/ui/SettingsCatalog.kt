@@ -5,9 +5,9 @@ import java.text.Normalizer
 import java.util.Locale
 
 /** Stable row identities are independent of saved preference keys. Dynamic collections index their parent group. */
-internal data class SettingSpec(val id: String, val page: String, val keywords: String = "",
-    val values: List<String> = emptyList(), val revealedBy: String? = null) {
-    val title: String get() = id
+internal data class SettingSpec(override val id: String, val page: String, val keywords: String = "",
+    val values: List<String> = emptyList(), val revealedBy: String? = null) : io.github.anastaci1a.localica.ui.layout.menu.SettingKey {
+    override val title: String get() = id
 }
 
 internal object SettingsCatalog {

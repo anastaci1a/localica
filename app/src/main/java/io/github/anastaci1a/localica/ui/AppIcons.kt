@@ -21,7 +21,7 @@ import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.icons.IconPacks
 
 /** Every icon the app draws. [id] is the stable pack key; [builtin] is the fallback vector. */
-internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
+internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) : io.github.anastaci1a.localica.ui.layout.menu.MenuIcon {
     TabHome("tab.home", R.drawable.ic_home),
     TabLibrary("tab.library", R.drawable.ic_library),
     TabSongs("tab.songs", R.drawable.ic_music),
@@ -88,6 +88,8 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     SettingsLibraryFilters("settings.library_filters", R.drawable.ic_settings_library_filters),
     SettingsMetadataFailures("settings.metadata_failures", R.drawable.ic_settings_metadata_failures),
     SettingsTagJobs("settings.tag_jobs", R.drawable.ic_settings_tag_jobs);
+    /** #757: the neutral identity menu declarations carry; the binder resolves it back to this icon. */
+    override val key: String get() = id
     companion object {
         val ids: Set<String> = entries.mapTo(linkedSetOf()) { it.id }
         val legacyIds: Map<String, String> = mapOf(

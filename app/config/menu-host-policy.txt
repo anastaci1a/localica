@@ -1,0 +1,7 @@
+# #757 menu host policy: the finite list of files that may write @OptIn(MenuInternal::class).
+# Being listed grants that one thing only. It grants no exemption from GlassPopupWithoutAnchor or any other rule.
+# Readers: MenuHostPolicyTest (JVM, main) and the MenuInternalOptIn lint rule. A missing or unparsable file is a finding.
+# Entries are exact files: no directories, wildcards or packages. A legacy line expires at its migration step.
+# current-step: M0
+# kind | repo-relative source file | expires (migration step or "never") | reason
+binder | app/src/main/java/io/github/anastaci1a/localica/ui/menu/MenuBinder.kt | never | #757 binder

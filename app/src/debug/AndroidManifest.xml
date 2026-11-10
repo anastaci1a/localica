@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- #757: the UI specimen. Debug builds only; start it with
+             adb shell am start -n io.github.anastaci1a.localica.debug/io.github.anastaci1a.localica.MenuSpecimenActivity -->
+        <activity android:name="io.github.anastaci1a.localica.MenuSpecimenActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
+    </application>
+</manifest>
