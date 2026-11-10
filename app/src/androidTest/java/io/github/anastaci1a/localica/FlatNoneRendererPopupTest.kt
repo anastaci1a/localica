@@ -11,7 +11,7 @@ import io.github.anastaci1a.localica.navigation.*
 import org.junit.Assert.*
 import org.junit.Test
 
-/** #775: switch the actual preference through its retained native renderer popup. */
+/** #775: activate real accessibility actions through the retained native renderer popup. */
 class FlatNoneRendererPopupTest {
     @Test fun layerlessParentContributesNoSampledSceneBounds() {
         val structure = mutableListOf<io.github.anastaci1a.localica.ui.SampledSceneDependency>()
@@ -44,23 +44,27 @@ class FlatNoneRendererPopupTest {
             }.exceptionOrNull()?.let(failure::addSuppressed)
             throw failure
         }
+        fun activate(selector: BySelector) {
+            assertTrue("The real control must accept its framework accessibility action: $selector",
+                visible(selector).clickSystemAction())
+        }
         try {
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs, MainTab.Albums),
                 reducedMotion = true, glass = GlassAppearance(renderer = GlassRendererMode.FlatNone)))
             ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
                 lateinit var originalActivity: MainActivity
                 scenario.onActivity { originalActivity = it }
-                visible(By.desc("Library")).click()
-                visible(By.desc("More")).click()
-                visible(By.text("Settings")).click()
-                visible(By.text("Interface")).click()
-                visible(By.text("Glass")).click()
+                activate(By.desc("Library"))
+                activate(By.desc("More"))
+                activate(By.text("Settings"))
+                activate(By.text("Interface"))
+                activate(By.text("Glass"))
                 for ((index, target) in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.FlatNone,
                     GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.SingleToneBlur).withIndex()) {
                     step = "$index-${target.name}"
-                    visible(By.text("Glass renderer")).click()
-                    visible(By.text(target.label)).click()
-                    visible(By.text("Select")).click()
+                    activate(By.text("Glass renderer"))
+                    activate(By.text(target.label))
+                    activate(By.text("Select"))
                     await(15_000) { preferences.read().glass.renderer == target }
                     // The departing dialog has the same title as its underlying
                     // settings row. Require its actual dismissal before the next
