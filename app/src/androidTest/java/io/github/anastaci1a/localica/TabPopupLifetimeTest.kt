@@ -28,12 +28,14 @@ class TabPopupLifetimeTest {
 
     private lateinit var host: GlassDialogs
     private var baseline = 0
+    private var baselineWindows = 0
 
     private fun frames(count: Int) = repeat(count) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
 
     private fun openSelector(open: () -> Unit, midMinimize: Boolean) {
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { baseline = host.entries.size }
+        baselineWindows = appWindows()
         open()
         if (midMinimize) {
             frames(90)
@@ -49,15 +51,56 @@ class TabPopupLifetimeTest {
         }
     }
 
-    /** Switch, then require the popup to be gone after the grace and for every later frame. */
-    private fun switchAndAssertGone(switch: () -> Unit, outgoingContent: () -> Unit) {
+    /** Native windows of this app as the accessibility service sees them: dialogs are their own windows. */
+    private fun appWindows(): Int {
+        val ui = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        val pkg = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.packageName
+        return ui.windows.count { it.root?.packageName?.toString() == pkg }
+    }
+
+    private fun screenshot(): android.graphics.Bitmap {
+        val full = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        return android.graphics.Bitmap.createScaledBitmap(full, full.width / 8, full.height / 8, true)
+    }
+
+    /** Fraction of pixels differing visibly; the status-bar strip is excluded. */
+    private fun difference(a: android.graphics.Bitmap, b: android.graphics.Bitmap): Double {
+        var changed = 0
+        val top = a.height / 12
+        for (y in top until a.height) for (x in 0 until a.width) {
+            val p = a.getPixel(x, y); val q = b.getPixel(x, y)
+            if (kotlin.math.abs(android.graphics.Color.red(p) - android.graphics.Color.red(q)) > 12 ||
+                kotlin.math.abs(android.graphics.Color.green(p) - android.graphics.Color.green(q)) > 12 ||
+                kotlin.math.abs(android.graphics.Color.blue(p) - android.graphics.Color.blue(q)) > 12) changed++
+        }
+        return changed.toDouble() / (a.width * (a.height - top))
+    }
+
+    /**
+     * Switch, then require the popup to be gone after the grace and in every later frame: no extra
+     * host entry, no extra native window, no outgoing content, and no drawn popup pixels (each
+     * frame's real window composite must match the settled incoming screen, from [pixelGrace] on,
+     * which a still-drawing selector scrim or panel cannot).
+     */
+    private fun switchAndAssertGone(switch: () -> Unit, pixelGrace: Int = GRACE, outgoingContent: () -> Unit) {
         switch()
         val stale = mutableListOf<Int>()
+        val windows = mutableListOf<Int>()
+        val shots = mutableMapOf<Int, android.graphics.Bitmap>()
         for (frame in 1..45) {
             frames(1)
-            if (frame > GRACE) compose.runOnIdle { if (host.entries.size > baseline) stale += frame }
+            if (frame > GRACE) {
+                compose.runOnIdle { if (host.entries.size > baseline) stale += frame }
+                if (appWindows() > baselineWindows) windows += frame
+                outgoingContent()
+            }
+            if (frame > pixelGrace) shots[frame] = screenshot()
         }
         assertTrue("popup entries remained over the incoming tab on frames $stale", stale.isEmpty())
+        assertTrue("a popup window remained over the incoming tab on frames $windows", windows.isEmpty())
+        val settled = screenshot()
+        val drawn = shots.filter { difference(it.value, settled) > .01 }.keys.sorted()
+        assertTrue("popup or outgoing pixels were drawn after the switch on frames $drawn", drawn.isEmpty())
         outgoingContent()
     }
 
@@ -103,7 +146,7 @@ class TabPopupLifetimeTest {
         fun tab(label: String) = compose.onNode(hasText(label) and hasAnyAncestor(hasTestTag("browse-options-tabs")), useUnmergedTree = true)
         try {
             openSelector({ compose.onNodeWithText("Sort by").performClick() }, midMinimize)
-            switchAndAssertGone({ tab("View").performClick() }) {
+            switchAndAssertGone({ tab("View").performClick() }, pixelGrace = 14) {
                 compose.onAllNodesWithText("Select").assertCountEquals(0)
             }
         } finally { compose.mainClock.autoAdvance = true }
