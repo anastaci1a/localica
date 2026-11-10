@@ -167,7 +167,7 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
         db.execSQL("INSERT INTO queue_sequence_history (token,queueId,position,entryId,cycle) VALUES (?,?,?,?,?)",
             arrayOf(visit.token, queueId, 0, visit.entryId, visit.cycle))
         if (visit.cycle == state.cycle) {
-            db.execSQL("UPDATE queue_sequence_plan SET visited = 1 WHERE queueId = ? AND cycle = ? AND entryId = ?",
+            db.execSQL("UPDATE queue_sequence_plan SET visited = 1, scheduled = 0 WHERE queueId = ? AND cycle = ? AND entryId = ?",
                 arrayOf(queueId, state.cycle, visit.entryId))
         }
         val updated = state.copy(cursor = 0, historySize = historySize)
@@ -195,7 +195,7 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
             """.trimIndent(), arrayOf(queueId, state.cursor, target.first, state.cycle)).use { it.moveToFirst(); it.getInt(0) }
             if (skipped != 0) moveSkippedVisits(state, target.first, skipped)
             if (target.second.cycle == state.cycle) {
-                db.execSQL("UPDATE queue_sequence_plan SET visited = 1 WHERE queueId = ? AND cycle = ? AND entryId = ?",
+                db.execSQL("UPDATE queue_sequence_plan SET visited = 1, scheduled = 0 WHERE queueId = ? AND cycle = ? AND entryId = ?",
                     arrayOf(queueId, state.cycle, target.second.entryId))
             }
             val updated = state.copy(cursor = target.first - skipped)

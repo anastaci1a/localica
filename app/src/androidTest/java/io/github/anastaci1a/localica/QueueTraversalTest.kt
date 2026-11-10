@@ -28,6 +28,27 @@ class QueueTraversalTest {
             arrayOf(queueId, journey.cycle)).use { rows ->
             assertEquals(journey.visited, buildSet { while (rows.moveToNext()) add(rows.getString(0)) })
         }
+        val scheduled = journey.history.drop(journey.cursor + 1)
+            .filter { it.cycle == journey.cycle && it.entryId !in journey.visited }.map { it.entryId }.toSet()
+        val expectedPlans = journey.plans.filterKeys { it != QueueJourney.BEHIND_START }.toSortedMap().flatMap { (cycle, ids) ->
+            ids.mapIndexed { index, id -> listOf(cycle, index, id,
+                cycle == journey.cycle && id in journey.visited, cycle == journey.cycle && id in scheduled) }
+        }
+        db.query("SELECT cycle,position,entryId,visited,scheduled FROM queue_sequence_plan WHERE queueId = ? ORDER BY cycle,position",
+            arrayOf(queueId)).use { rows ->
+            assertEquals(expectedPlans, buildList {
+                while (rows.moveToNext()) add(listOf(rows.getLong(0), rows.getInt(1), rows.getString(2), rows.getInt(3) != 0, rows.getInt(4) != 0))
+            })
+        }
+        db.query("SELECT entryId,cycle,token FROM queue_sequence_plan WHERE queueId = ? AND visited = 0 AND scheduled = 0 ORDER BY cycle,position",
+            arrayOf(queueId)).use { rows ->
+            assertEquals(journey.future, buildList {
+                while (rows.moveToNext()) {
+                    assertFalse(rows.isNull(2))
+                    add(QueueVisit(rows.getString(0), rows.getLong(1), rows.getString(2)))
+                }
+            })
+        }
     }
     private fun queue(size: Int, current: Int, modes: JourneyModes): ListeningQueue {
         val namespace = java.util.UUID.randomUUID().toString()
@@ -356,13 +377,17 @@ class QueueTraversalTest {
     }
 
     @Test fun recordedShuffleArrivalKeepsSkippedPlayNextVisitsAfterTheTargetInBoundedPages() {
-        for (scheduledCount in listOf(2, 600)) {
-            val queue = queue(20, 10, JourneyModes(loop = true))
+        for (scheduledCount in listOf(2, 600)) for (loop in listOf(false, true)) for (advancedCycle in listOf(false, true)) {
+            if (advancedCycle && !loop) continue
+            val queue = queue(20, 10, JourneyModes(loop = loop))
             val ids = queue.entries.map { it.id }
-            val modes = JourneyModes(shuffle = true, loop = true)
+            val modes = JourneyModes(shuffle = true, loop = loop)
             var journey = queue.journey!!.reconcile(ids, queue.currentEntryId, modes, kotlin.random.Random(43))
-            for (index in listOf(17, 4, 8)) journey = journey.select(ids[index], ids)
+            if (advancedCycle) {
+                repeat(25) { journey = journey.arrive(journey.next!!.token, ids, kotlin.random.Random(43)) }
+            } else for (index in listOf(17, 4, 8)) journey = journey.select(ids[index], ids)
             journey = journey.arrive(journey.history[1].token, ids)
+            if (advancedCycle) assertTrue(journey.current!!.cycle < journey.cycle)
             val added = List(scheduledCount) { QueueEntry(id = "scheduled:$it", track = queue.entries.first().track) }
             val all = ids + added.map { it.id }
             journey = journey.playNext(added.map { it.id }, all, kotlin.random.Random(43))
@@ -385,7 +410,7 @@ class QueueTraversalTest {
                     var writes = -1L
                     traversal.arrivalWriteObserver = {
                         writes = it
-                        android.util.Log.i("QueueTraversalWrites", "case=scheduled scheduled=$scheduledCount rows=$it")
+                        android.util.Log.i("QueueTraversalWrites", "case=scheduled scheduled=$scheduledCount loop=$loop advanced=$advancedCycle rows=$it")
                     }
                     journey = journey.arrive(target.token, all)
                     var window = requireNotNull(traversal.arriveRecordedShuffle(queue.id, target.token))
@@ -402,6 +427,8 @@ class QueueTraversalTest {
                     assertNull(traversal.arriveRecordedShuffle(queue.id, "not-recorded"))
                     assertEquals(0L, writes)
                     assertTraversalState(db, queue.id, journey, traversal.window(queue.id))
+                    assertEquals(window, traversal.arriveRecordedShuffle(queue.id, journey.current!!.token))
+                    assertEquals(0L, writes)
                     db.setTransactionSuccessful()
                 } finally { db.endTransaction() }
             } finally { room.close() }
