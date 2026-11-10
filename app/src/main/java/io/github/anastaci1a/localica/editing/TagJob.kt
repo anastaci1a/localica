@@ -8,7 +8,7 @@ import org.json.JSONObject
 data class TagJob(val id: String, val total: Int, val status: String = "Editing", val outcomes: List<String> = emptyList())
 
 internal class TagJobHistory(context: Context) {
-    private val preferences = context.getSharedPreferences("tag-jobs", 0)
+    private val preferences = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "tag-jobs")
     fun read(): List<TagJob> = runCatching {
         val array = JSONArray(preferences.getString("jobs", "[]"))
         (0 until array.length()).map { index ->

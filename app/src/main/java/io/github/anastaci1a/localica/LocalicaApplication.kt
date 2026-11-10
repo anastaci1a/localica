@@ -21,31 +21,32 @@ class LocalicaApplication : Application() {
     // needs only these exact credential-protected paths; workers own directory creation.
     private val privateFilesPath get() = java.io.File(applicationInfo.dataDir, "files")
     private val privateCachePath get() = java.io.File(applicationInfo.dataDir, "cache")
-    private companion object {
-        val STARTUP_PREFERENCES = listOf("interface", "queue-settings", "scanner", "scan-progress", "browse-style",
-            "library-query", "library-filters", "pins", "player-actions", "tag-jobs", "cover-images", "listening-identity")
-    }
+    private val startup = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val preferences by lazy { io.github.anastaci1a.localica.preferences.PreparedPreferences(this, startup) }
     override fun onCreate() {
         if (BuildConfig.DEBUG) io.github.anastaci1a.localica.threading.MainThreadPolicy.install()
         super.onCreate()
         io.github.anastaci1a.localica.diagnostics.Diagnostics.mirrorToLogcat =
             applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
-        val startup = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        // Start once; consumers suspend at their entry boundary before accessing saved state.
+        preferences
         startup.launch { getFilesDir(); getCacheDir() }
         startup.launch {
-            // The first read of a preferences file blocks its caller until the XML is loaded. Load the
-            // files read while the first frames are built (activity, queue, scanner and browse state)
-            // here so those Main reads find them in memory. Values and write paths are unchanged.
-            for (name in STARTUP_PREFERENCES) runCatching { getSharedPreferences(name, MODE_PRIVATE).contains("") }
-        }
-        startup.launch {
+            preferences.awaitReady()
             runCatching { artistPhotos.loadIndex() }
             onlineMetadataConsent.load()
             artistPhotoWork.bind(startup)
         }
-        startup.launch { io.github.anastaci1a.localica.icons.IconPacks.load(this@LocalicaApplication) }
-        startup.launch { startArtworkColors(this) }
         startup.launch {
+            preferences.awaitReady()
+            io.github.anastaci1a.localica.icons.IconPacks.load(this@LocalicaApplication)
+        }
+        startup.launch {
+            preferences.awaitReady()
+            startArtworkColors(this)
+        }
+        startup.launch {
+            preferences.awaitReady()
             // The registry starts fail-closed before any service can create/open a source.
             // The writer publishes a useful Unknown state if inspection fails.
             runCatching { tagWriter.initialize() }
@@ -73,7 +74,7 @@ class LocalicaApplication : Application() {
     val statistics by lazy {
         io.github.anastaci1a.localica.statistics.StatisticsRepository(statisticsDatabase.statistics(),
             identities = io.github.anastaci1a.localica.statistics.ListeningIdentityStore(
-                getSharedPreferences("listening-identity", MODE_PRIVATE)))
+                preferences.require("listening-identity")))
     }
     val onlineMetadataConsent by lazy {
         io.github.anastaci1a.localica.network.OnlineMetadataConsent(java.io.File(privateFilesPath, "online-metadata-consent"))
@@ -91,8 +92,7 @@ class LocalicaApplication : Application() {
             io.github.anastaci1a.localica.lastfm.FileLastFmStore(java.io.File(privateFilesPath, "lastfm-snapshot.json")),
             io.github.anastaci1a.localica.lastfm.LastFmSync(io.github.anastaci1a.localica.lastfm.HttpLastFmApi(BuildConfig.LASTFM_API_KEY, onlineMetadataConsent)),
             library.snapshots, BuildConfig.LASTFM_API_KEY.isNotBlank(), onlineMetadataConsent,
-            localStatistics = statistics.counts, background = io.github.anastaci1a.localica.lastfm.LastFmWork(this),
-            matchCache = io.github.anastaci1a.localica.lastfm.FileLastFmMatchCacheStore(java.io.File(filesDir, "lastfm-matches.json")))
+            localStatistics = statistics.counts, background = io.github.anastaci1a.localica.lastfm.LastFmWork(this))
     }
     val effectiveStatistics by lazy { lastfm.applyTo(statistics.counts) }
     val playRankings by lazy { io.github.anastaci1a.localica.statistics.PlayRankingSource(

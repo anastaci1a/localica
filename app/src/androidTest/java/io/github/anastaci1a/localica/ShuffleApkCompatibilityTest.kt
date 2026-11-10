@@ -23,6 +23,7 @@ class ShuffleApkCompatibilityTest {
         require(phase in listOf("seed", "bridge", "verify"))
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
+        (context.applicationContext as LocalicaApplication).preferences.awaitReady()
         val queueName = "shuffle-apk-compat-queues.db"
         val statsName = "shuffle-apk-compat-statistics.db"
         val witness = File(context.filesDir, "shuffle-apk-compat-token")

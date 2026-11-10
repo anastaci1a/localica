@@ -100,6 +100,12 @@ Appears On and Similar Artists currently return empty through an enrichment inte
 
 ### Settings/selection
 
+The application owns prepared preference handles. An IO coroutine loads every preference file, its values and constructor directory handles before publishing readiness. Activity content, cold service commands and background controller entry points await readiness asynchronously. The startup window uses in-memory state; preference consumers never open files or wait for XML on Main.
+
+Deferred entries preserve caller order and check caller lifetime immediately before execution. Cancelling a caller leaves process preparation running.
+
+Saved lyrics selections resolve before their first presentation, including legacy synced-source aliases. Restored selections carry track identity and reject another track’s saved state. Migration and subsequent choices use the same prepared handle and retain synchronous memory updates and ordered framework writes.
+
 Typed preference boundaries retain explicit inheritance. Shared enum decoding preserves unknown-value fallbacks. Pure ordering/move helpers are shared across collection types. Selection retains source occurrence IDs and clears only after command completion. Pins retain typed identity/manual order independently of tabs.
 
 Artist photo requests run off Main and use fixed HTTPS hosts, disabled redirects, bounded responses and shared request pacing. Provider errors become fixed failures without URLs or transport messages. Metadata responses are limited to 512 KiB and pictures to 4 MiB. Searches inspect five artists and 25 releases per candidate; incomplete coverage falls back conservatively.

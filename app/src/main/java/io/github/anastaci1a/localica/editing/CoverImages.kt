@@ -17,7 +17,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
 class CoverImages(private val context: Context) {
-    private val preferences = context.getSharedPreferences("cover-images", 0)
+    private val preferences = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "cover-images")
     private val grants by lazy { sharedGrants(context) }
     fun selected(uri: String) {
         remember(uri)
@@ -98,7 +98,7 @@ class CoverImages(private val context: Context) {
         private val owners = mutableMapOf<android.content.SharedPreferences, ArtworkGrants>()
         @Synchronized private fun sharedGrants(context: Context): ArtworkGrants {
             val app = context.applicationContext
-            val prefs = app.getSharedPreferences("cover-images", 0)
+            val prefs = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "cover-images")
             owners[prefs]?.let { return it }
             fun entries(key: String): Set<String> {
                 val array = JSONArray(prefs.getString(key, "[]"))

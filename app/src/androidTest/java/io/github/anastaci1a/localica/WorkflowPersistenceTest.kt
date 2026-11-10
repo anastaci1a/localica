@@ -103,10 +103,10 @@ class WorkflowPersistenceTest {
         } finally { store.edit().clear().commit() }
     }
 
-    private fun tracklistContext(): Context = object : android.content.ContextWrapper(ApplicationProvider.getApplicationContext<Context>()) {
+    private fun tracklistContext(): Context = preparedTestContext(object : android.content.ContextWrapper(ApplicationProvider.getApplicationContext<Context>()) {
         override fun getSharedPreferences(name: String, mode: Int) =
             baseContext.getSharedPreferences("tracklist-test-$name", mode)
-    }
+    })
 
     @Test fun sortedOccurrencesAndManualBaselineSurviveReopeningBothStores() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()

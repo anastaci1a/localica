@@ -9,6 +9,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
@@ -47,10 +48,20 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.DEBUG) android.os.StrictMode.setThreadPolicy(android.os.StrictMode.ThreadPolicy.Builder()
             .detectDiskReads().detectDiskWrites().detectCustomSlowCalls().penaltyLog().build())
         enableEdgeToEdge()
+        // The window can draw immediately. Mount saved-state consumers only after publication.
+        setContent { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) }
+        lifecycleScope.launch {
+            val playback = PlaybackConnection.preparedFactory(applicationContext)
+            if (isDestroyed) return@launch
+            showPreparedContent(playback)
+        }
+    }
+
+    private fun showPreparedContent(playback: () -> PlaybackConnection) {
         model = ViewModelProvider(this, object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                LibraryViewModel((application as LocalicaApplication).library, PlaybackConnection(applicationContext),
+                LibraryViewModel((application as LocalicaApplication).library, playback(),
                     (application as LocalicaApplication).playlists, (application as LocalicaApplication).scanner, (application as LocalicaApplication).effectiveStatistics) as T
         })[LibraryViewModel::class.java]
         consumeScannerIntent(intent)
@@ -116,7 +127,10 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         if (::model.isInitialized) model.refreshAccess()
     }
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); consumeScannerIntent(intent) }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent); setIntent(intent)
+        if (::model.isInitialized) consumeScannerIntent(intent)
+    }
 }
 
 private class LocalFolderPicker : ActivityResultContracts.OpenDocumentTree() {

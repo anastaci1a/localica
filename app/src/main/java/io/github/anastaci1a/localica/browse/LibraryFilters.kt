@@ -12,7 +12,7 @@ data class LibraryFilters(val visible: List<LibraryFilter> = LibraryFilter.entri
     val allCollections: Set<MediaKind> = setOf(MediaKind.Album, MediaKind.AlbumArtist, MediaKind.Playlist))
 
 class LibraryFilterPreferences(context: Context) {
-    private val store = context.getSharedPreferences("library-filters", Context.MODE_PRIVATE)
+    private val store = io.github.anastaci1a.localica.preferences.PreparedPreferences.get(context, "library-filters")
     fun read(): LibraryFilters {
         val defaults = LibraryFilters()
         val visible = store.getString("visible", null)?.split(',')?.mapNotNull { name ->

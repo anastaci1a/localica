@@ -233,12 +233,13 @@ class TagBatchControllerTest {
     }
 }
 
-private class BatchServiceContext(base: Context) : ContextWrapper(base) {
+private class BatchServiceContext(base: Context) : ContextWrapper(base), io.github.anastaci1a.localica.preferences.PreparedPreferences.Owner {
     private val token = "batch-controller-${UUID.randomUUID()}"
     private val directory = File(base.filesDir, token).apply { check(mkdirs()) }
     private val preferences = mutableSetOf<String>()
     var starts = 0
     var beforeJobsCommit: ((String?) -> Unit)? = null
+    override val preparedPreferences = preparedTestOwner(this)
     override fun getFilesDir(): File = directory
     override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
         val owned = "$token-$name"; preferences += owned

@@ -50,10 +50,10 @@ class QueueFollowingPlaybackTest {
 
     private fun fixture(reducedMotion: Boolean, test: (Fixture) -> Unit) {
         val preferencesName = "queue-follow-playback-${UUID.randomUUID()}"
-        val preferences = QueuePreferences(object : ContextWrapper(context) {
+        val preferences = QueuePreferences(preparedTestContext(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) =
                 context.getSharedPreferences(preferencesName, mode)
-        })
+        }))
         preferences.write(QueueSettings(shuffle = false, repeat = QueueRepeat.Off))
         val file = File.createTempFile("queue-follow-playback-", ".mp3", context.cacheDir)
         val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
