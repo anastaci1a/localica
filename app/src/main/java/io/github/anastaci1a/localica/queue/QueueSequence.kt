@@ -191,7 +191,7 @@ internal class QueueSequence(internal val db: SupportSQLiteDatabase) {
     fun randomize(queueId: String, currentFirst: String? = null, random: kotlin.random.Random = kotlin.random.Random.Default) {
         mutation()
         val count = revision(queueId).count
-        if (count < 2) return
+        if (count < 2) { adoptPhysicalOrder(queueId); changed(queueId); return }
         val anchor = currentFirst?.let { position(queueId, it) }
         if (anchor != null) moveRange(queueId, anchor, 1, 0)
         val first = if (anchor == null) 0 else 1
@@ -251,6 +251,7 @@ internal class QueueSequence(internal val db: SupportSQLiteDatabase) {
 
     private fun adoptPhysicalOrder(queueId: String) {
         db.execSQL("UPDATE queue_sequence_entries SET manualPosition = position WHERE queueId = ?", arrayOf(queueId))
+        db.execSQL("UPDATE queue_sequence_state SET sort = 'Manual', ascending = 1 WHERE queueId = ?", arrayOf(queueId))
     }
 
     private fun shift(queueId: String, start: Int, end: Int, offset: Int) {
