@@ -457,3 +457,4 @@ io.github.anastaci1a.localica.TagBatchControllerTest
 io.github.anastaci1a.localica.TagBatchTransactionTest
 io.github.anastaci1a.localica.TagSaveProgressPopupTest
 io.github.anastaci1a.localica.ScrollPlacementFirstFrameTest
+io.github.anastaci1a.localica.SlotBoundsContractTest
