@@ -164,4 +164,32 @@ class ScrollbarMotionTest {
             assertEquals(0, h.clock.activeCount)
         }
     }
+    @Test fun constantRevealDelayDoesNotInvalidatePresentationOnSharedFrames() {
+        EngineHarness().use { h ->
+            val motion = ScrollbarMotion(h.clock)
+            motion.reveal()
+            h.advance(.016)
+            androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+            var invalidations = 0
+            val scope = Any()
+            val changed: (Any) -> Unit = { invalidations++ }
+            val observer = androidx.compose.runtime.snapshots.SnapshotStateObserver { it() }
+            observer.start()
+            try {
+                repeat(10) { frame ->
+                    observer.observeReads(scope, changed) { assertEquals(1f, motion.opacity(), 0f) }
+                    h.advance(.016)
+                    androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+                    assertEquals("Unchanged reveal delay at frame $frame", 0, invalidations)
+                }
+                h.advance(1.04)
+                androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+                assertTrue("The real fade boundary invalidates the held value", invalidations > 0)
+            } finally {
+                observer.stop()
+                observer.clear()
+                motion.dispose()
+            }
+        }
+    }
 }
