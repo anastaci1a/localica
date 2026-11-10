@@ -93,6 +93,14 @@ def expected_for(root, api):
         'ScopedSearchOpticsTest': [
             ('searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
         ],
+        # The native onEnd latch requires API30 IME inset animation callbacks.
+        'PopupImeGeometryTest': [
+            ('tagEditorNativeImeTrace', 30),
+            ('addToPlaylistsNativeImeTrace', 30),
+            ('playerAddToPlaylistsNativeImeTrace', 30),
+            ('playerTagEditorNativeImeTrace', 30),
+            ('mixedContentDuringNativeImeTrace', 30),
+        ],
         'FloatingImeLifecycleTest': [
             ('actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
         ],

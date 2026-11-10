@@ -146,6 +146,7 @@ io.github.anastaci1a.localica.ListDensityRevisionTest
 io.github.anastaci1a.localica.ListMotionTest
 io.github.anastaci1a.localica.ListReturnControlsTest
 io.github.anastaci1a.localica.ListSearchTest
+io.github.anastaci1a.localica.LocalFunReferenceFreshnessTest
 io.github.anastaci1a.localica.ListTopFadeTest
 io.github.anastaci1a.localica.ListeningIdentityStorageTest
 io.github.anastaci1a.localica.LiveOrderDialogTest
@@ -345,6 +346,7 @@ io.github.anastaci1a.localica.TagEditorFlowTest
 io.github.anastaci1a.localica.TagEditorThemeInheritanceTest
 io.github.anastaci1a.localica.TagWritingTest
 io.github.anastaci1a.localica.TestComposeDispatcherTest
+io.github.anastaci1a.localica.TestProcessAccessibilityLaunchTest
 io.github.anastaci1a.localica.TextEditingNativeImeTest
 io.github.anastaci1a.localica.ThemeTest
 io.github.anastaci1a.localica.ToneSnapshotContinuityTest
@@ -432,6 +434,8 @@ io.github.anastaci1a.localica.NoneReductionWitnessTest
 io.github.anastaci1a.localica.NestedGlassRegistrationTest
 io.github.anastaci1a.localica.SublistLoadingPlaceholderCaptureTest
 io.github.anastaci1a.localica.LoadingSweepContrastTest
+
+io.github.anastaci1a.localica.AutoScrollDrawnPlacementTest
 io.github.anastaci1a.localica.ArtworkWashEdgeWeightingTest
 io.github.anastaci1a.localica.BackdropEdgeStripTest
 
@@ -450,3 +454,10 @@ io.github.anastaci1a.localica.FlatNoneMaterialTest
 io.github.anastaci1a.localica.LegacyNonePixelReferenceTest
 io.github.anastaci1a.localica.LegacyNoneControlledPixelReferenceTest
 io.github.anastaci1a.localica.ShadowSchedulingOracleTest
+io.github.anastaci1a.localica.GlassMorphZeroConstraintsTest
+io.github.anastaci1a.localica.PopupViewportSlotTest
+io.github.anastaci1a.localica.PopupEditorFocusOwnershipTest
+io.github.anastaci1a.localica.PopupImeGeometryTest
+io.github.anastaci1a.localica.TagBatchControllerTest
+io.github.anastaci1a.localica.TagBatchTransactionTest
+io.github.anastaci1a.localica.TagSaveProgressPopupTest

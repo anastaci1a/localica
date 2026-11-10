@@ -606,7 +606,11 @@ Tag editor: frosted sheet with shared title, perimeter and fixed header/footer. 
 
 Image picker: rounded previews of readable previous choices. Optional device-photo access has a short explanation and glass permission button. An evenly spaced divider separates these from icon-bearing glass Gallery/Files actions.
 
-Bulk jobs: Continue in background and Stop after current file. **Settings → Library and tags → Tag jobs and recovery → Tag editing jobs** shows progress/recent per-file outcomes.
+Saving opens a shared glass progress popup above the same editor. Keep draft fields styled as enabled while modal ownership blocks underlying input. Show verified Saved counts with rounded progress. Cancel shows Restoring counts and returns to the same draft and scroll owner after verification.
+
+Continue in background explicitly closes the editor while its service continues. Foreground completion offers Done and Retry failed files. Interrupted work offers Resume or Restore; recorded cancellation offers Restore only. Explicit no-undo mode replaces Cancel with Stop after current.
+
+**Settings → Library and tags → Tag jobs and recovery → Tag editing jobs** shows active progress and recent per-file outcomes.
 
 The artwork viewer centers fitted artwork across the full page. Safe Close and Save (to Downloads, original file format) controls overlay the image; zoom is by pinch or the accessibility Zoom actions. Pan bounds follow the fitted image. Released pans decelerate. Re-grab, reset, zoom or reduced motion stops travel. Recreation preserves zoom and the visible image center.
 

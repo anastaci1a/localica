@@ -73,7 +73,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             progress.animateTo(if (open) 1f else 0f, tween(settings.motionDuration(400)))
         }
     }
-    val currentSettle by rememberUpdatedState<(Boolean) -> Unit>(::settle)
+    val currentSettle by rememberUpdatedState<(Boolean) -> Unit>({ settle(it) })
     // Optional test diagnostics observe existing callbacks without adding a pointer node.
     // A stationary pointer observer would itself change Compose's hit-path dispatch.
     val currentTrace by rememberUpdatedState(onDragTrace)
