@@ -40,16 +40,16 @@ internal fun TagEditorHost(controller: TagEditingController, content: @Composabl
     CompositionLocalProvider(LocalTagEdit provides launches.editTags, LocalArtworkEdit provides launches.editArtwork,
         LocalTagEditorLaunches provides launches) { content() }
     TagEditorPresentationScope(launches.presentation(state.sessionId).takeIf { state.tracks.isNotEmpty() }) {
-        if (state.tracks.isNotEmpty() && !state.background) key(state.sessionId) { TagEditorDialog(state, controller) }
-        if (state.jobsVisible) TagJobsDialog(state, controller)
+        if (state.tracks.isNotEmpty() && !state.background) key(state.sessionId) { GlassUnanchoredPopup("started from a menu item") { TagEditorDialog(state, controller) } }
+        if (state.jobsVisible) GlassUnanchoredPopup("notification action") { TagJobsDialog(state, controller) }
     }
     var recoveryDismissed by remember(state.recovery) { mutableStateOf(false) }
-    if (state.recovery != null && !recoveryDismissed && state.tracks.isEmpty()) GlassAlertDialog(
+    if (state.recovery != null && !recoveryDismissed && state.tracks.isEmpty()) GlassUnanchoredPopup("recovery prompt raised at start") { GlassAlertDialog(
         onDismissRequest = { recoveryDismissed = true }, title = { Text("Interrupted tag edit") },
         text = { Column { Text(state.recoveryProblem ?: "An original copy of ${state.recovery} is retained. Restore it to undo the interrupted edit. You can also recover from Settings.")
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) } } },
         confirmButton = { ActionTextButton(enabled = !state.busy, onClick = controller::recover) { Text(if (state.recoveryProblem == null) "Restore original" else "Retry recovery") } },
-        dismissButton = { ActionTextButton(onClick = { recoveryDismissed = true }) { Text("Later") } })
+        dismissButton = { ActionTextButton(onClick = { recoveryDismissed = true }) { Text("Later") } }) }
 }
 
 @Composable
@@ -61,13 +61,14 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
     if (state.recovery != null) SettingsEntry("Recover tag edit") {
         ActionTextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
     }
-    if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text(if (state.recoveryProblem == null) "Restore original file?" else "Retry tag recovery?") },
+    if (confirming) GlassUnanchoredPopup("text button has no glass face") { GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text(if (state.recoveryProblem == null) "Restore original file?" else "Retry tag recovery?") },
         text = { Text(state.recoveryProblem ?: "This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
         confirmButton = { ActionTextButton(onClick = { confirming = false; controller.recover() }) { Text(if (state.recoveryProblem == null) "Restore original" else "Retry recovery") } },
-        dismissButton = { ActionTextButton(onClick = { confirming = false }) { Text("Cancel") } })
+        dismissButton = { ActionTextButton(onClick = { confirming = false }) { Text("Cancel") } }) }
 }
 
 @Composable
+@GlassPopupOpener
 internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingController,
     readCover: (suspend (String) -> CoverImage)? = null, onSave: ((TagPatch) -> Unit)? = null) {
     val context = LocalContext.current
@@ -207,6 +208,7 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
 }
 
 @Composable
+@GlassPopupOpener
 private fun TagJobsDialog(state: TagEditorState, controller: TagEditingController) {
     GlassDialog(controller::hideJobs, GlassPlacement.Sheet) {
         Column(Modifier.fillMaxWidth().controlVerticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -229,6 +231,7 @@ private fun TagJobsDialog(state: TagEditorState, controller: TagEditingControlle
 }
 
 @Composable
+@GlassPopupOpener
 private fun TagSaveProgressDialog(state: TagEditorState, controller: TagEditingController) {
     val restoring = state.cancelPending || state.phase == "CancelRequested" || state.phase == "Restoring"
     GlassAlertDialog(onDismissRequest = {}, title = {

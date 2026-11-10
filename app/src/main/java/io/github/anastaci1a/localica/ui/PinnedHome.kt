@@ -156,10 +156,10 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     }
     info?.let { request -> TagEditorPresentationScope(request.presentation) {
     val track = request.track
-    SongInformation(track, { collectionLookup.cancel(); info = null }, folders = library.snapshot.folders) { action ->
+    GlassUnanchoredPopup("menu item") { SongInformation(track, { collectionLookup.cancel(); info = null }, folders = library.snapshot.folders) { action ->
         // SongInformation intentionally dismisses before invoking this accepted action.
         val owner = informationLookupOwner
         collectionLookup.open(action, track) { info == null && currentInformationLookupOwner === owner }
-    } } }
+    } } } }
 
 }

@@ -72,13 +72,13 @@ internal fun IconPackSettings(onView: (String?) -> Unit) {
     SettingsEntry("Import icon pack") { ActionTextButton(enabled = !busy, onClick = { importer.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }) { Text("Import icon pack") } }
     SettingsEntry("Export built-in icons as a template") { ActionTextButton(enabled = !busy, onClick = { exporter.launch("localica-icon-template.zip") }) { Text("Export built-in icons as a template") } }
     updating?.let { prepared ->
-        GlassAlertDialog({ updating = null }, title = { Text("Update ${prepared.report.info.name}?") },
+        GlassUnanchoredPopup("import result") { GlassAlertDialog({ updating = null }, title = { Text("Update ${prepared.report.info.name}?") },
             text = { Text("Version ${prepared.report.info.version} is already in your library. Replace its icons with this import?") },
             confirmButton = { ActionTextButton({ updating = null; install(prepared) }) { Text("Update") } },
-            dismissButton = { ActionTextButton({ updating = null }) { Text("Cancel") } })
+            dismissButton = { ActionTextButton({ updating = null }) { Text("Cancel") } }) }
     }
     deleting?.let { pack ->
-        GlassAlertDialog({ deleting = null }, title = { Text("Delete ${pack.report.info.name}?") },
+        GlassUnanchoredPopup("row action") { GlassAlertDialog({ deleting = null }, title = { Text("Delete ${pack.report.info.name}?") },
             text = { Text("Remove this pack from your library? If it is active, Localica will use the built-in icons.") },
             confirmButton = { ActionTextButton({
                 deleting = null
@@ -87,11 +87,11 @@ internal fun IconPackSettings(onView: (String?) -> Unit) {
                     message = withContext(Dispatchers.IO) { runCatching { IconPacks.delete(context, pack.id) }.exceptionOrNull()?.let { "Couldn’t delete this pack." } }
                     busy = false
                 }
-            }) { Text("Delete") } }, dismissButton = { ActionTextButton({ deleting = null }) { Text("Cancel") } })
+            }) { Text("Delete") } }, dismissButton = { ActionTextButton({ deleting = null }) { Text("Cancel") } }) }
     }
     message?.let { text ->
-        GlassAlertDialog({ message = null }, title = { Text("Icon packs") }, text = { Text(text) },
-            confirmButton = { ActionTextButton({ message = null }) { Text("Close") } })
+        GlassUnanchoredPopup("failure notice") { GlassAlertDialog({ message = null }, title = { Text("Icon packs") }, text = { Text(text) },
+            confirmButton = { ActionTextButton({ message = null }) { Text("Close") } }) }
     }
 }
 

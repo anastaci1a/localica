@@ -91,19 +91,19 @@ import kotlinx.coroutines.*
                 onClick = { onDismiss(); onRemove() })
         }
     }
-    ArtistPhotoDialog(artistPhotoActions)
-    if (adding) AddToPlaylistDialog(item.songs.map { it.track }, playlists, controller, { adding = false }, { adding = false })
+    GlassUnanchoredPopup("menu item") { ArtistPhotoDialog(artistPhotoActions) }
+    if (adding) GlassUnanchoredPopup("menu item") { AddToPlaylistDialog(item.songs.map { it.track }, playlists, controller, { adding = false }, { adding = false }) }
     if (queuePicker && queues != null) {
         val state by queues.state.collectAsState()
-        ChoiceDialog("Add to a queue", state.library.queues, state.library.active ?: state.library.queues.firstOrNull(),
+        GlassUnanchoredPopup("menu item") { ChoiceDialog("Add to a queue", state.library.queues, state.library.active ?: state.library.queues.firstOrNull(),
             { it?.name.orEmpty() }, { queuePicker = false }) { target ->
             if (target != null) queues.appendTo(target.id, item.songs) { if (!it) failure = "Couldn’t add these songs to the queue." }
-        }
+        } }
     }
     if (renaming) {
         var name by remember { mutableStateOf(item.title) }
         val available = PlaylistEdits.nameAvailable(playlists.playlists, name, item.ref.id)
-        GlassAlertDialog({ if (!busy) renaming = false }, title = { Text("Rename playlist") }, text = {
+        GlassUnanchoredPopup("menu item") { GlassAlertDialog({ if (!busy) renaming = false }, title = { Text("Rename playlist") }, text = {
             Column {
                 GlassTextField(name, { name = it }, singleLine = true, label = { Text("Playlist name") }, enabled = !busy)
                 if (name.isNotBlank() && !available) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
@@ -111,15 +111,15 @@ import kotlinx.coroutines.*
             }
         }, confirmButton = { ActionTextButton(enabled = available && !busy, onClick = {
             busy = true; controller?.rename(item.ref.id, name) { ok -> busy = false; if (ok) { renaming = false; onRenamed(name.trim()) } }
-        }) { Text("Save") } }, dismissButton = { ActionTextButton(enabled = !busy, onClick = { renaming = false }) { Text("Cancel") } })
+        }) { Text("Save") } }, dismissButton = { ActionTextButton(enabled = !busy, onClick = { renaming = false }) { Text("Cancel") } }) }
     }
-    if (deleting) GlassAlertDialog({ if (!busy) deleting = false }, title = { Text("Delete playlist?") },
+    if (deleting) GlassUnanchoredPopup("menu item") { GlassAlertDialog({ if (!busy) deleting = false }, title = { Text("Delete playlist?") },
         text = { Text("Delete “${item.title}”? Your music files stay on the device.") },
         confirmButton = { ActionTextButton(enabled = !busy, onClick = {
             busy = true; controller?.delete(item.ref.id) { ok -> busy = false; if (ok) { deleting = false; onDeleted() } }
-        }) { Text("Delete") } }, dismissButton = { ActionTextButton(enabled = !busy, onClick = { deleting = false }) { Text("Cancel") } })
+        }) { Text("Delete") } }, dismissButton = { ActionTextButton(enabled = !busy, onClick = { deleting = false }) { Text("Cancel") } }) }
     if (artwork.choosing) key(artworkTarget) {
-        ImageChooser(artwork, artwork::cancelChooser) { cropped ->
+        GlassUnanchoredPopup("menu item") { ImageChooser(artwork, artwork::cancelChooser) { cropped ->
             artwork.clearImage()
             val playlistId = item.ref.id
             scope.launch {
@@ -137,8 +137,8 @@ import kotlinx.coroutines.*
                 } catch (cancelled: CancellationException) { stored?.delete(); throw cancelled }
                 catch (_: Exception) { stored?.delete(); failure = "Couldn’t save the playlist image." }
             }
-        }
+        } }
     }
-    failure?.let { message -> GlassAlertDialog({ failure = null }, title = { Text("Collection") }, text = { Text(message) },
-        confirmButton = { ActionTextButton({ failure = null }) { Text("Close") } }) }
+    failure?.let { message -> GlassUnanchoredPopup("failure notice") { GlassAlertDialog({ failure = null }, title = { Text("Collection") }, text = { Text(message) },
+        confirmButton = { ActionTextButton({ failure = null }) { Text("Close") } }) } }
 }

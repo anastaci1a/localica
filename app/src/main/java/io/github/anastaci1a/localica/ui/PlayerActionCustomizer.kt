@@ -45,6 +45,7 @@ private class ActionDrag(val action: PlayerAction, val origin: Offset, point: Of
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@GlassPopupOpener
 internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (PlayerActionSettings) -> Unit,
     onDismiss: () -> Unit, reducedMotion: Boolean = false) {
     val current by rememberUpdatedState(value)

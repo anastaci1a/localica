@@ -26,7 +26,7 @@ Floating pills, mini-player, filter/search bars and circular controls share Liqu
 
 Glass shadows keep their full spread during placement and fades. Their falloff reaches the background smoothly, without visible rings.
 
-Related controls morph into their panels and return as one visible surface: creation, More, sorting, search and queue/lyric-source selectors. Hidden sources accept no input. a visibly restored source can immediately reverse the current return motion with one owner, without a settling lock or cooldown.
+Related controls morph into their panels and return as one visible surface: creation, More, sorting, search and queue/lyric-source selectors. Every popup opened by a pressed control carries that control as its origin, so it expands from the control’s bounds and retracts into them: bar and header buttons, settings links and the More menu share one host path (`GlassPopupFrom`). Popups with no pressed control of their own (failures, progress, prompts raised by the system, dialogs raised from a menu item) say so with `GlassUnanchoredPopup`; the UI lint rule `GlassPopupWithoutAnchor` rejects an opener that names neither. Hidden sources accept no input. a visibly restored source can immediately reverse the current return motion with one owner, without a settling lock or cooldown.
 
 Selected media hover: in one 220 ms ease-out the outline grows, a shadow deepens, and the surface shows the same backdrop region magnified with a slight frost. Content scales with it. Deselection is the same ease-out in reverse, and interruptions continue from the current appearance. Liquid Glass remains for controls.
 

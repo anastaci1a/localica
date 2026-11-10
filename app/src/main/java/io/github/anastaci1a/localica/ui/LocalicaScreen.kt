@@ -501,31 +501,31 @@ fun LocalicaScreen(
             LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }
         })
     // The app-owned scanner is the live count source; LibraryUiState carries scan milestones only.
-    if (scannerOpen) ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan, onQuickScan,
+    if (scannerOpen) GlassUnanchoredPopup("opened from the scan button") { ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan, onQuickScan,
         remember(context) { (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.scanner?.state }) { destination ->
         scannerOpen = false; returnToScanner = true; settingsCategory = destination; settingsOpen = true
-    }
-    if (exitPrompt) GlassAlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
+    } }
+    if (exitPrompt) GlassUnanchoredPopup("exit prompt raised by Back") { GlassAlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
         text = { Text("Playback will continue.") }, confirmButton = { ActionTextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
-        dismissButton = { ActionTextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
+        dismissButton = { ActionTextButton(onClick = { exitPrompt = false }) { Text("Cancel") } }) }
     CompositionLocalProvider(LocalGlassDialogAppearance provides playerDialogAppearance) {
-    if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
+    if (repeatOptions) GlassUnanchoredPopup("player action") { RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) } }
     if (customizeActions) CompositionLocalProvider(LocalGlassDialogAppearance provides customizeAppearance) {
-        PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false; customizeAppearance = null }, settings.reducedMotion)
+        GlassUnanchoredPopup("player action") { PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false; customizeAppearance = null }, settings.reducedMotion) }
     }
-    if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { playerCollectionLookup.cancel(); songInfo = false }, folders = library.snapshot.folders, onAction = { playerAction(it) })
+    if (songInfo && indexedTrack != null) GlassUnanchoredPopup("player action") { SongInformation(indexedTrack, { playerCollectionLookup.cancel(); songInfo = false }, folders = library.snapshot.folders, onAction = { playerAction(it) }) }
     if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri, indexedTrack.albumArtist ?: indexedTrack.artist, indexedTrack.album) { viewArt = false }
-    if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
-    if (playerMore) GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
+    if (addPlaying && indexedTrack != null) GlassUnanchoredPopup("player action") { AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false }) }
+    if (playerMore) GlassUnanchoredPopup("player action") { GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
         val editTags = presentedTagEdit()
         Column(Modifier.fillMaxWidth().controlVerticalScroll(rememberScrollState()).padding(16.dp)) {
             PlayerAction.entries.filterNot { it == PlayerAction.More }
                 .forEach { action -> ActionTextButton(onClick = { playerMore = false; playerAction(action, editTags) }) { Text(action.label) } }
         }
+    } }
     }
-    }
-    QueueDialogs(queues, queueController)
-    PlaybackFailureDialog(playback, playback.hasNext, onRetryPlayback) { onNext(); onRetryPlayback() }
+    GlassUnanchoredPopup("queue prompts raised by the controller") { QueueDialogs(queues, queueController) }
+    GlassUnanchoredPopup("playback failure") { PlaybackFailureDialog(playback, playback.hasNext, onRetryPlayback) { onNext(); onRetryPlayback() } }
     }
     }
     }

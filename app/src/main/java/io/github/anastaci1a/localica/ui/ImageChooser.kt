@@ -29,11 +29,13 @@ import io.github.anastaci1a.localica.editing.CoverImages
 internal val LocalImagePreviewDecodeObserver = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 @Composable
+@GlassPopupOpener
 internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
     ImageChooser(rememberArtworkWorkflow("standalone", startChoosing = true), onDismiss, onChosen)
 }
 
 @Composable
+@GlassPopupOpener
 internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onChosen: (String) -> Unit) {
     val context = LocalContext.current
     val images = remember { CoverImages(context) }

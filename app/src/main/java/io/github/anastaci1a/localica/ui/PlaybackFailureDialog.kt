@@ -12,6 +12,7 @@ import io.github.anastaci1a.localica.playback.PlaybackState
 
 /** One notice per failure, independent of whether the player is expanded. Normal loading is silent. */
 @Composable
+@GlassPopupOpener
 internal fun PlaybackFailureDialog(state: PlaybackState, canSkip: Boolean, onRetry: () -> Unit, onSkip: () -> Unit) {
     var dismissed by rememberSaveable(state.trackUri, state.problem) { mutableStateOf(false) }
     val problem = state.problem ?: return

@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 
 /** Leaf chooser: shared modal, buttons, scroll handling and artwork reveal own presentation. */
 @Composable
+@GlassPopupOpener
 internal fun ArtistPhotoChooser(actions: ArtistPhotoActions) {
     val environment = actions.environment
     val allowed by environment.consent.allowed.collectAsState()

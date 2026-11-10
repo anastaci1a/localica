@@ -371,7 +371,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         val mutableRows = remember(mutableQueue?.entries, mutablePlaylist?.entries) {
             mutableQueue?.entries?.map { SongRow(it.id, it.track) } ?: mutablePlaylist?.entries
         }
-        BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
+        GlassPopupInherited("every sortingPanel caller sets the origin") { BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
         if (!changeViewInPlace(value) { preferences.write(route, value, override) }) {
             preferences.write(route, value, override)
             commitStyle(value)
@@ -404,7 +404,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             mutableQueue != null && queues != null -> ({ method, ascending, done -> orderAction(true, { done(it != null) }) { queues.applySortOrder(mutableQueue.id, method, ascending, it) } })
             mutablePlaylist != null && playlistController != null -> ({ method, ascending, done -> orderScroll.cancel(); playlistController.applySort(mutablePlaylist.id, method, ascending, done) })
             else -> null
-        }) }
+        }) } }
 
     val restoredSearchSlotHeight = with(density) { pillSlotHeight.roundToPx() }
     LaunchedEffect(localSearchOpen, searchAnchor, showSearchPill, restoredSearchSlotHeight) {
@@ -1432,14 +1432,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
     }
-    addingSong?.let { song -> AddToPlaylistDialog(listOf(song), playlists, playlistController, { addingSong = null }, { addingSong = null }) }
+    addingSong?.let { song -> GlassUnanchoredPopup("no trigger sets this state") { AddToPlaylistDialog(listOf(song), playlists, playlistController, { addingSong = null }, { addingSong = null }) } }
     info?.let { request -> TagEditorPresentationScope(request.presentation) {
     val song = request.track
-    SongInformation(song, { collectionLookup.cancel(); info = null }, folders = library.snapshot.folders) { action ->
+    GlassUnanchoredPopup("menu item") { SongInformation(song, { collectionLookup.cancel(); info = null }, folders = library.snapshot.folders) { action ->
         // SongInformation intentionally dismisses before invoking this accepted action.
         val owner = informationLookupOwner
         collectionLookup.open(action, song) { info == null && currentInformationLookupOwner === owner }
-    } } }
+    } } } }
     if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel(initialView = presentationOnly) }
 }
 

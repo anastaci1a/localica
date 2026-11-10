@@ -154,10 +154,10 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     }
     state.library.queues.firstOrNull { it.id == renameId }?.let { queue ->
         var name by remember(queue.id) { mutableStateOf(queue.name) }
-        GlassAlertDialog(onDismissRequest = { renameId = null }, title = { Text("Rename queue") },
+        GlassUnanchoredPopup("menu item") { GlassAlertDialog(onDismissRequest = { renameId = null }, title = { Text("Rename queue") },
             text = { GlassTextField(name, { name = it }, label = { Text("Queue name") }) },
             confirmButton = { ActionTextButton(enabled = name.isNotBlank(), onClick = { controller?.rename(queue.id, name); renameId = null }) { Text("Save") } },
-            dismissButton = { ActionTextButton(onClick = { renameId = null }) { Text("Cancel") } })
+            dismissButton = { ActionTextButton(onClick = { renameId = null }) { Text("Cancel") } }) }
     }
     deleting?.let { ids -> CompositionLocalProvider(LocalGlassOrigin provides deletionOrigin) {
         fun dismissDeletion() { deleting = null; deletionOrigin = null }
@@ -176,6 +176,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
 }
 
 @Composable
+@GlassPopupOpener
 internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
     state.pending?.let { pending ->
         var removals by remember(pending) { mutableStateOf(setOfNotNull(pending.suggestedRemoval)) }
@@ -211,6 +212,8 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
     val navigate = LocalSettingsNavigate.current
     var limitOpen by remember { mutableStateOf(false) }
     var thresholdOpen by remember { mutableStateOf(false) }
+    val thresholdOrigin = rememberGlassAnchor()
+    val limitOrigin = rememberGlassAnchor()
     if (section == "Song tap behavior" || section == "Per-list overrides") {
         if (section == "Song tap behavior") {
         SettingsHeading("Default song action")
@@ -233,34 +236,34 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
             onChange { it.copy(previousBehavior = behavior) }
         }
         if (settings.previousBehavior == PreviousBehavior.RestartAfterThreshold) {
-            SettingsLink("Restart threshold", "${settings.previousThresholdSeconds} seconds; earlier taps go to the previous song") { thresholdOpen = true }
+            SettingsLink("Restart threshold", "${settings.previousThresholdSeconds} seconds; earlier taps go to the previous song", anchor = thresholdOrigin) { thresholdOpen = true }
         }
         SettingsHeading("Queues")
         ChoicePreference("Switch queue", settings.switching, QueueSwitch.entries, { it.label() }) { switching -> onChange { it.copy(switching = switching) } }
-        SettingsLink("Maximum queues: " + (settings.maximum ?: "unlimited"), "A limit never deletes existing queues automatically.") { limitOpen = true }
+        SettingsLink("Maximum queues: " + (settings.maximum ?: "unlimited"), "A limit never deletes existing queues automatically.", anchor = limitOrigin) { limitOpen = true }
     }
     if (thresholdOpen) {
         var seconds by remember(settings.previousThresholdSeconds) { mutableStateOf(settings.previousThresholdSeconds.toString()) }
         val valid = seconds.toIntOrNull()?.let { it in 1..60 } == true
-        GlassAlertDialog(onDismissRequest = { thresholdOpen = false }, title = { Text("Restart threshold") }, text = {
+        GlassPopupFrom(thresholdOrigin) { GlassAlertDialog(onDismissRequest = { thresholdOpen = false }, title = { Text("Restart threshold") }, text = {
             GlassTextField(seconds, { seconds = it }, label = { Text("Seconds (1–60)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = !valid)
         }, confirmButton = { ActionTextButton(enabled = valid, onClick = {
             val threshold = seconds.toInt()
             onChange { it.copy(previousThresholdSeconds = threshold) }; thresholdOpen = false
-        }) { Text("Save") } }, dismissButton = { ActionTextButton(onClick = { thresholdOpen = false }) { Text("Cancel") } })
+        }) { Text("Save") } }, dismissButton = { ActionTextButton(onClick = { thresholdOpen = false }) { Text("Cancel") } }) }
     }
     if (limitOpen) {
         var limit by remember(settings.maximum) { mutableStateOf(settings.maximum?.toString().orEmpty()) }
-        GlassAlertDialog(onDismissRequest = { limitOpen = false }, title = { Text("Queue limit") }, text = {
+        GlassPopupFrom(limitOrigin) { GlassAlertDialog(onDismissRequest = { limitOpen = false }, title = { Text("Queue limit") }, text = {
             GlassTextField(limit, { limit = it }, label = { Text("Maximum queues (blank = unlimited)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = limit.isNotBlank() && (limit.toIntOrNull() ?: 0) < 1)
         }, confirmButton = { ActionTextButton(enabled = limit.isBlank() || (limit.toIntOrNull() ?: 0) > 0, onClick = {
             val maximum = limit.toIntOrNull()
             onChange { it.copy(maximum = maximum) }; limitOpen = false
-        }) { Text("Save queue limit") } }, dismissButton = { ActionTextButton(onClick = { limitOpen = false }) { Text("Cancel") } })
+        }) { Text("Save queue limit") } }, dismissButton = { ActionTextButton(onClick = { limitOpen = false }) { Text("Cancel") } }) }
     }
 }
 internal fun SongTap.label() = when (this) { SongTap.NewQueue -> "New queue from displayed list"

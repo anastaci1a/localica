@@ -68,7 +68,7 @@ internal fun LastFmDecision(row: LastFmMatchRow, library: List<Track>, onDismiss
     val candidates = if (picking) filtered.drop(currentPage * 20).take(20) else row.candidates.filter { it.id in available }
     val choices = candidates.map { LastFmPickerChoice.Song(it.id) } + listOf(LastFmPickerChoice.Search, LastFmPickerChoice.Absent)
     val draft: LastFmPickerChoice? = selected?.let { if (it == LastFmMatcher.NONE) LastFmPickerChoice.Absent else LastFmPickerChoice.Song(it) }
-    ChoiceDialog(ChoiceDialogActions("Use selection", "Skip", enabled = !saving), "Choose a match", choices, draft,
+    GlassPopupInherited("LastFmDecision is opened inside the row origin") { ChoiceDialog(ChoiceDialogActions("Use selection", "Skip", enabled = !saving), "Choose a match", choices, draft,
         label = { choice -> when (choice) {
             is LastFmPickerChoice.Song -> available[choice.id]?.let { "${it.title} · ${it.artist ?: "Unknown artist"} · ${it.album ?: "Unknown album"}" }.orEmpty()
             LastFmPickerChoice.Search -> "Choose another song…"
@@ -107,5 +107,5 @@ internal fun LastFmDecision(row: LastFmMatchRow, library: List<Track>, onDismiss
             if (picking && currentPage > 0) GlassActionButton(AppIcon.ActionChevronLeft, "Previous library songs") { page = currentPage - 1; selected = null }
             if (picking && (currentPage + 1) * 20 < filtered.size) GlassActionButton(AppIcon.ActionArrowRight, "More library songs") { page = currentPage + 1; selected = null }
             if (picking) GlassActionButton(AppIcon.ActionChevronLeft, "Suggested matches") { picking = false; selected = null }
-        })
+        }) }
 }

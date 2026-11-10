@@ -83,17 +83,18 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
                 onClick = { menu = false; picker.launch(arrayOf("*/*")) })
         }
     }
-    if (loading) GlassAlertDialog(onDismissRequest = { loadJob?.cancel() }, title = { Text("Reading playlist") },
+    if (loading) GlassUnanchoredPopup("progress after a menu item") { GlassAlertDialog(onDismissRequest = { loadJob?.cancel() }, title = { Text("Reading playlist") },
         text = { LinearProgressIndicator(Modifier.fillMaxWidth()) }, confirmButton = {
             ActionTextButton(onClick = { loadJob?.cancel() }) { Text("Cancel") }
-        })
-    if (naming) PlaylistNameDialog(controller, { naming = false })
-    preview?.let { found -> PlaylistImportDialog(found, controller, { preview = null }) }
-    error?.let { message -> GlassAlertDialog(onDismissRequest = { error = null }, title = { Text("Playlist import") }, text = { Text(message) },
-        confirmButton = { ActionTextButton(onClick = { error = null }) { Text("Close") } }) }
+        }) }
+    if (naming) GlassUnanchoredPopup("menu item") { PlaylistNameDialog(controller, { naming = false }) }
+    preview?.let { found -> GlassUnanchoredPopup("file picker result") { PlaylistImportDialog(found, controller, { preview = null }) } }
+    error?.let { message -> GlassUnanchoredPopup("failure notice") { GlassAlertDialog(onDismissRequest = { error = null }, title = { Text("Playlist import") }, text = { Text(message) },
+        confirmButton = { ActionTextButton(onClick = { error = null }) { Text("Close") } }) } }
 }
 
 @Composable
+@GlassPopupOpener
 private fun PlaylistNameDialog(controller: PlaylistController?, onDismiss: () -> Unit) {
     val playlists = controller?.state?.collectAsState()?.value ?: PlaylistState()
     var name by remember { mutableStateOf("") }
@@ -111,6 +112,7 @@ private fun PlaylistNameDialog(controller: PlaylistController?, onDismiss: () ->
 }
 
 @Composable
+@GlassPopupOpener
 internal fun PlaylistImportDialog(preview: PlaylistImportPreview, controller: PlaylistController?, onDismiss: () -> Unit) {
     val playlists = controller?.state?.collectAsState()?.value ?: PlaylistState()
     var name by remember(preview) { mutableStateOf(preview.name) }

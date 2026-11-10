@@ -36,6 +36,7 @@ private const val queueRepeatWarning = "Queue-end options apply after you turn o
 private data class RepeatWarningColumns(val choices: Dp, val warning: Dp)
 
 @Composable
+@GlassPopupOpener
 internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit, onApply: ((QueueSettings) -> QueueSettings) -> Unit) {
     var advanced by remember { mutableStateOf(settings.advancedRepeat != null) }
     var simple by remember { mutableStateOf(settings.repeat) }
@@ -140,6 +141,7 @@ private fun RepeatSectionPreference(section: RepeatSection, policy: AdvancedRepe
 
 /** Section drafts commit to the enclosing editor only on Select, never on dismissal. */
 @Composable
+@GlassPopupOpener
 internal fun RepeatSectionDialog(section: RepeatSection, policy: AdvancedRepeat,
     onDismiss: () -> Unit, onSelect: (AdvancedRepeat) -> Unit) {
     var draft by remember { mutableStateOf(policy) }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @Composable
+@GlassPopupOpener
 internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: (() -> Unit)? = null,
     folders: List<FolderSelection> = emptyList(),
     rootNameResolver: suspend (android.content.Context, List<FolderSelection>) -> List<SongRootName> = ::resolveSongRootNames,

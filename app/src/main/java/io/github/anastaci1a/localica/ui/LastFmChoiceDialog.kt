@@ -13,6 +13,7 @@ internal data class ChoiceDialogActions(val confirm: String, val dismiss: String
 
 /** The original single-select dialog is unchanged. This decision stages one field value until confirmed. */
 @Composable
+@GlassPopupOpener
 internal fun <T> ChoiceDialog(actions: ChoiceDialogActions, title: String, choices: List<T>, selected: T?,
     label: (T) -> String, onDismiss: () -> Unit, onSelect: (T) -> Unit,
     onDraft: (T) -> Unit = {}, header: @Composable () -> Unit = {},

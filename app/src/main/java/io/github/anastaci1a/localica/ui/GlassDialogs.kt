@@ -81,6 +81,7 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
 }
 
 @Composable
+@GlassPopupOpener
 internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = GlassPlacement.Center,
     fitContent: Boolean = placement == GlassPlacement.Menu,
     heightSizing: GlassDialogHeight = GlassDialogHeight.Content, content: @Composable () -> Unit) {
@@ -132,6 +133,7 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
 }
 
 @Composable
+@GlassPopupOpener
 internal fun GlassAlertDialog(onDismissRequest: () -> Unit, confirmButton: @Composable () -> Unit,
     modifier: Modifier = Modifier, dismissButton: (@Composable () -> Unit)? = null,
     icon: (@Composable () -> Unit)? = null, title: (@Composable () -> Unit)? = null,

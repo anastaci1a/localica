@@ -24,6 +24,7 @@ import io.github.anastaci1a.localica.library.OrderCheckpoint
 import io.github.anastaci1a.localica.navigation.*
 
 @Composable
+@GlassPopupOpener
 internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden: Boolean,
     onDismiss: () -> Unit, onSave: (BrowseStyle, Boolean) -> Unit, onReset: () -> Unit, presentationOnly: Boolean = false, onRandomize: ((((Boolean) -> Unit)) -> Unit)? = null,
     mutableOrder: io.github.anastaci1a.localica.library.SavedOrder? = null,

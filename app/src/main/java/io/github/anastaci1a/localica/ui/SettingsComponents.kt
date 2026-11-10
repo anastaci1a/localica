@@ -87,6 +87,7 @@ internal fun SettingsHeading(title: String) {
 }
 
 @Composable
+@GlassPopupOpener
 internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, label: (T) -> String,
     onDismiss: () -> Unit, onSelect: (T) -> Unit) {
     var draft by remember { mutableStateOf(choices.firstOrNull { it == selected } ?: choices.firstOrNull() ?: selected) }

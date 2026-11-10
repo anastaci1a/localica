@@ -17,7 +17,7 @@ internal fun DiagnosticsExportAction() {
     val context = LocalContext.current
     SettingsEntry("Export diagnostics") { ActionTextButton(onClick = { open = true }) { Text("Export diagnostics") } }
     FrameStatsActions()
-    if (open) GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Export diagnostics") },
+    if (open) GlassUnanchoredPopup("text button has no glass face") { GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Export diagnostics") },
         text = {
             Text("Saves the app version, device model, Android version and the last ${Diagnostics.ring.size} recorded pinch and " +
                 "transition events and any opt-in frame capture to a text file, then opens the share sheet. Nothing is sent unless you choose where to share it.",
@@ -27,10 +27,10 @@ internal fun DiagnosticsExportAction() {
             open = false
             failed = runCatching { io.github.anastaci1a.localica.diagnostics.DiagnosticsExport.export(context) }.isFailure
         }) { Text("Export") } },
-        dismissButton = { ActionTextButton(onClick = { open = false }) { Text("Cancel") } })
-    if (failed) GlassAlertDialog(onDismissRequest = { failed = false }, title = { Text("Could not export") },
+        dismissButton = { ActionTextButton(onClick = { open = false }) { Text("Cancel") } }) }
+    if (failed) GlassUnanchoredPopup("failure notice") { GlassAlertDialog(onDismissRequest = { failed = false }, title = { Text("Could not export") },
         text = { Text("The diagnostics file could not be created or shared.") },
-        confirmButton = { ActionTextButton(onClick = { failed = false }) { Text("Close") } })
+        confirmButton = { ActionTextButton(onClick = { failed = false }) { Text("Close") } }) }
 }
 
 @Composable

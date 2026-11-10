@@ -49,6 +49,7 @@ internal fun ArtistPhotoMenu(actions: ArtistPhotoActions?, onDismiss: () -> Unit
 }
 
 @Composable
+@GlassPopupOpener
 internal fun ArtistPhotoDialog(actions: ArtistPhotoActions?) {
     if (actions == null) return
     actions.problem?.let { problem ->

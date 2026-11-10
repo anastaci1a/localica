@@ -58,12 +58,14 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     // A minimized pill cannot keep its menu open.
     if (minimized && menu) SideEffect { menu = false }
     val moreAnchor = rememberGlassAnchor()
+    // The Add to playlists popup opens from, and returns to, its own bar button (#748).
+    val addAnchor = rememberGlassAnchor()
     fun act(action: SongTap) { menu = false
         queues?.act(chosen.map { it.track }, action, chosen.map { it.sourcePlaylistId }) { if (it) onSelection(emptySet()) } }
     @Composable fun FrequentActions() {
         ActionIcon(AppIcon.TabQueues, "Play next", enabled = chosen.isNotEmpty() && queues != null,
             glass = false) { act(SongTap.PlayNext) }
-        ActionIcon(AppIcon.ActionListAddLast, "Add to playlist", enabled = chosen.isNotEmpty(),
+        ActionIcon(AppIcon.ActionListAddLast, "Add to playlist", enabled = chosen.isNotEmpty(), anchor = addAnchor,
             glass = false) { adding = chosen.map { it.track } }
         ActionIcon(AppIcon.ActionEllipsis, "More selection actions", anchor = moreAnchor,
             glass = false) { menu = true }
@@ -119,12 +121,13 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
         }
         if (onRange != null) ActionMenuItem("Select range", icon = AppIcon.TabQueues) { menu = false; onRange() }
     }
-    adding?.let { tracks -> AddToPlaylistDialog(tracks, playlistState, playlists,
-        onDismiss = { adding = null }, onAdded = { adding = null; onSelection(emptySet()) }) }
+    adding?.let { tracks -> GlassPopupFrom(addAnchor) { AddToPlaylistDialog(tracks, playlistState, playlists,
+        onDismiss = { adding = null }, onAdded = { adding = null; onSelection(emptySet()) }) } }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
+@GlassPopupOpener
 internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, controller: PlaylistController?,
     onDismiss: () -> Unit, onAdded: () -> Unit) {
     var name by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }

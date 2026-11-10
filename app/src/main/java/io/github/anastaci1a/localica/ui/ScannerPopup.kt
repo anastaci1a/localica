@@ -44,6 +44,7 @@ internal fun openLocalicaSystemSettings(context: Context, notifications: Boolean
 }
 
 @Composable
+@GlassPopupOpener
 internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart: () -> Unit, onCancel: () -> Unit, onQuickScan: () -> Unit = {},
     progress: StateFlow<ScanState>? = null, onSettings: (String) -> Unit) {
     val context = LocalContext.current
