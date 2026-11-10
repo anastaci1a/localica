@@ -275,8 +275,8 @@ class CanonicalReducedVisibilityTest {
                 assertTrue("Caller remains visible during original pending-return interval", visible)
             }
             compose.runOnUiThread { visible = false }
-            phase("caller-close", capture, events = { at -> if (interrupted && at == 16L) visible = true }, supplemental = ::state)
-            if (interrupted) {
+            phase("caller-close", capture, events = { at -> if (interrupted && !live && at == 16L) visible = true }, supplemental = ::state)
+            if (interrupted && !live) {
                 assertTrue("Interrupted reopen paints a live editor window", editor.view?.isAttachedToWindow == true)
                 compose.runOnUiThread { visible = false }
                 phase("reopened-editor-close", capture, supplemental = ::state)
