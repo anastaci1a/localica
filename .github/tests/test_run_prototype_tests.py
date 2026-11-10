@@ -14,6 +14,7 @@ OBSERVER = Path(os.environ.get('LOCALICA_OBSERVER_TEST_SOURCE', ROOT/'.github/te
 REQUIRED = 'io.github.anastaci1a.localica.SearchImeMotionTest'
 FOCUS = 'io.github.anastaci1a.localica.ListSearchTest'
 CONTRAST = 'io.github.anastaci1a.localica.FrostedSurfaceTest'
+THREADING = 'io.github.anastaci1a.localica.MainThreadGuardTest'
 AFFECTED = 'io.github.anastaci1a.localica.QueueRecoveryTest'
 SHA = 'f'*40
 
@@ -28,8 +29,8 @@ class RunnerContract(unittest.TestCase):
         shutil.copyfile(ROOT/'.github/run-prototype-tests.sh', self.root/'runner.sh')
         for helper in ('run-prototype-tests.sh', 'run-prototype-repeat.py', 'prototype-methods.py'):
             shutil.copyfile(ROOT/'.github'/helper, self.root/'.github'/helper)
-        (self.root/'.github/prototype-risk-classes.txt').write_text(REQUIRED+'\n'+FOCUS+'\n'+CONTRAST+'\n'+AFFECTED+'\n')
-        for cls in [REQUIRED,FOCUS,CONTRAST,AFFECTED]:
+        (self.root/'.github/prototype-risk-classes.txt').write_text(REQUIRED+'\n'+FOCUS+'\n'+CONTRAST+'\n'+THREADING+'\n'+AFFECTED+'\n')
+        for cls in [REQUIRED,FOCUS,CONTRAST,THREADING,AFFECTED]:
             (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text('package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+' { @org.junit.Test fun regression() {} }\n')
         for apk in ['app/build/outputs/apk/debug/app-debug.apk','app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk']:
             (self.root/apk).write_bytes(b'apk')
@@ -54,6 +55,7 @@ trap 'status=$?; printf "restore\\n" >> lifecycle; if [[ ${CLEANUP_FAIL:-0} == 1
 trap 'exit 143' TERM
 trap 'exit 130' INT
 ''')
+        self.executable('.github/run-main-thread-cold-start.sh', '#!/bin/bash\nexit 0\n')
         self.executable('bin/adb', '#!/bin/sh\nprintf \"%s\\n\" \"${ACTUAL_API:-$TEST_API}\"\n')
         self.executable('bin/git', '#!/bin/sh\nprintf "%s\\n" "$GITHUB_SHA"\n')
         self.executable('gradlew', '''#!/usr/bin/env python3
@@ -147,7 +149,7 @@ if offline:
         self.assertEqual('methods', summary['kind'])
         self.assertEqual('passed', summary['gate']['status'])
         gate = json.loads((root/'reconciled-tests.json').read_text())
-        self.assertEqual({REQUIRED, FOCUS, CONTRAST, AFFECTED}, set(gate['selectors']))
+        self.assertEqual({REQUIRED, FOCUS, CONTRAST, THREADING, AFFECTED}, set(gate['selectors']))
         for item in summary['iterations']:
             self.assertEqual('passed', item['status'])
             receipt = json.loads((root/f"iterations/iteration-{item['iteration']:02d}/prototype-evidence/reconciled-tests.json").read_text())
@@ -234,7 +236,7 @@ esac
         self.assertTrue(all(entry['removed'] for entry in uninstalled.values()))
         self.assertEqual('first_attempt_exit=1\n', (offline/'recovered.txt').read_text())
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual({REQUIRED,FOCUS,CONTRAST,AFFECTED}, set(evidence['counts']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST,THREADING,AFFECTED}, set(evidence['counts']))
         self.assertEqual('setup\nrestore\n', (self.root/'lifecycle').read_text())
         self.assertIn('boot_id=boot-1', (self.root/'prototype-evidence/context.txt').read_text())
 
@@ -350,7 +352,7 @@ esac
             folder=root/f"iterations/iteration-{item['iteration']:02d}/prototype-evidence"
             self.assertEqual(recorded,(folder/'test-input-apks.sha256').read_text())
             receipt=json.loads((folder/'reconciled-tests.json').read_text())
-            self.assertEqual(set(affected+[REQUIRED,FOCUS,CONTRAST]),set(receipt['selectors']))
+            self.assertEqual(set(affected+[REQUIRED,FOCUS,CONTRAST,THREADING]),set(receipt['selectors']))
 
     def test_forbidden_repackaging_cannot_produce_a_passing_receipt(self):
         result=self.run_case(1, MODE='repackage-always')
@@ -360,16 +362,16 @@ esac
     def test_duplicate_selectors_deduplicate(self):
         self.run_case(AFFECTED_CLASSES=AFFECTED+','+AFFECTED)
         args=json.loads((self.root/'argv.json').read_text())
-        self.assertEqual(4,len(args[-1].split('=',1)[1].split(',')))
+        self.assertEqual(5,len(args[-1].split('=',1)[1].split(',')))
 
     def test_focused_only_and_restoration(self):
         self.run_case()
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(1,args.count('connectedDebugAndroidTest'))
-        self.assertEqual(set(args[-1].split('=',1)[1].split(',')),{REQUIRED,FOCUS,CONTRAST,AFFECTED})
+        self.assertEqual(set(args[-1].split('=',1)[1].split(',')),{REQUIRED,FOCUS,CONTRAST,THREADING,AFFECTED})
         self.assertEqual('setup\nrestore\n',(self.root/'lifecycle').read_text())
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual({REQUIRED,FOCUS,CONTRAST,AFFECTED},set(evidence['counts']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST,THREADING,AFFECTED},set(evidence['counts']))
         self.assertFalse(evidence['release_certified'])
 
     def test_publisher_failure_holds_success(self):
@@ -423,7 +425,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
                 ' { @org.junit.Test fun regression() {} }\n')
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING},set(evidence['counts']))
 
     def distinct_affected_sources(self, count):
         classes = ['io.github.anastaci1a.localica.Coverage%dTest' % i for i in range(count)]
@@ -439,9 +441,9 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         classes = self.distinct_affected_sources(21)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING},set(evidence['counts']))
         args=json.loads((self.root/'argv.json').read_text())
-        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING},set(args[-1].split('=',1)[1].split(',')))
 
     def test_seventy_four_distinct_affected_classes_are_rejected_before_instrumentation(self):
         classes = self.distinct_affected_sources(74)
@@ -452,34 +454,34 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         classes = self.distinct_affected_sources(47)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING},set(evidence['counts']))
         args=json.loads((self.root/'argv.json').read_text())
-        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING},set(args[-1].split('=',1)[1].split(',')))
 
     def test_fifty_distinct_affected_classes_keep_all_mandatory_regressions(self):
         classes = self.distinct_affected_sources(50)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING},set(evidence['counts']))
         args=json.loads((self.root/'argv.json').read_text())
-        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING},set(args[-1].split('=',1)[1].split(',')))
 
     def test_fifty_one_distinct_affected_classes_keep_all_mandatory_regressions(self):
         classes = self.distinct_affected_sources(51)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING},set(evidence['counts']))
         args=json.loads((self.root/'argv.json').read_text())
-        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING},set(args[-1].split('=',1)[1].split(',')))
 
     def test_fifty_six_distinct_affected_classes_keep_every_method_and_sentinel(self):
         classes = self.distinct_affected_sources(56)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
+        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING}
         self.assertEqual(expected,set(evidence['counts']))
         self.assertEqual({c+'#regression' for c in expected},set(evidence['methods']))
-        self.assertEqual({REQUIRED,FOCUS,CONTRAST},set(evidence['required_selectors']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST,THREADING},set(evidence['required_selectors']))
         self.assertTrue(all(outcome == 'passed' for outcome in evidence['methods'].values()))
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(expected,set(args[-1].split('=',1)[1].split(',')))
@@ -488,10 +490,10 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         classes = self.distinct_affected_sources(57)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
+        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING}
         self.assertEqual(expected,set(evidence['counts']))
         self.assertEqual({c+'#regression' for c in expected},set(evidence['methods']))
-        self.assertEqual({REQUIRED,FOCUS,CONTRAST},set(evidence['required_selectors']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST,THREADING},set(evidence['required_selectors']))
         self.assertTrue(all(outcome == 'passed' for outcome in evidence['methods'].values()))
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(expected,set(args[-1].split('=',1)[1].split(',')))
@@ -500,10 +502,10 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         classes = self.distinct_affected_sources(60)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
+        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING}
         self.assertEqual(expected,set(evidence['counts']))
         self.assertEqual({c+'#regression' for c in expected},set(evidence['methods']))
-        self.assertEqual({REQUIRED,FOCUS,CONTRAST},set(evidence['required_selectors']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST,THREADING},set(evidence['required_selectors']))
         self.assertTrue(all(outcome == 'passed' for outcome in evidence['methods'].values()))
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(expected,set(args[-1].split('=',1)[1].split(',')))
@@ -512,10 +514,10 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         classes = self.distinct_affected_sources(69)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
+        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING}
         self.assertEqual(expected,set(evidence['counts']))
         self.assertEqual({c+'#regression' for c in expected},set(evidence['methods']))
-        self.assertEqual({REQUIRED,FOCUS,CONTRAST},set(evidence['required_selectors']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST,THREADING},set(evidence['required_selectors']))
         self.assertTrue(all(outcome == 'passed' for outcome in evidence['methods'].values()))
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(expected,set(args[-1].split('=',1)[1].split(',')))
@@ -524,10 +526,10 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         classes = self.distinct_affected_sources(73)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
+        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST,THREADING}
         self.assertEqual(expected,set(evidence['counts']))
         self.assertEqual({c+'#regression' for c in expected},set(evidence['methods']))
-        self.assertEqual({REQUIRED,FOCUS,CONTRAST},set(evidence['required_selectors']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST,THREADING},set(evidence['required_selectors']))
         self.assertTrue(all(outcome == 'passed' for outcome in evidence['methods'].values()))
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(expected,set(args[-1].split('=',1)[1].split(',')))
@@ -543,7 +545,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
                 ' { @org.junit.Test fun regression() {} }\n')
         self.run_case(AFFECTED_CLASSES=','.join(menu))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual({c+'#regression' for c in set(menu)|{REQUIRED,FOCUS,CONTRAST}},
+        self.assertEqual({c+'#regression' for c in set(menu)|{REQUIRED,FOCUS,CONTRAST,THREADING}},
                          set(evidence['methods']))
 
     def skip_source(self, cls, method):
@@ -641,7 +643,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         return cls
 
     def cases(self, *extra):
-        return ','.join([c+'#regression' for c in (REQUIRED,FOCUS,CONTRAST)]+list(extra))
+        return ','.join([c+'#regression' for c in (REQUIRED,FOCUS,CONTRAST,THREADING)]+list(extra))
 
     def mixed(self):
         cls=self.gated_source('GatedMixedTest', '@org.junit.Test fun plain() {} '+self.GATE+' @org.junit.Test fun gated() {} '
@@ -864,7 +866,7 @@ class WorkflowContract(unittest.TestCase):
     def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False, infrastructure_jobs=(), failed_jobs=(), historical_infrastructure=False):
         import yaml, hashlib
         affected_classes=affected_classes or [AFFECTED]
-        selected=[REQUIRED,FOCUS,CONTRAST]+affected_classes
+        selected=[REQUIRED,FOCUS,CONTRAST,THREADING]+affected_classes
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         script=next(step['run'] for step in workflow['jobs']['evidence']['steps']
                     if step.get('name') == 'Record passed, failed and not-run checks')
@@ -892,7 +894,7 @@ class WorkflowContract(unittest.TestCase):
                     inventory={'selectors':selected,'runtime_methods':[c+'#regression' for c in selected]}
                     inventory_bytes=json.dumps(inventory).encode()
                     (focused/'expected-methods.json').write_bytes(inventory_bytes)
-                    (focused/'reconciled-tests.json').write_text(json.dumps({'source_inventory_sha256':hashlib.sha256(inventory_bytes).hexdigest(),'required_selectors':[REQUIRED,FOCUS,CONTRAST],'methods':{c+'#regression':'passed' for c in selected},'sha':SHA,'api':str(api),'selectors':selected,'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in selected}}))
+                    (focused/'reconciled-tests.json').write_text(json.dumps({'source_inventory_sha256':hashlib.sha256(inventory_bytes).hexdigest(),'required_selectors':[REQUIRED,FOCUS,CONTRAST,THREADING],'methods':{c+'#regression':'passed' for c in selected},'sha':SHA,'api':str(api),'selectors':selected,'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in selected}}))
                     if partial_methods:
                         data=json.loads((focused/'reconciled-tests.json').read_text())
                         data['methods'].pop(REQUIRED+'#regression')
@@ -1455,6 +1457,89 @@ while true; do sleep .05; done
         _, result, summary = self.run_case(missing_at=1)
         self.assertEqual(2, result.returncode)
         self.assertEqual(['failed', 'not-run', 'not-run'], [i['status'] for i in summary['iterations']])
+
+
+class ColdStartContract(unittest.TestCase):
+    def run_cold(self, mode='green'):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root/'bin').mkdir()
+            adb = root/'bin/adb'
+            adb.write_text('''#!/usr/bin/env python3
+import os,pathlib,sys
+a=sys.argv[3:];state=pathlib.Path('running')
+with open('commands','a') as out:out.write(' '.join(a)+'\\n')
+mode=os.environ['COLD_MODE']
+remote=pathlib.Path('remote-window.xml')
+if mode=='stale' and not pathlib.Path('initialized').exists():
+    remote.write_text('<node text="Guard album stale"/>');pathlib.Path('initialized').touch()
+if a[:3]==['shell','am','instrument']:
+    print('FAILURES!!!' if mode=='bad-seed' else 'OK (1 test)')
+elif a[:3]==['shell','am','force-stop']:state.unlink(missing_ok=True)
+elif a[:3]==['shell','am','start']:
+    state.write_text('yes');print('Status: ok')
+elif a[:2]==['shell','pidof']:
+    if state.exists():
+        n=pathlib.Path('polls');count=int(n.read_text())+1 if n.exists() else 1;n.write_text(str(count))
+        if mode not in ('dead','clear-failed-dead') or count==1:print('1234')
+elif a[:3]==['shell','rm','-f']:remote.unlink(missing_ok=True)
+elif a[:3]==['shell','uiautomator','dump']:
+    if mode=='stale':sys.exit(1)
+    if mode=='dump-no-receipt':sys.exit(0)
+    remote.write_text('<node text="Guard album 0"/>' if mode!='empty' else '<node/>')
+    print('UI hierchary dumped to: '+a[-1])
+elif a[:2]==['logcat','-c'] and mode in ('clear-failed','clear-failed-dead'):
+    print("failed to clear the 'main' log", file=sys.stderr);sys.exit(1)
+elif a[:2]==['shell','cat']:
+    if mode=='read-failed':sys.exit(1)
+    if not remote.exists():sys.exit(1)
+    print(remote.read_text())
+''')
+            adb.chmod(0o755)
+            sleep = root/'bin/sleep'
+            sleep.write_text('#!/bin/sh\nexit 0\n'); sleep.chmod(0o755)
+            result = subprocess.run(['bash', str(ROOT/'.github/run-main-thread-cold-start.sh'), 'emulator-5554'],
+                cwd=root, env=dict(os.environ, PATH=str(root/'bin')+os.pathsep+os.environ['PATH'], COLD_MODE=mode),
+                text=True, capture_output=True, timeout=15)
+            receipt=root/'prototype-evidence/main-thread-cold-start/receipt.txt'
+            return result, receipt.read_text() if receipt.exists() else '', (root/'commands').read_text()
+
+    def test_seeded_fresh_process_must_reach_gallery(self):
+        result, receipt, commands = self.run_cold()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn('tracks=13400', receipt)
+        self.assertIn('am force-stop', commands)
+        self.assertIn('logcat -b crash', commands)
+
+    def test_seed_failure_never_launches_app(self):
+        result, receipt, commands = self.run_cold('bad-seed')
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse(receipt)
+        self.assertNotIn('am start', commands)
+        self.assertIn('logcat -b crash', commands)
+
+    def test_failed_diagnostic_clear_does_not_replace_process_and_ui_gates(self):
+        result, receipt, commands = self.run_cold('clear-failed')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn('logcat-cleared=false', receipt)
+        self.assertIn('cold-gallery-visible=true', receipt)
+        result, receipt, commands = self.run_cold('clear-failed-dead')
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse(receipt)
+
+    def test_process_death_and_missing_gallery_fail_closed(self):
+        for mode in ('dead', 'empty'):
+            result, receipt, commands = self.run_cold(mode)
+            self.assertNotEqual(0, result.returncode, mode)
+            self.assertFalse(receipt)
+            self.assertIn('logcat -b crash', commands)
+
+    def test_stale_dump_failed_read_and_missing_dump_receipt_fail_closed(self):
+        for mode in ('stale', 'read-failed', 'dump-no-receipt'):
+            result, receipt, commands = self.run_cold(mode)
+            self.assertNotEqual(0, result.returncode, mode)
+            self.assertFalse(receipt)
+            self.assertIn('shell rm -f /sdcard/localica-threading-guard.xml', commands)
 
 
 class RiskInventoryContract(unittest.TestCase):

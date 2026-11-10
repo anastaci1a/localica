@@ -61,6 +61,8 @@ Select the API 26 or 36 emulator explicitly with `ANDROID_SERIAL`. Match the [em
 
 Standalone test-package components cannot rely on the target app classloader: the test APK packages identical bytes from the appâs resolved Kotlin standard library. Its coordinate and SHA256 are retained in `app/build/generated/standalone-test-runtime/binding.txt`. `NavigationStandaloneRuntimeTest` checks linkage in the separate provider process. Ordinary instrumentation alone does not cover that path.
 
+For non-debuggable policy linkage, build `assembleDistribution assembleDistributionAndroidTest` with `-PlocalicaInstrumentationBuildType=distribution`. Install the matching pair and run `MainThreadPolicyInstallationTest` with `expectNonDebuggableTarget=true`. This probe does not replace the native debug suite.
+
 ### Evidence tooling prerequisites
 
 The [host contract workflow](../.github/workflows/tooling-contracts.yml) runs the Python selection/observer contracts and Node publisher mocks without an Android device. Its pinned Python dependency targets CPython 3.12 on Linux x86-64. Use the hash-locked [requirements](../.github/tests/requirements.txt) in an isolated environment.
@@ -113,7 +115,7 @@ Risk preflight retains its existing method partition. Weighted remainder shards 
 
 Each prototype occupies at most two runners: one chain runs build and both compatibility checks; the other runs both focused APIs. A failed check does not skip later checks in its chain. Release coordination still holds new prototype dispatches until release shards start, reducing competition for the runner pool.
 
-The opt-in `prototype.yml` lane builds an explicitly uncertified development APK through manual dispatch or an explicit reusable-workflow call. Select up to 73 affected behavior classes (4096 characters maximum including the three mandatory regression classes) and describe coverage and limitations.
+The opt-in `prototype.yml` lane builds an explicitly uncertified development APK through manual dispatch or an explicit reusable-workflow call. Select up to 73 affected behavior classes (4096 characters maximum including the four mandatory regression classes) and describe coverage and limitations.
 
 Full native shards and focused prototype jobs time out after 35 minutes. A timed-out shard fails the summary even if its XML is complete; rerun failed jobs to retry it.
 
@@ -125,7 +127,7 @@ Any other failure, a rebooted guest, a device that stays offline, a package that
 
 On API 26 and 27 the test APK's own process (fixture providers, AndroidX Bootstrap/Empty activities) can die when UiAutomation's accessibility-state change reaches a just-detached window: `ViewRootImpl.onAccessibilityStateChanged` dereferences a null `mView` (fixed in Android 9; #730). The test APK's `TestPackageApplication` keeps that process's main looper running after exactly that framework NPE and rethrows every other exception. `TestProcessAccessibilityLaunchTest` reproduces the overlap.
 
-Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
+Search IME, search-focus, contrast and threading coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
 The `runner` input defaults to `hosted`. `runner=self-hosted` moves only the two focused emulator jobs to the owner’s locked-down single-job runner, for the owner’s manual dispatch on a branch (#592). A queued self-hosted job waits for the owner’s launcher and is never rerouted.
 

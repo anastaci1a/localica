@@ -38,6 +38,8 @@ class NavigationRandomOwnedSession : AndroidJUnitRunner() {
     private val resumed = mutableSetOf<Activity>()
 
     override fun callApplicationOnCreate(app: Application) {
+        // Enforce this even when instrumentation targets a non-debuggable build.
+        installMainPolicy()
         if (residentMode) app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) { resumed += activity }
             override fun onActivityPaused(activity: Activity) { resumed -= activity }
@@ -48,6 +50,21 @@ class NavigationRandomOwnedSession : AndroidJUnitRunner() {
             override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
         })
         super.callApplicationOnCreate(app)
+    }
+
+    private fun installMainPolicy() {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        // Own the platform-only entry point in the test APK: R8 may remove the
+        // debug-only target helper from a non-debuggable target.
+        val policy = android.os.StrictMode.ThreadPolicy.Builder()
+            .detectDiskReads().detectDiskWrites().detectNetwork()
+            .detectCustomSlowCalls().detectUnbufferedIo()
+            .penaltyLog().penaltyDeath().build()
+        android.os.StrictMode.setThreadPolicy(policy)
+        // Android 8 restores its pre-bind policy after Application.onCreate.
+        check(Handler(Looper.getMainLooper()).postAtFrontOfQueue {
+            android.os.StrictMode.setThreadPolicy(policy)
+        })
     }
 
     internal fun hasResumedMainActivity(): Boolean {

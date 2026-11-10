@@ -69,7 +69,7 @@ class ArtistPhotoFirstFrameTest {
             compose.runOnUiThread {
                 val previous = android.os.StrictMode.getThreadPolicy()
                 try {
-                    android.os.StrictMode.setThreadPolicy(android.os.StrictMode.ThreadPolicy.Builder()
+                    android.os.StrictMode.setThreadPolicy(android.os.StrictMode.ThreadPolicy.Builder(previous)
                         .detectDiskReads().detectDiskWrites().penaltyDeath().build())
                     repeat(100) {
                         val photo = requireNotNull(photos.peekKey(key)?.photo)

@@ -1,6 +1,18 @@
 # Technical structure
 
-One Kotlin/Compose `app` module with constructor injection. Keep storage/playback independent of Compose and graphics. Introduce interfaces or modules only for demonstrated boundaries. Toolchain and format compatibility belong in [Build](build.md). Behavior belongs in [Product](product.md) and [Interface](interface.md).
+The Kotlin/Compose `app` module uses constructor injection. The `threading-lint` module enforces UI call-site restrictions. Keep storage/playback independent of Compose and graphics. Introduce interfaces or modules only for demonstrated boundaries. Toolchain and format compatibility belong in [Build](build.md). Behavior belongs in [Product](product.md) and [Interface](interface.md).
+
+## Threading contract
+
+Main handles input, lifecycle callbacks and publication of prepared UI state. Composition, drawing and measurement consume in-memory results. File access, database work, decoding, hashing and library-sized scans belong on worker dispatchers. Suspending a coroutine is permitted; blocking its thread is not.
+
+Debug startup and every instrumentation invocation install a fatal `StrictMode` thread policy. Disk reads, disk writes, network access, custom slow calls and unbuffered I/O log their stack and terminate the process. Uninstrumented release and distribution startup do not install this policy. Do not weaken the policy to hide a finding.
+
+`MainThreadBlocking` lint rejects known blocking APIs in composition, draw and measure callbacks, annotated UI methods, Main-owned scopes and explicit Main-dispatcher blocks. Explicit IO or Default blocks provide worker boundaries. Lint cannot establish that arbitrary computation is inexpensive; guard scenarios and device attribution remain necessary.
+
+The prototype gate cold-launches the seeded application in a fresh process, then runs `MainThreadGuardTest`: uncached gallery covers, player, Last.fm Matches, settings, search and million-entry queue restore. It logs heap and GC counters at scenario boundaries. An intentional Main-read test lives only on dedicated negative-control proof refs; it must terminate instrumentation.
+
+File each discovered violation separately under [#772](https://github.com/anastaci1a/localica/issues/772) before fixing it. Adopt every lint finding without baselines. Fix crashes and ANRs first, then navigation, player and scrolling, then other interactions. Larger repairs retain their own issue and owner.
 
 ## Code map
 

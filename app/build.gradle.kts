@@ -11,6 +11,10 @@ plugins {
 android {
     namespace = "io.github.anastaci1a.localica"
     compileSdk = 36
+    // Build the matching test APK when verifying the non-debuggable target.
+    testBuildType = providers.gradleProperty("localicaInstrumentationBuildType").getOrElse("debug").also {
+        require(it == "debug" || it == "distribution") { "Unsupported instrumentation build type: $it" }
+    }
     defaultConfig {
         applicationId = "io.github.anastaci1a.localica"
         minSdk = 26
@@ -64,6 +68,7 @@ kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 dependencies {
+    lintChecks(project(":threading-lint"))
     implementation(libs.jaudiotagger)
     implementation(libs.androidx.core)
     implementation(libs.androidx.profileinstaller)
@@ -90,6 +95,8 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.uiautomator)
+    // Class-retained runner annotations are needed by R8 analysis, not by Android at runtime.
+    androidTestCompileOnly("com.google.errorprone:error_prone_annotations:2.30.0")
     androidTestImplementation(libs.coroutines.test)
     androidTestImplementation(libs.work.testing)
     debugImplementation(libs.compose.test.manifest)
@@ -116,16 +123,29 @@ val standaloneStdlib = providers.provider {
         it.moduleVersion.id.group == "org.jetbrains.kotlin" && it.name == "kotlin-stdlib"
     }
 }
+val standaloneTracing = providers.provider {
+    configurations.getByName("debugRuntimeClasspath").resolvedConfiguration.resolvedArtifacts.single {
+        it.moduleVersion.id.group == "androidx.tracing" && it.name == "tracing"
+    }
+}
+val standaloneTracingClasses = standaloneTracing.map { artifact ->
+    zipTree(artifact.file).matching { include("classes.jar") }.singleFile
+}
 val standaloneRuntimeDirectory = layout.buildDirectory.dir("generated/standalone-test-runtime")
 val prepareStandaloneTestRuntime = tasks.register<Copy>("prepareStandaloneTestRuntime") {
     // Capture value providers in the action, not the build script or resolved artifacts.
     val runtimeJar = standaloneStdlib.map { it.file }
     val runtimeCoordinate = standaloneStdlib.map { it.moduleVersion.id.toString() }
+    val tracingJar = standaloneTracingClasses
+    val tracingCoordinate = standaloneTracing.map { it.moduleVersion.id.toString() }
     val runtimeDirectory = standaloneRuntimeDirectory
-    from(runtimeJar)
+    from(runtimeJar) { rename { "kotlin-stdlib-standalone.jar" } }
     into(runtimeDirectory)
-    rename { "kotlin-stdlib-standalone.jar" }
+    // A minified target can remove Trace entirely. The runner still needs the
+    // app's exact resolved tracing implementation in its own test classloader.
+    from(tracingJar) { rename { "tracing-standalone.jar" } }
     inputs.property("resolvedCoordinate", runtimeCoordinate)
+    inputs.property("resolvedTracingCoordinate", tracingCoordinate)
     outputs.file(runtimeDirectory.map { it.file("binding.txt") })
     doLast {
         val original = runtimeJar.get()
@@ -134,13 +154,21 @@ val prepareStandaloneTestRuntime = tasks.register<Copy>("prepareStandaloneTestRu
             .digest(file.readBytes()).joinToString("") { "%02x".format(it) }
         val originalHash = digest(original)
         check(digest(copied) == originalHash) { "Standalone stdlib bytes differ from target runtime" }
+        val originalTracing = tracingJar.get()
+        val copiedTracing = runtimeDirectory.get().file("tracing-standalone.jar").asFile
+        val tracingHash = digest(originalTracing)
+        check(digest(copiedTracing) == tracingHash) { "Standalone tracing bytes differ from target runtime" }
         runtimeDirectory.get().file("binding.txt").asFile.writeText(
-            "coordinate=${runtimeCoordinate.get()}\nsha256=$originalHash\n"
+            "coordinate=${runtimeCoordinate.get()}\nsha256=$originalHash\n" +
+                "tracingCoordinate=${tracingCoordinate.get()}\ntracingSha256=$tracingHash\n"
         )
     }
 }
 dependencies {
     androidTestRuntimeOnly(files(standaloneRuntimeDirectory.map {
         it.file("kotlin-stdlib-standalone.jar")
+    }).builtBy(prepareStandaloneTestRuntime))
+    androidTestRuntimeOnly(files(standaloneRuntimeDirectory.map {
+        it.file("tracing-standalone.jar")
     }).builtBy(prepareStandaloneTestRuntime))
 }

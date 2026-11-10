@@ -12,22 +12,23 @@ classes=${AFFECTED_CLASSES:-}
 required=io.github.anastaci1a.localica.SearchImeMotionTest
 focus_regression=io.github.anastaci1a.localica.ListSearchTest
 contrast_regression=io.github.anastaci1a.localica.FrostedSurfaceTest
+threading_regression=io.github.anastaci1a.localica.MainThreadGuardTest
 if [[ "$method_iteration" == true ]]; then
   [[ -n "${PROTOTYPE_METHODS:-}" ]] || exit 2
-  required=''; focus_regression=''; contrast_regression=''
+  required=''; focus_regression=''; contrast_regression=''; threading_regression=''
 fi
 [[ -n "$classes" && ${#classes} -le 4096 ]] || { echo 'Supply nonempty affected behavior classes (maximum 4096 characters)' >&2; exit 2; }
 pattern='^io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*(,io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*)*$'
 [[ "$classes" =~ $pattern ]] || { echo 'Invalid affected class selector' >&2; exit 2; }
 IFS=, read -r -a selected <<< "$classes"
-[[ ${#selected[@]} -le 73 ]] || { echo 'At most 73 affected classes plus the three required regression classes' >&2; exit 2; }
+[[ ${#selected[@]} -le 73 ]] || { echo 'At most 73 affected classes plus the four required regression classes' >&2; exit 2; }
 [[ -f .github/prototype-risk-classes.txt ]] || { echo 'Missing reviewed class inventory' >&2; exit 2; }
 declare -A seen=()
 affected=0
-for name in "${selected[@]}" "$required" "$focus_regression" "$contrast_regression"; do
+for name in "${selected[@]}" "$required" "$focus_regression" "$contrast_regression" "$threading_regression"; do
   [[ -n "$name" ]] || continue
   grep -Fxq "$name" .github/prototype-risk-classes.txt || { echo "Class is not in the reviewed inventory: $name" >&2; exit 2; }
-  [[ "$name" == "$required" || "$name" == "$focus_regression" || "$name" == "$contrast_regression" ]] || affected=1
+  [[ "$name" == "$required" || "$name" == "$focus_regression" || "$name" == "$contrast_regression" || "$name" == "$threading_regression" ]] || affected=1
   seen["$name"]=1
 done
 (( affected )) || { echo 'Name affected behavior coverage in addition to the mandatory IME regression' >&2; exit 2; }
@@ -46,7 +47,7 @@ mkdir prototype-evidence
 printf '%s\n' "$selector" > prototype-evidence/selectors.txt
 python3 .github/test-evidence/source_methods.py --classes "$selector" --api "$TEST_API" --output prototype-evidence/expected-methods.json
 instrument_selector=$selector
-required_selector=$(printf '%s\n' "$required" "$focus_regression" "$contrast_regression" | sed '/^$/d' | paste -sd, -)
+required_selector=$(printf '%s\n' "$required" "$focus_regression" "$contrast_regression" "$threading_regression" | sed '/^$/d' | paste -sd, -)
 if [[ "$method_iteration" == true ]]; then
   python3 .github/prototype-methods.py prototype-evidence/expected-methods.json "$PROTOTYPE_METHODS"
   instrument_selector=$PROTOTYPE_METHODS
@@ -79,6 +80,9 @@ stop_child() {
 }
 trap 'stop_child TERM 143' TERM
 trap 'stop_child INT 130' INT
+if [[ "$method_iteration" == false ]]; then
+  bash .github/run-main-thread-cold-start.sh "$serial"
+fi
 run_gate() {
   local status
   python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --offline -I .github/prebuilt-device-tests.gradle "${aot_args[@]}" --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
