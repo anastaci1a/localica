@@ -163,16 +163,22 @@ class UtilityPopupReturnTest {
             try {
                 advanceUntil("Utility native window retires") { !popup.decorView.isAttachedToWindow }
             } catch (retirementFailure: Throwable) {
-                report.put("retirementFailureBeforeControl", snapshot())
-                // Diagnose the frozen-clock driver only after preserving its actual failure.
-                // This control never converts the failed route to a pass.
-                runCatching {
+                try {
+                    report.put("originalRetirementFailureIdentity", System.identityHashCode(retirementFailure))
+                        .put("originalRetirementFailure", retirementFailure.toString())
+                    // Diagnose only after preserving the original failed gate.
+                    report.put("retirementFailureBeforeControl", snapshot())
                     compose.mainClock.advanceTimeBy(2000)
                     compose.waitForIdle()
                     report.put("postFailureClockAdvanceMs", 2000)
                         .put("retirementFailureAfterControl", snapshot())
-                }.onFailure { report.put("postFailureControlError", it.toString()) }
-                throw retirementFailure
+                } catch (diagnosticFailure: Throwable) {
+                    retirementFailure.addSuppressed(diagnosticFailure)
+                    runCatching { report.put("postFailureControlError", diagnosticFailure.toString()) }
+                } finally {
+                    // Snapshot/metadata failures cannot replace the qualifying failure.
+                    throw retirementFailure
+                }
             }
             compose.runOnUiThread {
                 assertFalse("The retired flight leaves its source owner", flights(home).any { it === flight })
