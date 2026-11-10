@@ -143,6 +143,10 @@ class PlayerPresentationSliceEqualityTest {
                     assertTrue("$tag has unique semantic ownership", matches.size <= 1)
                     geometry.put(tag, matches.singleOrNull()?.boundsInRoot?.let(::rect) ?: JSONObject.NULL)
                 }
+                assertEquals("The handle mounts and disposes at its original positive reveal boundary",
+                    if (p > .72f) 1 else 0, nodes("player-handle").size)
+                assertEquals("The actions row mounts and disposes at its original positive reveal boundary",
+                    if (!selected && p > .83f) 1 else 0, nodes("player-actions-row").size)
                 if (p == 1f) {
                     unique("player-handle").assertIsDisplayed()
                     if (selected) unique("empty-lyrics").assertIsDisplayed()
