@@ -202,7 +202,10 @@ jobs:
     - name: Compile non-debuggable queue diagnostic inputs
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDistribution assembleDistributionAndroidTest -PlocalicaInstrumentationBuildType=distribution --no-daemon --max-workers=2
+      run: |
+        bash .github/gradle-transient-retry.sh ./gradlew assembleDistribution assembleDistributionAndroidTest -PlocalicaInstrumentationBuildType=distribution -PlocalicaUnminifiedQueueStorageDiagnostic=true --no-daemon --max-workers=2
+        mkdir -p queue-storage-diagnostic
+        printf '%s\n' 'localicaUnminifiedQueueStorageDiagnostic=true' 'distribution.minifyEnabled=false' 'diagnostic_only=true' 'managed_heap_gc_not_shipped_binary=true' > queue-storage-diagnostic/build-mode.txt
     - name: Compile instrumentation APKs before starting emulator
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
@@ -446,7 +449,10 @@ jobs:
     - name: Compile non-debuggable queue diagnostic inputs
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDistribution assembleDistributionAndroidTest -PlocalicaInstrumentationBuildType=distribution --no-daemon --max-workers=2
+      run: |
+        bash .github/gradle-transient-retry.sh ./gradlew assembleDistribution assembleDistributionAndroidTest -PlocalicaInstrumentationBuildType=distribution -PlocalicaUnminifiedQueueStorageDiagnostic=true --no-daemon --max-workers=2
+        mkdir -p queue-storage-diagnostic
+        printf '%s\n' 'localicaUnminifiedQueueStorageDiagnostic=true' 'distribution.minifyEnabled=false' 'diagnostic_only=true' 'managed_heap_gc_not_shipped_binary=true' > queue-storage-diagnostic/build-mode.txt
     - name: Compile instrumentation APKs before starting emulator
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}

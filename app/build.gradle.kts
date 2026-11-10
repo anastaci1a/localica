@@ -46,7 +46,9 @@ android {
             applicationIdSuffix = ".debug"
             signingConfig = signingConfigs.getByName("debug")
             isDebuggable = false
-            isMinifyEnabled = true
+            // Proof-only scalar diagnostic: avoid remapping the standalone test runtime.
+            isMinifyEnabled = !providers.gradleProperty("localicaUnminifiedQueueStorageDiagnostic")
+                .map { it.toBooleanStrict() }.getOrElse(false)
             isShrinkResources = false
             matchingFallbacks += "release"
         }
