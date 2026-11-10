@@ -130,6 +130,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         rememberFloatingSelectionPanel(session.panelVisible, reducedMotion) else null
     val selectionPanel = ownSelectionPanel ?: LocalBrowseSelectionPanel.current
     val obscuredInset = LocalBrowseObscuredInset.current + (ownSelectionPanel?.clearance ?: 0.dp)
+    val selectionBaseInset = obscuredInset - (selectionPanel?.clearance ?: 0.dp)
     var returnControlHeight by remember { mutableIntStateOf(0) }
     var actionControlHeight by remember { mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -650,7 +651,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
     val selectionInsetScroll = SelectionInsetScroll(gridState, selectionPanel, scrollOwnership,
-        baseInset = { with(density) { (obscuredInset - (selectionPanel?.clearance ?: 0.dp)).toPx() } },
+        baseInset = { with(density) { selectionBaseInset.toPx() } },
         enabled = { selectionVisible && !playerOpen && !localSearchOpen },
         selected = { key -> result.items.firstOrNull { it.key == key }?.let { session.selectedCount(it, route.collection) > 0 } == true })
     OnModalGestureCancellation { playbackFollow.interrupt(); selectionInsetScroll.interrupt() }

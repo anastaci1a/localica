@@ -1,6 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyLayoutScrollScope as listScrollScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -15,6 +18,10 @@ import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 import kotlin.math.sign
+
+/** Short inset corrections share the list easing and honor the app's motion speed. */
+internal fun quickScrollAnimationSpec(reducedMotion: Boolean, speed: Float): AnimationSpec<Float> =
+    if (reducedMotion) snap() else tween((220f / speed).roundToInt().coerceAtLeast(1), easing = FastOutSlowInEasing)
 
 /** Process-wide choice read by easeToItem/easeToTop, set from the interface settings. */
 internal object LongScroll {
