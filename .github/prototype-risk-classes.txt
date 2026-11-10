@@ -457,3 +457,6 @@ io.github.anastaci1a.localica.BrowseSettledReferenceDiagnosticTest
 
 # Isolated native presented-buffer primitive controls (#600).
 io.github.anastaci1a.localica.FirstPresentedBufferCaptureTest
+
+# Strict FIRST and eighth-additional input phase comparisons (#750).
+io.github.anastaci1a.localica.BrowseInputPhaseEqualityTest
