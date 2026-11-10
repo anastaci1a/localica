@@ -199,6 +199,10 @@ jobs:
         # This Android job does not use the runner's preinstalled .NET SDKs.
         sudo rm -rf /usr/share/dotnet
         df -h "$HOME"
+    - name: Compile non-debuggable queue diagnostic inputs
+      env:
+        LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDistribution assembleDistributionAndroidTest -PlocalicaInstrumentationBuildType=distribution --no-daemon --max-workers=2
     - name: Compile instrumentation APKs before starting emulator
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
@@ -219,7 +223,12 @@ jobs:
           adb shell wm density reset
           python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+          set +e
+          bash .github/run-queue-storage-diagnostic.sh
+          diagnostic_status=$?
           bash .github/run-prototype-tests.sh
+          gate_status=$?
+          test "$diagnostic_status" -eq 0 && test "$gate_status" -eq 0
       run: bash .github/local/with-emulator.sh
     - name: Prepare the verified emulator SDK
       if: inputs.runner != 'self-hosted'
@@ -244,7 +253,12 @@ jobs:
           adb shell wm density reset
           python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+          set +e
+          bash .github/run-queue-storage-diagnostic.sh
+          diagnostic_status=$?
           bash .github/run-prototype-tests.sh
+          gate_status=$?
+          test "$diagnostic_status" -eq 0 && test "$gate_status" -eq 0
     - name: Cache the installed SDK system image
       if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true' && inputs.runner != 'self-hosted'
       uses: ./.github/actions/system-image-cache
@@ -280,6 +294,7 @@ jobs:
           app/build/outputs/androidTest-results/
           app/build/outputs/connected_android_test_additional_output/
 
+          queue-storage-diagnostic/
           prototype-evidence/
           prototype-iterations/
           prototype-runner-environment.txt
@@ -428,6 +443,10 @@ jobs:
         # This Android job does not use the runner's preinstalled .NET SDKs.
         sudo rm -rf /usr/share/dotnet
         df -h "$HOME"
+    - name: Compile non-debuggable queue diagnostic inputs
+      env:
+        LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDistribution assembleDistributionAndroidTest -PlocalicaInstrumentationBuildType=distribution --no-daemon --max-workers=2
     - name: Compile instrumentation APKs before starting emulator
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
@@ -448,7 +467,12 @@ jobs:
           adb shell wm density 280
           python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+          set +e
+          bash .github/run-queue-storage-diagnostic.sh
+          diagnostic_status=$?
           bash .github/run-prototype-tests.sh
+          gate_status=$?
+          test "$diagnostic_status" -eq 0 && test "$gate_status" -eq 0
       run: bash .github/local/with-emulator.sh
     - name: Prepare the verified emulator SDK
       if: inputs.runner != 'self-hosted'
@@ -473,7 +497,12 @@ jobs:
           adb shell wm density 280
           python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+          set +e
+          bash .github/run-queue-storage-diagnostic.sh
+          diagnostic_status=$?
           bash .github/run-prototype-tests.sh
+          gate_status=$?
+          test "$diagnostic_status" -eq 0 && test "$gate_status" -eq 0
     - name: Cache the installed SDK system image
       if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true' && inputs.runner != 'self-hosted'
       uses: ./.github/actions/system-image-cache
@@ -509,6 +538,7 @@ jobs:
           app/build/outputs/androidTest-results/
           app/build/outputs/connected_android_test_additional_output/
 
+          queue-storage-diagnostic/
           prototype-evidence/
           prototype-iterations/
           prototype-runner-environment.txt

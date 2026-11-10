@@ -21,3 +21,6 @@
 -keep class io.github.anastaci1a.localica.queue.QueuePlaybackWindow* { *; }
 -keep class io.github.anastaci1a.localica.queue.QueueTraversal* { *; }
 -keep class io.github.anastaci1a.localica.queue.QueueWindowStore { *; }
+
+# The diagnostic fixtures access logical counts before the runtime cutover.
+-keep class io.github.anastaci1a.localica.queue.ListeningQueue { *; }
