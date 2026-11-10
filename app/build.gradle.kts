@@ -64,6 +64,7 @@ kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 dependencies {
+    lintChecks(project(":threading-lint"))
     implementation(libs.jaudiotagger)
     implementation(libs.androidx.core)
     implementation(libs.androidx.profileinstaller)

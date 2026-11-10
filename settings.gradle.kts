@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "localica"
-include(":app")
+include(":app", ":threading-lint")
