@@ -11,6 +11,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.runtime.*
+import io.github.anastaci1a.localica.ui.components.BindBrowsePinchProgress
+import io.github.anastaci1a.localica.ui.components.BrowsePinchProgressOwner
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
@@ -62,13 +64,14 @@ internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseSt
 @Stable
 internal class BrowsePinchMotion {
     val beyondBounds = BrowseBeyondBounds()
-    var progress by mutableStateOf(BrowsePinchProgress(1f))
+    internal val progressOwner = BrowsePinchProgressOwner()
+    var progress by mutableStateOf(progressOwner.create(1f))
         private set
     /** Retired layout keeps its terminal clock while the next transaction starts at zero. */
     fun beginGeometry() {
         tracking?.cancel(); tracking = null
         caughtUp = false
-        progress = BrowsePinchProgress(0f)
+        progress = progressOwner.create(0f)
     }
     var held by mutableStateOf(false)
     var fingerProgress = 0f
@@ -355,6 +358,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     route: BrowseRoute, gridState: LazyGridState, width: Int, density: Density,
     scope: CoroutineScope, reducedMotion: Boolean, onPreview: (BrowseStyle) -> Unit,
     onCommit: (BrowseStyle) -> Unit, onAnchor: (BrowseZoomAnchor?) -> Unit): Modifier {
+    BindBrowsePinchProgress(motion.progressOwner)
     val graphicsContext = androidx.compose.ui.platform.LocalGraphicsContext.current
     val readback = remember { PinchReadback() }
     val artwork = LocalBrowseArtwork.current
@@ -441,7 +445,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 if (!motion.owns(generation) || motion.captureProblem) return@launch
                 val destination = if (commit) motion.target else motion.source
                 if (reducedMotion) motion.progress.snapTo(if (commit) 1f else 0f)
-                else motion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
+                else motion.progress.animateTo(if (commit) 1f else 0f)
                 if (destination != null) {
                     motion.activeHeader?.beginHandoff(commit)
                     // A cancelled retarget still owes the preceding genuine release its endpoint.

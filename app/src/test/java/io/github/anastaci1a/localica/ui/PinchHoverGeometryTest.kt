@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.engine.bindPinchClock
+
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.browse.*
@@ -109,6 +111,7 @@ class PinchHoverGeometryTest {
         val owner = Job()
         val scope = CoroutineScope(owner + Dispatchers.Unconfined + clock)
         val motion = BrowsePinchMotion()
+        scope.bindPinchClock(motion.progressOwner.motion)
         try {
             motion.beginGeometry()
             motion.held = true
@@ -131,6 +134,7 @@ class PinchHoverGeometryTest {
             val duration = object : androidx.compose.ui.MotionDurationScale { override val scaleFactor = scale }
             val scope = CoroutineScope(owner + Dispatchers.Unconfined + clock + duration)
             val motion = BrowsePinchMotion()
+            scope.bindPinchClock(motion.progressOwner.motion)
             try {
                 motion.beginGeometry()
                 motion.held = true; motion.destinationReady = true; motion.fingerProgress = .05f
@@ -157,6 +161,7 @@ class PinchHoverGeometryTest {
         val owner = Job()
         val scope = CoroutineScope(owner + Dispatchers.Unconfined + clock)
         val motion = BrowsePinchMotion()
+        scope.bindPinchClock(motion.progressOwner.motion)
         try {
             motion.beginGeometry()
             motion.held = true; motion.destinationReady = true; motion.fingerProgress = .6f
