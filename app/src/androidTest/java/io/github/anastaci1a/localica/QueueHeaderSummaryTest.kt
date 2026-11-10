@@ -56,6 +56,16 @@ class QueueHeaderSummaryTest {
         summary("1 / 1", "0:05")
         compose.runOnIdle { state.value = state.value.copy(browsedId = queue.id) }
         summary("3 / 3", "2:02")
+        // A logical summary must remain exact while only a small playback window, or no inactive rows, is loaded.
+        update(queue.copy(entries = listOf(entries[1]), currentEntryId = "two",
+            storage = QueueStorageState(1_000_000, 122000, 2, 500000, 1)))
+        summary("500001 / 1000000", "2:02")
+        update(queue.copy(entries = listOf(entries[1]), currentEntryId = "two",
+            storage = QueueStorageState(1_000_000, 241000, 3, 900000, 2)))
+        summary("900001 / 1000000", "4:01")
+        update(queue.copy(entries = emptyList(), currentEntryId = "two",
+            storage = QueueStorageState(1_000_000, 0, 0, 900000, 3)))
+        summary("900001 / 1000000", "–:––")
         compose.runOnIdle { state.value = QueueUiState(loading = false) }
         summary("0 / 0", "0:00")
     }

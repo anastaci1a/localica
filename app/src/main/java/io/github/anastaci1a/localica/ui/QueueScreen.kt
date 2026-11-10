@@ -56,11 +56,11 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         }
     }
     SideEffect { selectorAnchor.face = { SelectorFace() } }
-    val position = remember(active?.entries, active?.currentEntryId) {
-        active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
+    val position = remember(active?.entries, active?.currentEntryId, active?.storage) {
+        active?.let { "${it.currentIndex + 1} / ${it.entryCount}" }
     }
-    val duration = remember(active?.entries) {
-        active?.let { formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()) }
+    val duration = remember(active?.entries, active?.storage) {
+        active?.let { formatTime(it.totalDurationMs) }
     }
     // Restoration ignores rememberSaveable inputs, and the drawer removes this screen while
     // closed. Key the saved navigation by queue so a queue activated meanwhile (#500) cannot

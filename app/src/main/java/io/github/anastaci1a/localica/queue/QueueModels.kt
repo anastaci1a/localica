@@ -25,6 +25,15 @@ data class ListeningQueue(
     /** Logical count remains exact when only the active playback window is loaded. */
     val entryCount: Int get() = storage?.entryCount ?: entries.size
     val currentIndex: Int get() = storage?.currentIndex ?: entries.indexOfFirst { it.id == currentEntryId }
+    val totalDurationMs: Long? get() {
+        val summary = storage
+        if (summary != null) return if (summary.knownDurations > 0) summary.durationMs else null
+        var total = 0L
+        var known = false
+        for (entry in entries) entry.track.durationMs?.let { total += it; known = true }
+        return if (known) total else null
+    }
+
 }
 enum class QueueRepeat { Off, All, One }
 enum class SongEnd(val label: String) { Stop("Stop here"), NextPaused("Load next song and pause"), Next("Play next song"), Repeat("Repeat this song") }
