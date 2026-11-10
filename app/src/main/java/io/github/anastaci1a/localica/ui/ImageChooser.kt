@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.editing.CoverImages
+import io.github.anastaci1a.localica.ui.layout.ImageChooserSourceActions
 
 /** Optional decoder-entry observation; callbacks run in the decoder context. */
 internal val LocalImagePreviewDecodeObserver = staticCompositionLocalOf<(() -> Unit)?> { null }
@@ -84,8 +85,7 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
             }
         }
     }, footer = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+        ImageChooserSourceActions {
             GlassActionButton(AppIcon.TabAlbums, "Open gallery", Modifier.fillMaxWidth()) {
                 gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }
