@@ -121,7 +121,7 @@ class MenuInvariantTest {
         for (index in 0 until minOf(items.size, flat.count)) {
             val above = if (index == 0) strip ?: continue else items[index - 1].rect.bottom
             val expected = px(spec.dp(flat.gapBefore(index)))
-            if (!near(items[index].rect.top - above, expected)) report("I3 gap before item $index (${flat.item(index).key}) is ${items[index].rect.top - above} px, ${flat.gapBefore(index)} is $expected px; drawn ${items[index].part} ${items[index].rect}, above ${if (index == 0) "the tab strip" else "${items[index - 1].part} ${items[index - 1].rect}"}; next ${items.getOrNull(index + 1)?.let { "${it.part} ${it.rect}" }}")
+            if (!near(items[index].rect.top - above, expected)) report("I3 gap before item $index (${flat.item(index).key}) is ${items[index].rect.top - above} px, ${flat.gapBefore(index)} is $expected px; drawn ${items[index].part} ${items[index].rect}, above ${if (index == 0) "the tab strip" else "${items[index - 1].part} ${items[index - 1].rect}"}; stream ${items.take(5).map { "${it.part} ${it.rect}" }}, strip ${all.filter { it.part == MenuPart.Tab }.map { it.rect }}")
         }
     }
 

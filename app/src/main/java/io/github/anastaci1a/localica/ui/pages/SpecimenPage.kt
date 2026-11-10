@@ -53,7 +53,7 @@ private fun loadable(state: SpecimenState, value: String): Value<String> = if (s
 
 internal fun specimenPage(s: SpecimenState): PageDraft = page(PageId.Specimen) {
     val on = s.on
-    val longTitle = "A deliberately long row title that has to wrap onto a second line at narrow widths"
+    val longTitle = "A long row title that wraps"
     tabs(s.tab, on.tab) {
         tab(SpecimenTab.Rows, "Rows") {
             section("navigation", heading = "Navigation and links", caption = "Links open a page or a popup; the chevron and the icon stay centred on the row.") {
@@ -67,7 +67,7 @@ internal fun specimenPage(s: SpecimenState): PageDraft = page(PageId.Specimen) {
             section("values", heading = "Values and actions") {
                 value(local("name", "Playlist name"), s.name, opens = textEntry("Rename playlist", "Name", s.name, on.name))
                 info(SpecimenInfo.Version, "Version", loadable(s, "0.33.19"))
-                info(SpecimenInfo.LastSync, "Last sync", loadable(s, "Today, 9:41 AM"), icon = AppIcon.ActionRefresh) { on.event("last-sync") }
+                info(SpecimenInfo.LastSync, "Last sync", loadable(s, "9:41 AM"), icon = AppIcon.ActionRefresh) { on.event("last-sync") }
                 action(SpecimenSetting("Rescan library"), AppIcon.ActionRescan) { on.event("rescan") }
                 action(SpecimenSetting("Delete specimen data"), AppIcon.ActionTrash, role = ActionRole.Destructive,
                     opens = confirm("Delete specimen data?", "This deletes only the specimen's sample values.",
