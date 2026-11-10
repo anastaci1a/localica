@@ -5,6 +5,8 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.animation.core.tween
@@ -47,13 +49,41 @@ import kotlinx.coroutines.flow.collectLatest
 internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sort: TrackSort, modifier: Modifier = Modifier, onUserScroll: () -> Unit = {}) {
     ListScrollbar(state, items, { state.canScrollForward || state.canScrollBackward }, { state.scrollbarFrame() },
         { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset },
-        { index, offset -> state.scrollToItem(index, offset) }, modifier, onUserScroll) { target ->
+        { index, offset -> state.jumpToItem(index, offset) }, modifier, onUserScroll) { target ->
         // Grid item 0 is the header; browser items start at grid index 1.
         items.getOrNull(target - 1)?.let { item -> when (sort) {
             TrackSort.Title -> item.title.firstOrNull()?.uppercase() ?: "#"
             TrackSort.Year -> item.songs.mapNotNull { it.track.year }.minOrNull()?.toString() ?: "—"
             else -> null
         } }
+    }
+}
+
+/**
+ * A cold jump that never makes the grid scroll back (#635).
+ *
+ * Inside a LookaheadScope, a lookahead pass that cannot fill the viewport from the requested item
+ * scrolls back, and the grid then eases its approach pass across that distance with a spring:
+ * every row is drawn away from its slot and drifts back. Targets near the end therefore land on an
+ * item that still fills the viewport, and the rest is covered by a scroll delta, which stops at the
+ * end without a scroll-back. Both steps measure synchronously, so only the final frame is drawn.
+ */
+internal suspend fun LazyGridState.jumpToItem(index: Int, scrollOffset: Int = 0) {
+    val total = layoutInfo.totalItemsCount
+    // Twice the visible items spans at least a viewport of similar rows before the end.
+    val reach = (layoutInfo.visibleItemsInfo.size * 2).coerceAtLeast(1)
+    if (index + reach < total) return scrollToItem(index, scrollOffset)
+    scrollToItem((total - reach).coerceAtLeast(0).coerceAtMost(index))
+    repeat(8) {
+        val target = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+        if (target != null) {
+            val distance = (if (layoutInfo.orientation == Orientation.Vertical)
+                target.offset.y else target.offset.x) + scrollOffset
+            if (distance != 0) scrollBy(distance.toFloat())
+            return
+        }
+        if (!canScrollForward) return
+        scrollBy(layoutInfo.viewportSize.height.toFloat())
     }
 }
 
