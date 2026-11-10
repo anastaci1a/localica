@@ -12,6 +12,7 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.components.LocalSheetContentObserver
 import io.github.anastaci1a.localica.ui.engine.*
 import io.github.anastaci1a.localica.ui.spec.MotionAccess
 import org.junit.Assert.*
@@ -31,6 +32,7 @@ class CollapsedPlayerCollectionNavigationTest {
     private val playlist = ManualPlaylist(id = "basis-playlist", name = "Basis playlist",
         entries = tracks.map { SongRow(it.id, it) })
     private val events = SheetEvents()
+    private val contentEvents = mutableListOf<Pair<String, Boolean>>()
     private lateinit var records: File
     private lateinit var access: MotionAccess
 
@@ -55,26 +57,28 @@ class CollapsedPlayerCollectionNavigationTest {
         }
     }
 
-    private fun start(access: MotionAccess, loaded: Boolean, tab: MainTab = MainTab.Albums) {
+    private fun start(access: MotionAccess, loaded: Boolean, tab: MainTab = MainTab.Albums, input: String = "navigation") {
         this.access = access
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val output = File(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
             ?: checkNotNull(context.getExternalFilesDir(null)).absolutePath, "collapsed-collection-navigation")
         output.mkdirs()
-        records = File(output, "$access-$loaded-$tab.tsv")
-        records.writeText("source\tapi\tframeMs\taccess\treferenceTravel\tphase\tqueuePhase\tbasisJoins\n")
+        records = File(output, "$access-$loaded-$tab-$input.tsv")
+        records.writeText("source\tapi\tframeMs\taccess\treferenceTravel\tphase\tqueuePhase\tbasisJoins\tcontentEvents\n")
         InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(tab),
             fasterMotion = access == MotionAccess.Faster, reducedMotion = access == MotionAccess.Reduced))
         BrowsePreferences(context).write(BrowseRoute(tab), BrowseStyle(listSize = ListSize.Small, quickSearch = true), false)
         val track = tracks.first()
         val playback = if (loaded) PlaybackState(connected = true, trackId = track.id, trackUri = track.uri,
             title = track.title) else PlaybackState(connected = true)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { CompositionLocalProvider(LocalSheetContentObserver provides { name, mounted ->
+            contentEvents += name to mounted
+        }) { LocalicaTheme {
             val clock = LocalUiClock.current
             SideEffect { clock.events = events }
             LocalicaScreen(LibraryUiState(snapshot, loading = false), playback, {}, {}, {}, {}, {}, {},
                 playlist = PlaylistState(listOf(playlist), loading = false))
-        } }
+        } } }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().size == 1 }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
@@ -93,9 +97,10 @@ class CollapsedPlayerCollectionNavigationTest {
             assertTrue("The Queue must stay at its closed rest", queue.settled)
             assertEquals(0f, queue.value(), 0f)
             assertTrue("No transient phase segment is admitted", events.movingJoins.isEmpty())
+            assertTrue("No retained Player or Queue content may mount, even with cleared semantics", contentEvents.isEmpty())
             listOf(BuildConfig.SOURCE_SHA, Build.VERSION.SDK_INT, compose.mainClock.currentTime,
                 context.access, context.fullPlayerReferenceTravelPx, phase.value(), queue.value(),
-                events.basisJoins).joinToString("\t") + "\n"
+                events.basisJoins, contentEvents.toList()).joinToString("\t") + "\n"
         }
         records.appendText(record)
         compose.onAllNodesWithTag("queue-surface", useUnmergedTree = true).assertCountEquals(0)
@@ -131,6 +136,14 @@ class CollapsedPlayerCollectionNavigationTest {
             compose.mainClock.advanceTimeBy(1000)
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
             compose.onNodeWithTag("queue-surface").assertExists()
+            compose.runOnIdle {
+                assertTrue(contentEvents.contains("player-overlay" to true))
+                assertTrue(contentEvents.contains("queue-surface" to true))
+            }
+            compose.onNodeWithContentDescription("Open queue").assertIsDisplayed().performClick()
+            compose.mainClock.advanceTimeBy(1000)
+            compose.runOnIdle { assertTrue("The Queue body visibility control must really compose",
+                contentEvents.contains("queue-screen" to true)) }
         }
         compose.mainClock.autoAdvance = true
     }
@@ -142,40 +155,67 @@ class CollapsedPlayerCollectionNavigationTest {
     @Test fun fasterEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(MotionAccess.Faster, false)
     @Test fun reducedEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(MotionAccess.Reduced, false)
 
-    private fun interactions(access: MotionAccess) {
-        start(access, true, MainTab.Playlists)
+    private enum class Input { Pinch, Back, Search }
+
+    private fun interactions(access: MotionAccess, input: Input) {
+        start(access, true, MainTab.Playlists, input.name)
         val row = hasText(playlist.name) and hasClickAction()
         compose.onAllNodes(row).assertCountEquals(1)
+        val navigationFrame = compose.mainClock.currentTime
         compose.onNode(row).performClick()
         frames(2)
         val list = compose.onNodeWithTag("browser-list")
-        // Recognition occurs while the collection chrome is changing, before the 300 ms tween can finish.
-        val before = list.fetchSemanticsNode().config[SemanticsProperties.StateDescription]
-        list.performTouchInput {
-            down(0, Offset(centerX - 50f, centerY)); down(1, Offset(centerX + 50f, centerY))
-            moveTo(0, Offset(centerX - 60f, centerY)); moveTo(1, Offset(centerX + 60f, centerY))
+        val inputFrame = compose.mainClock.currentTime
+        assertTrue("Input must begin inside both Standard and Faster chrome transitions",
+            inputFrame - navigationFrame in 1..100)
+        when (input) {
+            Input.Pinch -> {
+                val before = list.fetchSemanticsNode().config[SemanticsProperties.StateDescription]
+                list.performTouchInput {
+                    down(0, Offset(centerX - 50f, centerY)); down(1, Offset(centerX + 50f, centerY))
+                    moveTo(0, Offset(centerX - 60f, centerY)); moveTo(1, Offset(centerX + 60f, centerY))
+                }
+                frames(2)
+                assertNotEquals("The list must admit pinch recognition during navigation", before,
+                    list.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+                list.performTouchInput { up(0); up(1) }
+                frames(32)
+            }
+            Input.Back -> {
+                list.performScrollToIndex(35)
+                frames(1)
+                val range = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+                compose.runOnIdle { assertTrue("Back starts with a scrolled list", range.value() > 0f) }
+                pressSystemBack()
+                frames(40)
+                compose.runOnIdle { assertEquals("Back must return the collection list to its home", 0f, range.value(), 0f) }
+                compose.onNodeWithContentDescription("Playlist actions").assertIsDisplayed()
+            }
+            Input.Search -> {
+                compose.onAllNodesWithText("Search ${playlist.name}").assertCountEquals(1)
+                compose.onNodeWithText("Search ${playlist.name}").assertIsDisplayed().performClick()
+                repeat(6) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.runOnIdle {
+                        assertTrue(events.movingJoins.isEmpty())
+                        assertTrue(contentEvents.isEmpty())
+                    }
+                }
+                compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
+                compose.onNode(hasSetTextAction()).assertIsEnabled().performTextInput("Song")
+            }
         }
-        frames(2)
-        assertNotEquals("The list must admit pinch recognition during navigation", before,
-            list.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
-        list.performTouchInput { up(0); up(1) }
-        frames(32)
-        list.performScrollToIndex(35)
-        compose.mainClock.advanceTimeByFrame()
-        val range = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
-        compose.runOnIdle { assertTrue("Back control starts with a scrolled list", range.value() > 0f) }
-        pressSystemBack()
-        frames(40)
-        compose.runOnIdle { assertEquals("List Back returns to the list home", 0f, range.value(), 0f) }
-        compose.onNodeWithContentDescription("Playlist actions").assertIsDisplayed()
-        compose.onNodeWithText("Search ${playlist.name}").assertIsDisplayed().performClick()
-        compose.mainClock.advanceTimeBy(1000)
-        compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
-        compose.onNode(hasSetTextAction()).assertIsEnabled().performTextInput("Song")
+        records.appendText("input\t$input\tnavigation=$navigationFrame\tinput=$inputFrame\n")
         compose.mainClock.autoAdvance = true
     }
 
-    @Test fun standardCollapsedCollectionAdmitsPinchBackAndSearch() = interactions(MotionAccess.Standard)
-    @Test fun fasterCollapsedCollectionAdmitsPinchBackAndSearch() = interactions(MotionAccess.Faster)
-    @Test fun reducedCollapsedCollectionAdmitsPinchBackAndSearch() = interactions(MotionAccess.Reduced)
+    @Test fun standardCollapsedCollectionAdmitsPinchDuringNavigation() = interactions(MotionAccess.Standard, Input.Pinch)
+    @Test fun fasterCollapsedCollectionAdmitsPinchDuringNavigation() = interactions(MotionAccess.Faster, Input.Pinch)
+    @Test fun reducedCollapsedCollectionAdmitsPinchDuringNavigation() = interactions(MotionAccess.Reduced, Input.Pinch)
+    @Test fun standardCollapsedCollectionAdmitsListBackDuringNavigation() = interactions(MotionAccess.Standard, Input.Back)
+    @Test fun fasterCollapsedCollectionAdmitsListBackDuringNavigation() = interactions(MotionAccess.Faster, Input.Back)
+    @Test fun reducedCollapsedCollectionAdmitsListBackDuringNavigation() = interactions(MotionAccess.Reduced, Input.Back)
+    @Test fun standardCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(MotionAccess.Standard, Input.Search)
+    @Test fun fasterCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(MotionAccess.Faster, Input.Search)
+    @Test fun reducedCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(MotionAccess.Reduced, Input.Search)
 }
