@@ -14,6 +14,7 @@ import com.intellij.psi.PsiParameter
 import com.intellij.psi.PsiClass
 import org.jetbrains.uast.*
 import org.jetbrains.kotlin.psi.KtProperty
+import org.jetbrains.kotlin.lexer.KtTokens
 
 class ThreadingRegistry : IssueRegistry() {
     override val api = CURRENT_API
@@ -139,7 +140,13 @@ class MainThreadBlockingDetector : Detector(), SourceCodeScanner {
         val variable = (symbol as? UVariable) ?: symbol?.toUElementOfType<UVariable>()
             ?: symbol?.navigationElement?.toUElementOfType<UVariable>()
         val property = (variable?.sourcePsi as? KtProperty) ?: symbol?.navigationElement as? KtProperty
-        if (property != null) return if (property.isVar) null else property.initializer?.toUElementOfType<UExpression>()
+        if (property != null) {
+            // A val may still be virtual, delegated, or computed on every access.
+            if (property.isVar || property.hasModifier(KtTokens.OPEN_KEYWORD) ||
+                property.hasModifier(KtTokens.OVERRIDE_KEYWORD) || property.hasModifier(KtTokens.ABSTRACT_KEYWORD) ||
+                property.getter != null || property.hasDelegate() || property.receiverTypeReference != null) return null
+            return property.initializer?.toUElementOfType<UExpression>()
+        }
         if (variable == null) return null
         // A mutable alias or caller-supplied parameter cannot prove a worker boundary.
         if (variable.javaPsi is PsiParameter ||
@@ -151,8 +158,10 @@ class MainThreadBlockingDetector : Detector(), SourceCodeScanner {
         if (expression == null) return Dispatcher.NONE
         if (depth > 16) return Dispatcher.UNKNOWN
         val value = unwrap(expression)
-        if (value is UBinaryExpression && value.operator == UastBinaryOperator.PLUS)
+        if (value is UBinaryExpression && value.operator == UastBinaryOperator.PLUS) {
+            if (!contextPlus(value.resolveOperator())) return Dispatcher.UNKNOWN
             return combine(dispatcher(value.leftOperand, depth + 1), dispatcher(value.rightOperand, depth + 1))
+        }
         val symbol = resolve(value)
         val member = symbol as? PsiMember
         val owner = member?.containingClass?.qualifiedName.orEmpty()
@@ -174,11 +183,18 @@ class MainThreadBlockingDetector : Detector(), SourceCodeScanner {
                 return Dispatcher.NONE
             if (name == "limitedParallelism" && qualified.startsWith("kotlinx.coroutines."))
                 return dispatcher(call.receiver, depth + 1)
-            if (name == "plus" && call.receiver != null)
+            if (name == "plus" && call.receiver != null && contextPlus(method))
                 return combine(dispatcher(call.receiver, depth + 1), dispatcher(call.valueArguments.firstOrNull(), depth + 1))
         }
         return initializer(symbol)?.let { dispatcher(it, depth + 1) } ?: Dispatcher.UNKNOWN
     }
+
+    /** Only platform context combination has the right-biased dispatcher contract. */
+    private fun contextPlus(method: PsiMethod?): Boolean = method?.name == "plus" &&
+        method.containingClass?.qualifiedName in setOf("kotlin.coroutines.CoroutineContext",
+            "kotlin.coroutines.CoroutineContext.Element", "kotlin.coroutines.EmptyCoroutineContext",
+            "kotlin.coroutines.CombinedContext") &&
+        method.parameterList.parameters.singleOrNull()?.type?.canonicalText == "kotlin.coroutines.CoroutineContext"
 
     private fun scopeDispatcher(expression: UExpression?, depth: Int = 0): Dispatcher {
         if (expression == null || depth > 16) return Dispatcher.UNKNOWN
@@ -202,9 +218,16 @@ class MainThreadBlockingDetector : Detector(), SourceCodeScanner {
         val value = unwrap(expression)
         val symbol = resolve(value)
         val method = symbol as? PsiMethod
-        if (method?.name == "getMainExecutor" && method.containingClass?.qualifiedName in
-            setOf("androidx.core.content.ContextCompat", "android.content.Context")) return true
+        if (mainExecutorProducer(method)) return true
         return initializer(symbol)?.let { mainExecutor(it, depth + 1) } ?: false
+    }
+
+    private fun mainExecutorProducer(method: PsiMethod?, depth: Int = 0): Boolean {
+        if (method?.name != "getMainExecutor" || depth > 16) return false
+        if (method.containingClass?.qualifiedName == "androidx.core.content.ContextCompat") return true
+        if (method.parameterList.parametersCount != 0) return false
+        if (method.containingClass?.qualifiedName in setOf("android.content.Context", "android.content.ContextWrapper")) return true
+        return method.findSuperMethods().any { mainExecutorProducer(it, depth + 1) }
     }
 
     companion object {

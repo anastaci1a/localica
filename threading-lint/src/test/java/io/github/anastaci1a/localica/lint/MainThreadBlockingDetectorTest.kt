@@ -221,6 +221,69 @@ class MainThreadBlockingDetectorTest : LintDetectorTest() {
         """)).allowMissingSdk().run().expectErrorCount(3)
     }
 
+    @Test fun testVirtualPropertiesAndCustomPlusCannotProveWorkerEscape() {
+        lint().files(composable, contexts, kotlin("""
+            package test
+            import androidx.compose.runtime.Composable
+            import kotlinx.coroutines.*
+            import java.io.File
+            import kotlin.coroutines.CoroutineContext
+            open class Base {
+                open val worker: CoroutineContext = Dispatchers.IO
+                val computed: CoroutineContext get() = Dispatchers.Main
+                val delegated: CoroutineContext by lazy { Dispatchers.Main }
+                val fixedProperty: CoroutineContext = Dispatchers.IO
+                @Composable fun screen() {
+                    withContext(worker) { File("state").length() }
+                    withContext(computed) { File("state").length() }
+                    withContext(delegated) { File("state").length() }
+                    withContext(fixedProperty) { File("state").length() }
+                }
+            }
+            class Derived : Base() { override val worker = Dispatchers.Main }
+            class Fake {
+                operator fun plus(other: CoroutineContext): CoroutineContext = Dispatchers.Main
+            }
+            val fake = Fake()
+            @Composable fun custom() {
+                withContext(fake + Dispatchers.IO) { File("state").length() }
+                withContext(fake.plus(Dispatchers.IO)) { File("state").length() }
+                val fixed = Dispatchers.IO
+                withContext(fixed) { File("state").length() }
+            }
+        """)).allowMissingSdk().run().expectErrorCount(5)
+    }
+
+    @Test fun testSdkContextWrapperMainExecutorDeclaration() {
+        lint().files(java("""
+            package android.content;
+            public class Context { public java.util.concurrent.Executor getMainExecutor() { return null; } }
+        """), java("""
+            package android.content;
+            public class ContextWrapper extends Context {
+                @Override public java.util.concurrent.Executor getMainExecutor() { return null; }
+            }
+        """), java("""
+            package android.app;
+            public class Activity extends android.content.ContextWrapper {}
+        """), java("""
+            package test;
+            public class Screen extends android.app.Activity {
+                @Override public java.util.concurrent.Executor getMainExecutor() { return super.getMainExecutor(); }
+            }
+        """), kotlin("""
+            package test
+            import java.io.File
+            fun observe(activity: android.app.Activity, wrapper: android.content.ContextWrapper, screen: Screen) {
+                activity.mainExecutor.execute { File("state").length() }
+                wrapper.getMainExecutor().execute { File("state").length() }
+                val executor = activity.mainExecutor
+                executor.execute { File("state").length() }
+                screen.mainExecutor.execute { File("state").length() }
+            }
+        """)).allowMissingSdk().run().expectErrorCount(4)
+    }
+
     @Test fun testExtensionLaunchMapsContextWithoutConfusingItsScopeReceiver() {
         lint().files(composable, contexts, kotlin("""
             package kotlinx.coroutines
