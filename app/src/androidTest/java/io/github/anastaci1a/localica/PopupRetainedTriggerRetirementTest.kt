@@ -24,6 +24,8 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.collect
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -77,11 +79,16 @@ class PopupRetainedTriggerRetirementTest {
         return state.value as OwnedFieldRequest?
     }
 
+    private data class ObservedField(val request: OwnedFieldRequest, val sourceGeneration: Long,
+        val nativeGeneration: Long?, val homeMatches: Boolean)
+
     private data class Checkpoint(val stage: String, val frameMillis: Long, val root: Policy?, val popup: Policy?,
         val mounted: Boolean, val modal: Boolean, val hidden: Boolean, val restoreRequest: Long,
         val restorePresented: Long, val triggerDraws: Int, val nativeAttached: Boolean,
         val nativeGeneration: Long?, val nativeOpening: Boolean?, val homeGeneration: Long?, val ownsHome: Boolean?,
-        val fieldRequestGeneration: Long?, val fieldSubmitted: Boolean?)
+        val fieldRequestGeneration: Long?, val fieldSubmitted: Boolean?, val retainedFieldSubmitted: Boolean?,
+        val retainedSourceGeneration: Long?, val observedSourceGeneration: Long?,
+        val retainedNativeGeneration: Long?, val observedNativeGeneration: Long?, val retainedHomeMatches: Boolean?)
 
     private fun retirement(adjacentTab: Boolean, reduced: Boolean = false, speed: Float = 4f / 3f,
         hide: Boolean = true, renew: Boolean = false) {
@@ -95,6 +102,7 @@ class PopupRetainedTriggerRetirementTest {
         val triggerDraws = AtomicInteger()
         var rootPolicy: (() -> Policy)? = null
         var popupPolicy: (() -> Policy)? = null
+        var observedField: ObservedField? = null
         compose.setContent {
             val density = LocalDensity.current
             val settings = remember { InterfaceSettings(reducedMotion = reduced, fasterMotion = speed == 2f) }
@@ -116,6 +124,16 @@ class PopupRetainedTriggerRetirementTest {
                             TabPager(pager, { listOf(MainTab.Library, MainTab.Albums) }, Modifier.fillMaxSize()) { page ->
                                 if (page == 0) {
                                     anchor = rememberGlassAnchor()
+                                    LaunchedEffect(anchor) {
+                                        // Retain the real request before native acknowledgment clears the live slot.
+                                        // The collector stores references/scalars only; all export stays on instrumentation.
+                                        snapshotFlow { fieldRequest(anchor.surfaceNode ?: anchor.returningNode) }
+                                            .filterNotNull().collect { request ->
+                                                val node = (anchor.surfaceNode ?: anchor.returningNode) as SurfaceNode
+                                                observedField = ObservedField(request, node.sourceGeneration,
+                                                    expansionOwner(anchor)?.nativeGeneration, request.plane === node.returnPlane())
+                                            }
+                                    }
                                     Box(Modifier.padding(32.dp)
                                         .drawWithContent { triggerDraws.incrementAndGet(); drawContent() }) {
                                         ActionIcon(AppIcon.ActionEllipsis, "Retained popup trigger", anchor = anchor) { open = true }
@@ -144,11 +162,14 @@ class PopupRetainedTriggerRetirementTest {
                 val home = node?.returnPlane()
                 val expansion = expansionOwner(anchor)
                 val field = fieldRequest(node)
+                val retained = observedField
                 Checkpoint(stage, compose.mainClock.currentTime, rootPolicy?.invoke(), popupPolicy?.invoke(),
                     anchor.triggerMounted, anchor.modalPresent, anchor.hidden, anchor.restoredDrawRequest,
                     anchor.restoredPresentedReceipt, triggerDraws.get(), popupView?.isAttachedToWindow == true,
                     expansion?.nativeGeneration, expansion?.nativeOpening,
-                    home?.generation, home?.let { node?.ownsWindow(it) }, field?.nativeGeneration, field?.submitted)
+                    home?.generation, home?.let { node?.ownsWindow(it) }, field?.nativeGeneration, field?.submitted,
+                    retained?.request?.submitted, retained?.request?.sourceGeneration, retained?.sourceGeneration,
+                    retained?.request?.nativeGeneration, retained?.nativeGeneration, retained?.homeMatches)
             }
             File(evidence, "$case-$stage.txt").writeText(snapshot.toString() + "\n")
             return snapshot
@@ -245,7 +266,13 @@ class PopupRetainedTriggerRetirementTest {
             if (hide) {
                 assertEquals("The hidden home still cannot submit a field", closing.homeGeneration, bounded.homeGeneration)
                 assertNull("The fallback never invents a home-field submission", bounded.fieldSubmitted)
-            } else assertEquals("The drawable path submitted its real owned field", true, bounded.fieldSubmitted)
+            } else {
+                assertEquals("The retained real owned-field request was submitted", true, bounded.retainedFieldSubmitted)
+                assertEquals("The receipt belongs to the actual source attachment", bounded.observedSourceGeneration, bounded.retainedSourceGeneration)
+                assertEquals("The receipt belongs to the observed native generation", bounded.observedNativeGeneration, bounded.retainedNativeGeneration)
+                assertEquals("The receipt belongs to this closing gate", closing.nativeGeneration, bounded.retainedNativeGeneration)
+                assertEquals("The receipt belongs to the actual return home", true, bounded.retainedHomeMatches)
+            }
             compose.runOnIdle {
                 assertFalse("The closing gate must release the modal within six frames", anchor.modalPresent)
                 assertFalse(anchor.hidden)
