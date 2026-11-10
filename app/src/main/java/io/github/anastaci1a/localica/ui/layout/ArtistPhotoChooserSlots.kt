@@ -9,8 +9,8 @@ import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 
 /** The caller supplies its existing scroll chain, after the stock viewport constraint. */
 @Composable
-internal fun ArtistPhotoChooserBody(scrollModifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.heightIn(max = ArtistPhotoChooserSpec.maximumBodyHeight).then(scrollModifier),
+internal fun ArtistPhotoChooserBody(modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.heightIn(max = ArtistPhotoChooserSpec.maximumBodyHeight).then(modifier),
         verticalArrangement = Arrangement.spacedBy(StockUiSpec.space.getValue(Space.Base)), content = content)
 }
 
