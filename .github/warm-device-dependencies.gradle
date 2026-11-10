@@ -1,0 +1,23 @@
+// Resolve UTP host tools before boot; assembling APKs does not resolve these (#752).
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.project(':app')
+    app.tasks.register('warmDeviceDependencies') {
+        doLast {
+            // Realize the connected task so AGP has registered its host configurations.
+            app.tasks.named('connectedDebugAndroidTest').get()
+            def configs = app.configurations.findAll {
+                it.canBeResolved && it.name.startsWith('_internal-unified-test-platform-')
+            }.sort { it.name }
+            if (!configs.any { it.name.contains('host-additional-test-output') }) {
+                throw new GradleException('Expected UTP host configurations are missing; update dependency warming')
+            }
+            configs.each { config ->
+                def files = config.resolve()
+                if (files.empty) {
+                    throw new GradleException("Empty UTP configuration: ${config.name}")
+                }
+                logger.lifecycle("Warmed ${config.name}: ${files.size()} files")
+            }
+        }
+    }
+}

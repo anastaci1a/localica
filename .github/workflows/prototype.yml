@@ -159,6 +159,7 @@ jobs:
         path: |-
           app/build/reports/
           prototype-runner-environment.txt
+          ci-infrastructure/
     name: Prototype build, unit tests and lint
   focused_26:
     needs: identity
@@ -216,7 +217,7 @@ jobs:
     - name: Compile instrumentation APKs before starting emulator
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2
     - name: Record downloaded dependency files
       if: ${{ !cancelled() && inputs.runner != 'self-hosted' }}
       run: bash .github/dependency-cache-audit.sh report
@@ -297,6 +298,7 @@ jobs:
           prototype-evidence/
           prototype-iterations/
           prototype-runner-environment.txt
+          ci-infrastructure/
         if-no-files-found: error
     name: Prototype focused API 26
   compatibility_26:
@@ -445,7 +447,7 @@ jobs:
     - name: Compile instrumentation APKs before starting emulator
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2
     - name: Record downloaded dependency files
       if: ${{ !cancelled() && inputs.runner != 'self-hosted' }}
       run: bash .github/dependency-cache-audit.sh report
@@ -473,7 +475,9 @@ jobs:
       uses: ./.github/actions/system-image-cache
       with:
         api: 36
-    - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+    - id: emulator-first
+      continue-on-error: true
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       if: inputs.runner != 'self-hosted'
       with:
         api-level: 36
@@ -487,7 +491,34 @@ jobs:
           adb shell wm density 280
           python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
-          bash .github/run-prototype-tests.sh
+          python3 .github/prototype-health.py
+    - name: Preserve lost-emulator attempt and authorize one fresh boot
+      id: emulator-recovery
+      if: ${{ !cancelled() && steps.emulator-first.outcome == 'failure' }}
+      run: |
+        if [[ -f ci-infrastructure/emulator.json ]]; then
+          python3 .github/prototype-health.py --prepare-restart
+          echo 'restart=true' >> "$GITHUB_OUTPUT"
+        fi
+    - id: emulator-restart
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+      if: ${{ !cancelled() && steps.emulator-recovery.outputs.restart == 'true' }}
+      with:
+        api-level: 36
+        target: default
+        arch: x86_64
+        profile: pixel_2
+        emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel
+        disable-animations: false
+        script: |
+          adb shell wm size 720x1280
+          adb shell wm density 280
+          python3 .github/emulator-readiness.py --normalize-navigation
+          bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+          python3 .github/prototype-health.py
+    - name: Require a complete focused emulator run
+      if: ${{ !cancelled() && inputs.runner != 'self-hosted' && steps.emulator-first.outcome != 'success' }}
+      run: test '${{ steps.emulator-restart.outcome }}' = success
     - name: Cache the installed SDK system image
       if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true' && inputs.runner != 'self-hosted'
       uses: ./.github/actions/system-image-cache
@@ -526,6 +557,8 @@ jobs:
           prototype-evidence/
           prototype-iterations/
           prototype-runner-environment.txt
+          ci-infrastructure/
+          prototype-infrastructure/
         if-no-files-found: error
     name: Prototype focused API 36
   compatibility_36:
@@ -811,6 +844,30 @@ jobs:
                         'source_sha': data['source_sha'], 'private_variants_not_distributed': True}
                 except (AssertionError, KeyError, ValueError, OSError) as error:
                     errors.append(f'Compatibility API {api} provenance validation failed: ' + type(error).__name__ + ': ' + str(error))
+        manifest['infrastructure_failures'] = []
+        jobs_by_artifact = {'prototype-build-reports': 'build',
+                            'prototype-focused-api-26': 'focused_26', 'prototype-focused-api-36': 'focused_36',
+                            'prototype-compatibility-api-26': 'compatibility_26',
+                            'prototype-compatibility-api-36': 'compatibility_36'}
+        infrastructure_jobs = set()
+        for receipt in sorted(root.rglob('ci-infrastructure/*.json')):
+            record = json.loads(receipt.read_text())
+            if record.get('classification') != 'infrastructure':
+                continue
+            relative = receipt.relative_to(root)
+            job = jobs_by_artifact.get(relative.parts[0])
+            historical = 'prototype-infrastructure' in relative.parts
+            manifest['infrastructure_failures'].append({'evidence': str(receipt), 'job': job,
+                                                       'historical': historical, **record})
+            context_valid = (record.get('sha') == manifest['sha'] and record.get('run_id') == manifest['run_id']
+                             and record.get('run_attempt') == manifest['run_attempt'] and record.get('job') == job)
+            if job and not historical and context_valid:
+                infrastructure_jobs.add(job)
+        manifest['check_classification'] = {
+            job: ('infrastructure' if job in infrastructure_jobs else 'unclassified')
+            for job, status in results.items() if status == 'failed'}
+        failures = set(manifest['check_classification'].values())
+        manifest['failure_classification'] = ('mixed' if len(failures) > 1 else next(iter(failures), None))
         all_checks_passed = all(value == 'passed' for value in results.values())
         complete = canonical_valid and len(manifest['focused_evidence']) == 2 and len(manifest['compatibility_evidence']) == 2
         if all_checks_passed and not complete:

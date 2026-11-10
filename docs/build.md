@@ -215,7 +215,13 @@ Emulator archives and system images are saved only from `main`. A branch-scoped 
 
 Hosted compile jobs restore shared Gradle dependency entries instead of downloading: `localica-static-checks` (unit tests, lint, debug and release builds) and `localica-test-apks` (app and instrumentation APKs, also the compatibility builds). Only runs on `main` save them: the [dependency cache workflow](../.github/workflows/dependency-cache.yml) writes both on dispatch or when dependency files change; the Android workflow refreshes them each train.
 
-Each compile job records `dependency-downloads=N` in its runner identity file and annotates the run when `N > 0`. Gradle itself never retries a failed download, so compile steps run through `gradle-transient-retry.sh`: at most three attempts, only after an HTTP 5xx, timeout or reset on a download. Failing tests, compilation errors and lint findings are never retried.
+Each compile job records `dependency-downloads=N` in its runner identity file and annotates the run when `N > 0`. Gradle itself never retries a failed download, so compile steps run through `gradle-transient-retry.sh`: at most three attempts, only after an HTTP 5xx, timeout, reset or unreachable network on a download. Failing tests, compilation errors and lint findings are never retried.
+
+Focused prototype builds also warm UTP host-plugin configurations before boot. APK assembly alone leaves those dependencies unresolved. Focused instrumentation uses offline dependency resolution. Exhausted network retries retain attempt logs and infrastructure receipts; the delivery manifest distinguishes infrastructure failures from unclassified failures. Neither permits delivery.
+
+Hosted prototype API 36 jobs sample the selected emulator's PID, process start identity, boot ID, adb state and host memory. Recovery requires a healthy original guest followed by two terminal process-and-transport loss samples. Recovered or replaced guests cannot authorize another run.
+
+One fresh boot requires empty UTP failure XML and complete observer evidence without product assertions or crashes. Only the recognized UTP device-loss stderr is accepted. Interrupted outputs remain archived. Missing or malformed evidence blocks recovery. Recovered infrastructure attempts remain visible in the delivery manifest.
 
 On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
 

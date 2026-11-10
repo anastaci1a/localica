@@ -78,7 +78,9 @@ class SelfHostedPrototypeContract(unittest.TestCase):
                 self.assertEqual('x86_64', inputs['arch'])
                 self.assertEqual(inputs['emulator-options'], env['EMULATOR_OPTIONS'])
                 self.assertEqual(str(inputs['disable-animations']).lower(), env['EMULATOR_DISABLE_ANIMATIONS'])
-                self.assertEqual(inputs['script'], env['EMULATOR_SCRIPT'])
+                hosted_script = inputs['script'].replace('python3 .github/prototype-health.py',
+                                                        'bash .github/run-prototype-tests.sh')
+                self.assertEqual(hosted_script, env['EMULATOR_SCRIPT'])
                 self.assertIn('bash .github/run-prototype-tests.sh', env['EMULATOR_SCRIPT'])
                 # The self-hosted step runs before the hosted SDK/emulator steps, after compilation.
                 names = [s.get('name', s.get('uses', '')) for s in steps]
