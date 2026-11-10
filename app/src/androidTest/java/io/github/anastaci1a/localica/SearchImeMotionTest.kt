@@ -119,6 +119,12 @@ class SearchImeMotionTest {
     private var nativeActionReturnGate: java.util.concurrent.CountDownLatch? = null
     private var nativeDismissalAt: Long? = null
     private var legacyNativeReturn: LegacyNativeReturn? = null
+    private var legacyReturnPlacement: LegacyReturnPlacement? = null
+    private data class LegacyReturnPlacement(
+        val sample: SearchMorphSample,
+        val requestedAt: Long,
+        val placedAt: Long,
+    )
     private data class LegacyNativeReturn(
         val sample: SearchMorphSample,
         val requestedAt: Long,
@@ -352,16 +358,11 @@ class SearchImeMotionTest {
                 LocalSearchMorphObserver provides {
                     samples += it
                     if (android.os.Build.VERSION.SDK_INT == 26 && nativeDismissalAt != null && !it.opening &&
-                        it.progress >= .01f && it.progress < .99f && legacyNativeReturn == null) {
-                        val requested = requireNotNull(nativeDismissalAt)
-                        val placed = SystemClock.uptimeMillis()
-                        val started = SystemClock.uptimeMillis()
-                        val dump = shell("dumpsys -t 2 window windows")
-                        val ended = SystemClock.uptimeMillis()
-                        legacyNativeReturn = LegacyNativeReturn(it, requested, placed, started, ended,
-                            legacyImeWindowVisible(dump), dump)
-                        motionTimeline += "$ended legacyNativeReturn requested=$requested placed=$placed " +
-                            "queryStarted=$started queryEnded=$ended visible=${legacyNativeReturn?.nativeWindowVisible}"
+                        it.progress >= .01f && it.progress < .99f && legacyReturnPlacement == null) {
+                        // Layout only captures immutable values. The instrumentation thread
+                        // queries WM immediately after this first moving frame is placed.
+                        legacyReturnPlacement = LegacyReturnPlacement(it, requireNotNull(nativeDismissalAt),
+                            SystemClock.uptimeMillis())
                     }
                     if (!it.opening && it.progress in .01f.. .99f) nativeActionReturnGate?.countDown()
                     motionTimeline += "${SystemClock.uptimeMillis()} $it"
@@ -677,7 +678,7 @@ class SearchImeMotionTest {
             // real traversal (which would relayout the Dialog's released focus and let
             // the hide start). Dismissal writes land in the global snapshot from the
             // input event; the recomposer only learns of them once they are applied.
-            val (witnessed, retired) = compose.runOnUiThread {
+            val (witnessed, retired, legacyPlacement) = compose.runOnUiThread {
                 androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
                 fun witnessed() = samples.any { !it.opening && it.progress in .01f.. .99f }
                 var pumped = 0
@@ -686,7 +687,19 @@ class SearchImeMotionTest {
                     pumped++
                 }
                 frames += pumped
-                witnessed() to !anchor.modalPresent
+                Triple(witnessed(), !anchor.modalPresent, legacyReturnPlacement)
+            }
+            // Keep the Compose clock paused until the native query finishes. Shell
+            // IPC and descriptor reads must run after the Main layout callback returns.
+            if (legacyPlacement != null && legacyNativeReturn == null) {
+                val started = SystemClock.uptimeMillis()
+                val dump = shell("dumpsys -t 2 window windows")
+                val ended = SystemClock.uptimeMillis()
+                legacyNativeReturn = LegacyNativeReturn(legacyPlacement.sample, legacyPlacement.requestedAt,
+                    legacyPlacement.placedAt, started, ended, legacyImeWindowVisible(dump), dump)
+                motionTimeline += "$ended legacyNativeReturn requested=${legacyPlacement.requestedAt} " +
+                    "placed=${legacyPlacement.placedAt} queryStarted=$started queryEnded=$ended " +
+                    "visible=${legacyNativeReturn?.nativeWindowVisible}"
             }
             turns++
             if (witnessed || retired) {
