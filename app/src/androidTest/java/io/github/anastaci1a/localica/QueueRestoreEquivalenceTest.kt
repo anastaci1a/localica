@@ -77,12 +77,23 @@ class QueueRestoreEquivalenceTest {
                 var library = QueueLibrary()
                 for (queue in saved) { val next = library.copy(queues = library.queues + queue, activeId = queue.id); database.queues().save(library, next); library = next }
             }
-            // Rows are inserted in ordinal order. Reverse two queues so row order opposes ordinal order, then halve
-            // ordinals so neighbours tie, including the pair that straddles the page boundary.
+            // Rows are inserted in ordinal order. Reverse two queues so row order opposes ordinal order, then pair
+            // ordinals as (1,2), (3,4), ... so the rows at positions 1999 and 2000 tie across the page boundary.
             database.openHelper.writableDatabase.apply {
                 execSQL("UPDATE queue_entries SET ordinal = 100000 - ordinal WHERE queueId IN (?, ?)", arrayOf(saved[1].id, saved[3].id))
-                execSQL("UPDATE queue_entries SET ordinal = ordinal / 2 WHERE queueId IN (?, ?)", arrayOf(saved[0].id, saved[1].id))
+                execSQL("UPDATE queue_entries SET ordinal = (ordinal + 1) / 2 WHERE queueId IN (?, ?)", arrayOf(saved[0].id, saved[1].id))
                 execSQL("UPDATE queue_entries SET ordinal = 7 WHERE queueId = ?", arrayOf(saved[2].id))
+            }
+            // The boundary pair of both paired queues: equal ordinals, different occurrences.
+            val boundary = saved.take(2).map { queue ->
+                database.openHelper.readableDatabase.query(
+                    "SELECT id, ordinal FROM queue_entries WHERE queueId = ? ORDER BY ordinal, rowid LIMIT 2 OFFSET ?", arrayOf<Any>(queue.id, page - 1)).use { rows ->
+                    List(2) { rows.moveToNext(); rows.getString(0) to rows.getInt(1) }
+                }
+            }
+            for (pair in boundary) {
+                assertEquals("the last row of the first page and the first of the next tie", pair[0].second, pair[1].second)
+                assertTrue("the tied rows are different occurrences", pair[0].first != pair[1].first)
             }
             val dao = database.queues()
             val expected = runBlocking { reference(dao.readQueues(), dao.readActive()) }
@@ -90,6 +101,10 @@ class QueueRestoreEquivalenceTest {
             assertEquals("fixture really ties and reverses", listOf(page * 2, page + 137, 41, page + 1), expected.queues.map { it.entries.size })
             assertTrue(expected.queues[3].entries.first().id == saved[3].entries.last().id)
             assertEquals(expected, restored)
+            for ((index, pair) in boundary.withIndex()) {
+                assertEquals("reference keeps row order for the tie across the page", pair.map { it.first }, expected.queues[index].entries.subList(page - 1, page + 1).map { it.id })
+                assertEquals("paged restore keeps it too", pair.map { it.first }, restored.queues[index].entries.subList(page - 1, page + 1).map { it.id })
+            }
             for ((old, new) in expected.queues.zip(restored.queues)) {
                 assertEquals(old.entries.map { it.id }, new.entries.map { it.id })
                 assertEquals(old.order, new.order)
