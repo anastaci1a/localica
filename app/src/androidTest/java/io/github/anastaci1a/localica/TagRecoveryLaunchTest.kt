@@ -49,11 +49,16 @@ private class PendingApplicationRecovery : TestRule {
         override fun evaluate() {
             val instrumentation = InstrumentationRegistry.getInstrumentation()
             val app = instrumentation.targetContext.applicationContext as LocalicaApplication
+            fun onMain(action: () -> Unit) {
+                var failure: Throwable? = null
+                instrumentation.runOnMainSync { try { action() } catch (error: Throwable) { failure = error } }
+                failure?.let { throw it }
+            }
             fun controllerField(name: String) = TagEditingController::class.java.getDeclaredField(name).apply { isAccessible = true }
             val initialized = controllerField("initialized")
             val scopeField = controllerField("scope")
             lateinit var previousController: TagEditingController
-            instrumentation.runOnMainSync { previousController = app.tagEditing }
+            onMain { previousController = app.tagEditing }
             runBlocking { withTimeout(15_000) { (initialized.get(previousController) as Deferred<*>).await() } }
             check(!previousController.state.value.busy && previousController.state.value.batchId == null &&
                 previousController.state.value.tracks.isEmpty() && !previousController.state.value.jobsVisible) {
@@ -78,12 +83,13 @@ private class PendingApplicationRecovery : TestRule {
             val previousWriter = writerField.get(app)
             val previousEditing = editingField.get(app)
             var fixtureController: TagEditingController? = null
+            var failure: Throwable? = null
             try {
                 // Keep the old writer untouched; the real application getters now initialize from our journal.
                 check(directory.isDirectory || directory.mkdirs()) { "Could not create fixture recovery directory" }
                 original.writeBytes(bytes)
                 journal.writeBytes(record)
-                instrumentation.runOnMainSync {
+                onMain {
                     writerField.set(app, lazy { RecoverableTagWriter(directory, AndroidEditableDocuments(app), app.nativeReaders) })
                     editingField.set(app, lazy { TagEditingController(app, app.library, app.queues, app.playlists, app.tagWriter) })
                     fixtureController = app.tagEditing
@@ -95,20 +101,36 @@ private class PendingApplicationRecovery : TestRule {
                 base.evaluate()
                 assertArrayEquals("The launch path retains the journal", record, journal.readBytes())
                 assertArrayEquals("The launch path retains original bytes", bytes, original.readBytes())
-            } finally {
-                val fixtureScope = fixtureController?.let { scopeField.get(it) as CoroutineScope }
-                instrumentation.runOnMainSync {
-                    fixtureScope?.cancel()
-                    editingField.set(app, previousEditing)
-                    writerField.set(app, previousWriter)
-                }
-                runBlocking { withTimeout(15_000) { fixtureScope?.coroutineContext?.get(Job)?.join() } }
-                // Remove only our own exact bytes; preserve any unexpected mutation for inspection.
-                if (journal.exists() && journal.readBytes().contentEquals(record)) journal.delete()
-                if (original.exists() && original.readBytes().contentEquals(bytes)) original.delete()
-                if (!directoryExisted && directory.listFiles()?.isEmpty() == true) directory.delete()
-                app.nativeReaders.publishRecovery(previousAdmission)
+            } catch (error: Throwable) { failure = error }
+            // The inner Activity rule has disposed before any application delegate is restored.
+            val cleanup = FixtureRestoration(failure)
+            var fixtureScope: CoroutineScope? = null
+            cleanup.attempt("cancel test controller") {
+                fixtureScope = fixtureController?.let { scopeField.get(it) as CoroutineScope }
+                onMain { fixtureScope?.cancel() }
             }
+            cleanup.attempt("restore application controller delegate") { onMain { editingField.set(app, previousEditing) } }
+            cleanup.attempt("restore application writer delegate") { onMain { writerField.set(app, previousWriter) } }
+            cleanup.attempt("join test controller") {
+                runBlocking { withTimeout(15_000) { fixtureScope?.coroutineContext?.get(Job)?.join() } }
+            }
+            cleanup.attempt("remove exact test journal") {
+                if (journal.exists()) {
+                    check(journal.readBytes().contentEquals(record)) { "Unexpected journal mutation; retained for inspection" }
+                    check(journal.delete()) { "Could not remove the test journal" }
+                }
+            }
+            cleanup.attempt("remove exact test original") {
+                if (original.exists()) {
+                    check(original.readBytes().contentEquals(bytes)) { "Unexpected original mutation; retained for inspection" }
+                    check(original.delete()) { "Could not remove the test original" }
+                }
+            }
+            cleanup.attempt("remove empty test directory") {
+                if (!directoryExisted && directory.listFiles()?.isEmpty() == true) check(directory.delete())
+            }
+            cleanup.attempt("restore exact native-reader admission") { app.nativeReaders.publishRecovery(previousAdmission) }
+            cleanup.finish()
         }
     }
 }
