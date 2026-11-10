@@ -38,7 +38,7 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     }
     fun show(visible: Boolean) { shown = visible; if (rectangle != null) expansion.target(visible) }
     fun hold() { holding = true; if (rectangle != null) expansion.hold() }
-    fun release() { holding = false; expansion.release() }
+    fun release() { holding = false }
     fun place(home: Rect, envelope: Rect, density: Float) {
         if (shown || openingEnvelope == null) openingEnvelope = envelope
         val basis = ExpansionBasis(home, requireNotNull(openingEnvelope), density)
