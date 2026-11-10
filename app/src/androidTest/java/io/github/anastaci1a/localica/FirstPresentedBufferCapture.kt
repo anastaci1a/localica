@@ -101,12 +101,15 @@ internal class FirstPresentedBufferCapture(private val automation: UiAutomation,
             return Capture(bitmap, first, checkNotNull(receipt.get()))
         } finally {
             release.countDown()
-            if (frozen.count == 0L) check(exited.await(1, TimeUnit.SECONDS)) { "Main barrier failed to release" }
-            if (armed) instrumentation.runOnMainSync {
-                if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnDrawListener(listener)
+            try {
+                if (frozen.count == 0L) check(exited.await(1, TimeUnit.SECONDS)) { "Main barrier failed to release" }
+                if (armed) instrumentation.runOnMainSync {
+                    if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnDrawListener(listener)
+                }
+            } finally {
+                pixelThread.quitSafely()
+                pixelThread.join(500)
             }
-            pixelThread.quitSafely()
-            pixelThread.join(500)
         }
     }
 }
