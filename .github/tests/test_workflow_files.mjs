@@ -15,11 +15,14 @@ const save = message => { git('add', '.'); git('commit', '-qm', message); return
 const check = (base, head, ok) => {
   const result = spawnSync(process.execPath, [script, '--range', base, head], {cwd: directory, env, encoding: 'utf8'});
   assert.equal(result.status, ok ? 0 : 1, result.stdout + result.stderr);
+  return result;
 };
 try {
   git('init', '-q');
   fs.mkdirSync(path.join(directory, '.github/workflows'), {recursive: true});
-  for (const name of ['android.yml', 'prototype.yml', 'documentation.yml', 'dependency-cache.yml', 'tooling-contracts.yml']) write(name);
+  for (const name of ['android.yml', 'prototype.yml', 'documentation.yml', 'tooling-contracts.yml']) write(name);
+  const staleBase = save('Legacy fixtures before cache workflow');
+  write('dependency-cache.yml');
   const base = save('Base fixtures');
   // Model accepted legacy history containing a transient workflow before the policy.
   write('legacy.yml');
@@ -34,11 +37,23 @@ try {
   const edit = save('Edit an approved workflow');
   check(base, edit, true);
   check('0'.repeat(40), edit, true);
+  // A stale branch receives an approved workflow already present in its other parent.
+  git('checkout', '-qb', 'stale', staleBase);
+  write('prototype.yml', 'name: stale branch edit\n');
+  save('Stale branch without the approved cache workflow');
+  git('merge', '--no-ff', '-qm', 'Bring approved workflows from the policy parent', policyBase);
+  check(base, git('rev-parse', 'HEAD'), true);
+  git('reset', '--hard', edit);
   write('one-off.yml');
   const addition = save('Add forbidden diagnostic');
-  check(base, addition, false);
+  assert.match(check(base, addition, false).stderr, /added or renamed workflow file: .github\/workflows\/one-off.yml/);
   fs.unlinkSync(path.join(directory, '.github/workflows/one-off.yml'));
-  check(base, save('Remove transient diagnostic'), false);
+  assert.match(check(base, save('Remove transient diagnostic'), false).stderr, /added or renamed workflow file: .github\/workflows\/one-off.yml/);
+  git('reset', '--hard', policyBase);
+  fs.unlinkSync(path.join(directory, '.github/workflows/android.yml'));
+  save('Remove approved workflow before reintroduction');
+  write('android.yml');
+  assert.match(check(base, save('Reintroduce approved workflow outside policy'), false).stderr, /added or renamed workflow file: .github\/workflows\/android.yml/);
   git('reset', '--hard', policyBase);
   git('mv', '.github/workflows/android.yml', '.github/workflows/renamed.yml');
   check(base, save('Rename workflow'), false);
@@ -62,7 +77,7 @@ try {
   assert.equal(spawnSync(process.execPath, [script], {cwd: directory, env: {...env, GITHUB_EVENT_PATH: event, GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: edit}}).status, 0);
   fs.writeFileSync(event, JSON.stringify({before: base, after: '0'.repeat(40)}));
   assert.equal(spawnSync(process.execPath, [script], {cwd: directory, env: {...env, GITHUB_EVENT_PATH: event, GITHUB_EVENT_NAME: 'push'}}).status, 0);
-  console.log('Workflow file policy: edits, new refs, additions, transient additions, renames, deletions, nested files, symlinks, push, PR, manual and deleted-ref events passed.');
+  console.log('Workflow file policy: edits, new refs, approved merges, additions, transient additions, approved reintroductions, renames, deletions, nested files, symlinks, push, PR, manual and deleted-ref events passed.');
 } finally {
   fs.rmSync(directory, {recursive: true, force: true});
 }

@@ -49,7 +49,12 @@ const commits = git('rev-list', head, `^${base}`, `^${policyBase}`).trim().split
 for (const sha of commits) {
   // Disabling rename detection treats every rename/copy destination as an addition.
   const added = git('diff-tree', '--root', '-r', '-m', '--no-commit-id', '--no-renames', '--diff-filter=A', '--name-only', '-z', sha, '--', '.github/workflows/').split('\0').filter(Boolean);
-  for (const name of new Set(added)) errors.push(`${sha}: added or renamed workflow file: ${name}`);
+  const parents = git('rev-list', '--parents', '-n', '1', sha).trim().split(' ').slice(1);
+  for (const name of new Set(added)) {
+    // A merge may bring an existing workflow from any parent.
+    if (parents.some(parent => git('ls-tree', '-z', parent, '--', name))) continue;
+    errors.push(`${sha}: added or renamed workflow file: ${name}`);
+  }
 }
 if (errors.length) {
   console.error(errors.join('\n'));
