@@ -37,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
-import io.github.anastaci1a.localica.ui.spec.EmptyInset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -125,13 +124,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val scrollFrameProbe = LocalBrowseScrollFrameProbe.current
     val screenWork = LocalBrowseCellWorkObserver.current
     if (screenWork != null) SideEffect { screenWork("screen", route.key) }
-    val session = LocalSessionSelection.current ?: remember { SessionSelection() }
-    // Separate windows own their visible pill; sharing membership must not share hidden chrome.
-    val ownSelectionPanel = if (LocalSessionSelection.current == null || popupDismiss != null)
-        rememberFloatingSelectionPanel(session.panelVisible, reducedMotion) else null
-    val selectionPanel = ownSelectionPanel ?: LocalBrowseSelectionPanel.current
-    val obscuredInset = LocalBrowseObscuredInset.current + (ownSelectionPanel?.clearance ?: EmptyInset)
-    val selectionBaseInset = obscuredInset - (selectionPanel?.clearance ?: EmptyInset)
+    val obscuredInset = LocalBrowseObscuredInset.current
     var returnControlHeight by remember { mutableIntStateOf(0) }
     var actionControlHeight by remember { mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -651,11 +644,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             if (scrolling && followingOrder == null) orderScroll.cancel()
         }
     }
-    val selectionInsetScroll = SelectionInsetScroll(gridState, selectionPanel, scrollOwnership,
-        baseInset = { with(density) { selectionBaseInset.toPx() } },
-        enabled = { selectionVisible && !playerOpen && !localSearchOpen },
-        selected = { key -> result.items.firstOrNull { it.key == key }?.let { session.selectedCount(it, route.collection) > 0 } == true })
-    OnModalGestureCancellation { playbackFollow.interrupt(); selectionInsetScroll.interrupt() }
+    val session = LocalSessionSelection.current ?: remember { SessionSelection() }
+    OnModalGestureCancellation { playbackFollow.interrupt() }
     val readyToScroll by rememberUpdatedState(!queryPending && loadedResult != null)
     // Cursor checkpoints replace queue snapshots without changing this list. A return
     // owns its query/occurrence structure, not unrelated live playback bookkeeping.
@@ -820,7 +810,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             automatic = !route.search, openingRequest = queueOpeningRequest, initialEligible = initialEligible)
     }
     fun userScroll() {
-        selectionInsetScroll.interrupt()
         manualQueueReturn = route.collection?.kind == MediaKind.Queue
         artistFilterRange.interrupt()
         orderScroll.cancel()
@@ -980,7 +969,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 // Retire automatic range motion before LazyGrid can acquire this
                 // contact as a stop-fling drag and swallow an album-chip click.
                 artistFilterRange.interrupt()
-                selectionInsetScroll.interrupt()
                 listContact = true
                 orderScroll.cancel()
                 returnToList.cancel()
@@ -1393,10 +1381,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
         }
-    }
-    if (ownSelectionPanel != null) CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
-        FloatingSelectionPanel(ownSelectionPanel, Modifier.align(Alignment.BottomCenter)) {
-            SessionSelectionPanel(session, queues, playlistController, playlists, dragging = reorder.drag != null)
+        if (LocalSessionSelection.current == null) CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
+            SelectionPanelVisibility(session.panelVisible, reducedMotion = reducedMotion) {
+                SessionSelectionPanel(session, queues, playlistController, playlists, dragging = reorder.drag != null)
+            }
         }
     }
 
@@ -1422,7 +1410,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
         ListSearchWindow(localSearchOpen && !playerOpen, searchAnchor, localSearch.route.text.isNotBlank(), ::closeSearch, onBack = ::backSearch) {
-            CompositionLocalProvider(LocalBrowseObscuredInset provides EmptyInset, LocalBrowseSelectionPanel provides null) {
+            CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) {
                 val searchRoute = localSearch.route
                 key(searchRoute.key) { searchHolder.SaveableStateProvider(searchRoute.key) {
                     BrowserScreen(library, playlists, searchRoute, { localSearch = localSearch.update(it) }, onOpen, onSettings,

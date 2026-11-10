@@ -2,8 +2,7 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -34,7 +33,7 @@ class SelectionPanelClearanceTest {
             panel = rememberFloatingSelectionPanel(visible, reducedMotion)
             // Independent clock oracle: unlike the panel this has no measurement/occupancy state.
             referenceProgress = animateFloatAsState(if (visible) 1f else 0f,
-                if (reducedMotion) snap() else tween((220f / motionSpeed).roundToInt().coerceAtLeast(1), easing = FastOutSlowInEasing), label = "Reference panel motion")
+                if (reducedMotion) snap() else spring(1f, 90f * motionSpeed * motionSpeed, visibilityThreshold = .0001f), label = "Reference panel motion")
             CompositionLocalProvider(LocalBrowseObscuredInset provides (chrome.dp + panel.clearance)) {
                 Box(Modifier.size(320.dp, 480.dp).background(Color.White).testTag("viewport")) {
                     if (inline) Column(Modifier.fillMaxSize()) {
@@ -64,7 +63,7 @@ class SelectionPanelClearanceTest {
         var progress = 0f
         compose.runOnIdle {
             progress = panel.progress
-            assertEquals("Panel follows the independent quick scroll curve at this clock phase",
+            assertEquals("Panel follows the independent glass spring at this clock phase",
                 referenceProgress.value, progress, .0001f)
         }
         val contentPixels = (96f * density).roundToInt()

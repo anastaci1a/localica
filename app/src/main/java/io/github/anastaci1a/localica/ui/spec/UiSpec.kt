@@ -9,9 +9,6 @@ import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import java.util.Collections
 import kotlin.math.*
 
-/** Neutral extent for an absent inset; independent of configurable spacing. */
-val EmptyInset: Dp = Dp.Hairline
-
 enum class Space { Hairline, Tight, Compact, Base, Comfortable, Section, Panel }
 enum class Radius { Artwork, Card, Menu, LargeArtwork, Panel, Pill }
 enum class ControlSize { NavigationPill, Compact, MiniArtwork, CollapsedQueue, DragBubble, PreferenceRow, PreferenceCompact, SettingsIcon }

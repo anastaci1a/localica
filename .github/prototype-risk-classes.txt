@@ -463,5 +463,3 @@ io.github.anastaci1a.localica.QueueLibraryHeapTest
 io.github.anastaci1a.localica.QueueRestoreEquivalenceTest
 # Mounted collection-header density regression (#600).
 io.github.anastaci1a.localica.CollectionHeaderDensityContractTest
-io.github.anastaci1a.localica.SelectionInsetScrollTest
-io.github.anastaci1a.localica.SelectionInsetContextsTest
