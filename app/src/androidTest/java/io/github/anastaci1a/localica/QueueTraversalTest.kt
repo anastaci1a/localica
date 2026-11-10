@@ -116,6 +116,33 @@ class QueueTraversalTest {
             currentEntryId = ids[10], journey = journey))
     }
 
+    @Test fun shuffledBehindProjectionSurvivesClosingRoomWithoutReimportingLegacyMetadata() {
+        val name = "queue-behind-${java.util.UUID.randomUUID()}.db"
+        var room = Room.databaseBuilder(context, QueueDatabase::class.java, name).build()
+        try {
+            val queue = queue(300, 170, JourneyModes(loop = true))
+            val ids = queue.entries.map { it.id }
+            val journey = queue.journey!!.reconcile(ids, queue.currentEntryId,
+                JourneyModes(shuffle = true, loop = true), kotlin.random.Random(43))
+            val saved = queue.copy(journey = journey, shuffle = true)
+            runBlocking {
+                room.queues().save(QueueLibrary(), QueueLibrary(listOf(saved), saved.id))
+                val first = QueueWindowStore(room).restore(QueueSettings()).active!!.playbackWindow!!
+                assertEquals(journey.window(), first.visits)
+                room.openHelper.writableDatabase.execSQL("DELETE FROM queue_cycle_members WHERE queueId = ? AND cycle = ?",
+                    arrayOf(queue.id, QueueJourney.BEHIND_START))
+                room.close()
+                room = Room.databaseBuilder(context, QueueDatabase::class.java, name).build()
+                val restored = QueueWindowStore(room).restore(QueueSettings()).active!!.playbackWindow!!
+                assertEquals(first, restored)
+                assertEquals(journey.previous, restored.previous)
+            }
+        } finally {
+            room.close()
+            context.deleteDatabase(name)
+        }
+    }
+
     @Test fun missingLegacyJourneyInitializesExactShuffleOrderWithBoundedProjection() {
         for (size in listOf(1, 13, 211)) for (loop in listOf(false, true)) for (reshuffle in listOf(false, true)) {
             val modes = JourneyModes(shuffle = true, loop = loop, reshuffle = reshuffle)
