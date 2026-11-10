@@ -48,7 +48,7 @@ enum class MenuRowSize { Link, Control }
 
 /** Draws the surface of a glass row or card; the slot supplies the corner so the binder holds no size. */
 @Composable fun MenuSurfaceSlot(surface: @Composable (corner: Dp, content: @Composable () -> Unit) -> Unit, content: @Composable () -> Unit) {
-    surface(LocalMenuEnvironment.current.metrics.dp(MenuSize.RowCorner), content)
+    Box(Modifier.menuPart(MenuPart.Surface)) { surface(LocalMenuEnvironment.current.metrics.dp(MenuSize.RowCorner), content) }
 }
 
 /** The shared leading slot: an icon, a marker dot or empty, always the same box and the same gap to the text. */
