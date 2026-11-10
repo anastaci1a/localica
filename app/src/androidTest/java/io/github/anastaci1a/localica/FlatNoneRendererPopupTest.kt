@@ -29,7 +29,21 @@ class FlatNoneRendererPopupTest {
         val device = UiDevice.getInstance(instrumentation)
         val preferences = InterfacePreferences(context)
         val original = preferences.read()
-        fun visible(selector: BySelector) = requireNotNull(device.findFresh(selector, 15_000)) { "Missing $selector" }
+        var step = "settings-ingress"
+        fun visible(selector: BySelector): androidx.test.uiautomator.UiObject2 {
+            val found = device.findFresh(selector, 15_000)
+            if (found != null) return found
+            val failure = IllegalArgumentException("Missing $selector")
+            runCatching {
+                val output = java.io.File(context.getExternalFilesDir(null), "renderer-popup-775").apply { mkdirs() }
+                device.dumpWindowHierarchy(java.io.File(output, "$step.xml"))
+                device.takeScreenshot(java.io.File(output, "$step.png"))
+                java.io.File(output, "$step.json").writeText(org.json.JSONObject()
+                    .put("missingSelector", selector.toString()).put("step", step)
+                    .put("persistedRenderer", preferences.read().glass.renderer.name).toString(2))
+            }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
         try {
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs, MainTab.Albums),
                 reducedMotion = true, glass = GlassAppearance(renderer = GlassRendererMode.FlatNone)))
@@ -41,13 +55,18 @@ class FlatNoneRendererPopupTest {
                 visible(By.text("Settings")).click()
                 visible(By.text("Interface")).click()
                 visible(By.text("Glass")).click()
-                for (target in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.FlatNone,
-                    GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.SingleToneBlur)) {
+                for ((index, target) in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.FlatNone,
+                    GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.SingleToneBlur).withIndex()) {
+                    step = "$index-${target.name}"
                     visible(By.text("Glass renderer")).click()
                     visible(By.text(target.label)).click()
                     visible(By.text("Select")).click()
-                    visible(By.text("Glass renderer"))
                     await(15_000) { preferences.read().glass.renderer == target }
+                    // The departing dialog has the same title as its underlying
+                    // settings row. Require its actual dismissal before the next
+                    // iteration can use that row to open a new renderer popup.
+                    await(15_000) { device.findFresh(By.text("Select"), 0) == null }
+                    visible(By.text("Glass renderer"))
                     scenario.onActivity { assertSame("Switching retains the Activity and settings page", originalActivity, it) }
                     assertNull(device.findObject(By.textContains("keeps stopping")))
                 }
