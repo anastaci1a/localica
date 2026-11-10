@@ -207,8 +207,10 @@ class PlayerPresentationSliceEqualityTest {
                     val lyric = geometry.getValue("empty-lyrics").singleOrNull()
                     record.put("handleContrast", handle?.let { handleContrast(image, capture, it) } ?: false)
                         .put("handleDifference", difference(image, backing, capture, handle))
+                        .put("handleBackingRingDifference", ringDifference(image, backing, capture, handle))
                         .put("actionPaint", painted(image, capture, action, true)).put("actionDifference", difference(image, backing, capture, action))
                         .put("lyricsPaint", painted(image, capture, lyric, false)).put("lyricsDifference", difference(image, backing, capture, lyric))
+                        .put("lyricsBackingRingDifference", if (selected) ringDifference(image, backing, capture, lyric) else 0)
                 }
                 val after = snapshot(visual)
                 record.put("after", snapshotJson(after))
@@ -244,11 +246,14 @@ class PlayerPresentationSliceEqualityTest {
                     assertTrue(before.roleSourceMatches); assertTrue(before.actualDescriptorMatches); assertEquals(1, before.roleCount)
                     assertTrue(record.getJSONObject("oracle").getBoolean("descriptorMatches"))
                     assertEquals("The restored original is unchanged", 0, difference(image, requireNotNull(restored), capture, capture))
+                    assertEquals("The restored original state is unchanged", snapshotJson(before).toString(), snapshotJson(after).toString())
+                    assertEquals("The original and oracle have the same measured handle backing coordinates", 0, record.getInt("handleBackingRingDifference"))
                     assertTrue("$policy paints its handle", record.getBoolean("handleContrast") && record.getInt("handleDifference") > 0)
                     compose.onNodeWithTag("player-handle", true).assertIsDisplayed()
                     if (selected) {
                         assertEquals(1f, requireNotNull(before.ink).lyricsProgress, 0f)
                         assertEquals(0f, playerLyricsMotion(1f, requireNotNull(before.ink).lyricsProgress).artworkAlpha, 0f)
+                        assertEquals("The original and oracle have the same measured lyrics backing coordinates", 0, record.getInt("lyricsBackingRingDifference"))
                         assertTrue("$policy paints its lyrics icon", record.getInt("lyricsPaint") > 0 && record.getInt("lyricsDifference") > 0)
                         compose.onNodeWithTag("empty-lyrics", true).assertIsDisplayed()
                     } else {
@@ -319,6 +324,16 @@ class PlayerPresentationSliceEqualityTest {
         val y = (bounds.center.y - capture.top).roundToInt().coerceIn(0, image.height - 1)
         val below = (bounds.bottom - capture.top + 3f).roundToInt().coerceIn(0, image.height - 1)
         return pixels[x, y] != pixels[x, below]
+    }
+    private fun ringDifference(image: ImageBitmap, backing: ImageBitmap, capture: Rect, bounds: Rect?): Int {
+        if (image.width != backing.width || image.height != backing.height) return -1
+        val r = region(image, capture, bounds) ?: return -1
+        if (r[0] < 2 || r[1] < 2 || r[2] + 2 > image.width || r[3] + 2 > image.height) return -1
+        val a = image.toPixelMap(); val b = backing.toPixelMap(); var count = 0
+        for (y in r[1] - 2 until r[3] + 2) for (x in r[0] - 2 until r[2] + 2) {
+            if ((x < r[0] || x >= r[2] || y < r[1] || y >= r[3]) && a[x, y] != b[x, y]) count++
+        }
+        return count
     }
     private fun painted(image: ImageBitmap, capture: Rect, target: Rect?, action: Boolean): Int {
         val area = region(image, capture, target) ?: return 0
