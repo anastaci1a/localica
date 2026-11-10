@@ -21,8 +21,9 @@ import java.nio.ByteOrder
 
 /**
  * #828: a headset or Bluetooth play key (Samsung Sound Assistant's "Favourite media app") reaches the manifest's MEDIA_BUTTON
- * receiver while no PlaybackService exists, and playback of the persisted queue starts with no Activity. Instrumentation shares
- * the app process, so this proves a cold SERVICE; the host adb receipts cover the resolved receiver.
+ * receiver while no PlaybackService exists, and playback starts with no Activity. Instrumentation shares the app process and
+ * LocalicaApplication.queues is already in memory, so this proves a warm-process SERVICE cold start, NOT a disk restore. The
+ * cold-process proof (force-stop, input keyevent, restore from queues.db) is MediaButtonColdProcessFixture driven by adb (#828).
  */
 @RunWith(AndroidJUnit4::class)
 class MediaButtonResumptionTest {
@@ -43,7 +44,7 @@ class MediaButtonResumptionTest {
         context.stopService(Intent(context, PlaybackService::class.java))
         withContext(Dispatchers.Main) { app.queues.tap(listOf(track), 0) }
         withTimeout(10_000) { while (app.queues.state.value.library.active == null) delay(20) }
-        delay(1_500) // The checkpoint persists asynchronously; the service restores from disk, not from this memory.
+        delay(1_500) // Let the checkpoint settle; the service here still re-attaches the in-memory queue.
         withContext(Dispatchers.Main) { app.queues.playbackRequested(false) }
         context.stopService(Intent(context, PlaybackService::class.java))
         withTimeout(10_000) { while (sample(app) != null) delay(20) }
