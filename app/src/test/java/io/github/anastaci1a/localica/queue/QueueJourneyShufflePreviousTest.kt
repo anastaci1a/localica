@@ -211,7 +211,7 @@ class QueueJourneyShufflePreviousTest {
             val window = at.window()
             assertTrue("cursor $cursor window ${window.size}", window.size <= 129)
             assertTrue("The current visit stays in its window", window.any { it.token == at.current!!.token })
-            val behind = window.first().token != at.history.first().token
+            val behind = at.history.none { it.token == window.first().token }
             assertEquals("The behind visit is present exactly while the window reaches the oldest visit", cursor <= 64, behind)
             if (cursor == 0) assertEquals(at.previous, window.first())
             if (behind) assertEquals(at.history.first().token, window[1].token)
