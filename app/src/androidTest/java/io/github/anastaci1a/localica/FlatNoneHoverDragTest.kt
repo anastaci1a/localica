@@ -54,7 +54,7 @@ class FlatNoneHoverDragTest {
             val prepared = (raster.get(owner) as State<*>).value
             val key = prepared?.javaClass?.getDeclaredField("key")?.apply { isAccessible = true }?.get(prepared)
             return org.json.JSONObject().put("owner", System.identityHashCode(owner)).put("rasterizations", owner.rasterizations)
-                .put("requestedKey", requested.get(owner).toString()).put("preparedKeyMatches", key != null && key == requested.get(owner))
+                .put("requestedKey", (requested.get(owner)?.toString() ?: "null")).put("preparedKeyMatches", key != null && key == requested.get(owner))
         }
         fun state() = compose.runOnIdle { shadowState().put("geometryReadCount", drawObservations.length()) }
         fun assertFreshDraw(priorCount: Int, request: Int, clockMs: Long) {
