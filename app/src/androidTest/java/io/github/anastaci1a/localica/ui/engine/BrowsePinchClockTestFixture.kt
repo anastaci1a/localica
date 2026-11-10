@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -16,6 +17,6 @@ internal fun CoroutineScope.bindPinchClock(owner: BrowsePinchProgressOwner): Job
             onFrame(it)
         }
     }, base::now, {})
-    owner.bind(clock)
+    owner.bind(clock, Dispatchers.Unconfined)
     return launch(start = CoroutineStart.UNDISPATCHED) { clock.run() }
 }

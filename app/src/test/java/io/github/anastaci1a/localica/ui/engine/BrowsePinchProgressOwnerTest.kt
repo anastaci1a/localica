@@ -40,7 +40,7 @@ class BrowsePinchProgressOwnerTest {
             override suspend fun awaitFrame() = frames.receive()
             override suspend fun <R> awaitFrame(onFrame: (Long) -> R): R = onFrame(frames.receive())
         }, { Long.MIN_VALUE / 4 }, {})
-        val owner = BrowsePinchProgressOwner().also { it.bind(clock) }
+        val owner = BrowsePinchProgressOwner().also { it.bind(clock, Dispatchers.Unconfined) }
         init { scope.launch(start = CoroutineStart.UNDISPATCHED) { clock.run() } }
         fun send(nanos: Long) { check(frames.trySend(nanos).isSuccess) }
         override fun close() { scope.cancel(); frames.close() }
