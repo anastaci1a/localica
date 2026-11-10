@@ -41,8 +41,23 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
                         (SELECT v.token FROM queue_visits v WHERE v.queueId = m.queueId AND v.cycle = m.cycle
                             AND v.entryId = m.entryId AND v.ordinal >= ? ORDER BY v.ordinal LIMIT 1)
                     FROM queue_cycle_members m JOIN queue_sequence_entries e ON e.id = m.entryId AND e.queueId = m.queueId
-                    WHERE m.queueId = ?
-                """.trimIndent(), arrayOf(old.cycle, old.cursor, old.historySize, queueId))
+                    WHERE m.queueId = ? AND m.cycle != ?
+                """.trimIndent(), arrayOf(old.cycle, old.cursor, old.historySize, queueId, QueueJourney.BEHIND_START))
+                // This reserved plan contains [neighbor id, queue index], not two occurrence IDs.
+                val behind = db.query("SELECT entryId,ordinal FROM queue_cycle_members WHERE queueId = ? AND cycle = ? ORDER BY ordinal",
+                    arrayOf(queueId, QueueJourney.BEHIND_START)).use { rows ->
+                    var id: String? = null
+                    var position: Int? = null
+                    while (rows.moveToNext()) when (rows.getInt(1)) {
+                        0 -> id = rows.getString(0)
+                        1 -> position = rows.getString(0).toIntOrNull()
+                    }
+                    id?.let { it to position }
+                }
+                if (behind != null && sequence.position(queueId, behind.first) != null) {
+                    db.execSQL("INSERT INTO queue_sequence_behind (queueId,entryId,queuePosition) VALUES (?,?,?)",
+                        arrayOf(queueId, behind.first, behind.second))
+                }
             }
         }
         val selected = currentEntryId?.takeIf { sequence.position(queueId, it) != null }
@@ -168,14 +183,29 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
 
     private fun shuffledWindow(state: State, selected: QueueVisit): QueuePlaybackWindow {
         val start = (state.cursor - QueuePlaybackWindow.Radius).coerceAtLeast(0)
+        val behind = if (start != 0) null else db.query("""
+            SELECT b.entryId,h.cycle,h.token FROM queue_sequence_behind b
+            JOIN queue_sequence_history h ON h.queueId = b.queueId AND h.position = 0
+            WHERE b.queueId = ?
+        """.trimIndent(), arrayOf(state.queueId)).use { rows ->
+            if (!rows.moveToFirst()) null else {
+                val id = rows.getString(0)
+                val oldest = rows.getString(2)
+                QueueVisit(id, rows.getLong(1), UUID.nameUUIDFromBytes(
+                    "behind:${oldest.length}:$oldest:$id".toByteArray(Charsets.UTF_8)).toString())
+            }
+        }
+        val end = (state.cursor.toLong() + QueuePlaybackWindow.Radius + 1).let {
+            if (behind == null) it else it.coerceAtMost(QueuePlaybackWindow.MaximumVisits.toLong() - 1)
+        }
         val history = db.query("""
             SELECT entryId,cycle,token FROM queue_sequence_history
-            WHERE queueId = ? AND position >= ? AND position <= ? ORDER BY position
-        """.trimIndent(), arrayOf(state.queueId, start, state.cursor.toLong() + QueuePlaybackWindow.Radius)).use { rows ->
+            WHERE queueId = ? AND position >= ? AND position < ? ORDER BY position
+        """.trimIndent(), arrayOf(state.queueId, start, end)).use { rows ->
             buildList { while (rows.moveToNext()) add(QueueVisit(rows.getString(0), rows.getLong(1), rows.getString(2))) }
         }
         val visits = history.toMutableList()
-        val desired = state.cursor - start + QueuePlaybackWindow.Radius + 1
+        val desired = (end - start).toInt()
         val lastCycle = if (!state.modes.loop) state.cycle else minOf(Long.MAX_VALUE - 2, state.cycle) + 2
         for (cycle in state.cycle..lastCycle) {
             if (visits.size >= desired) break
@@ -190,6 +220,7 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
                 }
             }
         }
+        if (behind != null) visits.add(0, behind)
         val positions = visits.map { it.entryId }.distinct().associateWith {
             requireNotNull(sequence.position(state.queueId, it))
         }
@@ -246,6 +277,11 @@ internal class QueueTraversal(private val sequence: QueueSequence) {
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_queue_sequence_history_position ON queue_sequence_history(queueId,position)")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_sequence_history_entry ON queue_sequence_history(queueId,entryId,cycle,position)")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_sequence_history_entryId ON queue_sequence_history(entryId)")
+            db.execSQL("""CREATE TABLE IF NOT EXISTS queue_sequence_behind (
+                queueId TEXT NOT NULL PRIMARY KEY, entryId TEXT NOT NULL, queuePosition INTEGER,
+                FOREIGN KEY(queueId) REFERENCES queue_sequence_traversal(queueId) ON DELETE CASCADE,
+                FOREIGN KEY(entryId) REFERENCES queue_sequence_entries(id) ON DELETE CASCADE)""")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_sequence_behind_entryId ON queue_sequence_behind(entryId)")
             db.execSQL("""CREATE TABLE IF NOT EXISTS queue_sequence_plan (
                 queueId TEXT NOT NULL, cycle INTEGER NOT NULL, position INTEGER NOT NULL,
                 entryId TEXT NOT NULL, visited INTEGER NOT NULL, scheduled INTEGER NOT NULL, token TEXT,

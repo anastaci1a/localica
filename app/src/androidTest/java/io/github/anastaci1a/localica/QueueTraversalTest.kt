@@ -41,6 +41,20 @@ class QueueTraversalTest {
                 assertTrue(window.visits.size <= QueuePlaybackWindow.MaximumVisits)
                 assertEquals(window.visits.map { it.entryId }.toSet(), sequence.entries(queue.id, window.positions.keys).map { it.id }.toSet())
                 assertEquals(window, traversal.window(queue.id))
+                assertEquals(window, traversal.restore(queue.id, queue.currentEntryId, queue.journey!!.modes))
+                db.query("SELECT COUNT(*) FROM queue_sequence_plan WHERE queueId = ? AND cycle = ?",
+                    arrayOf(queue.id, QueueJourney.BEHIND_START)).use {
+                    assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+                }
+                val behind = queue.journey!!.plans[QueueJourney.BEHIND_START].orEmpty()
+                db.query("SELECT entryId,queuePosition FROM queue_sequence_behind WHERE queueId = ?",
+                    arrayOf(queue.id)).use {
+                    assertEquals(behind.isNotEmpty(), it.moveToFirst())
+                    if (behind.isNotEmpty()) {
+                        assertEquals(behind[0], it.getString(0))
+                        assertEquals(behind.getOrNull(1)?.toIntOrNull(), if (it.isNull(1)) null else it.getInt(1))
+                    }
+                }
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }
         } finally { room.close() }
@@ -68,6 +82,38 @@ class QueueTraversalTest {
         val added = inserted.entries.filter { it.id !in ids }.map { it.id }
         val scheduled = journey.playNext(added, inserted.entries.map { it.id })
         compare(inserted.copy(journey = scheduled))
+    }
+
+    @Test fun shuffledBehindNeighborMatchesTheExactLegacyWindowAtEveryBoundary() {
+        for (loop in listOf(false, true)) for (current in listOf(0, 170)) {
+            val queue = queue(300, current, JourneyModes(loop = loop))
+            val ids = queue.entries.map { it.id }
+            val modes = JourneyModes(shuffle = true, loop = loop)
+            var journey = queue.journey!!.reconcile(ids, queue.currentEntryId, modes, kotlin.random.Random(43))
+            for (cursor in 0..100) {
+                if (cursor in setOf(0, 1, 63, 64, 65, 66, 100)) {
+                    compare(queue.copy(currentEntryId = journey.current!!.entryId, journey = journey))
+                }
+                journey = journey.arrive(journey.next!!.token, ids)
+            }
+        }
+    }
+
+    @Test fun shuffledBehindIndexNeverBecomesAnOccurrenceEvenWhenAnIdIsNumeric() {
+        val entries = List(20) { QueueEntry(id = it.toString(), track = Track("song:$it", "Song $it",
+            fileName = "song.mp3", relativePath = "song.mp3")) }
+        // Use nonnumeric IDs for the anchor and neighbor, leaving "9" as a real but unrelated occurrence.
+        val numbered = entries.mapIndexed { index, entry -> when (index) {
+            0 -> entry.copy(id = "9")
+            9, 10 -> entry.copy(id = "entry:$index")
+            else -> entry
+        } }
+        val ids = numbered.map { it.id }
+        val modes = JourneyModes(shuffle = true)
+        val journey = QueueJourney.start(ids, ids[10], JourneyModes())
+            .reconcile(ids, ids[10], modes, kotlin.random.Random(43))
+        compare(ListeningQueue(id = "numeric", name = "Numeric IDs", entries = numbered,
+            currentEntryId = ids[10], journey = journey))
     }
 
     @Test fun missingLegacyJourneyInitializesExactShuffleOrderWithBoundedProjection() {
