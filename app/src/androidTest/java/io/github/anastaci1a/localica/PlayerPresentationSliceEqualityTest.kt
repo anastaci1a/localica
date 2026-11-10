@@ -94,8 +94,8 @@ class PlayerPresentationSliceEqualityTest {
     private fun exercise(policy: String, reduced: Boolean, faster: Boolean) {
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         val navy = Color(0xFF152238)
-        val artwork = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF152238.toInt()) }
-        val visual = PlayerVisual(artwork.asImageBitmap(), PlayerPalette(navy, navy, navy))
+        val artwork = Bitmap.createBitmap(32, 8, Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF152238.toInt()) }
+        val visual = PlayerVisual(artwork.asImageBitmap(), PlayerPalette(navy, navy, navy, aspect = 4f))
         val sourceHash = bitmapHash(artwork)
         val grainHash = bitmapHash(playerGrain)
         compose.setContent { LocalicaTheme {
@@ -178,6 +178,7 @@ class PlayerPresentationSliceEqualityTest {
                     .put("api", Build.VERSION.SDK_INT).put("policy", policy).put("requestedPhaseBits", requested.toRawBits())
                     .put("capture", rect(capture)).put("before", snapshotJson(before)).put("afterOriginal", snapshotJson(afterOriginal))
                     .put("sourceBitmapSha256", sourceHash).put("grainBitmapSha256", grainHash)
+                    .put("sourceBitmapSize", JSONArray(listOf(32, 8))).put("artworkAspect", 4f)
                     .put("displaySize", JSONArray(listOf(display.width, display.height)))
                     .put("geometry", JSONObject().apply { geometry.forEach { (tag, boxes) -> put(tag, JSONArray(boxes.map(::rect))) } })
                 File(output, "$name.json").writeText(record.toString(2))
@@ -316,7 +317,7 @@ class PlayerPresentationSliceEqualityTest {
         .put("roleCount", value.roleCount).put("roleSourceMatches", value.roleSourceMatches).put("actualDescriptorMatches", value.actualDescriptorMatches)
     private fun rect(value: Rect) = JSONArray(listOf(value.left, value.top, value.right, value.bottom))
     private fun retainedGeometry(value: PlayerBackgroundGeometry): JSONObject {
-        val scale = value.contentScale.computeScaleFactor(Size(32f, 32f), value.cover.size)
+        val scale = value.contentScale.computeScaleFactor(Size(32f, 8f), value.cover.size)
         return JSONObject().put("size", JSONArray(listOf(value.size.width, value.size.height))).put("cover", rect(value.cover))
             .put("washCover", rect(value.washCover)).put("footprints", JSONArray(value.footprints.map(::rect)))
             .put("fields", JSONArray(listOf(value.fullArtBlend, value.softness, value.edgeSoftness, value.edgeBand,
