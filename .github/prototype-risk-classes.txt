@@ -470,3 +470,6 @@ io.github.anastaci1a.localica.MainThreadPolicyInstallationTest
 io.github.anastaci1a.localica.PreparedPreferencesTest
 io.github.anastaci1a.localica.PreparedLyricsSelectionTest
 io.github.anastaci1a.localica.PreparedColdEntryTest
+
+io.github.anastaci1a.localica.QueueSequenceTest
+io.github.anastaci1a.localica.QueueTraversalTest
