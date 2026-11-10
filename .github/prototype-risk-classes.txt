@@ -433,7 +433,6 @@ io.github.anastaci1a.localica.LyricsLineAnchorTest
 io.github.anastaci1a.localica.PlayerLyricsMountTest
 io.github.anastaci1a.localica.NoneControlPolicyTest
 io.github.anastaci1a.localica.NoneRequestedPolicyTest
-io.github.anastaci1a.localica.NoneReductionWitnessTest
 io.github.anastaci1a.localica.NestedGlassRegistrationTest
 io.github.anastaci1a.localica.SublistLoadingPlaceholderCaptureTest
 io.github.anastaci1a.localica.LoadingSweepContrastTest
@@ -465,3 +464,6 @@ io.github.anastaci1a.localica.QueueRestoreEquivalenceTest
 io.github.anastaci1a.localica.CollectionHeaderDensityContractTest
 io.github.anastaci1a.localica.SelectionInsetScrollTest
 io.github.anastaci1a.localica.SelectionInsetContextsTest
+io.github.anastaci1a.localica.MainThreadGuardTest
+io.github.anastaci1a.localica.MainThreadGuardSeedTest
+io.github.anastaci1a.localica.MainThreadPolicyInstallationTest

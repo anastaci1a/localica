@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica
 
 import android.content.Intent
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import kotlinx.coroutines.test.StandardTestDispatcher
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
@@ -14,7 +13,7 @@ import org.junit.Test
 /** Real notification intents enter the same settings popup on cold and warm launches. */
 @OptIn(ExperimentalTestApi::class)
 class OnlineFeaturesNavigationTest {
-    @get:Rule val compose = createEmptyComposeRule(effectContext = StandardTestDispatcher())
+    @get:Rule val compose = localicaEmptyComposeRule(effectContext = StandardTestDispatcher())
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun intent(open: Boolean) = Intent(context, MainActivity::class.java)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)

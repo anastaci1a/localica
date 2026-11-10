@@ -17,15 +17,21 @@ import io.github.anastaci1a.localica.library.RoomLibraryStore
 import io.github.anastaci1a.localica.library.TreeScanner
 
 class LocalicaApplication : Application() {
+    // Context directory getters stat/create directories on every call. Constructor injection
+    // needs only these exact credential-protected paths; workers own directory creation.
+    private val privateFilesPath get() = java.io.File(applicationInfo.dataDir, "files")
+    private val privateCachePath get() = java.io.File(applicationInfo.dataDir, "cache")
     private companion object {
         val STARTUP_PREFERENCES = listOf("interface", "queue-settings", "scanner", "scan-progress", "browse-style",
             "library-query", "library-filters", "pins", "player-actions", "tag-jobs", "cover-images", "listening-identity")
     }
     override fun onCreate() {
+        if (BuildConfig.DEBUG) io.github.anastaci1a.localica.threading.MainThreadPolicy.install()
         super.onCreate()
         io.github.anastaci1a.localica.diagnostics.Diagnostics.mirrorToLogcat =
             applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
         val startup = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        startup.launch { getFilesDir(); getCacheDir() }
         startup.launch {
             // The first read of a preferences file blocks its caller until the XML is loaded. Load the
             // files read while the first frames are built (activity, queue, scanner and browse state)
@@ -43,7 +49,7 @@ class LocalicaApplication : Application() {
             // The registry starts fail-closed before any service can create/open a source.
             // The writer publishes a useful Unknown state if inspection fails.
             runCatching { tagWriter.initialize() }
-            runCatching { io.github.anastaci1a.localica.library.TagViewFiles.sweep(java.io.File(cacheDir, "tag-views")) }
+            runCatching { io.github.anastaci1a.localica.library.TagViewFiles.sweep(java.io.File(privateCachePath, "tag-views")) }
                 .onFailure { android.util.Log.w("TagViewFiles", "Could not sweep leftover metadata mirrors", it) }
         }
     }
@@ -70,11 +76,11 @@ class LocalicaApplication : Application() {
                 getSharedPreferences("listening-identity", MODE_PRIVATE)))
     }
     val onlineMetadataConsent by lazy {
-        io.github.anastaci1a.localica.network.OnlineMetadataConsent(java.io.File(filesDir, "online-metadata-consent"))
+        io.github.anastaci1a.localica.network.OnlineMetadataConsent(java.io.File(privateFilesPath, "online-metadata-consent"))
     }
     val artistPhotos by lazy {
         io.github.anastaci1a.localica.artistphoto.ArtistPhotos(onlineMetadataConsent,
-            java.io.File(cacheDir, "artist-photos"), java.io.File(filesDir, "artist-photo-matches"),
+            java.io.File(privateCachePath, "artist-photos"), java.io.File(privateFilesPath, "artist-photo-matches"),
             prepare = io.github.anastaci1a.localica.artistphoto.ArtistPhotoEncoding::encode)
     }
     val artistPhotoWork by lazy {
@@ -82,7 +88,7 @@ class LocalicaApplication : Application() {
     }
     val lastfm by lazy {
         io.github.anastaci1a.localica.lastfm.LastFmController(
-            io.github.anastaci1a.localica.lastfm.FileLastFmStore(java.io.File(filesDir, "lastfm-snapshot.json")),
+            io.github.anastaci1a.localica.lastfm.FileLastFmStore(java.io.File(privateFilesPath, "lastfm-snapshot.json")),
             io.github.anastaci1a.localica.lastfm.LastFmSync(io.github.anastaci1a.localica.lastfm.HttpLastFmApi(BuildConfig.LASTFM_API_KEY, onlineMetadataConsent)),
             library.snapshots, BuildConfig.LASTFM_API_KEY.isNotBlank(), onlineMetadataConsent,
             localStatistics = statistics.counts, background = io.github.anastaci1a.localica.lastfm.LastFmWork(this))
@@ -99,13 +105,13 @@ class LocalicaApplication : Application() {
     val tagEditing by lazy { io.github.anastaci1a.localica.editing.TagEditingController(this, library, queues, playlists, tagWriter) }
     val playlists by lazy {
         PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").addMigrations(PlaylistDatabase.MIGRATION_1_2, PlaylistDatabase.MIGRATION_2_3, PlaylistDatabase.MIGRATION_3_4).build().playlists(),
-            coverDirectory = java.io.File(filesDir, "playlist-covers"),
+            coverDirectory = java.io.File(privateFilesPath, "playlist-covers"),
             sortSnapshot = ::liveSortSnapshot)
     }
     val nativeReaders = io.github.anastaci1a.localica.playback.NativeReaders(
         io.github.anastaci1a.localica.playback.RecoveryAdmission.Checking)
     val tagWriter by lazy {
-        io.github.anastaci1a.localica.editing.RecoverableTagWriter(java.io.File(filesDir, "tag-recovery"),
+        io.github.anastaci1a.localica.editing.RecoverableTagWriter(java.io.File(privateFilesPath, "tag-recovery"),
             io.github.anastaci1a.localica.editing.AndroidEditableDocuments(this), nativeReaders)
     }
     val queues by lazy {

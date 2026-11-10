@@ -86,7 +86,7 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
         future.addListener({
             if (!closed) {
                 try {
-                    controller = future.get().also { it.addListener(listener) }
+                    controller = com.google.common.util.concurrent.Futures.getDone(future).also { it.addListener(listener) }
                     publish()
                 } catch (_: Exception) {
                     mutableState.value = PlaybackState(problem = PlaybackProblem.Connection)

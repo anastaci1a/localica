@@ -132,10 +132,18 @@ import kotlinx.coroutines.*
                     }
                     val output = stored
                     controller?.cover(playlistId, android.net.Uri.fromFile(output).toString()) { ok ->
-                        if (!ok) { output?.delete(); failure = "Couldn’t save the playlist image." }
+                        if (!ok) {
+                            failure = "Couldn’t save the playlist image."
+                            scope.launch(NonCancellable + Dispatchers.IO) { output?.delete() }
+                        }
                     }
-                } catch (cancelled: CancellationException) { stored?.delete(); throw cancelled }
-                catch (_: Exception) { stored?.delete(); failure = "Couldn’t save the playlist image." }
+                } catch (cancelled: CancellationException) {
+                    withContext(NonCancellable + Dispatchers.IO) { stored?.delete() }
+                    throw cancelled
+                } catch (_: Exception) {
+                    withContext(NonCancellable + Dispatchers.IO) { stored?.delete() }
+                    failure = "Couldn’t save the playlist image."
+                }
             }
         }
     }
