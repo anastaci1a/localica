@@ -57,6 +57,23 @@ class FlatNoneHoverDragTest {
                 .put("requestedKey", requested.get(owner).toString()).put("preparedKeyMatches", key != null && key == requested.get(owner))
         }
         fun state() = compose.runOnIdle { shadowState().put("geometryReadCount", drawObservations.length()) }
+        fun redrawFrame() {
+            compose.runOnIdle { redraw.intValue++ }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
+        fun assertPreparedDraw(observed: org.json.JSONObject) {
+            assertTrue("The settled capture must have a matching prepared raster", observed.getBoolean("preparedKeyMatches"))
+            val count = observed.getInt("geometryReadCount")
+            assertTrue("Both actual card draws must be recorded", count >= 2)
+            for (index in count - 2 until count) {
+                val drawn = drawObservations.getJSONObject(index).getJSONObject("shadow")
+                assertTrue("The recorded draw must use the prepared branch", drawn.getBoolean("preparedKeyMatches"))
+                assertEquals(observed.getInt("owner"), drawn.getInt("owner"))
+                assertEquals(observed.getString("requestedKey"), drawn.getString("requestedKey"))
+                assertEquals(observed.getInt("rasterizations"), drawn.getInt("rasterizations"))
+            }
+        }
         fun save(name: String, bitmap: android.graphics.Bitmap) {
             java.io.File(output, "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         }
@@ -86,22 +103,39 @@ class FlatNoneHoverDragTest {
                 }
             }
             repeat(64) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
-            compose.runOnIdle { events.clear() }
+            compose.runOnIdle { events.clear(); shadows.add(currentShadow()) }
+            // Keep the allocation regression independent of raster readiness. The
+            // pre-fix mismatch releases both owners during this first redraw.
+            redrawFrame()
+            compose.runOnIdle {
+                assertEquals("The first actual drag redraw must allocate no glass", emptyList<String>(), events)
+            }
+            compose.waitUntil(10_000) { state().getBoolean("preparedKeyMatches") }
+            // A frozen test clock can retain the initial live display list after
+            // background preparation. Qualify an actual prepared draw, not just
+            // the asynchronously published raster, before taking the reference.
+            redrawFrame()
             val beforeReference = state()
+            assertPreparedDraw(beforeReference)
             val reference = compose.onNodeWithTag("flat-drag").captureToImage().asAndroidBitmap()
             val referencePixels = pixels(reference)
-            observations.put(org.json.JSONObject().put("label", "reference").put("before", beforeReference).put("after", state())
+            val afterReference = state()
+            assertPreparedDraw(afterReference)
+            assertEquals("Native copy must preserve the settled draw state", beforeReference.toString(), afterReference.toString())
+            observations.put(org.json.JSONObject().put("label", "reference").put("before", beforeReference).put("after", afterReference)
                 .put("bitmapConfig", reference.config.toString()).put("colorSpace", reference.colorSpace.toString()))
             save("reference", reference)
             var changedImages = 0
             repeat(24) { index ->
-                compose.runOnIdle { redraw.intValue++ }
-                compose.mainClock.advanceTimeByFrame()
-                compose.waitForIdle()
+                redrawFrame()
                 val before = state()
+                assertPreparedDraw(before)
                 val image = compose.onNodeWithTag("flat-drag").captureToImage().asAndroidBitmap()
                 val actual = pixels(image)
-                observations.put(org.json.JSONObject().put("label", index).put("before", before).put("after", state())
+                val after = state()
+                assertPreparedDraw(after)
+                assertEquals("Native copy must preserve the settled draw state", before.toString(), after.toString())
+                observations.put(org.json.JSONObject().put("label", index).put("before", before).put("after", after)
                     .put("differentArgbPixels", actual.indices.count { actual[it] != referencePixels[it] })
                     .put("bitmapConfig", image.config.toString()).put("colorSpace", image.colorSpace.toString()))
                 save("frame-$index", image)
