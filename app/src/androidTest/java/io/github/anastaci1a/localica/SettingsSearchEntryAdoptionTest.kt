@@ -78,7 +78,7 @@ class SettingsSearchEntryAdoptionTest {
         compose.runOnIdle { focus.highlighted = "Glass renderer" }
         val start = compose.mainClock.currentTime
         val samples = JSONArray()
-        for (target in listOf(32L, 80L, 160L, 320L, 640L, 800L, 1040L, 1440L)) {
+        for (target in 16L..1440L step 16) {
             compose.mainClock.advanceTimeBy(start + target - compose.mainClock.currentTime)
             compose.waitForIdle()
             sample(samples, start)
