@@ -87,11 +87,12 @@ class ScrollPlacementFirstFrameTest {
         }
     }
 
-    /** Optional operator-scale fixture: a pushed corpus directory with tracks.jsonl and covers/. */
+    /** Optional operator-scale fixture: a pushed corpus directory with tracks.jsonl and its tagged files. */
     private fun corpusTracks(directory: File): List<Track> = File(directory, "tracks.jsonl").readLines().filter { it.isNotBlank() }.map { line ->
         val json = org.json.JSONObject(line)
-        val cover = File(directory, json.getString("artwork_path"))
-        Track(android.net.Uri.fromFile(cover).toString(), json.getString("title"),
+        // Artwork comes from each file's embedded cover, as in a scanned library.
+        val file = File(directory, json.getString("relative_path"))
+        Track(android.net.Uri.fromFile(file).toString(), json.getString("title"),
             artist = json.getString("artist"), albumArtist = json.getString("artist"), album = json.getString("album"),
             fileName = json.getString("relative_path").substringAfterLast('/'), relativePath = json.getString("relative_path"))
     }
