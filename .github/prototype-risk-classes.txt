@@ -496,3 +496,4 @@ io.github.anastaci1a.localica.SelectionInsetContextsTest
 
 # Slice K native equality witnesses (#600).
 io.github.anastaci1a.localica.UncontestedAnchorsEqualityTest
+io.github.anastaci1a.localica.PinnedHomePreparationTest
