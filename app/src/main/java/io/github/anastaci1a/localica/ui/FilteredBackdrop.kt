@@ -392,7 +392,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(b
     }
     chain.asReversed().forEach { scene ->
         val dependency = structure?.firstOrNull { it.scene === scene }
-        if ((dependency?.recorded ?: scene.recorded) && !scene.layer.isReleased) {
+        if (scene.hasGlassLayer && (dependency?.recorded ?: scene.recorded) && !scene.layer.isReleased) {
             if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(scene)
             val registration = if (structure != null) dependency?.registration
                 else if (scene === backing) backingToLocal else parentToLocal(scene)
@@ -417,7 +417,7 @@ internal fun sampledSceneBounds(backing: FrostedBackdrop, backingToLocal: Backdr
         visited += item
         val registration = if (item === backing) backingToLocal else parentToLocal(item)
         val recorded = item.recorded
-        val released = item.layer.isReleased
+        val released = !item.hasGlassLayer || item.layer.isReleased
         val extent = item.size
         structure?.add(SampledSceneDependency(item, recorded, released, extent, registration))
         if (recorded && !released && registration != null) {

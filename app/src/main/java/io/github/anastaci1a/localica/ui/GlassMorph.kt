@@ -577,9 +577,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val flat = flatGlass()
     fun retired(backdrop: FrostedBackdrop?) = backdrop != null &&
         (backdrop.hasGlassLayer == flat || backdrop.hasGlassLayer && backdrop.layer.isReleased)
-    val currentSource = if (retired(source)) ambientSource ?: anchor.source else source
+    val currentSource = source?.takeUnless(::retired)
+        ?: ambientSource?.takeUnless(::retired)
+        ?: anchor.source?.takeUnless(::retired)
     SideEffect { if (source !== currentSource) source = currentSource }
-    val departingSource = popupHome?.backdrop.takeIf { returningInline || popupFlight.wasProjected }
+    val departingSource = popupHome?.backdrop.takeIf { returningInline || popupFlight.wasProjected }?.takeUnless(::retired)
     // Navigation keeps the native window in place until this scene is ready.
     // Ordinary popup input must not continuously capture the full-screen
     // backdrop: that readback can starve drag cleanup and fresh fling admission.
