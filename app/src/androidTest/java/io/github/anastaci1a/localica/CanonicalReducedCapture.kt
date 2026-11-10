@@ -108,7 +108,21 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
     private val rows = JSONArray()
     private val listeners = mutableListOf<Pair<View, android.view.ViewTreeObserver.OnDrawListener>>()
     private var generation = 0
-    init { if (!enabled) HardwareRendererCompat.setDrawingEnabled(true) }
+    init {
+        if (!enabled) HardwareRendererCompat.setDrawingEnabled(true)
+        // Activity launch is outside the fixed journey. Do not sample its WindowManager enter transition.
+        val started = android.os.SystemClock.uptimeMillis()
+        try {
+            instrumentation.uiAutomation.waitForIdle(1_000L, 5_000L)
+            check(rule.mainClock.currentTime == initialClock) { "Startup observation advanced the phase clock" }
+            File(output, "startup-observation.json").writeText(JSONObject()
+                .put("elapsedMillis", android.os.SystemClock.uptimeMillis() - started)
+                .put("initialClockMs", initialClock).put("observedClockMs", rule.mainClock.currentTime).toString(2))
+        } catch (failure: Throwable) {
+            if (!enabled) HardwareRendererCompat.setDrawingEnabled(false)
+            throw failure
+        }
+    }
 
     private data class State(val probe: CanonicalReducedProbe, val view: View?, val window: Window?,
         val attached: Boolean, val bounds: Rect, val originX: Int, val originY: Int,
@@ -215,22 +229,42 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
                     check(markerLeft >= ceil(state.bounds.left).toInt() && markerTop + 8 <= floor(state.bounds.bottom).toInt())
                     p.marker.setBounds(markerLeft, markerTop, markerLeft + 8, markerTop + 8)
                     p.marker.requested = generation
-                    val listener = object : android.view.ViewTreeObserver.OnDrawListener {
-                        override fun onDraw() { view.post {
-                            if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnDrawListener(this)
-                            listeners.remove(view to this)
-                            drawn.countDown()
-                        } }
+                    if (android.os.Build.VERSION.SDK_INT >= 29 && view.isHardwareAccelerated) {
+                        view.viewTreeObserver.registerFrameCommitCallback { drawn.countDown() }
+                    } else {
+                        var draws = 0
+                        val listener = object : android.view.ViewTreeObserver.OnDrawListener {
+                            override fun onDraw() {
+                                draws++
+                                if (draws == 1) view.postOnAnimation { view.invalidate() }
+                                else view.post {
+                                    if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnDrawListener(this)
+                                    listeners.remove(view to this)
+                                    drawn.countDown()
+                                }
+                            }
+                        }
+                        listeners += view to listener
+                        view.viewTreeObserver.addOnDrawListener(listener)
                     }
-                    listeners += view to listener
-                    view.viewTreeObserver.addOnDrawListener(listener)
                     p.marker.invalidateSelf(); view.invalidate()
                 }
                 check(drawn.await(5, TimeUnit.SECONDS)) { "Incomplete native draw ${point.label}/${p.role}" }
                 val size = rule.runOnUiThread { state.window.decorView.width to state.window.decorView.height }
                 check(size.first > 0 && size.second > 0)
+                // API 26 addresses the padded Surface directly; API 28+ applies surfaceInsets in PixelCopy.
+                val insets = if (android.os.Build.VERSION.SDK_INT < 28) rule.runOnUiThread {
+                    val root = View::class.java.getDeclaredMethod("getViewRootImpl").apply { isAccessible = true }.invoke(view)
+                    val attributes = root.javaClass.getDeclaredField("mWindowAttributes").apply { isAccessible = true }.get(root)
+                    android.graphics.Rect(android.view.WindowManager.LayoutParams::class.java
+                        .getField("surfaceInsets").get(attributes) as android.graphics.Rect)
+                } else android.graphics.Rect()
+                val sourceBounds = android.graphics.Rect(0, 0, size.first, size.second).apply { offset(insets.left, insets.top) }
+                receipt.put("nativeSurfaceInsets", JSONArray(listOf(insets.left, insets.top, insets.right, insets.bottom)))
+                    .put("nativeCopySourceBounds", JSONArray(listOf(sourceBounds.left, sourceBounds.top, sourceBounds.right, sourceBounds.bottom)))
                 val buffer = copyNativeWindowOnce(state.window,
-                    Bitmap.createBitmap(size.first, size.second, Bitmap.Config.ARGB_8888), "Incomplete native copy ${p.role}") {
+                    Bitmap.createBitmap(size.first, size.second, Bitmap.Config.ARGB_8888), "Incomplete native copy ${p.role}",
+                    sourceBounds = sourceBounds) {
                     "Incomplete native copy ${p.role}: $it"
                 }
                 try {
@@ -242,9 +276,16 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
                         .put("displayWitnessPoints", JSONArray(listOf(state.originX + markerBounds.left + 2,
                             state.originY + markerBounds.top + 2, state.originX + markerBounds.left + 6,
                             state.originY + markerBounds.top + 2)))
-                    check(buffer.getPixel(x, y) == (NativeColor.BLACK or 0x00400000 or generation))
-                    check(buffer.getPixel(x + 4, y) == NativeColor.MAGENTA)
                     save("${point.label}-${p.role}-original.png", buffer)
+                    val observedCode = if (x in 0 until buffer.width && y in 0 until buffer.height) buffer.getPixel(x, y) else null
+                    val observedSentinel = if (x + 4 in 0 until buffer.width && y in 0 until buffer.height) buffer.getPixel(x + 4, y) else null
+                    File(output, "${point.label}-${p.role}-native-witness.json").writeText(JSONObject()
+                        .put("role", p.role).put("generation", generation).put("points", JSONArray(listOf(x, y, x + 4, y)))
+                        .put("observedCodeArgb", observedCode ?: JSONObject.NULL)
+                        .put("observedSentinelArgb", observedSentinel ?: JSONObject.NULL)
+                        .put("copy", receipt).toString(2))
+                    check(observedCode == (NativeColor.BLACK or 0x00400000 or generation))
+                    check(observedSentinel == NativeColor.MAGENTA)
                     val originInWindow = markerOrigin
                     val r = android.graphics.Rect(floor(state.bounds.left).toInt() + originInWindow[0],
                         floor(state.bounds.top).toInt() + originInWindow[1], ceil(state.bounds.right).toInt() + originInWindow[0],
@@ -271,6 +312,14 @@ internal class CanonicalReducedCapture(private val rule: ComposeContentTestRule,
             } else receipt.put("nativeCurrentClaim", if (state.blocked) "incomplete-blocked-producer" else "not-attached")
             owners.put(receipt)
         }
+        // Observe two display opportunities after native copy completion, without invalidating any producer.
+        val displayReady = CountDownLatch(1)
+        rule.runOnUiThread {
+            val rootView = requireNotNull(before.first { it.probe.role == "root" }.view)
+            rootView.postOnAnimation { rootView.postOnAnimation { rootView.post { displayReady.countDown() } } }
+        }
+        check(displayReady.await(5, TimeUnit.SECONDS)) { "Incomplete compositor observation ${point.label}" }
+        check(rule.mainClock.currentTime == queryClock) { "Compositor observation advanced the phase clock" }
         // One actual system-composited image includes the currently displayed child even while its producer is blocked.
         val screen = checkNotNull(instrumentation.uiAutomation.takeScreenshot()) { "Incomplete compositor capture" }
         try {
