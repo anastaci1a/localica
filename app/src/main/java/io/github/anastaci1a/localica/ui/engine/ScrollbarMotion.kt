@@ -32,6 +32,7 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
     var target: Float = initial
         private set
     override val id = clock.allocateId()
+    override val reducesWithAccess = false
     override var presented = false
         private set
     override val settled: Boolean get() = animation == null
