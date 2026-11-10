@@ -208,9 +208,15 @@ class LastFmScrollStressTest {
             archiveFile().delete()
             // `-e cold true` discards the persisted match result so this launch pays the one-time streamed match.
             if (arg("cold", "false") == "true") File(context.filesDir, "lastfm-matches.json").delete()
+            // `-e archiveFile <device path>`: a previously synced archive (the application's own file format, private
+            // operator data pushed by the harness) replaces the synthetic one; only its switches are rewritten.
+            val pulled = arg("archiveFile", "")
             if (lastfm != "none") runBlocking {
-                FileLastFmStore(archiveFile()).write(SavedLastFm("stress779", useCounts = true, snapshot = archive(tracks),
-                    active = lastfm == "on", keepSyncingInBackground = false))
+                val saved = if (pulled.isEmpty()) SavedLastFm("stress779", useCounts = true, snapshot = archive(tracks),
+                    active = lastfm == "on", keepSyncingInBackground = false)
+                else FileLastFmStore(File(pulled)).read().let { it.copy(useCounts = true, active = lastfm == "on", keepSyncingInBackground = false) }
+                FileLastFmStore(archiveFile()).write(saved)
+                Log.i(TAG, "archive songs=${saved.snapshot?.tracks?.size} scrobbles=${saved.snapshot?.tracks?.sumOf { it.plays }} source=${if (pulled.isEmpty()) "synthetic" else "pulled"}")
             }
             runBlocking { app.onlineMetadataConsent.setAllowed(photos) }
             runBlocking { store.replaceRoot(ScanResult(FolderSelection(ROOT, "Stress 779"), tracks, 0)) }
