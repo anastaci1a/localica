@@ -276,8 +276,14 @@ class PinchRecognitionContinuityTest {
             // A sharp edge resolves at half coverage. During the later settle a cover
             // can cross the viewport fade; there, retain its visible opaque contour.
             val sharp = background < .5f
-            val crossing = if (sharp) (1f + background) / 2f else 0f
-            fun score(at: Int) = if (sharp) blue(x + at * dx, y + at * dy) else opaqueBlue(x + at * dx, y + at * dy)
+            // A blue border over an opaque red backdrop has zero background blue.
+            // Its blue channel measures coverage without red-palette intensity bias.
+            val backgroundColor = if (inside(step + 3)) pixels[x + (step + 3) * dx, y + (step + 3) * dy] else null
+            val calibrated = sharp && backgroundColor != null && backgroundColor.red > 0f &&
+                backgroundColor.green == 0f && backgroundColor.blue == 0f && backgroundColor.alpha == 1f
+            val crossing = if (calibrated) .5f else if (sharp) (1f + background) / 2f else 0f
+            fun score(at: Int) = if (calibrated) pixels[x + at * dx, y + at * dy].blue
+                else if (sharp) blue(x + at * dx, y + at * dy) else opaqueBlue(x + at * dx, y + at * dy)
             while (inside(step + 1) && score(step + 1) > crossing) step++
             if (!inside(step + 1)) return when {
                 dx < 0 || dy < 0 -> 0f
