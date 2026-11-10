@@ -85,26 +85,39 @@ class PreparedColdEntryTest {
         }
         val controller = withContext(Dispatchers.IO) { future.get(30, TimeUnit.SECONDS) }
         try {
-            // Exercise the cold mailbox first, then require a real service-owned item and native sample.
-            withContext(Dispatchers.Main) { controller.play(); controller.pause() }
+            // The cold connection starts the service; transport commands need a selected, ready native item.
             app.preferences.awaitReady()
             val track = withTimeout(30_000) { app.library.snapshots.first { it.tracks.isNotEmpty() }.tracks.first() }
             app.queues.settings { it.copy(songTap = io.github.anastaci1a.localica.queue.SongTap.NewQueue, shuffle = false) }
             app.queues.tap(listOf(track), 0)
-            suspend fun awaitMain(condition: () -> Boolean) = withTimeout(30_000) {
-                while (!withContext(Dispatchers.Main) { condition() }) delay(20)
+            suspend fun awaitMain(label: String, condition: () -> Boolean) {
+                android.util.Log.i("PreparedEntryProof", "stage=$label pid=" + android.os.Process.myPid())
+                try {
+                    withTimeout(30_000) { while (!withContext(Dispatchers.Main) { condition() }) delay(20) }
+                } catch (timeout: TimeoutCancellationException) {
+                    val observed = withContext(NonCancellable + Dispatchers.Main) {
+                        "items=" + controller.mediaItemCount + ";state=" + controller.playbackState +
+                            ";playWhenReady=" + controller.playWhenReady + ";sample=" + app.queues.playbackSample() +
+                            ";queueLoading=" + app.queues.state.value.loading + ";problem=" + app.queues.state.value.problem
+                    }
+                    throw AssertionError("$label timed out: $observed", timeout)
+                }
             }
-            awaitMain {
+            awaitMain("native-attachment") {
                 controller.currentMediaItem?.mediaMetadata?.extras?.getString("trackId") == track.id &&
                     app.queues.playbackSample()?.playbackVisit != null
             }
             val queueId = checkNotNull(app.queues.state.value.library.activeId)
             withContext(Dispatchers.Main) { controller.play() }
-            awaitMain { controller.playWhenReady }
+            awaitMain("play") { controller.playWhenReady }
             withContext(Dispatchers.Main) { controller.pause() }
-            awaitMain { !controller.playWhenReady && !controller.isPlaying }
+            awaitMain("pause") { !controller.playWhenReady && !controller.isPlaying }
+            awaitMain("seek-command-ready") {
+                controller.playbackState == androidx.media3.common.Player.STATE_READY &&
+                    controller.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+            }
             withContext(Dispatchers.Main) { controller.seekTo(1234) }
-            awaitMain { app.queues.playbackSample()?.positionMs == 1234L }
+            awaitMain("native-seek-position") { app.queues.playbackSample()?.positionMs == 1234L }
             val playerIds = Regex("ExoPlayerImpl\\s*:\\s*Init ([0-9a-f]+)")
                 .findAll(logcat(instrumentation)).map { it.groupValues[1] }.distinct().toList()
             assertEquals("Require exactly one actual service-owned engine", 1, playerIds.size)
