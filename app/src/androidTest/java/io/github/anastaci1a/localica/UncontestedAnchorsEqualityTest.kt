@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -39,7 +41,6 @@ import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
-import java.io.DataOutputStream
 import java.io.File
 
 /** Matched native witnesses of the actual hosts, without candidate-only production adapters. */
@@ -88,15 +89,26 @@ class UncontestedAnchorsEqualityTest {
         }
     }
 
+    private val placed = SemanticsMatcher("Actually placed semantic owner") { it.layoutInfo.isPlaced }
+    private var checkedCapturedEncoding = false
+
+    private fun phase(name: String, phase: String, start: Long) {
+        Log.i("SliceKTiming", "scene=$name phase=$phase elapsedNs=${SystemClock.elapsedRealtimeNanos() - start}")
+    }
+
     private fun one(matcher: SemanticsMatcher): SemanticsNodeInteraction {
         compose.onAllNodes(matcher, useUnmergedTree = true).assertCountEquals(1)
         return compose.onNode(matcher, useUnmergedTree = true)
     }
 
     /** Capture on the instrumentation thread. Main returns immutable observations before any I/O. */
-    private fun export(name: String) {
+    private fun export(name: String, sceneStart: Long) {
+        phase(name, "prepare", sceneStart)
+        var phaseStart = SystemClock.elapsedRealtimeNanos()
         compose.mainClock.advanceTimeBy(2000)
         compose.waitForIdle()
+        phase(name, "settle", phaseStart)
+        phaseStart = SystemClock.elapsedRealtimeNanos()
         val host = one(hasTestTag("k-capture"))
         val node = host.fetchSemanticsNode()
         val text = one(hasTestTag("k-text-control")).fetchSemanticsNode()
@@ -130,29 +142,54 @@ class UncontestedAnchorsEqualityTest {
             else listOf(tag, words, description, n.layoutInfo.isPlaced, n.positionInRoot.x, n.positionInRoot.y,
                 n.size.width, n.size.height, n.layoutInfo.density.density, n.layoutInfo.density.fontScale)
         }.sortedBy { it.joinToString("\u0000") }
+        phase(name, "observe", phaseStart)
+        phaseStart = SystemClock.elapsedRealtimeNanos()
         val image = host.captureToImage()
         val pixels = IntArray(image.width * image.height)
         image.readPixels(pixels)
         assertTrue("The fixture has visible ink under ${profile.policy}", pixels.count { (it and 0x00ffffff) != 0x00ffffff } > 20)
+        phase(name, "capture", phaseStart)
+        phaseStart = SystemClock.elapsedRealtimeNanos()
         // Retain a same-production repeat, which must be exactly stable before cross-arm comparison.
         val repeat = host.captureToImage()
         val repeated = IntArray(repeat.width * repeat.height)
         repeat.readPixels(repeated)
         assertArrayEquals("The same-production capture is stable", pixels, repeated)
+        phase(name, "repeat-capture", phaseStart)
+        phaseStart = SystemClock.elapsedRealtimeNanos()
         val directory = nativeEvidenceDirectory("slice-k-anchors", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
         val extra = compose.runOnIdle { homeGeometry.toList() to measurementGeometry.toList() }
+        phase(name, "directory-and-extra", phaseStart)
+        phaseStart = SystemClock.elapsedRealtimeNanos()
         val receipt = JSONObject().put("api", android.os.Build.VERSION.SDK_INT).put("profile", profile.key).put("native", JSONArray(native))
             .put("backdropDark", false).put("backdropLightMix", 0).put("width", image.width).put("height", image.height)
             .put("geometry", JSONArray(observed.map { JSONArray(it) })).put("clicks", clicks)
             .put("homePadding", JSONArray(extra.first)).put("measurement", JSONArray(extra.second))
         File(directory, "$name.json").writeText(receipt.toString(2))
-        File(directory, "$name.argb").outputStream().use { output ->
-            DataOutputStream(output).use { data -> pixels.forEach(data::writeInt) }
+        phase(name, "json", phaseStart)
+        phaseStart = SystemClock.elapsedRealtimeNanos()
+        val encoded = UncontestedAnchorsArgb.encode(pixels)
+        if (!checkedCapturedEncoding) {
+            // Independent legacy producer checks the actual captured array before any file write.
+            val proof = UncontestedAnchorsArgb.verifyLegacy(pixels, encoded)
+            File(directory, "$name-encoding-proof.txt").writeText(proof + "\n")
+            checkedCapturedEncoding = true
         }
+        phase(name, "encode-and-legacy-proof", phaseStart)
+        phaseStart = SystemClock.elapsedRealtimeNanos()
+        File(directory, "$name.argb").outputStream().use { it.write(encoded) }
+        phase(name, "argb", phaseStart)
+        phaseStart = SystemClock.elapsedRealtimeNanos()
         File(directory, "$name.png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+        phase(name, "png", phaseStart)
+        phaseStart = SystemClock.elapsedRealtimeNanos()
         assertTrue("Retain the untouched native display", UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
             .takeScreenshot(File(directory, "$name-display.png")))
+        phase(name, "screenshot", phaseStart)
+        phaseStart = SystemClock.elapsedRealtimeNanos()
         File(directory, "source.txt").writeText(BuildConfig.SOURCE_SHA + "\n")
+        phase(name, "source", phaseStart)
+        phase(name, "scene-total", sceneStart)
     }
 
     @Test fun homeFirstAndLastGeometryFollowMeasuredReturnClearance() {
@@ -168,6 +205,7 @@ class UncontestedAnchorsEqualityTest {
         compose.waitUntil(5000) { compose.onAllNodesWithText("Pinned fixture").fetchSemanticsNodes().isNotEmpty() }
         compose.mainClock.autoAdvance = false
         for (p in profiles) for (scale in listOf(1f, .8f)) {
+            var sceneStart = SystemClock.elapsedRealtimeNanos()
             compose.runOnIdle { profile = p; densityScale = scale }
             one(hasTestTag("home-list")).performScrollToIndex(0)
             val title = one(hasText("Your music"))
@@ -177,22 +215,23 @@ class UncontestedAnchorsEqualityTest {
             val topPadding = with(firstList.layoutInfo.density) { 16.dp.roundToPx() }
             assertEquals("The first item preserves its top padding", topPadding.toFloat(), topGap, 0f)
             homeGeometry = listOf(topGap, topPadding.toFloat())
-            export("home-${p.key}-density$scale-first")
+            export("home-${p.key}-density$scale-first", sceneStart)
+            sceneStart = SystemClock.elapsedRealtimeNanos()
             one(hasTestTag("home-list")).performScrollToIndex(1)
             one(hasTestTag("home-list")).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 100000f) }
             compose.mainClock.advanceTimeBy(2000)
             one(hasTestTag("pin-${track.id}")).assertIsDisplayed()
-            one(hasContentDescription("Return to top")).assertIsDisplayed()
+            one(hasContentDescription("Return to top") and placed).assertIsDisplayed()
             val list = one(hasTestTag("home-list")).fetchSemanticsNode()
             val range = list.config[SemanticsProperties.VerticalScrollAxisRange]
             assertEquals("The list cannot scroll farther forward", range.maxValue(), range.value(), 0f)
             val last = one(hasTestTag("home-pins")).fetchSemanticsNode()
-            val control = one(hasClickAction() and hasAnyDescendant(hasContentDescription("Return to top"))).fetchSemanticsNode()
+            val control = one(hasClickAction() and placed and hasAnyDescendant(hasContentDescription("Return to top") and placed)).fetchSemanticsNode()
             val bottomGap = list.positionInRoot.y + list.size.height - last.positionInRoot.y - last.size.height
             val expected = with(list.layoutInfo.density) { (24.dp + control.size.height.toDp() + 16.dp).roundToPx() }
             assertEquals("Last-item clearance includes the actual measured return control", expected.toFloat(), bottomGap, 0f)
             homeGeometry = listOf(bottomGap, expected.toFloat(), control.size.height.toFloat(), range.value(), range.maxValue())
-            export("home-${p.key}-density$scale-last")
+            export("home-${p.key}-density$scale-last", sceneStart)
         }
         compose.mainClock.autoAdvance = true
     }
@@ -218,6 +257,7 @@ class UncontestedAnchorsEqualityTest {
         compose.mainClock.autoAdvance = false
         val live = hasAnyAncestor(hasTestTag("k-live"))
         for (p in profiles) for (present in listOf(true, false)) {
+            val sceneStart = SystemClock.elapsedRealtimeNanos()
             compose.runOnIdle { profile = p; minimize = present }
             compose.mainClock.advanceTimeBy(2000)
             val icon = one(hasContentDescription("Select queue") and live).fetchSemanticsNode()
@@ -242,7 +282,7 @@ class UncontestedAnchorsEqualityTest {
             if (present) {
                 one(hasContentDescription("Minimize queue") and live).performClick()
             } else compose.onAllNodes(hasContentDescription("Minimize queue") and live, useUnmergedTree = true).assertCountEquals(0)
-            export("queue-${p.key}-minimize$present")
+            export("queue-${p.key}-minimize$present", sceneStart)
         }
         compose.mainClock.autoAdvance = true
     }
@@ -274,13 +314,16 @@ class UncontestedAnchorsEqualityTest {
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         for (p in profiles) for (isIntrinsic in listOf(false, true)) for (artist in listOf(false, true)) {
+            val sceneStart = SystemClock.elapsedRealtimeNanos()
             compose.runOnIdle { profile = p; intrinsic = isIntrinsic; galleryScope = artist }
             compose.mainClock.advanceTimeBy(2000)
             val envelope = one(hasTestTag("k-envelope")).fetchSemanticsNode()
             assertTrue("The inert observer is measured", envelope.size.width > 0 && envelope.size.height > 0)
             // The production measurement owner measures alternatives without placing them.
-            compose.onAllNodesWithText("View mode", useUnmergedTree = true).assertCountEquals(0)
-            export("browse-${p.key}-intrinsic$isIntrinsic-artist$artist")
+            val alternatives = compose.onAllNodesWithText("View mode", useUnmergedTree = true).fetchSemanticsNodes()
+            assertTrue("Measurement alternatives exist in the unmerged tree", alternatives.isNotEmpty())
+            assertTrue("Every measurement alternative is unplaced", alternatives.all { !it.layoutInfo.isPlaced })
+            export("browse-${p.key}-intrinsic$isIntrinsic-artist$artist", sceneStart)
         }
         compose.mainClock.autoAdvance = true
     }
