@@ -67,10 +67,8 @@ private class PendingApplicationRecovery : TestRule {
             }
             check(previousController.state.value.recovery == null) { "Existing recovery state must be preserved" }
             val directoryExisted = directory.exists()
-            directory.mkdirs()
             val original = File(directory, "original.root-fixture-${java.util.UUID.randomUUID()}")
             val bytes = "retained root launch recovery".toByteArray()
-            original.writeBytes(bytes)
             val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
             val track = Track("content://root-recovery.fixture/document/song", "Root recovery", fileName = "root-recovery.mp3", relativePath = "root-recovery.mp3")
             val record = JSONObject().put("track", TrackSnapshot.encode(track)).put("uri", track.id)
@@ -82,6 +80,8 @@ private class PendingApplicationRecovery : TestRule {
             var fixtureController: TagEditingController? = null
             try {
                 // Keep the old writer untouched; the real application getters now initialize from our journal.
+                check(directory.isDirectory || directory.mkdirs()) { "Could not create fixture recovery directory" }
+                original.writeBytes(bytes)
                 journal.writeBytes(record)
                 instrumentation.runOnMainSync {
                     writerField.set(app, lazy { RecoverableTagWriter(directory, AndroidEditableDocuments(app), app.nativeReaders) })
@@ -102,7 +102,7 @@ private class PendingApplicationRecovery : TestRule {
                     editingField.set(app, previousEditing)
                     writerField.set(app, previousWriter)
                 }
-                runBlocking { fixtureScope?.coroutineContext?.get(Job)?.join() }
+                runBlocking { withTimeout(15_000) { fixtureScope?.coroutineContext?.get(Job)?.join() } }
                 // Remove only our own exact bytes; preserve any unexpected mutation for inspection.
                 if (journal.exists() && journal.readBytes().contentEquals(record)) journal.delete()
                 if (original.exists() && original.readBytes().contentEquals(bytes)) original.delete()
