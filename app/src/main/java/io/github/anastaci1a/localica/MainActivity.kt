@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
                         { _, window, _ -> io.github.anastaci1a.localica.diagnostics.FrameStats.attach(window) }
                     else null)) {
             // One shared None reduction for every material in this window (#691).
-            NoneReductionAtlasHost(GlassColorShader) {
+            NoneReductionAtlasHost(GlassColorShader, enabled = !io.github.anastaci1a.localica.ui.flatGlass()) {
             LocalicaTheme {
                 io.github.anastaci1a.localica.ui.TagEditorHost((application as LocalicaApplication).tagEditing) {
                 LocalicaScreen(library, playback, model::play, model.playback::toggle, model.playback::seekTo,

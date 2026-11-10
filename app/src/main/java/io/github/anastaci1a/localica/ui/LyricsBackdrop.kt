@@ -95,36 +95,33 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
         val cancel: () -> Unit = { handler.removeCallbacks(runnable) }
         cancel
     } }
-    if (flatGlass()) {
-        Box(modifier, propagateMinConstraints = true) {
-            CompositionLocalProvider(LocalLyricsBackdropScene provides scene, content = content)
-        }
-        return
-    }
+    val flat = flatGlass()
     val observer by rememberUpdatedState(LocalLyricsBackdropObserver.current)
-    SideEffect { source.parent = backing; source.readbackBarrier = scene.readback; observer?.invoke(scene, true) }
-    DisposableEffect(scene) { onDispose {
-        scene.readback.dispose()
-        observer?.invoke(scene, false)
-        if (source.readbackBarrier === scene.readback) source.readbackBarrier = null
-    } }
-    // Invalidate in-flight thumbnails when producer content or placement changes.
-    LaunchedEffect(scene) {
-        if (Build.VERSION.SDK_INT < 33) snapshotFlow {
-            currentAlpha() to scene.layers.map { layer ->
-                listOf(layer.source.recorded, layer.source.size, layer.source.location.placement,
-                    layer.alpha(), layer.contentKey())
+    if (!flat) {
+        SideEffect { source.parent = backing; source.readbackBarrier = scene.readback; observer?.invoke(scene, true) }
+        DisposableEffect(scene) { onDispose {
+            scene.readback.dispose()
+            observer?.invoke(scene, false)
+            if (source.readbackBarrier === scene.readback) source.readbackBarrier = null
+        } }
+        // Invalidate in-flight thumbnails when producer content or placement changes.
+        LaunchedEffect(scene) {
+            if (Build.VERSION.SDK_INT < 33) snapshotFlow {
+                currentAlpha() to scene.layers.map { layer ->
+                    listOf(layer.source.recorded, layer.source.size, layer.source.location.placement,
+                        layer.alpha(), layer.contentKey())
+                }
+            }.collectLatest {
+                scene.readback.sceneChanged()
+                source.refresh()
             }
-        }.collectLatest {
-            scene.readback.sceneChanged()
-            source.refresh()
         }
     }
     Box(modifier, propagateMinConstraints = true) {
         CompositionLocalProvider(LocalLyricsBackdropScene provides scene, content = content)
         // Compose the real artwork plus all retained Crossfade documents for sampling
         // only. Displaying this backing again would strengthen translucent player art.
-        Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = {
+        if (!flat) Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = {
             Path().apply { addRect(Rect(Offset.Zero, size)) }
         }, readbackRequest = { source.readbackRequest }, onRecorded = { request ->
             scene.readback.compositeRecorded(request, scene.compositeDraws)

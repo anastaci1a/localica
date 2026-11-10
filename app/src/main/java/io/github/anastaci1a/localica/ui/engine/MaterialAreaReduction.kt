@@ -34,7 +34,7 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
         private set
     private fun level(index: Int): GraphicsLayer {
         while (levels.size <= index) levels += graphics.createGraphicsLayer().apply {
-        io.github.anastaci1a.localica.ui.GlassWork.event("layer")
+        GlassWork.event("layer")
             compositingStrategy = CompositingStrategy.Offscreen
             clip = true
         }

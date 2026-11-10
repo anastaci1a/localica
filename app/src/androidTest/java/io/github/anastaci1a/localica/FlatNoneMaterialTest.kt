@@ -99,7 +99,7 @@ class FlatNoneMaterialTest {
         val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
         var mounts = 0
         compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {
-            io.github.anastaci1a.localica.ui.components.NoneReductionAtlasHost(GlassColorShader) {
+            io.github.anastaci1a.localica.ui.components.NoneReductionAtlasHost(GlassColorShader, enabled = !io.github.anastaci1a.localica.ui.flatGlass()) {
                 LocalicaTheme {
                     remember { mounts++; Any() }
                     var draft by remember { mutableStateOf("") }
@@ -117,6 +117,7 @@ class FlatNoneMaterialTest {
 
     @Test fun opaqueThemePixelsAndModeTransitionsDoNoGlassWork() {
         var dark by mutableStateOf(false)
+        var referenceOnly by mutableStateOf(false)
         val runtime = GlassRendererRuntime(GlassRendererMode.FlatNone)
         val events = mutableListOf<String>()
         lateinit var source: FrostedBackdrop
@@ -133,8 +134,13 @@ class FlatNoneMaterialTest {
                         Box(Modifier.size(160.dp, 420.dp).testTag("flat-stage")) {
                             // Adversarial scene must never be sampled, recorded, or blended into the fill.
                             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Magenta) }
-                            LiquidGlassSurface(Modifier.size(120.dp).testTag("flat"), source = source,
+                            if (!referenceOnly) LiquidGlassSurface(Modifier.size(120.dp).testTag("flat"), source = source,
                                 cornerRadius = 16.dp, shadow = false, pressFeedback = false) {}
+                            else Canvas(Modifier.size(120.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))) {
+                                drawRect(reference)
+                                drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), 16.dp.toPx(), tone = referenceTone)
+                            }
                             // The required structural rim remains part of the material.
                             // Compare against an opaque theme draw plus that same finish.
                             Canvas(Modifier.offset(y = 140.dp).size(120.dp)
@@ -153,10 +159,17 @@ class FlatNoneMaterialTest {
                 val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
                     ?: InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)!!
                 File(root, "flat-fill-" + expected.toArgb() + ".png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
-                // One native frame compares independently drawn opaque theme + structural
-                // rim against the material on adversarial backing; no color tolerance.
+                // Keep the independent finish at the identical physical coordinates.
+                // The translated same-frame reference remains in both saved images.
+                compose.runOnIdle { referenceOnly = true }
+                val referenceImage = compose.onNodeWithTag("flat-stage").captureToImage()
+                val referencePixels = referenceImage.toPixelMap()
+                File(root, "flat-fill-" + expected.toArgb() + "-reference.png").outputStream().use {
+                    referenceImage.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+                compose.runOnIdle { referenceOnly = false }
                 for (y in 24 until 96) for (x in 24 until 96)
-                    assertEquals("Opaque theme interior at $x,$y", pixels[x, y + 140].toArgb(), pixels[x, y].toArgb())
+                    assertEquals("Opaque theme interior at $x,$y", referencePixels[x, y].toArgb(), pixels[x, y].toArgb())
                 assertEquals("The uncoated reference is the specified opaque theme", expected.toArgb(), pixels[60, 340].toArgb())
                 assertEquals("The material center retains the opaque theme", pixels[60, 340].toArgb(), pixels[60, 60].toArgb())
                 compose.runOnIdle {

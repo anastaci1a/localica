@@ -132,7 +132,7 @@ internal class NoneReductionAtlas(private val graphics: GraphicsContext, colorSh
     val hostedRegions get() = members.filter { it.placed }.map { it.region }
 
     private fun layer() = graphics.createGraphicsLayer().apply {
-        io.github.anastaci1a.localica.ui.GlassWork.event("layer")
+        GlassWork.event("layer")
         compositingStrategy = CompositingStrategy.Offscreen
         clip = true
         // A member may reference the output before the first record; an empty layer still draws.

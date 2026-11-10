@@ -7,8 +7,6 @@ import io.github.anastaci1a.localica.ui.components.rememberNoneReductionAtlas
 import io.github.anastaci1a.localica.ui.components.NoneAtlasStyle
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.runtime.*
 import androidx.compose.ui.modifier.modifierLocalConsumer
 import androidx.compose.ui.Modifier
@@ -78,9 +76,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     noneAtlasInput: NoneAtlasInput? = null,
     effect: (Size, Float, Float) -> RenderEffect?) {
     if (flatGlass()) return
-    val renderer = currentGlassRendererGeneration()
-    val none by animateFloatAsState(if (renderer.backend == GlassBackend.SingleToneBlur) 1f else 0f,
-        spring(dampingRatio = 1f, stiffness = 450f), label = "Glass render mode")
+    val none by glassAverageProgress()
     val blending = none > 0f && none < 1f
     Box(modifier.graphicsLayer { compositingStrategy = if (blending)
         androidx.compose.ui.graphics.CompositingStrategy.Offscreen else androidx.compose.ui.graphics.CompositingStrategy.Auto }) {
