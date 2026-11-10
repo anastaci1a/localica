@@ -47,6 +47,8 @@ private data class SlotBoundsElement(val lookahead: LookaheadScope, val spec: ()
         node.lookahead = lookahead
         node.spec = spec
         node.content = content
+        // Motion disabled midway (reduced motion, reorder, loading) ends at the target now.
+        node.settleIfDisabled()
     }
     override fun InspectorInfo.inspectableProperties() { name = "slotBounds" }
 }
@@ -76,7 +78,19 @@ internal class SlotBoundsNode(var lookahead: LookaheadScope, var spec: () -> Fin
         pending = false
     }
 
+    /** Ends a running or pending motion at its target when the spec no longer allows motion. */
+    fun settleIfDisabled(): Boolean {
+        if (!isPlacementAnimating || spec() != null) return false
+        job?.cancel()
+        job = null
+        animation = null
+        pending = false
+        target?.let { current = it }
+        return true
+    }
+
     override fun isMeasurementApproachInProgress(lookaheadSize: IntSize): Boolean {
+        settleIfDisabled()
         val previous = targetSize
         targetSize = lookaheadSize
         if (previous != null && previous != lookaheadSize && target != null && spec() != null) {
@@ -99,6 +113,8 @@ internal class SlotBoundsNode(var lookahead: LookaheadScope, var spec: () -> Fin
         val previous = target
         target = next
         val changed = previous != null && !previous.roundedEquals(next)
+        // A disabled spec must not leave an earlier motion running toward an unchanged target.
+        settleIfDisabled()
         pending = false
         if (!changed) {
             if (job?.isActive != true) current = next
