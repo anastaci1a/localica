@@ -7,6 +7,119 @@ import org.junit.Test
 
 class ExpandCollapseTest {
     private fun basis(a: Float=100f,b: Float=200f)=ExpansionBasis(Rect(0f,0f,a,100f),Rect(0f,0f,b,100f),1f)
+    @Test fun restingSheetReanchorsEveryEdgeWithoutStartingAPhaseSegment() {
+        for (access in MotionAccess.entries) for (expanded in listOf(false, true)) {
+            EngineHarness(access).use { h ->
+                val old = basis()
+                val c = ExpandCollapse(h.clock, StockUiSpec.expansion, expanded)
+                c.setBasis(old)
+                val rect = MotionRect(h.clock, if (expanded) old.endBounds else old.startBounds,
+                    EdgeRanges(1000f, 1000f, 1000f, 1000f))
+                c.bind(rect)
+                for (step in 1..20) {
+                    val next = ExpansionBasis(Rect(step.toFloat(), 2f, 100f + step, 90f),
+                        Rect(3f, 4f, 200f + step, 120f), 1f)
+                    c.setBasis(next, reanchorAtRest = true)
+                    assertTrue("A basis replacement must keep the phase settled: $access", c.phase.settled)
+                    assertEquals(if (expanded) 1f else 0f, c.phase.value(), 0f)
+                    assertEquals(if (expanded) next.endBounds else next.startBounds, rect.valueAt(h.clock.stampNow))
+                    assertTrue(rect.channels.all { it.settled && it.rawVelocity(h.clock.stampNow) == 0.0 })
+                    assertEquals(0, h.clock.activeCount)
+                    assertNull(c.pendingBasis)
+                    h.advance(.016)
+                }
+                c.dispose()
+            }
+        }
+    }
+
+    @Test fun sheetReanchorPolicyPreservesInFlightContinuity() {
+        for (access in listOf(MotionAccess.Standard, MotionAccess.Faster)) EngineHarness(access).use { h ->
+            val old = basis()
+            val c = ExpandCollapse(h.clock, StockUiSpec.expansion, false)
+            c.setBasis(old)
+            val rect = MotionRect(h.clock, old.startBounds, EdgeRanges(1000f, 1000f, 1000f, 1000f))
+            c.bind(rect)
+            c.target(true)
+            h.advance(.04)
+            val stamp = h.clock.stampNow
+            val phase = c.phase.sampleAt(stamp)
+            val edges = rect.channels.map { it.sampleAt(stamp) }
+            val next = ExpansionBasis(Rect(10f, 20f, 120f, 110f), Rect(0f, 0f, 300f, 200f), 1f)
+            c.setBasis(next, reanchorAtRest = true)
+            assertFalse(c.phase.settled)
+            assertEquals(phase, c.phase.sampleAt(stamp))
+            assertEquals(edges, rect.channels.map { it.sampleAt(stamp) })
+            h.advance(1.0)
+            assertTrue(c.phase.settled)
+            assertEquals(next.endBounds, rect.valueAt(h.clock.stampNow))
+            c.dispose()
+        }
+    }
+
+    @Test fun sheetReanchorPolicyDefersBasisWhileInContact() {
+        EngineHarness().use { h ->
+            val old = basis()
+            val c = ExpandCollapse(h.clock, StockUiSpec.expansion, false)
+            c.setBasis(old)
+            val rect = MotionRect(h.clock, old.startBounds, EdgeRanges(1000f, 1000f, 1000f, 1000f))
+            c.bind(rect)
+            c.contactBegin(h.clock.stampNow)
+            val next = basis(20f, 300f)
+            c.setBasis(next, reanchorAtRest = true)
+            assertEquals(next, c.pendingBasis)
+            assertEquals(old.startBounds, rect.valueAt(h.clock.stampNow))
+            h.now += 10_000_000
+            c.contactMove(50f, h.clock.stampNow)
+            assertEquals(150f, rect.valueAt(h.clock.stampNow).right, 0f)
+            c.contactRelease(0f, h.clock.stampNow)
+            h.advance(1.0)
+            assertEquals(next.endBounds, rect.valueAt(h.clock.stampNow))
+            c.dispose()
+        }
+    }
+
+    @Test fun sheetReanchorPolicyCannotBypassAPendingNativeGate() {
+        EngineHarness().use { h ->
+            val old = basis()
+            val c = ExpandCollapse(h.clock, StockUiSpec.expansion, false)
+            c.setBasis(old)
+            val rect = MotionRect(h.clock, old.startBounds, EdgeRanges(1000f, 1000f, 1000f, 1000f))
+            c.bind(rect)
+            c.nativeGate(.25f)
+            c.target(true)
+            h.advance(1.0)
+            assertTrue(c.awaitingNativeGate)
+            val generation = c.nativeGeneration
+            val edges = rect.channels.map { it.sampleAt(h.clock.stampNow) }
+            val next = basis(20f, 300f)
+            c.setBasis(next, reanchorAtRest = true)
+            assertEquals(.25f, c.phase.valueAt(h.clock.stampNow), 0f)
+            assertEquals(edges, rect.channels.map { it.sampleAt(h.clock.stampNow) })
+            assertEquals(generation, c.nativeGeneration)
+            h.advance(1.0)
+            assertTrue(c.awaitingNativeGate)
+            assertTrue(c.acknowledgeNativeGate(generation))
+            h.advance(1.0)
+            assertEquals(next.endBounds, rect.valueAt(h.clock.stampNow))
+            c.dispose()
+        }
+    }
+
+    @Test fun defaultBasisPolicyRetainsPresentedGeometryAtRest() {
+        EngineHarness().use { h ->
+            val old = basis()
+            val c = ExpandCollapse(h.clock, StockUiSpec.expansion, false)
+            c.setBasis(old)
+            val rect = MotionRect(h.clock, old.startBounds, EdgeRanges(1000f, 1000f, 1000f, 1000f))
+            c.bind(rect)
+            c.setBasis(basis(20f, 300f))
+            assertFalse(c.phase.settled)
+            assertEquals(old.startBounds, rect.valueAt(h.clock.stampNow))
+            h.advance(1.0)
+            c.dispose()
+        }
+    }
     @Test fun fullHalfAndSmallTravelLawUsePhysicalEdgesAndReferenceTime() {
         val spec=StockUiSpec.expansion
         assertEquals(.426086832,expansionDuration(spec,1000.0,1000.0,0.0,0.0,1.0,1.0,1.0/120),1e-7)

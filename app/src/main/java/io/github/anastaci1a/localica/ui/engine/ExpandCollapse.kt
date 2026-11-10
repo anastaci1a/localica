@@ -67,7 +67,31 @@ internal fun boundedPlan(stamp: FrameStamp,core: EasingSpec,T: Double,sigma: Dou
     private fun bindRect(rect: MotionRect,geometry: Curve?) { val stamp=clock.stampNow; guard(stamp); require(rect.clock===clock); check(bound==null || bound===rect); if(bound===rect) { require(boundCurve===geometry); return }; check(geometry==null || !touching); val oldCurve=boundCurve; boundCurve=geometry
         val next=pendingBasis?:basis; val prepared=try { next?.let { prepare(logical,stamp,it,rect) }.also { rect.claim(this) } } catch(failure: Throwable) { boundCurve=oldCurve; throw failure }; bound=rect; rect.channels.forEach { it.onRest={ notifyLifecycle() } }; if(prepared!=null) { pendingBasis=null; basis=next; apply(prepared,logical,stamp) } }
 
-    fun setBasis(value: ExpansionBasis): BasisChange { val stamp=clock.stampNow; guard(stamp); if(value==basis) { pendingBasis=null; return BasisChange.Rescale }; val change=classify(value,stamp); if(touching) { pendingBasis=value; lastStamp=stamp; return change }; if(basis==null && bound==null) { basis=value; lastStamp=stamp; return change }; if(change==BasisChange.Rebase && bound==null) { pendingBasis=value; applyPendingNoop(); return change }; val prepared=prepare(logical,stamp,value,bound); basis=value; pendingBasis=null; apply(prepared,logical,stamp); return change }
+    fun setBasis(value: ExpansionBasis): BasisChange = setBasis(value, reanchorAtRest=false)
+    /** Sheets follow live layout at rest. Native windows retain their presented-home policy. */
+    internal fun setBasis(value: ExpansionBasis, reanchorAtRest: Boolean): BasisChange {
+        val stamp = clock.stampNow
+        guard(stamp)
+        if (value == basis) { pendingBasis = null; return BasisChange.Rescale }
+        val change = classify(value, stamp)
+        if (touching) { pendingBasis = value; lastStamp = stamp; return change }
+        if (basis == null && bound == null) { basis = value; lastStamp = stamp; return change }
+        // A layout-only change has no incoming motion to bridge at a resting sheet endpoint.
+        // Keep the phase at rest and atomically anchor all physical edges to the new basis.
+        val reanchor = reanchorAtRest && basis != null && pendingNative == null && physicalRest &&
+            motion.rawValue(stamp) == (if (logical) 1.0 else 0.0)
+        if (change == BasisChange.Rebase && bound == null && !reanchor) {
+            pendingBasis = value
+            applyPendingNoop()
+            return change
+        }
+        val prepared = prepare(logical, stamp, value, bound, reanchor = reanchor)
+        basis = value
+        pendingBasis = null
+        apply(prepared, logical, stamp)
+        return change
+    }
+
     /** A new native window has no presented rectangle to preserve. At the ordinary
      * source gate only, seed its first measured home without reusing a dead window's edges. */
     internal fun initializeNativeHome(value: ExpansionBasis, host: ShadowPlane): Boolean {
@@ -79,11 +103,11 @@ internal fun boundedPlan(stamp: FrameStamp,core: EasingSpec,T: Double,sigma: Dou
         return true
     }
     private data class Prepared(val entries: List<Pair<MotionFloat,MotionIntent>>,val plan: EasedPlan,val duration: Double,val approvedTau: Double,val spec: ExpansionSpec,val gate: Boolean?)
-    private fun prepare(q: Boolean,stamp: FrameStamp,next: ExpansionBasis,rect: MotionRect?,releaseVelocity: Double?=null,initialize: Boolean=false): Prepared {
+    private fun prepare(q: Boolean,stamp: FrameStamp,next: ExpansionBasis,rect: MotionRect?,releaseVelocity: Double?=null,initialize: Boolean=false,reanchor: Boolean=false): Prepared {
         val law=contact?.spec?:spec; val ctx=context(); val sigma=if(ctx.access==MotionAccess.Faster) 2.0/3 else 1.0; val x=motion.rawValue(stamp); val v=releaseVelocity?:motion.rawVelocity(stamp); val waiting=if(nativeBoundary==null) null else if(awaitingNativeGate) pendingNative else q.takeIf { it!=nativeSide }; val target=waiting?.let { requireNotNull(nativeBoundary).toDouble() }?:if(q) 1.0 else 0.0; val geometry=contact?.basis?:next; val reference=contact?.reference?:ctx.fullPlayerReferenceTravelPx.toDouble(); val T=if(ctx.access==MotionAccess.Reduced || initialize) 2*ctx.displayIntervalSeconds.toDouble() else expansionDuration(law,geometry.edgeTravelPx.toDouble(),reference,x,v,target,sigma,ctx.displayIntervalSeconds.toDouble())
         val edges=rect?.channels; val edgeV=if(releaseVelocity!=null && rect!=null) DoubleArray(4) { (contact?.basis?:basis?:next).delta(it)*releaseVelocity } else null
         require(finiteExpansionFinish(law,geometry.edgeTravelPx.toDouble()/reference,ctx.displayIntervalSeconds.toDouble())) { "Expansion duration is outside its admitted geometry domain" }; val states=mutableListOf(doubleArrayOf(x,v,target,-law.band.toDouble(),(1f+law.band).toDouble())); if(edges!=null) for(i in 0..3) { val residual=edges[i].rawValue(stamp)-basisEdges(next,x)[i]; val velocity=(edgeV?.get(i)?:edges[i].rawVelocity(stamp))-basisSlope(next,i,x)*v; val room=abs(residual)+law.band*edges[i].range.toDouble(); states.add(doubleArrayOf(residual,velocity,0.0,-room,room)) }
-        val rest=x==target && v==0.0 && (edges==null || edges.indices.all { edges[it].rawValue(stamp)==basisEdges(next,target)[it] && (edgeV?.get(it)?:edges[it].rawVelocity(stamp))==0.0 }); val reduced=ctx.access==MotionAccess.Reduced; val instant=reduced || initialize
+        val rest=x==target && v==0.0 && (reanchor || edges==null || edges.indices.all { edges[it].rawValue(stamp)==basisEdges(next,target)[it] && (edgeV?.get(it)?:edges[it].rawVelocity(stamp))==0.0 }); val reduced=ctx.access==MotionAccess.Reduced; val instant=reduced || initialize
         val plan=if(instant || rest) EasedPlan(stamp,law.core,T,sigma,min(sigma/120,T/4)) else expansionPlan(stamp,law,T,sigma,states)
         val policy=if(reduced) "Reduced" else if(initialize) "Initial" else "Continuous"; val segment=if(instant || rest) Rest(target) else plan.segment(x,v,target,states.first()[3]..states.first()[4]); val intents=mutableListOf(motion to motion.prepareSegment(segment,target.toFloat(),stamp,plan,policy,releaseVelocity?.toFloat()))
         if(rect!=null) { val physical=if(instant || rest) rect.channels.mapIndexed { i,m -> m.prepareSegment(Rest(basisEdges(next,target)[i]),basisEdges(next,target)[i].toFloat(),stamp,plan,policy) } else if(boundCurve!=null) rect.prepareMapped(next,requireNotNull(boundCurve),segment,target,plan,this) else rect.prepare(next.rect(target),plan,this,edgeV); intents.addAll(rect.entries(physical)) }; return Prepared(intents,plan,if(instant || rest) 0.0 else T,min(sigma/120,T/4),law,waiting)

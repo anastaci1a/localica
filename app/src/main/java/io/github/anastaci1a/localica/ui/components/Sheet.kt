@@ -30,7 +30,7 @@ private class SheetHandle(override val expansion: ExpansionView, initial: Boolea
         while (true) { requested = requests.first { it != requested }; owner.target(requested) }
     }
     SideEffect {
-        owner.bind(frame); owner.setBasis(basis)
+        owner.bind(frame); owner.setBasis(basis, reanchorAtRest = true)
         handle.contact = SheetContact(onDragStart = { owner.canContact.also { if (it) owner.contactBegin(clock.stampNow) } },
             onDrag = { owner.contactMove(it, clock.stampNow) },
             onRelease = { owner.contactRelease(it, clock.stampNow).also { decision -> handle.requested = decision.expanded } },
