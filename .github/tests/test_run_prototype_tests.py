@@ -40,6 +40,7 @@ class RunnerContract(unittest.TestCase):
         (self.root/'.github/test-evidence/source_methods.py').symlink_to((ROOT/'.github/test-evidence/source_methods.py').resolve())
         (self.root/'.github/test-evidence/teardown_offline.py').symlink_to((ROOT/'.github/test-evidence/teardown_offline.py').resolve())
         (self.root/'.github/test-evidence/utp_results.py').symlink_to((ROOT/'.github/test-evidence/utp_results.py').resolve())
+        (self.root/'.github/test-evidence/native_reconciliation.py').symlink_to((ROOT/'.github/test-evidence/native_reconciliation.py').resolve())
         self.executable('bin/node', '''#!/usr/bin/env python3
 import json,pathlib,sys,time
 a=sys.argv

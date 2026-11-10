@@ -118,6 +118,12 @@ if [[ "$result" != 0 && "$method_iteration" == false ]] \
   result=0
 fi
 set -e
+# Preserve raw native outcomes even when Gradle or strict qualification fails.
+# Raw outcomes never grant acceptance; the separate qualified receipt is marked below.
+if ! python3 .github/test-evidence/native_reconciliation.py --root . --output prototype-evidence/raw-reconciled-tests.json --exit-code "$result" --source "$GITHUB_SHA" --api "$TEST_API"; then
+  echo 'Could not preserve native reconciliation' >&2
+  [[ "$result" != 0 ]] || exit 1
+fi
 [[ "$result" == 0 ]] || exit "$result"
 # The connected task must install the precompiled pair without rebuilding either APK.
 sha256sum --check prototype-evidence/test-input-apks.sha256
@@ -281,3 +287,13 @@ assert all(v['failed'] == 0 and v['errors'] == 0 and (v['passed'] > 0 or (c in g
            or (v['skipped'] > 0 and v['skipped'] == assume_gated_skips.get(c, 0)))
            for c, v in counts.items()), 'Required class failed or had no passing tests'
 PYXML
+# Only the completed strict native qualification may mark its receipt accepted.
+python3 - <<'PYQUALIFIED'
+import json, pathlib
+path = pathlib.Path('prototype-evidence/reconciled-tests.json')
+receipt = json.loads(path.read_text())
+receipt['qualification_passed'] = True
+receipt['native_runner_exit_code'] = 0
+receipt['receipt_kind'] = 'native-qualified-outcomes'
+path.write_text(json.dumps(receipt, indent=2)+'\n')
+PYQUALIFIED

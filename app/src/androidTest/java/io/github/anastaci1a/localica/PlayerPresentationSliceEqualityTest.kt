@@ -157,8 +157,9 @@ class PlayerPresentationSliceEqualityTest {
             if (selected) compose.waitUntil(10000) { nodes("empty-lyrics").isNotEmpty() }
             compose.mainClock.autoAdvance = false
             phases.forEachIndexed { index, requested ->
-                compose.runOnIdle { checkpoint++; scope.launch { progress.snapTo(requested) } }
-                compose.waitForIdle()
+                val generation = compose.runOnIdle { checkpoint++; scope.launch { progress.snapTo(requested) }; checkpoint }
+                val name = "api${Build.VERSION.SDK_INT}-$policy-${artworkLayout.name}-$selected-$index"
+                requireFreshComposition(output, name, "original", visual, requested, generation)
                 val captureNode = compose.onNodeWithTag("slice-i-capture", useUnmergedTree = true)
                 val capture = captureNode.fetchSemanticsNode().boundsInRoot
                 val tags = listOf("player-surface", "player-background-space", "player-title", "player-artist", "player-artwork",
@@ -170,7 +171,6 @@ class PlayerPresentationSliceEqualityTest {
                 val image = captureNode.captureToImage()
                 val display = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
                 val afterOriginal = snapshot(visual)
-                val name = "api${Build.VERSION.SDK_INT}-$policy-${artworkLayout.name}-$selected-$index"
                 save(File(output, "$name.png"), image.asAndroidBitmap())
                 save(File(output, "$name-display.png"), display)
                 val record = JSONObject().put("name", name).put("source", BuildConfig.SOURCE_SHA)
@@ -189,7 +189,7 @@ class PlayerPresentationSliceEqualityTest {
                     val recipe = Oracle(background?.width?.toInt() ?: image.width, background?.height?.toInt() ?: image.height,
                         if (artworkLayout == ArtworkLayout.FullBackground && !selected) 1f else 0f)
                     compose.runOnIdle { oracleDescriptor = null; oracle = recipe }
-                    compose.waitForIdle()
+                    requireFreshComposition(output, name, "oracle", visual, requested, generation)
                     val backing = captureNode.captureToImage()
                     val oracleDisplay = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
                     val oracleState = snapshot(visual)
@@ -198,7 +198,7 @@ class PlayerPresentationSliceEqualityTest {
                     save(File(output, "$name-oracle.png"), backing.asAndroidBitmap())
                     save(File(output, "$name-oracle-display.png"), oracleDisplay)
                     compose.runOnIdle { oracle = null }
-                    compose.waitForIdle()
+                    requireFreshComposition(output, name, "restored", visual, requested, generation)
                     restored = captureNode.captureToImage()
                     val restoredDisplay = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
                     save(File(output, "$name-restored.png"), restored.asAndroidBitmap())
@@ -284,6 +284,23 @@ class PlayerPresentationSliceEqualityTest {
         }
         File(output, "api${Build.VERSION.SDK_INT}-$policy.json").writeText(JSONObject()
             .put("source", BuildConfig.SOURCE_SHA).put("api", Build.VERSION.SDK_INT).put("policy", policy).put("frames", receipts).toString(2))
+    }
+
+    private fun requireFreshComposition(output: File, name: String, stage: String, visual: PlayerVisual, requested: Float, generation: Int) {
+        // A paused test clock does not process pending recomposition in waitForIdle.
+        // Admit exactly one frame, then verify the held state before any image capture.
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        val actual = snapshot(visual)
+        File(output, "$name-pre-$stage.json").writeText(JSONObject()
+            .put("source", BuildConfig.SOURCE_SHA).put("stage", stage)
+            .put("requestedPhaseBits", requested.toRawBits()).put("expectedGeneration", generation)
+            .put("observed", snapshotJson(actual)).toString(2))
+        assertEquals("The checkpoint is unchanged before capture", generation, actual.generation)
+        val actualProbe = requireNotNull(actual.probe)
+        assertEquals("The provider observation is fresh before capture", generation, actualProbe.generation)
+        assertEquals("The Surface ink observation is fresh before capture", generation, actual.inkGeneration)
+        assertEquals("The exact held phase is unchanged before capture", requested.toRawBits(), actual.phaseBits)
     }
 
     private fun nodes(tag: String) = compose.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes()
