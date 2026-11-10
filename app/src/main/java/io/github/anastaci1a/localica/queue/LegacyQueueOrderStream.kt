@@ -1,12 +1,21 @@
 package io.github.anastaci1a.localica.queue
 
-/** Legacy scalar reader. Small results bound Kotlin memory; native SQLite input cost needs separate qualification. */
+/**
+ * Forward-only legacy transfer. The approved one-time exception permits a payload-sized native copy;
+ * fixed chunks bound only the transfer buffers. Persist copied segments before resuming at their byte offset.
+ */
 @androidx.annotation.WorkerThread
 internal class LegacyQueueOrderStream(private val db: androidx.sqlite.db.SupportSQLiteDatabase,
-    private val queueId: String) : java.io.InputStream() {
+    private val queueId: String, private val chunkBytes: Int = MigrationChunkBytes,
+    startOffset: Long = 0) : java.io.InputStream() {
+    init {
+        QueueSequence(db).checkWorker()
+        require(chunkBytes in 1..MigrationChunkBytes)
+        require(startOffset >= 0 && startOffset < Long.MAX_VALUE)
+    }
     private var chunk = ByteArray(0)
     private var index = 0
-    private var offset = 1L
+    private var offset = startOffset + 1
     private var ended = false
     override fun read(): Int {
         if (index == chunk.size && !refill()) return -1
@@ -23,11 +32,17 @@ internal class LegacyQueueOrderStream(private val db: androidx.sqlite.db.Support
     }
     private fun refill(): Boolean {
         if (ended) return false
-        chunk = db.query("SELECT substr(CAST(orderState AS BLOB),?,16384) FROM queues WHERE id = ?",
-            arrayOf(offset, queueId)).use { check(it.moveToFirst()); it.getBlob(0) ?: ByteArray(0) }
+        QueueSequence(db).checkWorker()
+        chunk = db.query("SELECT substr(CAST(orderState AS BLOB),?,?) FROM queues WHERE id = ?",
+            arrayOf(offset, chunkBytes, queueId)).use { check(it.moveToFirst()); it.getBlob(0) ?: ByteArray(0) }
         offset += chunk.size
         index = 0
         ended = chunk.isEmpty()
         return !ended
+    }
+
+    companion object {
+        // R8 verified this transfer size on API 26 and 36, below the API 26 cursor-window boundary.
+        const val MigrationChunkBytes = 1024 * 1024
     }
 }

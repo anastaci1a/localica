@@ -9,6 +9,7 @@ import io.github.anastaci1a.localica.queue.QueueEntry
 import io.github.anastaci1a.localica.queue.QueueSequence
 import io.github.anastaci1a.localica.queue.QueueSelection
 import io.github.anastaci1a.localica.queue.QueueSequenceMigration
+import io.github.anastaci1a.localica.queue.LegacyQueueOrderStream
 import io.github.anastaci1a.localica.library.SavedOrder
 import io.github.anastaci1a.localica.library.SavedOrderCodec
 import io.github.anastaci1a.localica.library.TrackSnapshot
@@ -39,6 +40,28 @@ class QueueSequenceTest {
     }
 
     private fun ids(sequence: QueueSequence) = sequence.page("q", 0, QueueSequence.PageSize).entries.map { it.entry.id }
+
+    @Test fun legacyTransferResumesAtExactByteOffsetsAcrossFixedChunksAndUtf8Boundaries() = database { _, sql ->
+        val value = "aα🙂中".repeat(110000)
+        val bytes = value.toByteArray(Charsets.UTF_8)
+        sql.execSQL("UPDATE queues SET orderState = ? WHERE id = 'q'", arrayOf(value))
+        for (chunk in listOf(16384, 262144, LegacyQueueOrderStream.MigrationChunkBytes)) {
+            for (offset in listOf(0, 1, 2, chunk - 1, chunk, chunk + 1, bytes.size, bytes.size + 5)) {
+                LegacyQueueOrderStream(sql, "q", chunk, offset.toLong()).use { input ->
+                    if (offset < bytes.size) {
+                        assertEquals(bytes[offset].toInt() and 255, input.read())
+                        assertArrayEquals(bytes.copyOfRange(offset + 1, bytes.size), input.readBytes())
+                    } else assertEquals(-1, input.read())
+                    assertEquals(0, input.read(ByteArray(1), 0, 0))
+                    assertEquals(-1, input.read())
+                }
+            }
+        }
+        assertEquals(1024 * 1024, LegacyQueueOrderStream.MigrationChunkBytes)
+        assertTrue(runCatching { LegacyQueueOrderStream(sql, "q", 0) }.exceptionOrNull() is IllegalArgumentException)
+        assertTrue(runCatching { LegacyQueueOrderStream(sql, "q", startOffset = -1) }.exceptionOrNull() is IllegalArgumentException)
+        assertTrue(runCatching { LegacyQueueOrderStream(sql, "q", startOffset = Long.MAX_VALUE) }.exceptionOrNull() is IllegalArgumentException)
+    }
 
     @Test fun rangeEditsMatchTheExistingOccurrenceModelAndMaintainTotals() = database { sequence, _ ->
         var expected = QueueEdits.create(List(19) { song(it % 7) }, 8, "Queue")
