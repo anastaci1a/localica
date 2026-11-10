@@ -5,11 +5,14 @@ from pathlib import Path
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT/'.github/test-evidence'))
+from source_methods import read_source
 OBSERVER = Path(os.environ.get('LOCALICA_OBSERVER_TEST_SOURCE', ROOT/'.github/test-evidence/observe.py'))
 REQUIRED = 'io.github.anastaci1a.localica.SearchImeMotionTest'
 FOCUS = 'io.github.anastaci1a.localica.ListSearchTest'
@@ -1427,19 +1430,46 @@ while true; do sleep .05; done
 class RiskInventoryContract(unittest.TestCase):
     """The reviewed prototype inventory names only existing top-level test classes, once each."""
 
-    def test_every_listed_class_exists_once(self):
-        lines = (ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()
-        names = [line for line in lines if line.startswith('io.')]
+    def assert_inventory(self, names, source):
         self.assertEqual(sorted(set(names)), sorted(names), 'Duplicate inventory lines')
-        source = ROOT/'app/src/androidTest/java/io/github/anastaci1a/localica'
         prefix = 'io.github.anastaci1a.localica.'
-        missing = []
+        declarations = []
+        for path in sorted(source.rglob('*')):
+            if path.is_file() and path.suffix in ('.kt', '.java'):
+                declarations.extend(entry[0] for entry in read_source(path).classes)
         for name in names:
             self.assertTrue(name.startswith(prefix) and '.' not in name[len(prefix):], name)
-            simple = name[len(prefix):]
-            path = source/(simple+'.kt')
-            if not path.is_file() or ('class '+simple) not in path.read_text():
-                missing.append(name)
-        self.assertEqual([], missing, 'Inventory names classes without a test source')
+            self.assertEqual(1, declarations.count(name),
+                'Require exactly one top-level source declaration for '+name)
+
+    def test_every_listed_class_exists_once(self):
+        lines = (ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()
+        self.assert_inventory([line for line in lines if line.startswith('io.')],
+            ROOT/'app/src/androidTest/java')
+
+    def test_colocated_classes_are_admitted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            (source/'Shared.kt').write_text('package io.github.anastaci1a.localica\nclass First {}\nclass Second {}\n')
+            self.assert_inventory(['io.github.anastaci1a.localica.'+name
+                for name in ('First', 'Second')], source)
+
+    def test_duplicate_declarations_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            for name in ('One.kt', 'Two.kt'):
+                (source/name).write_text('package io.github.anastaci1a.localica\nclass Duplicate {}\n')
+            with self.assertRaisesRegex(AssertionError, 'exactly one top-level'):
+                self.assert_inventory(['io.github.anastaci1a.localica.Duplicate'], source)
+
+    def test_nested_and_literal_declarations_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            (source/'Other.kt').write_text('package io.github.anastaci1a.localica\n'
+                'class Outer { class Nested {} }\n// class Comment {}\n'
+                'val text = "class Literal {}"\n')
+            for name in ('Nested', 'Comment', 'Literal', 'Missing'):
+                with self.subTest(name=name), self.assertRaisesRegex(AssertionError, 'exactly one top-level'):
+                    self.assert_inventory(['io.github.anastaci1a.localica.'+name], source)
 
 if __name__=='__main__':unittest.main()
