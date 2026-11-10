@@ -41,6 +41,24 @@ class RegistryContractTest {
             ).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectMatches("(?s).*RawUiMotion.*UiLayerDependency.*2 errors.*")
     }
 
+    /** The comparison tooling takes its rule list from this export of the built jar, never from a hand-written array (#757). */
+    @Test fun builtJarExportsItsRegistry() {
+        val jar = File(System.getProperty("localica.registry.jar"))
+        // Registry classes come from the jar first; the lint API comes from the test classpath.
+        val jarFirst = object : java.net.URLClassLoader(arrayOf(jar.toURI().toURL()), javaClass.classLoader) {
+            override fun loadClass(name: String, resolve: Boolean): Class<*> =
+                if (name.startsWith("io.github.anastaci1a.localica.lint.")) findLoadedClass(name) ?: findClass(name) else super.loadClass(name, resolve)
+        }
+        // Rule enums are read from the jar without creating a second set of Issue objects in this JVM.
+        val ids = jarFirst.use { loader -> listOf(UiRuleId::class.java, MenuRuleId::class.java).flatMap { type ->
+            val inJar = Class.forName(type.name, false, loader)
+            assertNotSame(type, inJar)
+            inJar.enumConstants.map { (it as Enum<*>).name }
+        } }
+        assertEquals(LocalicaIssueRegistry().issues.map { it.id }, ids)
+        File(jar.parentFile, "registry-export.json").writeText(ids.joinToString(",", "{\"vendor\":\"Localica\",\"issues\":[", "]}\n") { "\"$it\"" })
+    }
+
     @Test fun parallelRegistriesHaveTheSameImmutableInventory() {
         val pool = Executors.newFixedThreadPool(4)
         try {
