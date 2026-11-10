@@ -31,7 +31,8 @@ internal fun ScrollbarSlots(state: Any, key: Any, movement: () -> Pair<Int, Int>
     val density = LocalDensity.current
     var pressed by remember { mutableStateOf(false) }
     var activity by remember { mutableIntStateOf(0) }
-    val motion = rememberScrollbarMotion(state, movement, { activity }, dragging() || pressed, speed, reduced)
+    // Pointer coroutines retain this reader across owner replacement during a held contact.
+    val motion by rememberUpdatedState(rememberScrollbarMotion(state, movement, { activity }, dragging() || pressed, speed, reduced))
     // The preview extends 28 dp inward from the 48 dp input rail.
     BoxWithConstraints(modifier.fillMaxHeight()
         .width(ScrollbarSpec.railWidth)
