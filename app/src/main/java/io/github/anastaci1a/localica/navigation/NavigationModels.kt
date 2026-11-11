@@ -75,7 +75,10 @@ data class InterfaceSettings(
     val reducedMotion: Boolean = false,
     val artworkTap: ArtworkAction = ArtworkAction.Lyrics,
     val artworkHold: ArtworkAction = ArtworkAction.Menu,
-    val fasterMotion: Boolean = false,
+    /** #860: animation speed in tenths, 5..15 (0.5× to 1.5×); 10 is normal. */
+    val animationSpeedTenths: Int = 10,
+    /** #862: apply the platform animator duration scale (and its 0 as Reduce motion). */
+    val respectSystemAnimationScale: Boolean = true,
     val artworkLayout: ArtworkLayout = ArtworkLayout.FullBackground,
     val artworkTransition: ArtworkTransition = ArtworkTransition.BlurThrough,
     val artworkSwipe: Boolean = true,
@@ -83,7 +86,14 @@ data class InterfaceSettings(
     val grayTone: Float = .4f,
     val lyricDelayMs: Int = 0,
     val longScroll: LongScrollStyle = LongScrollStyle.FlyThrough,
-)
+) {
+    /** The speed multiplier s; stored tenths outside 5..15 are repaired to the nearest step. */
+    val animationSpeed: Float get() = animationSpeedTenths.coerceIn(MinimumAnimationSpeedTenths, MaximumAnimationSpeedTenths) / 10f
+}
+const val MinimumAnimationSpeedTenths = 5
+const val MaximumAnimationSpeedTenths = 15
+/** The old "Faster animations" (a 2/3 time scale) is exactly 1.5×. */
+const val FasterAnimationSpeedTenths = 15
 
 fun Float.normalizedGrayTone() = if (isFinite()) coerceIn(0f, 1f) else .4f
 
