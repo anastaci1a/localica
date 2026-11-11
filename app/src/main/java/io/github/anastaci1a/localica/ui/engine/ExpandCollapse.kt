@@ -163,6 +163,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: EasingSpec,T: Double,sigma: Dou
         held=true; identity=null; lastStamp=stamp
         // Frozen destinations also preserve the frame when ordinary live reduction drains these channels.
         commitAtomic(entries,true)
+        // A held frame is constant: it runs no frames, even while its departing home stays mounted (an offscreen pager page).
+        channels.forEach(clock::unregister)
     }
     internal fun release() {
         val stamp=clock.stampNow; guard(stamp)
