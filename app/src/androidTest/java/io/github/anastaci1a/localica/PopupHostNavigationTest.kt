@@ -33,13 +33,12 @@ class PopupHostNavigationTest {
     @Test fun settingsBackDuringRetractLeavesWithSubmenu() = navigate(settings = true, expanding = false)
     @Test fun settingsBackDuringExpandThenBackLeavesWithSubmenu() = navigate(settings = true, expanding = true)
     @Test fun subviewBackDuringRetractLeavesWithPage() = navigate(settings = false, expanding = false)
-    // #812 6c lead ruling: a Page host's Back lands on the frame that composes the popup's dismissal.
-    @Test fun subviewBackDuringExpandThenBackLeavesWithPage() = navigate(settings = false, expanding = true, hostBackOnDismissalFrame = true)
+    @Test fun subviewBackDuringExpandThenBackLeavesWithPage() = navigate(settings = false, expanding = true)
 
     @Test fun libraryBackDuringRetractKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = false, library = true)
     @Test fun libraryBackDuringExpandKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = true, library = true)
 
-    @Test fun playlistEditorCancellationLeavesPopupBackUsable() = navigate(settings = false, expanding = true, playlistEditor = true, hostBackOnDismissalFrame = true)
+    @Test fun playlistEditorCancellationLeavesPopupBackUsable() = navigate(settings = false, expanding = true, playlistEditor = true)
 
     private fun navigate(settings: Boolean, expanding: Boolean, library: Boolean = false, playlistEditor: Boolean = false, hostBackOnDismissalFrame: Boolean = false) {
         var naming by mutableStateOf(playlistEditor)
