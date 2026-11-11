@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.ui.layout.ReturnControlHeightProbe
 import io.github.anastaci1a.localica.ui.layout.ReturnControlSlot
 
 @Composable
@@ -46,13 +47,8 @@ internal fun FloatingReturnToPositionButton(up: Boolean, label: String, visible:
     if (onHeightMeasured != null) {
         // The list needs its end clearance before scrolling can reveal the arrow.
         // Measure the actual control without placing a drawing or an input target.
-        Layout(content = {
-            Box(Modifier.onSizeChanged { onHeightMeasured(it.height) }) {
-                ReturnToPositionButton(up, label, visible = false, onClick = {})
-            }
-        }) { measurables, constraints ->
-            measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
-            layout(0, 0) {}
+        ReturnControlHeightProbe(onHeightMeasured) {
+            ReturnToPositionButton(up, label, visible = false, onClick = {})
         }
     }
     val motion = rememberFloatingControlMotion(visible, reducedMotion)
