@@ -118,7 +118,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val aspect by animateFloatAsState(artwork.palette.aspect, tween(paletteDuration), label = "Cover proportions")
     val palette = animatedPlayerPalette(paletteTarget, blendClock).copy(aspect = aspect)
     // U10.03: the lyrics layout is one expand/collapse owner on the #608 law over the title's travel (basis bound below).
-    val lyricsPresence = rememberPresence("player-lyrics", lyricsOpen)
+    val lyricsPresence = rememberPresence("player-lyrics", lyricsOpen) { it.lyricsExpansion }
     val lyricVisibility = lyricsPresence.view.phase.value()
     val lyricsRest by rememberExpansionRest(lyricsPresence.view)
     val lyricsSettled = lyricsRest == if (lyricsOpen) ExpansionRest.Open else ExpansionRest.Closed
