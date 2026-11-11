@@ -157,6 +157,8 @@ class ScrollbarMotionTest {
             var total = 0f
             repeat(10_000) { total = readScalars(motion, 10, total) }
             val thread = Thread.currentThread().id
+            // Inflate the shared reflective accessor before measuring, as the sibling allocation tests do.
+            repeat(64) { allocated.invoke(bean, thread) }
             val before = allocated.invoke(bean, thread) as Long
             total = readScalars(motion, 1_000_000, total)
             val bytes = (allocated.invoke(bean, thread) as Long) - before
