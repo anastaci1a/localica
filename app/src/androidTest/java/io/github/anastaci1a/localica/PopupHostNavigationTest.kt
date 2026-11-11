@@ -33,14 +33,15 @@ class PopupHostNavigationTest {
     @Test fun settingsBackDuringRetractLeavesWithSubmenu() = navigate(settings = true, expanding = false)
     @Test fun settingsBackDuringExpandThenBackLeavesWithSubmenu() = navigate(settings = true, expanding = true)
     @Test fun subviewBackDuringRetractLeavesWithPage() = navigate(settings = false, expanding = false)
-    @Test fun subviewBackDuringExpandThenBackLeavesWithPage() = navigate(settings = false, expanding = true)
+    // #812 6c lead ruling: a Page host's Back lands on the frame that composes the popup's dismissal.
+    @Test fun subviewBackDuringExpandThenBackLeavesWithPage() = navigate(settings = false, expanding = true, hostBackOnDismissalFrame = true)
 
     @Test fun libraryBackDuringRetractKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = false, library = true)
     @Test fun libraryBackDuringExpandKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = true, library = true)
 
-    @Test fun playlistEditorCancellationLeavesPopupBackUsable() = navigate(settings = false, expanding = true, playlistEditor = true)
+    @Test fun playlistEditorCancellationLeavesPopupBackUsable() = navigate(settings = false, expanding = true, playlistEditor = true, hostBackOnDismissalFrame = true)
 
-    private fun navigate(settings: Boolean, expanding: Boolean, library: Boolean = false, playlistEditor: Boolean = false) {
+    private fun navigate(settings: Boolean, expanding: Boolean, library: Boolean = false, playlistEditor: Boolean = false, hostBackOnDismissalFrame: Boolean = false) {
         var naming by mutableStateOf(playlistEditor)
         var page by mutableStateOf(true)
         var open by mutableStateOf(false)
@@ -49,11 +50,19 @@ class PopupHostNavigationTest {
         var parentView: View? = null
         var parentProgress = 1f
         frameViews = { listOfNotNull(parentView, popupView) }
-        frameState = { "parent=$parentProgress open=$open parentAttached=${parentView?.isAttachedToWindow} popupAttached=${popupView?.isAttachedToWindow}" }
+        // #812 passive diagnostics, captured on Main from the existing work observer: the popup window's own phase,
+        // the clock of its last emission, and its foreground alpha under the production window(.18, .83) curve.
+        var popupPhase = Float.NaN
+        var popupPhaseClock = -1L
+        frameState = { "parent=$parentProgress open=$open parentAttached=${parentView?.isAttachedToWindow} popupAttached=${popupView?.isAttachedToWindow}" +
+            " popupPhase=$popupPhase popupPhaseClock=$popupPhaseClock popupForeground=${if (popupPhase.isNaN()) popupPhase else io.github.anastaci1a.localica.ui.engine.Curve.window(.18f, .83f).at(popupPhase)}" +
+            " popupProgress=${anchor.contact.expansion.value} ${ownerState(anchor)}" }
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassMorphWorkObserver provides { phase, window, progress ->
                 if (phase == "geometry" && progress != null && window ===
                     (parentView?.parent as? DialogWindowProvider)?.window) parentProgress = progress
+                if (phase == "geometry" && progress != null && window ===
+                    (popupView?.parent as? DialogWindowProvider)?.window) { popupPhase = progress; popupPhaseClock = compose.mainClock.currentTime }
             }) {
             Box(Modifier.fillMaxSize().background(Color.Blue))
             @Composable fun Body() {
@@ -131,7 +140,7 @@ class PopupHostNavigationTest {
         // navigates while it is still returning. Also cover an ordinary dismissal.
         if (expanding) back(popupView) { !open }
         else compose.runOnIdle { open = false }
-        compose.mainClock.advanceTimeBy(32)
+        if (!hostBackOnDismissalFrame) compose.mainClock.advanceTimeBy(32)
         assertTrue("Return is in flight before navigation", anchor.modalPresent && anchor.contact.expansion.value > 0f)
         val before = redFrame()
         assertTrue("Fixture presents popup foreground before navigation: $before", before.pixels > 100)
@@ -161,6 +170,18 @@ class PopupHostNavigationTest {
     }
 
     private data class RedFrame(val pixels: Int, val peak: Int)
+
+    /** #812 passive diagnostic, read on Main: the popup's bound expansion owner, its owning-clock phase and its held
+     * state. It never throws, so it cannot change an outcome; fields absent from a source are logged as absent. */
+    private fun ownerState(anchor: GlassAnchor): String = runCatching {
+        val view = anchor.contact.expansion
+        val phase = view.javaClass.getDeclaredField("phase").apply { isAccessible = true }.get(view)
+        val owner = (phase.javaClass.getDeclaredField("owner\$delegate").apply { isAccessible = true }.get(phase) as State<*>).value
+            as io.github.anastaci1a.localica.ui.engine.ExpandCollapse? ?: return@runCatching "owner=none"
+        val held = runCatching { (owner.javaClass.getDeclaredField("held\$delegate").apply { isAccessible = true }.get(owner) as State<*>).value }
+            .getOrElse { "absent" }
+        "owner=${System.identityHashCode(owner)} ownerPhase=${owner.phase.value()} held=$held expanded=${owner.expanded}"
+    }.getOrElse { "owner=unreadable(${it.javaClass.simpleName})" }
 
     private class FrameMarker(val x: Int) : android.graphics.drawable.Drawable() {
         var stage = 0
@@ -209,7 +230,8 @@ class PopupHostNavigationTest {
             if (matches) presented = next else next.recycle()
             matches
         }
-        android.util.Log.i("PopupHostNavigation", "stage=$requested clock=${compose.mainClock.currentTime} ${frameState()}")
+        val state = compose.runOnUiThread { frameState() }
+        android.util.Log.i("PopupHostNavigation", "stage=$requested clock=${compose.mainClock.currentTime} $state")
         val bitmap = requireNotNull(presented)
         return try {
             var count = 0
