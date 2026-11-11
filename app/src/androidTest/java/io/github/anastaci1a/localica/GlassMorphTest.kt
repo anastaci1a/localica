@@ -634,7 +634,7 @@ class GlassMorphTest {
         fun probeState(event: String, laidOut: Boolean? = null): String {
             var expansion = 0f
             probeClock.observe { expansion = anchor.contact.expansion.value }
-            return             "$event iteration=$awaitIteration clock=${compose.mainClock.currentTime} " +
+            return "$event iteration=$awaitIteration clock=${compose.mainClock.currentTime} " +
                 "window=${popupWindow?.let { System.identityHashCode(it) }} " +
                 "hidden=${anchor.hidden} shadowInModal=${anchor.shadowInModal} " +
                 "expansion=$expansion laidOut=$laidOut"
