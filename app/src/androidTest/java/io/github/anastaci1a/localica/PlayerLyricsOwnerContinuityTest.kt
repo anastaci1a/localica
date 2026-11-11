@@ -18,7 +18,7 @@ import org.junit.Test
 @OptIn(ExperimentalTestApi::class)
 class PlayerLyricsOwnerContinuityTest {
     private class Scene { var clock: UiClock? = null; val recorder = JoinRecorder("player-lyrics"); var closed = 0.0; var travel = 1.0
-        fun objectTime() = Law.objectTime(kotlin.math.abs(travel), clock!!.context!!.fullPlayerReferenceTravelPx.toDouble()) }
+        fun objectTime() = LyricsLaw.objectTime(kotlin.math.abs(travel), clock!!.context!!.fullPlayerReferenceTravelPx.toDouble()) }
 
     private fun ComposeUiTest.title() = onNodeWithTag("player-title", true).fetchSemanticsNode().boundsInRoot.top.toDouble()
     private fun ComposeUiTest.phase(scene: Scene) = (title() - scene.closed) / scene.travel
@@ -56,7 +56,7 @@ class PlayerLyricsOwnerContinuityTest {
         assertTrue("The opening is mid-flight when Back reverses it", frames.last().p in .05..0.95)
         back(); frames(scene, 45, frames)
         assertTrue("The lyrics layout has an Engine owner: joins ${scene.recorder.joins.size}", scene.recorder.joins.size >= 2)
-        verifyReleaseLaw("title tap/Back", frames, scene.recorder.joins, fallbackJoin(t0, 0.0, 0.0, true), scene.objectTime())
+        verifyReleaseLaw(LyricsLaw, "title tap/Back", frames, scene.recorder.joins, fallbackJoin(t0, 0.0, 0.0, true), scene.objectTime())
         assertEquals("Back closes the lyrics layout", 0.0, frames.last().p, 1e-3)
     }
 }

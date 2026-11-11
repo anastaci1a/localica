@@ -56,7 +56,7 @@ class ExpansionBoundaryPropertyTest {
             val plan=expansionPlan(FrameStamp(0,0),spec,T,sigma,listOf(doubleArrayOf(p,v,1.0,-spec.band.toDouble(),(1f+spec.band).toDouble())))
             if(multiplier==1.5) assertEquals(approved,plan.tauIn,0.0) else { worst=min(worst,plan.tauIn/approved); assertTrue(plan.tauIn>=.9*approved) }
         }
-        // #846: the capped-peak core (max slope 1.633) never clamps the startup bridge, even at twice the measured release.
+        // #846: the spring-fitted core (max slope 2.47) never clamps the startup bridge, even at twice the measured release.
         assertEquals(1.0,worst,0.0)
         val T=expansionDuration(spec,0.0,1000.0,.7,measured*1.5,1.0,1.0,1.0/120)
         val small=expansionPlan(FrameStamp(0,0),spec,T,1.0,listOf(doubleArrayOf(.7,measured*1.5,1.0,-.05,(1f+spec.band).toDouble())))
