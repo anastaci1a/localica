@@ -318,16 +318,18 @@ class BrowsePinchProgressLifecycleTest {
         assertEquals(trace(false), trace(true))
     }
 
-    @Test fun repeatedAndBackwardRootStampsRemainRejected() = runBlocking {
+    /** #848: a real frame source repeats or steps back a frame time; that is the already presented frame, never a crash. */
+    @Test fun repeatedAndBackwardRootStampsAreCoalescedNotFatal() = runBlocking {
         for (invalid in listOf(1_000_000_000L, 999_999_999L)) Pump().use { pump ->
             var writes = 0
             pump.scope.launch { pump.owner.catchUp(100) { _, _ -> writes++ } }
             pump.send(1_000_000_000L)
+            val active = pump.clock.activeCount; val presented = pump.clock.presentedStamp
             pump.send(invalid)
-            assertTrue(pump.failure.isCompleted)
-            assertTrue(pump.failure.await() is IllegalStateException)
+            assertFalse(pump.failure.isCompleted)
             assertEquals(1, writes)
-            assertEquals(0, pump.clock.activeCount)
+            assertEquals(active, pump.clock.activeCount)
+            assertEquals(presented, pump.clock.presentedStamp)
         }
     }
 }
