@@ -10,7 +10,7 @@ import org.junit.Test
  * admission and the engine's extremum proofs read that same band, and a release build counts an unproven extremum instead of throwing. */
 class SpringBandAdmissionTest {
     private val m = StockPopupMotion
-    private val band = StockUiSpec.expansion.band.toDouble()
+    private val band = StockPopupMotion.band.toDouble()
     private val basis = ExpansionBasis(Rect(300f, 100f, 400f, 150f), Rect(0f, 100f, 400f, 600f), 1f)
 
     @Test fun stockReversalsStayInTheBandAndReachExactlyTheOpenOvershoot() {
@@ -30,7 +30,7 @@ class SpringBandAdmissionTest {
         // Each law alone is admissible from rest (open overshoot kappa(.78) = 2 %), but a fast open reversing a close leaves the band.
         val fast = m.copy(open = SpringLaw(100f, .78f))
         assertTrue(springOvershoot(.78) <= band)
-        val reasons = popupMotionAdmission(fast, band.toFloat())
+        val reasons = popupMotionAdmission(fast)
         assertTrue(reasons.toString(), reasons.isNotEmpty() && reasons.all { it.startsWith("reversal.") })
         val result = uiSpec(InterfaceSettings(), UiSpecData(popupMotion = fast))
         assertTrue(result is SpecResult.Rejected && result.reasons.any { it.startsWith("popupMotion.reversal.") })
@@ -39,12 +39,14 @@ class SpringBandAdmissionTest {
 
     @Test fun admissionAndTheEngineReadTheSameLiveBand() {
         // A band below the open overshoot is rejected by admission rather than thrown later by the engine.
-        val tight = StockUiSpec.expansion.copy(band = (springOvershoot(m.open.zeta.toDouble()) * .75).toFloat())
-        val rejected = uiSpec(InterfaceSettings(), UiSpecData(expansion = tight))
-        assertTrue(rejected is SpecResult.Rejected && (rejected as SpecResult.Rejected).reasons.any { it.startsWith("popupMotion.") })
+        val tight = m.copy(band = (springOvershoot(m.open.zeta.toDouble()) * .75).toFloat())
+        val rejected = uiSpec(InterfaceSettings(), UiSpecData(popupMotion = tight))
+        assertTrue(rejected is SpecResult.Rejected && (rejected as SpecResult.Rejected).reasons.contains("popupMotion.open.overshoot"))
+        // The legacy expansion band (contact admission) no longer couples to the spring model.
+        assertTrue(uiSpec(InterfaceSettings(), UiSpecData(expansion = StockUiSpec.expansion.copy(band = .01f))) is SpecResult.Accepted)
         // An admitted band override flies reversals in debug without a band mismatch.
-        val narrow = StockUiSpec.expansion.copy(band = .03f)
-        val spec = (uiSpec(InterfaceSettings(), UiSpecData(expansion = narrow)) as SpecResult.Accepted).spec
+        val spec = (uiSpec(InterfaceSettings(), UiSpecData(popupMotion = m.copy(band = .03f))) as SpecResult.Accepted).spec
+        assertEquals(.03f, spec.popupMotion.band, 0f)
         assertTrue(SpringBandTelemetry.strict)
         EngineHarness(spec = spec).use { h ->
             val owner = ExpandCollapse(h.clock, spec.expansion, false).also { it.usePopupLaw(spec.popupMotion, PopupKind.Menu); it.setBasis(basis) }

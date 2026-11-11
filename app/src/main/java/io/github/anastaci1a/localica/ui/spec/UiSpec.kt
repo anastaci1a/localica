@@ -44,7 +44,9 @@ enum class PopupDirection { Open, Close, Gate }
 /** #854/#855 measured Apple popup motion. Every popup trajectory, test reference and admission bound derives from this.
  * Laws are read only through [law], so a revision can make them per kind without touching callers. */
 @Immutable data class PopupMotionModel(val revision: String, val open: SpringLaw, val close: SpringLaw, val crossOpen: SpringLaw, val crossClose: SpringLaw, val gate: SpringLaw,
-    val snapAspect: Float, val preparedRamp: Float, val rampBlend: Float, val variants: Map<PopupKind,PopupVariant>) {
+    val snapAspect: Float, val preparedRamp: Float, val rampBlend: Float, val variants: Map<PopupKind,PopupVariant>,
+    /** The phase band [-band, 1 + band] every spring channel must stay in; admission and the engine's extremum proofs both read it. */
+    val band: Float = StockPopupExpansionBand) {
     fun variant(kind: PopupKind): PopupVariant = variants[kind] ?: PopupVariant.Base
     /** One channel's law: the main axis by [direction]; [cross] channels use the snap laws (a cross-axis gate approach uses the cross close law). */
     @Suppress("UNUSED_PARAMETER") fun law(kind: PopupKind, direction: PopupDirection, cross: Boolean): SpringLaw =
@@ -125,8 +127,8 @@ fun uiSpec(settings: InterfaceSettings, overrides: UiSpecData? = null, geometry:
     for((key,s) in spring) valid(s.dampingRatio.isFinite() && s.dampingRatio>0 && bounded(s.stiffness,1f,10000f) && s.speedExponent in setOf(0,2) && (key==SpringProfile.Strain || springHorizon(s)<=2),"spring.$key")
     for((key,law) in listOf("expansion" to expansion,"sheetExpansion" to sheetExpansion,"lyricsExpansion" to lyricsExpansion)) with(law) { valid(finiteExpansionFinish(this,geometry?.let { it.maxViewportDiagonalPx.toDouble()/it.referenceTravelPx } ?: (sqrt(2.0)*Int.MAX_VALUE/Float.MIN_VALUE.toDouble()),geometry?.maxDisplayIntervalSeconds?.toDouble() ?: (Long.MAX_VALUE/1e9),geometry!=null),"$key.duration exceeds finite device geometry domain; provide measured geometry for a narrower admission domain"); valid(bounded(band,MinimumContactBand,.1f),"$key.band requires at least ulp(1f) contact room"); valid(curve(core) && curveExtrema(core).let { it.start>=0.0 && it.endInclusive<=1.0+band/2 },"$key.contact core extrema require minimum >= 0 and maximum <= 1 + band/2"); valid(curve(core) && curveExtrema(core).let { it.start>=-band.toDouble() && it.endInclusive<=(1f+band).toDouble() } && bounded(referenceDurationMs,Float.MIN_VALUE,2000f) && bounded(floorMs,Float.MIN_VALUE,2000f) && bounded(positionFloor,Float.MIN_VALUE,1f) && velocityKnee.isFinite() && velocityKnee>0 && velocityExponent.isFinite() && velocityExponent>0 && sizeExponent.isFinite() && sizeExponent>=0 && deadBand.isFinite() && deadBand>=0 && bounded(stationaryOpenAt,0f,1f) && bounded(band,0f,.1f),key) }
     valid(speed.isFinite() && speed in MinimumAnimationSpeed..MaximumAnimationSpeed,"speed")
-    // The live popup band: admission and the engine's extremum proofs read the same value (#854 review S2).
-    for(reason in popupMotionAdmission(popupMotion,expansion.band)) errors+="popupMotion.$reason"
+    // The model's own band: admission and the engine's extremum proofs read the same value (#854 review S2).
+    for(reason in popupMotionAdmission(popupMotion)) errors+="popupMotion.$reason"
     for((key,m) in material) with(m) { valid(listOf(blur,whiteTint,shadowStrength,shadowSpread).all { bounded(it,0f,1f) } && bounded(contrast,0f,.5f) && bounded(liftShadowStrength,.5f,1.5f) && bounded(shapeDamping,2f,40f) && bounded(depth,.6f,2f),"material.$key") }
     return if(errors.isNotEmpty()) SpecResult.Rejected(errors.toList()) else SpecResult.Accepted(UiSpec(space,radius,control,clearance,motion,spring,expansion,material,if(settings.reducedMotion || o.access==MotionAccess.Reduced) MotionAccess.Reduced else o.access?:MotionAccess.Standard,geometry,sheetExpansion,lyricsExpansion,popupMotion,speed))
 }
@@ -142,8 +144,9 @@ fun uiSpec(settings: InterfaceSettings, geometry: ExpansionGeometryDomain, densi
 internal fun springOvershoot(zeta: Double): Double = if(zeta>=1) 0.0 else exp(-PI*zeta/sqrt(1-zeta*zeta))
 /** #854 §3.4 admission: finite laws with omega in [1,400] and zeta in [.5,4]; the open overshoot fits the band; the close, gate
  * and cross laws never overshoot from rest; every law settles within 2 s of its worst admitted state at the slowest speed. */
-internal fun popupMotionAdmission(m: PopupMotionModel, band: Float = StockPopupExpansionBand): List<String> {
-    val errors=mutableListOf<String>()
+internal fun popupMotionAdmission(m: PopupMotionModel): List<String> {
+    val errors=mutableListOf<String>(); val band=m.band
+    if(!(band.isFinite() && band>0f && band<=.1f)) return listOf("band")
     for((key,law) in listOf("open" to m.open,"close" to m.close,"crossOpen" to m.crossOpen,"crossClose" to m.crossClose,"gate" to m.gate)) {
         if(!(law.omega.isFinite() && law.zeta.isFinite() && law.omega in 1f..400f && law.zeta in .5f..4f)) { errors+=key; continue }
         if(key!="open" && law.zeta<1f) errors+="$key.overshoot"
