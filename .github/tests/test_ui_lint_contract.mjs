@@ -254,3 +254,16 @@ test('a re-anchored transfer leaves its prior baseline identity out of the remov
     assert.equal(wrong.removed.length, 1); assert.equal(wrong.counts[old.rule].removed, 1);
     assert.equal(compare([old, {...old, identity:'twin'}], [now], 0, [ledgerId], [old.identity]).removed.length, 1);
 });
+test('a re-anchored transfer can be re-anchored again on a later edit, still one-for-one', () => {
+    const [old, now] = shapes[3], line = ' '.repeat(16) + '~'.repeat(17);
+    const prior = {rule:now.rule,path:now.path,fqn:now.fqn,codeSha256:old.codeSha256,removedBy:'U10.05',reason:'U10.05 removes'};
+    const code1 = '            if (handleReveal > 0f) Box(Modifier.graphicsLayer { alpha = handleReveal }) {';
+    const first = {...prior, codeSha256:now.codeSha256, reanchoredFrom:{codeSha256:old.codeSha256, errorLine1:code1, errorLine2:line, message:'policy', ordinal:0}};
+    const code2 = '            if (handleReveal > 0f) Box(Modifier.glassShadowOpacity { handleReveal }) {';
+    const next = row('            if (handleReveal > 0f) HandleSlot(Modifier.glassShadowOpacity { handleReveal }) {', 16, '~'.repeat(17));
+    const second = {...prior, codeSha256:next.codeSha256, reanchoredFrom:{codeSha256:now.codeSha256, errorLine1:code2, errorLine2:line, message:'policy', ordinal:0}};
+    transferGrowth([first], [second]); transferIds([second], ['U10.05'], []);
+    assert.deepEqual(transferReanchors([second], [next]).map(t => t.to.codeSha256), [next.codeSha256]);
+    assert.throws(() => transferGrowth([first], [{...second, removedBy:'U10.04'}]), /only shrink/);
+    assert.throws(() => transferGrowth([first], [first, second]), /only shrink/);
+});
