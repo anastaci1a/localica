@@ -29,6 +29,18 @@ class SettingsLinkMorphTest {
         }
     }
 
+    // Stage 3 returns follow the shared expansion law, so their duration scales with measured
+    // travel instead of a fixed tween (#858). Sample by return phase, not by elapsed time:
+    // the trigger face fades in over phase .55 to 0 (PopupWindowMotion.face).
+    private fun advanceReturnTo(anchor: GlassAnchor, phase: Float) {
+        val start = compose.mainClock.currentTime
+        while (compose.runOnIdle { anchor.contact.expansion.value } > phase) {
+            assertTrue("The return reaches phase $phase within 1500 ms", compose.mainClock.currentTime - start < 1500)
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
+    }
+
     // Distinctive foreground ink separates text/icon pixels from the neutral
     // material and empty popup. Semantics alone cannot detect a missing fade.
     private fun returningInk(): Float {
@@ -62,11 +74,11 @@ class SettingsLinkMorphTest {
         assertTrue(anchor.hidden)
         val expanded = returningInk()
         compose.runOnIdle { open = false }
-        advanceReturn(320)
+        advanceReturnTo(anchor, .4f)
         assertTrue("The live trigger is still hidden during this frame", anchor.hidden)
         val early = returningInk()
         assertTrue("The returning modal must already contain trigger ink: expanded=$expanded early=$early progress=${anchor.contact.expansion.value}", early > expanded + 1f)
-        advanceReturn(160)
+        advanceReturnTo(anchor, .15f)
         val late = returningInk()
         assertTrue("Trigger ink fades in before the final handoff", late > early)
         compose.runOnIdle { open = true }
@@ -111,7 +123,7 @@ class SettingsLinkMorphTest {
         compose.runOnIdle { childOpen = true }
         compose.advanceMorphOpening(1500, child) { if (::popupView.isInitialized) popupView else null }
         compose.runOnIdle { childOpen = false }
-        advanceReturn(400)
+        advanceReturnTo(child, .15f)
         assertTrue(child.hidden)
         assertTrue("Nested return retains the parent's foreground palette", returningInk() > 1f)
         advanceReturn(1500)

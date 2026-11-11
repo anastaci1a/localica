@@ -33,6 +33,18 @@ class LyricsLoadingStateTest {
         }
     }
 
+    // Stage 3 popup returns follow the shared expansion law, whose duration scales with the
+    // menu's measured travel: this one-source menu returns within a few frames, so a fixed
+    // 80 ms sample can land after its native retirement (#858). Sample the first return frame.
+    private fun assertReturnStarted(message: String, anchor: () -> GlassAnchor, visible: () -> Boolean) {
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle {
+            assertFalse(visible())
+            assertTrue(message, anchor().modalPresent && anchor().hidden)
+            assertTrue("$message: the return has started", anchor().contact.expansion.value < 1f)
+        }
+    }
+
     @Test fun disappearingSourcesRetainTheReturnSurfaceAndDoNotReopenOnArrival() {
         var result by mutableStateOf<LyricsResult?>(lyrics("A source"))
         var track by mutableStateOf(Track("file:///first.mp3", "First", fileName = "first.mp3", relativePath = "first.mp3"))
@@ -51,11 +63,7 @@ class LyricsLoadingStateTest {
             compose.mainClock.advanceTimeBy(4000)
             compose.runOnIdle { assertTrue(anchor.modalPresent) }
             compose.runOnIdle { result = null }
-            compose.mainClock.advanceTimeBy(80)
-            compose.runOnIdle {
-                assertFalse(visible)
-                assertTrue("Outgoing surface must survive the start of its return", anchor.modalPresent)
-            }
+            assertReturnStarted("Outgoing surface must survive the start of its return", { anchor }, { visible })
             compose.mainClock.advanceTimeBy(4000)
             compose.runOnIdle {
                 assertFalse(anchor.modalPresent)
@@ -72,8 +80,7 @@ class LyricsLoadingStateTest {
                 track = track.copy(id = "second", uri = "file:///second.mp3")
                 result = lyrics("Second song source")
             }
-            compose.mainClock.advanceTimeBy(80)
-            compose.runOnIdle { assertFalse(visible); assertTrue(anchor.modalPresent) }
+            assertReturnStarted("A track change returns the retained surface", { anchor }, { visible })
             compose.mainClock.advanceTimeBy(4000)
             compose.runOnIdle { assertFalse(anchor.modalPresent); assertFalse(anchor.hidden) }
         } finally { compose.mainClock.autoAdvance = true }
