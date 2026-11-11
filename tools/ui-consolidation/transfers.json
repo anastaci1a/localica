@@ -355,10 +355,17 @@
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "3f9191bd211bf716424847b7d2ed221845e4003494a439e269e57550bab80854",
+      "codeSha256": "75dab5bd0849ffb08a98e3fa7b6c1b2a5aa729cce7008b4f419f65c9e156102b",
       "removedBy": "U10.05",
       "reason": "U10.05 removes (second recorded U10.03 relabel, lead decision 2026-11-07 12:10 PM): player handle lifetime gate (player local visibility, U10.05); was U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).g",
-      "relabel": "U10.03-relabel-2-2026-11-07"
+      "relabel": "U10.03-relabel-2-2026-11-07",
+      "reanchoredFrom": {
+        "codeSha256": "3f9191bd211bf716424847b7d2ed221845e4003494a439e269e57550bab80854",
+        "errorLine1": "            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = handleReveal }) {",
+        "errorLine2": "                ~~~~~~~~~~~~~~~~~",
+        "message": "Use Curve maps and owner-only mutation",
+        "ordinal": 0
+      }
     },
     {
       "rule": "RawMotionMap",
@@ -403,15 +410,6 @@
       "codeSha256": "fe82c00278535b2a7472bc0107cca419f3dde40447d1374472ee3a27ca5c0a57",
       "removedBy": "U10.05",
       "reason": "U10.05 removes (second recorded U10.03 relabel, lead decision 2026-11-07 12:10 PM): seek row lifetime gate (player action/seek rows, U10.05 Component boundary); was U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(co",
-      "relabel": "U10.03-relabel-2-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "1ed7353e74259fe489ca17e514df1deb1a9626a77b88a3dc7fda74f9552e4798",
-      "removedBy": "U10.05",
-      "reason": "U10.05 removes (second recorded U10.03 relabel, lead decision 2026-11-07 12:10 PM): action row lifetime gate (PlayerActions call sites, U10.05); was U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)",
       "relabel": "U10.03-relabel-2-2026-11-07"
     },
     {

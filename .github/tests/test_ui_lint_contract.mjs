@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {xml,manifest,compare,rules,transferIds,transferGrowth,transferRelabels,recordedOwnerMoves,codeFingerprint} from '../check-ui-lint.mjs';
+import {xml,manifest,compare,rules,transferIds,transferGrowth,transferRelabels,recordedOwnerMoves,codeFingerprint,markedConstruct,sameIncident,transferReanchors} from '../check-ui-lint.mjs';
 const incident = {rule:rules[0],path:'app/src/main/A.kt',codeSha256:'c',identity:'old'};
 test('new incident and equal-count substitution fail', () => {
     assert.equal(compare([incident],[incident,{...incident,codeSha256:'d',identity:'new'}],0).accepted,false);
@@ -158,4 +158,99 @@ test('transfer owners change only through the recorded one-off relabel, once and
         transferGrowth([e], [{...e, removedBy:r.to}]);
         assert.throws(() => transferGrowth([e], [{...e, removedBy:'U10.04'}]), /cannot change/);
         assert.throws(() => transferGrowth([{...e, codeSha256:'other'}], [{...e, codeSha256:'other', removedBy:r.to}]), /cannot change/); }
+});
+// Lead ruling 2026-11-10 (v0.34.0): one incident whose line was edited around its unchanged marked construct.
+const row = (code, marker, span, extra = {}) => {
+    const r = {rule:rules[9],path:'app/src/main/S.kt',fqn:'p.move',message:'policy',originalLine:1,...extra};
+    const codeSha256 = codeFingerprint(code, marker, 0);
+    return {...r, codeSha256, identity:JSON.stringify([r.rule,r.path,r.fqn,codeSha256]), ...markedConstruct(code, ' '.repeat(marker) + span, marker)};
+};
+const shapes = [ // The four real shapes: longer line, shifted construct, changed tail, changed tail on a guarded gate.
+    [row('        Column(Modifier.fillMaxSize()', 8, '~~~~~~'), row('        Column(Modifier.fillMaxSize().glassPopupProjection(home, backdrop)', 8, '~~~~~~')],
+    [row('            scope.launch { lens.snapTo(position) }', 32, '~~~~~~'), row('            if (delta != 0f) scope.launch { lens.snapTo(position) }', 49, '~~~~~~')],
+    [row('                    raw = if (inside) lens.value else', 39, '~~~~~'), row('                    raw = if (inside) lens.value else under', 39, '~~~~~')],
+    [row('            if (handleReveal > 0f) Box(Modifier.graphicsLayer { alpha = handleReveal }) {', 16, '~'.repeat(17)),
+        row('            if (handleReveal > 0f) Box(Modifier.glassShadowOpacity { handleReveal }) {', 16, '~'.repeat(17))]];
+test('a same-incident re-anchor onto an edited line is listed separately, never as removed or added', () => {
+    for (const [old, now] of shapes) {
+        const result = compare([old], [now], 0);
+        assert.equal(result.accepted, true, now.construct); assert.equal(result.added.length, 0); assert.equal(result.removed.length, 0);
+        assert.deepEqual(result.sameIncidents.map(s => [s.from.identity, s.to.identity, s.construct]), [[old.identity, now.identity, old.construct]]);
+    }
+    assert.equal(shapes[1][1].construct, 'snapTo'); assert.equal(compare([], [], 0).sameIncidents.length, 0);
+});
+test('same-incident re-anchors reject every other difference, ambiguity and already matched rows', () => {
+    const [old, now] = shapes[1], code = '            if (delta != 0f) scope.launch { lens.snapTo(position) }';
+    const rejects = {
+        construct: row('            if (delta != 0f) scope.launch { lens.animateTo(position) }', 49, '~~~~~~'),
+        rule: {...now, rule:rules[0]}, message: {...now, message:'other'}, fqn: {...now, fqn:'p.other'}, path: {...now, path:'app/src/main/T.kt'},
+        twice: row('            scope.launch { lens.snapTo(a); lens.snapTo(b) }', 32, '~~~~~~'),
+        absent: row(code, 49, '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'),
+        underline: row(code, 49, '~~~~~~~'), marker: {...now, ...markedConstruct(code, ' '.repeat(49) + '~~~~~~', 48)}};
+    for (const [why, d] of Object.entries(rejects)) {
+        const result = compare([old], [d], 0); assert.equal(result.accepted, false, why); assert.equal(result.sameIncidents.length, 0, why);
+        assert.equal(result.added.length, 1, why); assert.equal(result.removed.length, 1, why);
+    }
+    // One gone row against two candidates (or two gone rows against one) is ambiguous: nothing pairs, never by order.
+    const second = row('            if (moved) scope.launch { lens.snapTo(position) }', 43, '~~~~~~');
+    assert.equal(compare([old], [now, second], 0).sameIncidents.length, 0);
+    const otherOld = row('        scope.launch { lens.snapTo(position) }', 28, '~~~~~~');
+    assert.equal(compare([old, otherOld], [now], 0).sameIncidents.length, 0);
+    // A row that already matched by identity or by the existing re-anchor key is never a candidate.
+    const kept = compare([old], [old, now], 0); assert.equal(kept.sameIncidents.length, 0); assert.equal(kept.added.length, 1);
+    const drifted = compare([old], [{...old, fqn:'p.other', identity:'drifted'}, now], 0);
+    assert.equal(drifted.reanchored, 1); assert.equal(drifted.sameIncidents.length, 0); assert.equal(drifted.added.length, 1);
+});
+test('a re-anchored transfer replaces exactly its prior entry and must be the same incident', () => {
+    const [old, now] = shapes[3], line = ' '.repeat(16) + '~'.repeat(17);
+    const prior = {rule:now.rule,path:now.path,fqn:now.fqn,codeSha256:old.codeSha256,removedBy:'U10.05',reason:'U10.05 removes'};
+    const code = '            if (handleReveal > 0f) Box(Modifier.graphicsLayer { alpha = handleReveal }) {';
+    const moved = {...prior, codeSha256:now.codeSha256, reanchoredFrom:{codeSha256:old.codeSha256, errorLine1:code, errorLine2:line, message:'policy', ordinal:0}};
+    const [id] = transferIds([moved], ['U10.05'], []); transferGrowth([prior], [moved]); transferGrowth([moved], [moved]); transferGrowth([moved], []);
+    assert.equal(compare([], [now], 0, [id]).accepted, true);
+    assert.deepEqual(transferReanchors([moved], [now]).map(t => [t.from.codeSha256, t.to.codeSha256]), [[old.codeSha256, now.codeSha256]]);
+    assert.throws(() => transferGrowth([prior], [prior, moved]), /only shrink/);
+    assert.throws(() => transferGrowth([prior], [moved, {...moved, fqn:'p.other'}]), /only shrink/);
+    assert.throws(() => transferGrowth([prior], [{...moved, removedBy:'U10.04'}]), /only shrink/);
+    assert.throws(() => transferIds([{...moved, reanchoredFrom:{...moved.reanchoredFrom, ordinal:1}}], ['U10.05'], []), /prior fingerprint/);
+    assert.throws(() => transferIds([{...moved, reanchoredFrom:{...moved.reanchoredFrom, extra:1}}], ['U10.05'], []), /Invalid transfer re-anchor/);
+    assert.throws(() => transferReanchors([moved], [{...now, message:'other'}]), /not the same incident/);
+    assert.throws(() => transferReanchors([moved], [{...now, construct:'handleReveal >= 0f'}]), /not the same incident/);
+    assert.throws(() => transferReanchors([moved], []), /not the same incident/);
+});
+test('a same-incident row still needs the whole-line anchor through real Git blobs', () => {
+    const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ui-lint-same-'));
+    const git=(...a)=>execFileSync('git',a,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+    const put=(p,t)=>{fs.mkdirSync(path.dirname(path.join(dir,p)),{recursive:true});fs.writeFileSync(path.join(dir,p),t);};
+    const commit=()=>{git('add','.');git('-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','-qm','fixture');return git('rev-parse','HEAD');};
+    const file='app/src/main/java/io/example/ui/Screen.kt', old='    scope.launch { snapTo(0) }', edited='    if (moved) scope.launch { snapTo(0) }';
+    const baseline=(code,column)=>`<issues><issue id="RawUiMotion" message="policy" errorLine1="${code}" errorLine2="${' '.repeat(column-1)}~~~~~~"><location file="${file}" line="3" column="${column}"/></issue></issues>`;
+    const invoke=(args)=>spawnSync(process.execPath,[script,...args],{cwd:dir,encoding:'utf8'});
+    const common=['--baseline','app/lint-baseline.xml','--escapes','app/ui-escapes.yaml','--out','report'];
+    try {
+        git('init','-q');put(file,`package io.example.ui\nfun screen() {\n${old}\n}\n`);const base=commit();
+        put('lint/src/main/java/io/github/anastaci1a/localica/lint/LocalicaIssueRegistry.kt','registry');
+        put('app/lint-baseline.xml',baseline(old,20));put('app/ui-escapes.yaml','[]');put('app/build.gradle.kts','versionName = "1.0.0"');
+        put('tools/ui-consolidation/stage.json',JSON.stringify({schemaVersion:1,stage:0,integratedSha:base,release:'v1.0.0',knownSteps:['U13.01'],completedSteps:['U13.01'],bootstrapApproval:'fixture approval'}));
+        let head=commit(); assert.equal(invoke(['bootstrap','--source',head,'--registry-sha256','a'.repeat(64),...common]).status,0);
+        put('tools/ui-consolidation/ui-lint-bootstrap.json',fs.readFileSync(path.join(dir,'report/bootstrap.json'),'utf8'));fs.rmSync(path.join(dir,'report'),{recursive:true});head=commit();
+        const check=()=>{put('completed.json',JSON.stringify({schemaVersion:1,sourceSha:head,release:'v1.0.0',steps:['U13.01']}));
+            return invoke(['check','--base',base,'--head',head,'--stage','0','--completed-steps','completed.json',...common]);};
+        put(file,`package io.example.ui\nfun screen() {\n${edited}\n}\n`);put('app/lint-baseline.xml',baseline(edited,31));head=commit();
+        let result=check(); assert.equal(result.status,0,result.stderr);
+        const report=JSON.parse(fs.readFileSync(path.join(dir,'report/report.json'),'utf8'));
+        assert.equal(report.sameIncidentReanchored.baseline.length,1); assert.equal(report.perRule.RawUiMotion.removed,0); assert.equal(report.perRule.RawUiMotion.added,0);
+        // The head row's errorLine1 must still equal the real source line: the old text cannot ride on an edited line.
+        put('app/lint-baseline.xml',baseline(old,20));head=commit(); result=check(); assert.equal(result.status,2); assert.match(result.stderr,/stale source anchor/);
+        put(file,`package io.example.ui\nfun screen() {\n    if (moved) scope.launch { snapTo(0); snapTo(1) }\n}\n`);
+        put('app/lint-baseline.xml',baseline('    if (moved) scope.launch { snapTo(0); snapTo(1) }',31));head=commit(); assert.equal(check().status,1);
+    } finally { fs.rmSync(dir,{recursive:true,force:true}); }
+});
+test('a re-anchored transfer leaves its prior baseline identity out of the removed rows, one-to-one', () => {
+    const [old, now] = shapes[3], ledgerId = JSON.stringify([now.rule, now.path, now.fqn, now.codeSha256]);
+    const result = compare([old], [now], 0, [ledgerId], [old.identity]);
+    assert.equal(result.accepted, true); assert.equal(result.removed.length, 0); assert.equal(result.counts[old.rule].removed, 0);
+    const wrong = compare([old], [now], 0, [ledgerId], [JSON.stringify([now.rule, now.path, now.fqn, 'f'.repeat(64)])]);
+    assert.equal(wrong.removed.length, 1); assert.equal(wrong.counts[old.rule].removed, 1);
+    assert.equal(compare([old, {...old, identity:'twin'}], [now], 0, [ledgerId], [old.identity]).removed.length, 1);
 });
