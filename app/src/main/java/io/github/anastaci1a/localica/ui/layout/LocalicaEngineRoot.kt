@@ -16,7 +16,7 @@ internal fun expansionReferenceTravel(basis: ExpansionBasis): Float = basis.edge
 internal fun ProvideLocalicaEngineContext(refreshHz: Float, referenceTravel: Float,
     resolvedSpec: ResolvedUiSpec, durationScale: Float, content: @Composable () -> Unit) {
     val engine = remember(refreshHz, referenceTravel, resolvedSpec, durationScale) {
-        EngineContext(1f / refreshHz, referenceTravel, resolvedSpec.spec.access, durationScale)
+        EngineContext(1f / refreshHz, referenceTravel, resolvedSpec.spec.access, durationScale, resolvedSpec.spec.speed)
     }
     CompositionLocalProvider(LocalEngineContext provides engine, content = content)
 }

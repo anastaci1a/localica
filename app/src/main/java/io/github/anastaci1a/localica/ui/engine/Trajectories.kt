@@ -55,10 +55,20 @@ internal class Eased(internal val x: Double,internal val v: Double,internal val 
     override fun value(t: Double)=sample(t,false)
     override fun velocity(t: Double)=sample(t,true)
 }
-internal class Damped(private val x: Double,private val v: Double,private val q: Double,private val omega: Double,private val zeta: Double,range: Double,displayInterval: Double): Trajectory {
+/** A damped spring from (x, v) toward q. A [plan] (#854) fixes the shared [finish] and terminal bridge so every channel of one intent settles on the same frame. */
+internal class Damped(private val x: Double,private val v: Double,private val q: Double,private val omega: Double,private val zeta: Double,range: Double,displayInterval: Double,finishAt: Double?=null,tauOutAt: Double?=null,internal val plan: SpringPlan?=null): Trajectory {
     override val kind=2; private val offset=x-q; private val a=zeta*omega; private val wd=omega*sqrt(abs(1-zeta*zeta)); private val slow=if(zeta>1) omega/(zeta+sqrt(zeta*zeta-1)) else a; private val fast=if(zeta>1) omega*(zeta+sqrt(zeta*zeta-1)) else omega
-    internal val envelopeSeconds=settleEnvelope(offset,v,omega,zeta,range); override val duration=if(offset==0.0 && v==0.0) 0.0 else max(envelopeSeconds,2*displayInterval); internal val tauOut=minOf(duration/8,.064,1/slow); private val tailStart=duration-tauOut; private val tailX=raw(tailStart,false); private val tailV=raw(tailStart,true)
-    init { require(listOf(x,v,q,omega,zeta,range,displayInterval).all { it.isFinite() } && omega>0 && zeta>0 && range>0 && displayInterval>0 && duration.isFinite()) }
+    internal val envelopeSeconds=settleEnvelope(offset,v,omega,zeta,range); override val duration=finishAt?:if(offset==0.0 && v==0.0) 0.0 else max(envelopeSeconds,2*displayInterval); internal val tauOut=tauOutAt?:minOf(duration/8,.064,1/slow); private val tailStart=duration-tauOut; private val tailX=raw(tailStart,false); private val tailV=raw(tailStart,true)
+    init { require(listOf(x,v,q,omega,zeta,range,displayInterval).all { it.isFinite() } && omega>0 && zeta>0 && range>0 && displayInterval>0 && duration.isFinite() && this.tauOut>=0 && this.tauOut<=duration) }
+    /** Exact value extrema over the whole segment (no sampling): the analytic part's endpoints and velocity zeros, then the terminal bridge. */
+    internal val extrema: ClosedFloatingPointRange<Double> by lazy {
+        val times=mutableListOf(0.0,tailStart)
+        when { zeta<1 -> { val c=(v+a*offset)/wd; val first=(atan2(v,a*c+offset*wd)%PI+PI)%PI; for(k in 0..2) times+=(first+k*PI)/wd }
+            zeta==1.0 -> { val d=omega*(v+omega*offset); if(d!=0.0) times+=v/d }
+            else -> { val b=-(v+slow*offset)/(fast-slow); val ratio=-fast*b/(slow*(offset-b)); if(ratio>0) times+=ln(ratio)/(fast-slow) } }
+        val values=times.filter { it>=0 && it<=tailStart }.map { raw(it,false) }; val tail=hermiteExtrema(tailX,tailV,q,0.0,tauOut)
+        minOf(values.min(),tail.start,x)..maxOf(values.max(),tail.endInclusive,x)
+    }
     internal fun raw(t: Double,d: Boolean): Double {
         val response=when { zeta<1 -> { val c=(v+a*offset)/wd; exp(-a*t)*(if(d) v*cos(wd*t)-(a*c+offset*wd)*sin(wd*t) else offset*cos(wd*t)+c*sin(wd*t)) }; zeta==1.0 -> exp(-omega*t)*(if(d) v-omega*(v+omega*offset)*t else offset+(v+omega*offset)*t); else -> { val difference=fast-slow; val b=-(v+slow*offset)/difference; val extra=expm1(-difference*t); exp(-slow*t)*(if(d) -slow*offset+b*(-slow*extra-difference*exp(-difference*t)) else offset+b*extra) } }
         return response+if(d) 0.0 else q

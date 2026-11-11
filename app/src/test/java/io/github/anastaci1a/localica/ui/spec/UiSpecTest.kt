@@ -79,8 +79,8 @@ class UiSpecTest {
         try { ResolvedUiSpec(accepted(UiSpecData(space=mapOf(Space.Panel to Float.MAX_VALUE.dp))),Density(4f)); fail("Resolved px overflow") } catch(expected: IllegalArgumentException) { }
     }
     @Test fun reducedDominatesFasterAndMaterialOverridesResolveOneSpread() {
-        assertEquals(MotionAccess.Reduced,accepted(UiSpecData(access=MotionAccess.Standard),settings.copy(reducedMotion=true,fasterMotion=true)).access)
-        assertEquals(MotionAccess.Faster,accepted(config=settings.copy(fasterMotion=true)).access)
+        assertEquals(MotionAccess.Reduced,accepted(UiSpecData(access=MotionAccess.Standard),settings.copy(reducedMotion=true,animationSpeedTenths=15)).access)
+        assertEquals(MotionAccess.Standard,accepted(config=settings.copy(animationSpeedTenths=15)).access); assertEquals(1.5f,accepted(config=settings.copy(animationSpeedTenths=15)).speed,0f)
         val m=StockUiSpec.material.getValue(MaterialRole.Glass).copy(shadowSpread=.1f)
         assertEquals(8.8f,accepted(UiSpecData(material=mapOf(MaterialRole.Glass to m))).clearance.getValue(Clearance.ShadowInset).value,.00001f)
         assertEquals(2f,accepted(config=settings.copy(glass=GlassAppearance(shapeDamping=2f)) ).material.getValue(MaterialRole.Glass).shapeDamping,0f)

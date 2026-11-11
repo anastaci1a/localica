@@ -13,6 +13,7 @@ import androidx.compose.ui.text.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.ui.engine.*
+import io.github.anastaci1a.localica.ui.spec.PopupKind
 
 /** U04.02a (D06(a), D33): a retained face host's one ExpandCollapse on the #608 law. Layout hands it the measured endpoint frames;
  * a request made before them waits. An unchanged basis is no new intent, so hosts may report it on every pass. */
@@ -23,8 +24,9 @@ import io.github.anastaci1a.localica.ui.engine.*
     fun request(expanded: Boolean) = motion.show(expanded)
     fun measured(start: Rect, end: Rect) { val basis = ExpansionBasis(start, end, density); if (basis != last) { last = basis; motion.place(basis) } }
 }
-@Composable fun rememberFaceExpansion(expanded: Boolean): FaceExpansion {
-    val motion = rememberPopupMotion(remember { Any() }, expanded)
+/** [kind] selects the #854 spring model; by default a face inherits its enclosing popup's kind (Legacy outside popups). */
+@Composable fun rememberFaceExpansion(expanded: Boolean, kind: PopupKind = LocalPopupKind.current): FaceExpansion {
+    val motion = rememberPopupMotion(remember { Any() }, expanded, kind)
     val density = LocalDensity.current.density
     val face = remember(motion, density) { FaceExpansion(motion, density) }
     SideEffect { face.request(expanded) }

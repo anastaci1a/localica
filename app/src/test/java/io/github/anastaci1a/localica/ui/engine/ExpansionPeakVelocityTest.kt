@@ -37,14 +37,14 @@ class ExpansionPeakVelocityTest {
     }
 
     @Test fun popupLawReproducesTheV03321SpringPacingPeakAndEndAtEveryScaleSpeedAndSize() {
-        for (scale in listOf(1f, .5f)) for ((access, speed) in listOf(MotionAccess.Standard to 4f / 3, MotionAccess.Faster to 2f)) for (width in listOf(150f, 400f, 1100f)) EngineHarness().use { h ->
-            h.clock.configure(EngineContext(1f / 120, 1000f, access, scale), StockUiSpec)
+        for (scale in listOf(1f, .5f)) for ((root, speed) in listOf(1f to 4f / 3, 1.5f to 2f)) for (width in listOf(150f, 400f, 1100f)) EngineHarness().use { h ->
+            h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Standard, scale, root), StockUiSpec)
             val owner = ExpandCollapse(h.clock, StockUiSpec.expansion, false)
             owner.setBasis(ExpansionBasis(Rect(0f, 0f, 100f, 100f), Rect(0f, 0f, width, 100f), 1f))
             owner.target(true)
             val start = h.clock.stampNow
             val spring = v03321Popup(speed)
-            val case = "scale $scale ${access} width $width"
+            val case = "scale $scale root $root width $width"
             fun engine(ms: Double) = owner.phase.valueAt(FrameStamp(start.nanos + (ms * 1e6).toLong(), start.sequence)).toDouble()
             // Compose's spring plays at real time / platform scale, as the engine does; it samples whole milliseconds of play time.
             fun reference(ms: Double) = spring.getValueFromNanos((ms * 1e6 / scale).toLong()).toDouble()
@@ -53,8 +53,8 @@ class ExpansionPeakVelocityTest {
             // Position, at every whole millisecond of Compose play time: within the spring's own .0001 settle threshold (the
             // normalisation) until the engine's 64 ms terminal bridge; inside it, between the spring and rest, never past 1.
             val step = scale.toDouble()
-            val end = PopupSpringMs.toDouble() * (if (access == MotionAccess.Faster) 2.0 / 3 else 1.0) * scale
-            val bridge = end - .064 * (if (access == MotionAccess.Faster) 2.0 / 3 else 1.0) * scale * 1000
+            val end = PopupSpringMs.toDouble() * (1.0 / root) * scale
+            val bridge = end - .064 * (1.0 / root) * scale * 1000
             val at = (0..3000).map { it * step }.filter { it < bridge }.maxBy { abs(engine(it) - reference(it)) }
             val worst = abs(engine(at) - reference(at))
             assertTrue("$case position error $worst at $at ms: engine ${engine(at)} spring ${reference(at)}", worst <= 1e-4 / (1 - 1e-4) + 2 * Math.ulp(1f))
