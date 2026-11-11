@@ -21,6 +21,9 @@ import org.junit.Test
 
 class SettingsOptionsTest {
     @get:Rule val compose = createComposeRule()
+    // Retained-origin checks run under Reduced motion. The popup expansion takes its access from the
+    // Engine record, not LocalReducedMotion, so these fixtures compose the Reduced record (#869):
+    // under the Standard record the 929 ms popup spring (#846) can outlast the 5 s real-time waits.
     private fun assertAnchoredPopup(host: GlassDialogs, title: String, editBeforeCancel: () -> Unit = {}) {
         compose.onNodeWithText(title).performScrollTo().performClick()
         compose.waitUntil(5000) {
@@ -37,7 +40,7 @@ class SettingsOptionsTest {
 
     @Test fun addMainTabUsesItsSettingsLinkAsTheRetainedPopupOrigin() {
         lateinit var host: GlassDialogs
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             host = requireNotNull(LocalGlassDialogs.current)
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -50,7 +53,7 @@ class SettingsOptionsTest {
 
     @Test fun addLibraryFilterUsesItsSettingsLinkAsTheRetainedPopupOrigin() {
         lateinit var host: GlassDialogs
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             host = requireNotNull(LocalGlassDialogs.current)
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -66,7 +69,7 @@ class SettingsOptionsTest {
         val originalOptions = preferences.read("")
         val originalLaunchFlags = preferences.scanOnLaunch to preferences.fullScanOnLaunch
         lateinit var host: GlassDialogs
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             host = requireNotNull(LocalGlassDialogs.current)
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 FolderSettings(LibraryUiState(loading=false),{},{},{},initialCategory="Scanner")
@@ -88,7 +91,7 @@ class SettingsOptionsTest {
         val preferences = io.github.anastaci1a.localica.scanner.ScanPreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         val originalOptions = preferences.read(root)
         lateinit var host: GlassDialogs
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             host = requireNotNull(LocalGlassDialogs.current)
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 FolderSettings(LibraryUiState(LibrarySnapshot(folders=listOf(FolderSelection("content://synthetic-origin","Synthetic origin"))),loading=false),
