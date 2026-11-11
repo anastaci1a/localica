@@ -102,6 +102,6 @@ class LocalicaUiRootLifetimeTest {
             assertNotEquals(faster.context.fullPlayerReferenceTravelPx, screen!!.context.fullPlayerReferenceTravelPx)
             root.settings.value = root.settings.value.copy(reducedMotion = true)
         }
-        checkRecord(MotionAccess.Reduced)
+        checkRecord(MotionAccess.Reduced, 1.5f)
     }
 }
