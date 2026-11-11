@@ -28,9 +28,7 @@ The following proposed resolutions require final source and acceptance reconcili
 - https://github.com/anastaci1a/localica/issues/679 - Reduce repeated UI lint graph work.
 - https://github.com/anastaci1a/localica/issues/693 - Preserve source shadows through canceled popup openings and returns.
 - https://github.com/anastaci1a/localica/issues/811 - Retain popup parents until pending descendant handoff completes.
-- https://github.com/anastaci1a/localica/issues/812 - Preserve outgoing popup continuity during host navigation.
 - https://github.com/anastaci1a/localica/issues/813 - Verify complete native shadow-field receipts for existing controls.
-- https://github.com/anastaci1a/localica/issues/814 - Preserve native preparation, reversal and closing-window retirement.
 - https://github.com/anastaci1a/localica/issues/815 - Retain complete popup shadows through reversal and retirement.
 - https://github.com/anastaci1a/localica/issues/835 - Respect Android animation duration and Remove animations.
 - https://github.com/anastaci1a/localica/issues/836 - Bound popup retirement when its mounted trigger is no longer drawn.
