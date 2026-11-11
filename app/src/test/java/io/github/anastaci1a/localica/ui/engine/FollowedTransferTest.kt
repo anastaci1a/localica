@@ -62,4 +62,21 @@ class FollowedTransferTest {
         next.target(true); assertTrue(next.awaitingNativeGate)
         n.dispose(); first.dispose(); next.dispose()
     }
+
+    @Test fun aReturnAbandonedAtItsFrameAllowanceHandsTheFieldBackToTheSourceBeforeTheNextLifetime() = EngineHarness(spec=spec).use { h ->
+        val a=plane(h); val b=plane(h); val (first,r)=motion(h); val (next,r2)=motion(h)
+        val n=SurfaceNode(h.clock,"abandoned-return",PersistentShape(h.clock,ShapeTarget(emptyList(),JoinPolicy.Union)),SurfaceTarget(Stratum.Floating,1f,ShadowRole.Glass),a)
+        n.follow(first,Curve.constant(1f),r)
+        first.target(true); n.transfer(b,profile); b.acknowledge(); first.acknowledgeNativeGate(first.nativeGeneration); h.advance(.03)
+        first.target(false); h.advance(2.0); n.transfer(a,profile)
+        assertTrue("The source never drew, so the window still owns the field",n.owns(b)); assertTrue(n.waiting)
+        first.acknowledgeNativeGate(first.nativeGeneration); assertTrue(first.retirementReady)
+        n.follow(next,Curve.constant(1f),r2)
+        assertSame(r2,n.transform); assertTrue(n.owns(a)); assertFalse(n.owns(b)); assertFalse(n.waiting)
+        assertSame(n,a.casters.single()); assertTrue(b.casters.isEmpty())
+        assertTrue("The old popup releases its lifetime listener",first.lifecycle.isEmpty())
+        next.target(true); assertTrue(next.awaitingNativeGate)
+        n.transfer(b,profile); b.acknowledge(); assertTrue("The next lifetime transfers normally",n.owns(b))
+        n.dispose(); first.dispose(); next.dispose()
+    }
 }
