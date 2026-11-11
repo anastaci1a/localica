@@ -890,7 +890,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 fun startWidth() = start().width.takeIf { it > 0f } ?: targetWidth.toFloat()
                 fun startHeight() = start().height.takeIf { it > 0f } ?: with(density) { CompactControlSize.toPx() }
                 fun homeRadius() = anchor.cornerRadius?.let { it * anchor.presentedScale } ?: with(density) { (startHeight() / 2).toDp() }
-                fun radius() = if (page) PageCornerRadius else if (detached) PopupCornerRadius else homeRadius() * (1f - geometry()) + PopupCornerRadius * geometry()
+                fun radius() = if (page) PageCornerRadius else if (detached) PopupCornerRadius else popupCornerRadius(homeRadius(), PopupCornerRadius, geometry())
                 val foregroundTargetHeight = if (viewportSized) viewportTargetHeight else targetHeight
                 SideEffect { if (hasViewport) anchor.contact.vertical = kotlin.math.abs(foregroundTargetHeight - startHeight()) > kotlin.math.abs(targetWidth - startWidth()) }
                 val dark = panelDark
@@ -1187,7 +1187,7 @@ internal fun PopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop? = Loc
     onSearch: () -> Unit, onMore: () -> Unit) {
     val raised = role == TriggerRole.Navigation
     val effectiveShadow: () -> Float = if (playerExpansion == null) chromeVisibility
-        else ({ chromeVisibility() * (1f - playerExpansion.phase.value()) })
+        else ({ chromeVisibility() * (1f - playerExpansion.phase.value().coerceIn(0f, 1f)) })
     val iconSize = if (raised) io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Panel)
         else io.github.anastaci1a.localica.ui.spec.StockUiSpec.control.getValue(io.github.anastaci1a.localica.ui.spec.ControlSize.SettingsIcon)
     val face: @Composable () -> Unit = {
