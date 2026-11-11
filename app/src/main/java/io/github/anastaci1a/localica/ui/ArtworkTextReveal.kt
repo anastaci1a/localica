@@ -58,9 +58,11 @@ internal class ArtworkTextReveal(private val sourceOpacity: (() -> Float)? = nul
         if (menuGate.value) menuGate.value = false
     }
     val waiting: Boolean get() = gate.value
-    val textAlpha: Float get() = if (!gate.value) 1f else sourceOpacity?.invoke() ?: reveal?.value ?: 0f
+    // The single read of the artwork's reveal, shared by the text and action gates.
+    private val revealAlpha: Float get() = reveal?.value ?: 0f
+    val textAlpha: Float get() = if (!gate.value) 1f else sourceOpacity?.invoke() ?: revealAlpha
     internal fun menuAlpha(artworkVisibility: Float): Float {
-        val alpha = if (!menuGate.value) 1f else reveal?.value ?: 0f
+        val alpha = if (!menuGate.value) 1f else revealAlpha
         // The existing artwork-slot transition also owns the no-art endpoint. This
         // keeps the action continuous when a pinch removes or introduces that slot.
         return (1f - artworkVisibility) + artworkVisibility * alpha
