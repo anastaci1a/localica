@@ -14,7 +14,7 @@ class ExpansionDomainTest {
         assertTrue(result is SpecResult.Rejected); assertTrue((result as SpecResult.Rejected).reasons.any { "device geometry" in it })
         assertTrue(uiSpec(InterfaceSettings(),UiSpecData(expansion=StockUiSpec.expansion.copy(sizeExponent=2f)),geometry) is SpecResult.Accepted)
         // A high exponent is valid when every possible object is smaller than the reference;
-        // the 140 ms floor applies. There is no arbitrary exponent ceiling.
+        // the 360 ms floor applies. There is no arbitrary exponent ceiling.
         assertTrue(uiSpec(InterfaceSettings(),UiSpecData(expansion=invalid),ExpansionGeometryDomain(1000f,500f,1f/60)) is SpecResult.Accepted)
     }
     @Test fun defensiveAutomaticPreflightRejectsBeforeAnyStateChange() {
