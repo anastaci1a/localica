@@ -298,9 +298,9 @@ fun LocalicaScreen(
     val bottomShadows = rememberShadowPlane()
     SideEffect { LongScroll.style = settings.longScroll }
     LocalicaTheme(grayTone = settings.grayTone) {
-    CompositionLocalProvider(LocalPageShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides rememberEffectiveReducedMotion(settings.reducedMotion), LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+    CompositionLocalProvider(LocalPageShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalRespectSystemAnimationScale provides settings.respectSystemAnimationScale, LocalReducedMotion provides rememberEffectiveReducedMotion(settings.reducedMotion, settings.respectSystemAnimationScale), LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache, LocalBrowseSortSnapshot provides browseSorts,
-        LocalMotionSpeed provides if (settings.fasterMotion) 2f else 4f / 3f,
+        LocalMotionSpeed provides settings.legacyMotionSpeed,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseSelectionPanel provides selectionPanel,
@@ -418,7 +418,7 @@ fun LocalicaScreen(
                 noneAtlasInput = shellNoneAtlas,
                 onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
                 onMore = { moreOpen = true })
-            GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
+            GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }, motionKind = io.github.anastaci1a.localica.ui.spec.PopupKind.BottomMenu) {
                 ActionMenuItem("Scan music", icon = AppIcon.TabFolders, onClick = { moreOpen = false; scannerOpen = true })
                 ActionMenuItem("Settings", icon = AppIcon.ActionSettings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
             }

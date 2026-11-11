@@ -62,7 +62,7 @@ class PopupChromeDepthTest {
         fun save() { File(output, "frames.json").writeText(report.toString(2)) }
         var baseline: Bitmap? = null
         try {
-            preferences.write(InterfaceSettings(reducedMotion = false, fasterMotion = false))
+            preferences.write(InterfaceSettings(reducedMotion = false, animationSpeedTenths = 10))
             val track = Track("file:///missing-667.mp3", "One", artist = "Test", album = "One",
                 fileName = "missing-667.mp3", relativePath = "missing-667.mp3")
             lateinit var host: View

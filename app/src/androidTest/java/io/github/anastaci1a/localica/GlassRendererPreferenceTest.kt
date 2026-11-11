@@ -70,7 +70,7 @@ class GlassRendererPreferenceTest {
             .4f, .2f, 19f, .8f, 1.5f, .3f, 1.25f, .17f, true)
         val original = InterfaceSettings(tabs = listOf(MainTab.Songs, MainTab.Folders), tabHistory = false,
             confirmExit = true, expandOnPlay = false, albumArtistFirst = false, reducedMotion = true,
-            artworkTap = ArtworkAction.Change, artworkHold = ArtworkAction.View, fasterMotion = true,
+            artworkTap = ArtworkAction.Change, artworkHold = ArtworkAction.View, animationSpeedTenths = 15,
             artworkLayout = ArtworkLayout.Floating, artworkTransition = ArtworkTransition.Carousel,
             artworkSwipe = false, glass = appearance, grayTone = .7f, lyricDelayMs = -750)
         for (mode in GlassRendererMode.entries) {
