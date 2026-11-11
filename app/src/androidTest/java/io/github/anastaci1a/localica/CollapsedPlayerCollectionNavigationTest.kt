@@ -48,6 +48,7 @@ class CollapsedPlayerCollectionNavigationTest {
     private var requestedDestination: String? = null
     private var navigationFrame = 0L
     private var nativeRoot: NativeRootReferences? = null
+    private var latestSearchPresentation: SearchPresentationRecord? = null
     private lateinit var records: File
     private lateinit var access: MotionAccess
     private data class FrameRecord(val source: String, val api: Int, val frameMs: Long,
@@ -60,13 +61,16 @@ class CollapsedPlayerCollectionNavigationTest {
         val beforeKind: Int, val afterKind: Int, val policy: String,
         val contextAccess: MotionAccess?, val specAccess: MotionAccess, val motionId: Long,
         val clockIdentity: Int, val edgeName: String? = null)
+    private data class SearchPresentationRecord(val progress: Float, val opening: Boolean,
+        val bounds: Rect, val destination: Rect, val ime: Int, val windowFocused: Boolean)
     private data class SearchFrameRecord(val frameMs: Long, val playerValue: Float,
         val playerTarget: Float, val playerSettled: Boolean, val queueValue: Float,
         val queueTarget: Float, val queueSettled: Boolean, val contextAccess: MotionAccess?,
         val specAccess: MotionAccess, val movingJoins: List<PhaseJoinRecord>,
         val contentEvents: List<Pair<String, Boolean>>, val navigationBoundary: Int,
         val nativeRoot: NativeRootRecord?, val playerId: Long, val queueId: Long,
-        val playerEdgeJoins: List<PhaseJoinRecord>, val basisJoins: Int)
+        val playerEdgeJoins: List<PhaseJoinRecord>, val basisJoins: Int,
+        val searchPresentation: SearchPresentationRecord?, val editorCount: Int?, val editorEnabled: Boolean?)
     private data class NativeRootRecord(val width: Int, val height: Int, val density: Float,
         val fontScale: Float, val imeBottom: Int, val navigationBottom: Int, val referenceTravel: Float?)
     private class NativeRootReferences(val window: WindowInfo, val density: Density,
@@ -136,6 +140,9 @@ class CollapsedPlayerCollectionNavigationTest {
             val count = (liveRetainedHosts[name] ?: 0) + if (mounted) 1 else -1
             check(count >= 0)
             if (count == 0) liveRetainedHosts.remove(name) else liveRetainedHosts[name] = count
+        }, LocalSearchMorphObserver provides { sample ->
+            latestSearchPresentation = SearchPresentationRecord(sample.progress, sample.opening,
+                sample.bounds, sample.destination, sample.ime, sample.windowFocused)
         }) { LocalicaTheme {
             val clock = LocalUiClock.current
             val nativeWindow = LocalWindowInfo.current
@@ -368,13 +375,20 @@ class CollapsedPlayerCollectionNavigationTest {
                 records.appendText("search-before\t$beforeClick\n")
                 recordAction(input)
                 search.performTouchInput { click(clickPoint - searchBounds.topLeft) }
-                repeat(6) {
+                var editorAdmission = 0 to false
+                var firstEditorFrame: Long? = null
+                fun searchCheckpoint() {
                     compose.mainClock.advanceTimeByFrame()
+                    val editors = compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes()
+                    val editorEnabled = editors.size == 1 &&
+                        editors.single().config.getOrNull(SemanticsProperties.Disabled) == null
+                    editorAdmission = editors.size to editorEnabled
+                    if (editorEnabled && firstEditorFrame == null) firstEditorFrame = compose.mainClock.currentTime
                     var observed: SearchFrameRecord? = null
                     var originalFailure: Throwable? = null
                     try {
                         compose.runOnIdle {
-                            observed = searchSnapshot()
+                            observed = searchSnapshot(editors.size, editorEnabled)
                             assertTrue(events.movingJoins.isEmpty())
                             assertTrue(contentEvents.drop(navigationContentBoundary).isEmpty())
                         }
@@ -391,13 +405,24 @@ class CollapsedPlayerCollectionNavigationTest {
                         }
                     }
                 }
+                repeat(6) { searchCheckpoint() }
                 compose.runOnIdle {
                     if (access != MotionAccess.Reduced) assertTrue(
                         "Search checkpoints must observe a changing player basis",
                         events.basisJoins > beforeClick.basisJoins)
                 }
+                var searchFrames = 6
+                while (access != MotionAccess.Reduced && editorAdmission != (1 to true)) {
+                    assertTrue("Search must not admit ambiguous editors", editorAdmission.first <= 1)
+                    assertTrue("The Search editor must be enabled within 60 total post-click frames", searchFrames < 60)
+                    searchCheckpoint()
+                    searchFrames++
+                }
                 compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
-                compose.onNode(hasSetTextAction()).assertIsEnabled().performTextInput("Song")
+                val editor = compose.onNode(hasSetTextAction()).assertIsEnabled()
+                records.appendText("search-editor-frame\t${compose.mainClock.currentTime}\t$searchFrames" +
+                    "\tfirst-enabled=$firstEditorFrame\n")
+                editor.performTextInput("Song")
             }
         }
         compose.mainClock.autoAdvance = true
@@ -414,13 +439,13 @@ class CollapsedPlayerCollectionNavigationTest {
     @Test fun reducedCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(MotionAccess.Reduced, Input.Search)
 
     /** Called only in a Main snapshot block; the returned record owns immutable copied values. */
-    private fun searchSnapshot(): SearchFrameRecord {
+    private fun searchSnapshot(editorCount: Int? = null, editorEnabled: Boolean? = null): SearchFrameRecord {
         val phase = checkNotNull(events.phase)
         val queue = checkNotNull(events.queuePhase)
         return SearchFrameRecord(compose.mainClock.currentTime, phase.value(), phase.target,
             phase.settled, queue.value(), queue.target, queue.settled, phase.clock.context?.access,
             phase.clock.spec.access, events.movingPhaseRecords.toList(), contentEvents.toList(),
             navigationContentBoundary, nativeRoot?.snapshot(phase.clock), phase.id, queue.id,
-            events.playerEdgeRecords.toList(), events.basisJoins)
+            events.playerEdgeRecords.toList(), events.basisJoins, latestSearchPresentation, editorCount, editorEnabled)
     }
 }
