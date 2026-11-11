@@ -47,8 +47,9 @@ internal fun rememberFloatingSelectionPanel(visible: Boolean, reducedMotion: Boo
     val height = remember { mutableStateOf(0.dp) }
     val visibility = rememberUpdatedState(visible)
     // Access policy comes from the root's validated Engine record, as for all faces.
-    // v0.33.21's selection tween, never the popup spring (#869).
-    val face = rememberFaceExpansion(visible && height.value.value > 0f) { it.selectionExpansion }
+    // v0.33.21's selection tween, never a popup spring (#869): Legacy, so the #854 model never reaches it; the speed slider and the
+    // respected system scale apply to it as to every other law.
+    val face = rememberFaceExpansion(visible && height.value.value > 0f, io.github.anastaci1a.localica.ui.spec.PopupKind.Legacy) { it.selectionExpansion }
     val state = remember(face) { FloatingSelectionPanelState(height, face, visibility) }
     SideEffect { state.observeVisibility(visible) }
     return state

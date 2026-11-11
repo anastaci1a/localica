@@ -235,7 +235,7 @@ class ReleaseLintAdoptionTest {
         var expanded by mutableStateOf(false)
         var lyrics by mutableStateOf(false)
         lateinit var phase: Animatable<Float, *>
-        val settings = InterfaceSettings(reducedMotion = reduced, fasterMotion = faster)
+        val settings = InterfaceSettings(reducedMotion = reduced, animationSpeedTenths = if (faster) 15 else 10)
         compose.setContent { LocalicaTheme {
             ControlledScene { Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.White).testTag("lint-content")) {

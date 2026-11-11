@@ -54,7 +54,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val travel by rememberUpdatedState(currentTravel)
     val density = LocalDensity.current.density
     var dragging by remember { mutableStateOf(false) }
-    LaunchedEffect(expanded, settings.reducedMotion, settings.fasterMotion) {
+    LaunchedEffect(expanded, settings.reducedMotion, settings.animationSpeedTenths) {
         if (!dragging) progress.animateTo(if (expanded) 1f else 0f, tween(settings.motionDuration(400), easing = easing))
     }
     val sheet = remember(progress) { object : SheetState {

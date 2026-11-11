@@ -204,9 +204,9 @@ class PopupRetainedTriggerRetirementTest {
         }
         compose.setContent {
             val density = LocalDensity.current
-            val settings = remember { InterfaceSettings(reducedMotion = reduced, fasterMotion = speed == 2f) }
+            val settings = remember { InterfaceSettings(reducedMotion = reduced, animationSpeedTenths = if (speed == 2f) 15 else 10) }
             val spec = remember(density, settings) { uiSpec(settings, ExpansionGeometryDomain(1000f, 3000f, 1f / 60), density) }
-            val context = remember(spec) { EngineContext(1f / 60, 1000f, spec.spec.access) }
+            val context = remember(spec) { EngineContext(1f / 60, 1000f, spec.spec.access, 1f, spec.spec.speed) }
             CompositionLocalProvider(LocalEngineContext provides context, LocalUiSpec provides spec,
                 LocalReducedMotion provides reduced, LocalMotionSpeed provides speed) {
             LocalicaTheme {
@@ -259,7 +259,7 @@ class PopupRetainedTriggerRetirementTest {
                 }
             }
         } }
-        val expectedAccess = if (reduced) MotionAccess.Reduced else if (speed == 2f) MotionAccess.Faster else MotionAccess.Standard
+        val expectedAccess = if (reduced) MotionAccess.Reduced else MotionAccess.Standard
         val evidence = nativeEvidenceDirectory("popup-retained-trigger-retirement",
             InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
         val case = "adjacent-$adjacentTab-reduced-$reduced-speed-$speed-hide-$hide-renew-$renew"

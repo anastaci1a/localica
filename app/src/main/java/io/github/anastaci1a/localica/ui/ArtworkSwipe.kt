@@ -92,7 +92,7 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
     suspend fun settle(value: Float) {
         if (motion.reducedMotion) swipe.offset.snapTo(value)
         else swipe.offset.animateTo(value, spring(dampingRatio = .88f,
-            stiffness = if (motion.fasterMotion) 650f else 380f))
+            stiffness = motion.artworkSwipeStiffness()))
     }
     LaunchedEffect(visit, enabled) {
         if (swipe.active && ((swipe.origin != visit && swipe.pending != visit) || !enabled && swipe.pending == null)) {

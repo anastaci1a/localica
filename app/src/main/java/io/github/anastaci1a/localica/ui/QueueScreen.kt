@@ -50,7 +50,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     val active = state.library.queues.firstOrNull { it.id == state.browsedId } ?: state.library.active
     val queueNumber = state.library.queues.indexOfFirst { it.id == active?.id } + 1
     val selectorLabel = active?.let { "$queueNumber. ${it.name}" } ?: "Queues"
-    val nameMorph = rememberPopupSharedContent(selectorAnchor) {
+    val nameMorph = rememberPopupSharedContent(selectorAnchor, io.github.anastaci1a.localica.ui.spec.PopupKind.Dialog) {
         MorphPersistentTitle(selectorLabel, MaterialTheme.typography.titleMedium, MaterialTheme.typography.bodyLarge) {
             MarqueeTitle(selectorLabel, reducedMotion, style = MaterialTheme.typography.bodyLarge)
         }

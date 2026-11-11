@@ -41,7 +41,7 @@ class UiSpecFoundationTest {
         runOnIdle { assertEquals("RTL reuses the same direction-independent resolution",2,resolves); assertSame(root,popup) }
     }
     @Test fun rejectedPayloadNeverBecomesTheInstalledFixtureSnapshot() = localicaRunComposeUiTest {
-        val settings=InterfaceSettings(reducedMotion=true,fasterMotion=true)
+        val settings=InterfaceSettings(reducedMotion=true,animationSpeedTenths=15)
         val invalid=uiSpec(settings,UiSpecData(expansion=StockUiSpec.expansion.copy(velocityKnee=Float.NaN)))
         assertTrue(invalid is SpecResult.Rejected)
         val fallback=(uiSpec(settings) as SpecResult.Accepted).spec
