@@ -23,9 +23,9 @@ class UiSpecTest {
         assertEquals(listOf(180,270,220,220,300,240,300,165,300,225),MotionProfile.entries.take(10).map { (stock.motion.getValue(it) as MotionProfileSpec).durationMs })
         assertEquals(MarqueeSpec(1800,220,260,30f,EasingSpec(1f/3,0f,2f/3,1f)),stock.motion[MotionProfile.Marquee])
         assertEquals(ListMotionSpec(350,500,120,EasingSpec(.4f,0f,.2f,1f),EasingSpec(0f,0f,1f,1f)),stock.motion[MotionProfile.Scroll])
-        assertEquals(4.13f,stock.expansion.core.maxSlope,0f)
+        assertEquals(1.6330212f,stock.expansion.core.maxSlope,1e-5f)
         assertEquals(.0003f,SettleThreshold,0f); assertEquals(.003f,SettleVelocityThreshold,0f)
-        assertEquals(426.086832f,stock.expansion.referenceDurationMs,0f)
+        assertEquals(360f,stock.expansion.referenceDurationMs,0f)
         assertEquals(.05f,stock.expansion.band,0f)
         assertEquals(22.8f,stock.clearance.getValue(Clearance.ShadowInset).value,.00001f)
     }

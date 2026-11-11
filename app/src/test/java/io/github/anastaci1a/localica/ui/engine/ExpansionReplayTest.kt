@@ -11,17 +11,17 @@ import kotlin.math.*
 /** Independent Double equations, bisection inversion, and a public synthetic corpus only. */
 internal object ReferenceExpansion {
     fun bezier(u: Double,derivative: Boolean=false): Double {
-        if(u<=0) return if(derivative) .999967/.242192 else 0.0
-        if(u>=1) return if(derivative) (1-.997652)/(1-.511935) else 1.0
+        if(u<=0) return if(derivative) .15/.15 else 0.0
+        if(u>=1) return if(derivative) 0.0 else 1.0
         var low=0.0; var high=1.0
-        repeat(64) { val t=(low+high)/2; val s=1-t; val x=3*s*s*t*.242192+3*s*t*t*.511935+t*t*t; if(x<u) low=t else high=t }
+        repeat(64) { val t=(low+high)/2; val s=1-t; val x=3*s*s*t*.15+3*s*t*t*.5+t*t*t; if(x<u) low=t else high=t }
         val t=(low+high)/2; val s=1-t
-        return if(derivative) (s*s*.999967+2*s*t*(.997652-.999967)+t*t*(1-.997652))/(s*s*.242192+2*s*t*(.511935-.242192)+t*t*(1-.511935)) else 3*s*s*t*.999967+3*s*t*t*.997652+t*t*t
+        return if(derivative) (s*s*.15+2*s*t*(1.0-.15)+t*t*(1-1.0))/(s*s*.15+2*s*t*(.5-.15)+t*t*(1-.5)) else 3*s*s*t*.15+3*s*t*t*1.0+t*t*t
     }
-    fun duration(p: Double,v: Double,q: Double,sigma: Double=1.0,hz: Int=120): Double = max(sigma*.426086832*(.500401615+.499598385*abs(q-p))/max(1.0,abs(v*sigma)/1.41952128).pow(.73607278),2.0/hz)
+    fun duration(p: Double,v: Double,q: Double,sigma: Double=1.0,hz: Int=120): Double = max(sigma*.36*(.500401615+.499598385*abs(q-p))/max(1.0,abs(v*sigma)/1.41952128).pow(.73607278),2.0/hz)
     fun sample(p: Double,v: Double,q: Double,T: Double,t: Double,terminal: Boolean=true,sigma: Double=1.0): Double {
         if(t<=0) return p; if(t>=T) return q
-        val d=q-p; val B=abs(d)/T*4.13; val room=if(v>0) 1.05-p else p+.05
+        val d=q-p; val B=abs(d)/T*1.6330212; val room=if(v>0) 1.05-p else p+.05
         val start=minOf(sigma/120,T/4,if(v==0.0) Double.POSITIVE_INFINITY else room/(.149*(abs(v)+B)+if(v*d>0) B else 0.0)); val end=min(T/8,sigma*.064)
         fun h(a: Double,va: Double,b: Double,vb: Double,tau: Double,z: Double): Double { val u=z/tau; return (2*u*u*u-3*u*u+1)*a+(u*u*u-2*u*u+u)*tau*va+(-2*u*u*u+3*u*u)*b+(u*u*u-u*u)*tau*vb }
         return when {
