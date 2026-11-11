@@ -172,9 +172,11 @@ class PopupHostNavigationTest {
     /** #812 passive diagnostic: the popup's bound expansion owner and its held state, read through their State
      * delegates without sampling any motion. It never throws, so it cannot change an outcome; absent fields log as absent. */
     private fun ownerState(anchor: GlassAnchor): String = runCatching {
-        val view = anchor.contact.expansion
-        val phase = view.javaClass.getDeclaredField("phase").apply { isAccessible = true }.get(view)
-        val owner = (phase.javaClass.getDeclaredField("owner\$delegate").apply { isAccessible = true }.get(phase) as State<*>).value
+        // The contact view holds owner\$delegate directly or wraps the Engine view that does.
+        var view: Any = anchor.contact.expansion
+        if (view.javaClass.declaredFields.none { it.name == "owner\$delegate" })
+            view = view.javaClass.getDeclaredField("phase").apply { isAccessible = true }.get(view)
+        val owner = (view.javaClass.getDeclaredField("owner\$delegate").apply { isAccessible = true }.get(view) as State<*>).value
             as io.github.anastaci1a.localica.ui.engine.ExpandCollapse? ?: return@runCatching "owner=none"
         val held = runCatching { (owner.javaClass.getDeclaredField("held\$delegate").apply { isAccessible = true }.get(owner) as State<*>).value }
             .getOrElse { "absent" }

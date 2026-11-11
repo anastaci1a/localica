@@ -44,8 +44,9 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false) {
         if (shown || openingEnvelope == null) openingEnvelope = envelope
         val capturedEnvelope = requireNotNull(openingEnvelope)
-        val basis = ExpansionBasis(home, capturedEnvelope, density,
-            if (detached) maxOf(capturedEnvelope.width, capturedEnvelope.height) else null)
+        // A detached window can present beyond its root viewport; its duration never exceeds the admitted travel.
+        val basis = ExpansionBasis(home, capturedEnvelope, density, if (detached) minOf(maxOf(capturedEnvelope.width,
+            capturedEnvelope.height), requireNotNull(clock.spec.geometry).maxViewportDiagonalPx) else null)
         if (rectangle == null) {
             expansion.setBasis(basis)
             val rect = MotionRect(clock, home, ranges, expansion)

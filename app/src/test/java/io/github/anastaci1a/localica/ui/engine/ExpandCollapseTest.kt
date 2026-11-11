@@ -179,6 +179,9 @@ class ExpandCollapseTest {
         // Local speed is the whole time scale: the Faster root adds nothing, and speed 2 equals the old Faster root.
         assertEquals(phases(MotionAccess.Standard,1.5f,parallax).first,phases(MotionAccess.Faster,1.5f,parallax).first)
         assertEquals(phases(MotionAccess.Faster,null,parallax).first,phases(MotionAccess.Standard,2f,parallax).first)
+        // The published default speed is exactly the qualified law, and Faster is exactly its canonical factor.
+        assertEquals(phases(MotionAccess.Standard,null,parallax).first,phases(MotionAccess.Standard,4f/3f,parallax).first)
+        assertEquals(phases(MotionAccess.Faster,null,parallax).first,phases(MotionAccess.Faster,2f,parallax).first)
         assertNotEquals(phases(MotionAccess.Standard,2f,parallax).first,phases(MotionAccess.Standard,4f/3f,parallax).first)
     }
     @Test fun cancellationAndReducedExitClearContactWithoutLateInputResurrection() {
