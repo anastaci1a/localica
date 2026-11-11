@@ -20,7 +20,7 @@ class LyricsPausedSeekTest {
     @Test fun pausedLyricTapsMoveTheHighlightWithinHalfASecond() {
         val document = LrcParser.parse((0..40).joinToString("\n") { "[00:%02d.98]line %02d".format(it, it) })
         var position by mutableLongStateOf(0L)
-        compose.setContent { LocalicaTheme { LyricsPanel(null, position, true, { position = it }, Modifier.height(400.dp),
+        compose.setContent { LyricsEngineTheme(true) { LyricsPanel(null, position, true, { position = it }, Modifier.height(400.dp),
             playing = false, sampledAtMs = 1L, durationMs = 125000,
             result = LyricsResult(listOf(LyricSource("fixture", "Fixture", document)))) } }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("lyric-lines").fetchSemanticsNodes().isNotEmpty() }

@@ -29,7 +29,7 @@ class LyricsViewportMotionTest {
         var offset by mutableStateOf(0.dp)
         var reduced by mutableStateOf(false)
         val document = LrcParser.parse(List(48) { "████████████" }.joinToString("\n"))
-        compose.setContent { LocalicaTheme {
+        compose.setContent { LyricsEngineTheme(reduced) {
             MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.Green, onSurfaceVariant = Color.Green)) {
                 CompositionLocalProvider(LocalContentColor provides Color.Green) {
                     Box(Modifier.size(320.dp, 440.dp).background(Color.Black).testTag("clip-scene")) {
