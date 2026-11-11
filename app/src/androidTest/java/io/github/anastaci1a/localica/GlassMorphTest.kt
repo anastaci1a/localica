@@ -628,10 +628,25 @@ class GlassMorphTest {
         var popupWindow: android.view.Window? = null
         data class Mount(val window: android.view.Window, val clockMs: Long,
             val hidden: Boolean, val shadowOwned: Boolean, val expansion: Float)
+        lateinit var probeClock: UiClock
+        val probeLines = java.util.concurrent.ConcurrentLinkedQueue<String>()
+        var awaitIteration = -1
+        fun probeState(event: String, laidOut: Boolean? = null): String {
+            var expansion = 0f
+            probeClock.observe { expansion = anchor.contact.expansion.value }
+            return "$event iteration=$awaitIteration clock=${compose.mainClock.currentTime} " +
+                "window=${popupWindow?.let { System.identityHashCode(it) }} " +
+                "hidden=${anchor.hidden} shadowInModal=${anchor.shadowInModal} " +
+                "expansion=$expansion laidOut=$laidOut"
+        }
+        fun flushProbe() {
+            while (true) android.util.Log.i("GlassMorphProbe", probeLines.poll() ?: break)
+        }
         val mounts = mutableListOf<Mount>()
         val disposed = mutableListOf<android.view.Window>()
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
             Box(Modifier.fillMaxSize()) {
+                probeClock = LocalUiClock.current
                 anchor = rememberGlassAnchor()
                 Box(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(CompactControlSize)
                     .glassAnchor(anchor).testTag("preparation-trigger"))
@@ -642,6 +657,7 @@ class GlassMorphTest {
                         popupWindow = window
                         mounts += Mount(window, compose.mainClock.currentTime,
                             anchor.hidden, anchor.shadowInModal, anchor.contact.expansion.value)
+                        probeLines.add(probeState("mount", view.isLaidOut))
                         onDispose {
                             disposed += window
                             if (popupWindow === window) popupWindow = null
@@ -656,7 +672,13 @@ class GlassMorphTest {
         fun awaitWindow(): android.view.Window {
             repeat(12) {
                 popupWindow?.let { return it }
-                frame()
+                awaitIteration = it
+                compose.mainClock.advanceTimeByFrame()
+                probeLines.add(compose.runOnUiThread { probeState("pre-idle") + " mounts=${mounts.size}" })
+                flushProbe()
+                compose.waitForIdle()
+                probeLines.add(compose.runOnUiThread { probeState("post-idle") + " mounts=${mounts.size}" })
+                flushProbe()
             }
             error("The native dialog did not mount within twelve controlled frames")
         }
@@ -721,6 +743,7 @@ class GlassMorphTest {
             assertTrue("Replacement readiness follows its own two measured frames",
                 compose.mainClock.currentTime - mounts.last().clockMs >= 32)
         } finally {
+            flushProbe()
             compose.runOnIdle { open = false }
             compose.mainClock.autoAdvance = true
         }
