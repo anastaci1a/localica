@@ -37,17 +37,6 @@
     <issue
         id="IndependentUiClock"
         message="Use the shared UiClock"
-        errorLine1="    LaunchedEffect(present, reducedMotion) {"
-        errorLine2="    ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="33"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
         errorLine1="    LaunchedEffect(artwork) {"
         errorLine2="    ~~~~~~~~~~~~~~">
         <location
@@ -1364,17 +1353,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
             line="1225"
             column="73"/>
-    </issue>
-
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="                    top = if (showFilters || (showSearchPill &amp;&amp; !artDetail)) pillSlotHeight else 0.dp,"
-        errorLine2="                                                                                                 ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1276"
-            column="98"/>
     </issue>
 
     <issue
@@ -6481,7 +6459,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="63"
+            line="62"
             column="9"/>
     </issue>
 
@@ -6492,7 +6470,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="104"
+            line="103"
             column="5"/>
     </issue>
 
@@ -10321,23 +10299,12 @@
     <issue
         id="RawPresentationTransform"
         message="Bind presentation through Modifier.surface"
-        errorLine1="            Modifier.matchParentSize().graphicsLayer { alpha = reveal.value }, contentScale, if (reducedMotion) 0 else 240)"
+        errorLine1="            Modifier.matchParentSize().graphicsLayer { alpha = reveal.alpha() }, contentScale, if (reducedMotion) 0 else 240)"
         errorLine2="                                       ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="53"
+            line="52"
             column="40"/>
-    </issue>
-
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="            Modifier.matchParentSize().graphicsLayer { alpha = reveal.value }, contentScale, if (reducedMotion) 0 else 240)"
-        errorLine2="                                                       ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="53"
-            column="56"/>
     </issue>
 
     <issue
@@ -12317,83 +12284,6 @@
     <issue
         id="RawUiMotion"
         message="Use Engine trajectories"
-        errorLine1="    val reveal = remember { Animatable(if (artwork == null) 0f else 1f) }"
-        errorLine2="                            ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="31"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))"
-        errorLine2="               ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="34"
-            column="16"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))"
-        errorLine2="                                                  ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="34"
-            column="51"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))"
-        errorLine2="                                                                                                ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="34"
-            column="97"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            Modifier.matchParentSize().graphicsLayer { alpha = reveal.value }, contentScale, if (reducedMotion) 0 else 240)"
-        errorLine2="                                                                      ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="53"
-            column="71"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: Animatable&lt;Float, AnimationVector1D>, loading: Boolean,"
-        errorLine2="                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="59"
-            column="59"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val revealed by remember(artwork) { derivedStateOf { artwork != null &amp;&amp; reveal.value >= 1f } }"
-        errorLine2="                                                                                   ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="61"
-            column="84"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
         errorLine1="private data class ArtworkResolutionBlendState(val incoming: ImageBitmap,"
         errorLine2="                                              ^">
         <location
@@ -12873,17 +12763,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkSwipe.kt"
             line="196"
             column="94"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    internal var reveal: Animatable&lt;Float, AnimationVector1D>? = null"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkTextReveal.kt"
-            line="31"
-            column="5"/>
     </issue>
 
     <issue
