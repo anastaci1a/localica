@@ -18,8 +18,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
@@ -51,7 +50,12 @@ class PopupShadowContinuityTest {
     private var pageMarker: FrameMarker? = null
     private var stage = 0
     private lateinit var output: File
-    private var neighboringBody = Rect.Zero
+    private var neighboringBody by mutableStateOf(Rect.Zero)
+    private var referenceOrigin by mutableStateOf(Offset.Zero)
+    private var referenceShift = 0f
+    private var referencePlane: ShadowPlane? = null
+    private val referenceCasters = arrayOfNulls<SurfaceView>(2)
+    private var sharedSampleCoordinates = ""
     private var sweptBounds = Rect.Zero
 
     @Test fun utilityShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = false)
@@ -66,19 +70,38 @@ class PopupShadowContinuityTest {
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
         output = File(root, "popup-shadow-continuity/shared-gap-api${Build.VERSION.SDK_INT}")
         assertTrue(output.isDirectory || output.mkdirs())
-        compose.setContent { Fixture(false) }
+        compose.setContent { Fixture(false, sharedReference = true) }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         val log = StringBuilder("api=${Build.VERSION.SDK_INT} density=${compose.density.density} strength=$strength\n")
         val homeContinuity = ShadowFrameProbe()
-        val frames = mutableListOf<Pair<Float, Float>>() // progress to gap darkness, per frame
+        val frames = mutableListOf<Pair<Float, Float>>() // progress to geometry-matched error
+        val rawContinuity = ShadowFrameProbe()
+        var popupHomeFrames = 0
+        var pageHomeFrames = 0
+        var handoffs = 0
+        var previousOwner: Boolean? = null
         fun frame(label: String) {
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
             val p = anchor.contact.expansion.value
-            val gap = sharedGapDarkness()
-            if (p <= .002f) homeContinuity.observeLuminance(1f - gap / 255f) else homeContinuity.beginSegment()
-            frames += p to gap
-            log.append("$label p=$p hidden=${anchor.hidden} inModal=${anchor.shadowInModal} window=${popupWindow != null} gap=$gap\n")
+            val captureName = label.takeIf { p <= .002f && previousOwner != null && previousOwner != anchor.shadowInModal }
+            val (gap, reference) = sharedGapSample(captureName)
+            assertReferenceIsolation()
+            val error = gap - reference
+            if (p <= .002f) {
+                homeContinuity.observeLuminance(1f - error / 255f)
+                rawContinuity.observeLuminance(1f - gap / 255f)
+                val owner = anchor.shadowInModal
+                if (owner) popupHomeFrames++ else pageHomeFrames++
+                if (previousOwner != null && previousOwner != owner) handoffs++
+                previousOwner = owner
+            } else {
+                homeContinuity.beginSegment(); rawContinuity.beginSegment(); previousOwner = null
+            }
+            frames += p to error
+            val shape = anchor.contact.body.value
+            log.append("$label p=$p hidden=${anchor.hidden} inModal=${anchor.shadowInModal} window=${popupWindow != null} " +
+                "strain=${shape.strain} depth=${shape.depth} gap=$gap reference=$reference error=$error $sharedSampleCoordinates\n")
         }
         fun returnToRest(label: String) {
             compose.runOnIdle { open = false }
@@ -92,9 +115,22 @@ class PopupShadowContinuityTest {
             }
         }
         try {
-            val rest = sharedGapDarkness()
-            log.append("rest gap=$rest\n")
+            val (rest, referenceRest) = sharedGapSample()
+            log.append("rest gap=$rest reference=$referenceRest\n")
+            assertTrue("The independent union must match at rest", abs(rest - referenceRest) < 4f)
             assertTrue("The neighbor union must be visible in the gap: $rest", rest > 8f)
+            repeat(4) {
+                frame("precheck-$it")
+                assertTrue("The two unmoving unions must agree within 1/255: $log", abs(frames.last().second) <= 1f)
+                val realPlane = requireNotNull(anchor.shadowPlane)
+                val realOrigin = requireNotNull(realPlane.layout).backdropPosition(requireNotNull(realPlane.view))
+                val realBodies = realPlane.casters.mapNotNull { (it.shape as? LayoutShape)?.laidOut()?.translate(realOrigin) }
+                    .sortedBy { it.left }
+                val controlBodies = requireNotNull(referencePlane).casters.mapNotNull {
+                    (it.shape as? LayoutShape)?.laidOut()?.translate(referenceOrigin + Offset(0f, referenceShift))
+                }.sortedBy { it.left }
+                assertEquals("Both unions must contain the same two resting bodies", realBodies, controlBodies)
+            }
             repeat(2) { cycle ->
                 compose.runOnIdle { open = true }
                 repeat(10) { frame("open$cycle-$it") }
@@ -108,12 +144,30 @@ class PopupShadowContinuityTest {
             compose.runOnIdle { open = true }
             repeat(6) { frame("reopened-$it") }
             returnToRest("final")
+            // The disposal deadline above is unchanged. The final body has its
+            // own, slower spring: sample it until production publishes exact rest.
+            var settledFrames = 0
+            var settlingIndex = 0
+            while (settledFrames < 4) {
+                assertTrue("The final body spring must settle: $log", settlingIndex < 360)
+                frame("settling-${settlingIndex++}")
+                val body = anchor.contact.body.value
+                if (body.strain == 0f && body.depth == 0f) settledFrames++ else settledFrames = 0
+            }
+            val (finalGap, _) = sharedGapSample()
+            assertTrue("The settled union must return to its initial darkness: $log", abs(finalGap - rest) < 4f)
             File(output, "frames.txt").writeText(log.toString())
-            // At home the popup and trigger fields coincide; only ownership differs.
+            // Expansion can be home while the body spring still moves. Compare each
+            // presented gap with a never-transferred union at that SAME body shape.
+            // No fit, filtering of handoff frames, or change to the 3/255 bound.
+            log.append("rawJump=${rawContinuity.maximumDelta} jump=${homeContinuity.maximumDelta} " +
+                "popupHomeFrames=$popupHomeFrames pageHomeFrames=$pageHomeFrames handoffs=$handoffs\n")
+            assertTrue("Both ownership directions must be sampled: $log",
+                popupHomeFrames > 0 && pageHomeFrames > 0 && handoffs >= 6)
             val home = frames.filter { it.first <= .002f }
             assertTrue("Sample both home owners: $log", home.size > 20)
             homeContinuity.assertContinuous(3f / 255f, "popup home ownership")
-            val worst = home.maxOf { abs(it.second - rest) }
+            val worst = home.maxOf { abs(it.second) }
             var jump = 0f
             for (index in 1 until frames.size) {
                 val (previousP, previousGap) = frames[index - 1]
@@ -130,21 +184,42 @@ class PopupShadowContinuityTest {
     }
 
     /** Mean shadow levels (red channel, 0-255) in the gap between the neighbor and trigger. */
-    private fun sharedGapDarkness(): Float {
+    private fun sharedGapSample(captureName: String? = null): Pair<Float, Float> {
         val on = syncedScreenshot()
         try {
+            if (captureName != null) File(output, "$captureName.png").outputStream().use {
+                assertTrue("Save the same presented handoff frame", on.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
             val d = compose.density.density
             val gx = ((neighboringBody.right + anchor.bounds.left) / 2f).roundToInt()
             // The flat white page at the same rows, beyond the trigger's shadow reach.
             val reference = (anchor.bounds.right + 40f * d).roundToInt()
+            val rows = (-6..6).map { (anchor.bounds.center.y + it * d).roundToInt() }
+            sharedSampleCoordinates = "x=$gx dx=-1..1 rows=$rows controlRows=${rows.map { it - referenceShift.roundToInt() }} " +
+                "backgroundX=$reference shift=$referenceShift"
             assertTrue("The gap and reference must be on screen", gx in 1 until on.width - 1 && reference < on.width)
             var sum = 0f
+            var referenceSum = 0f
             var count = 0
             for (dy in -6..6) for (dx in -1..1) {
                 val y = (anchor.bounds.center.y + dy * d).roundToInt()
-                sum += AndroidColor.red(on.getPixel(reference, y)) - AndroidColor.red(on.getPixel(gx + dx, y)); count++
+                val controlY = y - referenceShift.roundToInt()
+                assertTrue("The independent union must remain on screen", controlY in 0 until on.height)
+                if (anchor.contact.expansion.value <= .002f) {
+                    val background = on.getPixel(reference, y)
+                    val controlBackground = on.getPixel(reference, controlY)
+                    assertTrue("Both probes need the same flat white backdrop",
+                        AndroidColor.red(background) >= 254 && AndroidColor.red(controlBackground) >= 254 &&
+                            AndroidColor.red(background) == AndroidColor.green(background) &&
+                            AndroidColor.red(background) == AndroidColor.blue(background) &&
+                            AndroidColor.red(controlBackground) == AndroidColor.green(controlBackground) &&
+                            AndroidColor.red(controlBackground) == AndroidColor.blue(controlBackground))
+                }
+                sum += AndroidColor.red(on.getPixel(reference, y)) - AndroidColor.red(on.getPixel(gx + dx, y))
+                referenceSum += AndroidColor.red(on.getPixel(reference, controlY)) - AndroidColor.red(on.getPixel(gx + dx, controlY))
+                count++
             }
-            return sum / count
+            return sum / count to referenceSum / count
         } finally { on.recycle() }
     }
 
@@ -307,7 +382,7 @@ class PopupShadowContinuityTest {
         }
     }
 
-    @Composable private fun Fixture(nested: Boolean) {
+    @Composable private fun Fixture(nested: Boolean, sharedReference: Boolean = false) {
         LocalicaTheme {
             val page = LocalView.current
             DisposableEffect(page) {
@@ -337,6 +412,7 @@ class PopupShadowContinuityTest {
                             }
                         } else {
                             anchor = rememberGlassAnchor()
+                            if (sharedReference) SharedUnionReference()
                             Row(Modifier.align(Alignment.BottomCenter).safeDrawingPadding()
                                 .padding(horizontal = 56.dp, vertical = 72.dp).fillMaxWidth().height(64.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -352,6 +428,61 @@ class PopupShadowContinuityTest {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private fun homeBodies(): List<RoundRect> {
+        if (neighboringBody == Rect.Zero || anchor.bounds == Rect.Zero) return emptyList()
+        val shape = anchor.contact.body.value
+        val sx = shape.scaleX(anchor.contact.vertical)
+        val sy = shape.scaleY(anchor.contact.vertical)
+        val rect = anchor.bounds
+        val half = Offset(rect.width * sx / 2f, rect.height * sy / 2f)
+        val corner = minOf(rect.width, rect.height) / 2f
+        return listOf(RoundRect(neighboringBody, CornerRadius(neighboringBody.height / 2f)),
+            RoundRect(Rect(rect.center - half, rect.center + half), CornerRadius(corner * sx, corner * sy)))
+    }
+
+    private fun assertReferenceIsolation() {
+        val plane = requireNotNull(referencePlane)
+        assertTrue("The control stays on the same page host class", plane.view?.rootView === pageView.rootView)
+        assertTrue("The control has exactly two independent casters", plane.casters.size == 2)
+        referenceCasters.forEach { caster ->
+            assertTrue("The control caster must never transfer", requireNotNull(caster).ownsWindow(plane))
+            assertFalse("The real union must not contain a control caster", anchor.shadowPlane?.casters?.any { it === caster } == true)
+        }
+        // The spread and 2dp vertical shadow shift are specified by the renderer.
+        // Check the FULL padded outlines at every sampled strain/depth, not just
+        // the gap or the undeformed 64dp body. A separate plane prevents merging.
+        val pad = (6f + .6f * 28f) * compose.density.density + 2f
+        val shift = Offset(0f, -referenceShift)
+        val bodies = homeBodies().map { it.boundingRect.inflate(pad) }
+        val controls = bodies.map { it.translate(shift) }
+        assertTrue("The full control spread must not clip at the top", controls.all { it.top >= 0f })
+        assertTrue("The real and control fields must be outside each other's reach",
+            controls.none { control -> bodies.any { it.overlaps(control) } })
+    }
+
+    /** A separate page ShadowPlane with the same live home geometry. Its two
+     * SurfaceNodes never follow popup motion or transfer to another native host.
+     * Integer translation preserves the pixel phase in the same display capture. */
+    @Composable private fun SharedUnionReference() {
+        val plane = rememberShadowPlane()
+        val page = LocalView.current
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        SideEffect {
+            referencePlane = plane
+            referenceShift = with(density) { 160.dp.roundToPx().toFloat() }
+        }
+        Box(Modifier.fillMaxSize().onGloballyPositioned { referenceOrigin = it.backdropPosition(page) }
+            .shadowPlaneHost(plane, strength, .6f)) {
+            repeat(2) { index ->
+                val key = remember { Any() }
+                Box(Modifier.matchParentSize().glassCaster(plane, key,
+                    onNode = { node, bound -> referenceCasters[index] = node.takeIf { bound } }) {
+                    homeBodies().getOrNull(index)?.translate(-referenceOrigin - Offset(0f, referenceShift))
+                })
             }
         }
     }
