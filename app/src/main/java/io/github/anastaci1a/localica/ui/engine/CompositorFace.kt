@@ -77,7 +77,9 @@ internal class CompositorRecording(private val graphics: GraphicsContext) {
     val present = remember(owner) { derivedStateOf { owner.expanded || !owner.retirementReady } }
     if (visible || present.value) Box(modifier.graphicsLayer {
         shape = RectangleShape
-        clip = expansion.phase.value() < 1f
+        // #854: the open spring rings through 1, so clip until the owner rests open rather than on a phase threshold.
+        val phase = expansion.phase; phase.value()
+        clip = !(phase.settled && phase.target == 1f && owner.expanded)
     }.then(contentModifier), content = content)
 }
 

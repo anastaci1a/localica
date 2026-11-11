@@ -13,6 +13,7 @@ import androidx.compose.ui.text.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.ui.engine.*
+import io.github.anastaci1a.localica.ui.spec.PopupKind
 
 /** U04.02a (D06(a), D33): a retained face host's one ExpandCollapse on the #608 law. Layout hands it the measured endpoint frames;
  * a request made before them waits. An unchanged basis is no new intent, so hosts may report it on every pass. */
@@ -23,8 +24,12 @@ import io.github.anastaci1a.localica.ui.engine.*
     fun request(expanded: Boolean) = motion.show(expanded)
     fun measured(start: Rect, end: Rect) { val basis = ExpansionBasis(start, end, density); if (basis != last) { last = basis; motion.place(basis) } }
 }
+/** A face inherits its enclosing popup's #854 kind (Legacy outside popups). [TriggerRole.Selection] keeps the selection panel's own
+ * Legacy law (#869), so the spring model never reaches it. Both follow from the role; callers never pass a kind or a law (#884). */
 @Composable fun rememberFaceExpansion(expanded: Boolean, role: TriggerRole<Nothing, Nothing> = TriggerRole.Surface): FaceExpansion {
-    val motion = rememberPopupMotion(remember { Any() }, expanded) { if (role == TriggerRole.Selection) it.selectionExpansion else it.expansion }
+    val selection = role == TriggerRole.Selection
+    val motion = rememberPopupMotion(remember { Any() }, expanded, if (selection) PopupKind.Legacy else LocalPopupKind.current) {
+        if (selection) it.selectionExpansion else it.expansion }
     val density = LocalDensity.current.density
     val face = remember(motion, density) { FaceExpansion(motion, density) }
     SideEffect { face.request(expanded) }

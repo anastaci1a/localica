@@ -24,7 +24,10 @@ class InterfacePreferences(context: Context) {
             preferences.getBoolean("reduced-motion", false),
             preferences.enumValue<ArtworkAction>("artwork-tap") ?: ArtworkAction.Lyrics,
             preferences.enumValue<ArtworkAction>("artwork-hold") ?: ArtworkAction.Menu,
-            fasterMotion = preferences.getBoolean("faster-motion", false),
+            animationSpeedTenths = (if (preferences.contains("animation-speed-tenths")) preferences.getInt("animation-speed-tenths", 10)
+                else if (preferences.getBoolean("faster-motion", false)) FasterAnimationSpeedTenths else 10)
+                .coerceIn(MinimumAnimationSpeedTenths, MaximumAnimationSpeedTenths),
+            respectSystemAnimationScale = preferences.getBoolean("respect-system-animation-scale", true),
             artworkLayout = preferences.enumValue<ArtworkLayout>("artwork-layout") ?: ArtworkLayout.FullBackground,
             artworkTransition = preferences.enumValue<ArtworkTransition>("artwork-transition") ?: ArtworkTransition.BlurThrough,
             artworkSwipe = preferences.getBoolean("artwork-swipe", true),
@@ -49,7 +52,11 @@ class InterfacePreferences(context: Context) {
         preferences.edit().putString("tabs", value.tabs.joinToString(",") { it.name }).putBoolean("history", value.tabHistory)
             .putBoolean("confirm-exit", value.confirmExit).putBoolean("expand-on-play", value.expandOnPlay)
             .putBoolean("album-artist", value.albumArtistFirst).putBoolean("reduced-motion", value.reducedMotion)
-            .putBoolean("faster-motion", value.fasterMotion).putString("artwork-layout", value.artworkLayout.name)
+            .putInt("animation-speed-tenths", value.animationSpeedTenths.coerceIn(MinimumAnimationSpeedTenths, MaximumAnimationSpeedTenths))
+            // A downgrade keeps the closest old state.
+            .putBoolean("faster-motion", value.animationSpeedTenths >= FasterAnimationSpeedTenths)
+            .putBoolean("respect-system-animation-scale", value.respectSystemAnimationScale)
+            .putString("artwork-layout", value.artworkLayout.name)
             .putString("artwork-transition", value.artworkTransition.name).putBoolean("artwork-swipe", value.artworkSwipe)
             .putFloat("gray-tone", value.grayTone.normalizedGrayTone())
             .putInt("lyric-delay-ms", value.lyricDelayMs.coerceIn(-2000, 2000))

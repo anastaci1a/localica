@@ -299,9 +299,9 @@ fun LocalicaScreen(
     val bottomShadows = rememberShadowPlane()
     SideEffect { LongScroll.style = settings.longScroll }
     LocalicaTheme(grayTone = settings.grayTone) {
-    CompositionLocalProvider(LocalPageShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides rememberEffectiveReducedMotion(settings.reducedMotion), LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+    CompositionLocalProvider(LocalPageShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalRespectSystemAnimationScale provides settings.respectSystemAnimationScale, LocalReducedMotion provides rememberEffectiveReducedMotion(settings.reducedMotion, settings.respectSystemAnimationScale), LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache, LocalBrowseSortSnapshot provides browseSorts,
-        LocalMotionSpeed provides if (settings.fasterMotion) 2f else 4f / 3f,
+        LocalMotionSpeed provides settings.legacyMotionSpeed,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseSelectionPanel provides selectionPanel,
