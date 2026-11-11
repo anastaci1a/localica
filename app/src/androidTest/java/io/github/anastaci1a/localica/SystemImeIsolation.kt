@@ -124,7 +124,9 @@ internal class NativeImePolicy : TestRule {
                 try {
                     val directory = nativeEvidenceDirectory("popup-ime-policy",
                         instrumentation.targetContext.getExternalFilesDir(null))
-                    java.io.File(directory, "class-policy-api${android.os.Build.VERSION.SDK_INT}.txt")
+                    val ownerPrefix = description.testClass?.simpleName
+                        ?.takeUnless { it == "PopupImeGeometryTest" }?.let { "$it-" }.orEmpty()
+                    java.io.File(directory, "${ownerPrefix}class-policy-api${android.os.Build.VERSION.SDK_INT}.txt")
                         .writeText(events.joinToString("\n", postfix = "\n"))
                 } catch (caught: Throwable) {
                     val primary = failure
