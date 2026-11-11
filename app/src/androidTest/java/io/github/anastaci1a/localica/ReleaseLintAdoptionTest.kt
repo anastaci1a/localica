@@ -106,14 +106,14 @@ class ReleaseLintAdoptionTest {
             var highlightedRow: androidx.compose.ui.geometry.Rect? = null
             var highlightedRoot: androidx.compose.ui.geometry.Rect? = null
             val positions = mutableSetOf<Int>()
+            val selector = SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange) and
+                hasAnyDescendant(hasTestTag("setting:Control expansion"))
             for (frame in 1..64) {
                 compose.mainClock.advanceTimeByFrame()
                 compose.waitForIdle()
                 val rows = compose.onAllNodesWithTag("setting:Control expansion", useUnmergedTree = true)
                 rows.assertCountEquals(1)
                 val row = rows.fetchSemanticsNodes().single()
-                val selector = SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange) and
-                    hasAnyDescendant(hasTestTag("setting:Control expansion"))
                 val owners = compose.onAllNodes(selector, useUnmergedTree = true)
                 owners.assertCountEquals(1)
                 val owner = owners.fetchSemanticsNodes().single()
@@ -124,12 +124,12 @@ class ReleaseLintAdoptionTest {
                 frames.put(JSONObject().put("frame", frame).put("position", bits(position))
                     .put("alpha", bits(alpha)).put("row", geometry(row)).put("scroll", geometry(owner)))
                 if (frame in listOf(4, 8, 12, 20, 32, 48, 64)) {
-                    val image = capture(compose.onNodeWithTag("lint-content"), "$name-$frame")
+                    val image = capture(compose.onNode(selector, useUnmergedTree = true), "$name-$frame")
                     if (!interrupt && frame == 32) {
                         assertTrue("The positive native control captures a revealed highlight", alpha > 0f)
                         highlighted = image
                         highlightedRow = row.boundsInRoot
-                        highlightedRoot = compose.onNodeWithTag("lint-content").fetchSemanticsNode().boundsInRoot
+                        highlightedRoot = owner.boundsInRoot
                     }
                 }
                 if (interrupt && frame == 4) compose.onNode(selector, useUnmergedTree = true)
@@ -147,8 +147,8 @@ class ReleaseLintAdoptionTest {
                 val row = compose.onNodeWithTag("setting:Control expansion", useUnmergedTree = true).fetchSemanticsNode()
                 assertEquals(0f, row.config.getOrNull(SettingsHighlightAlpha) ?: 0f, 0f)
                 assertEquals("Highlight retirement must preserve row geometry", highlightedRow, row.boundsInRoot)
-                val retired = capture(compose.onNodeWithTag("lint-content"), "$name-retired")
-                val root = compose.onNodeWithTag("lint-content").fetchSemanticsNode().boundsInRoot
+                val retired = capture(compose.onNode(selector, useUnmergedTree = true), "$name-retired")
+                val root = compose.onNode(selector, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
                 assertEquals(highlightedRoot, root)
                 val bounds = row.boundsInRoot.translate(-root.left, -root.top)
                 var count = 0
