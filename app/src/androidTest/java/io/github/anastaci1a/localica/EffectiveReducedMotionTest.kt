@@ -27,10 +27,14 @@ class EffectiveReducedMotionTest {
             setContent {
                 val reduced = rememberEffectiveReducedMotion(appReduced)
                 SideEffect { effective = reduced }
-                LocalicaTheme {
-                    CompositionLocalProvider(LocalReducedMotion provides reduced) {
-                        Box(Modifier.width(280.dp)) {
-                            GlassChoices(listOf("First", "Second"), selected) { selected = it }
+                FixtureTime.WithClock {
+                    EngineRecord(reduced = reduced) {
+                        LocalicaTheme {
+                            CompositionLocalProvider(LocalReducedMotion provides reduced) {
+                                Box(Modifier.width(280.dp)) {
+                                    GlassChoices(listOf("First", "Second"), selected) { selected = it }
+                                }
+                            }
                         }
                     }
                 }
