@@ -190,6 +190,7 @@ class LyricsLineInkEaseTest {
     private fun analyse(case: String, failures: MutableList<String>, polarity: Boolean = true, exclude: Set<Int> = emptySet()) {
         val rows = mutableListOf("case,leg,frame,foreground,progress,backdrop,lines")
         var previous: Map<Int, Float> = emptyMap()
+        var previousTheme: Float? = null
         samples.forEach { s ->
             rows += listOf(case, s.leg, s.frame, s.foreground, s.progress, s.backdrop,
                 s.lines.joinToString(" ") { "${it.index}${if (it.selected) "*" else ""}=${"%.3f".format(it.ink)}" }).joinToString(",")
@@ -206,12 +207,15 @@ class LyricsLineInkEaseTest {
                 if (abs(line.ink) >= .05f && line.ink * theme < 0f)
                     failures += "${s.leg} ${s.frame}: line ${line.index} keeps the old polarity (${line.ink}) while the theme is at $theme"
             }
-            // (c) No line steps in a single frame.
+            // (c) No line steps in a single frame on its own: a line may move as far as the shared theme moved in that
+            // frame (the #608 opening can leave the theme only a few frames of its ease), never further.
+            val shared = previousTheme?.let { abs(theme - it) } ?: 0f
             val current = s.lines.associate { it.index to it.ink }
             current.forEach { (id, ink) -> previous[id]?.let { before ->
-                if (abs(ink - before) > .25f) failures += "${s.leg} ${s.frame}: line $id steps $before -> $ink"
+                if (abs(ink - before) > maxOf(.25f, shared)) failures += "${s.leg} ${s.frame}: line $id steps $before -> $ink (shared theme step $shared)"
             } }
             previous = current
+            previousTheme = theme
         }
         export(case, rows)
         assertTrue("Every lyric line follows the shared theme ease ($case):\n" + failures.joinToString("\n"), failures.isEmpty())
