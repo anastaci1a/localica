@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.constrainHeight
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.layout.*
+import io.github.anastaci1a.localica.ui.spec.EmptyInset
 import io.github.anastaci1a.localica.ui.spec.PreferenceFrameSpec
 
 /** Opt-in compact rows keep the shared switch and the full 48dp input target. */
@@ -27,8 +28,8 @@ internal val SettingsRowPartKey = SemanticsPropertyKey<SettingsRowPart>("Setting
 internal fun Modifier.settingsRowPart(part: SettingsRowPart) =
     semantics { this[SettingsRowPartKey] = part }
 
-internal val SettingsRowInset = 16.dp
-internal val SettingsIconSize = 24.dp
+internal val SettingsRowInset = PreferenceFrameSpec.rowInset
+internal val SettingsIconSize = PreferenceFrameSpec.iconSize
 /** The leading icon slot: the icon plus its gap to the text. */
 internal val SettingsIconSlotWidth = PreferenceFrameSpec.iconSlotWidth
 
@@ -38,8 +39,8 @@ internal val SettingsIconSlotWidth = PreferenceFrameSpec.iconSlotWidth
  * whose rows carry icons, so rows without one keep the empty slot. Popups keep the default (no inset, no slot).
  */
 @androidx.compose.runtime.Immutable
-internal data class SettingsRowMetrics(val inset: Dp = 0.dp, val iconSlot: Boolean = false) {
-    val textStart: Dp get() = inset + if (iconSlot) SettingsIconSlotWidth else 0.dp
+internal data class SettingsRowMetrics(val inset: Dp = EmptyInset, val iconSlot: Boolean = false) {
+    val textStart: Dp get() = inset + if (iconSlot) SettingsIconSlotWidth else EmptyInset
 }
 internal val LocalSettingsRowMetrics = androidx.compose.runtime.compositionLocalOf { SettingsRowMetrics() }
 

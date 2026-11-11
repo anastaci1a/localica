@@ -4,9 +4,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.components.SettingsActionLayout
 import io.github.anastaci1a.localica.ui.components.SettingsOrderCard
+import io.github.anastaci1a.localica.ui.layout.SettingsEntryList
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.MediaKind
 
@@ -14,7 +14,7 @@ import io.github.anastaci1a.localica.navigation.MediaKind
 internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilters) -> Unit) {
     SettingsHeading("Visible filters")
     Text("Choose the resting order of Library filters. Selecting a filter brings it to the front; tapping it again restores the combined Library view. Global search keeps all item types available.", style = MaterialTheme.typography.bodyMedium)
-    SettingsEntry("Visible filters") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    SettingsEntry("Visible filters") { SettingsEntryList {
     value.visible.forEachIndexed { index, filter ->
         SettingsOrderCard(filter.label, SettingsActionLayout.Wrapping,
             moveUp = {
