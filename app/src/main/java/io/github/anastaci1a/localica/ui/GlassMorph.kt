@@ -406,6 +406,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         anchor.reclaimOpening = reclaimOpening
         onDispose { if (anchor.reclaimOpening === reclaimOpening) anchor.reclaimOpening = null }
     }
+    // A reopen that is not a click (state, Back stack, programmatic) reaches the retained
+    // window here, in the same apply pass and before this frame draws (#858).
+    SideEffect { if (visible) reclaimOpening() }
     // Native admission and return use real placement/draw receipts. Canceling this
     // adapter does not replace the expansion or its physical rectangle.
     LaunchedEffect(visible, reduced, speed, dismissalAttempt) {
