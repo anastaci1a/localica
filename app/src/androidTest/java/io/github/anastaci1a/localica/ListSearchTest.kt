@@ -24,10 +24,16 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 class ListSearchTest {
+    companion object {
+        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+    }
+
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
     private var lastRoot = ""
