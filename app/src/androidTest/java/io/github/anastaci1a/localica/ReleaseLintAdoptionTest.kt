@@ -1,6 +1,11 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.ViewTreeObserver
+import android.view.Window
 import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
@@ -9,9 +14,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -21,6 +26,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.platform.graphics.HardwareRendererCompat
 import io.github.anastaci1a.localica.library.FolderSelection
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
@@ -32,6 +38,9 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
 
 /** Byte-identical production-path observer on independently frozen before/after sources. */
 class ReleaseLintAdoptionTest {
@@ -64,6 +73,12 @@ class ReleaseLintAdoptionTest {
     private fun capture(node: SemanticsNodeInteraction, name: String): Bitmap {
         val measured = node.fetchSemanticsNode()
         val view = (measured.root as ViewRootForTest).view
+        val dialog = generateSequence(view.parent) { it.parent }.filterIsInstance<DialogWindowProvider>().singleOrNull()?.window
+        assertEquals("Capture must use the selected node's actual activity or GlassDialog window",
+            name.startsWith("settings-") || name == "excluded-dialog", dialog != null)
+        val window = dialog ?: view.context.activityWindow()
+        val crop = android.graphics.Rect(measured.boundsInRoot.left.roundToInt(), measured.boundsInRoot.top.roundToInt(),
+            measured.boundsInRoot.right.roundToInt(), measured.boundsInRoot.bottom.roundToInt())
         val safe = compose.runOnUiThread {
             val visible = android.graphics.Rect().also(view::getWindowVisibleDisplayFrame)
             val origin = IntArray(2).also(view::getLocationOnScreen)
@@ -71,12 +86,40 @@ class ReleaseLintAdoptionTest {
             assertTrue("Capture is within native safe app space", bounds.left + origin[0] >= visible.left &&
                 bounds.top + origin[1] >= visible.top && bounds.right + origin[0] <= visible.right &&
                 bounds.bottom + origin[1] <= visible.bottom)
+            val inWindow = IntArray(2).also(view::getLocationInWindow)
+            crop.offset(inWindow[0], inWindow[1])
             JSONObject().put("visible", visible.toShortString()).put("originX", origin[0]).put("originY", origin[1])
+                .put("nativeDialogWindow", dialog != null).put("nativeWindowType", window.attributes.type)
+                .put("copyRect", crop.toShortString())
         }
-        val image = node.captureToImage().asAndroidBitmap()
+        // Flush this real window's draw without advancing the paused Compose clock. API 26's
+        // Compose capture wrapper rejects dialogs, while Window PixelCopy supports them.
+        val drawn = CountDownLatch(1)
+        val enabled = HardwareRendererCompat.isDrawingEnabled()
+        if (!enabled) HardwareRendererCompat.setDrawingEnabled(true)
+        var listener: ViewTreeObserver.OnDrawListener? = null
+        val image = try {
+            compose.runOnUiThread {
+                listener = ViewTreeObserver.OnDrawListener { view.post { drawn.countDown() } }
+                view.viewTreeObserver.addOnDrawListener(listener)
+                Snapshot.sendApplyNotifications()
+                view.invalidate()
+            }
+            check(drawn.await(5, TimeUnit.SECONDS)) { "Native window draw timed out: $crop" }
+            copyNativeWindowOnce(window, Bitmap.createBitmap(crop.width(), crop.height(), Bitmap.Config.ARGB_8888),
+                "Native window copy timed out: $crop", crop) { "Native window copy failed: $it ($crop)" }
+        } finally {
+            compose.runOnUiThread { listener?.let { view.viewTreeObserver.removeOnDrawListener(it) } }
+            if (!enabled) HardwareRendererCompat.setDrawingEnabled(false)
+        }
         File(output, "$name.png").outputStream().use { assertTrue(image.compress(Bitmap.CompressFormat.PNG, 100, it)) }
         File(output, "$name-capture.json").writeText(geometry(measured).put("safe", safe).toString(2))
         return image
+    }
+    private fun Context.activityWindow(): Window = when (this) {
+        is Activity -> window
+        is ContextWrapper -> baseContext.activityWindow()
+        else -> error("The capture node must belong to a real activity or dialog window")
     }
     private fun save(name: String, frames: JSONArray, changedPixels: Int? = null) {
         File(output, "$name.json").writeText(JSONObject().put("api", Build.VERSION.SDK_INT)
@@ -97,6 +140,8 @@ class ReleaseLintAdoptionTest {
             } }
         } }
         compose.onNodeWithContentDescription("Search settings input").performTextInput("Control expansion")
+        compose.onAllNodesWithTag("search-result:Control expansion").assertCountEquals(1)
+        compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         try {
             compose.onNodeWithTag("search-result:Control expansion").performClick()
