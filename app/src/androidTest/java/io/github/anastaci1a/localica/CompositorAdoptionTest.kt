@@ -66,9 +66,23 @@ class CompositorAdoptionTest {
             assertTrue("The drawable destination acknowledges a traversal", destination.generation > 0)
             assertTrue("That exact caster owns the destination field", owner.owns(destination))
         }
-        compose.runOnIdle { open = false }
+        // Step the return one presented frame at a time, as production vsync does. Auto-advance
+        // can run the closing gate's bounded frame allowance (#836) before any real draw posts
+        // the restored trigger's receipt, which production frames never do.
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { open = false }
+            var frames = 0
+            while (compose.runOnIdle { anchor.modalPresent || anchor.hidden } && frames < 240) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                frames++
+            }
+            repeat(4) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+        } finally { compose.mainClock.autoAdvance = true }
         compose.waitForIdle()
         compose.runOnIdle {
+            assertTrue("The return released the native popup", !anchor.modalPresent && !anchor.hidden)
             assertSame("Return restores the same source owner", owner,
                 requireNotNull(sourcePlane).casters.single { it.key === anchor })
             assertTrue("Returned owner leaves the native plane", requireNotNull(popupPlane).casters.none { it === owner })
