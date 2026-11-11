@@ -20,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.components.ArtworkReveal
 import io.github.anastaci1a.localica.ui.components.rememberArtworkReveal
+import io.github.anastaci1a.localica.ui.components.revealAlpha
 
 /** Loading, absent artwork and image reveal are shared by every artwork surface. */
 @Composable
@@ -49,7 +50,7 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
         ArtworkPlaceholderHost(artwork, reveal, placeholderLoading, emptyText, tintUris, Modifier.matchParentSize())
         if (!loading && artwork == null && emptyText != null) Text(emptyText)
         if (artwork != null) ArtworkResolutionBlend(artwork,
-            Modifier.matchParentSize().graphicsLayer { alpha = reveal.alpha() }, contentScale, if (reducedMotion) 0 else 240)
+            Modifier.matchParentSize().revealAlpha { reveal.alpha() }, contentScale, if (reducedMotion) 0 else 240)
     }
 }
 
