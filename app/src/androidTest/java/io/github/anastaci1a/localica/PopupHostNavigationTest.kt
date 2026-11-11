@@ -49,11 +49,18 @@ class PopupHostNavigationTest {
         var parentView: View? = null
         var parentProgress = 1f
         frameViews = { listOfNotNull(parentView, popupView) }
-        frameState = { "parent=$parentProgress open=$open parentAttached=${parentView?.isAttachedToWindow} popupAttached=${popupView?.isAttachedToWindow}" }
+        // #812 passive diagnostics: the popup window's own phase and the clock of its last emission, published on Main
+        // by the existing work observer. Its foreground alpha is PopupWindowMotion.foreground of that phase.
+        var popupPhase = Float.NaN
+        var popupPhaseClock = -1L
+        frameState = { "parent=$parentProgress open=$open parentAttached=${parentView?.isAttachedToWindow} popupAttached=${popupView?.isAttachedToWindow}" +
+            " popupPhase=$popupPhase popupPhaseClock=$popupPhaseClock ${ownerState(anchor)}" }
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassMorphWorkObserver provides { phase, window, progress ->
                 if (phase == "geometry" && progress != null && window ===
                     (parentView?.parent as? DialogWindowProvider)?.window) parentProgress = progress
+                if (phase == "geometry" && progress != null && window ===
+                    (popupView?.parent as? DialogWindowProvider)?.window) { popupPhase = progress; popupPhaseClock = compose.mainClock.currentTime }
             }) {
             Box(Modifier.fillMaxSize().background(Color.Blue))
             @Composable fun Body() {
@@ -161,6 +168,18 @@ class PopupHostNavigationTest {
     }
 
     private data class RedFrame(val pixels: Int, val peak: Int)
+
+    /** #812 passive diagnostic: the popup's bound expansion owner and its held state, read through their State
+     * delegates without sampling any motion. It never throws, so it cannot change an outcome; absent fields log as absent. */
+    private fun ownerState(anchor: GlassAnchor): String = runCatching {
+        val view = anchor.contact.expansion
+        val phase = view.javaClass.getDeclaredField("phase").apply { isAccessible = true }.get(view)
+        val owner = (phase.javaClass.getDeclaredField("owner\$delegate").apply { isAccessible = true }.get(phase) as State<*>).value
+            as io.github.anastaci1a.localica.ui.engine.ExpandCollapse? ?: return@runCatching "owner=none"
+        val held = runCatching { (owner.javaClass.getDeclaredField("held\$delegate").apply { isAccessible = true }.get(owner) as State<*>).value }
+            .getOrElse { "absent" }
+        "owner=${System.identityHashCode(owner)} held=$held"
+    }.getOrElse { "owner=unreadable(${it.javaClass.simpleName})" }
 
     private class FrameMarker(val x: Int) : android.graphics.drawable.Drawable() {
         var stage = 0
