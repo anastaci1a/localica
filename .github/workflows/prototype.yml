@@ -687,6 +687,7 @@ jobs:
         import os
         import pathlib
         import shutil
+        import sys
 
         checks = json.loads(os.environ['CHECKS'])
         status = {'success': 'passed', 'failure': 'failed', 'skipped': 'not-run', 'cancelled': 'cancelled'}
@@ -726,6 +727,8 @@ jobs:
                 canonical_valid = True
             except (AssertionError, KeyError, ValueError, OSError) as error:
                 errors.append('Canonical APK provenance validation failed: ' + type(error).__name__ + ': ' + str(error))
+        sys.path.insert(0, str(pathlib.Path('.github/test-evidence').resolve()))
+        from full_partition import registered_skip_reason
         expected = set(manifest['requested_affected_classes']) | set(manifest['required_regression_classes'])
         for api in (26, 36):
             focused = root / f'prototype-focused-api-{api}' / 'prototype-evidence'
@@ -762,15 +765,19 @@ jobs:
                     # #464: a class whose every method is SdkSuppress-gated above this API legitimately runs nothing.
                     gated_classes = set(source_inventory.get('gated_absent_classes', []))
                     assert not gated_classes & required, f'API {api}: A mandatory regression class is SDK-excluded'
-                    # ...or one that only skips methods whose own assumeTrue(SDK_INT >= N) is above this API.
+                    # ...or one whose only results are source-gated or registered, observed assumption skips.
                     gates = source_inventory.get('gates', {})
-                    def only_source_gated_skips(cls):
+                    def only_qualified_skips(cls):
                         skipped = [m for m, o in data['methods'].items() if m.rsplit('#', 1)[0] == cls and o == 'skipped']
                         return bool(skipped) and len(skipped) == data['counts'][cls]['skipped'] and all(
-                            gates.get(m, {}).get('assume_min_sdk', 0) > api for m in skipped)
+                            gates.get(m, {}).get('assume_min_sdk', 0) > api or
+                            any(registered_skip_reason(m, api) is not None
+                                and row['id'] == m and str(row['api']) == str(api)
+                                and row['reason'] == registered_skip_reason(m, api)
+                                for row in data.get('qualified_skips', [])) for m in skipped)
                     assert all(value['failed'] == 0 and value['errors'] == 0 and
                                (value['passed'] > 0 or (cls in gated_classes and not any(value.values()))
-                                or only_source_gated_skips(cls))
+                                or only_qualified_skips(cls))
                                for cls, value in data['counts'].items()), f'API {api}: A selected class failed or lacks passing or qualified SDK coverage'
                     data['independent_test_apk_hashes'] = (focused / 'test-input-apks.sha256').read_text()
                     repetitions = manifest['requested_iterations']
@@ -885,6 +892,9 @@ jobs:
             summary.write('## Prototype — not release certified\n' + (
                 'Required checks passed; prototype APK attached.' if ready else
                 'Not ready: no delivery APK packaged. See per-job evidence.') + '\n')
+            for data in manifest['focused_evidence'].values():
+                for row in data.get('qualified_skips', []):
+                    summary.write('Recorded skip API'+str(row['api'])+': '+row['id']+' — '+row['reason']+'\n\n')
         if errors:
             raise SystemExit('Prototype evidence validation failed; see the held decision manifest')
         PYCODE

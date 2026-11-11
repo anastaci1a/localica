@@ -61,10 +61,45 @@ def discover(root):
 DEFERRED = {}
 
 
+# Exact opt-in/profile assumption identities shared by complete and focused evidence.
+# These remain executed methods: failures and missing results are never waived.
+PROFILE_ASSUMPTIONS = {
+    'RepeatOptionsEnvelopeTest#native360x640Font2SectionsExposeEveryControlAndStageDrafts': 'Exact native window profile requires sufficient display space and actual Android font scale 2',
+    'RepeatOptionsEnvelopeTest#native400x800Font2SectionsExposeEveryControlAndStageDrafts': 'Exact native window profile requires sufficient display space and actual Android font scale 2',
+    'RepeatOptionsEnvelopeTest#native360x640PhoneFont2SectionsFitSafeInsetsWithoutWindowResize': 'Requires the lead-configured 360x640 phone/font2 focused run',
+    'RepeatOptionsEnvelopeTest#native400x800PhoneFont2SectionsFitSafeInsetsWithoutWindowResize': 'Requires the lead-configured 400x800 phone/font2 focused run',
+    'DialogChromeLayoutTest#native360x640Font2RetainsSharedChromeAndEveryRepeatControl': 'Requires sufficient display space and actual Android font scale 2',
+    'DialogChromeLayoutTest#native400x800Font2RetainsSharedChromeAndEveryRepeatControl': 'Requires sufficient display space and actual Android font scale 2',
+    'TagEditorChromeLayoutTest#native360x640Font2KeepsSharedChromeAndScrollableFullSizeFields': 'Requires sufficient display space and the requested actual system font scale',
+}
+UTILITY_DIAGNOSTIC_REASON = (
+    'Ten-cycle optical recording requires explicit utilityPopupOpticalDiagnostics=true; '
+    'mandatory native lifecycle and presentation run in the three PreservesNativeReturnOwnership methods')
+for _scene in ('light', 'dark', 'patterned'):
+    PROFILE_ASSUMPTIONS['UtilityPopupRenderDiagnosticTest#'+_scene+'UtilityPopupRepeatedReturnDiagnostics'] = UTILITY_DIAGNOSTIC_REASON
+
+
+def registered_skip_reason(identity, api=None):
+    package = 'io.github.anastaci1a.localica.'
+    if (api is None or str(api) in ('26', '36')) and identity.startswith(package):
+        return PROFILE_ASSUMPTIONS.get(identity[len(package):])
+    return None
+
+
 def deferred_for(inv):
-    return [{'id': identity, 'reason': reason}
+    rows = [{'id': identity, 'reason': reason}
             for identity, reason in sorted(DEFERRED.items())
             if identity.split('#')[0] in inv['selectors']]
+    for row in rows:
+        require(row['id'] in inv['methods'], 'Deferred method missing from source: ' + row['id'])
+    return rows
+
+
+def focused_inventory(inv):
+    """Apply the complete lane's exact method deferrals to a focused source inventory."""
+    rows = deferred_for(inv)
+    return dict(inv, deferred=rows,
+                runtime_methods=sorted(set(inv['runtime_methods']) - {row['id'] for row in rows}))
 
 
 def plan(root, risks, api, sha, run_id='0', attempt='0'):
@@ -244,6 +279,8 @@ def outcomes(folder):
                                 observed.setdefault(key, []).extend(values)
                     reasons = sorted(set(observed.get(identity, [])), key=str)
                     require(len(reasons) == 1 and reasons[0] is not None, 'Missing observed assumption reason')
+                    expected = registered_skip_reason(identity)
+                    require(expected is None or reasons[0] == expected, 'Wrong observed skip reason: ' + identity)
                     logged = re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text)
                     require(logged in ([], reasons), 'Contradictory logged assumption reason')
                     skipped = case.find('skipped')

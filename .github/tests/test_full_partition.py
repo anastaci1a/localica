@@ -134,6 +134,22 @@ class FullPartitionTest(unittest.TestCase):
                 mutate()
                 with self.assertRaises(ValueError):self.complete()
 
+    def test_registered_diagnostic_is_still_required_and_cannot_fail(self):
+        cls='io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest'
+        method='patternedUtilityPopupRepeatedReturnDiagnostics'
+        identity=cls+'#'+method
+        (self.folder/'UtilityPopupRenderDiagnosticTest.kt').write_text(
+            'package io.github.anastaci1a.localica\nimport org.junit.Test\n'
+            'class UtilityPopupRenderDiagnosticTest { @Test fun '+method+'() {} }')
+        self.manifest=partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
+        self.assertIn(identity, self.manifest['remaining'])
+        for ids, outcome in (([m for m in self.manifest['remaining'] if m!=identity], None),
+                             (self.manifest['remaining'], 'failure')):
+            with self.subTest(outcome=outcome):
+                self.xml(self.remaining, ids, outcome)
+                with self.assertRaises(ValueError):
+                    self.complete()
+
     def test_source_addition_or_helper_mutation_invalidates_plan(self):
         (self.folder/'Helper.kt').write_text('package example\nclass Helper {}')
         with self.assertRaises(ValueError):self.complete()
@@ -353,6 +369,46 @@ class WeightedClassShardsTest(unittest.TestCase):
         self.assertEqual([cls],ordinary['opt_in_disabled_classes'])
         self.assertEqual(500,self.plan(scroll_performance=True)['class_seconds'][cls])
         self.assertEqual(18,sum(len(s['methods']) for s in ordinary['shards']))
+
+
+class SharedAssumptionPolicyTest(unittest.TestCase):
+    def test_diagnostic_registry_is_exact_on_both_apis(self):
+        package='io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest#'
+        for api in ('26', '36'):
+            for scene in ('light', 'dark', 'patterned'):
+                self.assertEqual(partition.UTILITY_DIAGNOSTIC_REASON,
+                    partition.registered_skip_reason(package+scene+'UtilityPopupRepeatedReturnDiagnostics', api))
+            for method in ('unregisteredDiagnostic', 'lightUtilityPopupPreservesNativeReturnOwnership'):
+                self.assertIsNone(partition.registered_skip_reason(package+method, api))
+            self.assertIsNone(partition.registered_skip_reason('other.UtilityPopupRenderDiagnosticTest#lightUtilityPopupRepeatedReturnDiagnostics', api))
+        self.assertIsNone(partition.registered_skip_reason(package+'lightUtilityPopupRepeatedReturnDiagnostics', '35'))
+
+    def test_deferred_policy_requires_source_identity_in_selected_classes(self):
+        from unittest.mock import patch
+        inv={'selectors':['example.Test'], 'methods':['example.Test#one','example.Test#two'],
+             'runtime_methods':['example.Test#one','example.Test#two']}
+        with patch.dict(partition.DEFERRED, {'example.Test#one':'DEFERRED contract'}):
+            self.assertEqual([{'id':'example.Test#one','reason':'DEFERRED contract'}], partition.deferred_for(inv))
+            self.assertEqual(['example.Test#two'], partition.focused_inventory(inv)['runtime_methods'])
+            self.assertEqual(['example.Test#one','example.Test#two'], inv['runtime_methods'])
+            self.assertEqual([], partition.deferred_for({'selectors':['example.Other'], 'methods':[]}))
+            with self.assertRaisesRegex(ValueError, 'Deferred method missing from source'):
+                partition.deferred_for({'selectors':['example.Test'], 'methods':['example.Test#two']})
+
+    def test_complete_lane_records_the_same_diagnostic_reason_and_rejects_a_contradiction(self):
+        identity='io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest#patternedUtilityPopupRepeatedReturnDiagnostics'
+        cls, method=identity.split('#')
+        with tempfile.TemporaryDirectory() as temp:
+            folder=Path(temp)
+            (folder/'TEST.xml').write_text('<testsuite tests="1" skipped="1"><testcase classname="'+cls+'" name="'+method+'"><skipped /></testcase></testsuite>')
+            (folder/('logcat-'+cls+'-'+method+'.txt')).write_text('')
+            (folder/'test-result.pb').write_bytes(utp({(cls,method):partition.UTILITY_DIAGNOSTIC_REASON}))
+            rows, _=partition.outcomes(folder)
+            self.assertEqual('skipped', rows[identity]['outcome'])
+            self.assertEqual(partition.UTILITY_DIAGNOSTIC_REASON, rows[identity]['reason'])
+            (folder/'test-result.pb').write_bytes(utp({(cls,method):'Unexpected assumption'}))
+            with self.assertRaisesRegex(ValueError, 'Wrong observed skip reason'):
+                partition.outcomes(folder)
 
 
 class RestoredSharedNeighborTest(unittest.TestCase):

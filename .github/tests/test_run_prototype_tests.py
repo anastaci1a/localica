@@ -42,6 +42,7 @@ class RunnerContract(unittest.TestCase):
         (self.root/'.github/test-evidence/supervise.py').symlink_to((ROOT/'.github/test-evidence/supervise.py').resolve())
         (self.root/'.github/test-evidence/source_methods.py').symlink_to((ROOT/'.github/test-evidence/source_methods.py').resolve())
         (self.root/'.github/test-evidence/teardown_offline.py').symlink_to((ROOT/'.github/test-evidence/teardown_offline.py').resolve())
+        shutil.copyfile(ROOT/'.github/test-evidence/full_partition.py', self.root/'.github/test-evidence/full_partition.py')
         (self.root/'.github/test-evidence/utp_results.py').symlink_to((ROOT/'.github/test-evidence/utp_results.py').resolve())
         self.executable('bin/node', '''#!/usr/bin/env python3
 import json,pathlib,sys,time
@@ -96,10 +97,10 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
     case=E.SubElement(suite,'testcase',classname=cls,name=method)
     if mode in ('xml-failure','teardown-offline-failure') and i==0:E.SubElement(case,'failure')
     if mode=='all-skipped' and i==0:E.SubElement(case,'skipped')
-    if os.environ.get('SKIP_CLASS')==cls:
+    if os.environ.get('SKIP_CLASS')==cls and os.environ.get('SKIP_MISSING')!='yes':
         method=os.environ['SKIP_METHOD']
         skipped=E.SubElement(suite,'testcase',classname=cls,name=method)
-        skip=E.SubElement(skipped,'skipped')
+        skip=E.SubElement(skipped,os.environ.get('SKIP_OUTCOME','skipped'))
         if os.environ.get('SKIP_XML_REASON'):skip.set('message',os.environ['SKIP_XML_REASON'])
         suite.set('tests','2')
         if os.environ.get('SKIP_ONLY')==cls:
@@ -175,7 +176,7 @@ if offline:
         (canonical/'app-debug.apk').write_bytes(b'canonical')
         (canonical/'provenance.json').write_text(json.dumps({'sha':SHA,'apk_sha256':hashlib.sha256(b'canonical').hexdigest(),'run_id':'1','run_attempt':'1','signing_certificate':'verified-test-certificate'}))
         checks={k:{'result':'success'} for k in workflow['jobs']['evidence']['needs']}
-        env=dict(os.environ,PROTOTYPE_METHODS=AFFECTED+'#regression',PROTOTYPE_REPEAT='2',CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT='1',GITHUB_STEP_SUMMARY=str(decision/'summary'))
+        env=dict(os.environ,PYTHONPATH=str(ROOT/'.github/test-evidence'),PROTOTYPE_METHODS=AFFECTED+'#regression',PROTOTYPE_REPEAT='2',CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT='1',GITHUB_STEP_SUMMARY=str(decision/'summary'))
         result=subprocess.run(['bash','-c',script],cwd=decision,env=env,capture_output=True,text=True)
         manifest=json.loads((decision/'prototype-delivery/manifest.json').read_text())
         self.assertEqual([],manifest['validation_errors'],result.stdout+'\n'+result.stderr)
@@ -557,6 +558,78 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
             ' { @org.junit.Test fun regression() {} @org.junit.Test fun '+method+'() {} }\n')
         return dict(AFFECTED_CLASSES=cls, SKIP_CLASS=cls, SKIP_METHOD=method)
 
+    def diagnostic_source(self, method='patternedUtilityPopupRepeatedReturnDiagnostics'):
+        return self.skip_source('io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest', method)
+
+    def test_registered_diagnostic_skips_are_recorded_on_both_apis(self):
+        from full_partition import UTILITY_DIAGNOSTIC_REASON
+        for api in ('26', '36'):
+            for scene in ('light', 'dark', 'patterned'):
+                with self.subTest(api=api, scene=scene):
+                    self.run_case(**self.diagnostic_source(scene+'UtilityPopupRepeatedReturnDiagnostics'),
+                                  TEST_API=api, SKIP_REASON=UTILITY_DIAGNOSTIC_REASON,
+                                  GITHUB_STEP_SUMMARY=str(self.root/'summary'))
+                    evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+                    row=evidence['qualified_skips'][0]
+                    self.assertEqual('skipped', evidence['methods'][row['id']])
+                    self.assertIn('Recorded skip API'+api+': '+row['id'], (self.root/'summary').read_text())
+                    shutil.rmtree(self.root/'prototype-evidence')
+                    shutil.rmtree(self.root/'app/build/outputs/androidTest-results')
+
+    def test_diagnostic_only_class_is_recorded_as_skip_not_pass(self):
+        from full_partition import UTILITY_DIAGNOSTIC_REASON
+        env=self.diagnostic_source()
+        cls=env['SKIP_CLASS']
+        path=self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')
+        path.write_text(path.read_text().replace('@org.junit.Test fun regression() {} ', ''))
+        self.run_case(**env, SKIP_REASON=UTILITY_DIAGNOSTIC_REASON, SKIP_ONLY=cls)
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({'passed':0,'failed':0,'errors':0,'skipped':1}, evidence['counts'][cls])
+
+    def test_diagnostic_registration_does_not_waive_failure_missing_or_wrong_reason(self):
+        from full_partition import UTILITY_DIAGNOSTIC_REASON
+        for overrides in ({'SKIP_OUTCOME':'failure'}, {'SKIP_OUTCOME':'error'},
+                          {'SKIP_MISSING':'yes'}, {'SKIP_REASON':'Different assumption'},
+                          {'SKIP_UTP_STATUS':'2'}):
+            with self.subTest(overrides=overrides):
+                env=dict(self.diagnostic_source(), SKIP_REASON=UTILITY_DIAGNOSTIC_REASON)
+                env.update(overrides)
+                self.run_case(1, **env)
+                shutil.rmtree(self.root/'prototype-evidence')
+                shutil.rmtree(self.root/'app/build/outputs/androidTest-results')
+
+    def test_unregistered_diagnostic_method_cannot_borrow_registered_reason(self):
+        from full_partition import UTILITY_DIAGNOSTIC_REASON
+        self.run_case(1, **self.diagnostic_source('unregisteredDiagnostic'), SKIP_REASON=UTILITY_DIAGNOSTIC_REASON)
+
+    def test_deferred_filter_uses_complete_policy_and_excludes_only_its_method(self):
+        policy=self.root/'.github/test-evidence/full_partition.py'
+        policy.write_text(policy.read_text().replace('DEFERRED = {}',
+            "DEFERRED = {'"+AFFECTED+"#deferredMethod': 'DEFERRED test policy'}"))
+        path=self.root/('app/src/androidTest/java/'+AFFECTED.replace('.','/')+'.kt')
+        path.write_text(path.read_text().replace('fun regression()', 'fun deferredMethod() {} @org.junit.Test fun regression()'))
+        self.run_case()
+        argv=json.loads((self.root/'argv.json').read_text())
+        self.assertIn('-Pandroid.testInstrumentationRunnerArguments.notClass='+AFFECTED+'#deferredMethod', argv)
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual([{'id':AFFECTED+'#deferredMethod','reason':'DEFERRED test policy'}], evidence['deferred'])
+        self.assertEqual('passed', evidence['methods'][AFFECTED+'#regression'])
+
+    def test_deferred_method_request_fails_closed_before_a_method_proof(self):
+        policy=self.root/'.github/test-evidence/full_partition.py'
+        policy.write_text(policy.read_text().replace('DEFERRED = {}',
+            "DEFERRED = {'"+AFFECTED+"#regression': 'DEFERRED test policy'}"))
+        result=self.run_case(1, PROTOTYPE_METHODS=AFFECTED+'#regression')
+        self.assertIn('Requested method is not declared', result.stderr)
+        self.assertFalse((self.root/'argv.json').exists())
+
+    def test_missing_deferred_source_method_fails_before_instrumentation(self):
+        policy=self.root/'.github/test-evidence/full_partition.py'
+        policy.write_text(policy.read_text().replace('DEFERRED = {}',
+            "DEFERRED = {'"+AFFECTED+"#missingMethod': 'DEFERRED test policy'}"))
+        self.run_case(1)
+        self.assertFalse((self.root/'argv.json').exists())
+
     def test_profile_skip_requires_exact_identity_reason_and_keeps_evidence(self):
         cls='io.github.anastaci1a.localica.DialogChromeLayoutTest'
         method='native360x640Font2RetainsSharedChromeAndEveryRepeatControl'
@@ -864,9 +937,9 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False, infrastructure_jobs=(), failed_jobs=(), historical_infrastructure=False):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False, infrastructure_jobs=(), failed_jobs=(), historical_infrastructure=False, diagnostic_skip=None):
         import yaml, hashlib
-        affected_classes=affected_classes or [AFFECTED]
+        affected_classes=affected_classes or (['io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest'] if diagnostic_skip else [AFFECTED])
         selected=[REQUIRED,FOCUS,CONTRAST]+affected_classes
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         script=next(step['run'] for step in workflow['jobs']['evidence']['steps']
@@ -896,6 +969,22 @@ class WorkflowContract(unittest.TestCase):
                     inventory_bytes=json.dumps(inventory).encode()
                     (focused/'expected-methods.json').write_bytes(inventory_bytes)
                     (focused/'reconciled-tests.json').write_text(json.dumps({'source_inventory_sha256':hashlib.sha256(inventory_bytes).hexdigest(),'required_selectors':[REQUIRED,FOCUS,CONTRAST],'methods':{c+'#regression':'passed' for c in selected},'sha':SHA,'api':str(api),'selectors':selected,'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in selected}}))
+                    if diagnostic_skip:
+                        from full_partition import UTILITY_DIAGNOSTIC_REASON
+                        cls=affected_classes[0]
+                        identity=cls+'#patternedUtilityPopupRepeatedReturnDiagnostics'
+                        inventory['runtime_methods'].remove(cls+'#regression')
+                        inventory['runtime_methods'].append(identity)
+                        inventory_bytes=json.dumps(inventory).encode()
+                        (focused/'expected-methods.json').write_bytes(inventory_bytes)
+                        data=json.loads((focused/'reconciled-tests.json').read_text())
+                        data['source_inventory_sha256']=hashlib.sha256(inventory_bytes).hexdigest()
+                        del data['methods'][cls+'#regression']
+                        data['methods'][identity]='skipped'
+                        data['counts'][cls]={'passed':0,'failed':0,'errors':0,'skipped':1}
+                        data['qualified_skips']=[] if diagnostic_skip=='unqualified' else [
+                            {'id':identity,'api':str(api),'reason':UTILITY_DIAGNOSTIC_REASON if diagnostic_skip=='registered' else 'Wrong reason'}]
+                        (focused/'reconciled-tests.json').write_text(json.dumps(data))
                     if partial_methods:
                         data=json.loads((focused/'reconciled-tests.json').read_text())
                         data['methods'].pop(REQUIRED+'#regression')
@@ -956,11 +1045,29 @@ class WorkflowContract(unittest.TestCase):
                         (iterations/'summary.json').write_text(json.dumps(summary))
                     compatibility=evidence/f'prototype-compatibility-api-{api}';compatibility.mkdir()
                     (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
-            env=dict(os.environ,PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=','.join(affected_classes),COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
+            env=dict(os.environ,PYTHONPATH=str(ROOT/'.github/test-evidence'),PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=','.join(affected_classes),COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
             result=subprocess.run(['bash','-c',script],cwd=root,env=env,capture_output=True,text=True)
             out=root/'prototype-delivery'
             manifest=json.loads((out/'manifest.json').read_text()) if (out/'manifest.json').exists() else None
             return result,manifest,list(out.glob('*.apk'))
+
+    def test_delivery_records_registered_skip_only_class_on_both_apis(self):
+        result, manifest, apks=self.decision(diagnostic_skip='registered')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(manifest['ready_for_prototype_delivery'])
+        self.assertEqual(1, len(apks))
+        for api in ('26', '36'):
+            data=manifest['focused_evidence'][api]
+            self.assertEqual(1, len(data['qualified_skips']))
+            self.assertEqual('skipped', next(o for m,o in data['methods'].items() if 'RepeatedReturnDiagnostics' in m))
+
+    def test_delivery_rejects_unqualified_or_wrong_reason_skip_only_class(self):
+        for mode in ('unqualified', 'wrong-reason'):
+            with self.subTest(mode=mode):
+                result, manifest, apks=self.decision(diagnostic_skip=mode)
+                self.assertNotEqual(0, result.returncode)
+                self.assertFalse(manifest['ready_for_prototype_delivery'])
+                self.assertEqual([], apks)
 
     def test_five_class_repeat_manifest_passes_and_names_changed_apks(self):
         affected=[AFFECTED]+['io.github.anastaci1a.localica.Affected'+str(i)+'Test' for i in range(4)]

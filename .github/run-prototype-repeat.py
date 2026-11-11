@@ -8,6 +8,10 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'test-evidence'))
+from full_partition import focused_inventory
 
 REQUIRED = {'io.github.anastaci1a.localica.' + cls for cls in
             ('SearchImeMotionTest', 'ListSearchTest', 'FrostedSurfaceTest')}
@@ -98,7 +102,8 @@ def main():
         subprocess.run(['python3', '.github/test-evidence/source_methods.py', '--classes',
                         ','.join(sorted(os.environ['AFFECTED_CLASSES'].split(','))), '--api', os.environ['TEST_API'],
                         '--output', str(inventory_file)], check=True)
-        complete = json.loads(inventory_file.read_text())
+        complete = focused_inventory(json.loads(inventory_file.read_text()))
+        inventory_file.write_text(json.dumps(complete, indent=2) + '\n')
         # Preserve source identities while restricting runtime expectations to requested methods.
         subprocess.run(['python3', '.github/prototype-methods.py', str(inventory_file), requested_methods], check=True)
         candidates = [c for c in complete['classes'] if c['class'] not in REQUIRED]
