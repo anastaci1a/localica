@@ -59,13 +59,16 @@ class SpringBandAdmissionTest {
     @Test fun aReleaseBuildCountsAnUnprovenExtremumInsteadOfThrowing() {
         val strict = SpringBandTelemetry.strict; val before = SpringBandTelemetry.violations
         // Bypass admission on purpose: the engine alone must keep the motion and record the violation.
-        val unadmitted = m.copy(open = SpringLaw(100f, .78f))
+        val unadmitted = m.copy(open = SpringLaw(100f, .78f)); val switch = .02
+        // Precondition from the closed forms: the close planned at the switch peaks past 1 + band.
+        val (x, v) = springState(0.0, 0.0, 1.0, 100.0, .78, switch)
+        assertTrue(springExtrema(x, v, 0.0, m.close.omega.toDouble(), m.close.zeta.toDouble()).endInclusive > 1 + band)
         try {
             SpringBandTelemetry.strict = false
             EngineHarness().use { h ->
                 val owner = ExpandCollapse(h.clock, StockUiSpec.expansion, false).also { it.usePopupLaw(unadmitted, PopupKind.Menu); it.setBasis(basis) }
                 // A fast open reversed early by the close overshoots far past 1 + band (agent-188: up to 1.216).
-                owner.target(true); h.advance(.01); owner.target(false)
+                owner.target(true); h.advance(switch); owner.target(false)
                 assertTrue("the motion runs unchanged", !owner.phase.settled)
                 h.advance(2.0); assertTrue(owner.phase.settled); owner.dispose()
             }
@@ -73,7 +76,7 @@ class SpringBandAdmissionTest {
             SpringBandTelemetry.strict = true
             EngineHarness().use { h ->
                 val owner = ExpandCollapse(h.clock, StockUiSpec.expansion, false).also { it.usePopupLaw(unadmitted, PopupKind.Menu); it.setBasis(basis) }
-                owner.target(true); h.advance(.01)
+                owner.target(true); h.advance(switch)
                 assertThrows(IllegalArgumentException::class.java) { owner.target(false) }
             }
         } finally { SpringBandTelemetry.strict = strict }
