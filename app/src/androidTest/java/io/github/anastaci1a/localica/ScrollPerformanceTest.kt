@@ -140,15 +140,18 @@ class ScrollPerformanceTest {
 
     @Test fun scrollbarDragTopToBottomToTop() {
         val harness = launch(BrowseRoute(MainTab.Songs), BrowseStyle(), songTracks())
-        runScenario("scrollbar-drag", harness, prepare = { it.scrollToIndex(0); it.settle() }) { h ->
+        // #704: an idle scrollbar is faded and has no hit area. The final jump of prepare is list movement, which
+        // shows it (as a scroll does) well within the idle delay; each drag then starts on the thumb itself.
+        runScenario("scrollbar-drag", harness, prepare = { it.scrollToIndex(1); it.settle(); it.scrollToIndex(0) }) { h ->
+            fun thumb() = h.nodeBounds { it.config.getOrNull(SemanticsProperties.TestTag) == "browse-scrollbar-thumb" }
             val bar = h.nodeBounds { it.config.getOrNull(SemanticsProperties.TestTag) == "browse-scrollbar" }
             val x = bar.centerX
             // Stay clear of the status-bar pull-down zone: a drag starting there never reaches the app.
-            val top = maxOf(bar.top, h.systemBarTop().toFloat()) + 24f
+            val top = maxOf(thumb().centerY, h.systemBarTop().toFloat() + 24f)
             val bottom = bar.bottom - 8f
-            h.swipe(x, top, x, bottom, 300); h.settle()
+            h.swipe(x, top, x, bottom, 300)
             check(h.scrollValue() > 1f) { "Scrollbar drag did not move the list" }
-            h.swipe(x, bottom, x, top, 300); h.settle()
+            h.swipe(x, thumb().centerY, x, top, 300); h.settle()
         }
     }
 

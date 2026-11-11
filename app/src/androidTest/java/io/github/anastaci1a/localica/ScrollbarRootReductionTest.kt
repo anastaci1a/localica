@@ -72,7 +72,7 @@ class ScrollbarRootReductionTest {
                 DisposableEffect(rail) { onDispose { rail.dispose() } }
                 Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
                     Box(Modifier.size(120.dp, 200.dp).background(Color.White).testTag("root-reduction-rail")) {
-                        Box(Modifier.scrollbarPresentation(rail, { 40f + rail.releaseOffset() * 100f }, true)
+                        Box(Modifier.scrollbarPresentation(rail, { 40f + rail.releaseOffset() * 100f })
                             .size(8.dp, 40.dp).background(Color.Green))
                     }
                 }
@@ -96,11 +96,11 @@ class ScrollbarRootReductionTest {
         val fade = TargetBasedAnimation(tween<Float>(220, 1200), Float.VectorConverter, 1f, 0f)
         val release = TargetBasedAnimation(tween<Float>(180), Float.VectorConverter, .2f, 0f)
         val grip = TargetBasedAnimation(tween<Float>(240, easing = CubicBezierEasing(0f, 0f, .2f, 1f)),
-            Float.VectorConverter, 1f, 1.5f)
+            Float.VectorConverter, 0f, 1f)
         fun sample(label: String, access: MotionAccess) {
             fun snapshot() = compose.runOnIdle {
                 Frame(clock.presentedStamp.nanos - origin, clock.context!!.access.name,
-                    System.identityHashCode(clock), clock.activeCount, motion.opacity(), motion.releaseOffset(), motion.scale())
+                    System.identityHashCode(clock), clock.activeCount, motion.opacity(), motion.releaseOffset(), motion.grip())
             }
             val node = compose.onNodeWithTag("root-reduction-rail").fetchSemanticsNode()
             val context = compose.runOnIdle {

@@ -157,4 +157,91 @@ class ScrollbarModelTest {
         assertTrue(ScrollbarGrip.durationMillis(2f, false) < 180)
         assertTrue(ScrollbarGrip.HitWidthDp >= 32f)
     }
+
+    /** Scroll offset of [index] plus [offset] in [grid]: what scrollToItem lands on. */
+    private fun scrollOf(grid: SimGrid, index: Int, offset: Int): Int {
+        val line = grid.lines.last { it.first <= index }
+        return (line.top + offset).coerceIn(0, grid.maxScroll)
+    }
+
+    /** One relative drag over [grid] along [finger] (thumb-fraction deltas); returns every scroll offset. */
+    private fun drag(grid: SimGrid, start: Int, finger: List<Float>): List<Int> {
+        val model = ScrollbarModel()
+        val drag = ScrollbarDrag()
+        var s = start
+        model.observe(grid.frame(s))
+        drag.begin(model.fraction)
+        val out = mutableListOf(s)
+        for (delta in finger) {
+            drag.move(delta)
+            val step = drag.take(model.position, model.remaining)
+            s = when {
+                step == Float.POSITIVE_INFINITY -> grid.maxScroll
+                step == Float.NEGATIVE_INFINITY -> 0
+                step == 0f -> s
+                abs(step) <= model.viewport -> (s + step.toInt()).coerceIn(0, grid.maxScroll)
+                else -> model.targetBy(step).let { (i, o) -> scrollOf(grid, i, o) }
+            }
+            model.observe(grid.frame(s))
+            out += s
+        }
+        return out
+    }
+
+    /** Rows that change height partway, so estimates for unmeasured rows are wrong until reached (#704). */
+    private fun coldGrid(n: Int) = SimGrid(List(n) { if (it < n / 3) 56 else 140 + (it % 5) * 9 }, emptySet(), 1, 800)
+
+    @Test fun relativeDragNeverMovesTheListAgainstTheFingerAndArrivesAtBothEnds() {
+        for ((name, grid) in lists() + mapOf("cold" to coldGrid(20000), "coldOperator" to coldGrid(13400))) {
+            for (rate in listOf(.001f, .005f, .02f)) {
+                val down = drag(grid, 0, List((1.2f / rate).toInt()) { rate })
+                assertTrue("$name $rate forward reversal", down.zipWithNext().all { (a, b) -> b >= a })
+                assertEquals("$name $rate reaches the end", grid.maxScroll, down.last())
+                val up = drag(grid, grid.maxScroll, List((1.2f / rate).toInt()) { -rate })
+                assertTrue("$name $rate backward reversal", up.zipWithNext().all { (a, b) -> b <= a })
+                assertEquals("$name $rate reaches the top", 0, up.last())
+            }
+        }
+    }
+
+    @Test fun travelThatWasNeverAppliedStaysOwedToTheDrag() {
+        val model = ScrollbarModel()
+        val grid = coldGrid(20000)
+        model.observe(grid.frame(0))
+        val drag = ScrollbarDrag()
+        drag.begin(model.fraction)
+        drag.move(.01f)
+        val first = drag.take(model.position, model.remaining)
+        // Blocked or stale: the step is dropped, and not accepted.
+        drag.move(.01f)
+        val second = drag.take(model.position, model.remaining)
+        assertTrue("Unapplied travel is still owed, plus the new travel: $first then $second", second > first * 1.9f)
+        drag.accept()
+        drag.move(.01f)
+        val third = drag.take(model.position, model.remaining)
+        assertEquals("Accepted travel is settled", first, third, first * .05f)
+    }
+
+    @Test fun grabbingWithoutMovingNeverMovesTheList() {
+        for ((name, grid) in lists() + mapOf("cold" to coldGrid(20000))) for (start in listOf(0, grid.maxScroll / 3, grid.maxScroll)) {
+            val moved = drag(grid, start, List(20) { 0f })
+            assertTrue("$name grab at $start moved the list: ${moved.distinct()}", moved.all { it == start })
+        }
+    }
+
+    @Test fun aMonotonicFingerWithJitterFreePauseGivesMonotonicListMotion() {
+        val grid = coldGrid(20000)
+        val finger = List(400) { k -> if (k % 50 in 20..29) 0f else .0007f * (1 + k % 3) }
+        val path = drag(grid, grid.maxScroll / 5, finger)
+        assertTrue(path.zipWithNext().all { (a, b) -> b >= a })
+        assertTrue(path.last() > path.first())
+    }
+
+    @Test fun heldGrowthIsAConstantWidthAndAProportionalCappedLength() {
+        val cap = 16f
+        assertEquals(8f, io.github.anastaci1a.localica.ui.spec.ScrollbarSpec.heldExtraLength(32f, cap), 0f)
+        assertEquals(12.5f, io.github.anastaci1a.localica.ui.spec.ScrollbarSpec.heldExtraLength(50f, cap), 0f)
+        assertEquals(cap, io.github.anastaci1a.localica.ui.spec.ScrollbarSpec.heldExtraLength(240f, cap), 0f)
+        assertTrue(io.github.anastaci1a.localica.ui.spec.ScrollbarSpec.heldExtraWidth.value > 0f)
+    }
 }
