@@ -38,10 +38,13 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
         checkMutation()
         try { while(true) {
             if(active.isEmpty()) { wake.receive(); continue }
-            source.awaitFrame { nanos -> checkMutation(); check(nanos>last.nanos) { "Frame source must advance monotonically" }; last=FrameStamp(nanos,last.sequence+1); state.value=last
+            // A real source can deliver the same frame time twice (several awaiters served by one Choreographer frame, a vsync skip or a resume) or an earlier one.
+            // That is the already presented frame, not a new one: it leaves the stamp, the sequence and every motion untouched, so FrameStamp stays strictly monotonic.
+            source.awaitFrame { nanos -> checkMutation(); if(nanos>last.nanos) {
+            last=FrameStamp(nanos,last.sequence+1); state.value=last
             // Finishing a motion may retire a surface or admit a queued transfer, changing other active owners.
             active.toList().forEach { motion -> if(motion in active) motion.frame(last); if(motion in active && motion.endsAt(last)) { active.remove(motion); motion.finish(last) } }
-            if(observers.isNotEmpty()) observe { val frame=active.toList(); observers.forEach { it.onFrame(last,frame) } } }
+            if(observers.isNotEmpty()) observe { val frame=active.toList(); observers.forEach { it.onFrame(last,frame) } } } }
         } } finally { active.clear() }
     }
 }
