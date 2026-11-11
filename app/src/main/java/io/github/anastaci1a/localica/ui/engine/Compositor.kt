@@ -43,7 +43,7 @@ internal class OwnedFieldRequest(val plane: ShadowPlane,val sourceGeneration: Lo
     var submitted by mutableStateOf(false); internal set
 }
 @Stable class SurfaceNode internal constructor(private val clock: UiClock,override val key: Any,override val shape: ShapeView,initial: SurfaceTarget,home: ShadowPlane): SurfaceView {
-    private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx.also { require(home.sameClock(clock)) { "A surface and its home share one clock" } }; private var low by mutableStateOf<ShadowPlane?>(home); private var owner by mutableStateOf(home); private var high: ShadowPlane?=null; private var pending: Triple<ShadowPlane,Long,MotionProfileId>?=null; private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false
+    private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx.also { require(home.sameClock(clock)) { "A surface and its home share one clock" } }; private var low by mutableStateOf<ShadowPlane?>(home); private var owner by mutableStateOf(home); private var high: ShadowPlane?=null; private var pending: Triple<ShadowPlane,Long,MotionProfileId>?=null; private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false; internal val isDisposed get()=disposed
     override var stratum by mutableStateOf(initial.stratum); private set; internal var role by mutableStateOf(initial.shadow); private set
     private val ownOpacity=MotionFloat(clock,initial.opacity,1f,0.0..1.0,key to "opacity"); private var following by mutableStateOf<SurfacePhase?>(null)
     override val opacity: MotionValue get()=following?.opacity?:ownOpacity
@@ -192,13 +192,16 @@ internal class LayoutShape(override val key: Any,internal var plane: ShadowPlane
 @Composable internal fun Modifier.glassCaster(plane: ShadowPlane,key: Any,opacity: ()->Float={ 1f },onNode: ((SurfaceView,Boolean)->Unit)?=null,
     retained: SurfaceView?=null,inheritsBodyScale: Boolean=false,body: (Rect)->RoundRect?): Modifier {
     val clock=ownerClock()
-    val node=remember(clock,plane,key) {
-        val existing=(retained as? SurfaceNode)?:plane.node(key)
+    var incarnation by remember { mutableIntStateOf(0) }
+    val node=remember(clock,plane,key,incarnation) {
+        val existing=((retained as? SurfaceNode)?.takeUnless { it.isDisposed })?:plane.node(key)?.takeUnless { it.isDisposed }
         existing?:SurfaceNode(clock,key,LayoutShape(key,plane),SurfaceTarget(Stratum.Floating,1f,ShadowRole.Glass),plane)
     }
     val shape=requireNotNull(node.shape as? LayoutShape)
     SideEffect { shape.plane=plane; shape.body=body; shape.opacity=opacity; node.fieldInheritsBodyScale=inheritsBodyScale }
     DisposableEffect(node,plane) {
+        // A reused lazy item reactivates its remembered node after its release disposed it: mint a fresh node, never reattach.
+        if(node.isDisposed) { incarnation++; return@DisposableEffect onDispose { } }
         val generation=node.attachSource(plane)
         onNode?.invoke(node,true)
         onDispose { if(node.sourceGeneration==generation) onNode?.invoke(node,false); node.releaseSource(generation) }
