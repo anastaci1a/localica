@@ -69,8 +69,7 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
             // Requests queued by an old contact cannot run after modal dismissal.
             launch {
                 if (owner?.blocked == true || generation != owner?.generation) return@launch
-                // Only executed travel is settled: blocked or stale travel stays owed to the drag.
-                drag.accept()
+                // Only executed travel is settled, after it ran: blocked, stale or cancelled travel stays owed to the drag.
                 when {
                     !target.isNaN() -> model.target(target).let { (index, offset) -> latestScrollTo(index, offset) }
                     step == Float.POSITIVE_INFINITY -> model.target(1f).let { (index, offset) -> latestScrollTo(index, offset) }
@@ -80,6 +79,7 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
                     kotlin.math.abs(step) <= model.viewport -> latestScrollBy(step)
                     else -> model.targetBy(step).let { (index, offset) -> latestScrollTo(index, offset) }
                 }
+                drag.accept()
             }.join()
             // At most one cold jump per frame: events arriving meanwhile conflate to the latest.
             withFrameNanos { }
