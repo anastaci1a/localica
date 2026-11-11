@@ -195,7 +195,8 @@ class PlayerLyricsThemeEaseTest {
         if (inkComposition?.lyricsProgress != 0f) failures += "closing did not reach the player endpoint"
         release()
         capture("close-settled", 4)
-        begin(true); capture("partial-open", 2)
+        // Mid-ease of the exact lyrics law (#846: v0.33.21 412.5 ms FastOutSlowIn): 8 frames of 16 ms reach phase .395.
+        begin(true); capture("partial-open", 8)
         if (requireNotNull(inkComposition).lyricsProgress !in .05f..0.95f) failures += "reversal did not interrupt intermediate progress"
         openLyrics(false); capture("reverse", 40)
         if (inkComposition?.lyricsProgress != 0f) failures += "reversal did not return to the player endpoint"
@@ -249,7 +250,7 @@ class PlayerLyricsThemeEaseTest {
         compose.mainClock.autoAdvance = false
         openLyrics(true); record(1)
         recorded.clear()
-        pin(false); record(2)
+        pin(false); record(7)   // frame 8 of the exact lyrics law (#846, 412.5 ms FastOutSlowIn) is phase .395, mid-ease
         assertTrue("reversal interrupts the lyrics phase", requireNotNull(inkComposition).lyricsProgress in .05f..0.95f)
         openLyrics(false)      // reversed part-way through the ease
         record(40)
@@ -266,7 +267,7 @@ class PlayerLyricsThemeEaseTest {
         compose.mainClock.autoAdvance = false
         openLyrics(true); record(1)
         recorded.clear()
-        pin(false); record(2)
+        pin(false); record(7)   // frame 8 of the exact lyrics law (#846, 412.5 ms FastOutSlowIn) is phase .395, mid-ease
         assertTrue("theme rejoin interrupts the lyrics phase", requireNotNull(inkComposition).lyricsProgress in .05f..0.95f)
         pin(true); record(40)
         assertEquals(1f, foreground().last(), .02f)

@@ -10,24 +10,24 @@ import kotlin.math.*
 
 /** Independent Double equations, bisection inversion, and a public synthetic corpus only. */
 internal object ReferenceExpansion {
-    fun bezier(u: Double,derivative: Boolean=false): Double {
-        if(u<=0) return if(derivative) .999967/.242192 else 0.0
-        if(u>=1) return if(derivative) (1-.997652)/(1-.511935) else 1.0
-        var low=0.0; var high=1.0
-        repeat(64) { val t=(low+high)/2; val s=1-t; val x=3*s*s*t*.242192+3*s*t*t*.511935+t*t*t; if(x<u) low=t else high=t }
-        val t=(low+high)/2; val s=1-t
-        return if(derivative) (s*s*.999967+2*s*t*(.997652-.999967)+t*t*(1-.997652))/(s*s*.242192+2*s*t*(.511935-.242192)+t*t*(1-.511935)) else 3*s*s*t*.999967+3*s*t*t*.997652+t*t*t
+    /** #846: the v0.33.21 popup spring, 1-(1+wt)e^(-wt) with w = sqrt(90) 4/3, normalised over its .0001 settle span a = wT. */
+    private const val a=11.756370544433594
+    private val s=1-(1+a)*exp(-a)
+    private val T0=a/(sqrt(90.0)*4/3)
+    fun curve(u: Double,derivative: Boolean=false): Double {
+        val w=u.coerceIn(0.0,1.0)
+        return if(derivative) a*a*w*exp(-a*w)/s else if(u<=0) 0.0 else if(u>=1) 1.0 else (1-(1+a*w)*exp(-a*w))/s
     }
-    fun duration(p: Double,v: Double,q: Double,sigma: Double=1.0,hz: Int=120): Double = max(sigma*.426086832*(.500401615+.499598385*abs(q-p))/max(1.0,abs(v*sigma)/1.41952128).pow(.73607278),2.0/hz)
+    fun duration(p: Double,v: Double,q: Double,sigma: Double=1.0,hz: Int=120): Double = max(sigma*T0*(.500401615+.499598385*abs(q-p))/max(1.0,abs(v*sigma)/1.41952128).pow(.73607278),2.0/hz)
     fun sample(p: Double,v: Double,q: Double,T: Double,t: Double,terminal: Boolean=true,sigma: Double=1.0): Double {
         if(t<=0) return p; if(t>=T) return q
-        val d=q-p; val B=abs(d)/T*4.13; val room=if(v>0) 1.05-p else p+.05
+        val d=q-p; val B=abs(d)/T*4.325359344482422; val room=if(v>0) 1.05-p else p+.05
         val start=minOf(sigma/120,T/4,if(v==0.0) Double.POSITIVE_INFINITY else room/(.149*(abs(v)+B)+if(v*d>0) B else 0.0)); val end=min(T/8,sigma*.064)
         fun h(a: Double,va: Double,b: Double,vb: Double,tau: Double,z: Double): Double { val u=z/tau; return (2*u*u*u-3*u*u+1)*a+(u*u*u-2*u*u+u)*tau*va+(-2*u*u*u+3*u*u)*b+(u*u*u-u*u)*tau*vb }
         return when {
-            t<start -> h(p,v,p+d*bezier(start/T),d*bezier(start/T,true)/T,start,t)
-            terminal && t>=T-end -> h(p+d*bezier(1-end/T),d*bezier(1-end/T,true)/T,q,0.0,end,t-T+end)
-            else -> p+d*bezier(t/T)
+            t<start -> h(p,v,p+d*curve(start/T),d*curve(start/T,true)/T,start,t)
+            terminal && t>=T-end -> h(p+d*curve(1-end/T),d*curve(1-end/T,true)/T,q,0.0,end,t-T+end)
+            else -> p+d*curve(t/T)
         }
     }
 }

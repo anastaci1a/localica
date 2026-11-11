@@ -33,7 +33,7 @@ class ExpansionClosurePropertyTest {
                     if(old is Eased) {
                         assertTrue("old lower seed600203 chain$accepted cycle$cycle",old.extrema.start>=-band)
                         assertTrue("old upper seed600203 chain$accepted cycle$cycle",old.extrema.endInclusive<=(1f+band).toDouble())
-                        val coreLaw=Bezier(spec.core); val x=old.value(0.0); val v=old.velocity(0.0); val q=old.value(old.duration); val tau=old.tauIn
+                        val coreLaw=unitCurve(spec.core); val x=old.value(0.0); val v=old.velocity(0.0); val q=old.value(old.duration); val tau=old.tauIn
                         val b=x+(q-x)*coreLaw.at(tau/old.duration); val w=(q-x)*coreLaw.at(tau/old.duration,true)/old.duration
                         val C=tau*v; val B=3*(b-x)-2*C-tau*w; val A=-2*(b-x)+C+tau*w
                         val peaks=quadraticRoots(3*A,2*B,C).filter { it>0 && it<1 }

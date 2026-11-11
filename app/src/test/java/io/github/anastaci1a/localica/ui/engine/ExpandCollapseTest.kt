@@ -122,8 +122,9 @@ class ExpandCollapseTest {
     }
     @Test fun fullHalfAndSmallTravelLawUsePhysicalEdgesAndReferenceTime() {
         val spec=StockUiSpec.expansion
-        assertEquals(.426086832,expansionDuration(spec,1000.0,1000.0,0.0,0.0,1.0,1.0,1.0/120),1e-7)
-        assertEquals(.14,expansionDuration(spec,0.0,1000.0,0.0,0.0,1.0,1.0,1.0/120),1e-8)
+        // #846: the popup law is the size-independent v0.33.21 spring, so full and zero travel share its reference time.
+        assertEquals(PopupSpringMs/1000.0,expansionDuration(spec,1000.0,1000.0,0.0,0.0,1.0,1.0,1.0/120),1e-7)
+        assertEquals(PopupSpringMs/1000.0,expansionDuration(spec,0.0,1000.0,0.0,0.0,1.0,1.0,1.0/120),1e-7)
         for(hz in listOf(60,90,120)) assertEquals(2.0/hz,expansionDuration(spec,1000.0,1000.0,.5,1e30,1.0,1.0,1.0/hz),1e-9)
         val translated=ExpansionBasis(Rect(0f,0f,100f,100f),Rect(20f,0f,120f,100f),1f)
         assertEquals(20f,translated.edgeTravelPx,0f); assertEquals(0,translated.edgeIndex)

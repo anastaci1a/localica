@@ -179,9 +179,9 @@ class LyricsArtworkEntryTest {
                         ordinary + (openArt - ordinary) * phase, artTop(), 1.5f)
                 }
                 assertTrue("The lyrics Engine records its motion joins", joins.joins.isNotEmpty())
-                verifyReleaseLaw("Artwork/title opening in $layout", frames, joins.joins,
+                verifyReleaseLaw(LyricsLaw, "Artwork/title opening in $layout", frames, joins.joins,
                     fallbackJoin(started, 0.0, 0.0, true),
-                    Law.objectTime(titleTravel.toDouble(), requireNotNull(clock).context!!.fullPlayerReferenceTravelPx.toDouble()))
+                    LyricsLaw.objectTime(titleTravel.toDouble(), requireNotNull(clock).context!!.fullPlayerReferenceTravelPx.toDouble()))
                 compose.mainClock.autoAdvance = true
                 compose.waitForIdle()
                 val end = artTop()
