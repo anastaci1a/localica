@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -83,8 +84,11 @@ class ScrollbarReducedRootTest {
 
     @Test fun appReducedKeepsItVisibleWhileAFingerRestsOnTheList() {
         host(reduced = true)
-        compose.onNodeWithTag("rows").performTouchInput { down(center) }
-        scrollNudge(); frames(1)
+        // A real drag keeps the list scrolling while the finger rests (a programmatic nudge does not).
+        compose.onNodeWithTag("rows").performTouchInput {
+            down(center); moveBy(Offset(0f, -viewConfiguration.touchSlop * 4), delayMillis = 200)
+        }
+        frames(1)
         val held = compose.mainClock.currentTime
         while (compose.mainClock.currentTime - held < ScrollbarSpec.idleMillis + ScrollbarSpec.fadeMillis + 800L) {
             compose.mainClock.advanceTimeBy(100L)
@@ -104,7 +108,8 @@ class ScrollbarReducedRootTest {
     private fun gripAfterTwoFrames(reduced: Boolean) {
         run {
             host(reduced)
-            scrollNudge(); frames(1)
+            // The thumb takes touches only once it is past the half-opacity floor: play the fade-in out first.
+            scrollNudge(); compose.mainClock.advanceTimeBy(ScrollbarSpec.fadeMillis + 64L)
             val rest = compose.onNodeWithTag("browse-scrollbar-thumb").fetchSemanticsNode().boundsInRoot.width
             compose.onNodeWithTag("browse-scrollbar-thumb").performTouchInput { down(center) }
             frames(2)
