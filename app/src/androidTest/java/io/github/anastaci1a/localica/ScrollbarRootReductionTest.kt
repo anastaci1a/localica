@@ -100,7 +100,7 @@ class ScrollbarRootReductionTest {
         fun sample(label: String, access: MotionAccess) {
             fun snapshot() = compose.runOnIdle {
                 Frame(clock.presentedStamp.nanos - origin, clock.context!!.access.name,
-                    System.identityHashCode(clock), clock.activeCount, motion.opacity(), motion.releaseOffset(), motion.scale())
+                    System.identityHashCode(clock), clock.activeCount, motion.opacity(), motion.releaseOffset(), motion.grip())
             }
             val node = compose.onNodeWithTag("root-reduction-rail").fetchSemanticsNode()
             val context = compose.runOnIdle {
