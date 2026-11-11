@@ -207,7 +207,8 @@ class PlatformDurationScaleWindowTest {
                         main {
                             assertSame(harness.clock, owners.clock)
                             assertSame(owners.engine, owners.clock.context)
-                            assertEquals(MotionAccess.Standard, owners.engine.access)
+                            // #862: a respected system scale of 0 is Reduce motion (the #835 fix folded into the root).
+                            assertEquals(if (value == 0f) MotionAccess.Reduced else MotionAccess.Standard, owners.engine.access)
                             scalar = MotionFloat(control.clock, 0f, 1f)
                             spring = MotionFloat(control.clock, 0f, 1f)
                             expansion = ExpandCollapse(control.clock, StockUiSpec.expansion, false)
@@ -301,6 +302,30 @@ class PlatformDurationScaleWindowTest {
         } finally { harness.close() }
     }
 
+    /** S4 (#862): the respect toggle gates the root's scale and the zero-as-Reduced rule; off, the app animates at its own speed. */
+    @Test fun respectSystemAnimationScaleToggleGatesTheRootScaleAndReducedPriority() {
+        withWindow("respect-toggle", null) { directory ->
+            val receipts = File(directory, "respect.tsv")
+            receipts.writeText("source\tsystem\trespect\troot\tclock\taccess\n")
+            fun record(respect: Boolean) = main { val o = checkNotNull(published.get())
+                receipts.appendText(listOf(BuildConfig.SOURCE_SHA, o.systemScale, respect, o.engine.durationScale, o.clock.context?.durationScale, o.engine.access).joinToString("\t") + "\n") }
+            for (value in listOf(0f, .5f, 2f)) {
+                main { root.settings.value = root.settings.value.copy(respectSystemAnimationScale = true) }
+                scale(value)
+                await("Respected $value") { it.engine.access == (if (value == 0f) MotionAccess.Reduced else MotionAccess.Standard) }
+                record(true)
+                main { root.settings.value = root.settings.value.copy(respectSystemAnimationScale = false) }
+                await("Ignored $value") { it.systemScale == value && it.engine.durationScale == 1f && it.clock.context?.durationScale == 1f &&
+                    it.engine.access == MotionAccess.Standard }
+                record(false)
+            }
+            // The app's Reduce motion keeps priority with the toggle off.
+            main { root.settings.value = root.settings.value.copy(reducedMotion = true) }
+            await("App Reduced with respect off") { it.engine.access == MotionAccess.Reduced && it.engine.durationScale == 1f }
+            main { root.settings.value = root.settings.value.copy(reducedMotion = false, respectSystemAnimationScale = true) }
+        }
+    }
+
     @Test fun productionClockReceivesLiveZeroWithoutTakingContactOwnership() {
         withWindow("production-clock", null) { directory ->
             scale(2f)
@@ -324,10 +349,12 @@ class PlatformDurationScaleWindowTest {
             main {
                 val current = checkNotNull(published.get())
                 assertSame(owners.clock, current.clock)
-                assertEquals(MotionAccess.Standard, current.engine.access)
+                // #862: the respected live zero is Reduce motion, which ends contact at the logical endpoint like the app setting.
+                assertEquals(MotionAccess.Reduced, current.engine.access)
                 assertEquals(1f, current.scalar.value(), 0f)
-                assertTrue(current.expansion.inContact)
-                assertEquals(.5f, current.expansion.phase.value(), 0f)
+                assertFalse(current.expansion.inContact)
+                assertTrue(current.expansion.phase.settled)
+                assertEquals(if (current.expansion.expanded) 1f else 0f, current.expansion.phase.value(), 0f)
                 assertEquals(0f, current.scrollbar.opacity(), 0f)
                 assertEquals(0f, current.scrollbar.releaseOffset(), 0f)
                 current.expansion.contactCancel()
