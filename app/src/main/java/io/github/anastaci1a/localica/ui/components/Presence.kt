@@ -1,6 +1,9 @@
 package io.github.anastaci1a.localica.ui.components
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorProducer
+import androidx.compose.ui.graphics.lerp
 import io.github.anastaci1a.localica.ui.engine.*
 import io.github.anastaci1a.localica.ui.spec.MotionProfile
 
@@ -21,4 +24,10 @@ import io.github.anastaci1a.localica.ui.spec.MotionProfile
     val motion = rememberMotionFloat(key, target, 1f)
     SideEffect { motion.retarget(target, motionProfileId(profile)) }
     return motion
+}
+/** A colour from [start] to [end] following [target] on a cataloged profile. The value is read only when the producer
+ * runs, so a draw-time producer's ease never recomposes its caller. */
+@Composable fun rememberProfileColor(key: Any, target: Float, profile: MotionProfile, start: Color, end: Color): ColorProducer {
+    val motion = rememberProfileValue(key, target, profile)
+    return ColorProducer { lerp(start, end, motion.value()) }
 }

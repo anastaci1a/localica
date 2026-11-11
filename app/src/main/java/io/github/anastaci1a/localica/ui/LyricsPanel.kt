@@ -36,7 +36,7 @@ import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.library.ArtworkCache
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.lyrics.*
-import io.github.anastaci1a.localica.ui.components.rememberProfileValue
+import io.github.anastaci1a.localica.ui.components.rememberProfileColor
 import io.github.anastaci1a.localica.ui.spec.LyricsLineSpec
 import io.github.anastaci1a.localica.ui.spec.MotionProfile
 
@@ -235,8 +235,9 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                             // composition, so every line follows the lyrics theme ease together and a line
                             // composed mid-ease is the same colour as its neighbours (#564).
                             // The emphasis is read only while drawing, so its ease never recomposes the row.
-                            val emphasis = rememberProfileValue("lyric-emphasis" to index, if (selected) 1f else 0f, MotionProfile.LyricEmphasis)
-                            BasicText(line.text.ifEmpty { LyricPlaceholder }, color = { androidx.compose.ui.graphics.lerp(inactiveInk, selectedInk, emphasis.value()) },
+                            val ink = rememberProfileColor("lyric-emphasis" to index, if (selected) 1f else 0f, MotionProfile.LyricEmphasis,
+                                inactiveInk, selectedInk)
+                            BasicText(line.text.ifEmpty { LyricPlaceholder }, color = ink,
                                 style = lyricStyle.merge(TextStyle(fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)),
                                 modifier = Modifier.fillMaxWidth().semantics { this.selected = document.synced && index == active }
                                     .then(if (line.timeMs != null) Modifier.clickable(interactionSource = null, indication = null,

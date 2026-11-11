@@ -47,7 +47,7 @@ internal fun FloatingReturnToPositionButton(up: Boolean, label: String, visible:
         // The list needs its end clearance before scrolling can reveal the arrow.
         // Measure the actual control without placing a drawing or an input target.
         Layout(content = {
-            Box(Modifier.onSizeChanged { onHeightMeasured(it.height) }) {
+            ReturnControlSlot(Modifier.onSizeChanged { onHeightMeasured(it.height) }) {
                 ReturnToPositionButton(up, label, visible = false, onClick = {})
             }
         }) { measurables, constraints ->
