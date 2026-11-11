@@ -159,13 +159,6 @@ class ScrollbarMotionTest {
             val thread = Thread.currentThread().id
             // Inflate the shared reflective accessor before measuring, as the sibling allocation tests do.
             repeat(64) { allocated.invoke(bean, thread) }
-            // Touch the compilation and collector beans first too: without this, hosted runs charged a one-time
-            // 1,032 bytes to the measured interval while every later round of reads measured 0 (#838).
-            val management = Class.forName("java.lang.management.ManagementFactory")
-            val compilation = management.getMethod("getCompilationMXBean").invoke(null)
-            Class.forName("java.lang.management.CompilationMXBean").getMethod("getTotalCompilationTime").invoke(compilation)
-            val collections = Class.forName("java.lang.management.GarbageCollectorMXBean").getMethod("getCollectionCount")
-            for (collector in management.getMethod("getGarbageCollectorMXBeans").invoke(null) as List<*>) collections.invoke(collector)
             val before = allocated.invoke(bean, thread) as Long
             total = readScalars(motion, 1_000_000, total)
             val bytes = (allocated.invoke(bean, thread) as Long) - before
