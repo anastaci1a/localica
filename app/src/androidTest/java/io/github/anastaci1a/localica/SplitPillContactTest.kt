@@ -118,10 +118,17 @@ class SplitPillContactTest {
                 assertTrue(anchor.contact.modal)
                 assertFalse("Release cannot leave stuck pressure in the popup", anchor.contact.pressed)
             }
+            // Stage 3 returns scale with measured travel: this two-item menu retires within about
+            // four frames, so a fixed 64 ms delay no longer interrupts a live return (#858).
+            // Reverse on the first return frame and step frames with idle, so the native
+            // admission receives the real draw receipts it waits for, as on device.
             compose.runOnIdle { open = false }
-            compose.mainClock.advanceTimeBy(64)
-            compose.runOnIdle { open = true }
-            compose.mainClock.advanceTimeBy(1800)
+            compose.mainClock.advanceTimeByFrame()
+            compose.runOnIdle {
+                assertTrue("This interrupts a live return", anchor.modalPresent && anchor.contact.expansion.value < 1f)
+                open = true
+            }
+            repeat(112) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
             compose.onNodeWithText("Settings").assertIsDisplayed()
             compose.runOnIdle { open = false }
             compose.mainClock.advanceTimeUntil(2500) { !anchor.modalPresent }
