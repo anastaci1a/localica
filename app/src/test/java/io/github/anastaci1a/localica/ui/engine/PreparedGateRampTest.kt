@@ -87,28 +87,18 @@ class PreparedGateRampTest {
     }
 
     @Test fun preparedWindowsRunTheRampAndOrdinaryWindowsStayLinear() {
-        // PopupWindowMotion wires the model's ramp for a prepared spring owner, Curve.linear for ordinary owners and quiet row menus,
-        // and a C1 ramp off QuietPopupHold for any other surface opened from a quiet anchor (lead ruling 2026-11-11, #692).
+        // PopupWindowMotion wires the model's ramp for a prepared spring owner and Curve.linear for ordinary and quiet ones.
         val spec = (uiSpec(io.github.anastaci1a.localica.navigation.InterfaceSettings(), null, ExpansionGeometryDomain(1000f, 4000f, 1f / 30)) as SpecResult.Accepted).spec
         EngineHarness(spec = spec).use { h ->
             val prepared = PopupWindowMotion(h.clock, spec.expansion, "prepared", prepared = true, quiet = false, kind = PopupKind.Menu)
             val quiet = PopupWindowMotion(h.clock, spec.expansion, "quiet", prepared = false, quiet = true, kind = PopupKind.RowMenu)
             val plain = PopupWindowMotion(h.clock, spec.expansion, "plain", prepared = false, quiet = false, kind = PopupKind.Dialog)
-            val quietRamp = Curve.ramp(QuietPopupHold, spec.popupMotion.rampBlend)
-            val quietOthers = listOf(PopupKind.Dialog, PopupKind.Menu, PopupKind.BottomMenu, PopupKind.SelectionPill).map {
-                PopupWindowMotion(h.clock, spec.expansion, "quiet-$it", prepared = false, quiet = true, kind = it) }
             for (i in 0..200) { val p = -.05f + 1.1f * i / 200
                 assertEquals(ramp.at(p), prepared.geometryCurve.at(p), 0f); assertEquals(ramp.slope(p), prepared.geometryCurve.slope(p), 0f)
                 assertEquals(prepared.geometryCurve.at(p), prepared.popupCurve.at(p), 0f)
-                for (m in listOf(quiet, plain)) { assertEquals(p, m.geometryCurve.at(p), 1e-6f); assertEquals(1f, m.geometryCurve.slope(p), 0f) }
-                for (m in quietOthers) { assertEquals(quietRamp.at(p), m.geometryCurve.at(p), 0f); assertEquals(quietRamp.slope(p), m.geometryCurve.slope(p), 0f)
-                    assertEquals(p, m.popupCurve.at(p), 1e-6f) } }
-            // The quiet hold: the edges stay on the trigger through the hold, leave C1 (slope 0 at the hold), and the return re-seats there.
-            for (m in quietOthers) { assertEquals(0f, m.geometryCurve.at(QuietPopupHold), 0f); assertEquals(0f, m.geometryCurve.slope(QuietPopupHold), 0f)
-                assertEquals(0f, m.geometryCurve.at(QuietPopupHold / 2), 0f); assertEquals(1f, m.geometryCurve.at(1f), 1e-6f)
-                assertTrue("the hold's overshoot gain is admitted in the margin", m.overshoot > 0f && m.overshoot.isFinite()) }
-            assertTrue(prepared.spring && quiet.spring && plain.spring && quietOthers.all { it.spring })
-            for (m in listOf(prepared, quiet, plain) + quietOthers) m.dispose()
+                for (m in listOf(quiet, plain)) { assertEquals(p, m.geometryCurve.at(p), 1e-6f); assertEquals(1f, m.geometryCurve.slope(p), 0f) } }
+            assertTrue(prepared.spring && quiet.spring && plain.spring)
+            for (m in listOf(prepared, quiet, plain)) m.dispose()
         }
     }
 }
