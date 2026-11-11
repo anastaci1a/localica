@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.ui.components.rememberMaterialAreaReduction
-import io.github.anastaci1a.localica.ui.engine.drawRetainedLayer
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.*
@@ -9,7 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
-import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.layer.drawLayer; import io.github.anastaci1a.localica.ui.engine.drawRetainedLayer
 import androidx.compose.ui.unit.*
 import kotlin.math.ceil
 
