@@ -49,7 +49,7 @@ class DragStackFrameTimeTest {
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 window = activity.window
-                activity.setContent { LocalicaTheme {
+                activity.setContent { EngineTheme {
                     val grid = rememberLazyGridState()
                     scope = rememberCoroutineScope()
                     state = remember { SongDragState(grid, scope).also { it.items = songs } }
