@@ -2165,12 +2165,12 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                val margin = with(density) { if (page) 0f else 12.dp.toPx() }"
-        errorLine2="                                                               ~~~~~">
+        errorLine1="                val margin = with(density) { if (page) 0f else maxOf(12.dp.toPx(),"
+        errorLine2="                                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="628"
-            column="64"/>
+            line="728"
+            column="70"/>
     </issue>
 
     <issue
