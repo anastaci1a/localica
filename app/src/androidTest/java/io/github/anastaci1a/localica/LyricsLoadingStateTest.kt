@@ -38,7 +38,7 @@ class LyricsLoadingStateTest {
         var track by mutableStateOf(Track("file:///first.mp3", "First", fileName = "first.mp3", relativePath = "first.mp3"))
         var visible by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
-        compose.setContent { LocalicaTheme {
+        compose.setContent { LyricsEngineTheme(false) {
             anchor = rememberGlassAnchor()
             androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(48.dp).glassAnchor(anchor))
             LyricsPanel(track, 0, false, {}, Modifier.fillMaxWidth().height(360.dp), result = result,
@@ -82,7 +82,7 @@ class LyricsLoadingStateTest {
     @Test fun loadingAndOutgoingLoadingLayersNeverBecomeMissingWhenLyricsArrive() {
         var result by mutableStateOf<LyricsResult?>(null)
         var reducedMotion by mutableStateOf(false)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { LyricsEngineTheme(reducedMotion) {
             LyricsPanel(null, 0, reducedMotion, {}, Modifier.fillMaxWidth().height(360.dp), result = result)
         } }
         compose.mainClock.autoAdvance = false
@@ -127,7 +127,7 @@ class LyricsLoadingStateTest {
         val requests = CopyOnWriteArrayList<Request>()
         var track by mutableStateOf(Track("file:///first.mp3", "First", fileName = "first.mp3", relativePath = "first.mp3"))
         var revision by mutableLongStateOf(0L)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { LyricsEngineTheme(false) {
             val result = rememberLyrics(track, revision) { requestedTrack, requestedRevision ->
                 val request = Request(requestedTrack, requestedRevision).also(requests::add)
                 // Model a provider read that finishes even after its owner was cancelled.

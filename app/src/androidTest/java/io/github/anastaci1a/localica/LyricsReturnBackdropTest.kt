@@ -335,7 +335,7 @@ class LyricsReturnBackdropTest {
     private fun mount(state: Scene, panel: Boolean = false) {
         fixtureState = state
         panelFixture = panel
-        compose.setContent { LocalicaTheme {
+        compose.setContent { LyricsEngineTheme(true) {
             view = LocalView.current
             MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.Green, onSurfaceVariant = Color.Red),
                 typography = MaterialTheme.typography.copy(headlineSmall = MaterialTheme.typography.headlineSmall.copy(
