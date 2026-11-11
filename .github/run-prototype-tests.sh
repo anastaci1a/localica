@@ -45,6 +45,21 @@ selector=$(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort | paste -sd, -)
 mkdir prototype-evidence
 printf '%s\n' "$selector" > prototype-evidence/selectors.txt
 python3 .github/test-evidence/source_methods.py --classes "$selector" --api "$TEST_API" --output prototype-evidence/expected-methods.json
+deferred_methods=$(python3 - <<'PYDEFER'
+import json, pathlib, sys
+sys.path.insert(0, '.github/test-evidence')
+from full_partition import focused_inventory
+path = pathlib.Path('prototype-evidence/expected-methods.json')
+inv = focused_inventory(json.loads(path.read_text()))
+rows = inv['deferred']
+path.write_text(json.dumps(inv, indent=2)+'\n')
+for row in rows:
+    print(row['reason'] + ': ' + row['id'], file=sys.stderr)
+print(','.join(row['id'] for row in rows))
+PYDEFER
+)
+runner_args=()
+[[ -z "$deferred_methods" ]] || runner_args+=("-Pandroid.testInstrumentationRunnerArguments.notClass=$deferred_methods")
 instrument_selector=$selector
 required_selector=$(printf '%s\n' "$required" "$focus_regression" "$contrast_regression" | sed '/^$/d' | paste -sd, -)
 if [[ "$method_iteration" == true ]]; then
@@ -81,7 +96,7 @@ trap 'stop_child TERM 143' TERM
 trap 'stop_child INT 130' INT
 run_gate() {
   local status
-  python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --offline -I .github/prebuilt-device-tests.gradle "${aot_args[@]}" --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
+  python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --offline -I .github/prebuilt-device-tests.gradle "${aot_args[@]}" --no-daemon --max-workers=2 "${runner_args[@]}" "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
   child=$!
   wait "$child"
   status=$?
@@ -121,7 +136,7 @@ set -e
 # The connected task must install the precompiled pair without rebuilding either APK.
 sha256sum --check prototype-evidence/test-input-apks.sha256
 python3 - "$selector" "$required_selector" <<'PYXML'
-import hashlib, json, pathlib, re, sys, xml.etree.ElementTree as ET
+import hashlib, json, os, pathlib, re, sys, xml.etree.ElementTree as ET
 if not __debug__:
     raise SystemExit("Optimized Python cannot disable prototype reconciliation")
 root = pathlib.Path('prototype-evidence')
@@ -158,15 +173,9 @@ required = set(filter(None, sys.argv[2].split(',')))
 # AGP's observed XML serializes assumptions as <skipped />. UTP's test-result.pb and the per-method
 # logcat carry the reason (#669). Never infer that reason from a count or source predicate.
 package = 'io.github.anastaci1a.localica.'
-profile_reasons = {
-    'RepeatOptionsEnvelopeTest#native360x640Font2SectionsExposeEveryControlAndStageDrafts': 'Exact native window profile requires sufficient display space and actual Android font scale 2',
-    'RepeatOptionsEnvelopeTest#native400x800Font2SectionsExposeEveryControlAndStageDrafts': 'Exact native window profile requires sufficient display space and actual Android font scale 2',
-    'RepeatOptionsEnvelopeTest#native360x640PhoneFont2SectionsFitSafeInsetsWithoutWindowResize': 'Requires the lead-configured 360x640 phone/font2 focused run',
-    'RepeatOptionsEnvelopeTest#native400x800PhoneFont2SectionsFitSafeInsetsWithoutWindowResize': 'Requires the lead-configured 400x800 phone/font2 focused run',
-    'DialogChromeLayoutTest#native360x640Font2RetainsSharedChromeAndEveryRepeatControl': 'Requires sufficient display space and actual Android font scale 2',
-    'DialogChromeLayoutTest#native400x800Font2RetainsSharedChromeAndEveryRepeatControl': 'Requires sufficient display space and actual Android font scale 2',
-    'TagEditorChromeLayoutTest#native360x640Font2KeepsSharedChromeAndScrollableFullSizeFields': 'Requires sufficient display space and the requested actual system font scale',
-}
+sys.path.insert(0, '.github/test-evidence')
+from full_partition import registered_skip_reason
+
 # These two existing RuntimeShader-path tests assume SDK >= 33. Their exact
 # API26 assumption callsites must be observed; API36 must execute both tests.
 selection_sdk33_callsites = {
@@ -174,8 +183,7 @@ selection_sdk33_callsites = {
     'SelectionLensTest#translatingAnIrregularSelectionKeepsItsMapButChangingItsHoleRebuildsIt': 315,
 }
 qualified_skips = []
-assume_gated_skips = {}
-sys.path.insert(0, '.github/test-evidence')
+qualified_skip_counts = {}
 import utp_results
 def observed_assumptions():
     if not hasattr(observed_assumptions, 'errors'):
@@ -193,7 +201,7 @@ def qualify_skip(name, method, skipped, xml_file):
     api = str(observed['api'])
     short_identity = identity.removeprefix(package) if identity.startswith(package) else None
     sdk33_line = selection_sdk33_callsites.get(short_identity)
-    expected = profile_reasons.get(short_identity)
+    expected = registered_skip_reason(identity, api)
     if sdk33_line is not None and api == '26':
         expected = 'got: <false>, expected: is <true>'
     if identity == package+'PlayerBackgroundPolarityTest#nativeBlurRetainsVerifiedInkAsDistinctUnavailableThenRecovers' and api == '26':
@@ -223,7 +231,7 @@ def qualify_skip(name, method, skipped, xml_file):
     reason, trace, status = errors[0]
     if assume_gated:
         expected = reason
-    if reason != expected:
+    if reason != expected or status != 4:
         raise ValueError('Wrong observed skip reason: '+identity)
     if re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text) not in ([], [expected]):
         raise ValueError('Logged skip reason contradicts the observed record: '+identity)
@@ -240,8 +248,7 @@ def qualify_skip(name, method, skipped, xml_file):
     detail = (skipped.text or '').strip()
     if message not in ('', expected) or detail not in ('', expected, 'org.junit.AssumptionViolatedException: '+expected):
         raise ValueError('Contradictory XML assumption reason: '+identity)
-    if assume_gated:
-        assume_gated_skips[name] = assume_gated_skips.get(name, 0) + 1
+    qualified_skip_counts[name] = qualified_skip_counts.get(name, 0) + 1
     qualified_skips.append({'id': identity, 'api': api, 'reason': reason, 'evidence': str(logs[0]),
         'evidence_sha256': hashlib.sha256(logs[0].read_bytes()).hexdigest(), 'xml': str(xml_file),
         'reason_records': observed_assumptions.records,
@@ -271,12 +278,18 @@ for file in files:
                 assert int(suite.attrib[attr]) == sum(c.find(tag) is not None for c in cases), 'Inconsistent XML '+attr
 assert set(methods) == expected_methods, 'Missing or extra source-declared methods'
 assert all(counts[c]['skipped'] == 0 for c in required), 'Required regression methods cannot skip'
-result = {'qualified_absences': source_inventory['gated_absent_reasons'], 'qualified_skips': qualified_skips, 'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
+result = {'deferred': source_inventory['deferred'], 'qualified_absences': source_inventory['gated_absent_reasons'], 'qualified_skips': qualified_skips, 'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
 (root/'reconciled-tests.json').write_text(json.dumps(result, indent=2)+'\n')
+for row in qualified_skips:
+    line = 'Recorded skip API'+str(row['api'])+': '+row['id']+' — '+row['reason']
+    print(line)
+    if os.environ.get('GITHUB_STEP_SUMMARY'):
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+            summary.write(line+'\n\n')
 assert not (gated_classes & required), 'Required regression classes cannot be API-gated'
-# A class may run nothing when it is wholly SdkSuppress-gated outside this API, or only skip methods whose own
-# source assumeTrue(SDK_INT >= N) is above this API; every other class needs a passing method.
+# A class may run nothing when wholly SdkSuppress-gated, or only record qualified skips.
+# Required regression methods must still all pass.
 assert all(v['failed'] == 0 and v['errors'] == 0 and (v['passed'] > 0 or (c in gated_classes and not any(v.values()))
-           or (v['skipped'] > 0 and v['skipped'] == assume_gated_skips.get(c, 0)))
+           or (v['skipped'] > 0 and v['skipped'] == qualified_skip_counts.get(c, 0)))
            for c, v in counts.items()), 'Required class failed or had no passing tests'
 PYXML
