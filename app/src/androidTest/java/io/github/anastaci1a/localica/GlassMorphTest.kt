@@ -566,6 +566,8 @@ class GlassMorphTest {
     }
 
     @Test fun oneSurfaceExpandsFromTheTriggerAndReturnsBeforeRestoringIt() {
+        // Keep the sample inside the accepted 0.75 duration scale.
+        val intermediateSampleMs = 80L
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
         lateinit var sampleClock: UiClock
@@ -601,18 +603,18 @@ class GlassMorphTest {
             val openingStart = compose.mainClock.currentTime
             compose.runOnIdle { open = true }
             // Native Dialog registration needs Android frames as well as Compose frames.
-            // Yield between frames without moving the original 176 ms sampling deadline.
+            // Yield between frames without moving the declared intermediate sampling deadline.
             try {
                 compose.waitUntil(5000) {
-                    if (compose.mainClock.currentTime - openingStart < 176) compose.mainClock.advanceTimeByFrame()
+                    if (compose.mainClock.currentTime - openingStart < intermediateSampleMs) compose.mainClock.advanceTimeByFrame()
                     compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().size == 1
                 }
             } finally {
                 android.util.Log.i("GlassMorphProbe", "opening registration elapsed=${compose.mainClock.currentTime - openingStart} progress=${anchor.contact.expansion.value} modal=${anchor.modalPresent}")
             }
             val registrationElapsed = compose.mainClock.currentTime - openingStart
-            assertTrue("Registration must not advance beyond the intermediate sample", registrationElapsed <= 176)
-            if (registrationElapsed < 176) compose.mainClock.advanceTimeBy(176 - registrationElapsed)
+            assertTrue("Registration must not advance beyond the intermediate sample", registrationElapsed <= intermediateSampleMs)
+            if (registrationElapsed < intermediateSampleMs) compose.mainClock.advanceTimeBy(intermediateSampleMs - registrationElapsed)
             compose.waitForIdle()
             val middle = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
             logGeometry("middle", middle.width)
@@ -624,7 +626,7 @@ class GlassMorphTest {
             assertTrue("Opening passes through an intermediate width", expanded.width > middle.width)
             compose.onNodeWithText("Create playlist").assertIsDisplayed()
             compose.runOnIdle { open = false }
-            compose.mainClock.advanceTimeBy(176)
+            compose.mainClock.advanceTimeBy(intermediateSampleMs)
             assertTrue("Do not expose a second surface during the return", anchor.hidden)
             compose.onNodeWithTag("glass-morph-surface").assertExists()
             compose.mainClock.advanceTimeBy(1000)
@@ -716,6 +718,13 @@ class GlassMorphTest {
                 compose.mainClock.advanceTimeByFrame()
                 probeLines.add(compose.runOnUiThread { probeState("pre-idle") + " mounts=${mounts.size}" })
                 flushProbe()
+                try {
+                    compose.waitUntil(250) { popupWindow != null }
+                    flushProbe()
+                    return requireNotNull(popupWindow)
+                } catch (_: ComposeTimeoutException) {
+                    // No mount in this frame; drain queued work before the next frame.
+                }
                 compose.waitForIdle()
                 probeLines.add(compose.runOnUiThread { probeState("post-idle") + " mounts=${mounts.size}" })
                 flushProbe()
@@ -739,7 +748,19 @@ class GlassMorphTest {
         try {
             compose.runOnIdle { open = true }
             val firstWindow = awaitWindow()
-            assertUnready("First native mount")
+            compose.waitUntil(1000) { preparationPoints.any { it.hidden } }
+            val points = preparationPoints.toList()
+            val firstHiddenIndex = points.indexOfFirst { it.hidden }
+            assertTrue("Native admission must be observed after visible preparation", firstHiddenIndex > 0)
+            val firstHidden = points[firstHiddenIndex]
+            assertSame("Native admission belongs to the mounted window", firstWindow, firstHidden.window)
+            assertTrue("Native admission follows the mount", firstHidden.nativeNanos > mounts.single().nativeNanos)
+            assertTrue("Native admission requires the mounted window's layout", firstHidden.laidOut)
+            points.take(firstHiddenIndex).forEach { point ->
+                assertFalse("First native mount: the trigger stays visible during preparation", point.hidden)
+                assertEquals("Expansion cannot precede native admission", 0f, point.expansion, 0f)
+            }
+            flushProbe()
             assertEquals(1, mounts.size)
             assertSame(firstWindow, mounts.single().window)
             assertFalse("A native window must not mount already owning its trigger", mounts.single().hidden)
