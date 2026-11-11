@@ -169,4 +169,31 @@ class ExpansionPeakVelocityTest {
             assertEquals(fastOutSlowInPeak / (.4125 * sigma), peak(law), 1e-3 * fastOutSlowInPeak / (.4125 * sigma))
         }
     }
+
+    @Test fun selectionLawReproducesTheV03321QuickInsetTweenAndIsNotThePopupSpring() {
+        // v0.33.21 QuickInsetMotion.quickInsetAnimationSpec: tween(Selection 220 ms / speed) on the Scroll easing,
+        // FastOutSlowIn; speed 4/3 by default (165 ms) and 2 when Faster (110 ms) (#869).
+        val stock = StockUiSpec
+        val spec = stock.selectionExpansion
+        val v03321Selection = (stock.motion.getValue(io.github.anastaci1a.localica.ui.spec.MotionProfile.Selection)
+            as io.github.anastaci1a.localica.ui.spec.MotionProfileSpec).durationMs
+        val v03321Easing = (stock.motion.getValue(io.github.anastaci1a.localica.ui.spec.MotionProfile.Scroll)
+            as io.github.anastaci1a.localica.ui.spec.ListMotionSpec).easing
+        assertEquals(220, v03321Selection)
+        assertEquals(EasingSpec(.4f, 0f, .2f, 1f), v03321Easing)
+        assertEquals(v03321Easing, spec.core)
+        assertEquals(165f, spec.referenceDurationMs, 0f)
+        assertEquals(165f, spec.floorMs, 0f)
+        assertEquals(0f, spec.sizeExponent, 0f)
+        assertTrue("the selection panel is not on the popup spring", stock.expansion != spec)
+        val fastOutSlowInPeak = 2.7345908033899957
+        for ((speed, sigma) in listOf(4.0 / 3 to 1.0, 2.0 to 2.0 / 3)) for (ratio in listOf(.05, .2, 1.0, 1.5)) {
+            val duration = expansionDuration(spec, ratio * 1000, 1000.0, 0.0, 0.0, 1.0, sigma, 1.0 / 120)
+            assertEquals("speed $speed ratio $ratio", v03321Selection / speed / 1000, duration, 1e-6)
+            val back = expansionDuration(spec, ratio * 1000, 1000.0, 1.0, 0.0, 0.0, sigma, 1.0 / 120)
+            assertEquals("dismiss speed $speed ratio $ratio", v03321Selection / speed / 1000, back, 1e-6)
+            val law = Eased(0.0, 0.0, 1.0, spec.core, duration, sigma)
+            assertEquals(fastOutSlowInPeak / duration, peak(law), 1e-3 * fastOutSlowInPeak / duration)
+        }
+    }
 }
