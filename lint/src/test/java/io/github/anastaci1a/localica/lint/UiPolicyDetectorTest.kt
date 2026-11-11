@@ -116,7 +116,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
 
     fun testEveryProtectedMutatorAndMutableParameters() {
         val methods = mapOf(
-            "MotionFloat" to listOf("retarget", "retargetSpring", "drive", "release", "initialize"),
+            "MotionFloat" to listOf("retarget", "retargetSpring", "snapTo", "drive", "release", "initialize"),
             "MotionRect" to listOf("retarget", "retargetSpring", "drive", "release", "initialize"),
             "MotionColor" to listOf("retarget", "retargetSpring", "drive", "release", "initialize"),
             "ExpandCollapse" to listOf("target", "contactBegin", "contactMove", "contactRelease", "contactCancel", "setBasis", "bind"),
@@ -531,7 +531,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
                 }
                 open class MotionFloat : MotionValue {
                     var onRest: (() -> Unit)? = null
-                    fun retarget() {}; fun retargetSpring() {}; fun drive() {}; fun release() {}; fun initialize() {}
+                    fun retarget() {}; fun retargetSpring() {}; fun snapTo() {}; fun drive() {}; fun release() {}; fun initialize() {}
                 }
                 class MotionRect : MotionValue {
                     fun retarget() {}; fun retargetSpring() {}; fun drive() {}; fun release() {}; fun initialize() {}

@@ -13,7 +13,7 @@ import java.util.IdentityHashMap
 
 private const val UI = "io.github.anastaci1a.localica.ui"
 private val mutators = mapOf(
-    "MotionFloat" to setOf("retarget", "retargetSpring", "drive", "release", "initialize"),
+    "MotionFloat" to setOf("retarget", "retargetSpring", "snapTo", "drive", "release", "initialize"),
     "MotionRect" to setOf("retarget", "retargetSpring", "drive", "release", "initialize"),
     "MotionColor" to setOf("retarget", "retargetSpring", "drive", "release", "initialize"),
     "ExpandCollapse" to setOf("target", "contactBegin", "contactMove", "contactRelease", "contactCancel", "setBasis", "bind"),
