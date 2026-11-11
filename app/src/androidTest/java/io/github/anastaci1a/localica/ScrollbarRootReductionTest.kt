@@ -96,7 +96,7 @@ class ScrollbarRootReductionTest {
         val fade = TargetBasedAnimation(tween<Float>(220, 1200), Float.VectorConverter, 1f, 0f)
         val release = TargetBasedAnimation(tween<Float>(180), Float.VectorConverter, .2f, 0f)
         val grip = TargetBasedAnimation(tween<Float>(240, easing = CubicBezierEasing(0f, 0f, .2f, 1f)),
-            Float.VectorConverter, 1f, 1.5f)
+            Float.VectorConverter, 0f, 1f)
         fun sample(label: String, access: MotionAccess) {
             fun snapshot() = compose.runOnIdle {
                 Frame(clock.presentedStamp.nanos - origin, clock.context!!.access.name,

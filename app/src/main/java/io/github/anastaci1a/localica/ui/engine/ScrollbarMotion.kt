@@ -144,6 +144,8 @@ internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolea
         check(!disposed)
         // Activity arrives every frame of a scroll: a fade-in already under way continues as one timeline
         // (restarting it each frame would keep re-entering its slow start). Its end starts the idle delay.
+        // Reduced Motion never fades in: activity shows the scrollbar at once, then the unchanged idle fade-out runs.
+        if (reduced) { opacity.cancel(1f); idle(); return }
         if (opacity.target == 1f && !opacity.settled) return
         val shown = opacity.value()
         if (shown >= 1f) idle() else opacity.start(shown, 1f, (ScrollbarSpec.fadeMillis * (1f - shown)).toInt(), then = afterFadeIn)

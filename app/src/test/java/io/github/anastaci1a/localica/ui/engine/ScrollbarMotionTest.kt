@@ -341,6 +341,21 @@ class ScrollbarMotionTest {
             assertThrows(IllegalStateException::class.java) { motion.reveal() }
         }
     }
+    @Test fun reducedRevealFromAFadedScrollbarShowsItAtOnceWithTheUnchangedIdleFade() {
+        EngineHarness().use { h ->
+            val motion = ScrollbarMotion(h.clock)
+            motion.reveal(); h.advance(.016); h.advance(1.5)
+            assertEquals(0f, motion.opacity(), 0f)
+            motion.access(true)
+            motion.reveal()
+            assertEquals("Reduced activity snaps to full opacity", 1f, motion.opacity(), 0f)
+            h.advance(.016); h.advance(1.1)
+            assertEquals("Visible until the idle deadline", 1f, motion.opacity(), 0f)
+            h.advance(.5)
+            assertEquals("The unchanged fade then runs to zero", 0f, motion.opacity(), 0f)
+            motion.dispose()
+        }
+    }
     @Test fun reducedRevealAndReleaseKeepTheExactBaseCurvesAndIdleDelay() {
         EngineHarness().use { h ->
             val motion = ScrollbarMotion(h.clock, reduced = true)

@@ -274,7 +274,7 @@ class PlatformDurationScaleWindowTest {
                 scale(1f)
                 main { root.settings.value = root.settings.value.copy(reducedMotion = true) }
                 await("App Reduced stays separate") { it.engine.access == MotionAccess.Reduced }
-                main { published.get()!!.scrollbar.reveal(); harness.advance(.016) }
+                main { published.get()!!.scrollbar.access(true); published.get()!!.scrollbar.reveal(); harness.advance(.016) }
                 val pixels = image(directory, "app-reduced-positive-reveal")
                 assertEquals(android.graphics.Color.BLUE, pixels.getPixel(pixels.width / 4, pixels.height / 2))
                 pixels.recycle()

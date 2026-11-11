@@ -2,7 +2,8 @@ package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.ui.layout.ScrollbarSlots
 import io.github.anastaci1a.localica.ui.spec.ScrollbarSpec
-import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.MutatePriority
+import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.*
@@ -21,7 +22,7 @@ import kotlinx.coroutines.launch
 internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sort: TrackSort, modifier: Modifier = Modifier, onUserScroll: () -> Unit = {}) {
     ListScrollbar(state, items, { state.canScrollForward || state.canScrollBackward }, { state.scrollbarFrame() },
         { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }, { state.isScrollInProgress },
-        { index, offset -> state.scrollToItem(index, offset) }, { state.scrollBy(it) }, modifier, onUserScroll) { target ->
+        { index, offset -> state.scrollToItem(index, offset) }, { state.dragBy(it) }, modifier, onUserScroll) { target ->
         // Grid item 0 is the header; browser items start at grid index 1.
         items.getOrNull(target - 1)?.let { item -> when (sort) {
             TrackSort.Title -> item.title.firstOrNull()?.uppercase() ?: "#"
@@ -35,7 +36,7 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
 internal fun BrowseScrollbar(state: LazyListState, modifier: Modifier = Modifier, onUserScroll: () -> Unit = {}) {
     ListScrollbar(state, state, { state.canScrollForward || state.canScrollBackward }, { state.scrollbarFrame() },
         { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }, { state.isScrollInProgress },
-        { index, offset -> state.scrollToItem(index, offset) }, { state.scrollBy(it) }, modifier, onUserScroll) { null }
+        { index, offset -> state.scrollToItem(index, offset) }, { state.dragBy(it) }, modifier, onUserScroll) { null }
 }
 
 @Composable
@@ -98,4 +99,10 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
         scrolling, { dragging }, { dragging = it }, { drag.fraction }, drag::begin, { drag.move(it); wake() }, ::request,
         { previewFor(movement().first) }, LocalMotionSpeed.current, LocalReducedMotion.current,
         modifier)
+}
+
+/** Moves the list by the finger's delta: an empty user-input scroll first ends any fling, then the raw delta applies. */
+private suspend fun ScrollableState.dragBy(delta: Float): Float {
+    scroll(MutatePriority.UserInput) {}
+    return dispatchRawDelta(delta)
 }

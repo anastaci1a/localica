@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.scrollToIndex
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.anastaci1a.localica.R
@@ -1378,10 +1379,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 (route.tab in setOf(MainTab.Library, MainTab.Playlists) && route.collection == null && !route.search)
             // The back button moves with the list, so its bottom is read in the layout phase: the host never
             // recomposes for it.
-            val scrollbarPill = if (showFilters || (showSearchPill && !artDetail)) pillSlotHeight else 0.dp
+            val scrollbarPill = if (showFilters || (showSearchPill && !artDetail)) pillSlotHeight else Dp.Zero
             if (loadedResult != null) BrowseScrollbar(gridState, result.items, displayedStyle.sort,
                 Modifier.align(Alignment.CenterEnd).padding(top = scrollbarPill,
-                    bottom = obscuredInset + if (cornerControl) with(density) { actionControlHeight.toDp() } else 0.dp)
+                    bottom = obscuredInset + if (cornerControl) with(density) { actionControlHeight.toDp() } else Dp.Zero)
                     .layout { measurable, constraints ->
                         val head = if (artDetail) (collectionBackBottom - listViewportTop - scrollbarPill.toPx())
                             .coerceAtLeast(0f).roundToInt().coerceAtMost(constraints.maxHeight) else 0
