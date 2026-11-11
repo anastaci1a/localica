@@ -342,7 +342,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     SideEffect { searchMotion.observer = searchObserver }
     var searchTransitioning by remember { mutableStateOf(false) }
     var searchReturning by remember { mutableStateOf(false) }
-    val departingHold = !visible && popupHome?.departing == true && popupHome.mounted
+    val departingHold = !visible && popupHome?.departing == true && popupHome.mounted &&
+        popupHome.holdsDepartingPopups
     SideEffect {
         motion.updateSpeed(speed)
         if (departingHold) {
@@ -859,6 +860,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             (if(anchor.quiet) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
                             radius().toPx(),shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
                             shadowReceiver[0],shadowExclusion[0]) {
+                            // The restored trigger draws into the sampled recording; this body must not lens it (#847).
+                            if (continuousOrigin == null && !visible && !anchor.hidden) return@draw
                             translate(left = pose?.horizontalShift ?: 0f) {
                                 scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
                                     this@drawWithContent.drawContent()
