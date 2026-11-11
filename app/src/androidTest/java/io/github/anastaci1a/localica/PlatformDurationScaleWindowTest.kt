@@ -107,12 +107,32 @@ class PlatformDurationScaleWindowTest {
         }
         fail("$label; last=${published.get()?.engine}; profile=${profile.get()}")
     }
+    private fun shell(command: String) = ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
+        .bufferedReader().use { it.readText() }
     private fun setting(value: String?) {
         require(value == null || value.toFloatOrNull()?.let { it.isFinite() && it >= 0f } == true)
-        val command = if (value == null) "settings delete global animator_duration_scale"
-            else "settings put global animator_duration_scale $value"
-        ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
-            .bufferedReader().use { it.readText() }
+        shell(if (value == null) "settings delete global animator_duration_scale" else "settings put global animator_duration_scale $value")
+    }
+    /** The window manager re-reads a deleted key with its current value as the default, so a class that ends at 0 and deletes
+     * leaves every later window (the native IME animation among them) at 0 (#862, #869). Restore through 1 and assert the live
+     * values: the window manager's own and this process's ValueAnimator scale, not only the Settings key. */
+    private fun restore(original: String?) {
+        val expected = original?.toFloat() ?: 1f
+        if (original == null) setting("1")
+        setting(original)
+        assertEquals(original, Settings.Global.getString(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE))
+        val deadline = SystemClock.uptimeMillis() + 5000
+        var live = ""
+        while (SystemClock.uptimeMillis() < deadline) {
+            val windowManager = Regex("mAnimatorDurationScale=([0-9.]+)").find(shell("dumpsys window"))?.groupValues?.get(1)?.toFloatOrNull()
+            val process = android.animation.ValueAnimator.getDurationScale()
+            live = "windowManager=$windowManager process=$process"
+            if (process == expected && (windowManager == null || windowManager == expected)) {
+                android.util.Log.i("PlatformDurationScale", "restored live $live"); return
+            }
+            SystemClock.sleep(50)
+        }
+        fail("Live animator scale restored to $expected; $live")
     }
     private fun scale(value: Float) {
         setting(value.toString())
@@ -155,8 +175,7 @@ class PlatformDurationScaleWindowTest {
                 throw thrown
             } finally {
                 val restored = runCatching {
-                    setting(original)
-                    assertEquals(original, Settings.Global.getString(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE))
+                    restore(original)
                     await("Window observes restored scale") { it.systemScale == (original?.toFloatOrNull() ?: 1f) }
                 }.exceptionOrNull()
                 File(directory, "window.txt").writeText("${profile.get()}\nrestored=${restored == null}\n")
@@ -188,7 +207,8 @@ class PlatformDurationScaleWindowTest {
                         main {
                             assertSame(harness.clock, owners.clock)
                             assertSame(owners.engine, owners.clock.context)
-                            assertEquals(MotionAccess.Standard, owners.engine.access)
+                            // #862: a respected system scale of 0 is Reduce motion (the #835 fix folded into the root).
+                            assertEquals(if (value == 0f) MotionAccess.Reduced else MotionAccess.Standard, owners.engine.access)
                             scalar = MotionFloat(control.clock, 0f, 1f)
                             spring = MotionFloat(control.clock, 0f, 1f)
                             expansion = ExpandCollapse(control.clock, StockUiSpec.expansion, false)
@@ -282,6 +302,30 @@ class PlatformDurationScaleWindowTest {
         } finally { harness.close() }
     }
 
+    /** S4 (#862): the respect toggle gates the root's scale and the zero-as-Reduced rule; off, the app animates at its own speed. */
+    @Test fun respectSystemAnimationScaleToggleGatesTheRootScaleAndReducedPriority() {
+        withWindow("respect-toggle", null) { directory ->
+            val receipts = File(directory, "respect.tsv")
+            receipts.writeText("source\tsystem\trespect\troot\tclock\taccess\n")
+            fun record(respect: Boolean) = main { val o = checkNotNull(published.get())
+                receipts.appendText(listOf(BuildConfig.SOURCE_SHA, o.systemScale, respect, o.engine.durationScale, o.clock.context?.durationScale, o.engine.access).joinToString("\t") + "\n") }
+            for (value in listOf(0f, .5f, 2f)) {
+                main { root.settings.value = root.settings.value.copy(respectSystemAnimationScale = true) }
+                scale(value)
+                await("Respected $value") { it.engine.access == (if (value == 0f) MotionAccess.Reduced else MotionAccess.Standard) }
+                record(true)
+                main { root.settings.value = root.settings.value.copy(respectSystemAnimationScale = false) }
+                await("Ignored $value") { it.systemScale == value && it.engine.durationScale == 1f && it.clock.context?.durationScale == 1f &&
+                    it.engine.access == MotionAccess.Standard }
+                record(false)
+            }
+            // The app's Reduce motion keeps priority with the toggle off.
+            main { root.settings.value = root.settings.value.copy(reducedMotion = true) }
+            await("App Reduced with respect off") { it.engine.access == MotionAccess.Reduced && it.engine.durationScale == 1f }
+            main { root.settings.value = root.settings.value.copy(reducedMotion = false, respectSystemAnimationScale = true) }
+        }
+    }
+
     @Test fun productionClockReceivesLiveZeroWithoutTakingContactOwnership() {
         withWindow("production-clock", null) { directory ->
             scale(2f)
@@ -305,10 +349,12 @@ class PlatformDurationScaleWindowTest {
             main {
                 val current = checkNotNull(published.get())
                 assertSame(owners.clock, current.clock)
-                assertEquals(MotionAccess.Standard, current.engine.access)
+                // #862: the respected live zero is Reduce motion, which ends contact at the logical endpoint like the app setting.
+                assertEquals(MotionAccess.Reduced, current.engine.access)
                 assertEquals(1f, current.scalar.value(), 0f)
-                assertTrue(current.expansion.inContact)
-                assertEquals(.5f, current.expansion.phase.value(), 0f)
+                assertFalse(current.expansion.inContact)
+                assertTrue(current.expansion.phase.settled)
+                assertEquals(if (current.expansion.expanded) 1f else 0f, current.expansion.phase.value(), 0f)
                 assertEquals(0f, current.scrollbar.opacity(), 0f)
                 assertEquals(0f, current.scrollbar.releaseOffset(), 0f)
                 current.expansion.contactCancel()
