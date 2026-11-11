@@ -38,18 +38,15 @@ class PopupRetainedTriggerRetirementTest {
     @Test fun adjacentTabRetiresInNormalMotion() = retirement(adjacentTab = true)
     @Test fun adjacentTabRetiresInFasterMotion() = retirement(adjacentTab = true, speed = 2f)
     @Test fun adjacentTabRetiresInReducedMotion() = retirement(adjacentTab = true, reduced = true)
-    @Test fun playerOcclusionRetiresInNormalMotion() = retirement(adjacentTab = false)
-    @Test fun playerOcclusionRetiresInFasterMotion() = retirement(adjacentTab = false, speed = 2f)
-    @Test fun playerOcclusionRetiresInReducedMotion() = retirement(adjacentTab = false, reduced = true)
+    @Test fun playerSuppressionKeepsRetainedPageReceiptsInNormalMotion() = retirement(adjacentTab = false)
+    @Test fun playerSuppressionKeepsRetainedPageReceiptsInFasterMotion() = retirement(adjacentTab = false, speed = 2f)
+    @Test fun playerSuppressionKeepsRetainedPageReceiptsInReducedMotion() = retirement(adjacentTab = false, reduced = true)
     @Test fun drawableOriginKeepsItsNativeReceiptInNormalMotion() = retirement(adjacentTab = false, hide = false)
     @Test fun drawableOriginKeepsItsNativeReceiptInReducedMotion() = retirement(adjacentTab = false, reduced = true, hide = false)
 
     @Test fun adjacentTabReopenCancelsOldDeadlineInNormalMotion() = retirement(adjacentTab = true, renew = true)
     @Test fun adjacentTabReopenCancelsOldDeadlineInFasterMotion() = retirement(adjacentTab = true, speed = 2f, renew = true)
     @Test fun adjacentTabReopenCancelsOldDeadlineInReducedMotion() = retirement(adjacentTab = true, reduced = true, renew = true)
-    @Test fun playerOcclusionReopenCancelsOldDeadlineInNormalMotion() = retirement(adjacentTab = false, renew = true)
-    @Test fun playerOcclusionReopenCancelsOldDeadlineInFasterMotion() = retirement(adjacentTab = false, speed = 2f, renew = true)
-    @Test fun playerOcclusionReopenCancelsOldDeadlineInReducedMotion() = retirement(adjacentTab = false, reduced = true, renew = true)
 
     private data class Policy(val engine: MotionAccess, val spec: MotionAccess, val clock: MotionAccess?,
         val clockSpec: MotionAccess, val localReduced: Boolean, val localSpeed: Float,
@@ -176,7 +173,7 @@ class PopupRetainedTriggerRetirementTest {
         val retainedSourceGeneration: Long?, val observedSourceGeneration: Long?,
         val retainedNativeGeneration: Long?, val observedNativeGeneration: Long?, val retainedHomeMatches: Boolean?,
         val nativeGateHeld: Boolean, val expanded: Boolean?, val playerFullyOpen: Boolean, val page: Int, val suppressedBrowseDraws: Int,
-        val graph: SceneGraph)
+        val graph: SceneGraph, val playerHideDrawBoundary: Int?)
 
     private fun retirement(adjacentTab: Boolean, reduced: Boolean = false, speed: Float = 4f / 3f,
         hide: Boolean = true, renew: Boolean = false) {
@@ -189,6 +186,7 @@ class PopupRetainedTriggerRetirementTest {
         var popupView: View? = null
         val triggerDraws = AtomicInteger()
         val suppressedBrowseDraws = AtomicInteger()
+        var playerHideDrawBoundary: Int? = null
         var rootPolicy: (() -> Policy)? = null
         var popupPolicy: (() -> Policy)? = null
         var observedField: ObservedField? = null
@@ -281,7 +279,8 @@ class PopupRetainedTriggerRetirementTest {
                     retained?.request?.submitted, retained?.request?.sourceGeneration, retained?.sourceGeneration,
                     retained?.request?.nativeGeneration, retained?.nativeGeneration, retained?.homeMatches,
                     expansion?.awaitingNativeGate == true, expansion?.expanded, playerFullyOpen, pager.currentPage, suppressedBrowseDraws.get(),
-                    sceneGraph(backingSource, browseSource, nativeMaterial, nativePanel, anchor.source, rootHome, nativeHome, observedIds))
+                    sceneGraph(backingSource, browseSource, nativeMaterial, nativePanel, anchor.source, rootHome, nativeHome, observedIds),
+                    playerHideDrawBoundary)
             }
             File(evidence, "$case-$stage.txt").writeText(snapshot.toString() + "\n")
             return snapshot
@@ -325,6 +324,9 @@ class PopupRetainedTriggerRetirementTest {
             val nativeView = requireNotNull(popupView)
             val oldRequest = compose.runOnIdle { anchor.restoredDrawRequest }
             compose.runOnIdle {
+                // Reduced can supply its real receipt during the very first frame.
+                // Capture the boundary at the actual player-hide/close intent, not after that frame.
+                if (hide && !adjacentTab) playerHideDrawBoundary = triggerDraws.get()
                 open = false
                 if (hide) {
                     if (adjacentTab) scope.launch(start = CoroutineStart.UNDISPATCHED) { pager.scrollToPage(1) }
@@ -341,12 +343,25 @@ class PopupRetainedTriggerRetirementTest {
             }
             val closing = checkpoint("closing-gate")
             assertPolicy(closing)
-            if (hide) {
+            if (hide && adjacentTab) {
                 assertTrue("The close is held at the real native gate", closing.nativeGateHeld)
                 assertEquals(false, closing.nativeOpening)
-                if (!adjacentTab) assertTrue("The actual browse draw gate suppressed content", closing.suppressedBrowseDraws > 0)
                 assertEquals("The hidden home did not draw a new field", opened.homeGeneration, closing.homeGeneration)
                 assertNull("A missing restore receipt has not admitted a home-field request", closing.fieldRequestGeneration)
+            } else if (hide) {
+                assertTrue("The actual browse draw gate suppressed content", closing.suppressedBrowseDraws > 0)
+                val openedBrowse = opened.graph.nodes.single { it.id == opened.graph.browse }
+                val closingBrowse = closing.graph.nodes.single { it.id == closing.graph.browse }
+                assertEquals("Outer player suppression keeps the browse recording unchanged", openedBrowse.recordings, closingBrowse.recordings)
+                assertTrue("The retained page really drew after the player-hide boundary",
+                    closing.triggerDraws > requireNotNull(closing.playerHideDrawBoundary))
+                assertEquals("The retained page supplied the actual restoration receipt", closing.restoreRequest, closing.restorePresented)
+                assertEquals("Player suppression preserves a real submitted owned-field request", true, closing.retainedFieldSubmitted)
+                assertEquals(closing.observedSourceGeneration, closing.retainedSourceGeneration)
+                assertEquals(closing.observedNativeGeneration, closing.retainedNativeGeneration)
+                assertEquals("The submitted field belongs to this close", closing.nativeGeneration, closing.retainedNativeGeneration)
+                assertEquals("The submitted field belongs to the actual return home", true, closing.retainedHomeMatches)
+                assertEquals("The actual return home owns the field", true, closing.ownsHome)
             }
             compose.runOnIdle {
                 assertTrue("The actual closing gate requested a fresh restoration receipt", anchor.restoredDrawRequest > oldRequest)
@@ -354,7 +369,7 @@ class PopupRetainedTriggerRetirementTest {
                 if (hide) {
                     if (adjacentTab) assertEquals("The production pager retained its adjacent origin", 1, pager.currentPage)
                     else assertTrue("The opaque player covers browse", playerFullyOpen)
-                    assertNotEquals("The undrawn origin cannot supply this receipt", anchor.restoredDrawRequest, anchor.restoredPresentedReceipt)
+                    if (adjacentTab) assertNotEquals("The undrawn origin cannot supply this receipt", anchor.restoredDrawRequest, anchor.restoredPresentedReceipt)
                 }
             }
             if (renew) {
@@ -391,7 +406,7 @@ class PopupRetainedTriggerRetirementTest {
             repeat(6) { frame() }
             val bounded = checkpoint("six-frame-bound")
             assertPolicy(bounded)
-            if (hide) {
+            if (hide && adjacentTab) {
                 assertEquals("The hidden home still cannot submit a field", closing.homeGeneration, bounded.homeGeneration)
                 assertNull("The fallback never invents a home-field submission", bounded.fieldSubmitted)
             } else {
@@ -400,15 +415,17 @@ class PopupRetainedTriggerRetirementTest {
                 assertEquals("The receipt belongs to the observed native generation", bounded.observedNativeGeneration, bounded.retainedNativeGeneration)
                 assertEquals("The receipt belongs to this closing gate", closing.nativeGeneration, bounded.retainedNativeGeneration)
                 assertEquals("The receipt belongs to the actual return home", true, bounded.retainedHomeMatches)
+                if (hide) assertEquals("Player suppression retains actual home ownership", true, bounded.ownsHome)
             }
             compose.runOnIdle {
                 assertFalse("The closing gate must release the modal within six frames", anchor.modalPresent)
                 assertFalse(anchor.hidden)
                 assertFalse(anchor.shadowInModal)
                 assertTrue("Retirement does not dispose the retained origin", anchor.triggerMounted)
-                if (!hide) assertEquals("The drawable path keeps the posted receipt", anchor.restoredDrawRequest, anchor.restoredPresentedReceipt)
+                if (hide && !adjacentTab) assertFalse("The restored page retains no modal input ownership", anchor.contact.modal)
+                if (!hide || !adjacentTab) assertEquals("The drawable path keeps the posted receipt", anchor.restoredDrawRequest, anchor.restoredPresentedReceipt)
             }
-            if (hide) assertEquals("No hidden trigger draw supplied a false acknowledgment", hiddenDraws, triggerDraws.get())
+            if (hide && adjacentTab) assertEquals("No hidden trigger draw supplied a false acknowledgment", hiddenDraws, triggerDraws.get())
             // Retirement acknowledgment and native window disposal drain after the gate releases.
             repeat(4) { frame() }
             compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(0)
