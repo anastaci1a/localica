@@ -794,6 +794,12 @@ class GlassMorphTest {
             assertSame("Cancellation reaches this mounted window", firstWindow, deliveredClose.window)
             val cancelledPoints = preparationPoints.toList().filter { it.window === firstWindow }
             assertTrue("The canceled window has a pre-layout observation", cancelledPoints.any { !it.laidOut })
+            val firstLayout = cancelledPoints.firstOrNull { it.laidOut }
+            assertTrue("Cancellation is composed before native layout",
+                firstLayout == null || deliveredClose.nativeNanos < firstLayout.nativeNanos)
+            val firstAdmission = cancelledPoints.firstOrNull { it.hidden }
+            assertTrue("Cancellation is composed before native admission",
+                firstAdmission == null || deliveredClose.nativeNanos < firstAdmission.nativeNanos)
             cancelledPoints.forEach { point ->
                 assertFalse("The canceled unadmitted window must never hide its trigger", point.hidden)
                 assertFalse("The canceled unadmitted window keeps the trigger shadow", point.shadowOwned)
