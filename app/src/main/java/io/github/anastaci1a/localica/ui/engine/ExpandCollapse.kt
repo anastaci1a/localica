@@ -6,6 +6,8 @@ import io.github.anastaci1a.localica.ui.spec.*
 import kotlin.math.*
 import kotlinx.coroutines.flow.first
 
+private const val DefaultPopupSpeed=4f/3f
+private const val FasterPopupSpeed=2f
 private fun coordinates(r: Rect)=doubleArrayOf(r.left.toDouble(),r.top.toDouble(),r.right.toDouble(),r.bottom.toDouble())
 @Immutable data class ExpansionBasis(val startBounds: Rect,val endBounds: Rect,val density: Float,val durationTravelPx: Float?=null) {
     private val start=coordinates(startBounds); private val end=coordinates(endBounds); private val deltas=DoubleArray(4) { end[it]-start[it] }; val edgeIndex: Int; val edgeTravelPx: Float
@@ -69,7 +71,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: EasingSpec,T: Double,sigma: Dou
     internal fun updateSpec(value: ExpansionSpec) { clock.checkMutation(); require(value.band>=MinimumContactBand); spec=value }
     internal fun updateSpeed(speed: Float) {
         val stamp=clock.stampNow; guard(stamp); require(speed.isFinite() && speed>0f)
-        val scale=1.0/speed.toDouble()
+        // The qualified law describes the published default speed exactly, and Faster keeps its canonical 2/3.
+        val scale=when(speed) { DefaultPopupSpeed -> 1.0; FasterPopupSpeed -> 2.0/3; else -> (4.0/3)/speed.toDouble() }
         if(localTimeScale==scale) return
         val old=localTimeScale
         localTimeScale=scale

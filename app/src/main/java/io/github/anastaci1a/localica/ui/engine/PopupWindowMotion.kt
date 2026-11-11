@@ -15,6 +15,9 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     val quietStrength=Curve.window(0f,.14f)
     val quietContent=Curve.window(0f,.25f)
     val foreground=Curve.window(.18f,.83f)
+    /** Detached Pages and anchorless dialogs fade their layer late in the same phase, following v0.33's perceived fade:
+     * opaque above .85, visibly fading through the middle, and gone below .05. */
+    val detachedOpacity=Curve.window(.05f,.85f)
     val homeWeight=Curve.constant(1f)+Curve.window(0f,.5f).scaled(-1f)
     val face=Curve.linear(1f,1f-1f/.55f)
     val preparationCurve = Curve.window(0f, .25f).scaled(.68359375f) +
@@ -42,8 +45,9 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false) {
         if (shown || openingEnvelope == null) openingEnvelope = envelope
         val capturedEnvelope = requireNotNull(openingEnvelope)
-        val basis = ExpansionBasis(home, capturedEnvelope, density,
-            if (detached) maxOf(capturedEnvelope.width, capturedEnvelope.height) else null)
+        // A detached window can present beyond its root viewport; its duration never exceeds the admitted travel.
+        val basis = ExpansionBasis(home, capturedEnvelope, density, if (detached) minOf(maxOf(capturedEnvelope.width,
+            capturedEnvelope.height), requireNotNull(clock.spec.geometry).maxViewportDiagonalPx) else null)
         if (rectangle == null) {
             expansion.setBasis(basis)
             val rect = MotionRect(clock, home, ranges, expansion)

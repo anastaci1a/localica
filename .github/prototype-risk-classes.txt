@@ -522,3 +522,4 @@ io.github.anastaci1a.localica.LastFmArchivePullTest
 io.github.anastaci1a.localica.PopupRetainedTriggerRetirementTest
 io.github.anastaci1a.localica.CollapsedPlayerCollectionNavigationTest
 io.github.anastaci1a.localica.ScrollbarRootReductionTest
+io.github.anastaci1a.localica.ReleaseLintAdoptionTest

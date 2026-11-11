@@ -30,11 +30,11 @@ class PopupDurationPolicyTest {
         popup.place(home, envelope, 1f, detached = true)
         assertEquals(home, popup.bounds!!.valueAt(h.clock.stampNow))
         assertTrue(popup.expansion.acknowledgeNativeGate(popup.expansion.nativeGeneration))
-        assertEquals(spec.expansion.referenceDurationMs / 1000.0 / (4f / 3f), joins.duration(), 1e-7)
+        assertEquals(spec.expansion.referenceDurationMs / 1000.0, joins.duration(), 1e-7)
         h.advance(2.0)
         assertEquals(envelope, popup.bounds!!.valueAt(h.clock.stampNow))
         popup.show(false)
-        assertEquals(spec.expansion.referenceDurationMs / 1000.0 / (4f / 3f), joins.duration(), 1e-7)
+        assertEquals(spec.expansion.referenceDurationMs / 1000.0, joins.duration(), 1e-7)
         h.advance(2.0)
         assertEquals(home, popup.bounds!!.valueAt(h.clock.stampNow))
         popup.dispose()
@@ -50,7 +50,8 @@ class PopupDurationPolicyTest {
                 owner.setBasis(ExpansionBasis(home, envelope, 1f, 1000f))
                 owner.updateSpeed(speed)
                 owner.target(true)
-                assertEquals(spec.expansion.referenceDurationMs / 1000.0 / speed, joins.duration(), 1e-7)
+                val scale = when (speed) { 4f / 3f -> 1.0; 2f -> 2.0 / 3; else -> (4.0 / 3) / speed }
+                assertEquals(spec.expansion.referenceDurationMs / 1000.0 * scale, joins.duration(), 1e-7)
                 owner.dispose()
                 assertEquals(0, h.clock.activeCount)
             }
@@ -96,7 +97,7 @@ class PopupDurationPolicyTest {
         owner.updateSpeed(2f)
         val release = owner.contactRelease(0f, h.clock.stampNow)
         assertTrue(release.expanded)
-        val expected = expansionDuration(spec.expansion, 1000.0, 1000.0, .7, 0.0, 1.0, 2.0, 1.0 / 120)
+        val expected = expansionDuration(spec.expansion, 1000.0, 1000.0, .7, 0.0, 1.0, (4.0 / 3) / .5, 1.0 / 120)
         assertEquals(expected, release.durationSeconds.toDouble(), 1e-6)
         val before = joins.values.size
         owner.target(true)
@@ -146,6 +147,19 @@ class PopupDurationPolicyTest {
         assertEquals(sample, owner.phase.sampleAt(h.clock.stampNow))
         owner.dispose()
     }
+    /** The same replacement-window sequence on an envelope whose extent is exactly the admitted diagonal. */
+    private fun admittedEdgeDuration() = EngineHarness(spec = spec).use { h ->
+        val joins = Joins()
+        h.clock.events = joins
+        val popup = PopupWindowMotion(h.clock, spec.expansion, "replacement-page", false, false)
+        popup.place(home, envelope, 1f, detached = true)
+        popup.attached(Any(), ShadowPlane(h.clock, HostKey.next(Any())))
+        popup.show(true)
+        popup.place(home, Rect(0f, 0f, 1000f, 3000f), 1f, detached = true)
+        assertTrue(popup.expansion.acknowledgeNativeGate(popup.expansion.nativeGeneration))
+        joins.duration().also { popup.dispose() }
+    }
+
     @Test fun replacementNativeWindowUsesTheSameDurationAdmissionBeforeAnyCommit() = EngineHarness(spec = spec).use { h ->
         val joins = Joins()
         h.clock.events = joins
@@ -159,25 +173,50 @@ class PopupDurationPolicyTest {
         val phase = popup.expansion.phase.sampleAt(h.clock.stampNow)
         val generation = popup.expansion.nativeGeneration
         val count = joins.values.size
-        val rejected = Rect(0f, 0f, 1000f, 3001f)
-        assertThrows(IllegalArgumentException::class.java) {
-            popup.place(home, rejected, 1f, detached = true)
-        }
+        // An envelope beyond the admitted viewport (a detached window larger than its root) must not throw in
+        // measurement: its duration travel is clamped to the admitted diagonal while the geometry keeps its extent.
+        val oversized = Rect(0f, 0f, 1000f, 3001f)
+        popup.place(home, oversized, 1f, detached = true)
+        assertTrue(joins.values.size > count)
         assertEquals(before, popup.bounds!!.valueAt(h.clock.stampNow))
         assertEquals(phase, popup.expansion.phase.sampleAt(h.clock.stampNow))
         assertEquals(generation, popup.expansion.nativeGeneration)
-        assertEquals(count, joins.values.size)
-        assertNull(popup.expansion.pendingBasis)
         assertTrue(popup.expansion.awaitingNativeGate)
-        val admitted = Rect(0f, 0f, 1000f, 3000f)
-        popup.place(home, admitted, 1f, detached = true)
-        assertTrue(joins.values.size > count)
-        assertEquals(before, popup.bounds!!.valueAt(h.clock.stampNow))
         assertTrue(popup.expansion.acknowledgeNativeGate(popup.expansion.nativeGeneration))
+        assertEquals(admittedEdgeDuration(), joins.duration(), 0.0)
         h.advance(4.0)
-        assertEquals(admitted, popup.bounds!!.valueAt(h.clock.stampNow))
+        assertEquals(oversized, popup.bounds!!.valueAt(h.clock.stampNow))
         popup.dispose()
         assertEquals(0, h.clock.activeCount)
     }
 
+    @Test fun detachedLayerOpacityKeepsExactEndpointsAndFadesLateInTheSamePhase() = EngineHarness(spec = spec).use { h ->
+        val popup = PopupWindowMotion(h.clock, spec.expansion, "page-fade", false, false)
+        val opacity = popup.detachedOpacity
+        val band = spec.expansion.band
+        // Rest, Reduced Motion and band overshoot keep the exact endpoint opacities.
+        assertEquals(0f, opacity.at(0f), 0f); assertEquals(1f, opacity.at(1f), 0f)
+        assertEquals(0f, opacity.at(-band), 0f); assertEquals(1f, opacity.at(1f + band), 0f)
+        var previous = 0f
+        for (i in 0..1000) {
+            val p = i / 1000f; val value = opacity.at(p)
+            assertTrue("monotone at $p", value >= previous); previous = value
+            if (p >= .85f) assertEquals("opaque from .85 at $p", 1f, value, 0f)
+            else if (p <= .05f) assertEquals("gone below .05 at $p", 0f, value, 0f)
+            else assertTrue("fading between .05 and .85 at $p", value > 0f && value < 1f)
+        }
+        // The actual Page close: opacity starts at exactly 1, never rises and reaches exactly 0 when the phase rests.
+        val page = Rect(0f, 0f, 1080f, 1920f)
+        popup.updateSpeed(4f / 3f); popup.show(true); popup.place(page.translate(73.5f, 0f), page, 2.625f, detached = true)
+        assertTrue(popup.expansion.acknowledgeNativeGate(popup.expansion.nativeGeneration)); h.advance(4.0)
+        assertEquals(1f, opacity.at(popup.expansion.phase.valueAt(h.clock.stampNow)), 0f)
+        popup.show(false); previous = 1f
+        repeat(60) {
+            h.advance(1.0 / 60); val value = opacity.at(popup.expansion.phase.valueAt(h.clock.stampNow))
+            assertTrue(value <= previous); previous = value
+        }
+        assertTrue(popup.expansion.phase.settled); assertEquals(0f, previous, 0f)
+        popup.dispose()
+        assertEquals(0, h.clock.activeCount)
+    }
 }

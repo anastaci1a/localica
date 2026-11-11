@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import io.github.anastaci1a.localica.ui.engine.*
+import io.github.anastaci1a.localica.ui.spec.MotionAccess
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -568,7 +569,9 @@ class GlassMorphTest {
     @Test fun oneSurfaceExpandsFromTheTriggerAndReturnsBeforeRestoringIt() {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
+        lateinit var sampleClock: UiClock
         compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+            sampleClock = LocalUiClock.current
             anchor = rememberGlassAnchor()
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(0xFFB4D8C8)) }
@@ -586,6 +589,14 @@ class GlassMorphTest {
         } } }
         assertNotNull("Direct surfaces must carry their backing into the returning morph", anchor.source)
         val start = compose.onNodeWithTag("trigger").fetchSemanticsNode().boundsInRoot
+        fun logGeometry(sample: String, width: Float) {
+            val phase = compose.runOnUiThread {
+                var value = 0f
+                sampleClock.observe { value = anchor.contact.expansion.value }
+                value
+            }
+            android.util.Log.i("GlassMorphProbe", "geometry sample=$sample clock=${compose.mainClock.currentTime} width=$width phase=$phase")
+        }
         compose.mainClock.autoAdvance = false
         try {
             val openingStart = compose.mainClock.currentTime
@@ -605,10 +616,12 @@ class GlassMorphTest {
             if (registrationElapsed < 176) compose.mainClock.advanceTimeBy(176 - registrationElapsed)
             compose.waitForIdle()
             val middle = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
+            logGeometry("middle", middle.width)
             assertTrue("The original trigger is hidden throughout the morph", anchor.hidden)
             assertTrue("The original circle grows into the menu", middle.width > start.width)
             compose.mainClock.advanceTimeBy(1000)
             val expanded = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
+            logGeometry("expanded", expanded.width)
             assertTrue("Opening passes through an intermediate width", expanded.width > middle.width)
             compose.onNodeWithText("Create playlist").assertIsDisplayed()
             compose.runOnIdle { open = false }
@@ -627,21 +640,80 @@ class GlassMorphTest {
         lateinit var anchor: GlassAnchor
         var popupWindow: android.view.Window? = null
         data class Mount(val window: android.view.Window, val clockMs: Long,
-            val hidden: Boolean, val shadowOwned: Boolean, val expansion: Float)
+            val hidden: Boolean, val shadowOwned: Boolean, val expansion: Float, val nativeNanos: Long)
+        data class PreparationPoint(val nativeNanos: Long, val clockMs: Long,
+            val window: android.view.Window?, val laidOut: Boolean, val hidden: Boolean,
+            val shadowOwned: Boolean, val expansion: Float)
+        val preparationPoints = java.util.concurrent.ConcurrentLinkedQueue<PreparationPoint>()
+        var popupView: android.view.View? = null
+        var exportedPoints = 0
+        lateinit var probeClock: UiClock
+        val probeLines = java.util.concurrent.ConcurrentLinkedQueue<String>()
+        var awaitIteration = -1
+        fun probeState(event: String, laidOut: Boolean? = null): String {
+            var expansion = 0f
+            probeClock.observe { expansion = anchor.contact.expansion.value }
+            return "$event iteration=$awaitIteration clock=${compose.mainClock.currentTime} " +
+                "window=${popupWindow?.let { System.identityHashCode(it) }} " +
+                "hidden=${anchor.hidden} shadowInModal=${anchor.shadowInModal} " +
+                "expansion=$expansion laidOut=$laidOut"
+        }
+        fun flushProbe() {
+            while (true) android.util.Log.i("GlassMorphProbe", probeLines.poll() ?: break)
+            preparationPoints.toList().drop(exportedPoints).forEach { point ->
+                android.util.Log.i("GlassMorphProbe", "preparation nativeNanos=${point.nativeNanos} clock=${point.clockMs} " +
+                    "window=${point.window?.let { System.identityHashCode(it) }} laidOut=${point.laidOut} " +
+                    "hidden=${point.hidden} shadowInModal=${point.shadowOwned} expansion=${point.expansion}")
+                exportedPoints++
+            }
+        }
+        fun capturePreparationPoint() {
+            if (android.os.Looper.myLooper() !== android.os.Looper.getMainLooper()) return
+            probeClock.observe {
+                preparationPoints.add(PreparationPoint(System.nanoTime(), compose.mainClock.currentTime,
+                    popupWindow, popupView?.isLaidOut == true, anchor.hidden,
+                    anchor.shadowInModal, anchor.contact.expansion.value))
+            }
+        }
+        val cancellations = java.util.concurrent.ConcurrentLinkedQueue<PreparationPoint>()
         val mounts = mutableListOf<Mount>()
         val disposed = mutableListOf<android.view.Window>()
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+        compose.setContent { EngineRecord(reduced = true) { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
             Box(Modifier.fillMaxSize()) {
+                probeClock = LocalUiClock.current
                 anchor = rememberGlassAnchor()
+                DisposableEffect(anchor, probeClock) {
+                    capturePreparationPoint()
+                    val observer = androidx.compose.runtime.snapshots.Snapshot.registerApplyObserver { _, _ ->
+                        capturePreparationPoint()
+                    }
+                    onDispose { observer.dispose() }
+                }
                 Box(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(CompactControlSize)
                     .glassAnchor(anchor).testTag("preparation-trigger"))
                 GlassMorphPopup(open, anchor, { open = false }) {
                     val view = androidx.compose.ui.platform.LocalView.current
+                    popupView = view
                     val window = (view.parent as androidx.compose.ui.window.DialogWindowProvider).window
                     DisposableEffect(window) {
                         popupWindow = window
                         mounts += Mount(window, compose.mainClock.currentTime,
-                            anchor.hidden, anchor.shadowInModal, anchor.contact.expansion.value)
+                            anchor.hidden, anchor.shadowInModal, anchor.contact.expansion.value, System.nanoTime())
+                        probeLines.add(probeState("mount", view.isLaidOut) + " nativeNanos=${mounts.last().nativeNanos}")
+                        capturePreparationPoint()
+                        // Explicit fixture input: suppress this window's native draw receipt.
+                        view.visibility = android.view.View.INVISIBLE
+                        if (mounts.size == 1) {
+                            val unready = preparationPoints.last()
+                            assertSame(window, unready.window)
+                            assertFalse("Cancellation starts before layout", unready.laidOut)
+                            assertFalse("Cancellation starts before native admission", unready.hidden)
+                            assertFalse(unready.shadowOwned)
+                            assertEquals(0f, unready.expansion, 0f)
+                            probeLines.add(probeState("cancel", view.isLaidOut) + " nativeNanos=${unready.nativeNanos}")
+                            cancellations.add(unready)
+                            open = false
+                        }
                         onDispose {
                             disposed += window
                             if (popupWindow === window) popupWindow = null
@@ -650,13 +722,26 @@ class GlassMorphTest {
                     Box(Modifier.fillMaxWidth().height(180.dp)) { Text("Measured menu") }
                 }
             }
-        } } }
+        } } } }
         compose.mainClock.autoAdvance = false
         fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
         fun awaitWindow(): android.view.Window {
             repeat(12) {
                 popupWindow?.let { return it }
-                frame()
+                awaitIteration = it
+                compose.mainClock.advanceTimeByFrame()
+                probeLines.add(compose.runOnUiThread { probeState("pre-idle") + " mounts=${mounts.size}" })
+                flushProbe()
+                try {
+                    compose.waitUntil(250) { popupWindow != null }
+                    flushProbe()
+                    return requireNotNull(popupWindow)
+                } catch (_: ComposeTimeoutException) {
+                    // No mount in this frame; drain queued work before the next frame.
+                }
+                compose.waitForIdle()
+                probeLines.add(compose.runOnUiThread { probeState("post-idle") + " mounts=${mounts.size}" })
+                flushProbe()
             }
             error("The native dialog did not mount within twelve controlled frames")
         }
@@ -665,7 +750,31 @@ class GlassMorphTest {
             assertFalse("$reason: the trigger still owns its shadow", anchor.shadowInModal)
             assertEquals("$reason: expansion cannot precede preparation", 0f, anchor.contact.expansion.value, 0f)
         }
+        fun releaseNativeDraw() {
+            compose.runOnUiThread {
+                requireNotNull(popupView).visibility = android.view.View.VISIBLE
+                requireNotNull(popupView).invalidate()
+            }
+            frame()
+        }
+        fun assertAdmissionOrdering(window: android.view.Window, mount: Mount) {
+            val points = preparationPoints.toList().filter { it.window === window }
+            val firstHiddenIndex = points.indexOfFirst { it.hidden }
+            assertTrue("Native admission must follow visible preparation", firstHiddenIndex > 0)
+            val firstHidden = points[firstHiddenIndex]
+            assertSame("Native admission belongs to the mounted window", window, firstHidden.window)
+            assertTrue("Native admission follows the mount", firstHidden.nativeNanos > mount.nativeNanos)
+            assertTrue("Layout exists no later than first observed admission", firstHidden.laidOut)
+            assertTrue("Native admission takes the window shadow", firstHidden.shadowOwned)
+            points.take(firstHiddenIndex).forEach { point ->
+                assertFalse("First native mount: the trigger stays visible during preparation", point.hidden)
+                assertFalse("The trigger owns its shadow before admission", point.shadowOwned)
+                assertEquals("Expansion cannot precede native admission", 0f, point.expansion, 0f)
+            }
+        }
         fun awaitReady(window: android.view.Window) {
+            assertEquals("The actual native owner must use Reduced access", MotionAccess.Reduced,
+                compose.runOnUiThread { probeClock.context?.access })
             repeat(12) {
                 if (!anchor.hidden) frame()
             }
@@ -677,6 +786,8 @@ class GlassMorphTest {
         try {
             compose.runOnIdle { open = true }
             val firstWindow = awaitWindow()
+            assertEquals("The native owner uses Reduced access", MotionAccess.Reduced,
+                compose.runOnUiThread { probeClock.context?.access })
             assertUnready("First native mount")
             assertEquals(1, mounts.size)
             assertSame(firstWindow, mounts.single().window)
@@ -684,32 +795,46 @@ class GlassMorphTest {
             assertFalse(mounts.single().shadowOwned)
             assertEquals(0f, mounts.single().expansion, 0f)
 
-            // Cancel after native registration but before either measured frame.
-            // The actual trigger remains present throughout this unready lifetime.
+            // The mount action canceled at its captured pre-layout, pre-admission point.
+            assertEquals(1, cancellations.size)
+            assertSame(firstWindow, cancellations.single().window)
+            assertFalse("No held window may hide its trigger", preparationPoints.any { it.hidden })
             compose.runOnIdle { open = false }
             frame()
+            repeat(12) { if (popupWindow != null) frame() }
             assertUnready("Cancelled unready window")
-            assertSame(firstWindow, popupWindow)
+            assertFalse("Cancellation cannot admit the held window", preparationPoints.any { it.hidden })
+            assertNull("A canceled unadmitted window retires", popupWindow)
+            assertEquals(listOf(firstWindow), disposed)
             compose.runOnIdle { open = true }
+            val reopenedWindow = awaitWindow()
+            assertNotSame("Unadmitted cancellation requires a new dialog", firstWindow, reopenedWindow)
+            assertEquals(2, mounts.size)
+            assertSame(reopenedWindow, mounts.last().window)
+            assertFalse("A reopened window mounts without native admission", mounts.last().hidden)
+            assertFalse(mounts.last().shadowOwned)
+            assertEquals(0f, mounts.last().expansion, 0f)
             frame()
-            assertSame("Unready cancellation/reopen retains the existing dialog", firstWindow, popupWindow)
             assertUnready("First unready-reopen frame")
-            awaitReady(firstWindow)
+            releaseNativeDraw()
+            awaitReady(reopenedWindow)
+            assertAdmissionOrdering(reopenedWindow, mounts.last())
             assertTrue("First readiness follows the native mount by at least two frames",
-                compose.mainClock.currentTime - mounts.single().clockMs >= 32)
+                compose.mainClock.currentTime - mounts.last().clockMs >= 32)
 
             compose.runOnIdle { open = false }
             repeat(12) { if (popupWindow != null) frame() }
             assertNull("The closed native window must actually dispose", popupWindow)
-            assertEquals(listOf(firstWindow), disposed)
+            assertEquals(listOf(firstWindow, reopenedWindow), disposed)
             assertFalse(anchor.modalPresent)
             assertFalse(anchor.hidden)
             assertFalse(anchor.shadowInModal)
 
             compose.runOnIdle { open = true }
             val replacement = awaitWindow()
-            assertNotSame("A fully disposed native window cannot be reused", firstWindow, replacement)
-            assertEquals(2, mounts.size)
+            assertNotSame("A fully disposed native window cannot be reused", reopenedWindow, replacement)
+            assertNotSame("Canceled readiness cannot be reused", firstWindow, replacement)
+            assertEquals(3, mounts.size)
             assertSame(replacement, mounts.last().window)
             assertUnready("Replacement native mount")
             assertFalse("Disposed readiness cannot hide a newly mounted trigger", mounts.last().hidden)
@@ -717,10 +842,13 @@ class GlassMorphTest {
             assertEquals(0f, mounts.last().expansion, 0f)
             frame()
             assertUnready("First replacement preparation frame")
+            releaseNativeDraw()
             awaitReady(replacement)
+            assertAdmissionOrdering(replacement, mounts.last())
             assertTrue("Replacement readiness follows its own two measured frames",
                 compose.mainClock.currentTime - mounts.last().clockMs >= 32)
         } finally {
+            flushProbe()
             compose.runOnIdle { open = false }
             compose.mainClock.autoAdvance = true
         }
