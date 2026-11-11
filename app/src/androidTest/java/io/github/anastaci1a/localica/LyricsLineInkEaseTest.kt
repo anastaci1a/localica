@@ -117,7 +117,7 @@ class LyricsLineInkEaseTest {
     /** One visible line: its index, emphasis and glyph ink relative to the backdrop (positive = lighter). */
     private class Line(val index: Int, val selected: Boolean, val ink: Float)
     private class Sample(val leg: String, val frame: Int, val foreground: Float, val progress: Float, val backdrop: Float,
-        val lines: List<Line>)
+        val lines: List<Line>, val mix: Float)
 
     /** Native crop of the lyric-lines viewport; each fully visible, unfaded line's extreme glyph luminance.
      *  Null once the viewport has left the composition (after a completed close). */
@@ -149,7 +149,9 @@ class LyricsLineInkEaseTest {
             Line(node.id, selected, extreme)
         }
         val ink = requireNotNull(inkComposition)
-        return Sample(leg, index, lum(ink.contentColor), ink.lyricsProgress, backdrop, lines)
+        // The shared light mix the player published for this frame, read as an immutable value on Main.
+        val mix = compose.runOnIdle { owner.lightMix }
+        return Sample(leg, index, lum(ink.contentColor), ink.lyricsProgress, backdrop, lines, mix)
     }
 
     private val strip = mutableListOf<android.graphics.Bitmap>()
@@ -186,12 +188,17 @@ class LyricsLineInkEaseTest {
     }
 
     /** Checks (a) uniform ink across lines of equal emphasis, (b) no line keeps the old polarity once the shared theme
-     *  has crossed, (c) no single-frame step; then exports the CSV and the contact sheet before asserting. */
+     *  has crossed, (c) no line steps on its own relative to the shared theme, (d) the shared theme is exactly the approved
+     *  U08.02a PhaseBinding of the logged phase in every frame (a theme snap fails here); then exports the CSV and the
+     *  contact sheet before asserting. */
     private fun analyse(case: String, failures: MutableList<String>, polarity: Boolean = true, exclude: Set<Int> = emptySet()) {
-        val rows = mutableListOf("case,leg,frame,foreground,progress,backdrop,lines")
+        val rows = mutableListOf("case,leg,frame,foreground,progress,backdrop,mix,lines")
         var previous: Map<Int, Float> = emptyMap()
+        var previousTheme: Float? = null
+        // The theme is pinned light until the flip, then dark; the opening legs travel to 1 and the close leg to 0.
+        val binding = io.github.anastaci1a.localica.ui.engine.PhaseBinding(1f)
         samples.forEach { s ->
-            rows += listOf(case, s.leg, s.frame, s.foreground, s.progress, s.backdrop,
+            rows += listOf(case, s.leg, s.frame, s.foreground, s.progress, s.backdrop, s.mix,
                 s.lines.joinToString(" ") { "${it.index}${if (it.selected) "*" else ""}=${"%.3f".format(it.ink)}" }).joinToString(",")
             // (a) Every line of the same emphasis is the same colour in the same frame (a line whose emphasis is still
             // fading is excluded by the emphasis case).
@@ -206,12 +213,21 @@ class LyricsLineInkEaseTest {
                 if (abs(line.ink) >= .05f && line.ink * theme < 0f)
                     failures += "${s.leg} ${s.frame}: line ${line.index} keeps the old polarity (${line.ink}) while the theme is at $theme"
             }
-            // (c) No line steps in a single frame.
+            // (c) No line steps in a single frame on its own: its change beyond the shared theme's change stays within .25.
+            val shared = previousTheme?.let { theme - it } ?: 0f
             val current = s.lines.associate { it.index to it.ink }
             current.forEach { (id, ink) -> previous[id]?.let { before ->
-                if (abs(ink - before) > .25f) failures += "${s.leg} ${s.frame}: line $id steps $before -> $ink"
+                if (abs(ink - before - shared) > .25f)
+                    failures += "${s.leg} ${s.frame}: line $id steps $before -> $ink beyond the shared theme step $shared"
             } }
             previous = current
+            previousTheme = theme
+            // (d) The shared theme itself follows the approved phase binding exactly, so its own steps are those of the ease.
+            if (polarity) {
+                val step = binding.resolve(if (s.leg == "open-light") 1f else 0f, s.progress, if (s.leg == "close") 0f else 1f)
+                binding.present(step)
+                if (s.mix != step.value) failures += "${s.leg} ${s.frame}: shared light mix ${s.mix} is not the phase binding's ${step.value} at phase ${s.progress}"
+            }
         }
         export(case, rows)
         assertTrue("Every lyric line follows the shared theme ease ($case):\n" + failures.joinToString("\n"), failures.isEmpty())
