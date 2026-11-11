@@ -27,6 +27,10 @@ shard_index=${LOCALICA_SHARD_INDEX:-}
 runner_args=()
 full_runner_args=()
 full_excluded_classes=$classes
+# Lead-ruled single-method deferrals (DEFERRED v0.34.1 #815): excluded by the runner's notClass filter
+# (Class#method) in every lane, announced here, and reported by the plan/union evidence.
+deferred_methods=
+[[ ! -d app/src/androidTest/java ]] || deferred_methods=$(python3 .github/test-evidence/full_partition.py deferred --root "$PWD")
 partition_shard=()
 # Opt-in measurement harness; skipped by assumption unless requested.
 [[ "${LOCALICA_SCROLL_PERFORMANCE:-}" != true ]] || runner_args+=("-Pandroid.testInstrumentationRunnerArguments.scrollPerformance=true")
@@ -54,6 +58,10 @@ if [[ -n "$shard_count" ]]; then
   python3 .github/test-evidence/full_partition.py shards --root "$PWD" --api "${TEST_API:-}" --shards "$shard_count" --sha "${GITHUB_SHA:-}" --risk-classes "$classes" --output "$PWD/native-shard-plan.json" "${weighted_options[@]}"
   # Exclude the complement so ordinary suite selection preserves opt-in assumptions.
   full_excluded_classes=$(python3 -c 'import json,sys; print(",".join(json.load(open("native-shard-plan.json"))["shards"][int(sys.argv[1])]["excluded_classes"]))' "$shard_index")
+fi
+if [[ -n "$deferred_methods" ]]; then
+  full_excluded_classes=${full_excluded_classes:+$full_excluded_classes,}$deferred_methods
+  runner_args+=("-Pandroid.testInstrumentationRunnerArguments.notClass=$deferred_methods")
 fi
 [[ -z "$full_excluded_classes" ]] || full_runner_args+=("-Pandroid.testInstrumentationRunnerArguments.notClass=$full_excluded_classes")
 stop_live_child() {

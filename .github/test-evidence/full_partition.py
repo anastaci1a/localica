@@ -54,6 +54,21 @@ def discover(root):
     return inventory
 
 
+# Lead-ruled single-method deferrals (never whole classes, never relaxed bounds). Each entry is
+# removed from the expected inventory and reported as DEFERRED; the source method must still exist
+# so a rename or removal cannot silently retire the deferral.
+DEFERRED = {
+    'io.github.anastaci1a.localica.PopupShadowContinuityTest#sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles':
+        'DEFERRED v0.34.1 #815',
+}
+
+
+def deferred_for(inv):
+    return [{'id': identity, 'reason': reason}
+            for identity, reason in sorted(DEFERRED.items())
+            if identity.split('#')[0] in inv['selectors']]
+
+
 def plan(root, risks, api, sha, run_id='0', attempt='0'):
     require(api in ('26', '36'), 'Unsupported API')
     require(re.fullmatch('[0-9a-f]{40}', sha), 'Invalid SHA')
@@ -65,7 +80,7 @@ def plan(root, risks, api, sha, run_id='0', attempt='0'):
     remaining = expected - preflight
     require(preflight and remaining, 'Require nonempty preflight and remainder')
     return {'schema_version': 1, 'sha': sha, 'api': api, 'run_id': run_id, 'attempt': attempt, 'inventory': inv,
-            'risk_classes': risks, 'sdk_omissions': omissions,
+            'risk_classes': risks, 'sdk_omissions': omissions, 'deferred': deferred_for(inv),
             'preflight': sorted(preflight), 'remaining': sorted(remaining),
             'expected': sorted(expected)}
 
@@ -179,7 +194,10 @@ def expected_for(root, api):
                 if (int(api) < bound if argument == 'minSdkVersion' else int(api) > bound):
                     omissions.append({'id': sdk_id, 'reason': 'Reviewed ' + argument + '=' + str(bound) + ' annotation',
                                       'source': path, 'source_sha256': inv['all_source_sha256'][path]})
-    return inv, omissions, set(inv['runtime_methods']) - {x['id'] for x in omissions}
+    deferred = deferred_for(inv)
+    for row in deferred:
+        require(row['id'] in inv['runtime_methods'], 'Deferred method missing from source: ' + row['id'])
+    return inv, omissions, set(inv['runtime_methods']) - {x['id'] for x in omissions} - {x['id'] for x in deferred}
 
 
 def outcomes(folder):
@@ -265,7 +283,8 @@ def reconcile(root, manifest, preflight_folder, remaining_folder=None, shard=Fal
 def union(root, api, folders, shards):
     """Prove the shard XML is the complete once-only inventory for this API."""
     require(api in ('26', '36') and shards > 0, 'Invalid union request')
-    _, _, expected = expected_for(root, api)
+    inv, _, expected = expected_for(root, api)
+    deferred = deferred_for(inv)
     rows = {}
     for folder in folders:
         part, _ = outcomes(folder)
@@ -274,7 +293,11 @@ def union(root, api, folders, shards):
     require(not set(rows) - expected, 'Extra identities: ' + str(sorted(set(rows) - expected)[:5]))
     require(not expected - set(rows), 'Missing identities (' + str(len(expected - set(rows))) + '): ' + str(sorted(expected - set(rows))[:5]))
     counts = {k: sum(r['outcome'] == k for r in rows.values()) for k in ('passed', 'skipped', 'failure', 'error')}
-    return {'api': api, 'shards': shards, 'xml_roots': len(folders), 'expected': len(expected), 'executed_once': len(rows), **counts}
+    for row in deferred:
+        require(row['id'] not in rows, 'Deferred method ran: ' + row['id'])
+        print(row['reason'] + ' API ' + api + ': ' + row['id'], file=sys.stderr)
+    return {'api': api, 'shards': shards, 'xml_roots': len(folders), 'expected': len(expected), 'executed_once': len(rows),
+            'deferred': deferred, **counts}
 
 
 def shards(root, api, count, durations, sha, risks=(), scroll_performance=False):
@@ -330,6 +353,7 @@ def shards(root, api, count, durations, sha, risks=(), scroll_performance=False)
         shard['classes'].sort()
         shard['excluded_classes'] = sorted(set(inv['selectors']) - set(shard['classes']))
         shard['methods'].sort()
+        shard['excluded_methods'] = [x['id'] for x in deferred_for(inv)]
         shard['estimated_seconds'] = round(shard['estimated_seconds'], 6)
     return {'schema_version': 1, 'sha': sha, 'api': api, 'shard_count': count,
             'algorithm': 'longest measured class first, least estimated load, stable class/index ties',
@@ -339,12 +363,12 @@ def shards(root, api, count, durations, sha, risks=(), scroll_performance=False)
             'preflight_partition': 'Existing AndroidJUnitRunner method shards; risks excluded from weighted remainder',
             'estimated_classes': sorted(estimated), 'unknown_seconds_per_method': fallback,
             'opt_in_disabled_classes': opt_in, 'opt_in_assumption_seconds_per_method': 0.01,
-            'sdk_omissions': omissions, 'shards': result}
+            'sdk_omissions': omissions, 'deferred': deferred_for(inv), 'shards': result}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('plan','preflight','complete','union','shards'))
+    parser.add_argument('action', choices=('plan','preflight','complete','union','shards','deferred'))
     parser.add_argument('--root', type=Path, default=Path('.'))
     parser.add_argument('--plan', type=Path)
     parser.add_argument('--shard', action='store_true')
@@ -362,6 +386,13 @@ def main():
     parser.add_argument('--scroll-performance', action='store_true')
     args = parser.parse_args()
     try:
+        if args.action == 'deferred':
+            # Comma-separated Class#method ids for the runner's notClass filter, plus a visible notice.
+            rows = deferred_for(discover(args.root.resolve()))
+            for row in rows:
+                print(row['reason'] + ': ' + row['id'], file=sys.stderr)
+            print(','.join(row['id'] for row in rows))
+            return 0
         if args.action == 'shards':
             require(args.shards and args.output, 'Missing shard plan inputs')
             result = shards(args.root.resolve(), args.api, args.shards, args.durations, args.sha,
