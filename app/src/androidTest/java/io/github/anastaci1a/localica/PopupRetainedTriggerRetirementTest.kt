@@ -168,6 +168,17 @@ class PopupRetainedTriggerRetirementTest {
         }
     }
 
+    private data class DrawEvent(val sequence: Int, val event: String, val frameMillis: Long,
+        val playerFullyOpen: Boolean, val mounted: Boolean?, val hidden: Boolean?, val modal: Boolean?,
+        val restoreRequest: Long?, val restoreDrawnReceipt: Long?, val restorePresented: Long?,
+        val triggerDraws: Int, val suppressedBrowseDraws: Int, val suppressedSourceDraws: Int,
+        val browseRecordings: Int?, val homeGeneration: Long?, val nativeGeneration: Long?,
+        val nativeGateHeld: Boolean?, val fieldSubmitted: Boolean?, val retainedFieldSubmitted: Boolean?)
+
+    private data class ReceiptState(val request: Long, val drawnReceipt: Long, val presented: Long,
+        val modal: Boolean, val nativeGeneration: Long?, val nativeOpening: Boolean?, val nativeGateHeld: Boolean?,
+        val fieldRequestGeneration: Long?, val fieldSubmitted: Boolean?, val retainedFieldSubmitted: Boolean?)
+
     private data class Checkpoint(val stage: String, val frameMillis: Long, val root: Policy?, val popup: Policy?,
         val mounted: Boolean, val modal: Boolean, val hidden: Boolean, val restoreRequest: Long,
         val restorePresented: Long, val triggerDraws: Int, val nativeAttached: Boolean,
@@ -176,7 +187,7 @@ class PopupRetainedTriggerRetirementTest {
         val retainedSourceGeneration: Long?, val observedSourceGeneration: Long?,
         val retainedNativeGeneration: Long?, val observedNativeGeneration: Long?, val retainedHomeMatches: Boolean?,
         val nativeGateHeld: Boolean, val expanded: Boolean?, val playerFullyOpen: Boolean, val page: Int, val suppressedBrowseDraws: Int,
-        val graph: SceneGraph)
+        val graph: SceneGraph, val suppressedSourceDraws: Int, val events: List<DrawEvent>)
 
     private fun retirement(adjacentTab: Boolean, reduced: Boolean = false, speed: Float = 4f / 3f,
         hide: Boolean = true, renew: Boolean = false) {
@@ -189,6 +200,7 @@ class PopupRetainedTriggerRetirementTest {
         var popupView: View? = null
         val triggerDraws = AtomicInteger()
         val suppressedBrowseDraws = AtomicInteger()
+        val suppressedSourceDraws = AtomicInteger()
         var rootPolicy: (() -> Policy)? = null
         var popupPolicy: (() -> Policy)? = null
         var observedField: ObservedField? = null
@@ -199,6 +211,20 @@ class PopupRetainedTriggerRetirementTest {
         var rootHome: GlassPopupHome? = null
         var nativeHome: GlassPopupHome? = null
         val observedIds = java.util.IdentityHashMap<Any, Int>()
+        var observedAnchor: GlassAnchor? = null
+        val events = mutableListOf<DrawEvent>()
+        fun event(name: String) {
+            // All callers run on Main. Export only an immutable copy on instrumentation.
+            val current = observedAnchor
+            val node = current?.let { it.surfaceNode ?: it.returningNode }
+            val expansion = current?.let(::expansionOwner)
+            events += DrawEvent(events.size + 1, name, compose.mainClock.currentTime, playerFullyOpen,
+                current?.triggerMounted, current?.hidden, current?.modalPresent, current?.restoredDrawRequest,
+                current?.restoredDrawReceipt, current?.restoredPresentedReceipt, triggerDraws.get(),
+                suppressedBrowseDraws.get(), suppressedSourceDraws.get(), browseSource?.recordings,
+                node?.returnPlane()?.generation, expansion?.nativeGeneration, expansion?.awaitingNativeGate,
+                fieldRequest(node)?.submitted, observedField?.request?.submitted)
+        }
         fun admitOpening() {
             // Match BrowseSortDialog: reclaim the native host before publishing the new open intent.
             anchor.reclaimOpening?.invoke()
@@ -225,12 +251,25 @@ class PopupRetainedTriggerRetirementTest {
                         Box(Modifier.fillMaxSize().recordFrostedBackdrop(backing).background(Color.White))
                         // LocalicaScreen's fully open player retains browse composition but omits its draw.
                         Column(Modifier.fillMaxSize().drawWithContent {
-                            if (!hasPlayer || !playerFullyOpen) drawContent() else suppressedBrowseDraws.incrementAndGet()
+                            if (!hasPlayer || !playerFullyOpen) { event("browse-gate-draw"); drawContent() }
+                            else { suppressedBrowseDraws.incrementAndGet(); event("browse-gate-suppressed") }
                         }.recordFrostedBackdrop(backdrop).background(Color.White)) {
                             TabPager(pager, { listOf(MainTab.Library, MainTab.Albums) }, Modifier.fillMaxSize()) { page ->
                                 if (page == 0) {
                                     anchor = rememberGlassAnchor()
+                                    SideEffect { observedAnchor = anchor }
                                     LaunchedEffect(anchor) {
+                                        launch {
+                                            snapshotFlow {
+                                                val expansion = expansionOwner(anchor)
+                                                val request = fieldRequest(anchor.surfaceNode ?: anchor.returningNode)
+                                                ReceiptState(anchor.restoredDrawRequest, anchor.restoredDrawReceipt,
+                                                    anchor.restoredPresentedReceipt, anchor.modalPresent,
+                                                    expansion?.nativeGeneration, expansion?.nativeOpening,
+                                                    expansion?.awaitingNativeGate, request?.nativeGeneration,
+                                                    request?.submitted, observedField?.request?.submitted)
+                                            }.collect { event("receipt-state") }
+                                        }
                                         // Retain the real request before native acknowledgment clears the live slot.
                                         // The collector stores references/scalars only; all export stays on instrumentation.
                                         snapshotFlow { fieldRequest(anchor.surfaceNode ?: anchor.returningNode) }
@@ -238,10 +277,22 @@ class PopupRetainedTriggerRetirementTest {
                                                 val node = (anchor.surfaceNode ?: anchor.returningNode) as SurfaceNode
                                                 observedField = ObservedField(request, node.sourceGeneration,
                                                     expansionOwner(anchor)?.nativeGeneration, request.plane === node.returnPlane())
+                                                event("owned-field-request")
                                             }
                                     }
                                     Box(Modifier.padding(32.dp)
-                                        .drawWithContent { triggerDraws.incrementAndGet(); drawContent() }) {
+                                        // Compose updates dirty retained descendants after root drawing, even
+                                        // when the outer production gate omitted their parent. Establish the
+                                        // same undrawn-source predicate inside that retained pager subtree.
+                                        .drawWithContent {
+                                            if (!hasPlayer || !playerFullyOpen) {
+                                                event("source-gate-draw")
+                                                drawContent()
+                                                event("source-gate-return")
+                                            }
+                                            else { suppressedSourceDraws.incrementAndGet(); event("source-gate-suppressed") }
+                                        }
+                                        .drawWithContent { triggerDraws.incrementAndGet(); event("trigger-draw"); drawContent() }) {
                                         ActionIcon(AppIcon.ActionEllipsis, "Retained popup trigger", anchor = anchor) { admitOpening() }
                                     }
                                     GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center) {
@@ -281,7 +332,8 @@ class PopupRetainedTriggerRetirementTest {
                     retained?.request?.submitted, retained?.request?.sourceGeneration, retained?.sourceGeneration,
                     retained?.request?.nativeGeneration, retained?.nativeGeneration, retained?.homeMatches,
                     expansion?.awaitingNativeGate == true, expansion?.expanded, playerFullyOpen, pager.currentPage, suppressedBrowseDraws.get(),
-                    sceneGraph(backingSource, browseSource, nativeMaterial, nativePanel, anchor.source, rootHome, nativeHome, observedIds))
+                    sceneGraph(backingSource, browseSource, nativeMaterial, nativePanel, anchor.source, rootHome, nativeHome, observedIds),
+                    suppressedSourceDraws.get(), events.toList())
             }
             File(evidence, "$case-$stage.txt").writeText(snapshot.toString() + "\n")
             return snapshot
@@ -325,11 +377,13 @@ class PopupRetainedTriggerRetirementTest {
             val nativeView = requireNotNull(popupView)
             val oldRequest = compose.runOnIdle { anchor.restoredDrawRequest }
             compose.runOnIdle {
+                event("before-hide-close")
                 open = false
                 if (hide) {
                     if (adjacentTab) scope.launch(start = CoroutineStart.UNDISPATCHED) { pager.scrollToPage(1) }
                     else playerFullyOpen = true
                 }
+                event("after-hide-close")
             }
             frame()
             val hiddenDraws = triggerDraws.get()
@@ -344,7 +398,15 @@ class PopupRetainedTriggerRetirementTest {
             if (hide) {
                 assertTrue("The close is held at the real native gate", closing.nativeGateHeld)
                 assertEquals(false, closing.nativeOpening)
-                if (!adjacentTab) assertTrue("The actual browse draw gate suppressed content", closing.suppressedBrowseDraws > 0)
+                if (!adjacentTab) {
+                    assertTrue("The actual browse draw gate suppressed content", closing.suppressedBrowseDraws > 0)
+                    assertTrue("The retained source gate also suppressed dirty descendant recording", closing.suppressedSourceDraws > 0)
+                    assertTrue("The retained source gate was visited with the actual restoration request",
+                        closing.events.any { it.event == "source-gate-suppressed" && it.playerFullyOpen &&
+                            it.restoreRequest == closing.restoreRequest })
+                    assertFalse("No retained trigger draw bypasses player suppression",
+                        closing.events.any { it.event == "trigger-draw" && it.playerFullyOpen })
+                }
                 assertEquals("The hidden home did not draw a new field", opened.homeGeneration, closing.homeGeneration)
                 assertNull("A missing restore receipt has not admitted a home-field request", closing.fieldRequestGeneration)
             }
@@ -395,6 +457,9 @@ class PopupRetainedTriggerRetirementTest {
                 assertEquals("The hidden home still cannot submit a field", closing.homeGeneration, bounded.homeGeneration)
                 assertNull("The fallback never invents a home-field submission", bounded.fieldSubmitted)
             } else {
+                assertTrue("The same retained source gate permits the genuine trigger restoration callback",
+                    bounded.events.any { it.event == "source-gate-return" && !it.playerFullyOpen &&
+                        it.restoreRequest == bounded.restoreRequest && it.restoreDrawnReceipt == bounded.restoreRequest })
                 assertEquals("The retained real owned-field request was submitted", true, bounded.retainedFieldSubmitted)
                 assertEquals("The receipt belongs to the actual source attachment", bounded.observedSourceGeneration, bounded.retainedSourceGeneration)
                 assertEquals("The receipt belongs to the observed native generation", bounded.observedNativeGeneration, bounded.retainedNativeGeneration)
