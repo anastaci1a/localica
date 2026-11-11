@@ -65,7 +65,7 @@ class GlassMenuViewportTouchTest {
         var contentStarted = false
         try {
             contentStarted = true
-            compose.setContent { if (mounted) LocalicaTheme {
+            compose.setContent { if (mounted) EngineTheme(reduced = true) {
                 CompositionLocalProvider(LocalReducedMotion provides true,
                     LocalGlassAppearance provides GlassAppearance()) {
                     anchor = rememberGlassAnchor()

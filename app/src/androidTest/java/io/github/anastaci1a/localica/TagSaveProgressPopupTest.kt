@@ -50,7 +50,7 @@ class TagSaveProgressPopupTest {
             controller = TagEditingController(owned, app.library, app.queues, app.playlists,
                 RecoverableTagWriter(File(owned.filesDir, "tag-recovery"), documents))
         }
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             val backdrop = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.fillMaxSize()) {
                 Canvas(Modifier.matchParentSize().recordFrostedBackdrop(backdrop)) { drawRect(Color.White) }

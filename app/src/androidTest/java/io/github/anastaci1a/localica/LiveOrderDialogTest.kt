@@ -26,7 +26,7 @@ class LiveOrderDialogTest {
         var snapshot by mutableStateOf(LibrarySnapshot(tracks = listOf(a, z)))
         var open by mutableStateOf(true)
         var fail = false
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(LocalReducedMotion provides true) {
             if (open) {
                 BrowseSortDialog(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, "mix")),
                     BrowseStyle(), false, { open = false }, { _, _ -> }, {},

@@ -39,7 +39,7 @@ class GlassActionRowTest {
     @Test fun naturalWidthsKeepActionsBesideEachOtherAndReserveHiddenRevert() {
         var visible by mutableStateOf(false)
         var direction by mutableStateOf(LayoutDirection.Ltr)
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(
+        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(
             LocalReducedMotion provides true, LocalLayoutDirection provides direction) {
             Box(Modifier.width(328.dp).padding(vertical = 30.dp)) {
                 GlassActionRow(Modifier.testTag("actions")) {
@@ -74,7 +74,7 @@ class GlassActionRowTest {
         var randomizations = 0
         var reversions = 0
         val pulses = mutableListOf<ControlHaptic>()
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, 2f),
                 LocalLayoutDirection provides direction, LocalReducedMotion provides true,

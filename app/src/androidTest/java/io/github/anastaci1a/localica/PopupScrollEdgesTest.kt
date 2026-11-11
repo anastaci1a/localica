@@ -35,7 +35,7 @@ class PopupScrollEdgesTest {
     @Test fun modalBodiesFadeAtOverflowEdgesWithoutMovingTheirChrome() {
         lateinit var scroll: ScrollState
         var tall by mutableStateOf(true)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             scroll = rememberScrollState()
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 GlassAlertDialog({}, title = { Text("Scrolling options") },
@@ -63,7 +63,7 @@ class PopupScrollEdgesTest {
     @Test fun existingExplicitFadeIsNotAppliedTwiceByTheModalScrollPolicy() {
         lateinit var scroll: ScrollState
         var explicit by mutableStateOf(false)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             scroll = rememberScrollState()
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 GlassAlertDialog({}, confirmButton = {}, text = {
@@ -104,7 +104,7 @@ class PopupScrollEdgesTest {
         var count by mutableIntStateOf(8)
         var paddingPixels = 0
         var halfBandPixels = 0
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             scroll = rememberLazyListState()
             paddingPixels = with(LocalDensity.current) { 16.dp.roundToPx() }
             halfBandPixels = with(LocalDensity.current) { 12.dp.roundToPx() }
@@ -135,7 +135,7 @@ class PopupScrollEdgesTest {
     @Test fun registeredModalGridsShareFadesAcrossUnequalRowsAndContentChanges() {
         lateinit var scroll: LazyGridState
         var count by mutableIntStateOf(12)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             scroll = rememberLazyGridState()
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 GlassAlertDialog({}, confirmButton = {}, text = {

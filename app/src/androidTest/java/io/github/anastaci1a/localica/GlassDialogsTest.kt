@@ -47,7 +47,7 @@ class GlassDialogsTest {
         var childOpen by mutableStateOf(false)
         lateinit var parentScene: FrostedBackdrop
         lateinit var childScene: FrostedBackdrop
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(LocalReducedMotion provides true) {
             if (parentOpen) GlassAlertDialog(onDismissRequest = { parentOpen = false }, title = { Text("Parent options") }, text = {
                 parentScene = LocalModalBackdrop.current!!
                 TextButton(onClick = { childOpen = true }) { Text("Choose source") }

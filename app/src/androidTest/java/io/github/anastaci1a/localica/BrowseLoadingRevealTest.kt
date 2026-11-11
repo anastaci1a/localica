@@ -219,7 +219,7 @@ class BrowseLoadingRevealTest {
 
     @Test fun skeletonFillsTheViewportInEveryListDensityAndGalleryColumnCount() {
         var style by mutableStateOf(BrowseStyle())
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val columns = if (style.presentation == Presentation.List) 1 else requireNotNull(style.itemsPerRow)
@@ -253,7 +253,7 @@ class BrowseLoadingRevealTest {
     @Test fun skeletonCoverageIncludesNormalCellPaddingAtTheViewportEdge() {
         val style = BrowseStyle(listSize = ListSize.Small)
         var height by mutableIntStateOf(94)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true, LocalDensity provides Density(1f)) {
                 // Small rows allocate 40dp content + 8dp card padding. Exercise bottom
                 // padding, an exact row boundary, next-row top padding, then its content.
@@ -282,7 +282,7 @@ class BrowseLoadingRevealTest {
 
     @Test fun artistOnlySkeletonIsCircularWhileMixedCatalogSkeletonIsRounded() {
         val style = BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 2)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 Row(Modifier.width(320.dp).background(Color.Magenta)) {
                     Box(Modifier.weight(1f)) { BrowseLoadingItem(style, BrowseCellGeometry(2), true, artistOnly = false) }
@@ -306,7 +306,7 @@ class BrowseLoadingRevealTest {
         val reveal = BrowseLoadingReveal(columns = 1, initiallyComplete = false)
         val cell = reveal.cell(0).apply { place(0f, 0f) }
         val item = BrowserItem(MediaRef(MediaKind.Album, "line-reservation"), "One", "Info", emptyList())
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 Row(Modifier.width(320.dp)) {
                     Box(Modifier.weight(1f).testTag("skeleton-slot")) {
@@ -385,7 +385,7 @@ class BrowseLoadingRevealTest {
         val reveal = BrowseLoadingReveal(columns = 1, initiallyComplete = false)
         val cell = reveal.cell(0).apply { place(0f, 0f) }
         val key = "Album:handoff"
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 val style = BrowseStyle(listSize = size)
                 val item = BrowserItem(MediaRef(MediaKind.Album, "handoff"), "One", subtitle, emptyList())
@@ -432,7 +432,7 @@ class BrowseLoadingRevealTest {
         val long = BrowserItem(MediaRef(MediaKind.Album, "long"),
             "A deliberately long album title that must wrap across both available title lines",
             "A deliberately long subtitle that must wrap across both available information lines", emptyList())
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 Row(Modifier.width(320.dp)) {
                     listOf(short to first, long to second).forEachIndexed { index, (item, cell) ->
@@ -549,7 +549,7 @@ class BrowseLoadingRevealTest {
         }
         val item = BrowserItem(MediaRef(MediaKind.Artist, "morphing-artist"), "Artist", null, emptyList(), coverUri = uri)
         val style = BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 2, extraInfo = ExtraInfo.None)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true, LocalBrowseArtwork provides retention) {
                 Box(Modifier.width(160.dp).background(Color.Magenta)) {
                     LookaheadScope {

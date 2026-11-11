@@ -223,7 +223,7 @@ class GlassMorphTest {
         try {
             var open by mutableStateOf(false)
             lateinit var anchor: GlassAnchor
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = true) {
                 CompositionLocalProvider(LocalReducedMotion provides true, LocalGlassMorphWorkObserver provides work.observer, LocalGlassAppearance provides
                     io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
                     Box(Modifier.fillMaxSize().background(Color(0xFF808080))) {
@@ -953,7 +953,7 @@ class GlassMorphTest {
         var changed by mutableStateOf(false)
         lateinit var source: FrostedBackdrop
         lateinit var material: FrostedBackdrop
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(LocalReducedMotion provides true) {
             Box(Modifier.fillMaxSize()) {
                 val anchor = rememberGlassAnchor()
                 source = rememberFrostedBackdrop(Unit, dark = true)

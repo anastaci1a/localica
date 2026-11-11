@@ -31,6 +31,7 @@ class ControlStateMotionTest {
         var forward = 0f
         var inverse = 1f
         compose.setContent {
+            // This isolates the legacy control-state helpers, whose policy input is LocalReducedMotion alone.
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
                 val a by animateControlStateFloat(if (selected) 1f else 0f, selected, "Forward")
                 // Semantic activation can lower a visual value; do not infer from alpha.
@@ -103,6 +104,7 @@ class ControlStateMotionTest {
         var shown = Color.Unspecified
         var reduced by mutableStateOf(true)
         compose.setContent {
+            // This isolates the legacy control-state helpers, whose policy input is LocalReducedMotion alone.
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
                 val color = controlStateColor(enabled, ink, ink.copy(alpha = .38f), "Availability")
                 SideEffect { shown = color }

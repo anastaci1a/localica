@@ -38,7 +38,7 @@ class SettingsSearchEntryAdoptionTest {
             "api${Build.VERSION.SDK_INT}-$name")
     }
     private fun show(reduced: Boolean, speed: Float, rtl: Boolean = false, font: Float = 1f) {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             val device = LocalDensity.current
             val scroll = rememberScrollState()
             focus = remember(replacement) { SettingsSearchFocus("Glass", scroll) }

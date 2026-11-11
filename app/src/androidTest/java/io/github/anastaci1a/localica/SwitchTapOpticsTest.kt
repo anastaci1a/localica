@@ -59,7 +59,7 @@ class SwitchTapOpticsTest {
         var speed by mutableFloatStateOf(4f / 3f)
         var generation by mutableIntStateOf(0)
         var reduced by mutableStateOf(false)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             view = LocalView.current
             pixelDensity = LocalDensity.current.density
             CompositionLocalProvider(LocalMotionSpeed provides speed, LocalReducedMotion provides reduced) {

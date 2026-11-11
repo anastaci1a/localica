@@ -81,6 +81,7 @@ class SeekCancelMotionTest {
         var faster = 0f
         var fasterExit = 1f
         compose.setContent {
+            // This isolates seekCancelPreview and its legacy LocalReducedMotion input, independently of Engine motion.
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
                 normal = seekCancelPreview(0f, 1f, over)
                 CompositionLocalProvider(LocalMotionSpeed provides 2f) {

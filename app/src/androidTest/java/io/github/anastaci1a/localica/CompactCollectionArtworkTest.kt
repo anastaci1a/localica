@@ -75,7 +75,7 @@ class CompactCollectionArtworkTest {
         var size by mutableStateOf(ListSize.Compact)
         var fontScale by mutableFloatStateOf(1f)
         var density = 1f
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale),
                 LocalBrowseArtwork provides retention, LocalReducedMotion provides true) {

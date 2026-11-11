@@ -25,7 +25,7 @@ class SettingsSearchEntryReductionTest {
     private fun alpha() = compose.onNodeWithTag("setting:Glass renderer", useUnmergedTree = true)
         .fetchSemanticsNode().config[SettingsHighlightAlpha]
     private fun transition(atMillis: Long) {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             clock = LocalUiClock.current
             val scroll = rememberScrollState()
             focus = remember { SettingsSearchFocus("Glass", scroll) }

@@ -201,7 +201,7 @@ class SlidingTabsTest {
         var pageDragging by mutableStateOf(false)
         val selections = mutableListOf<MainTab>()
         val reselections = mutableListOf<MainTab>()
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true,
                 LocalGlassAppearance provides GlassAppearance(tabStyle = TabLensStyle.Classic)) {
                 Box(Modifier.size(300.dp, 64.dp).testTag("page-ownership-tabs")) {

@@ -63,7 +63,7 @@ class AsyncSectionTest {
         var value by mutableStateOf<String?>(null)
         var reduced by mutableStateOf(false)
         compose.mainClock.autoAdvance = false
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
                 Column(Modifier.testTag("async-scene")) { AsyncSection(value, rowCount = 2) { result ->
                     AsyncSectionRow(0) { Text(result) }

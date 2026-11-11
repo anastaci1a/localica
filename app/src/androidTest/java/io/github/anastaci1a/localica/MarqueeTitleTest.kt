@@ -185,7 +185,7 @@ class MarqueeTitleTest {
 
     @Test fun reducedMotionRetainsEllipsisAndFullAccessibleText() {
         val title = "A title much too long to fit in its small viewport"
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 MarqueeTitle(AnnotatedString(title), false, Modifier.width(100.dp).testTag("title"),
                     motionPaused = true)

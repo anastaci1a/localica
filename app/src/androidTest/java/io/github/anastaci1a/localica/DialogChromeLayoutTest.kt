@@ -34,7 +34,7 @@ class DialogChromeLayoutTest {
     private var titleStyle: TextStyle? = null
 
     @Composable private fun Scene(content: @Composable () -> Unit) {
-        LocalicaTheme {
+        EngineTheme(reduced = true) {
             titleStyle = MaterialTheme.typography.titleLarge
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.fillMaxSize()) {

@@ -42,7 +42,7 @@ class PlayerSeekHapticsTest {
     private lateinit var inputMode: InputModeManager
 
     private fun fixture(verticalParent: Boolean = false) {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalControlHaptics provides sink, LocalReducedMotion provides reduced) {
                 inputMode = LocalInputModeManager.current
                 scroll = rememberScrollState()

@@ -51,7 +51,7 @@ class ArtistAlbumFilterRangeTest {
             preferences.write(route, BrowseStyle(presentation = Presentation.List, listSize = ListSize.Normal,
                 sort = TrackSort.Title, ascending = true), true)
             phase("mount-begin")
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = reduced) {
                 density = LocalDensity.current.density
                 CompositionLocalProvider(LocalReducedMotion provides reduced) {
                     Box(Modifier.fillMaxWidth().height(560.dp)) {

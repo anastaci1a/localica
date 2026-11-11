@@ -29,7 +29,7 @@ class BrightnessWeightingTest {
 
     @Test fun sliderReachesEightSnapsToTheDefaultStepAndResets() {
         var value by mutableStateOf(GlassAppearance())
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     GlassSettingsControls(value, "Glass advanced") { value = it }

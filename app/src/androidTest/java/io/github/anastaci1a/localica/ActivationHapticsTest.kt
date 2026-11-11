@@ -156,7 +156,7 @@ class ActivationHapticsTest {
         var dark by mutableStateOf(false)
         var nativeInk: Color? = null
         var sharedInk: Color? = null
-        compose.setContent { LocalicaTheme { GlassPanelTheme(dark) {
+        compose.setContent { EngineTheme(reduced = true) { GlassPanelTheme(dark) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 Column(Modifier.width(280.dp).background(Color.Magenta).padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {

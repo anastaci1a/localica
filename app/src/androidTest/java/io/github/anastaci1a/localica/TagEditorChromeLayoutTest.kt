@@ -54,7 +54,7 @@ class TagEditorChromeLayoutTest {
     }
 
     private fun openEditor() {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             titleStyle = MaterialTheme.typography.titleLarge
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.fillMaxSize()) {

@@ -28,8 +28,8 @@ import kotlin.math.roundToInt
 
 /** Give native popups the recorded scene contract used by the application host. */
 @Composable
-private fun RepeatTestScene(content: @Composable () -> Unit) {
-    LocalicaTheme {
+private fun RepeatTestScene(reduced: Boolean = false, content: @Composable () -> Unit) {
+    EngineTheme(reduced = reduced) {
         val fitEvidence: ((String) -> Unit)? = remember {
             if (androidx.test.platform.app.InstrumentationRegistry.getArguments()
                     .getString("repeatFitEvidence") == "true") {
@@ -272,7 +272,7 @@ class RepeatOptionsEnvelopeTest {
     }
 
     @Test fun nativeChildResizeReportsImpossibleHeightWithoutLosingItsDraft() {
-        compose.setContent { RepeatTestScene {
+        compose.setContent { RepeatTestScene(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 RepeatSectionDialog(RepeatSection.Queue, AdvancedRepeat(), {}, {})
             }
@@ -302,7 +302,7 @@ class RepeatOptionsEnvelopeTest {
     @Test fun compactParentEnvelopeSurvivesModeFontAndWindowChangesWithReachableReset() {
         var width by mutableStateOf(360.dp); var height by mutableStateOf(640.dp)
         var font by mutableFloatStateOf(1f); var advanced by mutableStateOf(false); var generation by mutableIntStateOf(0)
-        compose.setContent { RepeatTestScene {
+        compose.setContent { RepeatTestScene(reduced = true) {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, font),
                 LocalInlineGlassDialog provides true, LocalReducedMotion provides true) {
@@ -470,7 +470,7 @@ class RepeatOptionsEnvelopeTest {
         var settings by mutableStateOf(initial)
         var submissions = 0
         var visible by mutableStateOf(true)
-        compose.setContent { RepeatTestScene {
+        compose.setContent { RepeatTestScene(reduced = true) {
             // Native child windows derive density/font scaling from Android resources.
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 if (visible) RepeatOptionsDialog(settings, { visible = false }, { settings = it(settings); submissions++ })
@@ -546,7 +546,7 @@ class RepeatOptionsEnvelopeTest {
     @Test fun shortLargeFontChildrenRefuseClippingAndLeaveSettingsUntouched() {
         var section by mutableStateOf(RepeatSection.Song); var generation by mutableIntStateOf(0)
         var submissions = 0
-        compose.setContent { RepeatTestScene {
+        compose.setContent { RepeatTestScene(reduced = true) {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f),
                 LocalInlineGlassDialog provides true, LocalReducedMotion provides true) {
@@ -567,7 +567,7 @@ class RepeatOptionsEnvelopeTest {
     @Test fun resetClearsBothModeDraftsButDoesNotSubmitUntilApply() {
         var settings by mutableStateOf(QueueSettings())
         var submissions = 0
-        compose.setContent { RepeatTestScene {
+        compose.setContent { RepeatTestScene(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 RepeatOptionsDialog(settings, {}, { settings = it(settings); submissions++ })
             }

@@ -80,7 +80,7 @@ class SettingsStockGeometryTest {
     }
 
     private fun show() = compose.setContent {
-        LocalicaTheme {
+        EngineTheme(reduced = true) {
             val device = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(device.density, font),
                 LocalLayoutDirection provides direction, LocalReducedMotion provides true) {
