@@ -199,4 +199,5 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         }
         placed=true; expansion.target(shown)
     } }
-@Composable internal fun rememberPopupMotion(key: Any,initial: Boolean=false): PopupMotion { val clock=ownerClock(); val spec=LocalUiSpec.current.spec.expansion; val owner=remember(clock,key) { PopupMotion(clock,spec,key,initial) }; SideEffect { owner.expansion.updateSpec(spec) }; DisposableEffect(owner) { onDispose { owner.expansion.dispose() } }; return owner }
+/** [law] selects the owner's law: popups and presences take the stock popup law; the selection panel its own (#869). */
+@Composable internal fun rememberPopupMotion(key: Any,initial: Boolean=false,law: (UiSpec)->ExpansionSpec={ it.expansion }): PopupMotion { val clock=ownerClock(); val spec=law(LocalUiSpec.current.spec); val owner=remember(clock,key) { PopupMotion(clock,spec,key,initial) }; SideEffect { owner.expansion.updateSpec(spec) }; DisposableEffect(owner) { onDispose { owner.expansion.dispose() } }; return owner }

@@ -47,7 +47,8 @@ internal fun rememberFloatingSelectionPanel(visible: Boolean, reducedMotion: Boo
     val height = remember { mutableStateOf(0.dp) }
     val visibility = rememberUpdatedState(visible)
     // Access policy comes from the root's validated Engine record, as for all faces.
-    val face = rememberFaceExpansion(visible && height.value.value > 0f)
+    // v0.33.21's selection tween, never the popup spring (#869).
+    val face = rememberFaceExpansion(visible && height.value.value > 0f) { it.selectionExpansion }
     val state = remember(face) { FloatingSelectionPanelState(height, face, visibility) }
     SideEffect { state.observeVisibility(visible) }
     return state
