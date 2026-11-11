@@ -147,7 +147,7 @@ class AutoScrollDrawnPlacementTest {
         val host = Host(route)
         scenario = ActivityScenario.launch(ComponentActivity::class.java)
         requireNotNull(scenario).onActivity { activity = it }
-        main { it.setContent { LocalicaTheme {
+        main { it.setContent { EngineTheme {
             Box(Modifier.fillMaxSize()) {
                 key(host.generation) {
                     if (fullHost) LocalicaScreen(library, io.github.anastaci1a.localica.playback.PlaybackState(),
@@ -537,7 +537,7 @@ class AutoScrollDrawnPlacementTest {
         val gap = mutableIntStateOf(40)
         scenario = ActivityScenario.launch(ComponentActivity::class.java)
         requireNotNull(scenario).onActivity { activity = it }
-        main { a -> a.setContent { LocalicaTheme {
+        main { a -> a.setContent { EngineTheme {
             Box(Modifier.fillMaxSize().pinchRetainedOverlay(motion, grid, (0 until 30).associate { it.toString() to it })) {
                 androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                     columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(1), state = grid,
