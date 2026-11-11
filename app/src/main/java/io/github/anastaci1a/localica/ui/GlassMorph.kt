@@ -777,7 +777,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 // A visibility reversal can lay out once before its effect resets state.
                 // The synthetic reopening flight must not borrow the old opening bottom.
                 val physical = motion.bounds
-                fun surfaceOpacity() = if (!admittedDraw) 0f else if (detached) motion.detachedOpacity.at(phase()) else
+                fun surfaceOpacity() = if (!admittedDraw) 0f else if (detached) phase() else
                     if (present && window != null && readyWindow === window) 1f else 0f
                 Box(Modifier.fillMaxSize().onGloballyPositioned {
                     if (hasViewport) windowOrigin = it.backdropPosition(view)
