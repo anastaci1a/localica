@@ -15,7 +15,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.library.*
-import io.github.anastaci1a.localica.navigation.InterfaceSettings
+import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.spec.ScrollbarSpec
 import org.junit.Assert.*
