@@ -237,20 +237,34 @@ class AutoScrollDrawnPlacementTest {
             val color = image.getPixel(x, y)
             // The fixture covers are opaque uniform colors. Ignore decode/reveal frames;
             // those have no stable color edge to measure yet.
+            // A real panel's color pipeline may round a channel by one step (A35: cc3322 -> cc3222,
+            // #851), so allow the same 2-step residual as coverPixel. A reveal frame is far outside it.
             val palette = intArrayOf(0xFFCC3322.toInt(), 0xFF2255AA.toInt(), 0xFF33AA55.toInt(), 0xFFDDAA22.toInt(), 0xFF884499.toInt())
-            if (color !in palette) {
+            fun near(a: Int, b: Int) = (a ushr 24) == (b ushr 24) &&
+                (0..16 step 8).all { abs(((a shr it) and 255) - ((b shr it) and 255)) <= 2 }
+            if (palette.none { near(color, it) }) {
                 if (arguments.getString("strict") != "0") problems += "$label $key expected visible cover is not fully drawn: center=" + Integer.toHexString(color)
                 return@forEach
             }
             measured++
-            var top = y
-            var bottom = y + 1
-            var left = x
-            var right = x + 1
-            while (left > 0 && coverPixel(image.getPixel(left - 1, y), color, background)) left--
-            while (right < image.width && coverPixel(image.getPixel(right, y), color, background)) right++
-            while (top > 0 && coverPixel(image.getPixel(x, top - 1), color, background)) top--
-            while (bottom < image.height && coverPixel(image.getPixel(x, bottom), color, background)) bottom++
+            // Walk against the local cover color: a floating control's soft glass shadow (Library's
+            // playlist-add-module) darkens the cover bottom by a few steps over ~20 px (#851). The
+            // reference follows that slow drift but never an antialiased edge pixel (> 2 steps away).
+            fun edge(start: Int, limit: Int, step: Int, pixel: (Int) -> Int): Int {
+                var at = start
+                var local = color
+                while (at != limit) {
+                    val next = pixel(at)
+                    if (!coverPixel(next, local, background)) break
+                    if (near(next, local)) local = next
+                    at += step
+                }
+                return at
+            }
+            val left = edge(x - 1, -1, -1) { image.getPixel(it, y) } + 1
+            val right = edge(x + 1, image.width, 1) { image.getPixel(it, y) }
+            val top = edge(y - 1, -1, -1) { image.getPixel(x, it) } + 1
+            val bottom = edge(y + 1, image.height, 1) { image.getPixel(x, it) }
             android.util.Log.i("AutoScroll635", "$label $key layout=$art drawn=$top..$bottom")
             // Pixel coverage gives integer edges; tolerate half a pixel rounding.
             val firstRow = art.top == actual.values.minOf { it[1].top }
