@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {xml,manifest,compare,rules,transferIds,transferGrowth,transferRelabels,recordedOwnerMoves,codeFingerprint,markedConstruct,sameIncident,transferReanchors} from '../check-ui-lint.mjs';
+import {xml,manifest,compare,rules,transferIds,transferGrowth,transferRelabels,recordedOwnerMoves,codeFingerprint,markedConstruct,sameIncident,transferReanchors,transferPriorIdentities} from '../check-ui-lint.mjs';
 const incident = {rule:rules[0],path:'app/src/main/A.kt',codeSha256:'c',identity:'old'};
 test('new incident and equal-count substitution fail', () => {
     assert.equal(compare([incident],[incident,{...incident,codeSha256:'d',identity:'new'}],0).accepted,false);
@@ -266,4 +266,17 @@ test('a re-anchored transfer can be re-anchored again on a later edit, still one
     assert.deepEqual(transferReanchors([second], [next]).map(t => t.to.codeSha256), [next.codeSha256]);
     assert.throws(() => transferGrowth([first], [{...second, removedBy:'U10.04'}]), /only shrink/);
     assert.throws(() => transferGrowth([first], [first, second]), /only shrink/);
+});
+test('a transfer re-anchored twice still continues its original before row, never counted as removed', () => {
+    const [old, now] = shapes[3], ledger = {rule:now.rule, path:now.path, fqn:now.fqn};
+    const next = row('            if (handleReveal > 0f) HandleSlot(Modifier.glassShadowOpacity { handleReveal }) {', 16, '~'.repeat(17));
+    const twice = [{...ledger, from:{codeSha256:now.codeSha256}, to:{codeSha256:next.codeSha256}}];
+    assert.deepEqual(transferPriorIdentities(twice, [old], [next]), [old.identity]);
+    const id = JSON.stringify([next.rule, next.path, next.fqn, next.codeSha256]);
+    assert.equal(compare([old], [next], 0, [id], transferPriorIdentities(twice, [old], [next])).removed.length, 0);
+    assert.deepEqual(transferPriorIdentities([{...twice[0], from:{codeSha256:old.codeSha256}}], [old], [next]), [old.identity]);
+    // A different construct, two candidate rows, or a row still present never pairs.
+    assert.deepEqual(transferPriorIdentities(twice, [{...old, construct:'other'}], [next]), []);
+    assert.deepEqual(transferPriorIdentities(twice, [old, {...old, identity:'twin'}], [next]), []);
+    assert.deepEqual(transferPriorIdentities(twice, [old], [next, old]), []);
 });
