@@ -9,22 +9,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.ui.spec.Space
+import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 
 /** Both actions press the same shell and keep their own click/drag ownership. */
 @Composable
 internal fun NavigationUtilityPill(anchor: GlassAnchor, source: FrostedBackdrop,
     modifier: Modifier = Modifier, noneAtlasInput: NoneAtlasInput? = null, shadowOpacity: () -> Float = { 1f },
     onSearch: () -> Unit, onMore: () -> Unit) {
+    val iconSize = StockUiSpec.space.getValue(Space.Panel)
     SideEffect {
         anchor.source = source
         anchor.face = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    Icon(appIconPainter(AppIcon.ActionSearch), null, Modifier.size(28.dp))
+                    Icon(appIconPainter(AppIcon.ActionSearch), null, Modifier.size(iconSize))
                 }
                 GlassPillDivider()
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    Icon(appIconPainter(AppIcon.ActionEllipsis), null, Modifier.size(28.dp))
+                    Icon(appIconPainter(AppIcon.ActionEllipsis), null, Modifier.size(iconSize))
                 }
             }
         }
@@ -34,9 +37,9 @@ internal fun NavigationUtilityPill(anchor: GlassAnchor, source: FrostedBackdrop,
         depthScale = RaisedGlassDepthScale, noneAtlasInput = noneAtlasInput) {
         anchor.captureInk()
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            ActionIcon(AppIcon.ActionSearch, "Search library", glass = false, iconSize = 28.dp, onClick = onSearch)
+            ActionIcon(AppIcon.ActionSearch, "Search library", glass = false, iconSize = iconSize, onClick = onSearch)
             GlassPillDivider()
-            ActionIcon(AppIcon.ActionEllipsis, "More", glass = false, iconSize = 28.dp, onClick = onMore)
+            ActionIcon(AppIcon.ActionEllipsis, "More", glass = false, iconSize = iconSize, onClick = onMore)
         }
     }
 }

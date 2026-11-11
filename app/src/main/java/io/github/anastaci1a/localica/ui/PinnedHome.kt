@@ -28,6 +28,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import io.github.anastaci1a.localica.ui.spec.Space
+import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 
 @Composable
 internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins: List<MediaRef>,
@@ -100,7 +102,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                 returnToList.cancel()
             }
         }
-        .recordFrostedBackdrop(listBackdrop, surroundingBackdrop).testTag("home-list"), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = obscuredInset + with(density) { returnControlHeight.toDp() } + 16.dp)) {
+        .recordFrostedBackdrop(listBackdrop, surroundingBackdrop).testTag("home-list"), state = scroll, contentPadding = PaddingValues(top = StockUiSpec.space.getValue(Space.Comfortable), bottom = obscuredInset + with(density) { returnControlHeight.toDp() } + StockUiSpec.space.getValue(Space.Comfortable))) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")
