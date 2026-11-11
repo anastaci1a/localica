@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import io.github.anastaci1a.localica.ui.engine.*
+import io.github.anastaci1a.localica.ui.spec.MotionAccess
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -730,6 +731,13 @@ class GlassMorphTest {
                 compose.mainClock.advanceTimeByFrame()
                 probeLines.add(compose.runOnUiThread { probeState("pre-idle") + " mounts=${mounts.size}" })
                 flushProbe()
+                try {
+                    compose.waitUntil(250) { popupWindow != null }
+                    flushProbe()
+                    return requireNotNull(popupWindow)
+                } catch (_: ComposeTimeoutException) {
+                    // No mount in this frame; drain queued work before the next frame.
+                }
                 compose.waitForIdle()
                 probeLines.add(compose.runOnUiThread { probeState("post-idle") + " mounts=${mounts.size}" })
                 flushProbe()
@@ -777,6 +785,8 @@ class GlassMorphTest {
         try {
             compose.runOnIdle { open = true }
             val firstWindow = awaitWindow()
+            assertEquals("The native owner uses Reduced access", MotionAccess.Reduced,
+                compose.runOnUiThread { probeClock.context?.access })
             assertUnready("First native mount")
             assertEquals(1, mounts.size)
             assertSame(firstWindow, mounts.single().window)
