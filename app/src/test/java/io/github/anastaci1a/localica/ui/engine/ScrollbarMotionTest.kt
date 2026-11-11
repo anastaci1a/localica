@@ -159,6 +159,8 @@ class ScrollbarMotionTest {
             val thread = Thread.currentThread().id
             // Inflate the shared reflective accessor before measuring, as the sibling allocation tests do.
             repeat(64) { allocated.invoke(bean, thread) }
+            // Run the measured call once untimed: hosted runs charged a one-time cost to the first long call only (#838).
+            total = readScalars(motion, 1_000_000, total)
             val before = allocated.invoke(bean, thread) as Long
             total = readScalars(motion, 1_000_000, total)
             val bytes = (allocated.invoke(bean, thread) as Long) - before
