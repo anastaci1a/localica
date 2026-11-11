@@ -711,17 +711,6 @@ class GlassMorphTest {
                             anchor.hidden, anchor.shadowInModal, anchor.contact.expansion.value, System.nanoTime())
                         probeLines.add(probeState("mount", view.isLaidOut) + " nativeNanos=${mounts.last().nativeNanos}")
                         capturePreparationPoint()
-                        if (mounts.size == 1) {
-                            val unready = preparationPoints.last()
-                            assertSame(window, unready.window)
-                            assertFalse("Cancellation starts before layout", unready.laidOut)
-                            assertFalse("Cancellation starts before native admission", unready.hidden)
-                            assertFalse(unready.shadowOwned)
-                            assertEquals(0f, unready.expansion, 0f)
-                            probeLines.add(probeState("cancel", view.isLaidOut) + " nativeNanos=${unready.nativeNanos}")
-                            cancellations.add(unready)
-                            open = false
-                        }
                         onDispose {
                             disposed += window
                             if (popupWindow === window) popupWindow = null
@@ -783,15 +772,35 @@ class GlassMorphTest {
         }
         try {
             compose.runOnIdle { open = true }
+            // The opening composes and starts its presentation, but its native window has not
+            // mounted yet. Withdraw the request here: a cancellation written at the mount is
+            // composed only after the Android looper has laid out (and may have admitted) that
+            // window, so it cannot deterministically precede native preparation (#814 r4-native).
+            frame()
+            assertNull("The opening frame has not mounted its native window", popupWindow)
+            assertTrue(mounts.isEmpty())
+            compose.runOnUiThread {
+                capturePreparationPoint()
+                val unready = preparationPoints.last()
+                assertNull(unready.window)
+                assertFalse("Cancellation starts before native admission", unready.hidden)
+                assertFalse(unready.shadowOwned)
+                assertEquals(0f, unready.expansion, 0f)
+                probeLines.add(probeState("cancel") + " nativeNanos=${unready.nativeNanos}")
+                cancellations.add(unready)
+                open = false
+            }
+            // The next controlled frame composes the withdrawal; the presentation it already
+            // started still mounts its native window, which must stay unready and retire.
             val firstWindow = awaitWindow()
-            // Deliver the mount cancellation through composition before observing its result.
             frame()
             flushProbe()
             assertEquals("The native owner uses Reduced access", MotionAccess.Reduced,
                 compose.runOnUiThread { probeClock.context?.access })
             assertTrue("A controlled frame delivers the cancellation", deliveredClosures.isNotEmpty())
             val deliveredClose = deliveredClosures.first()
-            assertSame("Cancellation reaches this mounted window", firstWindow, deliveredClose.window)
+            assertTrue("Cancellation is composed before the native window it withdraws",
+                deliveredClose.window == null || deliveredClose.window === firstWindow)
             val cancelledPoints = preparationPoints.toList().filter { it.window === firstWindow }
             assertTrue("The canceled window has a pre-layout observation", cancelledPoints.any { !it.laidOut })
             val firstLayout = cancelledPoints.firstOrNull { it.laidOut }
@@ -811,9 +820,9 @@ class GlassMorphTest {
             assertFalse(mounts.single().shadowOwned)
             assertEquals(0f, mounts.single().expansion, 0f)
 
-            // The mount action canceled at its captured pre-layout, pre-admission point.
+            // The withdrawal was captured before any native window existed.
             assertEquals(1, cancellations.size)
-            assertSame(firstWindow, cancellations.single().window)
+            assertNull(cancellations.single().window)
             assertFalse("The canceled window may not hide its trigger", preparationPoints.any { it.hidden })
             compose.runOnIdle { open = false }
             frame()
@@ -830,8 +839,10 @@ class GlassMorphTest {
             assertFalse("A reopened window mounts without native admission", mounts.last().hidden)
             assertFalse(mounts.last().shadowOwned)
             assertEquals(0f, mounts.last().expansion, 0f)
+            // Stage 3 admits on native receipts, never after elapsed frames (ExpandCollapse
+            // nativeGate); they may all arrive within one controlled frame. assertAdmissionOrdering
+            // checks every observed point before admission is unready instead.
             frame()
-            assertUnready("First unready-reopen frame")
             frame()
             awaitReady(reopenedWindow)
             assertAdmissionOrdering(reopenedWindow, mounts.last())
@@ -852,12 +863,12 @@ class GlassMorphTest {
             assertNotSame("Canceled readiness cannot be reused", firstWindow, replacement)
             assertEquals(3, mounts.size)
             assertSame(replacement, mounts.last().window)
-            assertUnready("Replacement native mount")
+            // The mount record is the unready sample; a live read after awaitWindow may follow
+            // receipts that already arrived on the looper.
             assertFalse("Disposed readiness cannot hide a newly mounted trigger", mounts.last().hidden)
             assertFalse(mounts.last().shadowOwned)
             assertEquals(0f, mounts.last().expansion, 0f)
             frame()
-            assertUnready("First replacement preparation frame")
             frame()
             awaitReady(replacement)
             assertAdmissionOrdering(replacement, mounts.last())
