@@ -16,7 +16,7 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     val quietContent=Curve.window(0f,.25f)
     val foreground=Curve.window(.18f,.83f)
     /** Detached Pages and anchorless dialogs fade their layer late in the same phase, following v0.33's perceived fade. */
-    val detachedOpacity=Curve.window(0f,.6f)
+    val detachedOpacity=Curve.window(0f,.5f)
     val homeWeight=Curve.constant(1f)+Curve.window(0f,.5f).scaled(-1f)
     val face=Curve.linear(1f,1f-1f/.55f)
     val preparationCurve = Curve.window(0f, .25f).scaled(.68359375f) +

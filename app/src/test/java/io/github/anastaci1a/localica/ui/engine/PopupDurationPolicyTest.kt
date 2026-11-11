@@ -191,7 +191,7 @@ class PopupDurationPolicyTest {
         for (i in 0..1000) {
             val p = i / 1000f; val value = opacity.at(p)
             assertTrue("monotone at $p", value >= previous); previous = value
-            if (p >= .6f) assertEquals("opaque from .6 at $p", 1f, value, 0f) else if (p > 0f) assertTrue("fading below .6 at $p", value > 0f && value < 1f)
+            if (p >= .5f) assertEquals("opaque from .5 at $p", 1f, value, 0f) else if (p > 0f) assertTrue("fading below .5 at $p", value > 0f && value < 1f)
         }
         // The actual Page close: opacity starts at exactly 1, never rises and reaches exactly 0 when the phase rests.
         val page = Rect(0f, 0f, 1080f, 1920f)
