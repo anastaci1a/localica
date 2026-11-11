@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.WindowInfo
@@ -334,20 +335,37 @@ class CollapsedPlayerCollectionNavigationTest {
                 // Raw bounds are also exported unchanged, with every Float bit retained below.
                 val frameworkClick = searchBounds.topLeft + Offset(searchBounds.width.roundToInt() / 2f,
                     searchBounds.height.roundToInt() / 2f)
+                // Use the largest exposed rectangle of the pill, preserving real touch routing.
+                val exposed = listOf(
+                    Rect(searchBounds.left, searchBounds.top, searchBounds.right,
+                        playerBounds.top.coerceIn(searchBounds.top, searchBounds.bottom)),
+                    Rect(searchBounds.left, playerBounds.bottom.coerceIn(searchBounds.top, searchBounds.bottom),
+                        searchBounds.right, searchBounds.bottom),
+                    Rect(searchBounds.left, searchBounds.top,
+                        playerBounds.left.coerceIn(searchBounds.left, searchBounds.right), searchBounds.bottom),
+                    Rect(playerBounds.right.coerceIn(searchBounds.left, searchBounds.right), searchBounds.top,
+                        searchBounds.right, searchBounds.bottom)
+                ).filter { it.width > 0f && it.height > 0f }
+                    .maxByOrNull { it.width * it.height }
+                val clickPoint = checkNotNull(exposed) { "The Search pill must have an exposed touch point" }.center
+                assertTrue("The Search touch must stay inside the pill", searchBounds.contains(clickPoint))
+                assertFalse("The Search pill touch must not be covered by the collapsed player",
+                    playerBounds.contains(clickPoint))
                 val geometry = listOf(searchBounds.left, searchBounds.top, searchBounds.right, searchBounds.bottom,
                     playerBounds.left, playerBounds.top, playerBounds.right, playerBounds.bottom,
                     searchBounds.center.x, searchBounds.center.y,
                     searchNode.positionInRoot.x, searchNode.positionInRoot.y,
                     playerNode.positionInRoot.x, playerNode.positionInRoot.y,
-                    frameworkClick.x, frameworkClick.y)
+                    frameworkClick.x, frameworkClick.y, clickPoint.x, clickPoint.y)
                 records.appendText("search-geometry\t${compose.mainClock.currentTime}\t" +
                     geometry.flatMap { listOf(it.toString(), it.toRawBits().toString()) }.joinToString("\t") +
                     "\tsemantic-center-inside-player=${playerBounds.contains(searchBounds.center)}" +
-                    "\tframework-click-inside-player=${playerBounds.contains(frameworkClick)}\n")
+                    "\tframework-click-inside-player=${playerBounds.contains(frameworkClick)}" +
+                    "\tactual-click-inside-player=${playerBounds.contains(clickPoint)}\n")
                 val beforeClick = compose.runOnIdle { searchSnapshot() }
                 records.appendText("search-before\t$beforeClick\n")
                 recordAction(input)
-                search.performClick()
+                search.performTouchInput { click(clickPoint - searchBounds.topLeft) }
                 repeat(6) {
                     compose.mainClock.advanceTimeByFrame()
                     var observed: SearchFrameRecord? = null
