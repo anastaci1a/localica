@@ -93,6 +93,7 @@ io.github.anastaci1a.localica.GalleryNavigationTest
 io.github.anastaci1a.localica.GallerySkeletonGeometryTest
 io.github.anastaci1a.localica.GlassActionRowTest
 io.github.anastaci1a.localica.GlassAppearanceTest
+io.github.anastaci1a.localica.GlassDialogDepartureFrameTest
 io.github.anastaci1a.localica.GlassDialogLateReopenTest
 io.github.anastaci1a.localica.GlassDialogReopenTest
 io.github.anastaci1a.localica.GlassDialogsTest

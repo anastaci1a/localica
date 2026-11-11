@@ -32,7 +32,7 @@ internal fun currentGlassDialogAppearance(): GlassDialogAppearance {
 
 /** Retain closing dialogs even when their conditional caller has left composition. */
 @Stable
-internal class GlassDialogs {
+internal class GlassDialogs(val composer: Composer? = null) {
     val entries = mutableStateListOf<GlassDialogEntry>()
     var backdrop by mutableStateOf<FrostedBackdrop?>(null)
 }
@@ -41,6 +41,12 @@ internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLoca
     dismiss: () -> Unit, dark: Boolean, val placement: GlassPlacement,
     val heightSizing: GlassDialogHeight, content: @Composable () -> Unit) {
     var mounted by mutableStateOf(true)
+    /** A committed dismissal its caller has not yet withdrawn by composing the dialog again. */
+    var dismissing by mutableStateOf(false)
+    /** The caller composes ahead of its window, in the host's own composition. */
+    var precedesWindow = false
+    /** The window departs in the frame that removes its caller, not one frame later at disposal. */
+    val present get() = mounted && !dismissing
     var locals by mutableStateOf(locals)
     var dismiss by mutableStateOf(dismiss)
     var dark by mutableStateOf(dark)
@@ -48,17 +54,35 @@ internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLoca
     var fitContent by mutableStateOf(false)
     var appearance by mutableStateOf<GlassDialogAppearance?>(null)
     var popupHome by mutableStateOf<GlassPopupHome?>(null)
+
+    /** The window's dismissal commit. A preceding caller that honours it has left composition
+     * before its window composes that frame; one that keeps the dialog withdraws the departure
+     * first. Any other caller departs once its disposal is applied, as before. */
+    fun requestDismiss() {
+        if (!mounted) return
+        dismiss()
+        if (precedesWindow) dismissing = true
+    }
 }
 
 internal val LocalGlassDialogs = staticCompositionLocalOf<GlassDialogs?> { null }
+private val LocalGlassDialogWindow = staticCompositionLocalOf { false }
 internal val LocalGlassOrigin = compositionLocalOf<GlassAnchor?> { null }
 /** A persistent collection popup can replace its contents without opening a second window. */
 internal val LocalInlineGlassDialog = compositionLocalOf { false }
 
 @Composable
-internal fun GlassDialogHost(content: @Composable () -> Unit) {
+internal fun GlassDialogHost(content: @Composable () -> Unit) = GlassDialogHost(content) { entry ->
+    GlassMorphPopup(entry.present, entry.anchor, entry::requestDismiss,
+        entry.placement, darkOverride = entry.dark, fitContent = entry.fitContent,
+        heightSizing = entry.heightSizing, content = entry.content)
+}
+
+@Composable
+internal fun GlassDialogHost(content: @Composable () -> Unit, window: @Composable (GlassDialogEntry) -> Unit) {
     if (LocalGlassDialogs.current != null) { content(); return }
-    val host = remember { GlassDialogs() }
+    val composer = currentComposer
+    val host = remember { GlassDialogs(composer) }
     CompositionLocalProvider(LocalGlassDialogs provides host) {
         content()
         host.entries.toList().forEach { entry -> key(entry) {
@@ -67,10 +91,8 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
             CompositionLocalProvider(entry.locals) {
                 CompositionLocalProvider(LocalModalBackdrop provides
                     (entry.appearance?.backdrop ?: LocalModalBackdrop.current),
-                    LocalGlassPopupHome provides entry.popupHome) {
-                    GlassMorphPopup(entry.mounted, entry.anchor, { if (entry.mounted) entry.dismiss() },
-                        entry.placement, darkOverride = entry.dark, fitContent = entry.fitContent,
-                        heightSizing = entry.heightSizing, content = entry.content)
+                    LocalGlassPopupHome provides entry.popupHome, LocalGlassDialogWindow provides true) {
+                    window(entry)
                 }
             }
             LaunchedEffect(entry.mounted, entry.anchor.modalPresent) {
@@ -115,7 +137,11 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
         returning ?: GlassDialogEntry(origin, locals, onDismiss, dark, placement, heightSizing, resolvedContent)
     }
     require(entry.heightSizing == heightSizing) { "Height sizing is fixed for a dialog presentation" }
+    // Composing after a dismissal commit means the caller kept, or reclaimed, this dialog.
+    if (entry.dismissing) entry.dismissing = false
+    val precedesWindow = currentComposer === host.composer && !LocalGlassDialogWindow.current
     SideEffect {
+        entry.precedesWindow = precedesWindow
         if (trigger == null) origin.ink = ink
         if (origin.source == null) origin.source = source
         entry.locals = locals; entry.dismiss = onDismiss; entry.dark = dark
