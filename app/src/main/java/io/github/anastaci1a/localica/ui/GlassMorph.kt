@@ -510,7 +510,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     // Keep one frame in which the restored trigger is drawn while this modal
                     // still owns the window, so a reopen there reclaims the same dialog (#858).
                     // The modal draws no body (#847 skip) and no field (home owns it) here.
-                    if (anchor.triggerMounted) {
+                    // Only a trigger that presented its receipt has such a frame; an undrawn
+                    // origin retires at the #836 six-frame deadline without another frame.
+                    if (anchor.triggerMounted && anchor.restoredPresentedReceipt == receipt) {
                         awaitReturnedPresentation()
                         if (!gateCurrent()) continue@gateLoop
                     }
