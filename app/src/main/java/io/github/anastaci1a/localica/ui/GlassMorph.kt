@@ -342,7 +342,17 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     SideEffect { searchMotion.observer = searchObserver }
     var searchTransitioning by remember { mutableStateOf(false) }
     var searchReturning by remember { mutableStateOf(false) }
-    SideEffect { if (visible || childHome.handedOff) motion.show(visible) }
+    val departingHold = !visible && popupHome?.departing == true && popupHome.mounted
+    SideEffect {
+        motion.updateSpeed(speed)
+        if (departingHold) {
+            motion.hold()
+            motion.show(false)
+        } else {
+            motion.release()
+            if (visible || childHome.handedOff) motion.show(visible)
+        }
+    }
     var searchFlight by remember { mutableStateOf<SearchMorphFlight?>(null) }
     var searchTarget by remember { mutableStateOf(Rect.Zero) }
     var searchFocusRequest by remember { mutableStateOf<Boolean?>(null) }
@@ -422,14 +432,18 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         if (!visible) snapshotFlow { childHome.handedOff }.first { it }
         motion.show(visible)
         snapshotFlow { motion.bounds != null }.first { it }
-        while (true) {
+        gateLoop@ while (true) {
             snapshotFlow { motion.expansion.awaitingNativeGate || motion.expansion.retirementReady }.first { it }
             if (motion.expansion.awaitingNativeGate) {
                 val generation = motion.expansion.nativeGeneration
+                val opening = requireNotNull(motion.expansion.nativeOpening)
+                suspend fun gateCurrent() = motion.expansion.awaitNativeGate(generation, opening)
                 if (motion.expansion.nativeOpening == true && visible) {
                     continuousOrigin?.beginOriginProof(generation)
                     snapshotFlow { modalWindow != null && measuredOriginWindow === modalWindow }.first { it }
+                    if (!gateCurrent()) continue@gateLoop
                     continuousOrigin?.awaitDrawn()
+                    if (!gateCurrent()) continue@gateLoop
                     val window = requireNotNull(modalWindow)
                     val plane = requireNotNull(nativePlane)
                     val node = requireNotNull(nativeNode)
@@ -442,6 +456,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     node.transferWindow(plane)
                     window.decorView.invalidate()
                     snapshotFlow { node.ownsWindow(plane) }.first { it }
+                    if (!gateCurrent()) continue@gateLoop
                     originFootprint = anchor.samplingFootprint()
                     measuredHome = anchor.samplingLocation.coordinates?.isAttached == true
                     source?.refresh()
@@ -456,7 +471,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         window.glassInput(true); gestures.activate()
                     }
                 } else if (motion.expansion.nativeOpening == false) {
-                    fun closingGateCurrent() = motion.expansion.nativeGeneration == generation && motion.expansion.nativeOpening == false
                     modalWindow?.glassInput(false)
                     gestures.deactivate()
                     continuousOrigin?.beginOriginProof(generation)
@@ -466,24 +480,31 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     anchor.hidden = false
                     awaitTriggerReturn {
                         snapshotFlow { !anchor.triggerMounted || anchor.restoredPresentedReceipt == receipt }.first { it }
+                        if (!gateCurrent()) return@awaitTriggerReturn
                         continuousOrigin?.awaitDrawn { anchor.triggerMounted }
+                        if (!gateCurrent()) return@awaitTriggerReturn
                         val node=leasedNode
                         if (node!=null) while (anchor.triggerMounted) {
-                            if (!closingGateCurrent()) return@awaitTriggerReturn
+                            if (!gateCurrent()) return@awaitTriggerReturn
                             val home=node.returnPlane() ?: break
                             node.transferWindow(home)
                             home.view?.invalidate()
                             snapshotFlow { !anchor.triggerMounted || node.ownsWindow(home) || node.returnPlane()!==home }.first { it }
-                            if (!closingGateCurrent()) return@awaitTriggerReturn
-                            if (node.ownsWindow(home) && node.awaitWindowField(home)) break
+                            if (!gateCurrent()) return@awaitTriggerReturn
+                            if (node.ownsWindow(home)) {
+                                val fieldReady = node.awaitWindowField(home)
+                                if (!gateCurrent()) return@awaitTriggerReturn
+                                if (fieldReady) break
+                            }
                         }
                     }
-                    if (!closingGateCurrent()) return@LaunchedEffect
+                    if (!gateCurrent()) continue@gateLoop
                     originAdmitted = false
                     sharedContent?.releaseNative()
                     anchor.modalPresent = false; anchor.contact.modal = false
                     anchor.shadowInModal = false
                 }
+                if (!gateCurrent()) continue@gateLoop
                 motion.expansion.acknowledgeNativeGate(generation)
             } else {
                 if (!visible) {
@@ -954,7 +975,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (!holdImeBack && !(placement == GlassPlacement.Search && visible && searchReturning) &&
                             (placement != GlassPlacement.Search || childPanels.intValue == 0 &&
                             (imeSettled || imeHeight > 0 && imeTarget > 0 || searchTransitioning))) {
-                            motion.place(home, envelope, density.density)
+                            motion.place(home, envelope, density.density, detached = detached)
                             if (placement == GlassPlacement.Search) {
                                 if (visible) { searchShapeStarted=true; searchOpeningPositioned=true }
                                 val rect=requireNotNull(motion.bounds)

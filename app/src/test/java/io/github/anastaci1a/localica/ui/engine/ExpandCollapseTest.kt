@@ -160,6 +160,27 @@ class ExpandCollapseTest {
             assertThrows(IllegalStateException::class.java) { c.dispose() }
         }
     }
+    @Test fun durationTravelTimesThePhaseOnlyAndLocalSpeedReplacesTheRootFactorOnce() {
+        val domain=(uiSpec(io.github.anastaci1a.localica.navigation.InterfaceSettings(),null,ExpansionGeometryDomain(1000f,3000f,1f/60)) as SpecResult.Accepted).spec
+        fun phases(access: MotionAccess,speed: Float?,basis: ExpansionBasis,bind: Boolean=false)=EngineHarness(access,domain).use { h ->
+            val c=ExpandCollapse(h.clock,domain.expansion,false); c.setBasis(basis)
+            val rect=if(bind) MotionRect(h.clock,basis.startBounds,EdgeRanges(3000f,3000f,3000f,3000f)).also { c.bind(it) } else null
+            speed?.let(c::updateSpeed); c.target(true)
+            val samples=List(40) { h.advance(1.0/120); c.phase.valueAt(h.clock.stampNow) to rect?.valueAt(h.clock.stampNow) }
+            h.advance(2.0); assertTrue(c.phase.settled); val end=rect?.valueAt(h.clock.stampNow); c.dispose(); assertEquals(0,h.clock.activeCount); samples to end
+        }
+        val envelope=Rect(0f,0f,1000f,1000f); val parallax=ExpansionBasis(envelope.translate(28f,0f),envelope,1f,1000f)
+        assertEquals(28f,parallax.edgeTravelPx,0f)
+        // A 28 px slide timed by its 1000 px presented extent follows the same phase as a real 1000 px edge.
+        val real=phases(MotionAccess.Standard,4f/3f,ExpansionBasis(Rect(0f,0f,1000f,0f),Rect(0f,0f,1000f,1000f),1f),bind=true)
+        val (slide,end)=phases(MotionAccess.Standard,4f/3f,parallax,bind=true)
+        assertEquals(real.first.map { it.first },slide.map { it.first }); assertEquals(envelope,end)
+        slide.forEach { (p,r) -> assertTrue(r!!.left in 0f..28f && r.width==1000f && p in 0f..1f) }
+        // Local speed is the whole time scale: the Faster root adds nothing, and 1.5 equals the old Faster root.
+        assertEquals(phases(MotionAccess.Standard,1.5f,parallax).first,phases(MotionAccess.Faster,1.5f,parallax).first)
+        assertEquals(phases(MotionAccess.Faster,null,parallax).first,phases(MotionAccess.Standard,1.5f,parallax).first)
+        assertNotEquals(phases(MotionAccess.Standard,2f,parallax).first,phases(MotionAccess.Standard,1.5f,parallax).first)
+    }
     @Test fun cancellationAndReducedExitClearContactWithoutLateInputResurrection() {
         EngineHarness().use { h ->
             val c=ExpandCollapse(h.clock,StockUiSpec.expansion,false); c.setBasis(basis()); c.contactBegin(h.clock.stampNow)
