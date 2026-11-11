@@ -568,7 +568,9 @@ class GlassMorphTest {
     @Test fun oneSurfaceExpandsFromTheTriggerAndReturnsBeforeRestoringIt() {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
+        lateinit var sampleClock: UiClock
         compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+            sampleClock = LocalUiClock.current
             anchor = rememberGlassAnchor()
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(0xFFB4D8C8)) }
@@ -586,6 +588,14 @@ class GlassMorphTest {
         } } }
         assertNotNull("Direct surfaces must carry their backing into the returning morph", anchor.source)
         val start = compose.onNodeWithTag("trigger").fetchSemanticsNode().boundsInRoot
+        fun logGeometry(sample: String, width: Float) {
+            val phase = compose.runOnUiThread {
+                var value = 0f
+                sampleClock.observe { value = anchor.contact.expansion.value }
+                value
+            }
+            android.util.Log.i("GlassMorphProbe", "geometry sample=$sample clock=${compose.mainClock.currentTime} width=$width phase=$phase")
+        }
         compose.mainClock.autoAdvance = false
         try {
             val openingStart = compose.mainClock.currentTime
@@ -605,10 +615,12 @@ class GlassMorphTest {
             if (registrationElapsed < 176) compose.mainClock.advanceTimeBy(176 - registrationElapsed)
             compose.waitForIdle()
             val middle = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
+            logGeometry("middle", middle.width)
             assertTrue("The original trigger is hidden throughout the morph", anchor.hidden)
             assertTrue("The original circle grows into the menu", middle.width > start.width)
             compose.mainClock.advanceTimeBy(1000)
             val expanded = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
+            logGeometry("expanded", expanded.width)
             assertTrue("Opening passes through an intermediate width", expanded.width > middle.width)
             compose.onNodeWithText("Create playlist").assertIsDisplayed()
             compose.runOnIdle { open = false }
