@@ -464,17 +464,19 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     val receipt = ++anchor.restoredDrawRequest
                     sharedContent?.restoreInstance()
                     anchor.hidden = false
-                    snapshotFlow { !anchor.triggerMounted || anchor.restoredPresentedReceipt == receipt }.first { it }
-                    continuousOrigin?.awaitDrawn { anchor.triggerMounted }
-                    val node=leasedNode
-                    if (node!=null) while (anchor.triggerMounted) {
-                        if (!closingGateCurrent()) return@LaunchedEffect
-                        val home=node.returnPlane() ?: break
-                        node.transferWindow(home)
-                        home.view?.invalidate()
-                        snapshotFlow { !anchor.triggerMounted || node.ownsWindow(home) || node.returnPlane()!==home }.first { it }
-                        if (!closingGateCurrent()) return@LaunchedEffect
-                        if (node.ownsWindow(home) && node.awaitWindowField(home)) break
+                    awaitTriggerReturn {
+                        snapshotFlow { !anchor.triggerMounted || anchor.restoredPresentedReceipt == receipt }.first { it }
+                        continuousOrigin?.awaitDrawn { anchor.triggerMounted }
+                        val node=leasedNode
+                        if (node!=null) while (anchor.triggerMounted) {
+                            if (!closingGateCurrent()) return@awaitTriggerReturn
+                            val home=node.returnPlane() ?: break
+                            node.transferWindow(home)
+                            home.view?.invalidate()
+                            snapshotFlow { !anchor.triggerMounted || node.ownsWindow(home) || node.returnPlane()!==home }.first { it }
+                            if (!closingGateCurrent()) return@awaitTriggerReturn
+                            if (node.ownsWindow(home) && node.awaitWindowField(home)) break
+                        }
                     }
                     if (!closingGateCurrent()) return@LaunchedEffect
                     originAdmitted = false

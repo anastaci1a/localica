@@ -9,6 +9,10 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalView
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.flow.first
 
 /** The canonical field is projected into physical host coordinates. Shared source
@@ -76,6 +80,23 @@ internal fun SurfaceView.followWindow(motion: PopupWindowMotion)=(this as Surfac
 internal fun SurfaceView.transferWindow(plane: ShadowPlane)=(this as SurfaceNode).transfer(plane,motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
 internal fun SurfaceView.ownsWindow(plane: ShadowPlane)=(this as SurfaceNode).owns(plane)
 internal fun SurfaceView.returnPlane()=(this as SurfaceNode).sourceReturnPlane
+/** A retained but undrawn origin cannot acknowledge restoration. Keep the native
+ * receipts on the normal path, but retire after the base's six-frame allowance.
+ * Bound the field return too: a hidden home cannot submit its owned field. */
+internal suspend fun awaitTriggerReturn(returnHome: suspend () -> Unit) = coroutineScope {
+    val returned = async(start = CoroutineStart.UNDISPATCHED) { returnHome() }
+    val deadline = async { repeat(6) { withFrameNanos { } } }
+    try {
+        select<Unit> {
+            returned.onAwait { }
+            deadline.onAwait { }
+        }
+    } finally {
+        returned.cancel()
+        deadline.cancel()
+    }
+}
+
 /** The destination must submit its owned field after transfer, before the native host is released. */
 internal suspend fun SurfaceView.awaitWindowField(plane: ShadowPlane): Boolean {
     val node=this as SurfaceNode

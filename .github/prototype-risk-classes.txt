@@ -519,3 +519,4 @@ io.github.anastaci1a.localica.LastFmCachedOpenTest
 io.github.anastaci1a.localica.LastFmPreparationThreadTest
 io.github.anastaci1a.localica.LastFmScrollStressTest
 io.github.anastaci1a.localica.LastFmArchivePullTest
+io.github.anastaci1a.localica.PopupRetainedTriggerRetirementTest
