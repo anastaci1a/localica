@@ -72,7 +72,7 @@ class ScrollbarRootReductionTest {
                 DisposableEffect(rail) { onDispose { rail.dispose() } }
                 Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
                     Box(Modifier.size(120.dp, 200.dp).background(Color.White).testTag("root-reduction-rail")) {
-                        Box(Modifier.scrollbarPresentation(rail, { 40f + rail.releaseOffset() * 100f }, true)
+                        Box(Modifier.scrollbarPresentation(rail, { 40f + rail.releaseOffset() * 100f })
                             .size(8.dp, 40.dp).background(Color.Green))
                     }
                 }
