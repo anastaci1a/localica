@@ -2,10 +2,10 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
@@ -36,7 +36,9 @@ import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.library.ArtworkCache
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.lyrics.*
+import io.github.anastaci1a.localica.ui.components.rememberProfileValue
 import io.github.anastaci1a.localica.ui.spec.LyricsLineSpec
+import io.github.anastaci1a.localica.ui.spec.MotionProfile
 
 @Composable
 internal fun rememberLyrics(track: Track?): LyricsResult? {
@@ -232,10 +234,10 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                             // Only the emphasis is per-line state. The ink is the shared theme value of this
                             // composition, so every line follows the lyrics theme ease together and a line
                             // composed mid-ease is the same colour as its neighbours (#564).
-                            val emphasis by animateFloatAsState(if (selected) 1f else 0f,
-                                tween(if (reducedMotion) 0 else 350), label = "Lyric emphasis")
-                            Text(line.text.ifEmpty { LyricPlaceholder }, color = androidx.compose.ui.graphics.lerp(inactiveInk, selectedInk, emphasis),
-                                style = lyricStyle, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            // The emphasis is read only while drawing, so its ease never recomposes the row.
+                            val emphasis = rememberProfileValue("lyric-emphasis" to index, if (selected) 1f else 0f, MotionProfile.LyricEmphasis)
+                            BasicText(line.text.ifEmpty { LyricPlaceholder }, color = { androidx.compose.ui.graphics.lerp(inactiveInk, selectedInk, emphasis.value()) },
+                                style = lyricStyle.merge(TextStyle(fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)),
                                 modifier = Modifier.fillMaxWidth().semantics { this.selected = document.synced && index == active }
                                     .then(if (line.timeMs != null) Modifier.clickable(interactionSource = null, indication = null,
                                         onClickLabel = "Seek to lyric") { onSeek(line.timeMs); following = true } else Modifier)
