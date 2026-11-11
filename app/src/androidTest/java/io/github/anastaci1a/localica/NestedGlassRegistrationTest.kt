@@ -410,10 +410,24 @@ class NestedGlassRegistrationTest {
                 android.util.Log.i("MorphHomeFootprint", "$label API26 producer/anchor/window evidence only; no averaged-home or pixel-consumption claim")
             }
         }
+        // The home weight 1 - window(0, .5) of the phase is positive only below .5, so each phase is reached by stepping the
+        // active law one frame at a time, never by a budget tuned to one law (#854's open law passes .5 at ~53 ms).
+        fun admitted() = popupView?.let { it.isAttachedToWindow && it.isLaidOut && it.hasWindowFocus() } == true &&
+            anchor.modalPresent && anchor.hidden && anchor.shadowInModal
+        fun stepUntilHomeWeighted(label: String, opening: Boolean) {
+            var frames = 0
+            do {
+                compose.advanceMorphOpening(1, anchor) { popupView }; frames++
+                val (ready, value) = compose.runOnIdle { (!opening || admitted()) to expansionOwner.value }
+                assertTrue("$label: the law reached .5 before native admission ($value after $frames frames)", ready || value < .5f)
+                assertTrue("$label within 2 s", frames < 120)
+            } while (!(ready && value > 0f && value < .5f))
+            android.util.Log.i("MorphHomeFootprint", "$label home weighted after $frames frames at ${compose.runOnIdle { expansionOwner.value }}")
+        }
         compose.mainClock.autoAdvance = false
         try {
             compose.runOnIdle { open = true }
-            compose.advanceMorphOpening(128, anchor) { popupView }
+            stepUntilHomeWeighted("opening", opening = true)
             compose.runOnIdle {
                 val view = requireNotNull(popupView)
                 assertTrue("Actual native popup owns a ready window", view.isAttachedToWindow && view.isLaidOut && view.hasWindowFocus())
@@ -423,16 +437,15 @@ class NestedGlassRegistrationTest {
             val window = requireNotNull(popupView)
             verifyDraws("opening", opening = true)
             compose.runOnIdle { phase = "opening-moved"; fitX = .55f; fitY = .3f; left = 90.dp; top = 100.dp }
-            repeat(2) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
             val moved = producerFootprint("opening-moved")
             assertNotEquals("Live trigger genuinely moved after opening capture", openingCorners, moved)
             verifyDraws("opening-moved", opening = true)
             compose.runOnIdle { phase = "return"; open = false }
-            compose.mainClock.advanceTimeBy(80)
-            compose.waitForIdle()
+            stepUntilHomeWeighted("return", opening = false)
             verifyDraws("return", opening = false)
             compose.runOnIdle { phase = "return-moved"; fitX = .35f; fitY = .6f; left = 120.dp; top = 85.dp }
-            repeat(2) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
             val returned = producerFootprint("return-moved")
             assertNotEquals("Return must follow another genuine trigger basis", moved, returned)
             verifyDraws("return-moved", opening = false)

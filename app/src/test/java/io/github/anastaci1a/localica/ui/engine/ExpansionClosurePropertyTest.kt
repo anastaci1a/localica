@@ -24,8 +24,8 @@ class ExpansionClosurePropertyTest {
                 val candidate=StockUiSpec.expansion.copy(core=core,band=band,referenceDurationMs=(16+r.nextInt(1985)).toFloat(),floorMs=(16+r.nextInt(1985)).toFloat(),positionFloor=.001f+r.nextFloat()*.999f,velocityKnee=.001f+r.nextFloat()*20,velocityExponent=.01f+r.nextFloat()*4,sizeExponent=.01f+r.nextFloat()*5,deadBand=r.nextFloat(),stationaryOpenAt=r.nextFloat())
                 val result=uiSpec(InterfaceSettings(),UiSpecData(expansion=candidate),ExpansionGeometryDomain(1f,200f,1f/60))
                 if(result !is SpecResult.Accepted) continue
-                val spec=result.spec.expansion; val hz=listOf(60,90,120)[accepted%3]; val access=if(accepted%2==0) MotionAccess.Standard else MotionAccess.Faster
-                h.clock.configure(EngineContext(1f/hz,1f,access),StockUiSpec)
+                val spec=result.spec.expansion; val hz=listOf(60,90,120)[accepted%3]; val speed=if(accepted%2==0) 1f else 1.5f
+                h.clock.configure(EngineContext(1f/hz,1f,MotionAccess.Standard,speed=speed),StockUiSpec)
                 val c=ExpandCollapse(h.clock,spec,r.nextBoolean(),"closure$accepted")
                 c.setBasis(ExpansionBasis(Rect(0f,0f,100f,100f),Rect(1f,0f,100f,100f),1f))
                 repeat(8) { cycle ->
@@ -66,7 +66,7 @@ class ExpansionClosurePropertyTest {
         var holds=0
         EngineHarness(spec=spec).use { h ->
             repeat(20000) { chain ->
-                h.clock.configure(EngineContext(1f/listOf(60,90,120)[chain%3],1000f,if(chain%2==0) MotionAccess.Standard else MotionAccess.Faster),spec)
+                h.clock.configure(EngineContext(1f/listOf(60,90,120)[chain%3],1000f,MotionAccess.Standard,speed=if(chain%2==0) 1f else 1.5f),spec)
                 val c=ExpandCollapse(h.clock,spec.expansion,r.nextBoolean(),"held$chain"); var latest=basis(); c.setBasis(latest)
                 val rect=MotionRect(h.clock,latest.startBounds,EdgeRanges(3000f,3000f,3000f,3000f)); c.bind(rect)
                 c.updateSpeed(.25f+r.nextFloat()*3.75f); c.target(!c.expanded)

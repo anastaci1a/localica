@@ -60,7 +60,7 @@ class LocalicaUiRootLifetimeTest {
         output.mkdirs()
         val witness = File(output, "records.tsv")
         witness.writeText("source\taccess\twidth\theight\tdensity\tnavigationInsetDp\tcontextTravel\texpectedTravel\tedgeIndex\tdiagonal\n")
-        fun checkRecord(access: MotionAccess) {
+        fun checkRecord(access: MotionAccess, speed: Float = 1f) {
             compose.onNodeWithText("Sibling root witness").assertIsDisplayed()
             val row = compose.runOnIdle {
                 val s = checkNotNull(screen); val d = checkNotNull(dialog)
@@ -69,6 +69,7 @@ class LocalicaUiRootLifetimeTest {
                 assertEquals(IntSize(width, height), root.size)
                 assertEquals(root.size, s.window); assertEquals(s.window, d.window)
                 assertEquals(access, s.context.access); assertEquals(access, s.spec.spec.access)
+                assertEquals(speed, s.context.speed, 0f); assertEquals(speed, s.spec.spec.speed, 0f)
                 val basis = playerBasis(s.density, root.size, s.navigationInset,
                     StockUiSpec.clearance.getValue(Clearance.BottomChrome))
                 val travel = basis.edgeTravelPx
@@ -85,8 +86,8 @@ class LocalicaUiRootLifetimeTest {
         }
         checkRecord(MotionAccess.Standard)
         val initial = checkNotNull(screen)
-        compose.runOnIdle { root.settings.value = root.settings.value.copy(fasterMotion = true) }
-        checkRecord(MotionAccess.Faster)
+        compose.runOnIdle { root.settings.value = root.settings.value.copy(animationSpeedTenths = 15) }
+        checkRecord(MotionAccess.Standard, 1.5f)
         compose.runOnIdle { assertNotSame(initial.spec, screen!!.spec) }
         val faster = checkNotNull(screen)
         val resized = IntSize(320, 560)
@@ -95,12 +96,12 @@ class LocalicaUiRootLifetimeTest {
         assertNotEquals("The resize fixture must change the dominant-edge reference under the existing law",
             faster.context.fullPlayerReferenceTravelPx, expectedResizedTravel)
         compose.runOnIdle { width = resized.width; height = resized.height }
-        checkRecord(MotionAccess.Faster)
+        checkRecord(MotionAccess.Standard, 1.5f)
         compose.runOnIdle {
             assertNotSame(faster.spec, screen!!.spec)
             assertNotEquals(faster.context.fullPlayerReferenceTravelPx, screen!!.context.fullPlayerReferenceTravelPx)
             root.settings.value = root.settings.value.copy(reducedMotion = true)
         }
-        checkRecord(MotionAccess.Reduced)
+        checkRecord(MotionAccess.Reduced, 1.5f)
     }
 }
