@@ -60,7 +60,7 @@ Action-menu width fits measured labels, icons and padding within the screen. Ret
 
 Popups belong to their opening screen. When that screen departs, each popup holds its current geometry and foreground while the screen supplies movement, fade and clip. After screen disposal, the same popup owner resumes its return and retires through native receipts. Reopening resumes that owner. The destination never inherits an independently floating popup.
 
-Popup expansion and return honor the local animation speed once. Pages and anchorless dialogs derive duration from their measured presented extent; the short parallax offset controls geometry only. Changes in speed or measured extent preserve the current position and velocity. Reduced Motion still waits for required native ownership receipts.
+Popup expansion and return honor the local animation speed once, relative to the app default speed. Pages and anchorless dialogs derive duration from their measured presented extent; the short parallax offset controls geometry only. Changes in speed or measured extent preserve the current position and velocity. Reduced Motion still waits for required native ownership receipts.
 
 Corner tokens: small art 8 dp, cards 16, inputs/menus 20, large art 24, panels 28. Compact shelves/chips use pills. Transport uses circles. Icons start at 24 dp with a unified icon/label/surface target of at least 48 dp. Clip feedback to that shape.
 

@@ -176,10 +176,10 @@ class ExpandCollapseTest {
         val (slide,end)=phases(MotionAccess.Standard,4f/3f,parallax,bind=true)
         assertEquals(real.first.map { it.first },slide.map { it.first }); assertEquals(envelope,end)
         slide.forEach { (p,r) -> assertTrue(r!!.left in 0f..28f && r.width==1000f && p in 0f..1f) }
-        // Local speed is the whole time scale: the Faster root adds nothing, and 1.5 equals the old Faster root.
+        // Local speed is the whole time scale: the Faster root adds nothing, and speed 2 equals the old Faster root.
         assertEquals(phases(MotionAccess.Standard,1.5f,parallax).first,phases(MotionAccess.Faster,1.5f,parallax).first)
-        assertEquals(phases(MotionAccess.Faster,null,parallax).first,phases(MotionAccess.Standard,1.5f,parallax).first)
-        assertNotEquals(phases(MotionAccess.Standard,2f,parallax).first,phases(MotionAccess.Standard,1.5f,parallax).first)
+        assertEquals(phases(MotionAccess.Faster,null,parallax).first,phases(MotionAccess.Standard,2f,parallax).first)
+        assertNotEquals(phases(MotionAccess.Standard,2f,parallax).first,phases(MotionAccess.Standard,4f/3f,parallax).first)
     }
     @Test fun cancellationAndReducedExitClearContactWithoutLateInputResurrection() {
         EngineHarness().use { h ->

@@ -69,7 +69,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: EasingSpec,T: Double,sigma: Dou
     internal fun updateSpec(value: ExpansionSpec) { clock.checkMutation(); require(value.band>=MinimumContactBand); spec=value }
     internal fun updateSpeed(speed: Float) {
         val stamp=clock.stampNow; guard(stamp); require(speed.isFinite() && speed>0f)
-        val scale=1.0/speed.toDouble()
+        // The qualified law describes the app's default speed 4/3; only other local speeds move it.
+        val scale=(4.0/3)/speed.toDouble()
         if(localTimeScale==scale) return
         val old=localTimeScale
         localTimeScale=scale
