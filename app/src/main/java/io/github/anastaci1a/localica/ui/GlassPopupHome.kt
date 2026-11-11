@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.first
 internal class GlassPopupHome(private val leaving: State<Boolean>) {
     val departing get() = leaving.value
     var mounted by mutableStateOf(true)
+    /** A projection host never leaves; its returning popups keep their own motion (#667). */
+    var holdsDepartingPopups = true
     var backdrop by mutableStateOf<FrostedBackdrop?>(null)
     val flights = mutableStateListOf<GlassPopupFlight>()
     val children = mutableStateListOf<GlassPopupHome>()
@@ -119,7 +121,10 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome) {
 @Composable
 internal fun Modifier.glassPopupProjection(home: GlassPopupHome, source: FrostedBackdrop): Modifier {
     val view = LocalView.current
-    SideEffect { home.backdrop = source }
+    SideEffect {
+        home.backdrop = source
+        home.holdsDepartingPopups = false
+    }
     DisposableEffect(home, source) {
         home.mounted = true
         onDispose { home.mounted = false; home.backdrop = null }
