@@ -9,13 +9,14 @@ import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import io.github.anastaci1a.localica.ui.spec.ScrollbarSpec
 
 /** An incoming tween evaluator driven only by registered shared Engine frames.
  * Fresh work admits time zero on the next frame, as Animatable did. An interrupted grip
  * rejoins at its last presented frame, retaining the incoming evaluator and velocity.
+ * A completed tween runs its continuation on that Engine frame. App Reduced, local or through the root clock,
+ * never cancels a running timeline.
  */
 internal class ScrollbarTween(private val clock: UiClock, initial: Float) : ActiveMotion {
     private var resting by mutableFloatStateOf(initial)
@@ -29,6 +30,7 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
     private var awaiting by mutableStateOf(false)
     private var started = clock.stampNow
     private var disposed = false
+    private var next: (() -> Unit)? = null
     var target: Float = initial
         private set
     override val id = clock.allocateId()
@@ -54,7 +56,7 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
     }
     private fun velocity(): Float = animation?.getVelocityFromNanos(elapsed(clock.stamp), initialVector, targetVector, velocityVector)?.value ?: 0f
     fun start(from: Float, to: Float, duration: Int, delay: Int = 0,
-        easing: Easing = FastOutSlowInEasing, sequential: Boolean = false) {
+        easing: Easing = FastOutSlowInEasing, sequential: Boolean = false, then: (() -> Unit)? = null) {
         clock.checkMutation()
         check(!disposed)
         val running = !settled
@@ -72,6 +74,7 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
         evaluator.getValueFromNanos(0L, initialVector, targetVector, velocityVector)
         evaluator.getVelocityFromNanos(0L, initialVector, targetVector, velocityVector)
         animation = evaluator
+        next = then
         awaiting = !sequential || !running
         started = clock.stamp
         clock.register(this)
@@ -87,16 +90,23 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
         if (awaiting) {
             awaiting = false
             started = stamp
-            if (durationNanos == 0L || clock.context?.durationScale == 0f) cancel(target) else clock.register(this)
+            // A zero-duration tween (Reduced grip) or a zero duration scale retires on its admission frame, running its continuation.
+            if (durationNanos == 0L || clock.context?.durationScale == 0f) { val then = next; cancel(target); then?.invoke() } else clock.register(this)
         } else if (holding && elapsed(stamp) < durationNanos) {
             holding = false
             clock.register(this)
-        } else cancel(target)
+        } else {
+            val then = next
+            cancel(target)
+            then?.invoke()
+        }
     }
-    override fun reduce(stamp: FrameStamp) = cancel(target)
+    // App Reduced never retires a running timeline (#838); only future grip durations change.
+    override fun reduce(stamp: FrameStamp) = Unit
     fun cancel(value: Float) {
         clock.checkMutation()
         clock.unregister(this)
+        next = null
         animation = null
         awaiting = false
         holding = false
@@ -110,20 +120,45 @@ internal class ScrollbarTween(private val clock: UiClock, initial: Float) : Acti
 }
 
 /** One component owns reveal, grip and release, with separate registered motion channels.
- * App Reduced changes future grip-target durations; all in-flight base timelines continue.
+ * Activity fades the scrollbar in from its presented opacity. While [hold] is set (a finger on the
+ * scrollbar, or a list scroll in progress including its fling) it stays fully visible; the idle
+ * delay and the fade out start only once it is released and still. App Reduced changes future grip-target
+ * durations only (the grip, and so its colour, snaps); the fades, idle delay and release keep their base
+ * timelines. Neither a local nor a root Reduced change retires a running channel (#838). The grip channel is one 0..1 progress: the held width, length
+ * and colour all derive from it, so they move in lockstep on one timeline and easing.
  */
 @Stable
 internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolean = false,
     private var reduced: Boolean = false) {
     private val release = ScrollbarTween(clock, 0f)
     private val opacity = ScrollbarTween(clock, 1f)
-    private val grip = ScrollbarTween(clock, if (initiallyHeld) ScrollbarSpec.heldScale else 1f)
+    private val grip = ScrollbarTween(clock, if (initiallyHeld) 1f else 0f)
     private var disposed = false
-    fun scale() = grip.value()
+    private var held = false
+    private val afterFadeIn: () -> Unit = ::idle
+    /** Held progress: 0 at rest, 1 fully held. */
+    fun grip() = grip.value()
     fun releaseOffset() = release.value()
     internal fun opacity() = opacity.value()
     fun reveal() {
         check(!disposed)
+        // Activity arrives every frame of a scroll: a fade-in already under way continues as one timeline
+        // (restarting it each frame would keep re-entering its slow start). Its end starts the idle delay.
+        // Reduced Motion never fades in: activity shows the scrollbar at once, then the unchanged idle fade-out runs.
+        if (reduced) { opacity.cancel(1f); idle(); return }
+        if (opacity.target == 1f && !opacity.settled) return
+        val shown = opacity.value()
+        if (shown >= 1f) idle() else opacity.start(shown, 1f, (ScrollbarSpec.fadeMillis * (1f - shown)).toInt(), then = afterFadeIn)
+    }
+    fun hold(held: Boolean) {
+        check(!disposed)
+        if (held == this.held) return
+        this.held = held
+        reveal()
+    }
+    /** At full opacity: wait out the idle delay, then fade. Nothing is scheduled while held. */
+    private fun idle() {
+        if (held) { if (opacity.target != 1f) opacity.cancel(1f); return }
         opacity.start(1f, 0f, ScrollbarSpec.fadeMillis, ScrollbarSpec.idleMillis)
     }
     fun release(gap: Float) {
@@ -132,7 +167,7 @@ internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolea
     }
     fun contact(held: Boolean, speed: Float) {
         check(!disposed)
-        val target = if (held) ScrollbarSpec.heldScale else 1f
+        val target = if (held) 1f else 0f
         if (target == grip.target) return
         grip.start(grip.value(), target, if (reduced) 0 else (ScrollbarSpec.gripMillis / speed).toInt(),
             easing = CubicBezierEasing(0f, 0f, .2f, 1f), sequential = true)
@@ -144,39 +179,39 @@ internal class ScrollbarMotion(private val clock: UiClock, initiallyHeld: Boolea
     fun cancel() {
         release.cancel(0f)
         opacity.cancel(0f)
-        grip.cancel(1f)
+        grip.cancel(0f)
     }
     fun dispose() {
         release.dispose(0f)
         opacity.dispose(0f)
-        grip.dispose(1f)
+        grip.dispose(0f)
         disposed = true
     }
 }
 
 @Composable
 internal fun rememberScrollbarMotion(key: Any, movement: () -> Pair<Int, Int>, activity: () -> Int,
-    held: Boolean, speed: Float, reduced: Boolean): ScrollbarMotion {
+    scrolling: () -> Boolean, held: Boolean, speed: Float, reduced: Boolean): ScrollbarMotion {
     val clock = ownerClock()
     val owner = remember(clock) { ScrollbarMotion(clock, held, reduced) }
     val latestMovement by rememberUpdatedState(movement)
     val latestActivity by rememberUpdatedState(activity)
+    val latestScrolling by rememberUpdatedState(scrolling)
+    val latestHeld by rememberUpdatedState(held)
     SideEffect { owner.access(reduced); owner.contact(held, speed) }
     LaunchedEffect(owner, key) {
         snapshotFlow { latestMovement() to latestActivity() }.collect { owner.reveal() }
+    }
+    // A held contact and a list scroll in progress (a finger down, or a fling) keep it fully visible.
+    LaunchedEffect(owner, key) {
+        snapshotFlow { latestHeld || latestScrolling() }.collect { owner.hold(it) }
     }
     DisposableEffect(owner) { onDispose { owner.dispose() } }
     return owner
 }
 
-/** Both drawings sample one reveal; only the thumb scales about its outer top edge. */
-internal fun Modifier.scrollbarPresentation(motion: ScrollbarMotion, position: () -> Float,
-    scaleThumb: Boolean): Modifier = graphicsLayer {
+/** Both drawings sample one reveal and one travel; the thumb sizes and colours itself from [ScrollbarMotion.grip]. */
+internal fun Modifier.scrollbarPresentation(motion: ScrollbarMotion, position: () -> Float): Modifier = graphicsLayer {
     alpha = motion.opacity()
     translationY = position()
-    if (scaleThumb) {
-        scaleX = motion.scale()
-        scaleY = motion.scale()
-        transformOrigin = TransformOrigin(1f, 0f)
-    }
 }
