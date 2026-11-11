@@ -136,4 +136,38 @@ class DepartingHomeHoldTest {
         owner.dispose()
         assertEquals(0, h.clock.activeCount)
     }
+
+    @Test fun heldFlightAndHeldClosedRestRunNoFramesUntilRelease() = EngineHarness().use { h ->
+        val owner = ExpandCollapse(h.clock, StockUiSpec.expansion, false)
+        owner.setBasis(basis)
+        val rect = MotionRect(h.clock, basis.startBounds, EdgeRanges(2000f, 2000f, 2000f, 2000f))
+        owner.bind(rect)
+        owner.target(true)
+        h.advance(.08)
+        owner.hold()
+        owner.target(false)
+        val phase = owner.phase.valueAt(h.clock.stampNow)
+        val edges = rect.valueAt(h.clock.stampNow)
+        assertEquals(0, h.clock.activeCount)
+        h.advance(2.0)
+        assertEquals(0, h.clock.activeCount)
+        assertEquals(phase, owner.phase.valueAt(h.clock.stampNow), 0f)
+        assertEquals(edges, rect.valueAt(h.clock.stampNow))
+        assertFalse(owner.retirementReady)
+        owner.release()
+        assertTrue(h.clock.activeCount > 0)
+        h.advance(2.0)
+        assertEquals(0f, owner.phase.valueAt(h.clock.stampNow), 0f)
+        assertTrue(owner.retirementReady)
+        // A closed owner at rest whose home departs (CrossViewSelectionTest's offscreen Albums page) stays idle too.
+        owner.hold()
+        h.advance(2.0)
+        assertEquals(0, h.clock.activeCount)
+        assertEquals(0f, owner.phase.valueAt(h.clock.stampNow), 0f)
+        assertEquals(basis.startBounds, rect.valueAt(h.clock.stampNow))
+        owner.release()
+        assertTrue(owner.retirementReady)
+        assertEquals(0, h.clock.activeCount)
+        owner.dispose()
+    }
 }
