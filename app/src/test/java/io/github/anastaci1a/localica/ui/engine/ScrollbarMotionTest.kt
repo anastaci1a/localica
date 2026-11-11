@@ -70,7 +70,7 @@ class ScrollbarMotionTest {
             assertEquals(0, h.clock.activeCount)
         }
     }
-    @Test(timeout = 5000) fun localReductionPreservesBaseCurvesAndGlobalReductionRetiresWork() {
+    @Test(timeout = 5000) fun localAndRootReductionPreserveEveryInFlightBaseCurve() {
         for (global in listOf(false, true)) for (seconds in listOf(.064, .8, 1.3)) EngineHarness().use { h ->
             val motion = ScrollbarMotion(h.clock)
             motion.reveal(); motion.release(.2f); motion.contact(true, 1f)
@@ -80,22 +80,26 @@ class ScrollbarMotionTest {
             val scale = motion.scale()
             if (global) {
                 h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Reduced), StockUiSpec)
-                assertEquals(0, h.clock.activeCount)
-                assertEquals(0f, motion.opacity(), 0f)
-                assertEquals(0f, motion.releaseOffset(), 0f)
-                assertEquals(1.5f, motion.scale(), 0f)
-            } else {
-                motion.access(true)
-                assertEquals(if (seconds < .18) 3 else 1, h.clock.activeCount)
-                assertEquals(opacity.toRawBits(), motion.opacity().toRawBits())
-                assertEquals(release.toRawBits(), motion.releaseOffset().toRawBits())
-                assertEquals("Changing only the spec does not retarget the base grip", scale.toRawBits(), motion.scale().toRawBits())
-                h.advance(.016)
-                val incoming = TargetBasedAnimation(tween<Float>(240, easing = CubicBezierEasing(0f, 0f, .2f, 1f)),
-                    Float.VectorConverter, 1f, 1.5f)
-                val nanos = (seconds * 1e9).toLong() + 16_000_000L
-                assertEquals("The in-flight base grip keeps its curve", incoming.getValueFromNanos(nanos).toRawBits(), motion.scale().toRawBits())
             }
+            motion.access(true)
+            assertEquals(if (seconds < .18) 3 else 1, h.clock.activeCount)
+            assertEquals(opacity.toRawBits(), motion.opacity().toRawBits())
+            assertEquals(release.toRawBits(), motion.releaseOffset().toRawBits())
+            assertEquals("App reduction does not retarget the running grip", scale.toRawBits(), motion.scale().toRawBits())
+            h.advance(.016)
+            val nanos = (seconds * 1e9).toLong() + 16_000_000L
+            val incoming = TargetBasedAnimation(tween<Float>(240, easing = CubicBezierEasing(0f, 0f, .2f, 1f)),
+                Float.VectorConverter, 1f, 1.5f)
+            val fade = TargetBasedAnimation(tween<Float>(220, 1200), Float.VectorConverter, 1f, 0f)
+            val offset = TargetBasedAnimation(tween<Float>(180), Float.VectorConverter, .2f, 0f)
+            assertEquals("In-flight grip keeps its exact curve", incoming.getValueFromNanos(nanos).toRawBits(), motion.scale().toRawBits())
+            assertEquals("In-flight reveal keeps its exact curve", fade.getValueFromNanos(nanos).toRawBits(), motion.opacity().toRawBits())
+            assertEquals("In-flight release keeps its exact curve", offset.getValueFromNanos(nanos).toRawBits(), motion.releaseOffset().toRawBits())
+            motion.contact(false, 1f)
+            val retargeted = if (nanos < 240_000_000L) 1f else incoming.getValueFromNanos(nanos)
+            assertEquals("A running zero-duration retarget is immediate; fresh work waits for admission", retargeted.toRawBits(), motion.scale().toRawBits())
+            h.advance(.016)
+            assertEquals("Only the new Reduced grip target snaps on admission", 1f, motion.scale(), 0f)
             motion.access(false)
             if (global) h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Standard), StockUiSpec)
             h.advance(2.0)
@@ -151,10 +155,10 @@ class ScrollbarMotionTest {
             api.getMethod("setThreadAllocatedMemoryEnabled", Boolean::class.javaPrimitiveType).invoke(bean, true)
             val allocated = api.getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
             var total = 0f
-            repeat(100_000) { total += motion.opacity() + motion.scale() + motion.releaseOffset() }
+            repeat(10_000) { total = readScalars(motion, 10, total) }
             val thread = Thread.currentThread().id
             val before = allocated.invoke(bean, thread) as Long
-            repeat(1_000_000) { total += motion.opacity() + motion.scale() + motion.releaseOffset() }
+            total = readScalars(motion, 1_000_000, total)
             val bytes = (allocated.invoke(bean, thread) as Long) - before
             println("Scrollbar scalar reads: 3000000 reads, $bytes allocated bytes including measurement overhead")
             assertTrue(total.isFinite())
@@ -276,5 +280,10 @@ class ScrollbarMotionTest {
             motion.reveal(); motion.dispose()
             assertEquals(0, h.clock.activeCount)
         }
+    }
+    private fun readScalars(motion: ScrollbarMotion, repetitions: Int, initial: Float): Float {
+        var total = initial
+        repeat(repetitions) { total += motion.opacity() + motion.scale() + motion.releaseOffset() }
+        return total
     }
 }
