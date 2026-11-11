@@ -180,4 +180,31 @@ class PopupDurationPolicyTest {
         assertEquals(0, h.clock.activeCount)
     }
 
+    @Test fun detachedLayerOpacityKeepsExactEndpointsAndFadesLateInTheSamePhase() = EngineHarness(spec = spec).use { h ->
+        val popup = PopupWindowMotion(h.clock, spec.expansion, "page-fade", false, false)
+        val opacity = popup.detachedOpacity
+        val band = spec.expansion.band
+        // Rest, Reduced Motion and band overshoot keep the exact endpoint opacities.
+        assertEquals(0f, opacity.at(0f), 0f); assertEquals(1f, opacity.at(1f), 0f)
+        assertEquals(0f, opacity.at(-band), 0f); assertEquals(1f, opacity.at(1f + band), 0f)
+        var previous = 0f
+        for (i in 0..1000) {
+            val p = i / 1000f; val value = opacity.at(p)
+            assertTrue("monotone at $p", value >= previous); previous = value
+            if (p >= .6f) assertEquals("opaque from .6 at $p", 1f, value, 0f) else if (p > 0f) assertTrue("fading below .6 at $p", value > 0f && value < 1f)
+        }
+        // The actual Page close: opacity starts at exactly 1, never rises and reaches exactly 0 when the phase rests.
+        val page = Rect(0f, 0f, 1080f, 1920f)
+        popup.updateSpeed(4f / 3f); popup.show(true); popup.place(page.translate(73.5f, 0f), page, 2.625f, detached = true)
+        assertTrue(popup.expansion.acknowledgeNativeGate(popup.expansion.nativeGeneration)); h.advance(4.0)
+        assertEquals(1f, opacity.at(popup.expansion.phase.valueAt(h.clock.stampNow)), 0f)
+        popup.show(false); previous = 1f
+        repeat(60) {
+            h.advance(1.0 / 60); val value = opacity.at(popup.expansion.phase.valueAt(h.clock.stampNow))
+            assertTrue(value <= previous); previous = value
+        }
+        assertTrue(popup.expansion.phase.settled); assertEquals(0f, previous, 0f)
+        popup.dispose()
+        assertEquals(0, h.clock.activeCount)
+    }
 }
