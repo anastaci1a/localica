@@ -94,6 +94,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val p = sheet.expansion.phase.value()
+    val boundedProgress = p.coerceIn(0f, 1f)
     // A paused skip can buffer without requesting playback. Only show Pause
     // while playing or buffering with an explicit play-when-ready intent.
     val showPause = sampled.isPlaying || (sampled.isBuffering && sampled.playWhenReady)
@@ -122,17 +123,18 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // U10.03: the lyrics layout is one expand/collapse owner on the #608 law over the title's travel (basis bound below).
     val lyricsPresence = rememberPresence("player-lyrics", lyricsOpen, role = TriggerRole.Lyrics)
     val lyricVisibility = lyricsPresence.view.phase.value()
+    val boundedLyricVisibility = lyricVisibility.coerceIn(0f, 1f)
     val lyricsRest by rememberExpansionRest(lyricsPresence.view)
     val lyricsSettled = lyricsRest == if (lyricsOpen) ExpansionRest.Open else ExpansionRest.Closed
     // A light/dark foreground change during the lyrics animation (or artwork blend, #578) follows that shared phase (U08.02a).
     val inkTransition = remember { io.github.anastaci1a.localica.ui.engine.PhaseBinding(inkTarget) }
     val lyricsEnd = if (lyricsOpen) 1f else 0f
-    val inkStep = if (lyricsSettled && blendClock < 1f) inkTransition.resolve(inkTarget, blendClock, 1f, clock = 1) else inkTransition.resolve(inkTarget, lyricVisibility, lyricsEnd)
+    val inkStep = if (lyricsSettled && blendClock < 1f) inkTransition.resolve(inkTarget, blendClock, 1f, clock = 1) else inkTransition.resolve(inkTarget, boundedLyricVisibility, lyricsEnd)
     val lyricsInk = polarity.lyricsInk?.takeIf { blendClock >= 1f }
     // Every material that follows the player's ink (the glass backdrops and the panel theme below) reads the same
     // eased polarity as the foreground, and the shared state exposes it to the surfaces outside this composable.
-    val lightMix = if (lyricsInk != null) (if (lyricsInk.ordinary) 1f else 0f) * (1f - lyricVisibility) +
-        (if (lyricsInk.lyrics) 1f else 0f) * lyricVisibility else inkStep.value
+    val lightMix = if (lyricsInk != null) (if (lyricsInk.ordinary) 1f else 0f) * (1f - boundedLyricVisibility) +
+        (if (lyricsInk.lyrics) 1f else 0f) * boundedLyricVisibility else inkStep.value
     val playerInk = lerp(Color.Black, Color.White, lightMix)
     SideEffect { inkTransition.present(inkStep.copy(value = lightMix)); polarity.presentLightMix(lightMix) }
     // Header controls already sample this scene before lyrics open. Older
@@ -325,10 +327,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val edgeSoftness = backgroundProgress * PlayerReveal.Edge.at(p)
     val edgeBand = .02f + .24f * PlayerReveal.EdgeBand.at(p)
     val transportWidth = minOf(contentWidth, 280.dp)
-    val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * p
+    val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * boundedProgress
     val textX = 58.dp + (contentInset - 58.dp) * p
     val foreground = androidx.compose.ui.graphics.lerp(miniForeground, playerInk, backgroundReveal)
-    val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
+    val artworkCorner = playerArtworkCornerRadius(p, backgroundProgress)
+    val artworkShape = RoundedCornerShape(artworkCorner)
     val artPixels = with(density) { artWidth.toPx() }
     // Artwork navigation and the title's lyrics target admit input only while the player rests open under a closed Queue.
     val playerRest by rememberExpansionRest(sheet.expansion)
@@ -359,7 +362,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             with(density) { Rect(artX.toPx() + swipeOffset, artY.toPx(), artX.toPx() + swipeOffset + artPixels, artY.toPx() + artHeight.toPx()) },
             footprints, backgroundProgress * (1f - lyricProgress), maxOf(1f - coverBlend, swipeFeather / .9f),
             edgeSoftness, edgeBand, coverBlend, lyricMotion.artworkAlpha,
-            with(density) { ((8f + 16f * p).dp * (1f - p * backgroundProgress)).toPx() },
+            with(density) { artworkCorner.toPx() },
             artContentScale) else null
     // Project measured sizes onto the two existing layout endpoints. Never
     // subtract the moving measured position: it can be one layout pass old.
@@ -423,14 +426,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     GlassPanelTheme(lightMix) {
     val playerColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = playerColors.copy(onSurface = foreground,
-        onSurfaceVariant = foreground.copy(alpha = 0.72f), primary = androidx.compose.ui.graphics.lerp(baseColors.primary, playerInk, p),
-        surface = androidx.compose.ui.graphics.lerp(baseColors.surface, palette.bottom, p),
-        surfaceContainer = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainer, palette.middle, p),
-        surfaceContainerHigh = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHigh, palette.middle, p),
-        surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p))) {
+        onSurfaceVariant = foreground.copy(alpha = 0.72f), primary = androidx.compose.ui.graphics.lerp(baseColors.primary, playerInk, boundedProgress),
+        surface = androidx.compose.ui.graphics.lerp(baseColors.surface, palette.bottom, boundedProgress),
+        surfaceContainer = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainer, palette.middle, boundedProgress),
+        surfaceContainerHigh = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHigh, palette.middle, boundedProgress),
+        surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, boundedProgress))) {
     Surface(Modifier.motionBounds(surfaceFrame.x, surfaceFrame.y, surfaceFrame.width, surfaceFrame.height)
         .onGloballyPositioned { polarity.measure("viewport", it) }
-        .pageGlassCaster(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })
+        .pageGlassCaster(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value().coerceIn(0f, 1f) })
         .then(drag).controlScrollParent { playerDragDirections(expanded, scrubCancel.active) }
         .then(if (!queueClosed) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
         // The Queue must never sample the light browsing glass. Delaying readback alone
@@ -464,7 +467,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         val editArtwork = presentedArtworkEdit()
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
-            depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p,
+            depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * boundedProgress,
             noneAtlasInput = noneAtlasInput.takeIf { collapsedPhase(p) })
         Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > this@PlayerSurface.maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
