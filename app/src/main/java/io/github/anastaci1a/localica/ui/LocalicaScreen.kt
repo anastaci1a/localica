@@ -459,10 +459,13 @@ fun LocalicaScreen(
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         } }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
+        ObserveSheetContent("player-overlay")
         GlassPanelTheme(playerLightMix) {
         screenScope.PlayerClippedOverlay({ phase.value() }, bottomChrome) {
+        ObserveSheetContent("queue-surface")
         screenScope.QueueSurface(queueSheet, { queueOpen = it }, playerProgress = { phase.value() },
             onOpeningContact = { queueOpeningRequest++ }, providedPopupHome = queuePopupHome) {
+            ObserveSheetContent("queue-screen")
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides queueSelectionPanel.clearance) {
             CompositionLocalProvider(LocalBrowseSelectionPanel provides queueSelectionPanel) {
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
