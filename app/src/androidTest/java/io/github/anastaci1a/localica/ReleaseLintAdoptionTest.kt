@@ -147,6 +147,7 @@ class ReleaseLintAdoptionTest {
             compose.onNodeWithTag("search-result:Control expansion").performClick()
             val frames = JSONArray()
             var visible = false
+            var admitted = false
             var highlighted: Bitmap? = null
             var highlightedRow: androidx.compose.ui.geometry.Rect? = null
             var highlightedRoot: androidx.compose.ui.geometry.Rect? = null
@@ -157,7 +158,18 @@ class ReleaseLintAdoptionTest {
                 compose.mainClock.advanceTimeByFrame()
                 compose.waitForIdle()
                 val rows = compose.onAllNodesWithTag("setting:Control expansion", useUnmergedTree = true)
+                val candidates = rows.fetchSemanticsNodes()
+                assertTrue("The destination row must never have ambiguous ownership", candidates.size <= 1)
+                if (candidates.isEmpty()) {
+                    assertFalse("An admitted destination row must not disappear", admitted)
+                    assertTrue("The destination must be admitted before the first fixed native capture", frame < 4)
+                    frames.put(JSONObject().put("frame", frame).put("rowPresent", false)
+                        .put("position", JSONObject.NULL).put("alpha", JSONObject.NULL)
+                        .put("row", JSONObject.NULL).put("scroll", JSONObject.NULL))
+                    continue
+                }
                 rows.assertCountEquals(1)
+                admitted = true
                 val row = rows.fetchSemanticsNodes().single()
                 val owners = compose.onAllNodes(selector, useUnmergedTree = true)
                 owners.assertCountEquals(1)
@@ -166,7 +178,7 @@ class ReleaseLintAdoptionTest {
                 val alpha = row.config.getOrNull(SettingsHighlightAlpha) ?: 0f
                 visible = visible || alpha > 0f
                 positions += bits(position)
-                frames.put(JSONObject().put("frame", frame).put("position", bits(position))
+                frames.put(JSONObject().put("frame", frame).put("rowPresent", true).put("position", bits(position))
                     .put("alpha", bits(alpha)).put("row", geometry(row)).put("scroll", geometry(owner)))
                 if (frame in listOf(4, 8, 12, 20, 32, 48, 64)) {
                     val image = capture(compose.onNode(selector, useUnmergedTree = true), "$name-$frame")
@@ -180,6 +192,7 @@ class ReleaseLintAdoptionTest {
                 if (interrupt && frame == 4) compose.onNode(selector, useUnmergedTree = true)
                     .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 40f) }
             }
+            assertTrue("The destination row must be admitted", admitted)
             if (interrupt) assertFalse("A competing scroll cancels pending completion and highlight", visible)
             else {
                 assertTrue("Every policy, including Reduced, must visibly reveal the selected row", visible)
