@@ -8,6 +8,8 @@ import io.github.anastaci1a.localica.ui.spec.springOvershoot
 
 /** #854: the surface kind of the enclosing popup; retained faces and presences inside it inherit its motion. */
 internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
+/** The phase a surface opened from a quiet anchor holds on its trigger before its edges move (v0.34.0's quiet window start). */
+internal const val QuietPopupHold = .14f
 
 /** The native presenter owns one expansion and one measured rectangle. A native
  * receipt releases its gate; changing the envelope rebases those same edges. */
@@ -19,9 +21,11 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     /** Whether this window runs the #854 spring model rather than the Legacy v0.33.21 popup law. */
     val spring = expansion.popupLaw != null
     private val gate = if (!prepared) 0f else if (spring) model.preparedRamp else .25f
-    // #854 §1.5: prepared origins ramp C1 off the gate and pass the overshoot; quiet row menus leave the trigger at once.
+    // #854 §1.5: prepared origins ramp C1 off the gate and pass the overshoot. Quiet row menus leave the trigger at once (measured,
+    // Q4); any other surface opened from a quiet anchor (a dialog from a menu row) holds C1 on it, so its return re-seats there (#692).
     val geometryCurve = if (prepared) (if (spring) Curve.ramp(model.preparedRamp, model.rampBlend) else Curve.window(.25f, 1f))
-        else if (quiet && !spring) Curve.window(.14f, 1f) else Curve.linear(0f, 1f)
+        else if (quiet && !spring) Curve.window(QuietPopupHold, 1f)
+        else if (quiet && kind != PopupKind.RowMenu) Curve.ramp(QuietPopupHold, model.rampBlend) else Curve.linear(0f, 1f)
     /** The largest reachable edge overshoot as a fraction of edge travel (§1.7): the geometry at the phase peak 1 + κ, so a
      * prepared ramp's gain is included. 0 for Legacy. */
     val overshoot = if (spring) geometryCurve.at(1f + springOvershoot(model.open.zeta.toDouble()).toFloat()) - 1f else 0f
