@@ -372,10 +372,10 @@ class DeferredMethodTest(unittest.TestCase):
             'package example\nimport org.junit.Test\nclass RiskTest { @Test fun one() {} }')
 
     def test_exactly_one_method_is_deferred_and_the_rest_of_the_class_still_gates(self):
-        self.assertEqual({self.METHOD: 'DEFERRED v0.34.1 #815'}, partition.DEFERRED)
+        self.assertEqual({self.METHOD: 'DEFERRED v0.34.2 #815'}, partition.DEFERRED)
         for api in ('26', '36'):
             plan = partition.plan(self.root, ['example.RiskTest'], api, 'a'*40)
-            self.assertEqual([{'id': self.METHOD, 'reason': 'DEFERRED v0.34.1 #815'}], plan['deferred'])
+            self.assertEqual([{'id': self.METHOD, 'reason': 'DEFERRED v0.34.2 #815'}], plan['deferred'])
             self.assertNotIn(self.METHOD, plan['expected'])
             self.assertNotIn(self.METHOD, plan['remaining'])
             inv = partition.discover(self.root)
