@@ -416,6 +416,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         if (!visible && !present) return@LaunchedEffect
         if (visible && !present) {
             origin = anchor.presentedBounds
+            // Register the home from the trigger's actual footprint with the same intent as [origin],
+            // so pre-admission draws never fall back to its logical bounds; the gate re-captures (#869).
+            anchor.samplingFootprint()?.let { originFootprint = it; measuredHome = true }
             source = ambientSource ?: anchor.source
             present = true
         }
