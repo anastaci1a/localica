@@ -97,6 +97,10 @@ internal suspend fun awaitTriggerReturn(returnHome: suspend () -> Unit) = corout
     }
 }
 
+/** One presented frame in which the acknowledged trigger draws while the modal still owns
+ * the window: a reopen there reclaims the same dialog instead of disposing it (#858). */
+internal suspend fun awaitReturnedPresentation() { withFrameNanos { } }
+
 /** The destination must submit its owned field after transfer, before the native host is released. */
 internal suspend fun SurfaceView.awaitWindowField(plane: ShadowPlane): Boolean {
     val node=this as SurfaceNode

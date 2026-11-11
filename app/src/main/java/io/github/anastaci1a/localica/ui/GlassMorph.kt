@@ -504,7 +504,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     // still owns the window, so a reopen there reclaims the same dialog (#858).
                     // The modal draws no body (#847 skip) and no field (home owns it) here.
                     if (anchor.triggerMounted) {
-                        withFrameNanos { }
+                        awaitReturnedPresentation()
                         if (!gateCurrent()) continue@gateLoop
                     }
                     originAdmitted = false
