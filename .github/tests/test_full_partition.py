@@ -355,4 +355,78 @@ class WeightedClassShardsTest(unittest.TestCase):
         self.assertEqual(18,sum(len(s['methods']) for s in ordinary['shards']))
 
 
+class DeferredMethodTest(unittest.TestCase):
+    """#815: exactly one device method (sharedNeighbor) is deferred to v0.34.1; nothing else is."""
+    CLS = 'io.github.anastaci1a.localica.PopupShadowContinuityTest'
+    METHOD = CLS + '#sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles'
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        relative = Path('app/src/androidTest/java/io/github/anastaci1a/localica/PopupShadowContinuityTest.kt')
+        (self.root/relative).parent.mkdir(parents=True)
+        (self.root/relative).write_text((ROOT/relative).read_text())
+        (self.root/'app/src/androidTest/java/example').mkdir()
+        (self.root/'app/src/androidTest/java/example/RiskTest.kt').write_text(
+            'package example\nimport org.junit.Test\nclass RiskTest { @Test fun one() {} }')
+
+    def test_exactly_one_method_is_deferred_and_the_rest_of_the_class_still_gates(self):
+        self.assertEqual({self.METHOD: 'DEFERRED v0.34.1 #815'}, partition.DEFERRED)
+        for api in ('26', '36'):
+            plan = partition.plan(self.root, ['example.RiskTest'], api, 'a'*40)
+            self.assertEqual([{'id': self.METHOD, 'reason': 'DEFERRED v0.34.1 #815'}], plan['deferred'])
+            self.assertNotIn(self.METHOD, plan['expected'])
+            self.assertNotIn(self.METHOD, plan['remaining'])
+            inv = partition.discover(self.root)
+            siblings = {m for m in inv['runtime_methods'] if m.startswith(self.CLS + '#')}
+            self.assertIn(self.METHOD, siblings)
+            self.assertGreater(len(siblings), 1)
+            self.assertEqual(siblings - {self.METHOD}, {m for m in plan['expected'] if m.startswith(self.CLS + '#')})
+            self.assertTrue({m for m in inv['runtime_methods'] if m not in plan['expected']} <= {self.METHOD}
+                            | {x['id'] for x in plan['sdk_omissions']})
+
+    def test_shard_plan_records_the_deferral_and_never_assigns_the_method(self):
+        weights = self.root/'durations.csv'
+        weights.write_text('api,class,tests,total_seconds,skipped\n26,'+self.CLS+',4,100,0\n')
+        result = partition.shards(self.root, '26', 1, weights, 'a'*40, risks=['example.RiskTest'])
+        self.assertEqual([self.METHOD], [x['id'] for x in result['deferred']])
+        self.assertEqual([self.METHOD], result['shards'][0]['excluded_methods'])
+        self.assertNotIn(self.METHOD, result['shards'][0]['methods'])
+        self.assertEqual(self.CLS, result['shards'][0]['classes'][0])
+
+    def test_union_reports_deferred_and_rejects_a_run_of_it(self):
+        plan = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
+        def xml(folder, ids):
+            folder.mkdir()
+            suite = ET.Element('testsuite', tests=str(len(ids)), failures='0', errors='0', skipped='0')
+            for identity in ids:
+                cls, method = identity.split('#')
+                ET.SubElement(suite, 'testcase', classname=cls, name=method, time='1')
+            (folder/'r.xml').write_text(ET.tostring(suite, encoding='unicode'))
+        xml(self.root/'ok', plan['expected'])
+        result = partition.union(self.root, '26', [self.root/'ok'], 1)
+        self.assertEqual([self.METHOD], [x['id'] for x in result['deferred']])
+        self.assertEqual(len(plan['expected']), result['executed_once'])
+        xml(self.root/'ran', plan['expected'] + [self.METHOD])
+        with self.assertRaises(ValueError):
+            partition.union(self.root, '26', [self.root/'ran'], 1)
+
+    def test_a_removed_source_method_fails_closed(self):
+        path = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica/PopupShadowContinuityTest.kt'
+        path.write_text(path.read_text().replace('sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles', 'renamed'))
+        with self.assertRaises(ValueError):
+            partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
+
+    def test_runner_and_summary_announce_and_filter_the_deferral(self):
+        script = (ROOT/'.github/run-device-tests.sh').read_text()
+        self.assertIn('full_partition.py deferred', script)
+        self.assertIn('notClass=$deferred_methods', script)
+        self.assertIn('full_excluded_classes=${full_excluded_classes:+$full_excluded_classes,}$deferred_methods', script)
+        workflow = (ROOT/'.github/workflows/android.yml').read_text()
+        self.assertIn('d["reason"], sys.argv[2], d["id"]', workflow)
+        self.assertIn('.get("deferred", [])', workflow)
+        self.assertIn('GITHUB_STEP_SUMMARY', workflow)
+
+
 if __name__=='__main__':unittest.main()

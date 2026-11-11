@@ -421,6 +421,8 @@ jobs:
             test "$count" = "$LOCALICA_DEVICE_SHARDS" || { echo "API $api: $count of $LOCALICA_DEVICE_SHARDS shard reports" >&2; status=1; continue; }
             while IFS= read -r dir; do args+=(--xml-root "$dir"); done < <(find shard-reports -type d -name androidTest-results -path "*-reports-api-$api-shard-*" | sort)
             python3 .github/test-evidence/full_partition.py union --root "$PWD" --api "$api" --shards "$LOCALICA_DEVICE_SHARDS" "${args[@]}" | tee "union-api-$api.json" || status=1
+            # Visible deferral (#815): list every deferred method in the log and the run summary.
+            python3 -c 'import json,sys; [print("%s API %s: %s" % (d["reason"], sys.argv[2], d["id"])) for d in json.load(open(sys.argv[1])).get("deferred", [])]' "union-api-$api.json" "$api" | tee -a "$GITHUB_STEP_SUMMARY" || true
           done
           exit $status
       # A timed-out shard makes the matrix result non-success, even if XML is complete.
