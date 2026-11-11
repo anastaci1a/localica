@@ -239,7 +239,12 @@ class PopupImeGeometryTest {
                 }
                 override fun onEnd(animation: WindowInsetsAnimationCompat) {
                     record("end")
-                    if (ime > 0) opened.countDown() else if (phase == "closing") closed.countDown()
+                    val native = ViewCompat.getRootWindowInsets(this@NativeProbe)
+                    // A warmed but suppressed LatinIME can animate only its navigation-sized inset.
+                    if (native != null && ime > native.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom &&
+                        native.getInsets(WindowInsetsCompat.Type.ime()).bottom > native.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom)
+                        opened.countDown()
+                    if (ime == 0 && phase == "closing") closed.countDown()
                 }
             })
         }
