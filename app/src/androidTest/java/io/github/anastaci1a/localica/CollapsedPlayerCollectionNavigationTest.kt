@@ -66,7 +66,7 @@ class CollapsedPlayerCollectionNavigationTest {
         val specAccess: MotionAccess, val movingJoins: List<PhaseJoinRecord>,
         val contentEvents: List<Pair<String, Boolean>>, val navigationBoundary: Int,
         val nativeRoot: NativeRootRecord?, val playerId: Long, val queueId: Long,
-        val playerEdgeJoins: List<PhaseJoinRecord>)
+        val playerEdgeJoins: List<PhaseJoinRecord>, val basisJoins: Int)
     private data class NativeRootRecord(val width: Int, val height: Int, val density: Float,
         val fontScale: Float, val imeBottom: Int, val navigationBottom: Int, val referenceTravel: Float?)
     private class NativeRootReferences(val window: WindowInfo, val density: Density,
@@ -330,6 +330,8 @@ class CollapsedPlayerCollectionNavigationTest {
                 val searchNode = search.fetchSemanticsNode()
                 val playerNode = compose.onNodeWithTag("player-surface").fetchSemanticsNode()
                 val searchBounds = searchNode.boundsInRoot
+                assertEquals("The guarded root point must use the pinned touch injection origin",
+                    searchBounds.topLeft, searchNode.positionInRoot)
                 val playerBounds = playerNode.boundsInRoot
                 // Match the pinned Compose click implementation's visible-size integer conversion.
                 // Raw bounds are also exported unchanged, with every Float bit retained below.
@@ -389,6 +391,11 @@ class CollapsedPlayerCollectionNavigationTest {
                         }
                     }
                 }
+                compose.runOnIdle {
+                    if (access != MotionAccess.Reduced) assertTrue(
+                        "Search checkpoints must observe a changing player basis",
+                        events.basisJoins > beforeClick.basisJoins)
+                }
                 compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
                 compose.onNode(hasSetTextAction()).assertIsEnabled().performTextInput("Song")
             }
@@ -414,6 +421,6 @@ class CollapsedPlayerCollectionNavigationTest {
             phase.settled, queue.value(), queue.target, queue.settled, phase.clock.context?.access,
             phase.clock.spec.access, events.movingPhaseRecords.toList(), contentEvents.toList(),
             navigationContentBoundary, nativeRoot?.snapshot(phase.clock), phase.id, queue.id,
-            events.playerEdgeRecords.toList())
+            events.playerEdgeRecords.toList(), events.basisJoins)
     }
 }
