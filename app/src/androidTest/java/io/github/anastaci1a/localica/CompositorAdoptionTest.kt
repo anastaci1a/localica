@@ -110,6 +110,48 @@ class CompositorAdoptionTest {
         }
     }
 
+    /** A reused lazy item must reselect a leased (released, not disposed) retained node and mint a fresh one for a disposed node. */
+    @Test fun glassCasterReselectsALeasedRetainedNodeAndMintsAFreshOneForADisposedNode() {
+        var shown by mutableStateOf(true)
+        var retained by mutableStateOf<SurfaceView?>(null)
+        var host: ShadowPlane? = null
+        compose.setContent { EngineTheme {
+            GlassShadowScope(Modifier.size(100.dp)) {
+                val plane = requireNotNull(LocalSurfaceShadows.current)
+                SideEffect { host = plane }
+                if (shown) Box(Modifier.size(20.dp).glassCaster(plane, "reused-caster", retained = retained) { null })
+            }
+        } }
+        compose.waitForIdle()
+        lateinit var first: SurfaceNode
+        lateinit var release: ()->Unit
+        compose.runOnIdle {
+            first = requireNotNull(host).casters.single()
+            release = first.retainWindow()
+            retained = first
+            shown = false
+        }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertTrue("A window lease keeps the released node alive", !first.isDisposed)
+            shown = true
+        }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertSame("A live leased retained node is reselected and reattached", first, requireNotNull(host).casters.single())
+            assertTrue("The reselected node has a live source attachment", first.sourceReturnPlane === host)
+            shown = false
+        }
+        compose.waitForIdle()
+        compose.runOnIdle { release(); assertTrue("The final release disposes the node", first.isDisposed); shown = true }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            val fresh = requireNotNull(host).casters.single()
+            assertTrue("A disposed retained node is never reselected", fresh !== first && !fresh.isDisposed)
+            assertTrue("The fresh node attaches on the first frame", fresh.sourceReturnPlane === host)
+        }
+    }
+
     @Test fun descendantOwnersUseTheHostRegistryAndUnregisterOnRemoval() {
         var shown by mutableStateOf(true)
         var host: ShadowPlane? = null
