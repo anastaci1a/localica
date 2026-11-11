@@ -124,9 +124,11 @@ class QueueRemoveFaceTest {
         val n = samples.size.toDouble()
         return (n * ab - a * b) / sqrt((n * aa - a * a) * (n * bb - b * b)).coerceAtLeast(1.0)
     }
-    /** One glyph's own best transform: every translation within [PoseReach] px at unit scale, then the scales in [PoseScales] with
-     * one pixel around that translation. The same correlation as [correlation], read from one pixel copy of the frame. */
-    private fun pose(image: Bitmap, samples: List<Sample>, center: Offset): Pose {
+    /** One glyph's own best RESIDUAL transform around the drawn body ([bodyX], [bodyY] about the panel center, as
+     * QueueSelectorPersistenceTest.currentBodyRect draws it): every translation within [PoseReach] px at unit residual scale, then
+     * the residual scales in [PoseScales] with one pixel around that translation. The same correlation as [correlation], read from
+     * one pixel copy of the frame. */
+    private fun pose(image: Bitmap, samples: List<Sample>, center: Offset, bodyX: Float, bodyY: Float): Pose {
         val w = image.width; val h = image.height
         val pixels = IntArray(w * h).also { image.getPixels(it, 0, w, 0, 0, w, h) }
         fun gray(x: Int, y: Int): Double { val pixel = pixels[y.coerceIn(0, h - 1) * w + x.coerceIn(0, w - 1)]
@@ -134,7 +136,7 @@ class QueueRemoveFaceTest {
         fun score(sx: Float, sy: Float, dx: Int, dy: Int): Double {
             var a = 0.0; var b = 0.0; var aa = 0.0; var bb = 0.0; var ab = 0.0
             samples.forEach { sample ->
-                val actual = gray(floor(center.x + sample.x * sx + dx).toInt(), floor(center.y + sample.y * sy + dy).toInt())
+                val actual = gray(floor(center.x + sample.x * sx * bodyX + dx).toInt(), floor(center.y + sample.y * sy * bodyY + dy).toInt())
                 a += sample.value; b += actual; aa += sample.value * sample.value; bb += actual * actual; ab += sample.value * actual
             }
             val n = samples.size.toDouble()
@@ -159,13 +161,14 @@ class QueueRemoveFaceTest {
             Triple(panel.right, home.right, expanded.right), Triple(panel.bottom, home.bottom, expanded.bottom))
             .all { (now, rest, open) -> abs(now - rest) <= abs(open - rest) * fraction + 1f }
     }
-    /** One common, tightly bounded raster transform for BOTH icon and text, not separate realignment. */
-    private fun match(image: Bitmap, icon: List<Sample>, label: List<Sample>, center: Offset): Match {
+    /** One common, tightly bounded raster transform for BOTH icon and text, not separate realignment; a residual around the drawn
+     * body ([bodyX], [bodyY] about the panel center). */
+    private fun match(image: Bitmap, icon: List<Sample>, label: List<Sample>, center: Offset, bodyX: Float, bodyY: Float): Match {
         var best = Match(-1.0, -1.0, 1f, 1f, 0, 0)
         for (sx in listOf(.96f, .98f, 1f, 1.02f, 1.04f)) for (sy in listOf(.96f, .98f, 1f, 1.02f, 1.04f))
             for (dx in -1..1) for (dy in -1..1) {
-                val i = correlation(image, icon, center, sx, sy, dx, dy)
-                val l = correlation(image, label, center, sx, sy, dx, dy)
+                val i = correlation(image, icon, center, sx * bodyX, sy * bodyY, dx, dy)
+                val l = correlation(image, label, center, sx * bodyX, sy * bodyY, dx, dy)
                 if (min(i, l) > min(best.icon, best.label)) best = Match(i, l, sx, sy, dx, dy)
             }
         return best
@@ -269,6 +272,8 @@ class QueueRemoveFaceTest {
             while (compose.mainClock.currentTime - start <= 5000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 val p = compose.runOnUiThread { anchor.contact.expansion.value }
+                // The drawn body: the retained face is drawn inside the deformed glass body, scaled about the panel center.
+                val (bodyX, bodyY) = compose.runOnUiThread { anchor.contact.body.value.let { it.scaleX(anchor.contact.vertical) to it.scaleY(anchor.contact.vertical) } }
                 val hidden = compose.runOnUiThread { anchor.hidden }
                 val present = compose.runOnUiThread { anchor.modalPresent }
                 val retired = compose.runOnUiThread { entry !in host.entries }
@@ -288,7 +293,8 @@ class QueueRemoveFaceTest {
                         // Co-motion on every late return frame, wherever the panel is: the trash and the label each find their own
                         // best transform, and the two agree within one search step (#692's named invariant, independent of the law).
                         if (p <= .16f) {
-                            val i = pose(image, icon, panel.center); val l = pose(image, label, panel.center); poses++
+                            val i = pose(image, icon, panel.center, bodyX, bodyY); val l = pose(image, label, panel.center, bodyX, bodyY); poses++
+                            record.put("bodyScale", JSONArray(listOf(bodyX, bodyY)))
                             record.put("iconPose", JSONArray(listOf(i.sx, i.sy, i.dx, i.dy, i.correlation)))
                                 .put("labelPose", JSONArray(listOf(l.sx, l.sy, l.dx, l.dy, l.correlation))).put("poseFloor", PoseFloor)
                                 .put("poseReach", PoseReach).put("poseMeasured", i.measured() && l.measured())
@@ -297,7 +303,7 @@ class QueueRemoveFaceTest {
                                 apart += "frame $frame p=$p icon=$i label=$l"
                         }
                         if (p <= .16f && seated(panel, home, expanded)) {
-                            val result = match(image, icon, label, panel.center)
+                            val result = match(image, icon, label, panel.center, bodyX, bodyY)
                             checks += result
                             if (hidden) retainedSamples++
                             record.put("iconCorrelation", result.icon).put("labelCorrelation", result.label)
