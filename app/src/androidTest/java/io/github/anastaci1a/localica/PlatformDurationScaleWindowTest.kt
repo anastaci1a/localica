@@ -107,12 +107,32 @@ class PlatformDurationScaleWindowTest {
         }
         fail("$label; last=${published.get()?.engine}; profile=${profile.get()}")
     }
+    private fun shell(command: String) = ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
+        .bufferedReader().use { it.readText() }
     private fun setting(value: String?) {
         require(value == null || value.toFloatOrNull()?.let { it.isFinite() && it >= 0f } == true)
-        val command = if (value == null) "settings delete global animator_duration_scale"
-            else "settings put global animator_duration_scale $value"
-        ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
-            .bufferedReader().use { it.readText() }
+        shell(if (value == null) "settings delete global animator_duration_scale" else "settings put global animator_duration_scale $value")
+    }
+    /** The window manager re-reads a deleted key with its current value as the default, so a class that ends at 0 and deletes
+     * leaves every later window (the native IME animation among them) at 0 (#862, #869). Restore through 1 and assert the live
+     * values: the window manager's own and this process's ValueAnimator scale, not only the Settings key. */
+    private fun restore(original: String?) {
+        val expected = original?.toFloat() ?: 1f
+        if (original == null) setting("1")
+        setting(original)
+        assertEquals(original, Settings.Global.getString(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE))
+        val deadline = SystemClock.uptimeMillis() + 5000
+        var live = ""
+        while (SystemClock.uptimeMillis() < deadline) {
+            val windowManager = Regex("mAnimatorDurationScale=([0-9.]+)").find(shell("dumpsys window"))?.groupValues?.get(1)?.toFloatOrNull()
+            val process = android.animation.ValueAnimator.getDurationScale()
+            live = "windowManager=$windowManager process=$process"
+            if (process == expected && (windowManager == null || windowManager == expected)) {
+                android.util.Log.i("PlatformDurationScale", "restored live $live"); return
+            }
+            SystemClock.sleep(50)
+        }
+        fail("Live animator scale restored to $expected; $live")
     }
     private fun scale(value: Float) {
         setting(value.toString())
@@ -155,8 +175,7 @@ class PlatformDurationScaleWindowTest {
                 throw thrown
             } finally {
                 val restored = runCatching {
-                    setting(original)
-                    assertEquals(original, Settings.Global.getString(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE))
+                    restore(original)
                     await("Window observes restored scale") { it.systemScale == (original?.toFloatOrNull() ?: 1f) }
                 }.exceptionOrNull()
                 File(directory, "window.txt").writeText("${profile.get()}\nrestored=${restored == null}\n")
