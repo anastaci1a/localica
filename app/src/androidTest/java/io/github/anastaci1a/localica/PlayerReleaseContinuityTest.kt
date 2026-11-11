@@ -58,7 +58,7 @@ class PlayerReleaseContinuityTest {
         // A touch on the moving sheet only catches it (#608 contact); the reversal is the surface's click intent.
         onNode(SemanticsMatcher("Expand player") { it.config.getOrElseNullable(SemanticsActions.OnClick) { null }?.label == "Expand player" })
             .performSemanticsAction(SemanticsActions.OnClick); frames(40, travel, frames)
-        verifyReleaseLaw("tap/Back/tap", frames, scene.recorder.joins, fallbackJoin(t0, 0.0, 0.0, true))
+        verifyReleaseLaw(SheetLaw, "tap/Back/tap", frames, scene.recorder.joins, fallbackJoin(t0, 0.0, 0.0, true))
         assertEquals("tap/Back/tap settles expanded", 1.0, frames.last().p, 1e-3)
     }
 
@@ -72,7 +72,7 @@ class PlayerReleaseContinuityTest {
         val release = mainClock.currentTime * 1_000_000; val p0 = 1 - top() / travel
         frames(45, travel, frames)
         val v = if (hold > 0) 0.0 else step / .016 / travel
-        verifyReleaseLaw(label, frames, scene.recorder.joins, fallbackJoin(release, p0, v, expectOpen))
+        verifyReleaseLaw(SheetLaw, label, frames, scene.recorder.joins, fallbackJoin(release, p0, v, expectOpen))
         assertEquals("$label settles at the release decision", if (expectOpen) 1.0 else 0.0, frames.last().p, 1e-3)
     }
     @Test fun slowOpeningReleaseBelowDeadBandUsesHalfway() = releaseCase("slow", 3f, 30, false, expectOpen = false)
@@ -88,7 +88,7 @@ class PlayerReleaseContinuityTest {
         drag(from, (travel * fraction / 24).toFloat(), 24, hold = 8)
         val release = mainClock.currentTime * 1_000_000; val p0 = 1 - top() / travel
         frames(45, travel, frames)
-        verifyReleaseLaw("halfway $fraction", frames, scene.recorder.joins, fallbackJoin(release, p0, 0.0, open))
+        verifyReleaseLaw(SheetLaw, "halfway $fraction", frames, scene.recorder.joins, fallbackJoin(release, p0, 0.0, open))
         assertEquals("near-50% stationary release at $p0", if (open) 1.0 else 0.0, frames.last().p, 1e-3)
     }
 
@@ -104,7 +104,7 @@ class PlayerReleaseContinuityTest {
         repeat(10) { onRoot().performTouchInput { moveBy(Offset(0f, 24f), delayMillis = 16) } }
         onRoot().performTouchInput { up() }
         frames(45, travel, frames)
-        verifyReleaseLaw("catch/reverse", frames, scene.recorder.joins, fallbackJoin(0, 0.0, 0.0, true))
+        verifyReleaseLaw(SheetLaw, "catch/reverse", frames, scene.recorder.joins, fallbackJoin(0, 0.0, 0.0, true))
         assertEquals("reversed release follows its downward velocity", 0.0, frames.last().p, 1e-3)
     }
 
@@ -118,7 +118,7 @@ class PlayerReleaseContinuityTest {
         onRoot().performTouchInput { up() }
         val release = mainClock.currentTime * 1_000_000; val p0 = 1 - top() / travel
         frames.clear(); frames(45, travel, frames)
-        verifyReleaseLaw("still tap on a moving sheet", frames, scene.recorder.joins, fallbackJoin(release, p0, 0.0, p0 >= .5))
+        verifyReleaseLaw(SheetLaw, "still tap on a moving sheet", frames, scene.recorder.joins, fallbackJoin(release, p0, 0.0, p0 >= .5))
         assertEquals("the release settles by position, not as a tap toggle", if (p0 >= .5) 1.0 else 0.0, frames.last().p, 1e-3)
     }
 
@@ -134,7 +134,7 @@ class PlayerReleaseContinuityTest {
         assertTrue("collapse is in flight with the header present at p=${frames.last().p}", frames.last().p > .72 && frames.last().p < 1.0)
         onNodeWithContentDescription("Hide lyrics").performSemanticsAction(SemanticsActions.OnClick)
         frames(40, travel, frames)
-        verifyReleaseLaw("lyrics during collapse", frames, scene.recorder.joins, fallbackJoin(t0, 1.0, 0.0, false))
+        verifyReleaseLaw(SheetLaw, "lyrics during collapse", frames, scene.recorder.joins, fallbackJoin(t0, 1.0, 0.0, false))
         assertEquals("collapse completes through the lyrics toggle", 0.0, frames.last().p, 1e-3)
     }
 }

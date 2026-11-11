@@ -24,12 +24,14 @@ class FaceExpansionTest {
         face.measured(centeredFrame(compact), centeredFrame(expanded))
         assertFalse(face.view.expanded); assertEquals(0f, face.view.phase.target, 0f)
         val duration = expansionDuration(geometry.expansion, basis.edgeTravelPx.toDouble(), 1000.0, 1.0, 0.0, 0.0, 1.0, 1.0 / 120)
-        h.advance(duration / 2); val mid = face.view.phase.value()
+        // #846: the v0.33.21 spring is front-loaded (98 % by half its duration), so sample an eighth in, against the law.
+        h.advance(duration / 8); val mid = face.view.phase.value()
         assertTrue("Mid flight: $mid", mid > .05f && mid < .95f)
+        assertEquals(1 - unitCurve(geometry.expansion.core).at(1.0 / 8), mid.toDouble(), 1e-3)
         // Layout re-measures every frame of the morph; an unchanged basis is no new intent.
         val stamp = h.clock.stampNow; val sample = face.view.phase.sampleAt(stamp)
         face.measured(centeredFrame(compact), centeredFrame(expanded)); assertEquals(sample, face.view.phase.sampleAt(stamp))
-        h.advance(duration / 2 + 1.0 / 60); assertTrue(face.view.phase.settled); assertEquals(0f, face.view.phase.value(), 0f)
+        h.advance(duration * 7 / 8 + 1.0 / 60); assertTrue(face.view.phase.settled); assertEquals(0f, face.view.phase.value(), 0f)
         assertEquals(0, h.clock.activeCount)
     }
 

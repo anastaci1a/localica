@@ -14,7 +14,8 @@ class PreparedOverlapTest {
      * phase .4, which is what made the old window fail; the #846 capped law moves slower there, so the red control keeps this law. */
     private val rc3Law = ExpansionSpec(EasingSpec(.242192f,.999967f,.511935f,.997652f),426.086832f,.500401615f,1.41952128f,.73607278f,.5f,140f,.25f,.5f,.05f)
 
-    /** Returns the visible overlap counts of the shipped and the old preparation window over one second. */
+    /** Returns the visible overlap counts of the shipped and the old preparation window over two seconds, which covers the
+     * restored v0.33.21 popup spring (929 ms) after its native gate (#846). */
     private fun flight(hz: Int, law: ExpansionSpec?): Pair<Int, Int> {
         val spec = (uiSpec(InterfaceSettings(), law?.let { UiSpecData(expansion = it) },
             ExpansionGeometryDomain(1000f, 4000f, 1f / 30)) as SpecResult.Accepted).spec
@@ -30,7 +31,7 @@ class PreparedOverlapTest {
             motion.place(home, envelope, 1f)
             var admitted = false
             var firstAdmission = -1
-            repeat(hz) { frame ->
+            repeat(2 * hz) { frame ->
                 h.advance(1.0 / hz)
                 val phase = motion.expansion.phase.valueAt(h.clock.stampNow)
                 val preparation = motion.preparationCurve.at(phase)
