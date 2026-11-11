@@ -1132,7 +1132,7 @@ class WorkflowContract(unittest.TestCase):
         import yaml
         jobs = yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']
         shards = jobs['device-tests']
-        self.assertEqual(35, shards['timeout-minutes'])
+        self.assertEqual(50, shards['timeout-minutes'])
         self.assertFalse(shards['strategy']['fail-fast'])
         self.assertFalse(shards.get('continue-on-error', False))
         summary = jobs['device-tests-summary']
@@ -1162,6 +1162,9 @@ class WorkflowContract(unittest.TestCase):
         self.assertIn('app/build/outputs/connected_android_test_additional_output/', paths)
         self.assertIn('app/build/outputs/androidTest-results/', paths)
         self.assertIn('app/build/reports/androidTests/', paths)
+        self.assertIn('device-method-index.txt', paths)
+        index = next(step for step in steps if step.get('name') == 'Index per-method device results')
+        self.assertEqual('always()', index['if'])
 
     def test_native_emulator_failures_retain_crash_database_and_kernel_output(self):
         import yaml
