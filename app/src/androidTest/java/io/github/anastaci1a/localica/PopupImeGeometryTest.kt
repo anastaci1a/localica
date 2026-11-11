@@ -147,8 +147,9 @@ class PopupImeGeometryTest {
         if (editor) for (slot in listOf("sheet", "frame", "header", "body", "footer"))
             slots[slot] = compose.onNodeWithTag("tag-editor-$slot", true).fetchSemanticsNode().layoutInfo.coordinates
         var mixedPublished = false
-        val probe = NativeProbe(view, slots, telemetry) { ime ->
-            if (mixedContent && !mixedPublished && ime in 85..599) {
+        val probe = NativeProbe(view, slots, telemetry) { ime, target ->
+            // Any strictly intermediate native frame is a delta; a fixed pixel window misses it when the emulator drops frames.
+            if (mixedContent && !mixedPublished && ime in 1 until target) {
                 mixedPublished = true
                 events += "${SystemClock.uptimeMillis()},${System.nanoTime()},mixed-content-published,${System.identityHashCode(window)},$ime,${Thread.currentThread().id}"
                 playlists.value = PlaylistState(listOf(ManualPlaylist(id = "ime-existing", name = "Existing")), loading = false)
@@ -177,24 +178,26 @@ class PopupImeGeometryTest {
             field.assertIsDisplayed()
             assertTrue("Native IME supplied changing geometry", probe.nativeInsets.distinct().size > 2)
         } finally {
-            compose.runOnUiThread {
+            val (rows, eventRows) = compose.runOnUiThread {
                 activeProbe = null
                 view.viewTreeObserver.removeOnPreDrawListener(probe.beforeDraw)
                 view.viewTreeObserver.removeOnDrawListener(probe.draw)
                 ViewCompat.setWindowInsetsAnimationCallback(probe, null)
                 (probe.parent as? ViewGroup)?.removeView(probe)
-                val dir = File(instrumentation.targetContext.getExternalFilesDir(null), "popup-ime-geometry").apply { mkdirs() }
-                val name = if (editor && playerScene) "player-tag-editor" else if (editor) "tag-editor" else if (playerScene) "player-add-to-playlists" else if (mixedContent) "mixed-content" else "add-to-playlists"
-                File(dir, "$name.csv").writeText(probe.rows.joinToString("\n"))
-                File(dir, "$name-events.csv").writeText(
-                    "uptime,nanos,event,windowId,value,threadId\n" + events.joinToString("\n"))
+                probe.rows.toList() to events.toList()
             }
+            // Serialize the immutable snapshot on the instrumentation thread, never on Main.
+            val dir = File(instrumentation.targetContext.getExternalFilesDir(null), "popup-ime-geometry").apply { mkdirs() }
+            val name = if (editor && playerScene) "player-tag-editor" else if (editor) "tag-editor" else if (playerScene) "player-add-to-playlists" else if (mixedContent) "mixed-content" else "add-to-playlists"
+            File(dir, "$name.csv").writeText(rows.joinToString("\n"))
+            File(dir, "$name-events.csv").writeText(
+                "uptime,nanos,event,windowId,value,threadId\n" + eventRows.joinToString("\n"))
             compose.runOnIdle { controller.close() }
             sceneAudio?.delete()
         }
     }
 
-    private inner class NativeProbe(private val host: View, private val slots: Map<String, LayoutCoordinates>, private val telemetry: Map<String, Float>, private val onImeProgress: (Int) -> Unit) : View(host.context) {
+    private inner class NativeProbe(private val host: View, private val slots: Map<String, LayoutCoordinates>, private val telemetry: Map<String, Float>, private val onImeProgress: (Int, Int) -> Unit) : View(host.context) {
         var phase = "idle"
         val opened = CountDownLatch(1)
         val closed = CountDownLatch(1)
@@ -223,7 +226,7 @@ class PopupImeGeometryTest {
                     animationIds = runningAnimations.joinToString("|") { System.identityHashCode(it).toString() }
                     ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
                     nativeInsets += ime
-                    onImeProgress(ime)
+                    onImeProgress(ime, target)
                     record("progress"); return insets
                 }
                 override fun onEnd(animation: WindowInsetsAnimationCompat) {
