@@ -355,13 +355,13 @@
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "75dab5bd0849ffb08a98e3fa7b6c1b2a5aa729cce7008b4f419f65c9e156102b",
+      "codeSha256": "8f72c0a5739d9817743de5e09718b6db7bb868e3d31a27a003f4f7715647f276",
       "removedBy": "U10.05",
       "reason": "U10.05 removes (second recorded U10.03 relabel, lead decision 2026-11-07 12:10 PM): player handle lifetime gate (player local visibility, U10.05); was U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).g",
       "relabel": "U10.03-relabel-2-2026-11-07",
       "reanchoredFrom": {
-        "codeSha256": "3f9191bd211bf716424847b7d2ed221845e4003494a439e269e57550bab80854",
-        "errorLine1": "            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = handleReveal }) {",
+        "codeSha256": "75dab5bd0849ffb08a98e3fa7b6c1b2a5aa729cce7008b4f419f65c9e156102b",
+        "errorLine1": "            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).glassShadowOpacity { handleReveal }) {",
         "errorLine2": "                ~~~~~~~~~~~~~~~~~",
         "message": "Use Curve maps and owner-only mutation",
         "ordinal": 0
