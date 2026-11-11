@@ -1,46 +1,64 @@
-<!-- Release: v0.33.21 -->
+<!-- Release: v0.34.0 -->
 
-# Release v0.33.21
+# Release v0.34.0
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
 This optimized, non-debuggable build uses R8 and updates the existing app in place.
 
+Preparation draft: reconcile the proposed changes and issue list against the accepted candidate before freezing verification. No pending fix or issue closure is certified here.
+
 ## Changes
 
-- Add flat None rendering while preserving the reviewed Normal and Single-Tone appearance.
-- Remove large Last.fm opening stalls and reuse matching results during scrolling.
-- Enforce operator commit identity, the five-workflow policy and reliable CI dependency preparation.
-- Ship #738 emulator-loss diagnostics and recovery gating through #752; native recovery qualification remains incomplete.
+- Share the motion engine across player, Queue, popup, scrollbar, pinch and settings-search interactions.
+- Consolidate control layouts, lyrics-header presentation, transport outlines, preference frames and image chooser geometry.
+- Provide the shared UI context to tag editor, jobs and interrupted-edit recovery dialogs.
+- Pending final acceptance: honor Android animation speed and Remove animations, bound popup retirement, preserve resting-player navigation and retain ongoing scrollbar motion during reduced-motion changes.
 
 ## Resolved issues
 
-- https://github.com/anastaci1a/localica/issues/793 - Remove the stale test inventory entry blocking tooling contracts.
-- https://github.com/anastaci1a/localica/issues/789 - Enforce operator commit identity and reject attribution trailers.
-- https://github.com/anastaci1a/localica/issues/791 - Clean repository history and enforce the five-workflow inventory.
-- https://github.com/anastaci1a/localica/issues/752 - Prepare instrumentation dependencies before starting offline device checks.
-- https://github.com/anastaci1a/localica/issues/740 - Add flat None rendering with settled pixel regression coverage.
-- https://github.com/anastaci1a/localica/issues/775 - Reject retired popup parents across renderer changes.
-- https://github.com/anastaci1a/localica/issues/776 - Preserve flat drag surfaces and shadows across redraws.
-- https://github.com/anastaci1a/localica/issues/777 - Use current renderer modes consistently in settings and UI specifications.
-- https://github.com/anastaci1a/localica/issues/753 - Remove large synchronous Last.fm opening and Matches-switch stalls.
-- https://github.com/anastaci1a/localica/issues/779 - Reuse Last.fm matching and artist photo jobs during steady scrolling.
+{{FINAL_ACCEPTED_R2_ISSUE_RECONCILIATION}}
+
+The following proposed resolutions require final source and acceptance reconciliation. Remove incomplete or unshipped entries before freeze, and include every other completed issue actually delivered.
+
+- https://github.com/anastaci1a/localica/issues/721 - Verify Search direct return independently of native keyboard movement.
+- https://github.com/anastaci1a/localica/issues/818 - Provide the shared engine context to root-level tag editor and recovery dialogs.
+- https://github.com/anastaci1a/localica/issues/667 - Keep utility popup returns behind the mini player and bottom navigation.
+- https://github.com/anastaci1a/localica/issues/676 - Preserve player collapse when Back interrupts a closing lyrics drag.
+- https://github.com/anastaci1a/localica/issues/679 - Reduce repeated UI lint graph work.
+- https://github.com/anastaci1a/localica/issues/693 - Preserve source shadows through canceled popup openings and returns.
+- https://github.com/anastaci1a/localica/issues/811 - Retain popup parents until pending descendant handoff completes.
+- https://github.com/anastaci1a/localica/issues/812 - Preserve outgoing popup continuity during host navigation.
+- https://github.com/anastaci1a/localica/issues/813 - Verify complete native shadow-field receipts for existing controls.
+- https://github.com/anastaci1a/localica/issues/814 - Preserve native preparation, reversal and closing-window retirement.
+- https://github.com/anastaci1a/localica/issues/815 - Retain complete popup shadows through reversal and retirement.
+- https://github.com/anastaci1a/localica/issues/835 - Respect Android animation duration and Remove animations.
+- https://github.com/anastaci1a/localica/issues/836 - Bound popup retirement when its mounted trigger is no longer drawn.
+- https://github.com/anastaci1a/localica/issues/837 - Keep a resting player at rest during collection navigation.
+- https://github.com/anastaci1a/localica/issues/838 - Preserve ongoing scrollbar motion when reduced motion changes.
+- https://github.com/anastaci1a/localica/issues/841 - Check merge commits without the workflow-guard false positive.
+
+Scrollbar behavior changes in #704 are not claimed by this preparation. Add them only if their separate reviewed implementation joins the accepted candidate.
 
 ## Known issues
 
+- The extended Reduced-Motion audit of popup parent/child handoffs, Search return/reopening and live reduction continues as the first v0.34.1 item.
+
+It is incomplete for v0.34.0; its findings and strict acceptance criteria remain open.
+
+- Native popup IME test flake on API 36: https://github.com/anastaci1a/localica/issues/786.
+- Last.fm group-list test flake at large fonts in RTL on API 26: https://github.com/anastaci1a/localica/issues/787. Its fix is deferred until after this release.
+- API 36 startup test failure with an empty failure and device offline: https://github.com/anastaci1a/localica/issues/824. Complete coverage remains required.
 - Native emulator-loss recovery remains unqualified: https://github.com/anastaci1a/localica/issues/738.
-
 - WindowCapture test flakes: https://github.com/anastaci1a/localica/issues/734.
-- DocumentsUI and artwork restoration test flakes: https://github.com/anastaci1a/localica/issues/530.
-- Native popup IME test failures: https://github.com/anastaci1a/localica/issues/786.
-- Last.fm group-list test flake: https://github.com/anastaci1a/localica/issues/787.
-- Remaining Last.fm interaction performance: https://github.com/anastaci1a/localica/issues/780.
-- Cold Last.fm matching cost: https://github.com/anastaci1a/localica/issues/794.
+- DocumentsUI and artwork restoration test flakes: https://github.com/anastaci1a/localica/issues/530. These failures are not waived.
+- Remaining Last.fm performance work: https://github.com/anastaci1a/localica/issues/780 and https://github.com/anastaci1a/localica/issues/794.
+- The 8.3 ms whole-frame performance objective remains unmet and unchanged.
 
-The lead authorizes a release waiver only for the pre-existing #786 popup IME failures and #787 group-list flake. Original failed results remain failed. All other release gates remain required. The 8.3 ms whole-frame performance target remains unmet and unchanged.
+The fresh release waiver covers only the exact filed signatures of #786, #787 and #824. Every other retained release gate remains required. Final publication notes must identify the actual applied subset and producer run without changing original failed results.
 
 ## Install
 
-1. Download `localica-v0.33.21-pre-release.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.34.0-pre-release.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
