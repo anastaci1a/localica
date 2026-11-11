@@ -23,9 +23,11 @@ class UiSpecTest {
         assertEquals(listOf(180,270,220,220,300,240,300,165,300,225),MotionProfile.entries.take(10).map { (stock.motion.getValue(it) as MotionProfileSpec).durationMs })
         assertEquals(MarqueeSpec(1800,220,260,30f,EasingSpec(1f/3,0f,2f/3,1f)),stock.motion[MotionProfile.Marquee])
         assertEquals(ListMotionSpec(350,500,120,EasingSpec(.4f,0f,.2f,1f),EasingSpec(0f,0f,1f,1f)),stock.motion[MotionProfile.Scroll])
-        assertEquals(1.6330212f,stock.expansion.core.maxSlope,1e-5f)
+        // #846: the v0.33.21 popup spring, a / (e (1 - (1 + a) e^-a)) at its settle span a.
+        assertEquals(4.3253593f,stock.expansion.core.maxSlope,1e-5f)
         assertEquals(.0003f,SettleThreshold,0f); assertEquals(.003f,SettleVelocityThreshold,0f)
-        assertEquals(360f,stock.expansion.referenceDurationMs,0f)
+        assertEquals(929.4228f,stock.expansion.referenceDurationMs,1e-3f)
+        assertEquals(0f,stock.expansion.sizeExponent,0f); assertEquals(0f,stock.sheetExpansion.sizeExponent,0f); assertEquals(0f,stock.lyricsExpansion.sizeExponent,0f)
         assertEquals(.05f,stock.expansion.band,0f)
         assertEquals(22.8f,stock.clearance.getValue(Clearance.ShadowInset).value,.00001f)
     }
@@ -50,6 +52,10 @@ class UiSpecTest {
         }
         for(d in listOf(15,16,2000,2001)) assertEquals(d in 16..2000,uiSpec(settings,UiSpecData(motion=mapOf(MotionProfile.Control to MotionProfileSpec(d,EasingSpec(.4f,0f,.2f,1f))))) is SpecResult.Accepted)
         assertTrue(uiSpec(settings,UiSpecData(radius=mapOf(Radius.Pill to 1.dp))) is SpecResult.Rejected)
+        // #846 spring cores: a finite settle span in 1..40; size exponent 0 (size independent) is admitted, negative is not.
+        for(span in listOf(Float.NaN,Float.POSITIVE_INFINITY,0f,-1f,.5f,41f)) assertTrue("span $span",uiSpec(settings,UiSpecData(expansion=StockUiSpec.expansion.copy(core=SpringCurveSpec(span)))) is SpecResult.Rejected)
+        for(span in listOf(1f,11.756371f,40f)) assertTrue("span $span",uiSpec(settings,UiSpecData(expansion=StockUiSpec.expansion.copy(core=SpringCurveSpec(span)))) is SpecResult.Accepted)
+        assertTrue(uiSpec(settings,UiSpecData(sheetExpansion=StockUiSpec.sheetExpansion.copy(sizeExponent=-.1f))) is SpecResult.Rejected)
     }
     @Test fun acceptedMapsAreDefensiveAndUnmodifiableIncludingStock() {
         val input=mutableMapOf(Space.Base to 13.dp)
@@ -91,7 +97,7 @@ class UiSpecTest {
         assertEquals(.0603517,tau,.0000001); assertTrue(lambda*tau<=1.000000001)
     }
     @Test fun easingSupremumBoundsIndependentDerivativeIncludingRemovableTangents() {
-        val curves=listOf(EasingSpec(0f,0f,.2f,1f),EasingSpec(.4f,0f,.2f,1f),StockUiSpec.expansion.core,EasingSpec(1f/3,0f,2f/3,1f),EasingSpec(0f,0f,1f,1f))
+        val curves=listOf(EasingSpec(0f,0f,.2f,1f),EasingSpec(.4f,0f,.2f,1f),StockUiSpec.sheetExpansion.core as EasingSpec,EasingSpec(1f/3,0f,2f/3,1f),EasingSpec(0f,0f,1f,1f))
         for(e in curves) for(i in 1..10000) {
             val t=i/10001.0
             fun derivative(a: Float,b: Float)=3*(1-t)*(1-t)*a+6*(1-t)*t*(b-a)+3*t*t*(1-b)

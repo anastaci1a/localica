@@ -25,7 +25,7 @@ class ContactAdmissionCounterexampleTest {
     }
     @Test fun halfBandCoreStillFailsWhenCatchingAnAutomaticStartupPeak() {
         val candidate=StockUiSpec.expansion.copy(core=EasingSpec(.25f,-.15f,.75f,.8f))
-        val extrema=easingExtrema(candidate.core)
+        val extrema=curveExtrema(candidate.core)
         assertTrue(extrema.start>=-candidate.band/2 && extrema.endInclusive<=1+candidate.band/2)
         val result=uiSpec(InterfaceSettings(),UiSpecData(expansion=candidate))
         assertTrue(result is SpecResult.Rejected)

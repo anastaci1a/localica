@@ -21,7 +21,7 @@ class ExpansionBoundaryPropertyTest {
             val plan=expansionPlan(FrameStamp(0,0),spec,T,sigma,listOf(doubleArrayOf(p,v,q,lo,hi)))
             val curve=plan.segment(p,v,q,lo..hi)
             assertTrue("lower seed600201 case$i",curve.extrema.start>=lo); assertTrue("upper seed600201 case$i",curve.extrema.endInclusive<=hi)
-            val core=Bezier(spec.core); val tin=plan.tauIn; val tout=plan.tauOut
+            val core=unitCurve(spec.core); val tin=plan.tauIn; val tout=plan.tauOut
             assertEquals(p,curve.value(0.0),0.0); assertEquals(v,curve.velocity(0.0),0.0)
             assertEquals(p+(q-p)*core.at(tin/T),curve.value(tin),1e-12)
             assertEquals((q-p)*core.at(tin/T,true)/T,curve.velocity(tin),1e-9)
