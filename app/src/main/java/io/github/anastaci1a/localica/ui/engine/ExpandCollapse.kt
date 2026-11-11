@@ -185,7 +185,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         }
         val states=mutableListOf(doubleArrayOf(x,v,target,mainLaw.omega/sigma,mainLaw.zeta.toDouble(),1.0)); if(c!=null) states+=doubleArrayOf(cx,cv,target,crossLaw.omega/sigma,crossLaw.zeta.toDouble(),1.0)
         residualStates?.forEachIndexed { i,s -> val l=if(snap[i]) crossLaw else mainLaw; states+=doubleArrayOf(s[0],s[1],0.0,l.omega/sigma,l.zeta.toDouble(),edges!![i].range.toDouble()) }
-        val plan=SpringPlan.of(stamp,sigma,display,states); val band=spec.band.toDouble()
+        val plan=SpringPlan.of(stamp,sigma,display,states); val band=law.model.band.toDouble()
         val phase=plan.segment(x,v,target,mainLaw,1.0,display).also { proven(it.extrema.start>=-band && it.extrema.endInclusive<=1+band,"phase ${it.extrema}") }
         val crossPhase=c?.let { plan.segment(cx,cv,target,crossLaw,1.0,display).also { t -> proven(t.extrema.start>=-band && t.extrema.endInclusive<=1+band,"cross ${t.extrema}") } }
         val entries=mutableListOf(motion to motion.prepareSegment(phase,target.toFloat(),stamp,plan,policy)); if(c!=null) entries+=c to c.prepareSegment(crossPhase!!,target.toFloat(),stamp,plan,policy)
