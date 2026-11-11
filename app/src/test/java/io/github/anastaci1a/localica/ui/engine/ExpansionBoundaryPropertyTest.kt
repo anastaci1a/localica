@@ -56,10 +56,11 @@ class ExpansionBoundaryPropertyTest {
             val plan=expansionPlan(FrameStamp(0,0),spec,T,sigma,listOf(doubleArrayOf(p,v,1.0,-spec.band.toDouble(),(1f+spec.band).toDouble())))
             if(multiplier==1.5) assertEquals(approved,plan.tauIn,0.0) else { worst=min(worst,plan.tauIn/approved); assertTrue(plan.tauIn>=.9*approved) }
         }
-        assertEquals(.906598,worst,2e-5)
+        // #846: the capped-peak core (max slope 1.633) never clamps the startup bridge, even at twice the measured release.
+        assertEquals(1.0,worst,0.0)
         val T=expansionDuration(spec,0.0,1000.0,.7,measured*1.5,1.0,1.0,1.0/120)
         val small=expansionPlan(FrameStamp(0,0),spec,T,1.0,listOf(doubleArrayOf(.7,measured*1.5,1.0,-.05,(1f+spec.band).toDouble())))
-        assertTrue(small.tauIn<min(1.0/120,T/4)) // A35 B/C telemetry review, never a feel gate.
+        assertEquals(min(1.0/120,T/4),small.tauIn,0.0) // A35 B/C telemetry review, never a feel gate; small objects are no longer clamped (#846).
     }
     @Test fun admittedSteepPluginsStillHaveFiniteRealChannelVelocities() {
         val stock=StockUiSpec.expansion

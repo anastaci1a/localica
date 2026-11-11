@@ -37,4 +37,16 @@ class ExpansionPeakVelocityTest {
             assertEquals(.1017 * sigma, t66, .0015)
         }
     }
+
+    @Test fun lyricsLawReproducesTheV03321LayoutTweenDurationAndPeak() {
+        // v0.33.21 PlayerSurface: tween(motionDuration(550)) with FastOutSlowIn = 412.5 ms (275 ms Faster).
+        val spec = StockUiSpec.lyricsExpansion
+        val fastOutSlowInPeak = 2.7345908033899957
+        for (sigma in listOf(1.0, 2.0 / 3)) for (ratio in listOf(.2, 1.0)) {
+            val duration = expansionDuration(spec, ratio * 1000, 1000.0, 0.0, 0.0, 1.0, sigma, 1.0 / 120)
+            assertEquals(.4125 * sigma, duration, 1e-9)
+            val law = Eased(0.0, 0.0, 1.0, spec.core, duration, sigma)
+            assertEquals(fastOutSlowInPeak / (.4125 * sigma), peak(law), 1e-3 * fastOutSlowInPeak / (.4125 * sigma))
+        }
+    }
 }
