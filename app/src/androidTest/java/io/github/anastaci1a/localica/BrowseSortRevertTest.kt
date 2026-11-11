@@ -22,7 +22,7 @@ class BrowseSortRevertTest {
         var failRandomize = true
         var failRevert = true
         val checkpoints = mutableListOf<OrderCheckpoint>()
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(LocalReducedMotion provides true) {
             BrowseSortDialog(route, BrowseStyle(), false, {}, { _, _ -> }, {},
                 onRandomize = { done ->
                     if (!failRandomize) { ids = ids.drop(1) + ids.first(); order = SavedOrder(ids) }
@@ -101,7 +101,7 @@ class BrowseSortRevertTest {
         var order by mutableStateOf(opening.saved)
         var failReverse = false
         val restored = mutableListOf<OrderCheckpoint>()
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(LocalReducedMotion provides true) {
             BrowseSortDialog(route, BrowseStyle(), false, {}, { _, _ -> }, {},
                 onRandomize = { done -> ids = ids.drop(1) + ids.first(); order = SavedOrder(ids); done(true) },
                 onReverseOrder = { done ->
@@ -151,7 +151,7 @@ class BrowseSortRevertTest {
         var ids by mutableStateOf(listOf("a"))
         var order by mutableStateOf(SavedOrder(ids, TrackSort.Title, false))
         var reverseCalls = 0
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(LocalReducedMotion provides true) {
             BrowseSortDialog(route, BrowseStyle(), false, {}, { _, _ -> }, {},
                 onRandomize = { it(true) },
                 onReverseOrder = { reverseCalls++; it(order) },

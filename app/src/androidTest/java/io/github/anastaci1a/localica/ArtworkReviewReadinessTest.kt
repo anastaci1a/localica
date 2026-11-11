@@ -131,7 +131,7 @@ class ArtworkReviewReadinessTest {
             fileName = "review.mp3", relativePath = "review.mp3")), sessionId = "filled-review-fixture"))
         val events = mutableListOf<String>()
         val saves = mutableListOf<TagPatch>()
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true,
                 LocalControlHaptics provides ControlHaptics { events += it.name }) {
                 // The real dialog/caller owns readiness and confirmation. Record, never write.

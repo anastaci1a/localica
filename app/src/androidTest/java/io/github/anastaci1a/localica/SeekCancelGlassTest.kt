@@ -40,7 +40,7 @@ class SeekCancelGlassTest {
         lateinit var artRecording: FrostedBackdrop
         lateinit var sceneRecording: FrostedBackdrop
         val state = SeekCancelTargetState()
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true,
+        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(LocalReducedMotion provides true,
             LocalGlassRendererRuntime provides runtime, LocalGlassSurfaceDrawObserver provides { drawn = it }) {
             artRecording = rememberFrostedBackdrop("art", dark = false)
             sceneRecording = rememberFrostedBackdrop("scene", dark = false)

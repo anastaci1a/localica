@@ -32,7 +32,7 @@ class NavbarHapticsTest {
 
     private fun fixture(overflow: Boolean = false, rtl: Boolean = false, deferSelection: Boolean = false) {
         val choices = if (overflow) MainTab.entries.take(8) else tabs
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalControlHaptics provides sink, LocalReducedMotion provides reduced,
                 LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                 Box(Modifier.size(if (overflow) 260.dp else 300.dp, 64.dp).testTag("haptic-tabs")) {

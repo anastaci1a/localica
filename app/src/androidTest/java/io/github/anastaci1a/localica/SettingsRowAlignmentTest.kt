@@ -44,7 +44,7 @@ class SettingsRowAlignmentTest {
     private fun show() {
         val state = LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("content://synthetic-origin", "Synthetic origin"))),
             loading = false)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             val device = LocalDensity.current
             density = device
             CompositionLocalProvider(LocalDensity provides Density(device.density, scale),

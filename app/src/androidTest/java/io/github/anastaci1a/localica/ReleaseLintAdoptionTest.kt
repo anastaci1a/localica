@@ -129,7 +129,7 @@ class ReleaseLintAdoptionTest {
     }
 
     private fun settings(name: String, reduced: Boolean, speed: Float, interrupt: Boolean = false) {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             ControlledScene { CompositionLocalProvider(LocalReducedMotion provides reduced, LocalMotionSpeed provides speed) {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                     Box(Modifier.fillMaxSize().background(Color.White).testTag("lint-content")) {
@@ -288,7 +288,7 @@ class ReleaseLintAdoptionTest {
     @Test fun playerReducedPositiveVisibility() = player("player-reduced", true, false)
 
     @Test fun excludedFoldersNativeDialogGeometryDensityAndPixels() {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             ControlledScene { CompositionLocalProvider(LocalReducedMotion provides true) {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                     FolderSettings(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("content://lint-fixture", "Lint folder"))),

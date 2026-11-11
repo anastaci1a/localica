@@ -50,7 +50,7 @@ class ArtworkTintPlaceholderTest {
     /** Reduced motion removes the sweep so the base is sampled exactly. */
     private fun content(reduced: Boolean, body: @Composable () -> Unit) = compose.setContent {
         CompositionLocalProvider(LocalReducedMotion provides reduced) {
-            LocalicaTheme {
+            EngineTheme(reduced = reduced) {
                 dark = MaterialTheme.colorScheme.surface.run { (red + green + blue) / 3f < .5f }
                 neutral = MaterialTheme.colorScheme.surfaceContainer
                 body()

@@ -24,7 +24,7 @@ class PopupEnvelopeTest {
     @Test fun dialogHostUsesNaturalWidthWithoutQueryingTheLiveSubcomposition() {
         var natural by mutableStateOf(220.dp)
         var expected = 0
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             expected = with(LocalDensity.current) { natural.roundToPx() }
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 GlassAlertDialog({}, { ActionTextButton({}) { androidx.compose.material3.Text("Save") } },
@@ -205,7 +205,7 @@ class PopupEnvelopeTest {
         var generation by mutableIntStateOf(0)
         var randomizeOk = true
         var densityValue = 1f
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             val density = LocalDensity.current
             densityValue = density.density
             CompositionLocalProvider(LocalDensity provides Density(density.density, scale),

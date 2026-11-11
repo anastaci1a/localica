@@ -69,7 +69,7 @@ class QueueSongTransitionTest {
 
     private fun mount(first: PlayerVisual, awaitReady: Boolean = true, queueShown: Boolean = true) {
         visual = first
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalDensity provides Density(1f), LocalReducedMotion provides reduced,
                 LocalPlayerBackgroundPreparationBarrier provides preparationBarrier) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(if (queueShown) Color.Transparent else Color.Magenta)) {

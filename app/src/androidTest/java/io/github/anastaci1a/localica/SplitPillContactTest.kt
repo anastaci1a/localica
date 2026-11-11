@@ -22,7 +22,7 @@ class SplitPillContactTest {
         lateinit var options: GlassAnchor
         var clicks = 0
         var reduced by mutableStateOf(false)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
                 val source = rememberFrostedBackdrop(Unit, dark = false)
                 utility = rememberGlassAnchor(); options = rememberGlassAnchor()

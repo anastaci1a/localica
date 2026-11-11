@@ -35,7 +35,7 @@ class ActionStripDrawingTest {
         var randomizations = 0
         var reversals = 0
         var direction by mutableStateOf(LayoutDirection.Ltr)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalLayoutDirection provides direction, LocalReducedMotion provides true) {
                 Column(Modifier.width(240.dp).padding(top = 32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     GlassActionRow {

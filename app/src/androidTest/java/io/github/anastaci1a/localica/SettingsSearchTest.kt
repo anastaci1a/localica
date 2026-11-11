@@ -85,7 +85,7 @@ class SettingsSearchTest {
 
     @Test fun highlightRemainsVisibleOverOpaqueRowContent() {
         lateinit var focus: SettingsSearchFocus
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             val scroll = rememberScrollState()
             focus = remember { SettingsSearchFocus("Glass", scroll) }
             MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color.Magenta)) {

@@ -307,7 +307,7 @@ class BrowseOrderViewportTest {
             // Keep unused sources stable: their identity is part of the presentation revision.
             val noQueues = QueueUiState(loading = false)
             val noPlaylists = PlaylistState(loading = false)
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = reducedMotion) {
                 CompositionLocalProvider(LocalReducedMotion provides reducedMotion,
                     LocalGlassContactTrace provides { label, phase, point, consumed ->
                         android.util.Log.i("OrderContact", "queue=$queue label=$label phase=$phase point=$point consumed=$consumed")

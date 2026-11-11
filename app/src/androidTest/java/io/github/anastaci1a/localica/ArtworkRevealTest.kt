@@ -29,7 +29,7 @@ class ArtworkRevealTest {
 
     private fun content() = compose.setContent {
         CompositionLocalProvider(LocalReducedMotion provides reduced) {
-            LocalicaTheme {
+            EngineTheme(reduced = reduced) {
                 ArtworkImage(image?.asImageBitmap(), false,
                     Modifier.size(64.dp).testTag("reveal").composed { recompositions.incrementAndGet(); this }, RectangleShape)
             }

@@ -52,7 +52,7 @@ class GlassRendererSwitchingTest {
         val childMounted = AtomicReference<Mounted?>()
         compose.setContent {
             CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {
-                LocalicaTheme {
+                EngineTheme(reduced = true) {
                     CompositionLocalProvider(LocalReducedMotion provides true,
                         LocalGlassAppearance provides GlassAppearance(whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
                         val scene = rememberFrostedBackdrop(Unit, dark = false)
@@ -222,7 +222,7 @@ class GlassRendererSwitchingTest {
         var childOpen by mutableStateOf(false)
         compose.setContent {
             CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {
-                LocalicaTheme {
+                EngineTheme(reduced = true) {
                     CompositionLocalProvider(LocalReducedMotion provides true) {
                         GlassAlertDialog(onDismissRequest = {}, title = { Text("Renderer parent") }, text = {
                             val owner = remember { Any() }

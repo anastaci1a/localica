@@ -116,7 +116,7 @@ class LoadingMaterialOpacityTest {
         var loading by mutableStateOf(true)
         val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(AndroidColor.GREEN) }
         val artwork = bitmap.asImageBitmap()
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             val currentView = LocalView.current
             SideEffect { view = currentView }
             CompositionLocalProvider(LocalReducedMotion provides true) {

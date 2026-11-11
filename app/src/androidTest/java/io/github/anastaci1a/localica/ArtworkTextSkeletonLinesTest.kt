@@ -60,7 +60,7 @@ class ArtworkTextSkeletonLinesTest {
         }
         val item = BrowserItem(MediaRef(MediaKind.Playlist, "skeleton-lines"), title, info, emptyList(), coverUri = uri)
         try {
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = true) {
                 CompositionLocalProvider(LocalArtworkTransit provides transit, LocalReducedMotion provides true,
                     LocalLoadingMaterialOpacity provides 1f,
                     LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {

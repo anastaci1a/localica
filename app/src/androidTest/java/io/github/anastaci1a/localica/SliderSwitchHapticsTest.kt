@@ -40,7 +40,7 @@ class SliderSwitchHapticsTest {
 
     private fun fixture(preference: Boolean = true, parent: Parent = Parent.None,
         range: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 3) {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalControlHaptics provides sink, LocalReducedMotion provides reduced) {
                 scroll = rememberScrollState()
                 inputMode = LocalInputModeManager.current

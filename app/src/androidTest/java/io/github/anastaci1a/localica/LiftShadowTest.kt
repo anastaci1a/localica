@@ -148,7 +148,7 @@ class LiftShadowTest {
 
     @Test fun liftShadowStrengthSettingSitsNextToTheShadowControlsSnapsToFivePercentAndResets() {
         var value by mutableStateOf(GlassAppearance())
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Glass appearance",
                     interfaceContent = { page -> GlassSettingsControls(value, page) { value = it } })

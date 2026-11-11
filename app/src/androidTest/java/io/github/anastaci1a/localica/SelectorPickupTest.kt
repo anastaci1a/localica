@@ -27,7 +27,7 @@ class SelectorPickupTest {
 
     private fun choices(horizontal: Boolean = true, parent: Boolean = false, rtl: Boolean = false,
         reduced: Boolean = true) {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalReducedMotion provides reduced,
                 LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
                 LocalControlHaptics provides ControlHaptics { pulses += it }) {

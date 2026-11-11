@@ -264,7 +264,7 @@ class SelectionMotionRenderingTest {
     @Test fun reducedMotionNeverKeepsAStaleDepartingLens() {
         var selected by mutableStateOf(false)
         lateinit var scene: SelectionScene
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 ConnectedSelectionHost(Modifier.size(100.dp)) {
                     scene = checkNotNull(LocalSelectionScene.current)

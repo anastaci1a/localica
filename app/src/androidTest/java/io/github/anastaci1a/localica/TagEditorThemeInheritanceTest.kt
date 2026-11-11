@@ -137,7 +137,7 @@ class TagEditorThemeInheritanceTest {
         var lightInk by mutableStateOf(true)
         var open by mutableStateOf(false)
         val callbackIdentities = mutableListOf<Any>()
-        compose.setContent { LocalicaTheme { GlassPanelTheme(!lightInk) { Scene(lightInk) {
+        compose.setContent { EngineTheme(reduced = true) { GlassPanelTheme(!lightInk) { Scene(lightInk) {
             TagEditorHost(controller) {
                 val callback = checkNotNull(LocalTagEdit.current)
                 SideEffect { callbackIdentities += callback }
@@ -187,7 +187,7 @@ class TagEditorThemeInheritanceTest {
         var lightInk by mutableStateOf(true)
         var opened: BrowserItem? = null
         var pageInk = Color.Unspecified
-        compose.setContent { LocalicaTheme { GlassPanelTheme(!lightInk) { Scene(lightInk) {
+        compose.setContent { EngineTheme(reduced = true) { GlassPanelTheme(!lightInk) { Scene(lightInk) {
             TagEditorHost(controller) {
                 key(lightInk) {
                     val color = if (lightInk) Color(0xFF181818) else Color(0xFFEAEAEA)
@@ -261,7 +261,7 @@ class TagEditorThemeInheritanceTest {
             assertEquals("Artwork popup title uses the accepted launch ink", accepted.ink,
                 textColor(compose.onNodeWithText("Choose artwork"), "Choose artwork"))
         }
-        compose.setContent { LocalicaTheme { GlassPanelTheme(!lightInk) { Scene(lightInk) {
+        compose.setContent { EngineTheme(reduced = true) { GlassPanelTheme(!lightInk) { Scene(lightInk) {
             TagEditorHost(controller) {
                 val launches = checkNotNull(LocalTagEditorLaunches.current)
                 SideEffect { launchOwner.set(launches) }
@@ -337,7 +337,7 @@ class TagEditorThemeInheritanceTest {
 
     @Test fun unspecifiedAmbientInkFallsBackToTheCurrentPaletteBeforeLaunching() {
         var lightInk by mutableStateOf(true)
-        compose.setContent { LocalicaTheme { GlassPanelTheme(!lightInk) { Scene(lightInk) {
+        compose.setContent { EngineTheme(reduced = true) { GlassPanelTheme(!lightInk) { Scene(lightInk) {
             TagEditorHost(controller) {
                 CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk)) { GlassPanelTheme(lightInk) {
                     CompositionLocalProvider(LocalContentColor provides Color.Unspecified) {
@@ -358,7 +358,7 @@ class TagEditorThemeInheritanceTest {
 
     @Test fun acceptedBackgroundSessionKeepsItsPresentationWhenTheJobsWindowReopens() {
         var lightInk by mutableStateOf(true)
-        compose.setContent { LocalicaTheme { GlassPanelTheme(!lightInk) { Scene(lightInk) {
+        compose.setContent { EngineTheme(reduced = true) { GlassPanelTheme(!lightInk) { Scene(lightInk) {
             TagEditorHost(controller) {
                 CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk)) { GlassPanelTheme(lightInk) {
                     val edit = presentedTagEdit()

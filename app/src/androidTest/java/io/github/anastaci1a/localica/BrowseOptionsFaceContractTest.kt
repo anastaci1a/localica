@@ -95,7 +95,7 @@ class BrowseOptionsFaceContractTest {
         var width by mutableStateOf(148.dp)
         var font by mutableFloatStateOf(1f)
         val sizes = mutableMapOf<String, IntSize>()
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalDensity provides Density(2.625f, font), LocalReducedMotion provides true) {
                 Column(Modifier.width(width).verticalScroll(rememberScrollState())) {
                     probes.forEachIndexed { index, probe ->
@@ -187,7 +187,7 @@ class BrowseOptionsFaceContractTest {
         var font by mutableFloatStateOf(1f)
         var width by mutableStateOf(148.dp)
         val sizes = mutableMapOf<String, IntSize>()
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalDensity provides Density(2.625f, font), LocalReducedMotion provides true) {
                 Column(Modifier.width(width).verticalScroll(rememberScrollState())) {
                     titles.forEachIndexed { index, title ->

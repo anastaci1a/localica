@@ -38,7 +38,7 @@ class ArtworkViewerGestureTest {
         wideViewport.value = landscape
         val bitmap = Bitmap.createBitmap(if (squareArt) 800 else if (portraitArt) 400 else 800, if (squareArt || portraitArt) 800 else 400,
             Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }.asImageBitmap()
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reducedMotion.value) {
             CompositionLocalProvider(LocalReducedMotion provides reducedMotion.value) {
                 Box(Modifier.size(if (wideViewport.value) 360.dp else 260.dp, if (wideViewport.value) 260.dp else 360.dp)
                     .background(Color.Black)) {

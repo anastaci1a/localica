@@ -32,7 +32,7 @@ class GlassRendererSettingsTest {
         var mode by mutableStateOf(GlassRendererMode.Normal)
         var changes = 0
         val runtime = GlassRendererRuntime(mode)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true, LocalGlassRendererRuntime provides runtime) {
                 SideEffect { runtime.request(mode) }
                 Column { GlassRendererPreference(mode) { mode = it; changes++ } }
@@ -58,7 +58,7 @@ class GlassRendererSettingsTest {
 
     @Test fun cancellingPreservesNormalAndExplainsOlderApiFallback() {
         val mode = GlassRendererMode.Normal
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 Column { GlassRendererPreference(mode) { fail("Cancel must not rewrite a restored request") } }
             }
@@ -75,7 +75,7 @@ class GlassRendererSettingsTest {
     @Test fun actualGlassSettingsResetRestoresNormalWithTheOtherDefaults() {
         var value by mutableStateOf(GlassAppearance(blur = .7f, depth = .9f, renderer = GlassRendererMode.SingleToneBlur))
         var changes = 0
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Glass",
                     interfaceContent = { section -> GlassSettingsControls(value, section) { value = it; changes++ } })

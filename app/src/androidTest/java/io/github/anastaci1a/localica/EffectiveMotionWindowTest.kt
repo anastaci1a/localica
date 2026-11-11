@@ -63,6 +63,7 @@ class EffectiveMotionWindowTest {
                     val system = rememberCoroutineScope().coroutineContext[MotionDurationScale]
                     val reduced = rememberEffectiveReducedMotion(appReduced)
                     LocalicaTheme {
+                        // This isolates the native duration-scale observer and legacy rememberGlassBody input, independently of Engine motion.
                         CompositionLocalProvider(LocalReducedMotion provides reduced) {
                             // Observe the output during composition; a delegated read only inside
                             // SideEffect would never subscribe this publisher to body frames.
