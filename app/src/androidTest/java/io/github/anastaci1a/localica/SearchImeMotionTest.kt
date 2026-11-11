@@ -35,6 +35,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
 import org.junit.ClassRule
+import org.junit.rules.RuleChain
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
@@ -53,7 +54,8 @@ class SearchImeMotionTest {
 
         // Own policy before Activity creation and restore it only after every Activity is disposed.
         // A method-body finally can reconfigure the IME while its editor/Back callbacks still live.
-        @JvmField @ClassRule val nativePolicies: TestRule = object : TestRule {
+        @JvmField @ClassRule val nativePolicies: TestRule = RuleChain.outerRule(NativeImePolicy())
+            .around(FreshSystemIme()).around(object : TestRule {
             override fun apply(base: Statement, description: Description) = object : Statement() {
                 override fun evaluate() {
                     val settings = listOf("secure show_ime_with_hard_keyboard", "global animator_duration_scale",
@@ -99,7 +101,7 @@ class SearchImeMotionTest {
                     failure?.let { throw it }
                 }
             }
-        }
+        })
     }
 
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
