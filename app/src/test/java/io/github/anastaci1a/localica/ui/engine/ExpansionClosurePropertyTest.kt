@@ -58,4 +58,45 @@ class ExpansionClosurePropertyTest {
         }
         assertEquals(100000,accepted); assertTrue(bridgeCatches>100000)
     }
+    @Test fun twentyThousandSpeedDurationAndHeldChainsCloseOnTheirLatestBasis() {
+        val r=Random(812162); val spec=(uiSpec(InterfaceSettings(),null,ExpansionGeometryDomain(1000f,3000f,1f/60)) as SpecResult.Accepted).spec; val band=spec.expansion.band
+        fun rect()=r.nextFloat()*1000f to r.nextFloat()*1000f
+        fun basis(): ExpansionBasis { val (a,b)=rect(); val (c,d)=rect(); val (w,h)=rect(); val (x,y)=rect()
+            return ExpansionBasis(Rect(a,b,a+w,b+h),Rect(c,d,c+x,d+y),1f,if(r.nextBoolean()) null else r.nextFloat()*3000f) }
+        var holds=0
+        EngineHarness(spec=spec).use { h ->
+            repeat(20000) { chain ->
+                h.clock.configure(EngineContext(1f/listOf(60,90,120)[chain%3],1000f,if(chain%2==0) MotionAccess.Standard else MotionAccess.Faster),spec)
+                val c=ExpandCollapse(h.clock,spec.expansion,r.nextBoolean(),"held$chain"); var latest=basis(); c.setBasis(latest)
+                val rect=MotionRect(h.clock,latest.startBounds,EdgeRanges(3000f,3000f,3000f,3000f)); c.bind(rect)
+                c.updateSpeed(.25f+r.nextFloat()*3.75f); c.target(!c.expanded)
+                repeat(8) { cycle ->
+                    val label="seed812162 chain$chain cycle$cycle"
+                    h.advance(r.nextDouble()*.3)
+                    val old=field.get(c.phase) as Trajectory
+                    if(old is Eased) { assertTrue(label,old.extrema.start>=-band); assertTrue(label,old.extrema.endInclusive<=(1f+band).toDouble()); assertEquals(label,0.0,old.velocity(old.duration),0.0) }
+                    if(cycle%2==0) {
+                        c.hold(); holds++; val stamp=h.clock.stampNow; val frozen=listOf(c.phase.valueAt(stamp))+rect.channels.map { it.valueAt(stamp) }
+                        // Targets, measurement and speed arriving while the home owns presentation wait for release.
+                        if(r.nextBoolean()) c.target(r.nextBoolean())
+                        if(r.nextBoolean()) { latest=basis(); c.setBasis(latest) }
+                        if(r.nextBoolean()) c.updateSpeed(.25f+r.nextFloat()*3.75f)
+                        h.advance(r.nextDouble()*.5); val later=h.clock.stampNow
+                        assertEquals(label,frozen,listOf(c.phase.valueAt(later))+rect.channels.map { it.valueAt(later) })
+                        assertFalse(label,c.retirementReady); c.release()
+                        assertEquals(label,frozen,listOf(c.phase.valueAt(later))+rect.channels.map { it.valueAt(later) })
+                    } else when(r.nextInt(3)) {
+                        0 -> c.target(!c.expanded)
+                        1 -> { latest=basis(); c.setBasis(latest) }
+                        else -> c.updateSpeed(.25f+r.nextFloat()*3.75f)
+                    }
+                }
+                h.advance(30.0); val end=h.clock.stampNow
+                assertTrue("seed812162 chain$chain",c.phase.settled && rect.channels.all { it.settled } && c.retirementReady)
+                assertEquals("seed812162 chain$chain",latest.rect(if(c.expanded) 1.0 else 0.0),rect.valueAt(end))
+                c.dispose(); assertEquals(0,h.clock.activeCount)
+            }
+        }
+        assertEquals(80000,holds)
+    }
 }
