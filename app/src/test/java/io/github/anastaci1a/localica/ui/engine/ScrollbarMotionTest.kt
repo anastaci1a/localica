@@ -155,10 +155,10 @@ class ScrollbarMotionTest {
             api.getMethod("setThreadAllocatedMemoryEnabled", Boolean::class.javaPrimitiveType).invoke(bean, true)
             val allocated = api.getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
             var total = 0f
-            repeat(100_000) { total += motion.opacity() + motion.scale() + motion.releaseOffset() }
+            repeat(10_000) { total = readScalars(motion, 10, total) }
             val thread = Thread.currentThread().id
             val before = allocated.invoke(bean, thread) as Long
-            repeat(1_000_000) { total += motion.opacity() + motion.scale() + motion.releaseOffset() }
+            total = readScalars(motion, 1_000_000, total)
             val bytes = (allocated.invoke(bean, thread) as Long) - before
             println("Scrollbar scalar reads: 3000000 reads, $bytes allocated bytes including measurement overhead")
             assertTrue(total.isFinite())
@@ -280,5 +280,10 @@ class ScrollbarMotionTest {
             motion.reveal(); motion.dispose()
             assertEquals(0, h.clock.activeCount)
         }
+    }
+    private fun readScalars(motion: ScrollbarMotion, repetitions: Int, initial: Float): Float {
+        var total = initial
+        repeat(repetitions) { total += motion.opacity() + motion.scale() + motion.releaseOffset() }
+        return total
     }
 }
