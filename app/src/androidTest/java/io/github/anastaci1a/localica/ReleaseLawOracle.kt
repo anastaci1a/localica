@@ -43,8 +43,8 @@ internal class ReleaseLaw(private val core: List<Double>, val T: Double, private
         }
     }
 }
-/** Player and Queue sheets: v0.33.21's 300 ms (.22, 0, .12, 1) tween at every travel (#846). */
-internal val SheetLaw = ReleaseLaw(listOf(.22, 0.0, .12, 1.0), .3, .3, 0.0)
+/** Player and Queue drawers: the #608 measured model, 426.086832 ms (.242192, .999967, .511935, .997652), square-root size rule, 140 ms floor (#846). */
+internal val SheetLaw = ReleaseLaw(listOf(.242192, .999967, .511935, .997652), .426086832, .14, .5)
 /** Lyrics presence: v0.33.21's 412.5 ms FastOutSlowIn at every travel (#846). */
 internal val LyricsLaw = ReleaseLaw(listOf(.4, 0.0, .2, 1.0), .4125, .4125, 0.0)
 /** Every presented frame after an automatic join matches the oracle from that join; joins keep value and velocity. */

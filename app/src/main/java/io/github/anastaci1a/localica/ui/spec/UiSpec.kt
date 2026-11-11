@@ -67,8 +67,11 @@ private val fast = EasingSpec(.4f,0f,.2f,1f)
 private val linear = EasingSpec(0f,0f,1f,1f)
 private fun <K,V> frozen(base: Map<K,V>, overlay: Map<K,V>?) = Collections.unmodifiableMap(LinkedHashMap(base).apply { if(overlay!=null) putAll(overlay) })
 private fun <K> dimensions(keys: List<K>, values: List<Float>) = frozen(keys.zip(values.map { it.dp }).toMap(),null)
-/** Sheets (player, Queue) keep v0.33.21's 300 ms tween curve and peak speed: its (.22,0,.12,1) easing is the law core at every travel (size exponent 0), never slower than before (#846). */
-private val StockSheetExpansion = ExpansionSpec(EasingSpec(.22f,0f,.12f,1f),300f,.500401615f,1.41952128f,.73607278f,0f,300f,.25f,.5f,.05f)
+/** Drawers (the player sheet and the Queue drawer: open, close and drag releases) are the #608 measured model: 426.086832 ms
+ * cubic-bezier(.242192, .999967, .511935, .997652) at the full player, T = 426.1 ms x (.5004 + .4996 x remaining) at rest,
+ * its velocity knee and exponent, and #608's square-root size rule with a 140 ms floor. 1x references; the platform scale
+ * applies as to every law (operator 2026-11-11 3:17-3:20 AM, #846). */
+private val StockSheetExpansion = ExpansionSpec(EasingSpec(.242192f,.999967f,.511935f,.997652f),426.086832f,.500401615f,1.41952128f,.73607278f,.5f,140f,.25f,.5f,.05f)
 /** The player lyrics presence keeps v0.33.21's 412.5 ms FastOutSlowIn layout tween (motionDuration(550)) and its peak speed (#846). */
 private val StockLyricsExpansion = ExpansionSpec(EasingSpec(.4f,0f,.2f,1f),412.5f,.500401615f,1.41952128f,.73607278f,0f,412.5f,.25f,.5f,.05f)
 /** v0.33.21 popups ran glassMorphSpring(4/3): critically damped, stiffness 90(4/3)^2, ending at its .0001 visibility threshold,

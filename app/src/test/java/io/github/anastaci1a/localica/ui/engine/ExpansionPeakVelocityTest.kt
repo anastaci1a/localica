@@ -12,8 +12,6 @@ import org.junit.Test
 
 /** #846: each expansion law reproduces the v0.33.21 motion it replaced, from rest, at any size, speed step or platform scale. */
 class ExpansionPeakVelocityTest {
-    /** Peak of the v0.33.21 300 ms (.22, 0, .12, 1) sheet tween, in travel per second. */
-    private val tweenPeak = 2.9411764705882355 / .3
     private fun peak(trajectory: Eased, samples: Int = 60000) = (0..samples).maxOf { abs(trajectory.velocity(trajectory.duration * it / samples)) }
 
     /** v0.33.21 popups: glassMorphSpring(speed) = spring(1f, 90 speed^2, visibilityThreshold = .0001f), speed 4/3 (2 with Faster). */
@@ -78,15 +76,85 @@ class ExpansionPeakVelocityTest {
         }
     }
 
-    @Test fun sheetLawKeepsTheV03321TweenPeakAndSixtySixPercentTime() {
+    /** #608 measured drawer model (feedback/issues/608-expand-collapse-motion/analysis/REPORT.md): the player sheet and the
+     * Queue drawer (operator 2026-11-11 3:17 and 3:20 AM). Its numbers are 1x (animator scale 1.0) references. */
+    private val drawer608Core = EasingSpec(.242192f, .999967f, .511935f, .997652f)
+    /** #608 object time: 426.086832 ms x (travel / full-player travel)^.5, floored at 140 ms; the full player is exactly 426.1 ms. */
+    private fun drawer608ObjectTime(ratio: Double) = max(.14, .426086832 * sqrt(ratio))
+    private fun drawer608Duration(remaining: Double, ratio: Double = 1.0) = drawer608ObjectTime(ratio) * (.500401615 + .499598385 * remaining)
+    /** The harness reference travel is 1000 px: the player's edge travel equals it; the Queue's top travel is longer (#608: 1.06x here). */
+    private val drawers = listOf("player" to 1000f, "Queue" to 1060f)
+    private fun drawerOwner(h: EngineHarness, travel: Float) = ExpandCollapse(h.clock, StockUiSpec.sheetExpansion, false).also {
+        it.setBasis(ExpansionBasis(Rect(0f, 0f, 100f, 100f), Rect(0f, 0f, 100f + travel, 100f), 1f))
+    }
+
+    @Test fun drawerLawIsThe608MeasuredModelForAutomaticOpenAndCloseAtOneAndHalfScale() {
         val spec = StockUiSpec.sheetExpansion
-        for (sigma in listOf(1.0, 2.0 / 3)) {
-            val duration = expansionDuration(spec, 1000.0, 1000.0, 0.0, 0.0, 1.0, sigma, 1.0 / 120)
-            assertEquals(.3 * sigma, duration, 1e-9)
-            val law = Eased(0.0, 0.0, 1.0, spec.core, duration, sigma)
-            assertTrue(peak(law) <= tweenPeak / sigma * 1.0000001)
-            val t66 = (0..30000).first { law.value(duration * it / 30000) >= .66 } * duration / 30000
-            assertEquals(.1017 * sigma, t66, .0015)
+        assertEquals(drawer608Core, spec.core)
+        assertEquals(426.086832f, spec.referenceDurationMs, 0f)
+        for ((name, travel) in drawers) for (sigma in listOf(1.0, 2.0 / 3)) for ((p, q) in listOf(0.0 to 1.0, 1.0 to 0.0)) {
+            val ratio = travel / 1000.0
+            val duration = expansionDuration(spec, travel.toDouble(), 1000.0, p, 0.0, q, sigma, 1.0 / 120)
+            // The 1x reference (exactly 426.1 ms for the full player), to the Float storage of 426.086832 ms (one ulp is 3.1e-5 ms).
+            assertEquals("$name sigma $sigma", drawer608ObjectTime(ratio) * sigma, duration, Math.ulp(426.086832f) / 1000.0 * sqrt(ratio))
+            // Shape: between the C1 startup and terminal bridges the flight is exactly the #608 Bezier E(t / T).
+            val law = Eased(p, 0.0, q, spec.core, duration, sigma)
+            val curve = unitCurve(drawer608Core)
+            for (i in 0..1000) { val t = duration * i / 1000; if (t >= law.tauIn && t < duration - law.tauOut) assertEquals(p + (q - p) * curve.at(t / duration), law.value(t), 1e-12) }
+        }
+        // A real owner from rest follows that flight. The platform scale applies as to every engine law:
+        // real time = model time x scale, so the full player lands at 426.09 ms at 1x and 213.04 ms at 0.5x.
+        for ((name, travel) in drawers) for (scale in listOf(1f, .5f)) for (open in listOf(true, false)) EngineHarness().use { h ->
+            h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Standard, scale), StockUiSpec)
+            val c = drawerOwner(h, travel)
+            if (!open) { c.target(true); h.advance(1.0) }
+            c.target(open); val start = h.clock.stampNow
+            fun at(ms: Double) = c.phase.valueAt(FrameStamp(start.nanos + (ms * 1e6).toLong(), start.sequence)).toDouble()
+            val model = drawer608ObjectTime(travel / 1000.0)
+            val law = Eased(if (open) 0.0 else 1.0, 0.0, if (open) 1.0 else 0.0, drawer608Core, model, 1.0)
+            val end = model * 1000 * scale
+            for (i in 0..(model * 1000).toInt()) { val ms = i * scale.toDouble(); assertEquals("$name scale $scale open $open at $ms ms", law.value(ms / scale / 1000.0), at(ms), 1e-6) }
+            assertTrue("$name scale $scale open $open still moving 1 ms before the end", at(end - 1) != if (open) 1.0 else 0.0)
+            assertEquals(if (open) 1.0 else 0.0, at(end + .001), 0.0)
+            c.dispose()
+        }
+    }
+
+    @Test fun drawerNearStationaryReleasesFollowThe608PositionLawAtSeveralPositionsAndScales() {
+        // #608 examples (full player, 1x): remaining 10.5 % -> 235.6 ms, 30.6 % -> 278.4 ms, 48.1 % -> 315.6 ms.
+        assertEquals(235.6, drawer608Duration(.105) * 1000, .05); assertEquals(278.4, drawer608Duration(.306) * 1000, .05); assertEquals(315.6, drawer608Duration(.481) * 1000, .05)
+        // Stationary and inside the .25 travel/s dead band (0.1/s either way): open iff p >= .5; T from the remaining fraction;
+        // the hand-off keeps the measured velocity. At 0.5x the same decision lands in half the real time.
+        for ((name, travel) in drawers) for (scale in listOf(1f, .5f)) for (p in listOf(.105, .306, .481, .532, .694, .895)) for (velocity in listOf(0.0, .1, -.1)) EngineHarness().use { h ->
+            h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Standard, scale), StockUiSpec)
+            val c = drawerOwner(h, travel)
+            c.contactBegin(h.clock.stampNow); h.now += 10_000_000; c.contactMove((p * travel).toFloat(), h.clock.stampNow)
+            val p0 = c.phase.valueAt(h.clock.stampNow).toDouble()
+            assertEquals(p, p0, 1e-6)
+            val decision = c.contactRelease((velocity * travel).toFloat(), h.clock.stampNow)
+            val open = p0 >= .5
+            val case = "$name scale $scale p $p v $velocity"
+            assertEquals(case, open, decision.expanded)
+            val model = drawer608Duration(if (open) 1 - p0 else p0, travel / 1000.0)
+            assertEquals(case, model, decision.durationSeconds.toDouble(), 1e-6)
+            assertEquals("$case hand-off keeps the measured velocity", velocity, decision.handOffVelocity.toDouble(), 1e-6)
+            val released = h.clock.stampNow
+            fun at(ms: Double) = c.phase.valueAt(FrameStamp(released.nanos + (ms * 1e6).toLong(), released.sequence))
+            assertEquals(case, if (open) 1f else 0f, at(model * 1000 * scale + .001), 0f)
+            assertTrue("$case still moving 1 ms before model time x scale", at(model * 1000 * scale - 1) != if (open) 1f else 0f)
+            c.dispose()
+        }
+        // A fling beyond the knee follows its direction and shortens by (|v| / 1.41952128)^.73607278 (#608 velocity law).
+        for ((name, travel) in drawers) for ((p, velocity) in listOf(.4 to 3.0, .7 to -3.0)) EngineHarness().use { h ->
+            val c = drawerOwner(h, travel)
+            c.contactBegin(h.clock.stampNow); h.now += 10_000_000; c.contactMove((p * travel).toFloat(), h.clock.stampNow)
+            val p0 = c.phase.valueAt(h.clock.stampNow).toDouble()
+            val decision = c.contactRelease((velocity * travel).toFloat(), h.clock.stampNow)
+            assertEquals("$name $p", velocity > 0, decision.expanded)
+            val ratio = travel / 1000.0
+            val reference = abs(velocity) * drawer608ObjectTime(ratio) / .426086832
+            assertEquals("$name $p", drawer608Duration(if (velocity > 0) 1 - p0 else p0, ratio) / max(1.0, reference / 1.41952128).pow(.73607278), decision.durationSeconds.toDouble(), 1e-6)
+            c.dispose()
         }
     }
 

@@ -27,8 +27,10 @@ class UiSpecTest {
         assertEquals(4.3253593f,stock.expansion.core.maxSlope,1e-5f)
         assertEquals(.0003f,SettleThreshold,0f); assertEquals(.003f,SettleVelocityThreshold,0f)
         assertEquals(929.4228f,stock.expansion.referenceDurationMs,1e-3f)
-        assertEquals(0f,stock.expansion.sizeExponent,0f); assertEquals(0f,stock.sheetExpansion.sizeExponent,0f); assertEquals(0f,stock.lyricsExpansion.sizeExponent,0f)
+        assertEquals(0f,stock.expansion.sizeExponent,0f); assertEquals(0f,stock.lyricsExpansion.sizeExponent,0f)
         assertEquals(.05f,stock.expansion.band,0f)
+        // #846 (operator 3:17-3:20 AM): both drawers (player sheet and Queue) are the #608 measured model.
+        assertEquals(ExpansionSpec(EasingSpec(.242192f,.999967f,.511935f,.997652f),426.086832f,.500401615f,1.41952128f,.73607278f,.5f,140f,.25f,.5f,.05f),stock.sheetExpansion)
         assertEquals(22.8f,stock.clearance.getValue(Clearance.ShadowInset).value,.00001f)
     }
     @Test fun rejectsNaNZeroDurationAndEveryMalformedFieldWithoutThrowing() {
@@ -97,7 +99,7 @@ class UiSpecTest {
         assertEquals(.0603517,tau,.0000001); assertTrue(lambda*tau<=1.000000001)
     }
     @Test fun easingSupremumBoundsIndependentDerivativeIncludingRemovableTangents() {
-        val curves=listOf(EasingSpec(0f,0f,.2f,1f),EasingSpec(.4f,0f,.2f,1f),StockUiSpec.sheetExpansion.core as EasingSpec,EasingSpec(1f/3,0f,2f/3,1f),EasingSpec(0f,0f,1f,1f))
+        val curves=listOf(EasingSpec(0f,0f,.2f,1f),EasingSpec(.4f,0f,.2f,1f),StockUiSpec.sheetExpansion.core as EasingSpec,EasingSpec(.22f,0f,.12f,1f),EasingSpec(1f/3,0f,2f/3,1f),EasingSpec(0f,0f,1f,1f))
         for(e in curves) for(i in 1..10000) {
             val t=i/10001.0
             fun derivative(a: Float,b: Float)=3*(1-t)*(1-t)*a+6*(1-t)*t*(b-a)+3*t*t*(1-b)
