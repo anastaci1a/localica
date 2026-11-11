@@ -56,9 +56,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
-import io.github.anastaci1a.localica.ui.spec.LocalUiSpec
-import io.github.anastaci1a.localica.ui.spec.PageCornerRadius
-import io.github.anastaci1a.localica.ui.spec.PopupCornerRadius
+import io.github.anastaci1a.localica.ui.spec.LocalUiSpec; import io.github.anastaci1a.localica.ui.spec.PageCornerRadius; import io.github.anastaci1a.localica.ui.spec.PopupCornerRadius
 import io.github.anastaci1a.localica.ui.engine.*
 import io.github.anastaci1a.localica.ui.engine.GlassOriginWell
 import io.github.anastaci1a.localica.ui.engine.SurfaceView
@@ -872,8 +870,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         .graphicsLayer { shape=RoundedCornerShape(radius()); clip=true }.glassPopupHome(childHome)
                         .recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
-                        Box(Modifier.presentedAlpha { if (anchor.quiet) motion.quietContent.at(phase()) else 1f }
-                            .recordFrostedBackdrop(material)) {
+                        Box(Modifier.presentedAlpha {
+                            if (anchor.quiet) motion.quietContent.at(phase()) else 1f
+                        }.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = samplingSource,

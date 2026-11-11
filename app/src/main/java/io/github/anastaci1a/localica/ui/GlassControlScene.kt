@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.ui.components.rememberMaterialAreaReduction
-import io.github.anastaci1a.localica.ui.engine.drawRetainedLayer
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.*
@@ -119,9 +118,9 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
                 averageLayer.renderEffect = averageRenderer.effect()
                 averageLayer.alpha = none
                 averageLayer.blendMode = if (blending) BlendMode.Plus else BlendMode.SrcOver
-                averageLayer.record(Density(density, fontScale), layoutDirection, IntSize(1, 1)) { drawRetainedLayer(reduced) }
+                averageLayer.record(Density(density, fontScale), layoutDirection, IntSize(1, 1)) { io.github.anastaci1a.localica.ui.engine.drawRetainedLayer(reduced) }
                 clipPath(silhouette) { translate(shape.bounds.left, shape.bounds.top) {
-                    scale(shape.bounds.width, shape.bounds.height, Offset.Zero) { drawRetainedLayer(averageLayer) }
+                    scale(shape.bounds.width, shape.bounds.height, Offset.Zero) { io.github.anastaci1a.localica.ui.engine.drawRetainedLayer(averageLayer) }
                 } }
             } else if (averageBitmap != null && !region.isEmpty) {
                 // Software path: rasterize the region at full resolution (bounded) and
