@@ -16,7 +16,7 @@ enum class Space { Hairline, Tight, Compact, Base, Comfortable, Section, Panel }
 enum class Radius { Artwork, Card, Menu, LargeArtwork, Panel, Pill }
 enum class ControlSize { NavigationPill, Compact, MiniArtwork, CollapsedQueue, DragBubble, Icon, PreferenceRow, PreferenceCompact, SettingsIcon }
 enum class Clearance { FloatingGap, LiftMax, LiftClearance, ShadowInset, BottomChrome }
-enum class MotionProfile { Control, ControlOff, Selection, Hover, Reveal, ResolutionBlend, Floating, Heading, ArtworkLayout, CropRetention, Marquee, Scroll, SettingsHighlight, SettingsScroll }
+enum class MotionProfile { Control, ControlOff, Selection, Hover, Reveal, ResolutionBlend, Floating, Heading, ArtworkLayout, CropRetention, Marquee, Scroll, SettingsHighlight, SettingsScroll, LyricEmphasis }
 enum class SpringProfile { GlassMorph, Page, GlassMode, Strain }
 enum class MaterialRole { Glass, Panel, Selection, DragPane, Page, Scrim }
 enum class MotionAccess { Standard, Faster, Reduced }
@@ -61,7 +61,7 @@ private val linear = EasingSpec(0f,0f,1f,1f)
 private fun <K,V> frozen(base: Map<K,V>, overlay: Map<K,V>?) = Collections.unmodifiableMap(LinkedHashMap(base).apply { if(overlay!=null) putAll(overlay) })
 private fun <K> dimensions(keys: List<K>, values: List<Float>) = frozen(keys.zip(values.map { it.dp }).toMap(),null)
 val StockUiSpec: UiSpec = UiSpec(dimensions(Space.entries,listOf(1f,4f,8f,12f,16f,24f,28f)), dimensions(Radius.entries.dropLast(1),listOf(8f,16f,20f,24f,28f)), dimensions(ControlSize.entries,listOf(64f,51.2f,32f,64f,28f,24f,56f,48f,24f)), dimensions(Clearance.entries,listOf(8f,4f,1f,22.8f,80f)),
-    frozen<MotionProfile,MotionSpec>(MotionProfile.entries.take(10).zip(listOf(180,270,220,220,300,240,300,165,300,225).mapIndexed { i,d -> MotionProfileSpec(d,if(i in listOf(0,1,2,3,6)) slow else fast) }).toMap()+mapOf(MotionProfile.Marquee to MarqueeSpec(1800,220,260,30f,EasingSpec(1f/3,0f,2f/3,1f)),MotionProfile.Scroll to ListMotionSpec(350,500,120,fast,linear),MotionProfile.SettingsScroll to SettingsScrollSpec(262,175,fast),MotionProfile.SettingsHighlight to SettingsHighlightSpec(150,450,600,1200,.18f,fast)),null),
+    frozen<MotionProfile,MotionSpec>(MotionProfile.entries.take(10).zip(listOf(180,270,220,220,300,240,300,165,300,225).mapIndexed { i,d -> MotionProfileSpec(d,if(i in listOf(0,1,2,3,6)) slow else fast) }).toMap()+mapOf(MotionProfile.LyricEmphasis to MotionProfileSpec(350,fast),MotionProfile.Marquee to MarqueeSpec(1800,220,260,30f,EasingSpec(1f/3,0f,2f/3,1f)),MotionProfile.Scroll to ListMotionSpec(350,500,120,fast,linear),MotionProfile.SettingsScroll to SettingsScrollSpec(262,175,fast),MotionProfile.SettingsHighlight to SettingsHighlightSpec(150,450,600,1200,.18f,fast)),null),
     frozen(mapOf(SpringProfile.GlassMorph to SpringProfileSpec(1f,90f,2),SpringProfile.Page to SpringProfileSpec(.85f,380f),SpringProfile.GlassMode to SpringProfileSpec(1f,90f,2),SpringProfile.Strain to SpringProfileSpec(8f/(2*sqrt(380f)),380f,2)),null), ExpansionSpec(EasingSpec(.242192f,.999967f,.511935f,.997652f),426.086832f,.500401615f,1.41952128f,.73607278f,.5f,140f,.25f,.5f,.05f), frozen(MaterialRole.entries.associateWith { MaterialTokens(.2f,.06f,.12f,.6f,.25f,1f,8f,1.35f,GlassMode.Normal) },null),MotionAccess.Standard)
 fun uiSpec(settings: InterfaceSettings, overrides: UiSpecData? = null, geometry: ExpansionGeometryDomain? = null): SpecResult {
     val o=overrides?:UiSpecData(); val b=StockUiSpec; val g=settings.glass.normalized(); val errors=mutableListOf<String>()
