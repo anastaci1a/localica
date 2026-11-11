@@ -194,7 +194,7 @@ internal class LayoutShape(override val key: Any,internal var plane: ShadowPlane
     val clock=ownerClock()
     var incarnation by remember { mutableIntStateOf(0) }
     val node=remember(clock,plane,key,incarnation) {
-        val existing=(retained as? SurfaceNode)?:plane.node(key)
+        val existing=((retained as? SurfaceNode)?.takeUnless { it.isDisposed })?:plane.node(key)?.takeUnless { it.isDisposed }
         existing?:SurfaceNode(clock,key,LayoutShape(key,plane),SurfaceTarget(Stratum.Floating,1f,ShadowRole.Glass),plane)
     }
     val shape=requireNotNull(node.shape as? LayoutShape)
