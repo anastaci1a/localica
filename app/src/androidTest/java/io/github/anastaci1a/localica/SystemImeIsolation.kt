@@ -5,6 +5,9 @@ import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.rules.ExternalResource
+import org.junit.rules.TestRule
+import org.junit.runner.Description
+import org.junit.runners.model.Statement
 
 /**
  * Force-stops the system keyboard whose component is [selected] (a `package/service` id from
@@ -70,5 +73,65 @@ internal fun ComposeTestRule.awaitSystemImeHardKeyboardPolicy(
     } catch (timeout: ComposeTimeoutException) {
         throw AssertionError("The system keyboard never observed show_ime_with_hard_keyboard=" +
             "$showWithHardKeyboard (observer state $observed)", timeout)
+    }
+}
+
+/**
+ * Own the docked system input view before fixture Activities exist. API 36 LatinIME can report
+ * onShown and complete an inset animation while hardware-keyboard policy suppresses its input view;
+ * every inset is then zero. A preceding keyboard fixture can mask that missing precondition.
+ * Pair with [FreshSystemIme] inside this rule so the next bind reads the owned policy immediately.
+ * Restore the exact setting after Activities retire, then discard this fixture's keyboard cache.
+ */
+internal class NativeImePolicy : TestRule {
+    override fun apply(base: Statement, description: Description): Statement = object : Statement() {
+        override fun evaluate() {
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
+                instrumentation.uiAutomation.executeShellCommand(command)).bufferedReader().use { it.readText().trim() }
+            val key = "show_ime_with_hard_keyboard"
+            val original = shell("settings get secure $key")
+            check(original == "null" || original.matches(Regex("-?[0-9]+"))) {
+                "Cannot restore native keyboard policy: $original"
+            }
+            val selected = shell("settings get secure default_input_method")
+            val events = mutableListOf<String>()
+            var failure: Throwable? = null
+            try {
+                shell("settings put secure $key 1")
+                check(shell("settings get secure $key") == "1") { "Native keyboard policy must precede Activities" }
+                events += "before-activities $key=1 original=$original"
+                base.evaluate()
+            } catch (caught: Throwable) {
+                failure = caught
+            } finally {
+                try {
+                    if (original == "null") shell("settings delete secure $key")
+                    else shell("settings put secure $key $original")
+                    check(shell("settings get secure $key") == original) { "Restore native keyboard policy" }
+                    events += "after-activities $key=$original"
+                } catch (caught: Throwable) {
+                    val primary = failure
+                    if (primary == null) failure = caught else primary.addSuppressed(caught)
+                }
+                try {
+                    restartSystemKeyboard(selected)
+                    events += "keyboard-cache-retired selected=$selected"
+                } catch (caught: Throwable) {
+                    val primary = failure
+                    if (primary == null) failure = caught else primary.addSuppressed(caught)
+                }
+                try {
+                    val directory = nativeEvidenceDirectory("popup-ime-policy",
+                        instrumentation.targetContext.getExternalFilesDir(null))
+                    java.io.File(directory, "class-policy-api${android.os.Build.VERSION.SDK_INT}.txt")
+                        .writeText(events.joinToString("\n", postfix = "\n"))
+                } catch (caught: Throwable) {
+                    val primary = failure
+                    if (primary == null) failure = caught else primary.addSuppressed(caught)
+                }
+            }
+            failure?.let { throw it }
+        }
     }
 }

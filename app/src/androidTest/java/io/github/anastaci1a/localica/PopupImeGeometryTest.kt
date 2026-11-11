@@ -32,6 +32,8 @@ import io.github.anastaci1a.localica.queue.QueueLibrary
 import io.github.anastaci1a.localica.queue.QueueUiState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import org.junit.ClassRule
+import org.junit.rules.RuleChain
 import org.junit.Rule
 import org.junit.Test
 import org.junit.After
@@ -42,6 +44,10 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 
 /** Diagnostic native callback + submitted-draw trace. Callbacks may affect timing; pair with optical evidence. */
 class PopupImeGeometryTest {
+    companion object {
+        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+    }
+
     @get:Rule val compose = createComposeRule()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val controller get() = (instrumentation.targetContext.applicationContext as LocalicaApplication).tagEditing
@@ -187,7 +193,9 @@ class PopupImeGeometryTest {
                 probe.rows.toList() to events.toList()
             }
             // Serialize the immutable snapshot on the instrumentation thread, never on Main.
-            val dir = File(instrumentation.targetContext.getExternalFilesDir(null), "popup-ime-geometry").apply { mkdirs() }
+            val outputRoot = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+                ?.takeIf { it.isNotBlank() }?.let(::File) ?: instrumentation.targetContext.getExternalFilesDir(null)
+            val dir = File(outputRoot, "popup-ime-geometry").apply { mkdirs() }
             val name = if (editor && playerScene) "player-tag-editor" else if (editor) "tag-editor" else if (playerScene) "player-add-to-playlists" else if (mixedContent) "mixed-content" else "add-to-playlists"
             File(dir, "$name.csv").writeText(rows.joinToString("\n"))
             File(dir, "$name-events.csv").writeText(
