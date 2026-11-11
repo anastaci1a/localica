@@ -116,6 +116,8 @@ class PopupRestoredTriggerLensTest {
                 if (hidden) continue
                 restoredFrames++
                 assertTrue("Frame $frames: the popup window draws over the restored pill ($modal ink pixels)", modal <= 20)
+                // No hole: the shell draws the restored pill on the same frame the popup body stops drawing.
+                assertTrue("Frame $frames: the restored pill is not drawn ($shell ink pixels)", shell > 20)
             }
             report.put("restoredFramesSampled", restoredFrames).put("retiredAfterFrames", frames); save()
             assertFalse("The popup window retires after its return", window.decorView.isAttachedToWindow)
