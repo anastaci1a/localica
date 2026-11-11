@@ -15,68 +15,122 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.spec.*
+import kotlin.math.ceil
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
 class SettingsOptionsTest {
     @get:Rule val compose = createComposeRule()
-    // Retained-origin checks run under Reduced motion. The popup expansion takes its access from the
-    // Engine record, not LocalReducedMotion, so these fixtures compose the Reduced record (#869):
-    // under the Standard record the 929 ms popup spring (#846) can outlast the 5 s real-time waits.
-    private fun assertAnchoredPopup(host: GlassDialogs, title: String, editBeforeCancel: () -> Unit = {}) {
-        compose.onNodeWithText(title).performScrollTo().performClick()
-        compose.waitUntil(5000) {
-            host.entries.lastOrNull { it.mounted && it.placement != GlassPlacement.Page }?.anchor?.let {
-                it.triggerMounted && it.hidden && it.bounds.width > 0f && it.bounds.height > 0f && it.face != null
-            } == true
+    private lateinit var popupSpec: UiSpec
+
+    @Composable private fun OriginTheme(reduced: Boolean, content: @Composable () -> Unit) {
+        EngineTheme(reduced = reduced) {
+            val spec = LocalUiSpec.current.spec
+            SideEffect { popupSpec = spec }
+            CompositionLocalProvider(LocalReducedMotion provides reduced, content = content)
         }
-        val origin = host.entries.last { it.mounted && it.placement != GlassPlacement.Page }.anchor
-        editBeforeCancel()
-        compose.onNodeWithText("Cancel", substring = false).performClick()
-        compose.waitUntil(5000) { !origin.hidden && !origin.modalPresent }
-        assertTrue("Cancellation restores the same physical settings source",origin.triggerMounted)
     }
 
-    @Test fun addMainTabUsesItsSettingsLinkAsTheRetainedPopupOrigin() {
+    private fun awaitPopupState(title: String, state: String, condition: () -> Boolean) {
+        // Each intent can approach the native gate and then finish its flight. Bound both
+        // segments by the active Dialog laws, including cross channels. Twelve extra frames
+        // cover native admission, the six-frame home receipt deadline and retirement.
+        val horizon = PopupDirection.entries.maxOf { direction ->
+            listOf(false, true).maxOf { cross ->
+                popupLawHorizon(popupSpec.popupMotion.law(PopupKind.Dialog, direction, cross), popupSpec.speed.toDouble())
+            }
+        }
+        val budget = ceil(2 * horizon * 1000).toLong() + 12 * 16L
+        val start = compose.mainClock.currentTime
+        while (!compose.runOnIdle(condition)) {
+            assertTrue("$title must $state within the active popup law ($budget ms of test time)",
+                compose.mainClock.currentTime - start < budget)
+            compose.mainClock.advanceTimeByFrame()
+            // Native Dialog attachment and home presentation need Android traversal between frames.
+            compose.waitForIdle()
+        }
+    }
+
+    private fun assertAnchoredPopup(host: GlassDialogs, title: String, reduced: Boolean, editBeforeCancel: () -> Unit = {}) {
+        assertEquals("$title uses the requested Engine motion access",
+            if (reduced) MotionAccess.Reduced else MotionAccess.Standard, popupSpec.access)
+        assertEquals("$title uses Standard animation speed", 1f, popupSpec.speed, 0f)
+        compose.onNodeWithText(title).performScrollTo()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithText(title).performClick()
+            var animated = false
+            awaitPopupState(title, "open from its retained settings source") {
+                val anchor = host.entries.singleOrNull { it.mounted && it.placement != GlassPlacement.Page }?.anchor
+                if (anchor != null && anchor.contact.expansion.value > 0f && anchor.contact.expansion.value < 1f) animated = true
+                anchor != null && anchor.triggerMounted && anchor.hidden && anchor.bounds.width > 0f &&
+                    anchor.bounds.height > 0f && anchor.face != null && anchor.modalPresent && anchor.contact.expansion.value == 1f
+            }
+            if (!reduced) assertTrue("$title opens at Standard speed through animated frames", animated)
+            val origin = compose.runOnIdle { host.entries.single { it.mounted && it.placement != GlassPlacement.Page }.anchor }
+            editBeforeCancel()
+            compose.onNodeWithText("Cancel", substring = false).performClick()
+            var animatedReturn = false
+            awaitPopupState(title, "restore its retained settings source after Cancel") {
+                val phase = origin.contact.expansion.value
+                if (phase > 0f && phase < 1f) animatedReturn = true
+                !origin.hidden && !origin.modalPresent
+            }
+            if (!reduced) assertTrue("$title returns at Standard speed through animated frames", animatedReturn)
+            compose.runOnIdle { assertTrue("Cancellation restores the same physical settings source", origin.triggerMounted) }
+            compose.onNodeWithText(title).assertIsDisplayed()
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test fun addMainTabUsesItsSettingsLinkAsTheRetainedPopupOrigin() = addMainTabRetainedOrigin(reduced = true)
+
+    @Test fun addMainTabUsesItsSettingsLinkAsTheRetainedPopupOriginAtStandardSpeed() = addMainTabRetainedOrigin(reduced = false)
+
+    private fun addMainTabRetainedOrigin(reduced: Boolean) {
         lateinit var host: GlassDialogs
-        compose.setContent { EngineTheme(reduced = true) {
+        compose.setContent { OriginTheme(reduced) {
             host = requireNotNull(LocalGlassDialogs.current)
-            CompositionLocalProvider(LocalReducedMotion provides true) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    InterfaceSettingsControls(InterfaceSettings(tabs=listOf(MainTab.Home)),onChange={ fail("Cancelled choice must not save") })
-                }
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                InterfaceSettingsControls(InterfaceSettings(tabs=listOf(MainTab.Home)),onChange={ fail("Cancelled choice must not save") })
             }
         } }
-        repeat(2) { assertAnchoredPopup(host,"Add main tab") }
+        repeat(2) { assertAnchoredPopup(host, "Add main tab", reduced) }
     }
 
-    @Test fun addLibraryFilterUsesItsSettingsLinkAsTheRetainedPopupOrigin() {
+    @Test fun addLibraryFilterUsesItsSettingsLinkAsTheRetainedPopupOrigin() = addLibraryFilterRetainedOrigin(reduced = true)
+
+    @Test fun addLibraryFilterUsesItsSettingsLinkAsTheRetainedPopupOriginAtStandardSpeed() = addLibraryFilterRetainedOrigin(reduced = false)
+
+    private fun addLibraryFilterRetainedOrigin(reduced: Boolean) {
         lateinit var host: GlassDialogs
-        compose.setContent { EngineTheme(reduced = true) {
+        compose.setContent { OriginTheme(reduced) {
             host = requireNotNull(LocalGlassDialogs.current)
-            CompositionLocalProvider(LocalReducedMotion provides true) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    LibraryFilterSettings(LibraryFilters(visible=emptyList())) { fail("Cancelled choice must not save") }
-                }
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                LibraryFilterSettings(LibraryFilters(visible=emptyList())) { fail("Cancelled choice must not save") }
             }
         } }
-        repeat(2) { assertAnchoredPopup(host,"Add library filter") }
+        repeat(2) { assertAnchoredPopup(host, "Add library filter", reduced) }
     }
 
-    @Test fun scannerDurationDialogUsesItsRealSettingsOrigin() {
+    @Test fun scannerDurationDialogUsesItsRealSettingsOrigin() = scannerDurationRetainedOrigin(reduced = true)
+
+    @Test fun scannerDurationDialogUsesItsRealSettingsOriginAtStandardSpeed() = scannerDurationRetainedOrigin(reduced = false)
+
+    private fun scannerDurationRetainedOrigin(reduced: Boolean) {
         val preferences = io.github.anastaci1a.localica.scanner.ScanPreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         val originalOptions = preferences.read("")
         val originalLaunchFlags = preferences.scanOnLaunch to preferences.fullScanOnLaunch
         lateinit var host: GlassDialogs
-        compose.setContent { EngineTheme(reduced = true) {
+        compose.setContent { OriginTheme(reduced) {
             host = requireNotNull(LocalGlassDialogs.current)
-            CompositionLocalProvider(LocalReducedMotion provides true) {
-                FolderSettings(LibraryUiState(loading=false),{},{},{},initialCategory="Scanner")
-            }
+            FolderSettings(LibraryUiState(loading=false),{},{},{},initialCategory="Scanner")
         } }
         repeat(2) {
-            assertAnchoredPopup(host, "Exclude short files") {
+            assertAnchoredPopup(host, "Exclude short files", reduced) {
                 compose.onNode(hasSetTextAction() and !hasContentDescription("Search settings input")).performTextReplacement("17")
             }
             compose.runOnIdle {
@@ -86,26 +140,28 @@ class SettingsOptionsTest {
         }
     }
 
-    @Test fun folderExclusionsAndRemovalConfirmationHaveIndependentRestorableOrigins() {
+    @Test fun folderExclusionsAndRemovalConfirmationHaveIndependentRestorableOrigins() = folderExclusionsRetainedOrigins(reduced = true)
+
+    @Test fun folderExclusionsAndRemovalConfirmationHaveIndependentRestorableOriginsAtStandardSpeed() = folderExclusionsRetainedOrigins(reduced = false)
+
+    private fun folderExclusionsRetainedOrigins(reduced: Boolean) {
         val root = "content://synthetic-origin"
         val preferences = io.github.anastaci1a.localica.scanner.ScanPreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         val originalOptions = preferences.read(root)
         lateinit var host: GlassDialogs
-        compose.setContent { EngineTheme(reduced = true) {
+        compose.setContent { OriginTheme(reduced) {
             host = requireNotNull(LocalGlassDialogs.current)
-            CompositionLocalProvider(LocalReducedMotion provides true) {
-                FolderSettings(LibraryUiState(LibrarySnapshot(folders=listOf(FolderSelection("content://synthetic-origin","Synthetic origin"))),loading=false),
-                    {},{}, { fail("Cancelled removal cannot remove the folder") }, initialCategory="Folders to scan")
-            }
+            FolderSettings(LibraryUiState(LibrarySnapshot(folders=listOf(FolderSelection("content://synthetic-origin","Synthetic origin"))),loading=false),
+                {},{}, { fail("Cancelled removal cannot remove the folder") }, initialCategory="Folders to scan")
         } }
         compose.onNodeWithText("Synthetic origin").performScrollTo().performClick()
         repeat(2) {
-            assertAnchoredPopup(host, "Excluded subfolders") {
+            assertAnchoredPopup(host, "Excluded subfolders", reduced) {
                 compose.onNodeWithText("Both scans skip these paths when Include subfolders is on.", substring = true).assertIsDisplayed()
                 compose.onNodeWithText("Run Full scan to remove indexed songs from excluded paths.", substring = true).assertIsDisplayed()
                 compose.onNode(hasSetTextAction() and !hasContentDescription("Search settings input")).performTextReplacement("Synthetic/Cancelled")
             }
-            assertAnchoredPopup(host, "Remove folder")
+            assertAnchoredPopup(host, "Remove folder", reduced)
             compose.runOnIdle { assertEquals("Cancellation preserves the folder scan configuration", originalOptions, preferences.read(root)) }
         }
     }
