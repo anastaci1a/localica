@@ -335,10 +335,20 @@ class ListSearchTest {
         val key = "show_ime_with_hard_keyboard"
         val original = shell("settings get secure $key")
         check(original == "null" || original.matches(Regex("-?[0-9]+")))
+        val selected = shell("settings get secure default_input_method")
         val scales = listOf("animator_duration_scale", "transition_animation_scale", "window_animation_scale")
             .associateWith { shell("settings get global $it") }
         check(scales.values.all { it == "null" || it.toFloatOrNull() != null })
         val setup = mutableListOf<String>()
+        var failure: Throwable? = null
+        fun cleanup(action: () -> Unit) {
+            try {
+                action()
+            } catch (caught: Throwable) {
+                val primary = failure
+                if (primary == null) failure = caught else primary.addSuppressed(caught)
+            }
+        }
         try {
             compose.activityRule.scenario.onActivity {
                 androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it.window, false)
@@ -349,17 +359,26 @@ class ListSearchTest {
             scales.keys.forEach { shell("settings put global $it 1"); assertEquals(1f, shell("settings get global $it").toFloat(), 0f) }
             prepareNativeDockedKeyboard(compose, setup, ::shell)
             block()
+        } catch (caught: Throwable) {
+            failure = caught
         } finally {
-            setup.forEach { android.util.Log.i("ListSearchSlotSetup", it) }
-            if (original == "null") shell("settings delete secure $key") else shell("settings put secure $key $original")
-            assertEquals("Restore native keyboard policy", original, shell("settings get secure $key"))
-            // The running keyboard can observe the restore seconds later, inside the next test (#593).
-            compose.awaitSystemImeHardKeyboardPolicy(::shell, (original.toIntOrNull() ?: 0) != 0)
+            cleanup { setup.forEach { android.util.Log.i("ListSearchSlotSetup", it) } }
+            cleanup {
+                if (original == "null") shell("settings delete secure $key") else shell("settings put secure $key $original")
+                assertEquals("Restore native keyboard policy", original, shell("settings get secure $key"))
+                compose.awaitSystemImeHardKeyboardPolicy(::shell, (original.toIntOrNull() ?: 0) != 0)
+            }
+            // Like NativeImePolicy, retire the warmed input view after restoring its policy (#874).
+            // Awaiting the observer alone leaves navigation-sized cached geometry under policy 0.
+            cleanup { restartSystemKeyboard(selected) }
             scales.forEach { (name, value) ->
-                if (value == "null") shell("settings delete global $name") else shell("settings put global $name $value")
-                assertEquals("Restore native animation scale $name", value, shell("settings get global $name"))
+                cleanup {
+                    if (value == "null") shell("settings delete global $name") else shell("settings put global $name $value")
+                    assertEquals("Restore native animation scale $name", value, shell("settings get global $name"))
+                }
             }
         }
+        failure?.let { throw it }
     }
     private fun trace(message: String) {
         android.util.Log.i("ListSearchReopen", "${android.os.SystemClock.uptimeMillis()} $message")
