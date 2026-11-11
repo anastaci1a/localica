@@ -376,7 +376,7 @@ class AutoScrollDrawnPlacementTest {
             reveal?.let { state ->
                 found++
                 val animation = state.reveal
-                if (animation == null || animation.isRunning || animation.value != 1f || state.waiting) pending++
+                if (!animation.complete() || state.waiting) pending++
             }
         }
         artworkIdleWitness = "found=$found expected=" + keys.size + " pending=$pending"
