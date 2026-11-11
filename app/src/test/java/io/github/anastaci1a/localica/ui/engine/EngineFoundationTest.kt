@@ -104,6 +104,14 @@ class EngineFoundationTest {
             m.dispose()
         }
     }
+    @Test fun segmentStartedAfterTheDispatchedFrameDoesNotEndWithZeroDurationScale() {
+        EngineHarness().use { h ->
+            h.clock.configure(EngineContext(1f/120,1000f,MotionAccess.Standard,0f),StockUiSpec)
+            val m=MotionFloat(h.clock,0f,1f); val frame=h.clock.presentedStamp; h.now+=5_000_000; m.retarget(1f,profile)
+            assertFalse(m.endsAt(frame)); m.finish(h.clock.stampNow); assertTrue(m.settled)
+            m.dispose()
+        }
+    }
     @Test fun curveProductChainAndBoundaryDerivatives() {
         val r=Random(600104)
         repeat(10000) {
