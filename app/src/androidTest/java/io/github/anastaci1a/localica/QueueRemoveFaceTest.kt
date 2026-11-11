@@ -283,7 +283,13 @@ class QueueRemoveFaceTest {
                 assertTrue("Return retains the original source/confirmation windows", native == null || native === sourceWindow || native === childWindow)
                 val capture = p < .55f || frame % 4 == 0 || !present
                 if (capture) {
-                    val image = screenshot()
+                    // MUTANT (checklist 22, never merged): separate the label from its trash by 4 dp on late unseated frames only.
+                    val image = screenshot().let { shot -> if (p > .16f || !present || seated(panel, home, expanded)) shot else
+                        shot.copy(Bitmap.Config.ARGB_8888, true).also { m -> shot.recycle()
+                            val c = panel.center; val l = (home.left + 54 * d - home.center.x + c.x).toInt(); val r = (home.right - 18 * d - home.center.x + c.x).toInt()
+                            val t = (c.y - 10 * d).toInt(); val b = (c.y + 10 * d).toInt()
+                            val region = Bitmap.createBitmap(m, l, t, r - l, b - t)
+                            Canvas(m).drawBitmap(region, l + 4 * d, t.toFloat(), null); region.recycle() } }
                     try {
                         val file = File(output, "return-${frame.toString().padStart(3, '0')}.png").also { files += it }
                         save(image, file)
