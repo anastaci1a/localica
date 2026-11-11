@@ -2165,17 +2165,6 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                val margin = with(density) { if (page) 0f else 12.dp.toPx() }"
-        errorLine2="                                                               ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="628"
-            column="64"/>
-    </issue>
-
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
         errorLine1="                    when (placement) { GlassPlacement.Menu -> if (fitContent) availableWidth.toFloat() else 400.dp.toPx(); GlassPlacement.Center, GlassPlacement.Sheet -> 400.dp.toPx()"
         errorLine2="                                                                                                            ~~~~~~">
         <location
