@@ -71,10 +71,16 @@ internal fun prepareNativeDockedKeyboard(
                     else !editor.isFocused && observation.complete(editor.hasWindowFocus(), insets)
                 }
                 if (shown && !placed && SystemClock.uptimeMillis() >= nextShowRequest) {
-                    // A request rejected under the old policy need not replay
-                    // when its observer arrives. Retry only this setup editor.
-                    val requested = compose.runOnUiThread { input.showSoftInput(editor, 0) }
-                    record("native-show-request=$requested")
+                    // isActive can be true before the cold IME has a bound session.
+                    // A repeated show can then keep the same failed insets request.
+                    // Restart only this setup editor's connection on retries so Android
+                    // can reconnect the missing method; retain the native readiness bound.
+                    val restart = nextShowRequest != 0L
+                    val requested = compose.runOnUiThread {
+                        if (restart) input.restartInput(editor)
+                        input.showSoftInput(editor, 0)
+                    }
+                    record("native-show-request=$requested restartedInput=$restart")
                     nextShowRequest = SystemClock.uptimeMillis() + 1000L
                 }
                 // InputMethodService retains mIsInputViewShown after hiding
