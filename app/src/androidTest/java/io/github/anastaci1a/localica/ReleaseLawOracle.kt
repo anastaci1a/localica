@@ -17,9 +17,9 @@ internal class JoinRecorder(private val key: Any) : MotionEvents {
 internal class PhaseFrame(val nanos: Long, val p: Double)
 /** Independent #608 oracle: fitted core, position/velocity duration law, C1 startup and terminal Hermite bridges. */
 internal object Law {
-    const val T = .426086832
+    const val T = .36
     private fun bezier(u: Double): Pair<Double, Double> {
-        val (x1, y1, x2, y2) = listOf(.242192, .999967, .511935, .997652)
+        val (x1, y1, x2, y2) = listOf(.15, .15, .5, 1.0)
         fun c(s: Double, a: Double, b: Double) = 3 * (1 - s) * (1 - s) * s * a + 3 * (1 - s) * s * s * b + s * s * s
         fun d(s: Double, a: Double, b: Double) = 3 * (1 - s) * (1 - s) * a + 6 * (1 - s) * s * (b - a) + 3 * s * s * (1 - b)
         var s = u; repeat(30) { s = (s - (c(s, x1, x2) - u) / max(d(s, x1, x2), 1e-9)).coerceIn(0.0, 1.0) }
@@ -28,8 +28,8 @@ internal object Law {
     private fun hermite(t: Double, tau: Double, a: Double, va: Double, b: Double, vb: Double): Double {
         val u = t / tau; return (2 * u * u * u - 3 * u * u + 1) * a + (u * u * u - 2 * u * u + u) * tau * va + (-2 * u * u * u + 3 * u * u) * b + (u * u * u - u * u) * tau * vb
     }
-    /** #608 object time: the reference duration scaled by (edge travel / reference travel)^.5, floored at 140 ms. */
-    fun objectTime(travel: Double, reference: Double) = max(.14, T * (travel / reference).pow(.5))
+    /** #608 object time: the reference duration scaled by (edge travel / reference travel)^.5, floored at 360 ms. */
+    fun objectTime(travel: Double, reference: Double) = max(.36, T * (travel / reference).pow(.5))
     fun duration(p: Double, v: Double, q: Double, objectTime: Double = T) =
         max(objectTime * (.500401615 + .499598385 * abs(q - p)) / max(1.0, abs(v * objectTime / T) / 1.41952128).pow(.73607278), 2 / 120.0)
     fun at(p: Double, v: Double, q: Double, t: Double, objectTime: Double = T): Double {
