@@ -406,6 +406,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         anchor.reclaimOpening = reclaimOpening
         onDispose { if (anchor.reclaimOpening === reclaimOpening) anchor.reclaimOpening = null }
     }
+    // A reopen that is not a click (state, Back stack, programmatic) reaches the retained
+    // window here, in the same apply pass and before this frame draws (#858).
+    SideEffect { if (visible) reclaimOpening() }
     // Native admission and return use real placement/draw receipts. Canceling this
     // adapter does not replace the expansion or its physical rectangle.
     LaunchedEffect(visible, reduced, speed, dismissalAttempt) {
@@ -471,6 +474,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     if (continuousOrigin == null) {
                         window.glassInput(true); gestures.activate()
                     }
+                } else if (motion.expansion.nativeOpening == false && visible && continuousOrigin == null &&
+                    anchor.hidden && anchor.modalPresent && modalWindow != null && modalWindow === readyWindow) {
+                    // A reopen reclaimed this window at its return gate (#858). Pass the gate
+                    // without restoring the trigger; the reversed expansion then admits it again.
                 } else if (motion.expansion.nativeOpening == false) {
                     modalWindow?.glassInput(false)
                     gestures.deactivate()
@@ -500,6 +507,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         }
                     }
                     if (!gateCurrent()) continue@gateLoop
+                    // Keep one frame in which the restored trigger is drawn while this modal
+                    // still owns the window, so a reopen there reclaims the same dialog (#858).
+                    // The modal draws no body (#847 skip) and no field (home owns it) here.
+                    if (anchor.triggerMounted) {
+                        awaitReturnedPresentation()
+                        if (!gateCurrent()) continue@gateLoop
+                    }
                     originAdmitted = false
                     sharedContent?.releaseNative()
                     anchor.modalPresent = false; anchor.contact.modal = false
