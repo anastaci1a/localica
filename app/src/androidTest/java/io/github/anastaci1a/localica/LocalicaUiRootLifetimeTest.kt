@@ -35,12 +35,14 @@ class LocalicaUiRootLifetimeTest {
             WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
         SideEffect { publish(record) }
     }
+    private fun Record.px(width: Int, height: Int) = with(density) { IntSize(width.dp.roundToPx(), height.dp.roundToPx()) }
 
     @Test fun screenAndSiblingDialogShareLiveSettingsMeasuredSizeAndBasis() {
         val root = LocalicaUiRootState(InterfaceSettings())
         var width by mutableIntStateOf(280)
         var height by mutableIntStateOf(400)
-        compose.setContent { CompositionLocalProvider(LocalDensity provides Density(1f)) {
+        // The native dialog measures at its window's density, so the screen keeps that same production density.
+        compose.setContent {
             LocalicaUiRoot(root) { LocalicaTheme {
                 Box(Modifier.requiredSize(width.dp, height.dp)) {
                     // Use the same reuse branch as LocalicaScreen, alongside the actual screen measurement.
@@ -53,7 +55,7 @@ class LocalicaUiRootLifetimeTest {
                 GlassAlertDialog(onDismissRequest = {}, title = { Text("Sibling root witness") },
                     text = { Observe { dialog = it }; Text("Live root") }, confirmButton = {})
             } }
-        } }
+        }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val output = File(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
             ?: checkNotNull(instrumentation.targetContext.getExternalFilesDir(null)).absolutePath, "root-context-lifetime")
@@ -66,7 +68,9 @@ class LocalicaUiRootLifetimeTest {
                 val s = checkNotNull(screen); val d = checkNotNull(dialog)
                 assertSame(root, s.root); assertSame(s.root, d.root)
                 assertSame(s.context, d.context); assertSame(s.spec, d.spec)
-                assertEquals(IntSize(width, height), root.size)
+                assertEquals(s.density.density, d.density.density, 0f); assertEquals(s.density.fontScale, d.density.fontScale, 0f)
+                val window = s.px(width, height)
+                assertEquals(window, root.size)
                 assertEquals(root.size, s.window); assertEquals(s.window, d.window)
                 assertEquals(access, s.context.access); assertEquals(access, s.spec.spec.access)
                 val basis = playerBasis(s.density, root.size, s.navigationInset,
@@ -75,9 +79,9 @@ class LocalicaUiRootLifetimeTest {
                 assertEquals(travel, s.context.fullPlayerReferenceTravelPx, 0f)
                 val geometry = checkNotNull(s.spec.spec.geometry)
                 assertEquals(travel, geometry.referenceTravelPx, 0f)
-                assertEquals(maxOf(1f, kotlin.math.hypot(width.toFloat(), height.toFloat())), geometry.maxViewportDiagonalPx, 0f)
+                assertEquals(maxOf(1f, kotlin.math.hypot(window.width.toFloat(), window.height.toFloat())), geometry.maxViewportDiagonalPx, 0f)
                 assertTrue(s.context.displayIntervalSeconds <= geometry.maxDisplayIntervalSeconds)
-                listOf(BuildConfig.SOURCE_SHA, access, width, height, s.density.density,
+                listOf(BuildConfig.SOURCE_SHA, access, window.width, window.height, s.density.density,
                     s.navigationInset.value, s.context.fullPlayerReferenceTravelPx, travel, basis.edgeIndex,
                     geometry.maxViewportDiagonalPx).joinToString("\t") + "\n"
             }
@@ -89,12 +93,13 @@ class LocalicaUiRootLifetimeTest {
         checkRecord(MotionAccess.Faster)
         compose.runOnIdle { assertNotSame(initial.spec, screen!!.spec) }
         val faster = checkNotNull(screen)
-        val resized = IntSize(320, 560)
+        val resizedDp = IntSize(320, 560)
+        val resized = faster.px(resizedDp.width, resizedDp.height)
         val expectedResizedTravel = playerBasis(faster.density, resized, faster.navigationInset,
             StockUiSpec.clearance.getValue(Clearance.BottomChrome)).edgeTravelPx
         assertNotEquals("The resize fixture must change the dominant-edge reference under the existing law",
             faster.context.fullPlayerReferenceTravelPx, expectedResizedTravel)
-        compose.runOnIdle { width = resized.width; height = resized.height }
+        compose.runOnIdle { width = resizedDp.width; height = resizedDp.height }
         checkRecord(MotionAccess.Faster)
         compose.runOnIdle {
             assertNotSame(faster.spec, screen!!.spec)
