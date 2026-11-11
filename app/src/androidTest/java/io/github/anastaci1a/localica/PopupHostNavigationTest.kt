@@ -49,13 +49,12 @@ class PopupHostNavigationTest {
         var parentView: View? = null
         var parentProgress = 1f
         frameViews = { listOfNotNull(parentView, popupView) }
-        // #812 passive diagnostics, captured on Main from the existing work observer: the popup window's own phase,
-        // the clock of its last emission, and its foreground alpha under the production window(.18, .83) curve.
+        // #812 passive diagnostics: the popup window's own phase and the clock of its last emission, published on Main
+        // by the existing work observer. Its foreground alpha is PopupWindowMotion.foreground of that phase.
         var popupPhase = Float.NaN
         var popupPhaseClock = -1L
         frameState = { "parent=$parentProgress open=$open parentAttached=${parentView?.isAttachedToWindow} popupAttached=${popupView?.isAttachedToWindow}" +
-            " popupPhase=$popupPhase popupPhaseClock=$popupPhaseClock popupForeground=${if (popupPhase.isNaN()) popupPhase else io.github.anastaci1a.localica.ui.engine.Curve.window(.18f, .83f).at(popupPhase)}" +
-            " popupProgress=${anchor.contact.expansion.value} ${ownerState(anchor)}" }
+            " popupPhase=$popupPhase popupPhaseClock=$popupPhaseClock ${ownerState(anchor)}" }
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassMorphWorkObserver provides { phase, window, progress ->
                 if (phase == "geometry" && progress != null && window ===
@@ -170,8 +169,8 @@ class PopupHostNavigationTest {
 
     private data class RedFrame(val pixels: Int, val peak: Int)
 
-    /** #812 passive diagnostic, read on Main: the popup's bound expansion owner, its owning-clock phase and its held
-     * state. It never throws, so it cannot change an outcome; fields absent from a source are logged as absent. */
+    /** #812 passive diagnostic: the popup's bound expansion owner and its held state, read through their State
+     * delegates without sampling any motion. It never throws, so it cannot change an outcome; absent fields log as absent. */
     private fun ownerState(anchor: GlassAnchor): String = runCatching {
         val view = anchor.contact.expansion
         val phase = view.javaClass.getDeclaredField("phase").apply { isAccessible = true }.get(view)
@@ -179,7 +178,7 @@ class PopupHostNavigationTest {
             as io.github.anastaci1a.localica.ui.engine.ExpandCollapse? ?: return@runCatching "owner=none"
         val held = runCatching { (owner.javaClass.getDeclaredField("held\$delegate").apply { isAccessible = true }.get(owner) as State<*>).value }
             .getOrElse { "absent" }
-        "owner=${System.identityHashCode(owner)} ownerPhase=${owner.phase.value()} held=$held expanded=${owner.expanded}"
+        "owner=${System.identityHashCode(owner)} held=$held"
     }.getOrElse { "owner=unreadable(${it.javaClass.simpleName})" }
 
     private class FrameMarker(val x: Int) : android.graphics.drawable.Drawable() {
@@ -229,8 +228,7 @@ class PopupHostNavigationTest {
             if (matches) presented = next else next.recycle()
             matches
         }
-        val state = compose.runOnUiThread { frameState() }
-        android.util.Log.i("PopupHostNavigation", "stage=$requested clock=${compose.mainClock.currentTime} $state")
+        android.util.Log.i("PopupHostNavigation", "stage=$requested clock=${compose.mainClock.currentTime} ${frameState()}")
         val bitmap = requireNotNull(presented)
         return try {
             var count = 0
