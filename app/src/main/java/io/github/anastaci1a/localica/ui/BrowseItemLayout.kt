@@ -82,7 +82,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     val gatedText = textReveal.takeIf { from == null && artwork(style) }
     // Only the zero crossing changes composition. Opacity remains a layer-phase read.
     val menuRevealed by remember(textReveal, artworkAlpha, loadingReveal) {
-        derivedStateOf { textReveal.menuAlpha(artworkAlpha) * (loadingReveal?.alpha ?: 1f) > 0f }
+        derivedStateOf { textReveal.menuShown(artworkAlpha) && (loadingReveal?.alpha ?: 1f) > 0f }
     }
     var titleLayout by remember(item.key) { mutableStateOf<TextLayoutResult?>(null) }
     var informationLayout by remember(item.key) { mutableStateOf<TextLayoutResult?>(null) }

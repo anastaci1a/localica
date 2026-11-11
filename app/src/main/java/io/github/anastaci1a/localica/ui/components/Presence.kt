@@ -29,5 +29,5 @@ import io.github.anastaci1a.localica.ui.spec.MotionProfile
  * runs, so a draw-time producer's ease never recomposes its caller. */
 @Composable fun rememberProfileColor(key: Any, target: Float, profile: MotionProfile, start: Color, end: Color): ColorProducer {
     val motion = rememberProfileValue(key, target, profile)
-    return ColorProducer { lerp(start, end, motion.value()) }
+    return remember(motion, start, end) { ColorProducer { lerp(start, end, motion.value()) } }
 }

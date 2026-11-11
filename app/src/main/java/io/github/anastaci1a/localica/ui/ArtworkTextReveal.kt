@@ -1,7 +1,5 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -17,6 +15,8 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.LayoutDirection
+import io.github.anastaci1a.localica.ui.components.ArtworkReveal
+import io.github.anastaci1a.localica.ui.components.NoArtworkReveal
 
 /**
  * One artwork reveal drives its item's text (#526) and row action (#588). While the art loads, the text waits behind
@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.LayoutDirection
  */
 @Stable
 internal class ArtworkTextReveal(private val sourceOpacity: (() -> Float)? = null) {
-    internal var reveal: Animatable<Float, AnimationVector1D>? = null
+    internal var reveal: ArtworkReveal = NoArtworkReveal
     private val gate = mutableStateOf(false)
     private var released = false
     private val menuGate = mutableStateOf(false)
@@ -48,7 +48,7 @@ internal class ArtworkTextReveal(private val sourceOpacity: (() -> Float)? = nul
         if (gate.value) gate.value = false
     }
     // Unlike text, the action waits for unindexed artwork too. Both gates still read
-    // the artwork's single Animatable, and neither can close again after release.
+    // the artwork's single reveal, and neither can close again after release.
     internal fun holdMenu(waiting: Boolean) {
         if (menuReleased) return
         if (waiting) menuGate.value = true else releaseMenu()
@@ -59,7 +59,7 @@ internal class ArtworkTextReveal(private val sourceOpacity: (() -> Float)? = nul
     }
     val waiting: Boolean get() = gate.value
     // The single read of the artwork's reveal, shared by the text and action gates.
-    private val revealAlpha: Float get() = reveal?.value ?: 0f
+    private val revealAlpha: Float get() = reveal.alpha()
     val textAlpha: Float get() = if (!gate.value) 1f else sourceOpacity?.invoke() ?: revealAlpha
     internal fun menuAlpha(artworkVisibility: Float): Float {
         val alpha = if (!menuGate.value) 1f else revealAlpha
@@ -67,6 +67,8 @@ internal class ArtworkTextReveal(private val sourceOpacity: (() -> Float)? = nul
         // keeps the action continuous when a pinch removes or introduces that slot.
         return (1f - artworkVisibility) + artworkVisibility * alpha
     }
+    /** Whether [menuAlpha] is above zero, from the gate and the reveal's intent and rest rather than its value. */
+    internal fun menuShown(artworkVisibility: Float): Boolean = artworkVisibility < 1f || !menuGate.value || reveal.shown()
 }
 
 /** Gray text skeleton under the waiting text, fading as the text fades in. The skeleton keeps
@@ -95,7 +97,8 @@ internal fun Modifier.artworkTextReveal(reveal: ArtworkTextReveal?, layout: () -
         onDrawBehind {
             if (!skeleton || !reveal.waiting) return@onDrawBehind
             val alpha = (1f - reveal.textAlpha) * opacity
-            if (alpha <= 0f || size.width <= 0f || size.height <= 0f) return@onDrawBehind
+            // A fully revealed skeleton draws at zero alpha until the reveal releases the text.
+            if (opacity <= 0f || size.width <= 0f || size.height <= 0f) return@onDrawBehind
             for (bar in lines) {
                 if (bar.width <= 0f || bar.height <= 0f) continue
                 val radius = CornerRadius(cornerPx().coerceAtMost(bar.height / 2f))

@@ -58,6 +58,8 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
     }
     internal fun emit(intent: MotionIntent) { clock.events?.let { sink -> clock.observe { sink.joined(this,MotionJoin(epochState.intValue,intent.stamp,intent.before,Kinematic(intent.next.value(0.0).toFloat(),intent.next.velocity(0.0).toFloat()),intent.previous.kind,intent.next.kind,intent.policy,intent.releaseVelocity,intent.finiteDifferenceVelocity,(intent.next as? Damped)?.envelopeSeconds,intent.next.duration)) } }; if(intent.next.kind==0) onRest?.invoke() }
     fun retarget(target: Float,profile: MotionProfileId) { prepare(target,profile)?.let { commit(it) } }
+    /** A caller-reduced intent: rest at [target] now, with no velocity and no history to blend from. */
+    fun snapTo(target: Float) { clock.checkMutation(); check(!disposed); require(target.isFinite()); if(segment.kind==0 && target==this.target) return; commit(prepareSegment(Rest(target.toDouble()),target,clock.stampNow,policy="Reduced")) }
     fun retargetSpring(target: Float,spring: SpringProfileId) {
         clock.checkMutation(); check(!disposed); require(target.isFinite()); val spec=clock.spec.spring.getValue(SpringProfile.valueOf(spring.name)); val context=context(); val sigma=if(context.access==MotionAccess.Faster) 2.0/3 else 1.0; val speed=(if(spec.speedExponent==2) 4.0/3 else 1.0)/sigma; val identity=listOf(spring,spec,sigma); val stamp=clock.stampNow; val x=rawValue(stamp); val v=rawVelocity(stamp)
         if(target==this.target && segment.kind!=3 && (target.toDouble()==x && v==0.0 || descriptor==identity)) return

@@ -18,6 +18,8 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.ui.components.ArtworkReveal
+import io.github.anastaci1a.localica.ui.components.rememberArtworkReveal
 
 /** Loading, absent artwork and image reveal are shared by every artwork surface. */
 @Composable
@@ -28,12 +30,9 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     val reducedMotion = LocalReducedMotion.current
     val currentTextReveal by rememberUpdatedState(textReveal)
     // The reveal is read only while drawing; the cell never recomposes per animation frame.
-    val reveal = remember { Animatable(if (artwork == null) 0f else 1f) }
-    val present = artwork != null
-    LaunchedEffect(present, reducedMotion) {
-        reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
-        // The item's text and action finish with the art (#526, #588).
-        if (present) currentTextReveal?.let { it.release(); it.releaseMenu() }
+    // The item's text and action finish with the art (#526, #588).
+    val reveal = rememberArtworkReveal(artwork != null, reducedMotion) {
+        currentTextReveal?.let { it.release(); it.releaseMenu() }
     }
     // Art that replaces a loading shimmer fades in over that shimmer until the reveal completes (#524).
     // Only known-missing art shows the still placeholder and its icon.
@@ -50,15 +49,15 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
         ArtworkPlaceholderHost(artwork, reveal, placeholderLoading, emptyText, tintUris, Modifier.matchParentSize())
         if (!loading && artwork == null && emptyText != null) Text(emptyText)
         if (artwork != null) ArtworkResolutionBlend(artwork,
-            Modifier.matchParentSize().graphicsLayer { alpha = reveal.value }, contentScale, if (reducedMotion) 0 else 240)
+            Modifier.matchParentSize().graphicsLayer { alpha = reveal.alpha() }, contentScale, if (reducedMotion) 0 else 240)
     }
 }
 
 /** Reads the reveal in its own composition, so only this host recomposes when the placeholder is removed. */
 @Composable
-private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: Animatable<Float, AnimationVector1D>, loading: Boolean,
+private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: ArtworkReveal, loading: Boolean,
     emptyText: String?, tintUris: List<String>?, modifier: Modifier) {
-    val revealed by remember(artwork) { derivedStateOf { artwork != null && reveal.value >= 1f } }
+    val revealed by remember(artwork) { derivedStateOf { artwork != null && reveal.complete() } }
     if (!revealed) {
         Box(modifier) {
             ArtworkPlaceholder(loading, Modifier.matchParentSize(), showIcon = emptyText == null || loading, tintUris = tintUris)
