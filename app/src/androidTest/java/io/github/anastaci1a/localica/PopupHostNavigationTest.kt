@@ -36,11 +36,12 @@ class PopupHostNavigationTest {
     @Test fun subviewBackDuringExpandThenBackLeavesWithPage() = navigate(settings = false, expanding = true)
 
     @Test fun libraryBackDuringRetractKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = false, library = true)
-    @Test fun libraryBackDuringExpandKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = true, library = true)
+    // #812 6c lead ruling: the host Back lands on the frame that composes this popup's dismissal.
+    @Test fun libraryBackDuringExpandKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = true, library = true, hostBackOnDismissalFrame = true)
 
     @Test fun playlistEditorCancellationLeavesPopupBackUsable() = navigate(settings = false, expanding = true, playlistEditor = true)
 
-    private fun navigate(settings: Boolean, expanding: Boolean, library: Boolean = false, playlistEditor: Boolean = false) {
+    private fun navigate(settings: Boolean, expanding: Boolean, library: Boolean = false, playlistEditor: Boolean = false, hostBackOnDismissalFrame: Boolean = false) {
         var naming by mutableStateOf(playlistEditor)
         var page by mutableStateOf(true)
         var open by mutableStateOf(false)
@@ -131,7 +132,7 @@ class PopupHostNavigationTest {
         // navigates while it is still returning. Also cover an ordinary dismissal.
         if (expanding) back(popupView) { !open }
         else compose.runOnIdle { open = false }
-        compose.mainClock.advanceTimeBy(32)
+        if (!hostBackOnDismissalFrame) compose.mainClock.advanceTimeBy(32)
         assertTrue("Return is in flight before navigation", anchor.modalPresent && anchor.contact.expansion.value > 0f)
         val before = redFrame()
         assertTrue("Fixture presents popup foreground before navigation: $before", before.pixels > 100)
