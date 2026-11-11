@@ -11,6 +11,11 @@ import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.ui.engine.MotionPixelRect
 import io.github.anastaci1a.localica.ui.engine.motionPixelRect
 
+internal fun playerArtworkCornerRadius(progress: Float, backgroundProgress: Float): Dp {
+    val p = progress.coerceIn(0f, 1f)
+    return (8f + 16f * p).dp * (1f - p * backgroundProgress.coerceIn(0f, 1f))
+}
+
 /** One placement/contour for the player and overlays that must remain inside it. */
 internal data class PlayerSurfaceFrame(val x: Dp, val y: Dp, val width: Dp, val height: Dp,
     val shape: AbsoluteRoundedCornerShape, val maximumCorner: Dp) {
