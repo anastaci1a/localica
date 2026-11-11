@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.components.SettingsComparisonIcon
 import io.github.anastaci1a.localica.ui.components.SettingsIconComparisonRow
+import io.github.anastaci1a.localica.ui.layout.SettingsEntryList
 import io.github.anastaci1a.localica.icons.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -64,7 +65,7 @@ internal fun IconPackSettings(onView: (String?) -> Unit) {
     }
     Text(if (active == null) "Using the built-in icons" else "Using “${library.firstOrNull { it.id == active }?.report?.info?.name.orEmpty()}”",
         modifier = Modifier.testTag("icon-pack-status"))
-    SettingsEntry("Active icon pack") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    SettingsEntry("Active icon pack") { SettingsEntryList {
     IconPackRow(null, active == null, !busy, { IconPacks.reset(context) }, { onView(null) })
     library.forEach { pack ->
         IconPackRow(pack, pack.id == active, !busy, { IconPacks.select(context, pack.id) }, { onView(pack.id) }, { deleting = pack })

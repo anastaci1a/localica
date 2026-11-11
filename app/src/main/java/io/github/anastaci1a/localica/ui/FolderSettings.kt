@@ -12,6 +12,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import io.github.anastaci1a.localica.ui.layout.rememberSettingsSearchScroll
 import io.github.anastaci1a.localica.ui.layout.SettingsDialogBody
+import io.github.anastaci1a.localica.ui.layout.SettingsEntryList
+import io.github.anastaci1a.localica.ui.layout.SettingsPageColumn
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import kotlinx.coroutines.flow.first
@@ -145,9 +147,8 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
             if (page == "Metadata read failures" && search.isBlank()) MetadataReadFailures(state, Modifier.weight(1f))
             else CompositionLocalProvider(LocalSettingsSearchFocus provides focus.takeIf { search.isBlank() },
                 LocalSettingsNavigate provides { destination -> path = settingsPath(destination) }, LocalSettingsRowMetrics provides
-                LocalSettingsRowMetrics.current.copy(iconSlot = reservesIconSlot(page))) { Column(Modifier.fillMaxWidth().weight(1f).onGloballyPositioned { focus.viewportTop = it.positionInWindow().y; focus.viewportHeight = it.size.height }
-                .controlVerticalScroll(scroll).padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LocalSettingsRowMetrics.current.copy(iconSlot = reservesIconSlot(page))) { SettingsPageColumn(Modifier.fillMaxWidth().weight(1f).onGloballyPositioned { focus.viewportTop = it.positionInWindow().y; focus.viewportHeight = it.size.height }
+                .controlVerticalScroll(scroll)) {
                 if (search.isNotBlank()) {
                     val scanOptions = preferences.read("")
                     val values = searchValues + mapOf(
@@ -205,7 +206,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     "Folders to scan" -> {
                         Text("Your files stay where they are. Start scanning from More → Scan music.", style = MaterialTheme.typography.bodyMedium)
                         LibraryNotice(state)
-                        SettingsEntry("Music folders") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingsEntry("Music folders") { SettingsEntryList {
                         state.snapshot.folders.forEach { folder ->
                             val count = state.snapshot.tracks.count { track -> track.locations.any { it.folderUri == folder.uri } }
                             SettingsLink(folderLabels.getValue(folder.uri), if (folder.uri in state.unavailableFolders) "Access lost · select this folder again" else "$count songs", AppIcon.TabFolders) {

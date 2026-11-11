@@ -22,6 +22,18 @@ import io.github.anastaci1a.localica.ui.spec.*
     Column(verticalArrangement = Arrangement.spacedBy(LocalUiSpec.current.spec.space.getValue(Space.Base)), content = content)
 }
 
+/** A settings page body: the caller's scroll chain, then the page inset and the compact row gap. */
+@Composable internal fun SettingsPageColumn(modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val spec = LocalUiSpec.current.spec
+    Column(modifier.padding(spec.space.getValue(Space.Section)),
+        verticalArrangement = Arrangement.spacedBy(spec.space.getValue(Space.Compact)), content = content)
+}
+
+/** Stacked rows inside one settings entry (folders, tabs, filters, packs) at the compact row gap. */
+@Composable internal fun SettingsEntryList(content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(LocalUiSpec.current.spec.space.getValue(Space.Compact)), content = content)
+}
+
 @Composable internal fun SettingsCaption(modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier, content = content)
 }

@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.components.SettingsActionLayout
 import io.github.anastaci1a.localica.ui.components.SettingsOrderCard
+import io.github.anastaci1a.localica.ui.layout.SettingsEntryList
 import io.github.anastaci1a.localica.navigation.*
 
 @Composable
@@ -61,7 +62,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
             BooleanPreference("Retrace tab history", value.tabHistory) { onChange(value.copy(tabHistory = it)) }
             BooleanPreference("Confirm before exiting", value.confirmExit) { onChange(value.copy(confirmExit = it)) }
             SettingsHeading("Main tabs")
-            SettingsEntry("Main tabs") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SettingsEntry("Main tabs") { SettingsEntryList {
             value.tabs.forEachIndexed { index, tab ->
                 SettingsOrderCard(tab.label, SettingsActionLayout.Inline,
                     moveUp = {
