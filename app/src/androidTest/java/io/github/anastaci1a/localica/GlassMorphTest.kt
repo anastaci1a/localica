@@ -639,7 +639,13 @@ class GlassMorphTest {
         lateinit var anchor: GlassAnchor
         var popupWindow: android.view.Window? = null
         data class Mount(val window: android.view.Window, val clockMs: Long,
-            val hidden: Boolean, val shadowOwned: Boolean, val expansion: Float)
+            val hidden: Boolean, val shadowOwned: Boolean, val expansion: Float, val nativeNanos: Long)
+        data class PreparationPoint(val nativeNanos: Long, val clockMs: Long,
+            val window: android.view.Window?, val laidOut: Boolean, val hidden: Boolean,
+            val shadowOwned: Boolean, val expansion: Float)
+        val preparationPoints = java.util.concurrent.ConcurrentLinkedQueue<PreparationPoint>()
+        var popupView: android.view.View? = null
+        var exportedPoints = 0
         lateinit var probeClock: UiClock
         val probeLines = java.util.concurrent.ConcurrentLinkedQueue<String>()
         var awaitIteration = -1
@@ -653,6 +659,12 @@ class GlassMorphTest {
         }
         fun flushProbe() {
             while (true) android.util.Log.i("GlassMorphProbe", probeLines.poll() ?: break)
+            preparationPoints.toList().drop(exportedPoints).forEach { point ->
+                android.util.Log.i("GlassMorphProbe", "preparation nativeNanos=${point.nativeNanos} clock=${point.clockMs} " +
+                    "window=${point.window?.let { System.identityHashCode(it) }} laidOut=${point.laidOut} " +
+                    "hidden=${point.hidden} shadowInModal=${point.shadowOwned} expansion=${point.expansion}")
+                exportedPoints++
+            }
         }
         val mounts = mutableListOf<Mount>()
         val disposed = mutableListOf<android.view.Window>()
@@ -660,15 +672,31 @@ class GlassMorphTest {
             Box(Modifier.fillMaxSize()) {
                 probeClock = LocalUiClock.current
                 anchor = rememberGlassAnchor()
+                DisposableEffect(anchor, probeClock) {
+                    fun capturePreparationPoint() {
+                        if (android.os.Looper.myLooper() !== android.os.Looper.getMainLooper()) return
+                        probeClock.observe {
+                            preparationPoints.add(PreparationPoint(System.nanoTime(), compose.mainClock.currentTime,
+                                popupWindow, popupView?.isLaidOut == true, anchor.hidden,
+                                anchor.shadowInModal, anchor.contact.expansion.value))
+                        }
+                    }
+                    capturePreparationPoint()
+                    val observer = androidx.compose.runtime.snapshots.Snapshot.registerApplyObserver { _, _ ->
+                        capturePreparationPoint()
+                    }
+                    onDispose { observer.dispose() }
+                }
                 Box(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(CompactControlSize)
                     .glassAnchor(anchor).testTag("preparation-trigger"))
                 GlassMorphPopup(open, anchor, { open = false }) {
                     val view = androidx.compose.ui.platform.LocalView.current
+                    popupView = view
                     val window = (view.parent as androidx.compose.ui.window.DialogWindowProvider).window
                     DisposableEffect(window) {
                         popupWindow = window
                         mounts += Mount(window, compose.mainClock.currentTime,
-                            anchor.hidden, anchor.shadowInModal, anchor.contact.expansion.value)
+                            anchor.hidden, anchor.shadowInModal, anchor.contact.expansion.value, System.nanoTime())
                         probeLines.add(probeState("mount", view.isLaidOut))
                         onDispose {
                             disposed += window
