@@ -50,7 +50,7 @@ class PopupBrowseReturnReferenceTest {
         var open by mutableStateOf(false)
         var departing by mutableStateOf(false)
         try {
-            preferences.write(InterfaceSettings(reducedMotion = false, fasterMotion = false, glass = GlassAppearance(renderer = mode)))
+            preferences.write(InterfaceSettings(reducedMotion = false, animationSpeedTenths = 10, glass = GlassAppearance(renderer = mode)))
             compose.setContent { LocalicaTheme {
                 home = rememberGlassPopupHome(departing)
                 val page = rememberFrostedBackdrop(home, dark = false)

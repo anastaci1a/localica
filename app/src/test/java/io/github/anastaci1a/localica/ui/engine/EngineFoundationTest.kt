@@ -98,7 +98,7 @@ class EngineFoundationTest {
     @Test fun accessChangesAndObserversCannotMutate() {
         EngineHarness().use { h ->
             val m=MotionFloat(h.clock,0f,1f); m.retarget(1f,profile); h.now+=20_000_000; val s=h.clock.stampNow; val prior=m.sampleAt(s)
-            h.clock.configure(EngineContext(1f/120,1000f,MotionAccess.Faster),StockUiSpec); assertEquals(prior,m.sampleAt(s))
+            h.clock.configure(EngineContext(1f/120,1000f,MotionAccess.Standard,speed=1.5f),StockUiSpec); assertEquals(prior,m.sampleAt(s))
             assertThrows(IllegalStateException::class.java) { h.clock.observe { m.retarget(.5f,profile) } }
             h.clock.configure(EngineContext(1f/120,1000f,MotionAccess.Reduced),StockUiSpec); assertEquals(1f,m.value(),0f); assertTrue(m.settled); assertEquals(0,h.clock.activeCount)
             m.dispose()

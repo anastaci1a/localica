@@ -43,7 +43,7 @@ class PopupDurationPolicyTest {
     @Test fun localSpeedIsAppliedOnceIncludingTheFasterRoot() {
         for (speed in listOf(.5f, 1f, 4f / 3f, 2f)) {
             EngineHarness(spec = spec).use { h ->
-                h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Faster), spec)
+                h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Standard, speed = 1.5f), spec)
                 val joins = Joins()
                 h.clock.events = joins
                 val owner = ExpandCollapse(h.clock, spec.expansion, false)

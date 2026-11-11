@@ -51,6 +51,8 @@ class CollapsedPlayerCollectionNavigationTest {
     private var latestSearchPresentation: SearchPresentationRecord? = null
     private lateinit var records: File
     private lateinit var access: MotionAccess
+    /** The old Faster setting is the #860 speed 1.5×; access stays Standard. */
+    private enum class Pace(val access: MotionAccess, val tenths: Int) { Standard(MotionAccess.Standard, 10), Faster(MotionAccess.Standard, 15), Reduced(MotionAccess.Reduced, 10) }
     private data class FrameRecord(val source: String, val api: Int, val frameMs: Long,
         val access: MotionAccess, val referenceTravel: Float, val phase: Float, val queuePhase: Float,
         val basisJoins: Int, val contentEvents: List<Pair<String, Boolean>>)
@@ -121,16 +123,16 @@ class CollapsedPlayerCollectionNavigationTest {
                 System.identityHashCode(motion.clock), edge)
     }
 
-    private fun start(access: MotionAccess, loaded: Boolean, tab: MainTab = MainTab.Albums, input: String = "navigation") {
-        this.access = access
+    private fun start(pace: Pace, loaded: Boolean, tab: MainTab = MainTab.Albums, input: String = "navigation") {
+        this.access = pace.access
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val output = File(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
             ?: checkNotNull(context.getExternalFilesDir(null)).absolutePath, "collapsed-collection-navigation")
         output.mkdirs()
-        records = File(output, "$access-$loaded-$tab-$input.tsv")
+        records = File(output, "$pace-$loaded-$tab-$input.tsv")
         records.writeText("source\tapi\tframeMs\taccess\treferenceTravel\tphase\tqueuePhase\tbasisJoins\tcontentEvents\n")
         InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(tab),
-            fasterMotion = access == MotionAccess.Faster, reducedMotion = access == MotionAccess.Reduced))
+            animationSpeedTenths = pace.tenths, reducedMotion = pace.access == MotionAccess.Reduced))
         BrowsePreferences(context).write(BrowseRoute(tab), BrowseStyle(listSize = ListSize.Small, quickSearch = true), false)
         val track = tracks.first()
         val playback = if (loaded) PlaybackState(connected = true, trackId = track.id, trackUri = track.uri,
@@ -248,8 +250,8 @@ class CollapsedPlayerCollectionNavigationTest {
         compose.onNodeWithTag(destination).assertIsEnabled().assertIsDisplayed()
     }
 
-    private fun navigation(access: MotionAccess, loaded: Boolean) {
-        start(access, loaded)
+    private fun navigation(pace: Pace, loaded: Boolean) {
+        start(pace, loaded)
         if (loaded) compose.onNodeWithTag("player-surface").assertIsDisplayed()
         openAlbum()
         awaitRouteAdmission("media-basis:0")
@@ -280,12 +282,12 @@ class CollapsedPlayerCollectionNavigationTest {
         compose.mainClock.autoAdvance = true
     }
 
-    @Test fun standardCollapsedPlayerNeverComposesTheQueueDuringCollectionNavigation() = navigation(MotionAccess.Standard, true)
-    @Test fun fasterCollapsedPlayerNeverComposesTheQueueDuringCollectionNavigation() = navigation(MotionAccess.Faster, true)
-    @Test fun reducedCollapsedPlayerNeverComposesTheQueueDuringCollectionNavigation() = navigation(MotionAccess.Reduced, true)
-    @Test fun standardEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(MotionAccess.Standard, false)
-    @Test fun fasterEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(MotionAccess.Faster, false)
-    @Test fun reducedEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(MotionAccess.Reduced, false)
+    @Test fun standardCollapsedPlayerNeverComposesTheQueueDuringCollectionNavigation() = navigation(Pace.Standard, true)
+    @Test fun fasterCollapsedPlayerNeverComposesTheQueueDuringCollectionNavigation() = navigation(Pace.Faster, true)
+    @Test fun reducedCollapsedPlayerNeverComposesTheQueueDuringCollectionNavigation() = navigation(Pace.Reduced, true)
+    @Test fun standardEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(Pace.Standard, false)
+    @Test fun fasterEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(Pace.Faster, false)
+    @Test fun reducedEmptyPlayerRemainsClosedDuringCollectionNavigation() = navigation(Pace.Reduced, false)
 
     private enum class Input { Pinch, Back, Search }
 
@@ -296,8 +298,8 @@ class CollapsedPlayerCollectionNavigationTest {
             actionFrame - navigationFrame in 1L..100L)
     }
 
-    private fun interactions(access: MotionAccess, input: Input) {
-        start(access, true, MainTab.Playlists, input.name)
+    private fun interactions(pace: Pace, input: Input) {
+        start(pace, true, MainTab.Playlists, input.name)
         val row = hasText(playlist.name) and hasClickAction()
         compose.onAllNodes(row).assertCountEquals(1)
         beginHandoff("media-basis:0")
@@ -428,15 +430,15 @@ class CollapsedPlayerCollectionNavigationTest {
         compose.mainClock.autoAdvance = true
     }
 
-    @Test fun standardCollapsedCollectionAdmitsPinchDuringNavigation() = interactions(MotionAccess.Standard, Input.Pinch)
-    @Test fun fasterCollapsedCollectionAdmitsPinchDuringNavigation() = interactions(MotionAccess.Faster, Input.Pinch)
-    @Test fun reducedCollapsedCollectionAdmitsPinchDuringNavigation() = interactions(MotionAccess.Reduced, Input.Pinch)
-    @Test fun standardCollapsedCollectionAdmitsListBackDuringNavigation() = interactions(MotionAccess.Standard, Input.Back)
-    @Test fun fasterCollapsedCollectionAdmitsListBackDuringNavigation() = interactions(MotionAccess.Faster, Input.Back)
-    @Test fun reducedCollapsedCollectionAdmitsListBackDuringNavigation() = interactions(MotionAccess.Reduced, Input.Back)
-    @Test fun standardCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(MotionAccess.Standard, Input.Search)
-    @Test fun fasterCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(MotionAccess.Faster, Input.Search)
-    @Test fun reducedCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(MotionAccess.Reduced, Input.Search)
+    @Test fun standardCollapsedCollectionAdmitsPinchDuringNavigation() = interactions(Pace.Standard, Input.Pinch)
+    @Test fun fasterCollapsedCollectionAdmitsPinchDuringNavigation() = interactions(Pace.Faster, Input.Pinch)
+    @Test fun reducedCollapsedCollectionAdmitsPinchDuringNavigation() = interactions(Pace.Reduced, Input.Pinch)
+    @Test fun standardCollapsedCollectionAdmitsListBackDuringNavigation() = interactions(Pace.Standard, Input.Back)
+    @Test fun fasterCollapsedCollectionAdmitsListBackDuringNavigation() = interactions(Pace.Faster, Input.Back)
+    @Test fun reducedCollapsedCollectionAdmitsListBackDuringNavigation() = interactions(Pace.Reduced, Input.Back)
+    @Test fun standardCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(Pace.Standard, Input.Search)
+    @Test fun fasterCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(Pace.Faster, Input.Search)
+    @Test fun reducedCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(Pace.Reduced, Input.Search)
 
     /** Called only in a Main snapshot block; the returned record owns immutable copied values. */
     private fun searchSnapshot(editorCount: Int? = null, editorEnabled: Boolean? = null): SearchFrameRecord {

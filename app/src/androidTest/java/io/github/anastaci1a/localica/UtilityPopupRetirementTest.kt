@@ -83,7 +83,7 @@ class UtilityPopupRetirementTest {
     }
 
     private fun host() {
-        preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Playlists), reducedMotion = false, fasterMotion = false))
+        preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Playlists), reducedMotion = false, animationSpeedTenths = 10))
         val track = Track("file:///missing-667.mp3", "One", artist = "Test", album = "One",
             fileName = "missing-667.mp3", relativePath = "missing-667.mp3")
         compose.setContent { LocalicaTheme {
