@@ -34,7 +34,7 @@ class ExpansionDomainTest {
             c.setBasis(ExpansionBasis(Rect(0f,0f,100f,100f),Rect(1000f,0f,1100f,100f),1f))
             c.contactBegin(h.clock.stampNow); h.now+=10_000_000; c.contactMove(500f,h.clock.stampNow)
             c.updateSpec(StockUiSpec.expansion.copy(sizeExponent=Float.MAX_VALUE))
-            h.clock.configure(EngineContext(1f/60,500f,MotionAccess.Faster),StockUiSpec)
+            h.clock.configure(EngineContext(1f/60,500f,MotionAccess.Standard,speed=1.5f),StockUiSpec)
             val d=c.contactRelease(0f,h.clock.stampNow)
             val expected=expansionDuration(StockUiSpec.expansion,1000.0,1000.0,.5,0.0,1.0,2.0/3,(1f/60).toDouble())
             assertEquals(expected,d.durationSeconds.toDouble(),1e-7); assertTrue(c.expanded); c.dispose()

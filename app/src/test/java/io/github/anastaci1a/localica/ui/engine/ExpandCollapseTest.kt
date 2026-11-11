@@ -34,7 +34,7 @@ class ExpandCollapseTest {
     }
 
     @Test fun sheetReanchorPolicyPreservesInFlightContinuity() {
-        for (access in listOf(MotionAccess.Standard, MotionAccess.Faster)) EngineHarness(access).use { h ->
+        for (speed in listOf(1f, 1.5f)) EngineHarness(speed = speed).use { h ->
             val old = basis()
             val c = ExpandCollapse(h.clock, StockUiSpec.expansion, false)
             c.setBasis(old)
@@ -163,7 +163,7 @@ class ExpandCollapseTest {
     }
     @Test fun durationTravelTimesThePhaseOnlyAndLocalSpeedReplacesTheRootFactorOnce() {
         val domain=(uiSpec(io.github.anastaci1a.localica.navigation.InterfaceSettings(),null,ExpansionGeometryDomain(1000f,3000f,1f/60)) as SpecResult.Accepted).spec
-        fun phases(access: MotionAccess,speed: Float?,basis: ExpansionBasis,bind: Boolean=false)=EngineHarness(access,domain).use { h ->
+        fun phases(root: Float,speed: Float?,basis: ExpansionBasis,bind: Boolean=false)=EngineHarness(spec=domain,speed=root).use { h ->
             val c=ExpandCollapse(h.clock,domain.expansion,false); c.setBasis(basis)
             val rect=if(bind) MotionRect(h.clock,basis.startBounds,EdgeRanges(3000f,3000f,3000f,3000f)).also { c.bind(it) } else null
             speed?.let(c::updateSpeed); c.target(true)
@@ -173,20 +173,20 @@ class ExpandCollapseTest {
         val envelope=Rect(0f,0f,1000f,1000f); val parallax=ExpansionBasis(envelope.translate(28f,0f),envelope,1f,1000f)
         assertEquals(28f,parallax.edgeTravelPx,0f)
         // A 28 px slide timed by its 1000 px presented extent follows the same phase as a real 1000 px edge.
-        val real=phases(MotionAccess.Standard,4f/3f,ExpansionBasis(Rect(0f,0f,1000f,0f),Rect(0f,0f,1000f,1000f),1f),bind=true)
-        val (slide,end)=phases(MotionAccess.Standard,4f/3f,parallax,bind=true)
+        val real=phases(1f,4f/3f,ExpansionBasis(Rect(0f,0f,1000f,0f),Rect(0f,0f,1000f,1000f),1f),bind=true)
+        val (slide,end)=phases(1f,4f/3f,parallax,bind=true)
         assertEquals(real.first.map { it.first },slide.map { it.first }); assertEquals(envelope,end)
         // Unmoved edges stay exact; the moving pair stays inside the 28 px slide as one rigid 1000 px body (within float
         // rounding at 1028, about 0.0005); the phase stays in 0..1.
         slide.forEach { (p,r) -> assertTrue("$p $r",r!!.top==0f && r.bottom==1000f && r.left in 0f..28f && r.right in 1000f..1028f &&
             kotlin.math.abs(r.width-1000f)<=.0005f && p in 0f..1f) }
-        // Local speed is the whole time scale: the Faster root adds nothing, and speed 2 equals the old Faster root.
-        assertEquals(phases(MotionAccess.Standard,1.5f,parallax).first,phases(MotionAccess.Faster,1.5f,parallax).first)
-        assertEquals(phases(MotionAccess.Faster,null,parallax).first,phases(MotionAccess.Standard,2f,parallax).first)
-        // The published default speed is exactly the qualified law, and Faster is exactly its canonical factor.
-        assertEquals(phases(MotionAccess.Standard,null,parallax).first,phases(MotionAccess.Standard,4f/3f,parallax).first)
-        assertEquals(phases(MotionAccess.Faster,null,parallax).first,phases(MotionAccess.Faster,2f,parallax).first)
-        assertNotEquals(phases(MotionAccess.Standard,2f,parallax).first,phases(MotionAccess.Standard,4f/3f,parallax).first)
+        // Local speed is the whole time scale: a 1.5× root adds nothing, and the legacy speed 2 equals the 1.5× root (#860).
+        assertEquals(phases(1f,1.5f,parallax).first,phases(1.5f,1.5f,parallax).first)
+        assertEquals(phases(1.5f,null,parallax).first,phases(1f,2f,parallax).first)
+        // The published default speed is exactly the qualified law, and 1.5× is exactly the old Faster factor.
+        assertEquals(phases(1f,null,parallax).first,phases(1f,4f/3f,parallax).first)
+        assertEquals(phases(1.5f,null,parallax).first,phases(1.5f,2f,parallax).first)
+        assertNotEquals(phases(1f,2f,parallax).first,phases(1f,4f/3f,parallax).first)
     }
     @Test fun cancellationAndReducedExitClearContactWithoutLateInputResurrection() {
         EngineHarness().use { h ->

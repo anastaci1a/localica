@@ -22,7 +22,7 @@ class RandomBasisMappedChannelTest {
                 when(i%5) {
                     0 -> c.target(r.nextBoolean())
                     1 -> { basis=randomBasis(r); c.setBasis(basis) }
-                    2 -> { val access=if(i%2==0) MotionAccess.Standard else MotionAccess.Faster; h.clock.configure(EngineContext(1f/listOf(60,90,120)[i%3],1000f,access),StockUiSpec); c.target(!c.expanded) }
+                    2 -> { h.clock.configure(EngineContext(1f/listOf(60,90,120)[i%3],1000f,MotionAccess.Standard,speed=if(i%2==0) 1f else 1.5f),StockUiSpec); c.target(!c.expanded) }
                     3 -> { basis=basis.copy(density=if(basis.density==1f) 2f else 1f); c.setBasis(basis) }
                     else -> c.target(!c.expanded,ExpansionReason.Restore)
                 }

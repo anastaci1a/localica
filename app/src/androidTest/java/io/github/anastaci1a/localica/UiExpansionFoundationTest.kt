@@ -60,7 +60,7 @@ class UiExpansionFoundationTest {
         }
     }
     @Test fun tinyGeometryDisablesContactBeforeBeginAndStillAnimatesProgrammatically() = localicaRunComposeUiTest {
-        val scene=Scene(); setContent { Fixture({ mainClock.currentTime*1_000_000 },MotionAccess.Faster,scene) }
+        val scene=Scene(); setContent { Fixture({ mainClock.currentTime*1_000_000 },MotionAccess.Standard,scene) }
         runOnIdle {
             val c=scene.expansion!!; c.setBasis(basis(Rect(.5f,0f,100f,100f))); c.bind(scene.rect!!); assertFalse(c.canContact)
             assertThrows(IllegalStateException::class.java) { c.contactBegin(scene.clock!!.stampNow) }; c.target(true)
