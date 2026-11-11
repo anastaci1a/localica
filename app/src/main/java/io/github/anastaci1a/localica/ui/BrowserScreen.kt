@@ -63,6 +63,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlin.math.roundToInt
+import io.github.anastaci1a.localica.ui.spec.Space
+import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 
 /** Optional screen and per-cell work evidence (kind, route or item key); no behavior depends on it. */
 internal data class BrowseScrollFrame(val index: Int, val offset: Int, val headerHeight: Int?, val rowHeight: Int?,
@@ -1112,7 +1114,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .testTag("browser-list"), contentPadding = PaddingValues(start = cellGeometry.gridInset.dp, end = cellGeometry.gridInset.dp,
                     bottom = obscuredInset +
                         maxOf(with(density) { returnControlHeight.toDp() } + floatingControlClearance,
-                            with(density) { actionControlHeight.toDp() }) + 16.dp)) {
+                            with(density) { actionControlHeight.toDp() }) + StockUiSpec.space.getValue(Space.Comfortable))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     if (measuresNotice) {
                         // The grid canonicalizes a zero-height notice to item 1 / offset 0 and then
@@ -1376,7 +1378,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     bottom = obscuredInset), onUserScroll = ::userScroll)
             if (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search) {
                 val playlist = playlists.playlists.firstOrNull { it.id == route.collection?.id }
-                if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)
+                if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = StockUiSpec.space.getValue(Space.Base), bottom = obscuredInset)
                     .onSizeChanged { actionControlHeight = it.height }) {
                     val anchor = rememberGlassAnchor()
                     var open by remember { mutableStateOf(false) }
@@ -1388,7 +1390,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 }
             }
             if (route.tab in setOf(MainTab.Library, MainTab.Playlists) && route.collection == null && !route.search)
-                PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset).testTag("playlist-add-module")
+                PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(end = StockUiSpec.space.getValue(Space.Base), bottom = obscuredInset).testTag("playlist-add-module")
                     .onSizeChanged { actionControlHeight = it.height })
             }
         }
