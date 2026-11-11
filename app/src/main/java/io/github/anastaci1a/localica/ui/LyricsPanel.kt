@@ -36,6 +36,7 @@ import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.library.ArtworkCache
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.lyrics.*
+import io.github.anastaci1a.localica.ui.spec.LyricsLineSpec
 
 @Composable
 internal fun rememberLyrics(track: Track?): LyricsResult? {
@@ -289,8 +290,8 @@ internal fun lyricReturnMoves(delta: Int?, canScrollBackward: Boolean, canScroll
 }
 
 private const val LyricPlaceholder = "♪"
-private val LyricRowPadding = 12.dp
-private val LyricRowInset = 4.dp
+private val LyricRowPadding = LyricsLineSpec.rowPadding
+private val LyricRowInset = LyricsLineSpec.rowInset
 
 /** The current-line anchor geometry of [LyricsLines] (#717, shared by the opening position, the follow glide and the
  *  return arrow): rows are text plus [LyricRowPadding] above and below; the list's content padding is half the container
