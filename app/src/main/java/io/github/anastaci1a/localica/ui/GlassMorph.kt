@@ -57,6 +57,8 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
 import io.github.anastaci1a.localica.ui.spec.LocalUiSpec
+import io.github.anastaci1a.localica.ui.spec.PageCornerRadius
+import io.github.anastaci1a.localica.ui.spec.PopupCornerRadius
 import io.github.anastaci1a.localica.ui.engine.*
 import io.github.anastaci1a.localica.ui.engine.GlassOriginWell
 import io.github.anastaci1a.localica.ui.engine.SurfaceView
@@ -737,7 +739,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 fun startWidth() = start().width.takeIf { it > 0f } ?: targetWidth.toFloat()
                 fun startHeight() = start().height.takeIf { it > 0f } ?: with(density) { CompactControlSize.toPx() }
                 fun homeRadius() = anchor.cornerRadius?.let { it * anchor.presentedScale } ?: with(density) { (startHeight() / 2).toDp() }
-                fun radius() = if (page) 0.dp else if (detached) 28.dp else homeRadius() * (1f - geometry()) + 28.dp * geometry()
+                fun radius() = if (page) PageCornerRadius else if (detached) PopupCornerRadius else homeRadius() * (1f - geometry()) + PopupCornerRadius * geometry()
                 val foregroundTargetHeight = if (viewportSized) viewportTargetHeight else targetHeight
                 SideEffect { if (hasViewport) anchor.contact.vertical = kotlin.math.abs(foregroundTargetHeight - startHeight()) > kotlin.math.abs(targetWidth - startWidth()) }
                 val dark = panelDark
@@ -870,9 +872,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         .graphicsLayer { shape=RoundedCornerShape(radius()); clip=true }.glassPopupHome(childHome)
                         .recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
-                        Box(Modifier.graphicsLayer {
-                            if (anchor.quiet) alpha = motion.quietContent.at(phase())
-                        }.recordFrostedBackdrop(material)) {
+                        Box(Modifier.presentedAlpha { if (anchor.quiet) motion.quietContent.at(phase()) else 1f }
+                            .recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = samplingSource,
@@ -902,7 +903,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     })
                             }
                         }
-                        Box(Modifier.graphicsLayer { alpha = if (page) 1f else motion.foreground.at(phase()) }
+                        SurfaceLayer(Modifier.presentedAlpha { if (page) 1f else motion.foreground.at(phase()) }
                             .onPlaced { sharedContent?.destination(it) }
                             .then(contentModifier)
                             .then(if (!visible || !foregroundReady) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
@@ -922,7 +923,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 GlassPanelTheme(dark, content)
                             }
                         }
-                        Box(Modifier.graphicsLayer { alpha = motion.face.at(phase()) }
+                        SurfaceLayer(Modifier.presentedAlpha { motion.face.at(phase()) }
                             .clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                             CompositionLocalProvider(LocalContentColor provides (anchor.ink.takeIf { it != Color.Unspecified }
                                 ?: if (dark) Color.White else Color(0xFF202124))) { anchor.face?.invoke() }
