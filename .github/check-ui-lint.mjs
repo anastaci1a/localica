@@ -137,8 +137,9 @@ export function transferIds(entries, known, completed) {
 export function transferGrowth(older, newer) {
     const prior = new Set(older.map(transferId)), kept = new Set(newer.map(transferId)); let grown = newer.filter(e => !prior.has(transferId(e)));
     // A same-incident re-anchor replaces exactly one prior entry that is otherwise identical and no longer present.
-    const same = (o, e) => { const {reanchoredFrom, ...rest} = e, flat = x => JSON.stringify(Object.entries(x).sort());
-        return flat(o) === flat({...rest, codeSha256:reanchoredFrom.codeSha256}) || flat(o) === flat({...e, codeSha256:reanchoredFrom.codeSha256}); };
+    // The prior entry may itself carry an earlier reanchoredFrom; only the remaining fields must be identical.
+    const same = (o, e) => { const strip = ({reanchoredFrom, ...rest}) => rest, flat = x => JSON.stringify(Object.entries(x).sort());
+        return flat(strip(o)) === flat({...strip(e), codeSha256:e.reanchoredFrom.codeSha256}); };
     const source = e => e.reanchoredFrom ? older.filter(o => !kept.has(transferId(o)) && same(o, e)) : [];
     const replacing = grown.filter(e => source(e).length === 1); grown = grown.filter(e => !replacing.includes(e));
     requireThat(new Set(replacing.map(e => transferId(source(e)[0]))).size === replacing.length, 'Transfer re-anchor reused');
