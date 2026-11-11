@@ -212,6 +212,9 @@ class PopupShadowContinuityTest {
         // otherwise round in opposite directions and make coerceIn reject the range.
         coordinate.coerceIn(radius + shift, (extent - radius) + shift)
 
+    private data class ReturnPoint(val hidden: Boolean, val request: Long, val presented: Long,
+        val modalPresent: Boolean, val shadowInModal: Boolean, val window: Boolean)
+
     private fun verify(nested: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
@@ -253,19 +256,40 @@ class PopupShadowContinuityTest {
                 assertSame(window, popupWindow)
                 verifyField("reopening-$cycle")
             }
-            compose.runOnIdle { open = false }
+            // The closing gate restores, acknowledges, transfers and releases within one
+            // idle, so observe its order passively at each snapshot apply. The callback
+            // only copies values; the log is written here, on the instrumentation thread.
+            val returns = java.util.concurrent.ConcurrentLinkedQueue<ReturnPoint>()
+            fun record() = returns.add(ReturnPoint(anchor.hidden, anchor.restoredDrawRequest,
+                anchor.restoredPresentedReceipt, anchor.modalPresent, anchor.shadowInModal, popupWindow != null))
+            val request = compose.runOnIdle { record(); anchor.restoredDrawRequest }
+            val observer = androidx.compose.runtime.snapshots.Snapshot.registerApplyObserver { _, _ -> record() }
             var returned = false
-            repeat(180) {
-                if (!returned) {
-                    advance(16)
-                    if (!anchor.hidden && anchor.restoredDrawn && anchor.modalPresent) {
-                        assertEquals(0f, anchor.contact.expansion.value, 0f)
-                        verifyField("restored-draw-ack")
-                        returned = true
+            try {
+                compose.runOnIdle { open = false }
+                repeat(180) {
+                    if (!returned) {
+                        advance(16)
+                        // The first page-owned frame, while the popup window is still present.
+                        if (!anchor.hidden && anchor.restoredDrawn && !anchor.modalPresent && popupWindow != null) {
+                            assertEquals(0f, anchor.contact.expansion.value, 0f)
+                            verifyField("restored-draw-ack")
+                            returned = true
+                        }
                     }
                 }
-            }
-            assertTrue("Capture the final popup-owned shadow before native disposal", returned)
+            } finally { observer.dispose() }
+            val points = returns.toList()
+            File(output, "return-order.txt").writeText(points.joinToString("\n", "request=$request\n"))
+            assertTrue("Capture the final popup-owned shadow before native disposal: $points", returned)
+            val receipt = request + 1
+            assertEquals("One restored-draw request per return: $points", receipt, anchor.restoredDrawRequest)
+            val released = points.indexOfFirst { !it.modalPresent }
+            assertTrue("The return releases the popup: $points", released > 0)
+            assertTrue("The popup keeps its shadow until the restored trigger is presented: $points",
+                points.take(released).any { !it.hidden && it.presented == receipt && it.modalPresent && it.shadowInModal && it.window })
+            assertTrue("Ownership releases only after that receipt: $points",
+                points.drop(released).all { it.presented == receipt && !it.hidden })
             repeat(12) { if (popupWindow != null) advance(16) }
             assertNull("The returning native window must dispose", popupWindow)
             if (!nested) verifyField("first-trigger-owned-frame", popup = false)
