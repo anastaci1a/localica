@@ -89,22 +89,59 @@ export const transferRelabels = {'U10.03-relabel-2026-11-07': {from: 'U10.03', l
 export const recordedOwnerMoves = [{codeSha256: '20f5c3f87152c38dc50f6bd4be3be3085fe522574fa028dfc116923d1b338f15', from: 'U04.01a', to: 'U04.01b'},
     {codeSha256: 'f7cb4d564f22c78a17a817c10cc0bfd565fe2d741765b679d9f9537d54882f8f', from: 'U10.03', to: 'U11.04'}];
 const transferId = e => JSON.stringify([e.rule,e.path,e.fqn,e.codeSha256]);
+/** The marked construct of a row: the errorLine2 underline span within errorLine1, and how often it occurs on that line. */
+export function markedConstruct(code, underline, marker) {
+    const m = underline?.match(/^( *)([~^]+)\s*$/);
+    if (!m || m[1].length !== marker || marker + m[2].length > code.length) return {span:'', construct:'', occurrences:0};
+    const construct = code.slice(marker, marker + m[2].length); let occurrences = 0;
+    for (let i = code.indexOf(construct); i >= 0; i = code.indexOf(construct, i + 1)) occurrences++;
+    return {span:m[2], construct, occurrences};
+}
+/** Lead ruling 2026-11-10 (v0.34.0 baseline repair): one incident whose line was edited around it. Rule, path, enclosing symbol,
+ * message, underline and marked construct text are byte-identical, and the construct occurs exactly once on the new line. */
+export const sameIncident = (old, now) => !!old.construct && old.rule === now.rule && old.path === now.path && old.fqn === now.fqn &&
+    old.message === now.message && old.span === now.span && old.construct === now.construct && now.occurrences === 1;
+/** A transfer re-anchored onto its edited line records its prior row, which must reproduce the prior fingerprint. */
+function priorTransferRow(e) {
+    const r = e.reanchoredFrom;
+    requireThat(r && typeof r === 'object' && Object.keys(r).sort().join() === 'codeSha256,errorLine1,errorLine2,message,ordinal' &&
+        [r.errorLine1, r.errorLine2, r.message].every(v => typeof v === 'string' && v) && Number.isInteger(r.ordinal) && r.ordinal >= 0 &&
+        r.codeSha256 !== e.codeSha256, 'Invalid transfer re-anchor');
+    const marker = r.errorLine2.search(/[~^]/), mark = markedConstruct(r.errorLine1, r.errorLine2, marker);
+    requireThat(mark.construct && codeFingerprint(r.errorLine1, marker, r.ordinal) === r.codeSha256, 'Transfer re-anchor does not reproduce its prior fingerprint');
+    return {rule:e.rule, path:e.path, fqn:e.fqn, message:r.message, ...mark};
+}
+/** Every re-anchored transfer names a head row that is the same incident as its recorded prior row. */
+export function transferReanchors(entries, after) {
+    return entries.filter(e => 'reanchoredFrom' in e).map(e => {
+        const row = after.find(d => d.identity === transferId(e));
+        requireThat(row && sameIncident(priorTransferRow(e), row), 'Transfer re-anchor is not the same incident');
+        return {rule:e.rule, path:e.path, fqn:e.fqn, construct:row.construct, from:{codeSha256:e.reanchoredFrom.codeSha256}, to:{codeSha256:e.codeSha256, line:row.originalLine}};
+    });
+}
 /** Lead-approved ownership transfers (2026-11-07): itemized incidents a named future step removes; shrink-only along history. */
 export function transferIds(entries, known, completed) {
     requireThat(Array.isArray(entries), 'Transfer entries');
     const ids = entries.map(e => {
-        const keys = Object.keys(e).filter(k => k !== 'exception' && k !== 'relabel').sort().join();
+        const keys = Object.keys(e).filter(k => k !== 'exception' && k !== 'relabel' && k !== 'reanchoredFrom').sort().join();
         requireThat(keys === 'codeSha256,fqn,path,reason,removedBy,rule' && rules.includes(e.rule) && e.reason &&
             known.includes(e.removedBy) && !completed.includes(e.removedBy), 'Invalid or expired transfer');
         requireThat(!('exception' in e) || transferExceptions[e.exception]?.removedBy === e.removedBy, 'Unrecorded transfer exception');
         requireThat(!('relabel' in e) || !('exception' in e) && transferRelabels[e.relabel] && transferRelabels[e.relabel].from !== e.removedBy, 'Unrecorded transfer relabel');
+        if ('reanchoredFrom' in e) priorTransferRow(e);
         return transferId(e);
     });
     requireThat(new Set(ids).size === ids.length, 'Duplicate transfer'); return ids;
 }
 /** Newer entries must be a subset of older ones with unchanged owners, except a recorded exception's entries or relabel, each admitted once up to its limit. */
 export function transferGrowth(older, newer) {
-    const prior = new Set(older.map(transferId)); const grown = newer.filter(e => !prior.has(transferId(e)));
+    const prior = new Set(older.map(transferId)), kept = new Set(newer.map(transferId)); let grown = newer.filter(e => !prior.has(transferId(e)));
+    // A same-incident re-anchor replaces exactly one prior entry that is otherwise identical and no longer present.
+    const same = (o, e) => { const {reanchoredFrom, ...rest} = e, flat = x => JSON.stringify(Object.entries(x).sort());
+        return flat(o) === flat({...rest, codeSha256:reanchoredFrom.codeSha256}) || flat(o) === flat({...e, codeSha256:reanchoredFrom.codeSha256}); };
+    const source = e => e.reanchoredFrom ? older.filter(o => !kept.has(transferId(o)) && same(o, e)) : [];
+    const replacing = grown.filter(e => source(e).length === 1); grown = grown.filter(e => !replacing.includes(e));
+    requireThat(new Set(replacing.map(e => transferId(source(e)[0]))).size === replacing.length, 'Transfer re-anchor reused');
     requireThat(grown.every(e => e.exception && !e.relabel), 'Transfer entries can only shrink');
     const was = new Map(older.map(e => [transferId(e), e])), before = e => was.get(transferId(e));
     const moved = newer.filter(e => before(e) && (before(e).removedBy !== e.removedBy || before(e).relabel !== e.relabel));
@@ -118,7 +155,7 @@ export function transferGrowth(older, newer) {
 // Whitespace-normalized text, marker column relative to the trimmed text, and ordinal among identical source lines.
 export const codeFingerprint = (code, marker, ordinal) =>
     digest(JSON.stringify([code.trim().replace(/\s+/g,' '), marker - (code.length-code.trimStart().length), ordinal]));
-export function compare(before, after, stage, transfers = []) {
+export function compare(before, after, stage, transfers = [], transferReanchored = []) {
     const counts = Object.fromEntries(rules.map(r => [r, {before:0, after:0, removed:0, added:0}]));
     for (const d of before) counts[d.rule].before++;
     for (const d of after) counts[d.rule].after++;
@@ -130,10 +167,22 @@ export function compare(before, after, stage, transfers = []) {
     const key = d => JSON.stringify([d.rule,d.path,d.codeSha256]), gone = new Map(), reanchored = [];
     for (const d of before.filter(d => !now.has(d.identity))) gone.set(key(d), [...(gone.get(key(d)) ?? []), d]);
     added = added.filter(d => { const same = gone.get(key(d)); if (!same?.length) return true; same.pop(); reanchored.push(d); return false; });
-    const removed = [...gone.values()].flat();
+    // Lead ruling 2026-11-10: an incident whose line was edited around its unchanged marked construct is re-anchored, listed
+    // separately and counted neither as removed nor as added; only an unambiguous one-to-one match qualifies.
+    let removed = [...gone.values()].flat(); const sameIncidents = [], pairedOld = new Set(), pairedNew = new Set();
+    for (const d of added) {
+        const olds = removed.filter(g => sameIncident(g, d));
+        if (olds.length !== 1 || added.filter(a => sameIncident(olds[0], a)).length !== 1) continue;
+        pairedOld.add(olds[0]); pairedNew.add(d);
+        sameIncidents.push({rule:d.rule, path:d.path, fqn:d.fqn, construct:d.construct,
+            from:{identity:olds[0].identity, line:olds[0].originalLine}, to:{identity:d.identity, line:d.originalLine}});
+    }
+    added = added.filter(d => !pairedNew.has(d)); removed = removed.filter(d => !pairedOld.has(d));
+    // A re-anchored transfer's prior identity is the same incident as its transferred head row, not a removal (one-to-one).
+    for (const id of transferReanchored) { const i = removed.findIndex(d => d.identity === id); if (i >= 0) removed.splice(i, 1); }
     for (const d of added) counts[d.rule].added++;
     for (const d of removed) counts[d.rule].removed++;
-    return {counts, added, removed, reanchored: reanchored.length, transferred: transfers.length, accepted: added.length === 0 && (stage < 6 || after.length === 0)};
+    return {counts, added, removed, reanchored: reanchored.length, sameIncidents, transferred: transfers.length, accepted: added.length === 0 && (stage < 6 || after.length === 0)};
 }
 export function run(argv) {
     const command = argv.shift(); requireThat(['check','bootstrap'].includes(command), 'Unknown command');
@@ -189,7 +238,7 @@ export function run(argv) {
         const ordinal = candidates.indexOf(at);
         const codeSha256 = codeFingerprint(code, marker, ordinal);
         const identity = JSON.stringify([issue.id,file,pkg+'.'+symbol,codeSha256]);
-        return {rule:issue.id,path:file,fqn:pkg+'.'+symbol,codeSha256,originalLine:+loc.line,identity};
+        return {rule:issue.id,path:file,fqn:pkg+'.'+symbol,codeSha256,originalLine:+loc.line,identity,message:issue.message,...markedConstruct(code,issue.errorLine2,marker)};
     });
     const after = diagnostics(head); requireThat(new Set(after.map(d=>d.identity)).size === after.length, 'Duplicate diagnostic identities: ' + JSON.stringify(after.filter((d,i)=>after.findIndex(a=>a.identity===d.identity)!==i).slice(0,5)));
     let before = [], bootstrap = null;
@@ -211,21 +260,23 @@ export function run(argv) {
         requireThat(common===base || common===receipt.integratedSha, 'Bootstrap base is unrelated to the integrated pin');
         before = diagnostics(receipt.sourceSha);
     }
-    const transfersPath = 'tools/ui-consolidation/transfers.json'; let transfers = [];
+    const transfersPath = 'tools/ui-consolidation/transfers.json'; let transfers = [], transferSameIncidents = [];
     if (exists(head,transfersPath)) {
         const load = ref => { if (!exists(ref,transfersPath)) return null; const t = strictJson(blob(ref,transfersPath));
             requireThat(Object.keys(t).sort().join() === 'approval,entries,schemaVersion' && t.schemaVersion === 1 && t.approval, 'Transfer manifest');
             transferIds(t.entries, known.knownSteps, ref === head ? meta.steps : []); return t.entries; };
         const current = load(head); transfers = transferIds(current, known.knownSteps, meta.steps);
+        transferSameIncidents = transferReanchors(current, after);
         // Each ledger version is checked against its real parents, never against an unrelated branch's version.
         for (const [commit, ...parents] of git('log','--format=%H %P',head,'--',transfersPath).trim().split('\n').filter(Boolean).map(l => l.split(' ')))
             for (const parent of parents) { const prior = load(parent), now = load(commit); if (prior && now) transferGrowth(prior, now); }
         if (base) { const prior = load(base); if (prior) transferGrowth(prior, current); }
     }
-    const result = compare(before,after,stage,transfers);
+    const result = compare(before,after,stage,transfers,transferSameIncidents.map(t => JSON.stringify([t.rule,t.path,t.fqn,t.from.codeSha256])));
     const report = {schemaVersion:1,command,baseSha:base,headSha:head,registrySha256:registry,
         baselineSha256:digest(blob(head,o['--baseline'])),manifestSha256:digest(manifestText),stage,completedSteps:meta.steps,
-        perRule:result.counts,unmatchedIdentities:result.added,transferredIdentities:result.transferred,reanchoredIdentities:result.reanchored,escapeCounts:{before:base && exists(base,o['--escapes']) ? manifest(blob(base,o['--escapes']),meta,known.knownSteps).length : 0,after:escapes.length},
+        perRule:result.counts,unmatchedIdentities:result.added,transferredIdentities:result.transferred,reanchoredIdentities:result.reanchored,
+        sameIncidentReanchored:{baseline:result.sameIncidents,transfers:transferSameIncidents},escapeCounts:{before:base && exists(base,o['--escapes']) ? manifest(blob(base,o['--escapes']),meta,known.knownSteps).length : 0,after:escapes.length},
         validationErrors:[],accepted:(command === 'bootstrap' || result.accepted) && escapes.length <= 5};
     fs.mkdirSync(o['--out'],{recursive:true}); fs.writeFileSync(path.join(o['--out'],'report.json'),JSON.stringify(report,null,2)+'\n');
     if (bootstrap) fs.writeFileSync(path.join(o['--out'],'bootstrap.json'),JSON.stringify(bootstrap,null,2)+'\n');
