@@ -820,29 +820,37 @@ class GlassMorphTest {
             repeat(12) { if (popupWindow != null) frame() }
             assertUnready("Cancelled unready window")
             assertFalse("Cancellation cannot admit its unready window", preparationPoints.any { it.hidden })
-            assertSame(firstWindow, popupWindow)
+            assertNull("A canceled unadmitted window retires", popupWindow)
+            assertEquals(listOf(firstWindow), disposed)
             compose.runOnIdle { open = true }
+            val reopenedWindow = awaitWindow()
+            assertNotSame("Unadmitted cancellation requires a new dialog", firstWindow, reopenedWindow)
+            assertEquals(2, mounts.size)
+            assertSame(reopenedWindow, mounts.last().window)
+            assertFalse("A reopened window mounts without native admission", mounts.last().hidden)
+            assertFalse(mounts.last().shadowOwned)
+            assertEquals(0f, mounts.last().expansion, 0f)
             frame()
-            assertSame("Unready cancellation/reopen retains the existing dialog", firstWindow, popupWindow)
             assertUnready("First unready-reopen frame")
             frame()
-            awaitReady(firstWindow)
-            assertAdmissionOrdering(firstWindow, mounts.single())
+            awaitReady(reopenedWindow)
+            assertAdmissionOrdering(reopenedWindow, mounts.last())
             assertTrue("First readiness follows the native mount by at least two frames",
-                compose.mainClock.currentTime - mounts.single().clockMs >= 32)
+                compose.mainClock.currentTime - mounts.last().clockMs >= 32)
 
             compose.runOnIdle { open = false }
             repeat(12) { if (popupWindow != null) frame() }
             assertNull("The closed native window must actually dispose", popupWindow)
-            assertEquals(listOf(firstWindow), disposed)
+            assertEquals(listOf(firstWindow, reopenedWindow), disposed)
             assertFalse(anchor.modalPresent)
             assertFalse(anchor.hidden)
             assertFalse(anchor.shadowInModal)
 
             compose.runOnIdle { open = true }
             val replacement = awaitWindow()
-            assertNotSame("A fully disposed native window cannot be reused", firstWindow, replacement)
-            assertEquals(2, mounts.size)
+            assertNotSame("A fully disposed native window cannot be reused", reopenedWindow, replacement)
+            assertNotSame("Canceled readiness cannot be reused", firstWindow, replacement)
+            assertEquals(3, mounts.size)
             assertSame(replacement, mounts.last().window)
             assertUnready("Replacement native mount")
             assertFalse("Disposed readiness cannot hide a newly mounted trigger", mounts.last().hidden)
