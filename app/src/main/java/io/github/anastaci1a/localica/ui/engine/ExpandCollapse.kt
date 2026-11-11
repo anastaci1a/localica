@@ -20,6 +20,8 @@ sealed interface BasisChange { data object Rescale: BasisChange; data object Reb
 enum class ExpansionReason { User,Programmatic,Restore,Cancel }
 @Immutable data class ReleaseDecision(val expanded: Boolean,val durationSeconds: Float,val handOffVelocity: Float)
 @Stable interface ExpansionView { val phase: MotionValue; val expanded: Boolean; val inContact: Boolean; val canContact: Boolean }
+/** Whether a sampled expansion [phase] is the collapsed rest: exactly 0, with no tolerance. */
+internal fun collapsedPhase(phase: Float): Boolean = phase == 0f
 internal fun expansionDuration(spec: ExpansionSpec,travel: Double,reference: Double,p: Double,v: Double,q: Double,sigma: Double,display: Double): Double { val full=spec.referenceDurationMs/1000.0; val objectTime=max(spec.floorMs/1000.0,full*(travel/reference).pow(spec.sizeExponent.toDouble())); val raw=sigma*objectTime*(spec.positionFloor+(1.0-spec.positionFloor)*abs(q-p))/max(1.0,abs(v*sigma*objectTime/full)/spec.velocityKnee).pow(spec.velocityExponent.toDouble()); return max(raw,2*display).also { require(it.isFinite() && it.toFloat().isFinite()) } }
 // Each state is x,v,q,lower,upper. Residuals are Double analysis, not additional motion owners.
 internal fun expansionPlan(stamp: FrameStamp,spec: ExpansionSpec,T: Double,sigma: Double,states: List<DoubleArray>)=boundedPlan(stamp,spec.core,T,sigma,states)

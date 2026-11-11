@@ -47,6 +47,8 @@ import io.github.anastaci1a.localica.ui.components.PlayerReveal
 import io.github.anastaci1a.localica.ui.components.rememberPresence
 import io.github.anastaci1a.localica.ui.components.rememberProfileValue
 import io.github.anastaci1a.localica.ui.engine.ExpansionBasis
+import io.github.anastaci1a.localica.ui.engine.collapsedPhase
+import io.github.anastaci1a.localica.ui.layout.PlayerHandleBand
 import io.github.anastaci1a.localica.ui.spec.MotionProfile
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.library.Track
@@ -443,7 +445,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p,
-            noneAtlasInput = noneAtlasInput.takeIf { p == 0f })
+            noneAtlasInput = noneAtlasInput.takeIf { collapsedPhase(p) })
         Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > this@PlayerSurface.maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
             .onGloballyPositioned { polarity.measure("background", it) }
@@ -544,7 +546,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 cover(frame, swipeOffset)
                 if (destination != null) cover(destination.visual, swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels, neighbor = true)
             }
-            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).glassShadowOpacity { handleReveal }) {
+            if (handleReveal > 0f) PlayerHandleBand(Modifier.offset(y = statusInset), Modifier.glassShadowOpacity { handleReveal }) {
                 Box(Modifier.align(Alignment.TopCenter).size(96.dp, 48.dp)
                     .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { onExpanded(false) }
                     .semantics { contentDescription = "Player handle" }) {
