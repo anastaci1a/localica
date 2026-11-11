@@ -4,8 +4,6 @@ import androidx.compose.animation.core.TargetBasedAnimation
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.MotionDurationScale
 import io.github.anastaci1a.localica.ui.spec.ListMotionSpec
 import io.github.anastaci1a.localica.ui.spec.MotionProfile
@@ -40,12 +38,6 @@ internal class SettingsSearchScroll(private val clock: UiClock, private val scro
             }
         }
     }
-}
-
-@Composable
-internal fun rememberSettingsSearchScroll(scroll: ScrollState): SettingsSearchScroll {
-    val clock = LocalUiClock.current
-    return remember(clock, scroll) { SettingsSearchScroll(clock, scroll) }
 }
 
 /** Uses Compose's exact tween evaluator and platform time division, with no independent frame loop. */

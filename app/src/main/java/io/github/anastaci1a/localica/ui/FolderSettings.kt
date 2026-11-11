@@ -10,7 +10,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import io.github.anastaci1a.localica.ui.engine.rememberSettingsSearchScroll
+import io.github.anastaci1a.localica.ui.layout.rememberSettingsSearchScroll
 import io.github.anastaci1a.localica.ui.layout.SettingsDialogBody
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -138,7 +138,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                 }.first { it != null }!!
                 val y = ((focus.anchors.getValue(id) - focus.viewportTop) - focus.viewportHeight / 3f)
                     .toInt().coerceIn(0, scroll.maxValue)
-                searchScroll.scrollTo(y, reduced, speed)
+                searchScroll(y, reduced, speed)
                 focus.highlighted = id
                 pending = null
             }
