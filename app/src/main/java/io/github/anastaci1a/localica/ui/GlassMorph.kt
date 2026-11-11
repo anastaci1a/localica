@@ -500,6 +500,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         }
                     }
                     if (!gateCurrent()) continue@gateLoop
+                    // Keep one frame in which the restored trigger is drawn while this modal
+                    // still owns the window, so a reopen there reclaims the same dialog (#858).
+                    // The modal draws no body (#847 skip) and no field (home owns it) here.
+                    if (anchor.triggerMounted) {
+                        withFrameNanos { }
+                        if (!gateCurrent()) continue@gateLoop
+                    }
                     originAdmitted = false
                     sharedContent?.releaseNative()
                     anchor.modalPresent = false; anchor.contact.modal = false
