@@ -9,7 +9,7 @@ import io.github.anastaci1a.localica.ui.engine.LocalEngineContext
 import io.github.anastaci1a.localica.ui.spec.ResolvedUiSpec
 
 /** The layout boundary exposes measured travel without giving a screen Engine ownership. */
-internal fun expansionReferenceTravel(basis: ExpansionBasis): Float = basis.objectTravelPx
+internal fun expansionReferenceTravel(basis: ExpansionBasis): Float = basis.objectTravel
 
 /** One root record retains the measured spec and platform policy as separate inputs. */
 @Composable

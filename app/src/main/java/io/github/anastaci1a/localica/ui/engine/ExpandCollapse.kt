@@ -9,12 +9,12 @@ import kotlinx.coroutines.flow.first
 private const val DefaultPopupSpeed=4f/3f
 private const val FasterPopupSpeed=2f
 private fun coordinates(r: Rect)=doubleArrayOf(r.left.toDouble(),r.top.toDouble(),r.right.toDouble(),r.bottom.toDouble())
-@Immutable data class ExpansionBasis(val startBounds: Rect,val endBounds: Rect,val density: Float,val durationTravelPx: Float?=null) {
+@Immutable data class ExpansionBasis(val startBounds: Rect,val endBounds: Rect,val density: Float,val durationTravelCap: Float?=null) {
     private val start=coordinates(startBounds); private val end=coordinates(endBounds); private val deltas=DoubleArray(4) { end[it]-start[it] }; val edgeIndex: Int; val edgeTravelPx: Float
-    init { require(density.isFinite() && density>0 && (start+end).all(Double::isFinite) && startBounds.left<=startBounds.right && startBounds.top<=startBounds.bottom && endBounds.left<=endBounds.right && endBounds.top<=endBounds.bottom); edgeIndex=(0..3).maxBy { abs(deltas[it]) }; edgeTravelPx=abs(deltas[edgeIndex]).toFloat(); require(edgeTravelPx.isFinite() && (durationTravelPx==null || durationTravelPx.isFinite() && durationTravelPx>=0f)) }
-    /** #846 duration travel (operator 2026-11-11): origin drift plus size change, |delta center| + |delta half-extent|, which bounds the farthest corner. Contact drags still normalise by [edgeTravelPx]. */
-    val objectTravelPx: Float=(hypot((deltas[0]+deltas[2])/2,(deltas[1]+deltas[3])/2)+hypot((deltas[2]-deltas[0])/2,(deltas[3]-deltas[1])/2)).toFloat().also { require(it.isFinite()) }
-    internal val durationTravel: Float get()=durationTravelPx?:objectTravelPx
+    init { require(density.isFinite() && density>0 && (start+end).all(Double::isFinite) && startBounds.left<=startBounds.right && startBounds.top<=startBounds.bottom && endBounds.left<=endBounds.right && endBounds.top<=endBounds.bottom); edgeIndex=(0..3).maxBy { abs(deltas[it]) }; edgeTravelPx=abs(deltas[edgeIndex]).toFloat(); require(edgeTravelPx.isFinite() && (durationTravelCap==null || durationTravelCap.isFinite() && durationTravelCap>=0f)) }
+    /** #846 duration travel, the dimensionless [expansionTravel] measure (operator 2026-11-11). Contact drags still normalise by [edgeTravelPx]. */
+    val objectTravel: Float=expansionTravel(start,end).toFloat().also { require(it.isFinite()) }
+    internal val durationTravel: Float get()=durationTravelCap?.let { minOf(objectTravel,it) }?:objectTravel
     internal fun delta(i: Int)=deltas[i]
     internal fun at(p: Double)=DoubleArray(4) { (1-p)*start[it]+p*end[it] }
     internal fun rect(p: Double)=at(p).let { Rect(it[0].toFloat(),it[1].toFloat(),it[2].toFloat(),it[3].toFloat()) }
@@ -100,9 +100,9 @@ internal fun boundedPlan(stamp: FrameStamp,core: EasingSpec,T: Double,sigma: Dou
         val next=pendingBasis?:basis; val prepared=try { next?.let { prepare(logical,stamp,it,rect) }.also { rect.claim(this) } } catch(failure: Throwable) { boundCurve=oldCurve; throw failure }; bound=rect; rect.channels.forEach { it.onRest={ notifyLifecycle() } }; if(prepared!=null) { pendingBasis=null; basis=next; apply(prepared,logical,stamp) } }
 
     private fun admitDurationBasis(value: ExpansionBasis) {
-        value.durationTravelPx?.let { travel ->
+        value.durationTravelCap?.let { travel ->
             val domain=requireNotNull(clock.spec.geometry) { "Measured duration travel requires the root geometry domain" }
-            require(travel<=domain.maxViewportDiagonalPx) { "Duration travel exceeds the admitted viewport" }
+            require(travel<=domain.maxTravel.toFloat()) { "Duration travel exceeds the admitted viewport" }
         }
     }
     fun setBasis(value: ExpansionBasis): BasisChange = setBasis(value, reanchorAtRest=false)

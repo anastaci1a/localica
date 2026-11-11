@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.ui.geometry.Rect
-import io.github.anastaci1a.localica.ui.spec.StockUiSpec
+import io.github.anastaci1a.localica.ui.spec.*
 import kotlin.math.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -17,36 +17,45 @@ class ExpansionPeakVelocityTest {
     private fun timeTo(law: Eased, fraction: Double, samples: Int = 60000) = (0..samples).first { law.value(law.duration * it / samples) >= fraction } * law.duration / samples
     private fun basis(start: List<Float>, end: List<Float>) =
         ExpansionBasis(Rect(start[0], start[1], start[2], start[3]), Rect(end[0], end[1], end[2], end[3]), 1f)
-    /** #608 geometry (analysis/data/geometry.json, dp at 720 x 1280 px, density 1.75): the measured Sort/View anchor and target, and the full player. */
+    /** #608 geometry (analysis/data/geometry.json, dp at 720 x 1280 px, density 1.75). The measure is scale invariant, so dp stand in for px. */
     private val sortView = basis(listOf(302.2857f, 26.2857f, 399.4286f, 77.7143f), listOf(40.5714f, 96.5714f, 370.8571f, 611.4286f))
     private val fullPlayer = basis(listOf(12f, 576.2286f, 399.4286f, 627.4286f), listOf(0f, 0f, 411.4286f, 731.4286f))
+    private val selectionPill = basis(listOf(8f, 438.8f, 372f, 490f), listOf(122.75f, 438.8f, 257.25f, 490f))
+    private val rowMenu = basis(listOf(351.4286f, 300f, 399.4286f, 348f), listOf(165.1429f, 46.8571f, 399.4286f, 675.4286f))
+    private val queue = basis(listOf(0f, 643.4286f, 411.4286f, 1350.8571f), listOf(0f, 24f, 411.4286f, 731.4286f))
 
-    @Test fun durationTravelCountsOriginDriftPlusSizeChange() {
-        // Pure translation: the half-extent is unchanged, so D is the center's travel.
-        assertEquals(576f, basis(listOf(0f, 600f, 400f, 1300f), listOf(0f, 24f, 400f, 724f)).objectTravelPx, 1e-3f)
-        // Pure growth about a fixed center: D is the half-extent's change.
-        assertEquals(hypot(50f, 25f), basis(listOf(100f, 400f, 200f, 450f), listOf(50f, 375f, 250f, 475f)).objectTravelPx, 1e-3f)
-        // Both (operator 2026-11-11): |delta center| + |delta half-extent|, which exceeds the greatest edge (533.7 dp).
-        assertEquals(335.06785f + 259.38467f, sortView.objectTravelPx, 1e-2f)
+    @Test fun durationTravelIsTheVanWijkNuijPathLength() {
+        val rho = sqrt(2.0)
+        // Pure zoom about a fixed center: S = |ln(w1 / w0)| / rho, w = sqrt(width x height).
+        assertEquals(ln(2.0) / rho, basis(listOf(100f, 100f, 200f, 200f), listOf(50f, 50f, 250f, 250f)).objectTravel.toDouble(), 1e-6)
+        // Pure pan at constant size w: S = 2 asinh(rho^2 u / (2 w)) / rho.
+        assertEquals(2 * asinh(rho * rho * 300 / 200) / rho, basis(listOf(0f, 0f, 100f, 100f), listOf(300f, 0f, 400f, 100f)).objectTravel.toDouble(), 1e-5)
+        // u -> 0 approaches the pure-zoom limit continuously.
+        assertEquals(ln(2.0) / rho, expansionTravel(doubleArrayOf(100.0, 100.0, 200.0, 200.0), doubleArrayOf(50.0001, 50.0, 250.0001, 250.0)), 1e-6)
+        // Mixed drift and zoom, from the measured #608 rectangles; contact drags keep the greatest edge.
+        assertEquals(2.1650267, sortView.objectTravel.toDouble(), 1e-4)
+        assertEquals(1.3650654, fullPlayer.objectTravel.toDouble(), 1e-4)
         assertEquals(533.7143f, sortView.edgeTravelPx, 1e-3f)
-        assertEquals(236.1143f + 340.32593f, fullPlayer.objectTravelPx, 1e-2f)
+        // Symmetric, and bounded by the admission domain at the evaluation viewport.
+        assertEquals(sortView.objectTravel, basis(listOf(40.5714f, 96.5714f, 370.8571f, 611.4286f), listOf(302.2857f, 26.2857f, 399.4286f, 77.7143f)).objectTravel, 1e-5f)
+        assertTrue(listOf(sortView, fullPlayer, selectionPill, rowMenu, queue).all { it.objectTravel < expansionTravelBound(hypot(411.4286, 731.4286)) })
     }
 
-    @Test fun sortViewPopupMatchesTheV03321SpringAndOtherPopupsScaleByTravel() {
+    @Test fun sortViewPopupMatchesTheV03321SpringAndEveryPopupFollowsTheChosenTable() {
         val spec = StockUiSpec.expansion
-        val reference = fullPlayer.objectTravelPx.toDouble()
-        val sortViewTravel = sortView.objectTravelPx.toDouble()
+        val reference = fullPlayer.objectTravel.toDouble()
         for (sigma in listOf(1.0, 2.0 / 3)) {
             // The operator's base case (#846): v0.33.21's Sort/View grow reaches 90 % at 308 ms (x2/3 Faster).
-            val base = expansionDuration(spec, sortViewTravel, reference, 0.0, 0.0, 1.0, sigma, 1.0 / 120)
-            assertEquals(.5230313 * sigma, base, 3e-6)
+            val base = expansionDuration(spec, sortView.objectTravel.toDouble(), reference, 0.0, 0.0, 1.0, sigma, 1.0 / 120)
+            assertEquals(.5230313 * sigma, base, 2e-5)
             val law = Eased(0.0, 0.0, 1.0, spec.core, base, sigma)
-            assertEquals(.308 * sigma, timeTo(law, .9), 3e-5)
+            assertEquals(.308 * sigma, timeTo(law, .9), 1e-4)
             assertEquals(springPeak(4.0 / 3 / sigma), peak(law), .02 * springPeak(4.0 / 3 / sigma))
-            // Every other popup scales from it by (travel / Sort/View travel)^.5 (U02:156), above the 140 ms floor.
-            for (travel in listOf(114.75, 405.1, 576.4, 619.4, 1200.0)) {
-                val duration = expansionDuration(spec, travel, reference, 0.0, 0.0, 1.0, sigma, 1.0 / 120)
-                assertEquals(base * sqrt(travel / sortViewTravel), duration, 1e-6)
+            // The operator-approved table (k = .5, scale 1, Faster off; x2/3 Faster): 90 % times in seconds.
+            for ((popup, t90) in listOf(selectionPill to .12419, rowMenu to .26827, sortView to .308, fullPlayer to .24457, queue to .24672)) {
+                val duration = expansionDuration(spec, popup.objectTravel.toDouble(), reference, 0.0, 0.0, 1.0, sigma, 1.0 / 120)
+                assertEquals(base * sqrt(popup.objectTravel / sortView.objectTravel.toDouble()), duration, 1e-6)
+                assertEquals(t90 * sigma, timeTo(Eased(0.0, 0.0, 1.0, spec.core, duration, sigma), .9), 5e-4)
             }
             assertEquals(.14 * sigma, expansionDuration(spec, 0.0, reference, 0.0, 0.0, 1.0, sigma, 1.0 / 120), 1e-9)
         }

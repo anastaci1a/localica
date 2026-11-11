@@ -18,7 +18,7 @@ internal object ReferenceExpansion {
         val t=(low+high)/2; val s=1-t
         return if(derivative) (s*s*.19+2*s*t*(1.0-.19)+t*t*(1-1.0))/(s*s*.229+2*s*t*(.21-.229)+t*t*(1-.21)) else 3*s*s*t*.19+3*s*t*t*1.0+t*t*t
     }
-    fun duration(p: Double,v: Double,q: Double,sigma: Double=1.0,hz: Int=120): Double = max(sigma*.5150463*(.500401615+.499598385*abs(q-p))/max(1.0,abs(v*sigma)/1.41952128).pow(.73607278),2.0/hz)
+    fun duration(p: Double,v: Double,q: Double,sigma: Double=1.0,hz: Int=120): Double = max(sigma*.4153104*(.500401615+.499598385*abs(q-p))/max(1.0,abs(v*sigma)/1.41952128).pow(.73607278),2.0/hz)
     fun sample(p: Double,v: Double,q: Double,T: Double,t: Double,terminal: Boolean=true,sigma: Double=1.0): Double {
         if(t<=0) return p; if(t>=T) return q
         val d=q-p; val B=abs(d)/T*2.471915; val room=if(v>0) 1.05-p else p+.05

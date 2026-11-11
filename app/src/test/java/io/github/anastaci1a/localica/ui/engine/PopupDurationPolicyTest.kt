@@ -73,7 +73,7 @@ class PopupDurationPolicyTest {
         val phase = owner.phase.sampleAt(stamp)
         val edges = rect.channels.map { it.sampleAt(stamp) }
         val before = joins.values.size
-        assertEquals(BasisChange.Rescale, owner.setBasis(basis.copy(durationTravelPx = 2000f)))
+        assertEquals(BasisChange.Rescale, owner.setBasis(basis.copy(durationTravelCap = .1f)))
         assertTrue(joins.values.size > before)
         assertEquals(phase, owner.phase.sampleAt(stamp))
         assertEquals(edges, rect.channels.map { it.sampleAt(stamp) })

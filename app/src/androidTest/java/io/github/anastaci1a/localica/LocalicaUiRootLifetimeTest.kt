@@ -71,7 +71,7 @@ class LocalicaUiRootLifetimeTest {
                 assertEquals(access, s.context.access); assertEquals(access, s.spec.spec.access)
                 val basis = playerBasis(s.density, root.size, s.navigationInset,
                     StockUiSpec.clearance.getValue(Clearance.BottomChrome))
-                val travel = basis.objectTravelPx // #846: the reference uses the popup duration measure
+                val travel = basis.objectTravel // #846: the reference uses the popup duration measure
                 assertEquals(travel, s.context.fullPlayerReferenceTravelPx, 0f)
                 val geometry = checkNotNull(s.spec.spec.geometry)
                 assertEquals(travel, geometry.referenceTravelPx, 0f)
@@ -91,7 +91,7 @@ class LocalicaUiRootLifetimeTest {
         val faster = checkNotNull(screen)
         val resized = IntSize(320, 560)
         val expectedResizedTravel = playerBasis(faster.density, resized, faster.navigationInset,
-            StockUiSpec.clearance.getValue(Clearance.BottomChrome)).objectTravelPx
+            StockUiSpec.clearance.getValue(Clearance.BottomChrome)).objectTravel
         assertNotEquals("The resize fixture must change the duration-travel reference under the existing law",
             faster.context.fullPlayerReferenceTravelPx, expectedResizedTravel)
         compose.runOnIdle { width = resized.width; height = resized.height }
