@@ -156,6 +156,17 @@ export function transferGrowth(older, newer) {
 // Whitespace-normalized text, marker column relative to the trimmed text, and ordinal among identical source lines.
 export const codeFingerprint = (code, marker, ordinal) =>
     digest(JSON.stringify([code.trim().replace(/\s+/g,' '), marker - (code.length-code.trimStart().length), ordinal]));
+/** The before identity each re-anchored transfer continues: its ledger prior when that is a before identity, else the one gone
+ * before row that is the same incident as the transferred head row (a transfer re-anchored more than once). */
+export function transferPriorIdentities(reanchors, before, after) {
+    const now = new Set(after.map(d => d.identity)), used = new Set();
+    return reanchors.flatMap(t => {
+        const prior = JSON.stringify([t.rule,t.path,t.fqn,t.from.codeSha256]), head = after.find(d => d.identity === JSON.stringify([t.rule,t.path,t.fqn,t.to.codeSha256]));
+        const found = before.some(d => d.identity === prior) ? [prior] :
+            before.filter(d => !now.has(d.identity) && !used.has(d.identity) && head && sameIncident(d, head)).map(d => d.identity);
+        if (found.length !== 1) return []; used.add(found[0]); return found;
+    });
+}
 export function compare(before, after, stage, transfers = [], transferReanchored = []) {
     const counts = Object.fromEntries(rules.map(r => [r, {before:0, after:0, removed:0, added:0}]));
     for (const d of before) counts[d.rule].before++;
@@ -273,7 +284,7 @@ export function run(argv) {
             for (const parent of parents) { const prior = load(parent), now = load(commit); if (prior && now) transferGrowth(prior, now); }
         if (base) { const prior = load(base); if (prior) transferGrowth(prior, current); }
     }
-    const result = compare(before,after,stage,transfers,transferSameIncidents.map(t => JSON.stringify([t.rule,t.path,t.fqn,t.from.codeSha256])));
+    const result = compare(before,after,stage,transfers,transferPriorIdentities(transferSameIncidents,before,after));
     const report = {schemaVersion:1,command,baseSha:base,headSha:head,registrySha256:registry,
         baselineSha256:digest(blob(head,o['--baseline'])),manifestSha256:digest(manifestText),stage,completedSteps:meta.steps,
         perRule:result.counts,unmatchedIdentities:result.added,transferredIdentities:result.transferred,reanchoredIdentities:result.reanchored,
