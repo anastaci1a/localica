@@ -31,6 +31,7 @@ import org.junit.rules.RuleChain
 
 class ListSearchTest {
     companion object {
+        // Keep the keyboard stable while Activities live; restore and retire after their disposal.
         @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
     }
 
@@ -341,7 +342,6 @@ class ListSearchTest {
         val key = "show_ime_with_hard_keyboard"
         val original = shell("settings get secure $key")
         check(original == "null" || original.matches(Regex("-?[0-9]+")))
-        val selected = shell("settings get secure default_input_method")
         val scales = listOf("animator_duration_scale", "transition_animation_scale", "window_animation_scale")
             .associateWith { shell("settings get global $it") }
         check(scales.values.all { it == "null" || it.toFloatOrNull() != null })
@@ -374,9 +374,6 @@ class ListSearchTest {
                 assertEquals("Restore native keyboard policy", original, shell("settings get secure $key"))
                 compose.awaitSystemImeHardKeyboardPolicy(::shell, (original.toIntOrNull() ?: 0) != 0)
             }
-            // Like NativeImePolicy, retire the warmed input view after restoring its policy (#874).
-            // Awaiting the observer alone leaves navigation-sized cached geometry under policy 0.
-            cleanup { restartSystemKeyboard(selected) }
             scales.forEach { (name, value) ->
                 cleanup {
                     if (value == "null") shell("settings delete global $name") else shell("settings put global $name $value")
