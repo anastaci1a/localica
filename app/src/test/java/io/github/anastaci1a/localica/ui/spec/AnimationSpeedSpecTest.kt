@@ -9,6 +9,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.pow
 
 /**
  * #860 and #862 S1. The engine context of the app is speed = settings.animationSpeed and durationScale = respect ? platform scale : 1
@@ -48,6 +49,25 @@ class AnimationSpeedSpecTest {
     }
 
     /** The settled time of a law from rest at travel = reference: sigma times its reference duration (floored by two frames), then stretched by the clock factor. */
+    /** Operator 2026-11-11: the slider and the respect toggle also drive the player and Queue drawers' #608 law, whose numbers are the 1x
+     * platform-scale reference. Full-travel and quarter-travel (square-root size rule) flights end at T(travel)·(respect ? platform : 1)/s. */
+    @Test fun playerAndQueueDrawerLawFollowsTheSliderAndTheRespectedScale() {
+        val law = StockUiSpec.sheetExpansion
+        assertEquals("the drawers run the #608 measured law", 426.086832f, law.referenceDurationMs, 1e-4f)
+        for (tenths in 5..15) for (platform in scales) for (respect in listOf(true, false)) for (fraction in listOf(1.0, .25)) EngineHarness().use { h ->
+            val s = tenths / 10f; val clock = if (respect) platform else 1f
+            h.setContext(120, s, clock)
+            val owner = ExpandCollapse(h.clock, law, false); owner.setBasis(ExpansionBasis(Rect(0f, 0f, 100f, 100f), Rect(0f, 0f, 100f, (100 + 1000 * fraction).toFloat()), 1f)); owner.target(true)
+            val reference = max(law.floorMs.toDouble(), law.referenceDurationMs * fraction.pow(law.sizeExponent.toDouble())) / 1000
+            val duration = max(reference / s, 2.0 / 120)
+            val label = "player s=$s platform=$platform respect=$respect travel=$fraction"
+            assertEquals(label, duration, expansionDuration(law, 1000 * fraction, 1000.0, 0.0, 0.0, 1.0, 1.0 / s, 1.0 / 120), 1e-9)
+            h.advance(duration * clock - .004); assertFalse("$label still moving", owner.phase.settled)
+            h.advance(.008); assertTrue("$label settled", owner.phase.settled)
+            owner.dispose()
+        }
+    }
+
     @Test fun sheetAndLyricsLawsTakeTOverSpeedStretchedByTheClock() {
         for (tenths in 5..15) for (platform in scales) for (respect in listOf(true, false)) for ((name, law) in listOf("sheet" to StockUiSpec.sheetExpansion, "lyrics" to StockUiSpec.lyricsExpansion)) EngineHarness().use { h ->
             val s = tenths / 10f; val clock = if (respect) platform else 1f
