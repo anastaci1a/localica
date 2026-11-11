@@ -33,7 +33,7 @@ class SettingsOptionsTest {
         }
     }
 
-    private fun awaitPopupState(title: String, state: String, condition: () -> Boolean) {
+    private fun awaitPopupState(title: String, state: String, foregroundReady: () -> Boolean = { true }, condition: () -> Boolean) {
         // Each intent can approach the native gate and then finish its flight. Bound both
         // segments by the active Dialog laws, including cross channels. Twelve extra frames
         // cover native admission, the six-frame home receipt deadline and retirement.
@@ -44,7 +44,7 @@ class SettingsOptionsTest {
         }
         val budget = ceil(2 * horizon * 1000).toLong() + 12 * 16L
         val start = compose.mainClock.currentTime
-        while (!compose.runOnIdle(condition)) {
+        while (!(compose.runOnIdle(condition) && foregroundReady())) {
             assertTrue("$title must $state within the active popup law ($budget ms of test time)",
                 compose.mainClock.currentTime - start < budget)
             compose.mainClock.advanceTimeByFrame()
@@ -62,7 +62,11 @@ class SettingsOptionsTest {
         try {
             compose.onNodeWithText(title).performClick()
             var animated = false
-            awaitPopupState(title, "open from its retained settings source") {
+            // Reduced expansion can finish before the foreground's semantics recomposition.
+            // Query merged semantics outside runOnIdle, within the same law-bounded wait.
+            awaitPopupState(title, "open from its retained settings source", foregroundReady = {
+                compose.onAllNodesWithText("Cancel", substring = false).fetchSemanticsNodes().size == 1
+            }) {
                 val anchor = host.entries.singleOrNull { it.mounted && it.placement != GlassPlacement.Page }?.anchor
                 if (anchor != null && anchor.contact.expansion.value > 0f && anchor.contact.expansion.value < 1f) animated = true
                 anchor != null && anchor.triggerMounted && anchor.hidden && anchor.bounds.width > 0f &&
