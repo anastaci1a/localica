@@ -842,7 +842,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 // overshoot of a full-extent panel would pass the side inset (a no-op in portrait phones).
                 val safeInsets = WindowInsets.safeDrawing
                 val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
-                val margin = with(density) { if (page) 0f else maxOf(12.dp.toPx(),
+                val margin = with(density) { if (page) 0f else maxOf(io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Base).toPx(),
                     motion.overshoot * constraints.maxWidth - minOf(safeInsets.getLeft(density, layoutDirection), safeInsets.getRight(density, layoutDirection)),
                     motion.overshoot * constraints.maxHeight - minOf(safeInsets.getTop(density), safeInsets.getBottom(density))) }
                 val availableWidth = constraints.maxWidth
