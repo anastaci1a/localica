@@ -9,50 +9,46 @@ import androidx.compose.ui.node.PointerInputModifierNode
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.IntSize
 
-/** A rail shares row taps and owns a vertical drag only after crossing touch slop. */
-internal fun Modifier.scrollbarInput(key: Any, dragging: () -> Boolean,
-    press: (Boolean) -> Unit, activity: () -> Unit, top: () -> Float, thumb: () -> Float,
-    grab: (Float) -> Unit, begin: () -> Unit, seek: (Float) -> Unit, dragY: () -> Float,
-    endDrag: () -> Unit): Modifier = this
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    activity()
-                    press(true)
-                    try {
-                        do { val event = awaitPointerEvent(PointerEventPass.Initial) } while (event.changes.any { it.pressed })
-                    } finally { press(false) }
-                }
-            }
+/** Only a touch-down on the visible thumb's target ([hit]) belongs to the scrollbar; every other touch
+ * on the strip stays unconsumed for the list and its rows. An accepted contact is selected at once
+ * ([press]) and captured exclusively until release: the list beneath sees a consumed stream, so it never
+ * scrolls, presses, long-presses or taps. Past touch slop the finger's travel beyond the slop drives the
+ * drag as relative deltas ([move]); releasing without a drag only deselects.
+ */
+internal fun Modifier.scrollbarInput(key: Any, hit: (Float) -> Boolean, press: (Boolean) -> Unit,
+    begin: () -> Unit, move: (Float) -> Unit, end: () -> Unit): Modifier = this
             .pointerInput(key) {
-                // The strip shares input with the list beneath, so the drag is claimed on the Initial pass:
-                // the list's own Main-pass scroll then sees a consumed stream, while taps stay unconsumed for row actions.
+                // The strip shares input with the list beneath, so contact is claimed on the Initial pass.
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    if (!hit(down.position.y)) return@awaitEachGesture
+                    down.consume()
+                    press(true)
                     var travel = 0f
+                    var dragging = false
                     try {
                         while (true) {
                             val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                            if (change.isConsumed) break
+                            change.consume()
                             if (!change.pressed) break
                             val dy = change.position.y - change.previousPosition.y
-                            if (!dragging()) {
-                                if (change.isConsumed) break
-                                travel += dy
-                                if (kotlin.math.abs(travel) < viewConfiguration.touchSlop) continue
-                                // Grabbing the thumb keeps its offset under the finger; elsewhere the thumb comes to the finger.
-                                val top = top()
-                                grab(if (down.position.y in top..(top + thumb())) down.position.y - (top + thumb() / 2) else 0f)
-                                begin(); seek(down.position.y + travel)
-                            } else seek(dragY() + dy)
-                            change.consume()
+                            if (dragging) { move(dy); continue }
+                            travel += dy
+                            val beyond = kotlin.math.abs(travel) - viewConfiguration.touchSlop
+                            if (beyond < 0f) continue
+                            dragging = true
+                            begin()
+                            move(if (travel > 0f) beyond else -beyond)
                         }
                     } finally {
-                        endDrag()
+                        if (dragging) end()
+                        press(false)
                     }
                 }
             }
 
-/** The edge strip takes drags, while unconsumed taps still reach a row's trailing action. */
+/** The edge strip takes the thumb's contacts, while every other touch still reaches the list and its rows. */
 internal object ScrollbarTapSharing : ModifierNodeElement<ScrollbarTapSharingNode>() {
     override fun create() = ScrollbarTapSharingNode()
     override fun update(node: ScrollbarTapSharingNode) = Unit

@@ -415,7 +415,9 @@ Revert uses shared glass emergence/disappearance in a reserved slot and disappea
 
 View offers presentation, list Size or gallery Items per row, extra information and applicable scoped search.
 
-Every overflowing browse list, including Queue, details, search and Home, gets a narrow edge scrollbar and accessible scroll action. Its 48 dp touch strip keeps the thumb’s visual size. The thumb fades after 1.2 seconds without list or drag movement and reappears on movement. Show letter/year previews only during dragging under title/year sort.
+Every overflowing browse list, including Queue, details, search and Home, gets a narrow edge scrollbar and accessible scroll action. Its track runs from the bottom of the header controls to the top of the lowest bottom control (shell chrome, the selection pill, the corner ⋯/plus button; not the return arrow), with standard padding at both ends, and follows those controls as they move. Movement fades the thumb in; it stays fully visible while a finger is on the scrollbar or the list is scrolling (a still finger or a fling included), then fades out 1.2 seconds after release and settle.
+
+Only the visible thumb, at least 48 dp long about its centre, takes touches. Touch-down selects it at once: it grows by a constant width and by a capped share of its length, and its colour eases to the selected colour on the same timeline. It captures the touch until release, so rows beneath never get its press, long-press or tap. Every other edge touch, and every touch while it is faded, reaches the list and its rows. Dragging moves the list by the finger’s travel, never by jumping to the finger’s position. Show letter/year previews only during dragging under title/year sort.
 
 ## Collection details
 

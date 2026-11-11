@@ -54,7 +54,8 @@ class ScrollbarScreenshotTest {
                     else -> { state.scrollToItem(count); state.scrollBy(1e7f) }
                 }
             } }
-            compose.waitForIdle()
+            // #704: an idle scrollbar is faded and untouchable; show it as a scroll does before the rest shot.
+            compose.revealScrollbar(state)
             shot(dir, "$name-$place-rest")
             val thumb = compose.onNodeWithTag("browse-scrollbar-thumb").fetchSemanticsNode().boundsInRoot
             val bar = compose.onNodeWithTag("browse-scrollbar").fetchSemanticsNode().boundsInRoot
@@ -63,6 +64,7 @@ class ScrollbarScreenshotTest {
             shot(dir, "$name-$place-held")
             compose.onNodeWithTag("browse-scrollbar").performTouchInput { up() }
             compose.mainClock.advanceTimeBy(500); compose.waitForIdle()
+            compose.mainClock.autoAdvance = true
         }
     }
 

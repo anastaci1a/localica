@@ -102,12 +102,25 @@ class FarScrollScrollbarTest {
         host(LazyGridState().also { state = it }, transit)
         val bar = compose.onNodeWithTag("browse-scrollbar")
         compose.runOnIdle { assertFalse(transit.active) }
-        bar.performTouchInput { down(Offset(centerX, 30f)); moveTo(Offset(centerX, centerY), delayMillis = 300) }
+        // #704: only the visible thumb takes contact, so reveal it and press its current centre.
+        compose.revealScrollbar(state)
+        fun grab() = compose.onNodeWithTag("browse-scrollbar-thumb").fetchSemanticsNode().boundsInRoot.center.y -
+            bar.fetchSemanticsNode().boundsInRoot.top
+        val first = grab()
+        bar.performTouchInput { down(Offset(centerX, first)); moveTo(Offset(centerX, centerY), delayMillis = 300) }
+        compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle { assertTrue("Deferral must engage during the drag", transit.active) }
         bar.performTouchInput { up() }
+        compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle { assertFalse("Release ends the deferral", transit.active) }
-        bar.performTouchInput { down(Offset(centerX, 30f)); moveTo(Offset(centerX, centerY), delayMillis = 100); cancel() }
+        val second = grab()
+        bar.performTouchInput { down(Offset(centerX, second)); moveTo(Offset(centerX, centerY + 40f), delayMillis = 100) }
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { assertTrue("The second drag also defers", transit.active) }
+        bar.performTouchInput { cancel() }
+        compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle { assertFalse("Cancel ends the deferral", transit.active) }
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun scrollbarRequestsWithinOneFrameCollapseToOneJump() {

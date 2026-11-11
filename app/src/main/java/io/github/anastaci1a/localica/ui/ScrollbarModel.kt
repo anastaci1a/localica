@@ -2,6 +2,9 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 
 /** One laid-out item of a vertical lazy list or grid, in pixels relative to the content start. */
 internal class ScrollbarItem(val index: Int, val top: Int, val height: Int)
@@ -104,7 +107,14 @@ internal class ScrollbarModel {
     fun target(f: Float): Pair<Int, Int> {
         if (extent.isEmpty()) return 0 to 0
         if (f >= 1f) return lastItemTarget()
-        val wanted = f.coerceIn(0f, 1f) * scrollable
+        return targetAt(f.coerceIn(0f, 1f) * scrollable)
+    }
+
+    /** The item and pixel offset [delta] pixels from the observed position. */
+    fun targetBy(delta: Float): Pair<Int, Int> =
+        if (extent.isEmpty()) 0 to 0 else targetAt((position + delta).coerceAtLeast(0f))
+
+    private fun targetAt(wanted: Float): Pair<Int, Int> {
         val average = average
         var cumulative = 0f
         var i = 0
@@ -154,6 +164,43 @@ internal class ScrollbarModel {
         lineFirst = IntArray(total) { -1 }
         measuredSum = 0.0; measuredCount = 0; seen = false
     }
+}
+
+/**
+ * Relative scrollbar dragging (#704). Finger travel moves the thumb fraction by its delta; the list then
+ * moves by the same share of the distance still ahead of it: `step / (1 - fraction)` of the remaining
+ * content going down, `step / fraction` of the covered content going up. With steady estimates that is
+ * content/track pixels per finger pixel. When estimates change mid-drag (rows loading or measuring) only
+ * the rate of later steps changes, so the list never moves against the finger, a grab never jumps it,
+ * and both ends arrive exactly with the thumb.
+ */
+internal class ScrollbarDrag {
+    /** The finger-driven thumb fraction, read by placement and drawing. */
+    var fraction by mutableFloatStateOf(0f); private set
+    private var applied = 0f
+    private var taken = 0f
+
+    fun begin(fraction: Float) { this.fraction = fraction.coerceIn(0f, 1f); applied = this.fraction; taken = applied }
+    fun move(delta: Float) { fraction = (fraction + delta).coerceIn(0f, 1f) }
+
+    /** The list movement in pixels owed since the last call, from the model's current [position] and
+     * [remaining]: zero for none, and an infinity when the thumb reached that end (the list goes exactly there).
+     */
+    fun take(position: Float, remaining: Float): Float {
+        val from = applied
+        val to = fraction
+        taken = to
+        return when {
+            to == from -> 0f
+            to > from -> if (to >= 1f) Float.POSITIVE_INFINITY else (to - from) / (1f - from) * remaining
+            else -> if (to <= 0f) Float.NEGATIVE_INFINITY else (to - from) / from * position
+        }
+    }
+
+    /** Marks the travel last returned by [take] as executed. Travel that is never applied (blocked input, a stale
+     * generation) stays owed, so the thumb and the list cannot drift apart.
+     */
+    fun accept() { applied = taken }
 }
 
 /** Resting and held geometry of the scrollbar thumb; the held thumb is a uniform scale of the resting one. */
