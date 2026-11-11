@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,18 @@ class ReleaseLintAdoptionTest {
             "api${Build.VERSION.SDK_INT}").apply { mkdirs() }
     }
     private fun bits(value: Float) = value.toRawBits()
+    @Composable private fun ControlledScene(content: @Composable () -> Unit) {
+        val backdrop = rememberFrostedBackdrop(Unit, dark = false, lightMix = 0f)
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color.Magenta)) {
+            GlassPanelTheme(false) {
+                Box(Modifier.fillMaxSize()) {
+                    Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backdrop)) { drawRect(Color.White) }
+                    CompositionLocalProvider(LocalFrostedBackdrop provides backdrop, LocalModalBackdrop provides backdrop,
+                        androidx.compose.material3.LocalContentColor provides Color.Black, content = content)
+                }
+            }
+        }
+    }
     private fun geometry(node: androidx.compose.ui.semantics.SemanticsNode): JSONObject {
         val bounds = node.boundsInRoot
         val density = node.layoutInfo.density
@@ -65,22 +78,23 @@ class ReleaseLintAdoptionTest {
         File(output, "$name-capture.json").writeText(geometry(measured).put("safe", safe).toString(2))
         return image
     }
-    private fun save(name: String, frames: JSONArray) {
+    private fun save(name: String, frames: JSONArray, changedPixels: Int? = null) {
         File(output, "$name.json").writeText(JSONObject().put("api", Build.VERSION.SDK_INT)
-            .put("frames", frames).toString(2))
+            .put("backdropDark", false).put("backdropLightMix", bits(0f)).put("ink", "black")
+            .put("nativeHighlightChangedPixels", changedPixels ?: JSONObject.NULL).put("frames", frames).toString(2))
         File(output, "source.txt").writeText(BuildConfig.SOURCE_SHA + "\n")
     }
 
     private fun settings(name: String, reduced: Boolean, speed: Float, interrupt: Boolean = false) {
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalReducedMotion provides reduced, LocalMotionSpeed provides speed) {
+            ControlledScene { CompositionLocalProvider(LocalReducedMotion provides reduced, LocalMotionSpeed provides speed) {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                     Box(Modifier.fillMaxSize().background(Color.White).testTag("lint-content")) {
                         FolderSettings(LibraryUiState(loading = false), {}, {}, {},
                             interfaceContent = { section -> InterfaceSettingsControls(InterfaceSettings(reducedMotion = reduced), section) {} })
                     }
                 }
-            }
+            } }
         } }
         compose.onNodeWithContentDescription("Search settings input").performTextInput("Control expansion")
         compose.mainClock.autoAdvance = false
@@ -88,6 +102,9 @@ class ReleaseLintAdoptionTest {
             compose.onNodeWithTag("search-result:Control expansion").performClick()
             val frames = JSONArray()
             var visible = false
+            var highlighted: Bitmap? = null
+            var highlightedRow: androidx.compose.ui.geometry.Rect? = null
+            var highlightedRoot: androidx.compose.ui.geometry.Rect? = null
             val positions = mutableSetOf<Int>()
             for (frame in 1..64) {
                 compose.mainClock.advanceTimeByFrame()
@@ -106,7 +123,15 @@ class ReleaseLintAdoptionTest {
                 positions += bits(position)
                 frames.put(JSONObject().put("frame", frame).put("position", bits(position))
                     .put("alpha", bits(alpha)).put("row", geometry(row)).put("scroll", geometry(owner)))
-                if (frame in listOf(4, 8, 12, 20, 32, 48, 64)) capture(compose.onNodeWithTag("lint-content"), "$name-$frame")
+                if (frame in listOf(4, 8, 12, 20, 32, 48, 64)) {
+                    val image = capture(compose.onNodeWithTag("lint-content"), "$name-$frame")
+                    if (!interrupt && frame == 32) {
+                        assertTrue("The positive native control captures a revealed highlight", alpha > 0f)
+                        highlighted = image
+                        highlightedRow = row.boundsInRoot
+                        highlightedRoot = compose.onNodeWithTag("lint-content").fetchSemanticsNode().boundsInRoot
+                    }
+                }
                 if (interrupt && frame == 4) compose.onNode(selector, useUnmergedTree = true)
                     .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 40f) }
             }
@@ -116,7 +141,30 @@ class ReleaseLintAdoptionTest {
                 compose.onNodeWithTag("setting:Control expansion").assertIsDisplayed()
             }
             if (!reduced) assertTrue("Retain intermediate scroll positions", positions.size > 2)
-            save(name, frames)
+            var changedPixels: Int? = null
+            if (!interrupt) {
+                repeat(64) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+                val row = compose.onNodeWithTag("setting:Control expansion", useUnmergedTree = true).fetchSemanticsNode()
+                assertEquals(0f, row.config.getOrNull(SettingsHighlightAlpha) ?: 0f, 0f)
+                assertEquals("Highlight retirement must preserve row geometry", highlightedRow, row.boundsInRoot)
+                val retired = capture(compose.onNodeWithTag("lint-content"), "$name-retired")
+                val root = compose.onNodeWithTag("lint-content").fetchSemanticsNode().boundsInRoot
+                assertEquals(highlightedRoot, root)
+                val bounds = row.boundsInRoot.translate(-root.left, -root.top)
+                var count = 0
+                for (y in (kotlin.math.ceil(bounds.top).toInt() + 1) until kotlin.math.floor(bounds.bottom).toInt() - 1)
+                    for (x in (kotlin.math.ceil(bounds.left).toInt() + 1) until kotlin.math.floor(bounds.right).toInt() - 1) {
+                        val peak = requireNotNull(highlighted).getPixel(x, y)
+                        val rest = retired.getPixel(x, y)
+                        val red = android.graphics.Color.red(peak) - android.graphics.Color.red(rest)
+                        val green = android.graphics.Color.green(peak) - android.graphics.Color.green(rest)
+                        val blue = android.graphics.Color.blue(peak) - android.graphics.Color.blue(rest)
+                        if ((red > 10 && blue > 10) || (red >= 0 && blue >= 0 && green < -10)) count++
+                    }
+                assertTrue("The actual native highlight changes visible row pixels, including Reduced", count > 0)
+                changedPixels = count
+            }
+            save(name, frames, changedPixels)
         } finally { compose.mainClock.autoAdvance = true }
     }
     @Test fun settingsNormal() = settings("settings-normal", false, 4f / 3f)
@@ -131,7 +179,7 @@ class ReleaseLintAdoptionTest {
         lateinit var phase: Animatable<Float, *>
         val settings = InterfaceSettings(reducedMotion = reduced, fasterMotion = faster)
         compose.setContent { LocalicaTheme {
-            Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+            ControlledScene { Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.White).testTag("lint-content")) {
                     phase = remember { Animatable(0f) }
                     PlayerSurface(PlaybackState(connected = true, title = "Lint fixture", artist = "Static artist", durationMs = 125000),
@@ -140,7 +188,7 @@ class ReleaseLintAdoptionTest {
                         Box(Modifier.fillMaxWidth().height(48.dp).background(Color.Magenta)) { Text("Visible action", color = Color.Black) }
                     }
                 }
-            }
+            } }
         } }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
@@ -183,12 +231,12 @@ class ReleaseLintAdoptionTest {
 
     @Test fun excludedFoldersNativeDialogGeometryDensityAndPixels() {
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalReducedMotion provides true) {
+            ControlledScene { CompositionLocalProvider(LocalReducedMotion provides true) {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                     FolderSettings(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("content://lint-fixture", "Lint folder"))),
                         loading = false), {}, {}, {}, initialCategory = "Folders to scan")
                 }
-            }
+            } }
         } }
         compose.onNodeWithText("Lint folder").performClick()
         compose.onNodeWithText("Excluded subfolders").performClick()
