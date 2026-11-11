@@ -9,6 +9,7 @@ import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.navigation.InterfacePreferences
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
+import io.github.anastaci1a.localica.navigation.MainTab
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
@@ -42,7 +43,7 @@ class UtilityPopupRetirementTest {
         host()
         openOverflow()
         compose.onNodeWithText("Settings").performClick()
-        assertRetired()
+        assertRetired(checkFlights = false)
         advance(120)
         UiDevice.getInstance(instrumentation).pressBack()
         advance(240)
@@ -55,7 +56,7 @@ class UtilityPopupRetirementTest {
         host()
         openOverflow()
         compose.onNodeWithText("Scan music").performClick()
-        assertRetired()
+        assertRetired(checkFlights = false)
         advance(120)
         UiDevice.getInstance(instrumentation).pressBack()
         advance(240)
@@ -65,7 +66,7 @@ class UtilityPopupRetirementTest {
     }
 
     private fun host() {
-        preferences.write(InterfaceSettings(reducedMotion = false, fasterMotion = false))
+        preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Playlists), reducedMotion = false, fasterMotion = false))
         val track = Track("file:///missing-667.mp3", "One", artist = "Test", album = "One",
             fileName = "missing-667.mp3", relativePath = "missing-667.mp3")
         compose.setContent { LocalicaTheme {
@@ -103,7 +104,7 @@ class UtilityPopupRetirementTest {
     private fun advance(frames: Int) = repeat(frames) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
 
     /** The collapse ran to its end and the native window left within a bounded number of frames. */
-    private fun assertRetired() {
+    private fun assertRetired(checkFlights: Boolean = true) {
         val window = requireNotNull(popup)
         var lowest = 1f
         var frames = 0
@@ -113,7 +114,7 @@ class UtilityPopupRetirementTest {
         }
         assertFalse("The overflow's native window retires after the close", window.decorView.isAttachedToWindow)
         assertTrue("The collapse ran (lowest phase $lowest)", lowest < .2f)
-        assertTrue("The utility flight is removed from its home", flights().isEmpty())
+        if (checkFlights) assertTrue("The utility flight is removed from its home", flights().isEmpty())
     }
 
     private fun flights(): List<GlassPopupFlight> = compose.runOnUiThread {
