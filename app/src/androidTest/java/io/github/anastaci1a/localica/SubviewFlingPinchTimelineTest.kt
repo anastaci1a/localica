@@ -118,12 +118,12 @@ class SubviewFlingPinchTimelineTest {
                 // The header reports a frame for every drawn frame of a live header transaction.
                 var lastHeaderFrame = 0L
                 ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
-                    scenario.onActivity { activity -> activity.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+                    scenario.onActivity { activity -> activity.setContent { FixtureTime.WithClock { EngineRecord { LocalicaTheme { Box(Modifier.fillMaxSize()) {
                         CompositionLocalProvider(LocalCollectionHeaderFrameObserver provides { lastHeaderFrame = SystemClock.uptimeMillis() }) {
                             BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(listOf(playlist), loading = false),
                                 route, {}, {}, {}, { _, _, _ -> }, null, null, true, false, queryDispatcher = Dispatchers.Unconfined)
                         }
-                    } } } }
+                    } } } } } }
                     SystemClock.sleep(1500)
                     var origin = IntArray(2); var density = 1f
                     scenario.onActivity { activity ->
