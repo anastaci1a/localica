@@ -11,6 +11,19 @@ import kotlin.math.*
 @Stable interface MotionRectView { val left: MotionValue; val top: MotionValue; val right: MotionValue; val bottom: MotionValue; fun value(): Rect; fun valueAt(stamp: FrameStamp): Rect }
 @Stable interface MotionColorView { fun value(): Color; fun valueAt(stamp: FrameStamp): Color }
 internal data class EasedPlan(val stamp: FrameStamp,val core: UnitCurveSpec,val duration: Double,val sigma: Double,val tauIn: Double,val tauOut: Double=min(duration/8,sigma*.064)) { fun segment(x: Double,v: Double,q: Double,bounds: ClosedFloatingPointRange<Double>?=null)=Eased(x,v,q,core,duration,sigma,bounds,tauIn,this,tauOut).also { require(it.tauIn==tauIn && it.tauOut==tauOut) { "All bound channels must use the source plan" } } }
+/** #854: one spring intent's shared finish frame and terminal bridge (U05 A2.2a), the analog of [EasedPlan]. */
+internal class SpringPlan(val stamp: FrameStamp,val finish: Double,val tauOut: Double,val sigma: Double) {
+    init { require(finish.isFinite() && finish>0 && tauOut.isFinite() && tauOut>0 && tauOut<=finish && sigma.isFinite() && sigma>0) }
+    fun segment(x: Double,v: Double,q: Double,law: SpringLaw,range: Double,display: Double)=Damped(x,v,q,law.omega/sigma,law.zeta.toDouble(),range,display,finish,tauOut,this)
+    companion object {
+        /** finish = max(2 frames, every channel's settle envelope); tauOut = min(finish/8, .064 sigma, 1/slowest pole). Each state is x, v, q, omega_eff, zeta, range. */
+        fun of(stamp: FrameStamp,sigma: Double,display: Double,states: List<DoubleArray>): SpringPlan {
+            val finish=states.maxOf { settleEnvelope(it[0]-it[2],it[1],it[3],it[4],it[5]) }.coerceAtLeast(2*display)
+            val slowest=states.minOf { val w=it[3]; val z=it[4]; if(z>1) w/(z+sqrt(z*z-1)) else z*w }
+            return SpringPlan(stamp,finish,minOf(finish/8,.064*sigma,1/slowest),sigma)
+        }
+    }
+}
 private fun edges(rect: Rect)=floatArrayOf(rect.left,rect.top,rect.right,rect.bottom).also { require(it.all(Float::isFinite)) }
 @Stable class MotionRect internal constructor(internal val clock: UiClock,initial: Rect,internal val ranges: EdgeRanges,key: Any=Any()): MotionRectView {
     private val initialEdges=edges(initial); internal val channels=Array(4) { MotionFloat(clock,initialEdges[it],ranges.values()[it],key=key to "edge$it") }; private var binding: Any?=null; private var last: Any?=null
@@ -20,6 +33,12 @@ private fun edges(rect: Rect)=floatArrayOf(rect.left,rect.top,rect.right,rect.bo
     internal fun claim(owner: Any) { clock.checkMutation(); require(binding==null || binding===owner) { "Rectangle already has an expansion owner" }; binding=owner }
     internal fun prepare(target: Rect,plan: EasedPlan,owner: Any,velocity: DoubleArray?=null): List<MotionIntent> { clock.checkMutation(); require(binding==null || binding===owner); val values=edges(target); require(velocity==null || velocity.size==4 && velocity.all(Double::isFinite)); return channels.mapIndexed { i,m -> val x=m.rawValue(plan.stamp); val v=velocity?.get(i)?:m.rawVelocity(plan.stamp); val next=if(clock.context!!.access==MotionAccess.Reduced) Rest(values[i].toDouble()) else plan.segment(x,v,values[i].toDouble()); m.prepareSegment(next,values[i],plan.stamp,plan,if(clock.context!!.access==MotionAccess.Reduced) "Reduced" else "Continuous",velocity?.get(i)?.toFloat()) } }
     /** One analytic phase plus C1 edge residuals; the physical channels remain the expansion's bound rectangle. */
+    /** #854: each edge maps its own axis phase (the main or the cross-axis snap phase) through [curve]; its rebase residual is a spring on that axis law. */
+    internal fun prepareMapped(basis: ExpansionBasis,curve: Curve,phases: List<Trajectory>,target: DoubleArray,residuals: List<Trajectory>,plan: SpringPlan,owner: Any): List<MotionIntent> {
+        clock.checkMutation(); require(binding==null || binding===owner)
+        return channels.mapIndexed { i,m -> val start=basis.at(0.0)[i]; val delta=basis.delta(i)
+            m.prepareSegment(MappedEdge(phases[i],curve,start,delta,residuals[i]),(start+delta*curve.at(target[i].toFloat())).toFloat(),plan.stamp,plan) }
+    }
     internal fun prepareMapped(basis: ExpansionBasis,curve: Curve,phase: Trajectory,target: Double,plan: EasedPlan,owner: Any): List<MotionIntent> {
         clock.checkMutation(); require(binding==null || binding===owner)
         return channels.mapIndexed { i,m ->

@@ -14,6 +14,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.ui.engine.*
 import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
+import io.github.anastaci1a.localica.ui.spec.PopupKind
 import io.github.anastaci1a.localica.ui.spec.UiSpec
 
 /** U04.02a (D06(a), D33): a retained face host's one ExpandCollapse on the #608 law. Layout hands it the measured endpoint frames;
@@ -25,8 +26,10 @@ import io.github.anastaci1a.localica.ui.spec.UiSpec
     fun request(expanded: Boolean) = motion.show(expanded)
     fun measured(start: Rect, end: Rect) { val basis = ExpansionBasis(start, end, density); if (basis != last) { last = basis; motion.place(basis) } }
 }
-@Composable fun rememberFaceExpansion(expanded: Boolean, law: (UiSpec) -> ExpansionSpec = { it.expansion }): FaceExpansion {
-    val motion = rememberPopupMotion(remember { Any() }, expanded, law)
+/** [kind] selects the #854 spring model; by default a face inherits its enclosing popup's kind (Legacy outside popups).
+ * A Legacy face runs [law]: the stock popup law, or the selection panel's own (#869). */
+@Composable fun rememberFaceExpansion(expanded: Boolean, kind: PopupKind = LocalPopupKind.current, law: (UiSpec) -> ExpansionSpec = { it.expansion }): FaceExpansion {
+    val motion = rememberPopupMotion(remember { Any() }, expanded, kind, law)
     val density = LocalDensity.current.density
     val face = remember(motion, density) { FaceExpansion(motion, density) }
     SideEffect { face.request(expanded) }

@@ -15,6 +15,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Text
 import io.github.anastaci1a.localica.ui.engine.*
+import io.github.anastaci1a.localica.ui.spec.PopupKind
 
 /** The popup's existing owner and one movable shared instance, borrowed by both native roots. */
 @Stable internal class PopupSharedContent internal constructor(
@@ -52,9 +53,9 @@ import io.github.anastaci1a.localica.ui.engine.*
     }
 }
 
-@Composable internal fun rememberPopupSharedContent(key: Any,
+@Composable internal fun rememberPopupSharedContent(key: Any, kind: PopupKind = PopupKind.Legacy,
     shared: @Composable SharedScope.() -> Unit): PopupSharedContent {
-    val motion = rememberPopupWindowMotion(key, prepared = false, quiet = false)
+    val motion = rememberPopupWindowMotion(key, prepared = false, quiet = false, kind = kind)
     val slots = rememberMorphSlots(motion.expansion) { motion.bounds }
     val host = remember(slots) { MorphHost(slots) }
     host.shared = { shared() }
