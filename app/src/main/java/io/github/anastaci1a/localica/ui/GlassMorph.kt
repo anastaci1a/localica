@@ -860,6 +860,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             (if(anchor.quiet) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
                             radius().toPx(),shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
                             shadowReceiver[0],shadowExclusion[0]) {
+                            // The restored trigger draws into the sampled recording; once it has presented,
+                            // this body must not lens it. Waiting for the receipt keeps the pill covered (#847).
+                            if (continuousOrigin == null && !visible && !anchor.hidden &&
+                                anchor.restoredPresentedReceipt == anchor.restoredDrawRequest) return@draw
                             translate(left = pose?.horizontalShift ?: 0f) {
                                 scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
                                     this@drawWithContent.drawContent()
