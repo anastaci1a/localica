@@ -613,16 +613,18 @@ class GlassMorphTest {
             }
             val registrationElapsed = compose.mainClock.currentTime - openingStart
             assertTrue("Registration must not advance beyond the intermediate sample", registrationElapsed <= 176)
-            if (registrationElapsed < 176) compose.mainClock.advanceTimeBy(176 - registrationElapsed)
-            compose.waitForIdle()
-            val middle = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
-            logGeometry("middle", middle.width)
-            assertTrue("The original trigger is hidden throughout the morph", anchor.hidden)
-            assertTrue("The original circle grows into the menu", middle.width > start.width)
-            compose.mainClock.advanceTimeBy(1000)
+            // #854: the menu opens on the measured spring (855-ios262-60fps-interim), which overshoots and settles, so sample every
+            // frame after registration instead of one fixed time: some frame must lie strictly between the trigger and the settled width.
+            val widths = mutableListOf<Float>()
+            while (compose.mainClock.currentTime - openingStart < registrationElapsed + 1000) {
+                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                widths += compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot.width
+                assertTrue("The original trigger is hidden throughout the morph", anchor.hidden)
+            }
             val expanded = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
             logGeometry("expanded", expanded.width)
-            assertTrue("Opening passes through an intermediate width", expanded.width > middle.width)
+            assertTrue("The original circle grows into the menu", expanded.width > start.width)
+            assertTrue("Opening passes through an intermediate width $widths", widths.any { it > start.width && it < expanded.width })
             compose.onNodeWithText("Create playlist").assertIsDisplayed()
             compose.runOnIdle { open = false }
             compose.mainClock.advanceTimeBy(176)
