@@ -1,10 +1,17 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
+import androidx.compose.ui.unit.Density
 import androidx.test.platform.app.InstrumentationRegistry
 import android.os.Build
 import io.github.anastaci1a.localica.browse.*
@@ -21,6 +28,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
 import java.io.File
+import kotlin.math.roundToInt
 
 /** #837: collection chrome may move the closed sheet's basis without opening its retained body. */
 class CollapsedPlayerCollectionNavigationTest {
@@ -38,6 +46,7 @@ class CollapsedPlayerCollectionNavigationTest {
     private var navigationContentBoundary = 0
     private var requestedDestination: String? = null
     private var navigationFrame = 0L
+    private var nativeRoot: NativeRootReferences? = null
     private lateinit var records: File
     private lateinit var access: MotionAccess
     private data class FrameRecord(val source: String, val api: Int, val frameMs: Long,
@@ -45,6 +54,26 @@ class CollapsedPlayerCollectionNavigationTest {
         val basisJoins: Int, val contentEvents: List<Pair<String, Boolean>>)
     private data class StartupRecord(val frame: FrameRecord, val phaseSettled: Boolean,
         val queueSettled: Boolean, val liveHosts: Map<String, Int>)
+    private data class PhaseJoinRecord(val owner: String, val target: Float, val epoch: Int,
+        val stampNanos: Long, val before: Kinematic, val after: Kinematic,
+        val beforeKind: Int, val afterKind: Int, val policy: String,
+        val contextAccess: MotionAccess?, val specAccess: MotionAccess, val motionId: Long,
+        val clockIdentity: Int, val edgeName: String? = null)
+    private data class SearchFrameRecord(val frameMs: Long, val playerValue: Float,
+        val playerTarget: Float, val playerSettled: Boolean, val queueValue: Float,
+        val queueTarget: Float, val queueSettled: Boolean, val contextAccess: MotionAccess?,
+        val specAccess: MotionAccess, val movingJoins: List<PhaseJoinRecord>,
+        val contentEvents: List<Pair<String, Boolean>>, val navigationBoundary: Int,
+        val nativeRoot: NativeRootRecord?, val playerId: Long, val queueId: Long,
+        val playerEdgeJoins: List<PhaseJoinRecord>)
+    private data class NativeRootRecord(val width: Int, val height: Int, val density: Float,
+        val fontScale: Float, val imeBottom: Int, val navigationBottom: Int, val referenceTravel: Float?)
+    private class NativeRootReferences(val window: WindowInfo, val density: Density,
+        val ime: WindowInsets, val navigation: WindowInsets) {
+        fun snapshot(clock: UiClock) = NativeRootRecord(window.containerSize.width,
+            window.containerSize.height, density.density, density.fontScale,
+            ime.getBottom(density), navigation.getBottom(density), clock.context?.fullPlayerReferenceTravelPx)
+    }
 
     private class SheetEvents : MotionEvents {
         var phase: MotionFloat? = null
@@ -52,19 +81,39 @@ class CollapsedPlayerCollectionNavigationTest {
         var checking = false
         var basisJoins = 0
         val movingJoins = mutableListOf<MotionJoin>()
+        val movingPhaseRecords = mutableListOf<PhaseJoinRecord>()
+        val playerEdgeRecords = mutableListOf<PhaseJoinRecord>()
         override fun created(motion: MotionFloat) {}
         override fun retired(motion: MotionFloat, stamp: FrameStamp) {}
         override fun joined(motion: MotionFloat, join: MotionJoin) {
             if (motion.key == ("player" to "phase")) {
                 phase = motion
-                if (checking && join.afterKind != 0) movingJoins += join
+                if (checking && join.afterKind != 0) {
+                    movingJoins += join
+                    record("player", motion, join)
+                }
             }
             if (motion.key == ("queue" to "phase")) {
                 queuePhase = motion
-                if (checking && join.afterKind != 0) movingJoins += join
+                if (checking && join.afterKind != 0) {
+                    movingJoins += join
+                    record("queue", motion, join)
+                }
             }
             if (checking && motion.key == (("player" to "frame") to "edge1")) basisJoins++
+            val key = motion.key as? Pair<*, *>
+            if (checking && key != null && key.first == ("player" to "frame")) {
+                playerEdgeRecords += capture("player-frame", motion, join, key.second as? String)
+            }
         }
+        private fun record(owner: String, motion: MotionFloat, join: MotionJoin) {
+            movingPhaseRecords += capture(owner, motion, join)
+        }
+        private fun capture(owner: String, motion: MotionFloat, join: MotionJoin, edge: String? = null) =
+            PhaseJoinRecord(owner, motion.target, join.epoch, join.stamp.nanos,
+                join.before, join.after, join.beforeKind, join.afterKind, join.policy,
+                motion.clock.context?.access, motion.clock.spec.access, motion.id,
+                System.identityHashCode(motion.clock), edge)
     }
 
     private fun start(access: MotionAccess, loaded: Boolean, tab: MainTab = MainTab.Albums, input: String = "navigation") {
@@ -88,7 +137,14 @@ class CollapsedPlayerCollectionNavigationTest {
             if (count == 0) liveRetainedHosts.remove(name) else liveRetainedHosts[name] = count
         }) { LocalicaTheme {
             val clock = LocalUiClock.current
-            SideEffect { clock.events = events }
+            val nativeWindow = LocalWindowInfo.current
+            val density = LocalDensity.current
+            val ime = WindowInsets.ime
+            val navigation = WindowInsets.navigationBars
+            SideEffect {
+                clock.events = events
+                nativeRoot = NativeRootReferences(nativeWindow, density, ime, navigation)
+            }
             LocalicaScreen(LibraryUiState(snapshot, loading = false), playback, {}, {}, {}, {}, {}, {},
                 playlist = PlaylistState(listOf(playlist), loading = false))
         } } }
@@ -269,13 +325,50 @@ class CollapsedPlayerCollectionNavigationTest {
             Input.Search -> {
                 compose.onAllNodesWithText("Search ${playlist.name}").assertCountEquals(1)
                 val search = compose.onNodeWithText("Search ${playlist.name}").assertIsDisplayed()
+                compose.onAllNodesWithTag("player-surface").assertCountEquals(1)
+                val searchNode = search.fetchSemanticsNode()
+                val playerNode = compose.onNodeWithTag("player-surface").fetchSemanticsNode()
+                val searchBounds = searchNode.boundsInRoot
+                val playerBounds = playerNode.boundsInRoot
+                // Match the pinned Compose click implementation's visible-size integer conversion.
+                // Raw bounds are also exported unchanged, with every Float bit retained below.
+                val frameworkClick = searchBounds.topLeft + Offset(searchBounds.width.roundToInt() / 2f,
+                    searchBounds.height.roundToInt() / 2f)
+                val geometry = listOf(searchBounds.left, searchBounds.top, searchBounds.right, searchBounds.bottom,
+                    playerBounds.left, playerBounds.top, playerBounds.right, playerBounds.bottom,
+                    searchBounds.center.x, searchBounds.center.y,
+                    searchNode.positionInRoot.x, searchNode.positionInRoot.y,
+                    playerNode.positionInRoot.x, playerNode.positionInRoot.y,
+                    frameworkClick.x, frameworkClick.y)
+                records.appendText("search-geometry\t${compose.mainClock.currentTime}\t" +
+                    geometry.flatMap { listOf(it.toString(), it.toRawBits().toString()) }.joinToString("\t") +
+                    "\tsemantic-center-inside-player=${playerBounds.contains(searchBounds.center)}" +
+                    "\tframework-click-inside-player=${playerBounds.contains(frameworkClick)}\n")
+                val beforeClick = compose.runOnIdle { searchSnapshot() }
+                records.appendText("search-before\t$beforeClick\n")
                 recordAction(input)
                 search.performClick()
                 repeat(6) {
                     compose.mainClock.advanceTimeByFrame()
-                    compose.runOnIdle {
-                        assertTrue(events.movingJoins.isEmpty())
-                        assertTrue(contentEvents.drop(navigationContentBoundary).isEmpty())
+                    var observed: SearchFrameRecord? = null
+                    var originalFailure: Throwable? = null
+                    try {
+                        compose.runOnIdle {
+                            observed = searchSnapshot()
+                            assertTrue(events.movingJoins.isEmpty())
+                            assertTrue(contentEvents.drop(navigationContentBoundary).isEmpty())
+                        }
+                    } catch (failure: Throwable) {
+                        originalFailure = failure
+                        throw failure
+                    } finally {
+                        try {
+                            val frame = observed
+                            if (frame != null) records.appendText("search-frame\t$frame\n")
+                        } catch (exportFailure: Throwable) {
+                            val failure = originalFailure
+                            if (failure != null) failure.addSuppressed(exportFailure) else throw exportFailure
+                        }
                     }
                 }
                 compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
@@ -294,4 +387,15 @@ class CollapsedPlayerCollectionNavigationTest {
     @Test fun standardCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(MotionAccess.Standard, Input.Search)
     @Test fun fasterCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(MotionAccess.Faster, Input.Search)
     @Test fun reducedCollapsedCollectionAdmitsSearchDuringNavigation() = interactions(MotionAccess.Reduced, Input.Search)
+
+    /** Called only in a Main snapshot block; the returned record owns immutable copied values. */
+    private fun searchSnapshot(): SearchFrameRecord {
+        val phase = checkNotNull(events.phase)
+        val queue = checkNotNull(events.queuePhase)
+        return SearchFrameRecord(compose.mainClock.currentTime, phase.value(), phase.target,
+            phase.settled, queue.value(), queue.target, queue.settled, phase.clock.context?.access,
+            phase.clock.spec.access, events.movingPhaseRecords.toList(), contentEvents.toList(),
+            navigationContentBoundary, nativeRoot?.snapshot(phase.clock), phase.id, queue.id,
+            events.playerEdgeRecords.toList())
+    }
 }
