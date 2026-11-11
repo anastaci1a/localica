@@ -474,6 +474,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     if (continuousOrigin == null) {
                         window.glassInput(true); gestures.activate()
                     }
+                } else if (motion.expansion.nativeOpening == false && visible && continuousOrigin == null &&
+                    anchor.hidden && anchor.modalPresent && modalWindow != null && modalWindow === readyWindow) {
+                    // A reopen reclaimed this window at its return gate (#858). Pass the gate
+                    // without restoring the trigger; the reversed expansion then admits it again.
                 } else if (motion.expansion.nativeOpening == false) {
                     modalWindow?.glassInput(false)
                     gestures.deactivate()
