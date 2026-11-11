@@ -25,6 +25,7 @@ io.github.anastaci1a.localica.ArtworkGrantsTest
 io.github.anastaci1a.localica.ArtworkLoadingFallbackTest
 io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest
 io.github.anastaci1a.localica.ArtworkRevealReleaseFrameTest
+io.github.anastaci1a.localica.ArtworkRevealTest
 io.github.anastaci1a.localica.ArtworkReviewReadinessTest
 io.github.anastaci1a.localica.ArtworkSaveTest
 io.github.anastaci1a.localica.ArtworkScrollLoadingTest
