@@ -438,24 +438,34 @@ def selected_methods(source, entry):
     return declarations, runtime
 
 
+# app/build.gradle.kts adds src/sharedTest/java to BOTH the unit-test and androidTest source sets, so
+# every class there compiles into the instrumentation APK and runs on the device (#870).
+INSTRUMENTATION_SOURCE_DIRS = ("app/src/androidTest/java", "app/src/sharedTest/java")
+
+
+def instrumentation_source_dirs(root):
+    """Existing source folders compiled into the androidTest APK (sharedTest is optional)."""
+    return [Path(root) / d for d in INSTRUMENTATION_SOURCE_DIRS if (Path(root) / d).is_dir()]
+
+
 def inventory(root, selectors, api=None):
     root = Path(root).resolve()
     selected = list(selectors)
     if not selected or any(not FQCN.fullmatch(c) for c in selected) or len(set(selected)) != len(selected):
         raise InventoryError("Require nonempty, unique comma-separated FQCN class selectors")
-    folder = root / "app/src/androidTest/java"
-    if not folder.is_dir():
+    if not (root / INSTRUMENTATION_SOURCE_DIRS[0]).is_dir():
         raise InventoryError("Missing Android test source directory")
     candidates = {cls: [] for cls in selected}
-    for path in sorted(folder.rglob("*")):
-        if path.suffix not in (".kt", ".java") or not path.is_file():
-            continue
-        if path.is_symlink() or not path.resolve().is_relative_to(folder.resolve()):
-            raise InventoryError("Source symlink/escape refused: " + str(path))
-        source = read_source(path)
-        for entry in source.classes:
-            if entry[0] in candidates:
-                candidates[entry[0]].append((source, entry))
+    for folder in instrumentation_source_dirs(root):
+        for path in sorted(folder.rglob("*")):
+            if path.suffix not in (".kt", ".java") or not path.is_file():
+                continue
+            if path.is_symlink() or not path.resolve().is_relative_to(folder.resolve()):
+                raise InventoryError("Source symlink/escape refused: " + str(path))
+            source = read_source(path)
+            for entry in source.classes:
+                if entry[0] in candidates:
+                    candidates[entry[0]].append((source, entry))
     classes, methods, runtime, gates = [], [], [], {}
     for cls in selected:
         matches = candidates[cls]

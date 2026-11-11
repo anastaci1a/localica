@@ -30,25 +30,26 @@ def digest(path):
 
 
 def discover(root):
-    folder = root / 'app/src/androidTest/java'
-    require(folder.is_dir(), 'Missing test source folder')
+    require((root / source.INSTRUMENTATION_SOURCE_DIRS[0]).is_dir(), 'Missing test source folder')
     selectors, hashes = [], {}
-    for path in sorted(folder.rglob('*')):
-        if path.suffix not in ('.kt', '.java') or not path.is_file():
-            continue
-        require(not path.is_symlink(), 'Source symlink refused')
-        parsed = source.read_source(path)
-        hashes[path.relative_to(root).as_posix()] = digest(path)
-        for entry in parsed.classes:
-            cls, _, body = entry
-            if body is None:
+    # androidTest plus sharedTest: both compile into the instrumentation APK (#870).
+    for folder in source.instrumentation_source_dirs(root):
+        for path in sorted(folder.rglob('*')):
+            if path.suffix not in ('.kt', '.java') or not path.is_file():
                 continue
-            depth = parsed.depths[body] + ('{',)
-            annotations = [source.annotation(parsed, i)[0]
-                           for i in range(body + 1, parsed.pairs[body])
-                           if parsed.tokens[i].text == '@' and parsed.depths[i] == depth]
-            if any(name in parsed.tests or name.endswith('.Test') or name == 'Test' for name in annotations):
-                selectors.append(cls)
+            require(not path.is_symlink(), 'Source symlink refused')
+            parsed = source.read_source(path)
+            hashes[path.relative_to(root).as_posix()] = digest(path)
+            for entry in parsed.classes:
+                cls, _, body = entry
+                if body is None:
+                    continue
+                depth = parsed.depths[body] + ('{',)
+                annotations = [source.annotation(parsed, i)[0]
+                               for i in range(body + 1, parsed.pairs[body])
+                               if parsed.tokens[i].text == '@' and parsed.depths[i] == depth]
+                if any(name in parsed.tests or name.endswith('.Test') or name == 'Test' for name in annotations):
+                    selectors.append(cls)
     inventory = source.inventory(root, selectors)
     inventory['all_source_sha256'] = hashes
     return inventory
@@ -300,6 +301,23 @@ def union(root, api, folders, shards):
             'deferred': deferred, **counts}
 
 
+def announce(path, api):
+    """Print every deferral recorded by a union result; fail clearly (never crash) on an empty/invalid result."""
+    try:
+        text = Path(path).read_text()
+    except OSError as error:
+        raise ValueError('Union result unreadable for API ' + api + ': ' + str(error))
+    require(text.strip(), 'Union result is empty for API ' + api + ': the union was rejected, see the error above')
+    try:
+        result = json.loads(text)
+    except ValueError:
+        raise ValueError('Union result is not valid JSON for API ' + api)
+    require(isinstance(result, dict) and 'deferred' in result and isinstance(result['deferred'], list),
+            'Union result for API ' + api + ' lacks the deferred list')
+    for row in result['deferred']:
+        print('%s API %s: %s' % (row['reason'], api, row['id']))
+
+
 def shards(root, api, count, durations, sha, risks=(), scroll_performance=False):
     """Longest measured class first; retain every method and explicit unknown costs."""
     require(api in ('26', '36') and 1 <= count <= 32, 'Invalid shard API/count')
@@ -368,7 +386,7 @@ def shards(root, api, count, durations, sha, risks=(), scroll_performance=False)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('plan','preflight','complete','union','shards','deferred'))
+    parser.add_argument('action', choices=('plan','preflight','complete','union','shards','deferred','announce'))
     parser.add_argument('--root', type=Path, default=Path('.'))
     parser.add_argument('--plan', type=Path)
     parser.add_argument('--shard', action='store_true')
@@ -382,6 +400,7 @@ def main():
     parser.add_argument('--preflight', type=Path)
     parser.add_argument('--remaining', type=Path)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--union-result', type=Path)
     parser.add_argument('--durations', type=Path, default=Path(__file__).with_name('class-durations.csv'))
     parser.add_argument('--scroll-performance', action='store_true')
     args = parser.parse_args()
@@ -392,6 +411,10 @@ def main():
             for row in rows:
                 print(row['reason'] + ': ' + row['id'], file=sys.stderr)
             print(','.join(row['id'] for row in rows))
+            return 0
+        if args.action == 'announce':
+            require(args.union_result and args.api, 'Missing announce inputs')
+            announce(args.union_result, args.api)
             return 0
         if args.action == 'shards':
             require(args.shards and args.output, 'Missing shard plan inputs')

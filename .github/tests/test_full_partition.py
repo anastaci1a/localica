@@ -424,9 +424,108 @@ class DeferredMethodTest(unittest.TestCase):
         self.assertIn('notClass=$deferred_methods', script)
         self.assertIn('full_excluded_classes=${full_excluded_classes:+$full_excluded_classes,}$deferred_methods', script)
         workflow = (ROOT/'.github/workflows/android.yml').read_text()
-        self.assertIn('d["reason"], sys.argv[2], d["id"]', workflow)
-        self.assertIn('.get("deferred", [])', workflow)
+        self.assertIn('full_partition.py announce', workflow)
+        self.assertIn("print('%s API %s: %s' % (row['reason'], api, row['id']))", (ROOT/'.github/test-evidence/full_partition.py').read_text())
         self.assertIn('GITHUB_STEP_SUMMARY', workflow)
+
+
+
+class SharedTestInventoryTest(unittest.TestCase):
+    """#870: src/sharedTest compiles into androidTest, so it is inventoried and sharded exactly once."""
+    SHARED = 'io.github.anastaci1a.localica.ui.engine.PopupWindowMotionTest'
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        for name, kind in (('RiskTest', 'androidTest'), ('OtherTest', 'androidTest'), ('SharedMotionTest', 'sharedTest')):
+            folder = self.root/'app/src'/kind/'java/example'
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder/(name+'.kt')).write_text('package example\nimport org.junit.Test\nclass '+name+' { @Test fun one() {} @Test fun two() {} }')
+        # A helper without tests is hashed but is not a selector.
+        (self.root/'app/src/sharedTest/java/example/Helper.kt').write_text('package example\nclass Helper')
+        self.weights = self.root/'durations.csv'
+        self.weights.write_text('api,class,tests,total_seconds,skipped\n26,example.OtherTest,2,10,0\n')
+
+    def xml(self, folder, ids):
+        folder.mkdir()
+        suite = ET.Element('testsuite', tests=str(len(ids)), failures='0', errors='0', skipped='0')
+        for identity in ids:
+            cls, method = identity.split('#')
+            ET.SubElement(suite, 'testcase', classname=cls, name=method, time='1')
+        (folder/'r.xml').write_text(ET.tostring(suite, encoding='unicode'))
+
+    def test_shared_class_is_in_the_inventory_and_hashed(self):
+        inv = partition.discover(self.root)
+        self.assertIn('example.SharedMotionTest', inv['selectors'])
+        self.assertIn('example.SharedMotionTest#one', inv['runtime_methods'])
+        self.assertIn('app/src/sharedTest/java/example/Helper.kt', inv['all_source_sha256'])
+
+    def test_shared_class_lands_in_exactly_one_shard_and_the_others_exclude_it(self):
+        result = partition.shards(self.root, '26', 2, self.weights, 'a'*40, risks=['example.RiskTest'])
+        owners = [s['index'] for s in result['shards'] if 'example.SharedMotionTest' in s['classes']]
+        self.assertEqual(1, len(owners))
+        for shard in result['shards']:
+            self.assertEqual(owners == [shard['index']], 'example.SharedMotionTest' in shard['classes'])
+            self.assertEqual(owners != [shard['index']], 'example.SharedMotionTest' in shard['excluded_classes'])
+        ids = [m for s in result['shards'] for m in s['methods']]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertIn('example.SharedMotionTest#one', ids)
+
+    def test_union_accepts_one_run_and_rejects_every_shard_running_it(self):
+        plan = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
+        shared = ['example.SharedMotionTest#one', 'example.SharedMotionTest#two']
+        self.assertTrue(set(shared) <= set(plan['expected']))
+        rest = [x for x in plan['expected'] if x not in shared]
+        self.xml(self.root/'a', rest + shared)
+        self.assertEqual(len(plan['expected']), partition.union(self.root, '26', [self.root/'a'], 1)['executed_once'])
+        self.xml(self.root/'s1', rest[:2] + shared)
+        self.xml(self.root/'s2', rest[2:] + shared)
+        with self.assertRaisesRegex(ValueError, 'Duplicate identity across shards'):
+            partition.union(self.root, '26', [self.root/'s1', self.root/'s2'], 2)
+
+    def test_shared_class_declared_in_both_trees_is_refused(self):
+        (self.root/'app/src/sharedTest/java/example/RiskTest.kt').write_text('package example\nimport org.junit.Test\nclass RiskTest { @Test fun one() {} }')
+        with self.assertRaises(ValueError):
+            partition.plan(self.root, ['example.OtherTest'], '26', 'a'*40)
+
+    def test_real_repository_shared_tests_are_inventoried(self):
+        if not (ROOT/'app/src/sharedTest/java').is_dir():
+            self.skipTest('no sharedTest tree')
+        inv = partition.discover(ROOT)
+        self.assertIn(self.SHARED, inv['selectors'])
+        self.assertTrue(any(m.startswith(self.SHARED + '#') for m in inv['runtime_methods']))
+
+    def test_empty_or_invalid_union_result_fails_clearly_without_a_traceback(self):
+        import contextlib, io, subprocess
+        empty = self.root/'union-empty.json'
+        empty.write_text('')
+        with self.assertRaisesRegex(ValueError, 'empty'):
+            partition.announce(empty, '26')
+        bad = self.root/'union-bad.json'
+        bad.write_text('not json')
+        with self.assertRaisesRegex(ValueError, 'not valid JSON'):
+            partition.announce(bad, '26')
+        with self.assertRaisesRegex(ValueError, 'unreadable'):
+            partition.announce(self.root/'missing.json', '26')
+        script = str(ROOT/'.github/test-evidence/full_partition.py')
+        run = subprocess.run([sys.executable, script, 'announce', '--api', '26', '--union-result', str(empty)],
+                             capture_output=True, text=True)
+        self.assertEqual(2, run.returncode)
+        self.assertIn('Full-suite partition rejected: Union result is empty for API 26', run.stderr)
+        self.assertNotIn('Traceback', run.stderr)
+
+    def test_announce_prints_each_deferral_and_the_workflow_uses_it_failing_closed(self):
+        import contextlib, io
+        good = self.root/'union.json'
+        good.write_text(json.dumps({'deferred': [{'id': 'x.Y#z', 'reason': 'DEFERRED v0.34.1 #815'}]}))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            partition.announce(good, '36')
+        self.assertEqual('DEFERRED v0.34.1 #815 API 36: x.Y#z\n', out.getvalue())
+        workflow = (ROOT/'.github/workflows/android.yml').read_text()
+        self.assertIn('full_partition.py announce --api "$api" --union-result "union-api-$api.json"', workflow)
+        self.assertNotIn('|| true\n          done', workflow)
 
 
 if __name__=='__main__':unittest.main()

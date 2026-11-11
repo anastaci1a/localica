@@ -169,8 +169,8 @@ pattern='^io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A
 IFS=, read -r -a selected <<< "$classes"
 [[ ${#selected[@]} -le 20 ]] || { echo 'risk_classes exceeds 20 classes' >&2; exit 2; }
 for name in "${selected[@]}"; do
-  source="app/src/androidTest/java/${name//.//}"
-  [[ -f "$source.kt" || -f "$source.java" ]] || { echo "Missing instrumentation source: $name" >&2; exit 2; }
+  source="app/src/androidTest/java/${name//.//}"; shared="app/src/sharedTest/java/${name//.//}"
+  [[ -f "$source.kt" || -f "$source.java" || -f "$shared.kt" || -f "$shared.java" ]] || { echo "Missing instrumentation source: $name" >&2; exit 2; }
 done
 # Refuse data clearing unless this really is the disposable GitHub-hosted emulator.
 [[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]] || { echo 'Preflight requires a GitHub-hosted runner' >&2; exit 2; }
