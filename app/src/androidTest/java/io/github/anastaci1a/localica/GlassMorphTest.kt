@@ -628,13 +628,17 @@ class GlassMorphTest {
         var popupWindow: android.view.Window? = null
         data class Mount(val window: android.view.Window, val clockMs: Long,
             val hidden: Boolean, val shadowOwned: Boolean, val expansion: Float)
+        lateinit var probeClock: UiClock
         val probeLines = java.util.concurrent.ConcurrentLinkedQueue<String>()
         var awaitIteration = -1
-        fun probeState(event: String, laidOut: Boolean? = null): String =
-            "$event iteration=$awaitIteration clock=${compose.mainClock.currentTime} " +
+        fun probeState(event: String, laidOut: Boolean? = null): String {
+            var expansion = 0f
+            probeClock.observe { expansion = anchor.contact.expansion.value }
+            return             "$event iteration=$awaitIteration clock=${compose.mainClock.currentTime} " +
                 "window=${popupWindow?.let { System.identityHashCode(it) }} " +
                 "hidden=${anchor.hidden} shadowInModal=${anchor.shadowInModal} " +
-                "expansion=${anchor.contact.expansion.value} laidOut=$laidOut"
+                "expansion=$expansion laidOut=$laidOut"
+        }
         fun flushProbe() {
             while (true) android.util.Log.i("GlassMorphProbe", probeLines.poll() ?: break)
         }
@@ -642,6 +646,7 @@ class GlassMorphTest {
         val disposed = mutableListOf<android.view.Window>()
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
             Box(Modifier.fillMaxSize()) {
+                probeClock = LocalUiClock.current
                 anchor = rememberGlassAnchor()
                 Box(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(CompactControlSize)
                     .glassAnchor(anchor).testTag("preparation-trigger"))
