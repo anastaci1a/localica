@@ -59,7 +59,7 @@ def discover(root):
 # so a rename or removal cannot silently retire the deferral.
 DEFERRED = {
     'io.github.anastaci1a.localica.PopupShadowContinuityTest#sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles':
-        'DEFERRED v0.34.1 #815',
+        'DEFERRED v0.34.2 #815',
 }
 
 

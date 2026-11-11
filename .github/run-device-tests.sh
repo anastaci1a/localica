@@ -27,7 +27,7 @@ shard_index=${LOCALICA_SHARD_INDEX:-}
 runner_args=()
 full_runner_args=()
 full_excluded_classes=$classes
-# Lead-ruled single-method deferrals (DEFERRED v0.34.1 #815): excluded by the runner's notClass filter
+# Lead-ruled single-method deferrals (DEFERRED v0.34.2 #815): excluded by the runner's notClass filter
 # (Class#method) in every lane, announced here, and reported by the plan/union evidence.
 deferred_methods=
 [[ ! -d app/src/androidTest/java ]] || deferred_methods=$(python3 .github/test-evidence/full_partition.py deferred --root "$PWD")
