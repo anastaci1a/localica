@@ -342,7 +342,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     SideEffect { searchMotion.observer = searchObserver }
     var searchTransitioning by remember { mutableStateOf(false) }
     var searchReturning by remember { mutableStateOf(false) }
-    val departingHold = !visible && popupHome?.departing == true && popupHome.mounted
+    val departingHold = !visible && popupHome?.departing == true && popupHome.mounted &&
+        popupHome.holdsDepartingPopups
     SideEffect {
         motion.updateSpeed(speed)
         if (departingHold) {
