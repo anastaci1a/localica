@@ -28,7 +28,7 @@ private class SheetHandle(override val expansion: ExpansionView, initial: Boolea
 }
 /** One ExpandCollapse owner; its physical frame follows the live endpoint basis (Rebase-capable, A2.3c). */
 @Composable fun rememberSheetState(key: Any, initiallyExpanded: Boolean = false, basis: ExpansionBasis): SheetState {
-    val owner = rememberExpandCollapse(key, initiallyExpanded)
+    val owner = rememberExpandCollapse(key, initiallyExpanded) { it.sheetExpansion }
     val range = remember(key) { maxOf(1f, 4f * basis.edgeTravelPx) }
     val frame = rememberMotionRect(key to "frame", if (initiallyExpanded) basis.endBounds else basis.startBounds, EdgeRanges(range, range, range, range))
     val handle = remember(owner) { SheetHandle(owner, initiallyExpanded) }
