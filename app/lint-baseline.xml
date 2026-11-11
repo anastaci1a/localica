@@ -6459,7 +6459,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="62"
+            line="63"
             column="9"/>
     </issue>
 
@@ -6470,7 +6470,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="103"
+            line="104"
             column="5"/>
     </issue>
 
@@ -10294,17 +10294,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkBlend.kt"
             line="144"
             column="56"/>
-    </issue>
-
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="            Modifier.matchParentSize().graphicsLayer { alpha = reveal.alpha() }, contentScale, if (reducedMotion) 0 else 240)"
-        errorLine2="                                       ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkImage.kt"
-            line="52"
-            column="40"/>
     </issue>
 
     <issue
