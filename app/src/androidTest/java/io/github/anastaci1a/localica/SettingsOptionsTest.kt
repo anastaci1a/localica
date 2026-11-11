@@ -16,6 +16,7 @@ import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.spec.*
+import io.github.anastaci1a.localica.ui.engine.expansionDuration
 import kotlin.math.ceil
 import org.junit.Assert.*
 import org.junit.Rule
@@ -24,24 +25,27 @@ import org.junit.Test
 class SettingsOptionsTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var popupSpec: UiSpec
+    private var popupSpeed = Float.NaN
 
     @Composable private fun OriginTheme(reduced: Boolean, content: @Composable () -> Unit) {
         EngineTheme(reduced = reduced) {
             val spec = LocalUiSpec.current.spec
-            SideEffect { popupSpec = spec }
+            val speed = LocalMotionSpeed.current
+            SideEffect { popupSpec = spec; popupSpeed = speed }
             CompositionLocalProvider(LocalReducedMotion provides reduced, content = content)
         }
     }
 
     private fun awaitPopupState(title: String, state: String, foregroundReady: () -> Boolean = { true }, condition: () -> Boolean) {
-        // Each intent can approach the native gate and then finish its flight. Bound both
-        // segments by the active Dialog laws, including cross channels. Twelve extra frames
-        // cover native admission, the six-frame home receipt deadline and retirement.
-        val horizon = PopupDirection.entries.maxOf { direction ->
-            listOf(false, true).maxOf { cross ->
-                popupLawHorizon(popupSpec.popupMotion.law(PopupKind.Dialog, direction, cross), popupSpec.speed.toDouble())
-            }
-        }
+        // Native admission can split an intent into two flights. Bound each by the
+        // active expansion law at maximum admitted viewport travel, from rest over
+        // the full phase range. Velocity and partial travel can only shorten it.
+        val domain = requireNotNull(popupSpec.geometry)
+        val timeScale = if (popupSpeed == 4f / 3f) 1.0 else (4.0 / 3) / popupSpeed.toDouble()
+        val horizon = if (popupSpec.access == MotionAccess.Reduced) 2 * domain.maxDisplayIntervalSeconds.toDouble()
+            else expansionDuration(popupSpec.expansion, domain.maxViewportDiagonalPx.toDouble(),
+                domain.referenceTravelPx.toDouble(), 0.0, 0.0, 1.0, timeScale, domain.maxDisplayIntervalSeconds.toDouble())
+        // Twelve frames cover native admission, the six-frame home receipt and retirement.
         val budget = ceil(2 * horizon * 1000).toLong() + 12 * 16L
         val start = compose.mainClock.currentTime
         while (!(compose.runOnIdle(condition) && foregroundReady())) {
@@ -56,7 +60,7 @@ class SettingsOptionsTest {
     private fun assertAnchoredPopup(host: GlassDialogs, title: String, reduced: Boolean, editBeforeCancel: () -> Unit = {}) {
         assertEquals("$title uses the requested Engine motion access",
             if (reduced) MotionAccess.Reduced else MotionAccess.Standard, popupSpec.access)
-        assertEquals("$title uses Standard animation speed", 1f, popupSpec.speed, 0f)
+        assertEquals("$title uses Standard animation speed", 4f / 3f, popupSpeed, 0f)
         compose.onNodeWithText(title).performScrollTo()
         compose.mainClock.autoAdvance = false
         try {
