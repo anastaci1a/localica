@@ -36,7 +36,15 @@ class QueueRemoveFaceTest {
     private data class Marker(val view: View, val drawable: ColorDrawable, val x: Int)
     private data class Sample(val x: Float, val y: Float, val value: Double)
     private data class Match(val icon: Double, val label: Double, val sx: Float, val sy: Float, val dx: Int, val dy: Int)
+    private data class Pose(val sx: Float, val sy: Float, val dx: Int, val dy: Int, val correlation: Double)
 
+    private companion object {
+        /** The co-motion search: translations up to 8 px, scales .94 to 1.06 in .02 steps; agreement is within one step of each. */
+        const val PoseReach = 8
+        val PoseScales = listOf(.94f, .96f, .98f, 1f, 1.02f, 1.04f, 1.06f)
+        /** Each glyph's own best pose must correlate at least as well as the retained-face floor. */
+        const val PoseFloor = .65
+    }
     @Test fun cancelKeepsTheTrashAndLabelTogetherThroughTheNativeReturn() = verifyReturn(false)
     @Test fun systemBackKeepsTheTrashAndLabelTogetherThroughTheNativeReturn() = verifyReturn(true)
 
@@ -116,6 +124,41 @@ class QueueRemoveFaceTest {
         val n = samples.size.toDouble()
         return (n * ab - a * b) / sqrt((n * aa - a * a) * (n * bb - b * b)).coerceAtLeast(1.0)
     }
+    /** One glyph's own best transform: every translation within [PoseReach] px at unit scale, then the scales in [PoseScales] with
+     * one pixel around that translation. The same correlation as [correlation], read from one pixel copy of the frame. */
+    private fun pose(image: Bitmap, samples: List<Sample>, center: Offset): Pose {
+        val w = image.width; val h = image.height
+        val pixels = IntArray(w * h).also { image.getPixels(it, 0, w, 0, 0, w, h) }
+        fun gray(x: Int, y: Int): Double { val pixel = pixels[y.coerceIn(0, h - 1) * w + x.coerceIn(0, w - 1)]
+            return (54 * AndroidColor.red(pixel) + 183 * AndroidColor.green(pixel) + 19 * AndroidColor.blue(pixel)) / 256.0 }
+        fun score(sx: Float, sy: Float, dx: Int, dy: Int): Double {
+            var a = 0.0; var b = 0.0; var aa = 0.0; var bb = 0.0; var ab = 0.0
+            samples.forEach { sample ->
+                val actual = gray(floor(center.x + sample.x * sx + dx).toInt(), floor(center.y + sample.y * sy + dy).toInt())
+                a += sample.value; b += actual; aa += sample.value * sample.value; bb += actual * actual; ab += sample.value * actual
+            }
+            val n = samples.size.toDouble()
+            return (n * ab - a * b) / sqrt((n * aa - a * a) * (n * bb - b * b)).coerceAtLeast(1.0)
+        }
+        var best = Pose(1f, 1f, 0, 0, -1.0)
+        for (dx in -PoseReach..PoseReach) for (dy in -PoseReach..PoseReach) score(1f, 1f, dx, dy).let { if (it > best.correlation) best = Pose(1f, 1f, dx, dy, it) }
+        val (tx, ty) = best.dx to best.dy
+        for (sx in PoseScales) for (sy in PoseScales) for (dx in tx - 1..tx + 1) for (dy in ty - 1..ty + 1)
+            score(sx, sy, dx, dy).let { if (it > best.correlation) best = Pose(sx, sy, dx, dy, it) }
+        return best
+    }
+    /** A pose at the edge of either search, or below the floor, measured nothing: it cannot witness co-motion. */
+    private fun Pose.measured() = abs(dx) < PoseReach && abs(dy) < PoseReach && sx > PoseScales.first() && sx < PoseScales.last() &&
+        sy > PoseScales.first() && sy < PoseScales.last() && correlation >= PoseFloor
+    /** Whether the panel has re-seated on its home row as closely as v0.34.0's quiet window had at p = .16: every moving edge is
+     * within that geometry fraction of its travel, plus one pixel of layout rounding. Measured from the panel itself, so it holds
+     * for any popup law (#854 §1.5 gives Dialogs linear geometry; the old phase window assumed the .14 hold). */
+    private fun seated(panel: Rect, home: Rect, expanded: Rect): Boolean {
+        val fraction = io.github.anastaci1a.localica.ui.engine.Curve.window(.14f, 1f).at(.16f)
+        return listOf(Triple(panel.left, home.left, expanded.left), Triple(panel.top, home.top, expanded.top),
+            Triple(panel.right, home.right, expanded.right), Triple(panel.bottom, home.bottom, expanded.bottom))
+            .all { (now, rest, open) -> abs(now - rest) <= abs(open - rest) * fraction + 1f }
+    }
     /** One common, tightly bounded raster transform for BOTH icon and text, not separate realignment. */
     private fun match(image: Bitmap, icon: List<Sample>, label: List<Sample>, center: Offset): Match {
         var best = Match(-1.0, -1.0, 1f, 1f, 0, 0)
@@ -153,6 +196,8 @@ class QueueRemoveFaceTest {
         val files = mutableListOf<File>()
         val frames = JSONArray()
         val checks = mutableListOf<Match>()
+        val apart = mutableListOf<String>()
+        var poses = 0
         val queue = ListeningQueue(name = "Current queue", entries = emptyList())
         val other = ListeningQueue(name = "Other queue", entries = emptyList())
         val state = QueueUiState(QueueLibrary(listOf(queue, other), queue.id), loading = false)
@@ -240,7 +285,18 @@ class QueueRemoveFaceTest {
                         val record = JSONObject().put("frame", frame).put("clockMillis", compose.mainClock.currentTime - start)
                             .put("progress", p).put("hidden", hidden).put("modalPresent", present).put("entryRetired", retired)
                             .put("windowIdentity", native?.let(System::identityHashCode)).put("file", file.name)
+                        // Co-motion on every late return frame, wherever the panel is: the trash and the label each find their own
+                        // best transform, and the two agree within one search step (#692's named invariant, independent of the law).
                         if (p <= .16f) {
+                            val i = pose(image, icon, panel.center); val l = pose(image, label, panel.center); poses++
+                            record.put("iconPose", JSONArray(listOf(i.sx, i.sy, i.dx, i.dy, i.correlation)))
+                                .put("labelPose", JSONArray(listOf(l.sx, l.sy, l.dx, l.dy, l.correlation))).put("poseFloor", PoseFloor)
+                                .put("poseReach", PoseReach).put("poseMeasured", i.measured() && l.measured())
+                            if (!i.measured() || !l.measured() ||
+                                abs(i.sx - l.sx) > .021f || abs(i.sy - l.sy) > .021f || abs(i.dx - l.dx) > 1 || abs(i.dy - l.dy) > 1)
+                                apart += "frame $frame p=$p icon=$i label=$l"
+                        }
+                        if (p <= .16f && seated(panel, home, expanded)) {
                             val result = match(image, icon, label, panel.center)
                             checks += result
                             if (hidden) retainedSamples++
@@ -257,6 +313,8 @@ class QueueRemoveFaceTest {
             assertTrue("Observe actual retained-face pixels before the native handoff", retainedSamples >= 2)
             assertTrue("Retained and live phases were both sampled", checks.size > retainedSamples)
             assertTrue("Trash geometry stays with the label throughout return: $checks", checks.all { it.icon >= .65 && it.label >= .65 })
+            assertTrue("Trash and label move together on every return frame with p <= .16", poses >= 2)
+            assertTrue("Trash and label poses agree within one search step: $apart", apart.isEmpty())
             assertTrue("The conditional confirmation retires normally", compose.runOnIdle { host.entries.isEmpty() })
             assertEquals(home, compose.runOnIdle { anchor.presentedBounds })
             val restored = view(source.fetchSemanticsNode())
