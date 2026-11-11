@@ -378,6 +378,8 @@ io.github.anastaci1a.localica.PinchRecognitionContinuityTest
 
 io.github.anastaci1a.localica.PopupHostNavigationTest
 io.github.anastaci1a.localica.PopupChromeDepthTest
+io.github.anastaci1a.localica.UtilityPopupRetirementTest
+io.github.anastaci1a.localica.PopupRestoredTriggerLensTest
 
 io.github.anastaci1a.localica.GlassRendererPreferenceTest
 io.github.anastaci1a.localica.GlassRendererSettingsTest
