@@ -78,7 +78,8 @@ class PopupShadowContinuityTest {
             val gap = sharedGapDarkness()
             if (p <= .002f) homeContinuity.observeLuminance(1f - gap / 255f) else homeContinuity.beginSegment()
             frames += p to gap
-            log.append("$label p=$p hidden=${anchor.hidden} inModal=${anchor.shadowInModal} window=${popupWindow != null} gap=$gap\n")
+            val body = anchor.contact.body.value
+            log.append("$label p=$p hidden=${anchor.hidden} inModal=${anchor.shadowInModal} window=${popupWindow != null} strain=${body.strain} depth=${body.depth} gap=$gap\n")
         }
         fun returnToRest(label: String) {
             compose.runOnIdle { open = false }
