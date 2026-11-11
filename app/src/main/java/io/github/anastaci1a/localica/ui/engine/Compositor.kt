@@ -98,14 +98,17 @@ internal class OwnedFieldRequest(val plane: ShadowPlane,val sourceGeneration: Lo
         clock.checkMutation(); check(!disposed); val owner=requireNotNull(expansion as? ExpandCollapse)
         require(owner.ownerClock===clock && owner.owns(bounds)) { "Follow the same clock and expansion-bound rectangle" }
         val old=following; val same=old!=null && old.expansion===owner && old.bounds===bounds
-        // A closed expansion whose native return hit its frame allowance still leaves the field on the closed window plane; the next lifetime reclaims it for the source.
-        require(old==null || same || !old.expansion.expanded && old.expansion.retirementReady) { "A live surface keeps its expansion until its source return completes (expanded=${old?.expansion?.expanded} retirementReady=${old?.expansion?.retirementReady} owner=${if(this.owner===low) "source" else "window"} high=${high!=null} pending=${pending!=null})" }
-        if(old!=null && !same) { old.expansion.lifecycle.remove(::followLifetime); if(!(this.owner===low && high==null && pending==null)) abandonReturn() }
+        // A closed expansion whose native return hit its frame allowance leaves the field on the closed window plane. The next lifetime may reclaim it only for a live source host and only when every stale plane's window view is gone (never attached); otherwise the source return is still owed.
+        val settled=old!=null && !same && !old.expansion.expanded && old.expansion.retirementReady
+        require(old==null || same || settled && (returned() || low!=null && stalePlanes().all { val v=it.view; v==null || !v.isAttachedToWindow })) { "A live surface keeps its expansion until its source return completes (expanded=${old?.expansion?.expanded} retirementReady=${old?.expansion?.retirementReady} owner=${if(this.owner===low) "source" else "window"} high=${high!=null} pending=${pending!=null} source=${low!=null})" }
+        if(old!=null && !same) { old.expansion.lifecycle.remove(::followLifetime); if(!returned()) abandonReturn() }
         if(!same) { check(ownOpacity.settled && ownTransform.channels.all { it.settled } && ownOwnership.settled) { "Bind before starting standalone surface motion" }; following=SurfacePhase(owner,opacity,bounds,ownership); owner.lifecycle.add(::followLifetime) } else { old.curve=opacity; old.ownershipCurve=ownership }
         followLifetime(true)
     }
     /** The closed popup's window is gone: its plane and any queued transfer to it give the field back to the source host, which draws it again. */
-    private fun abandonReturn() { val home=low ?: return; val stale=listOfNotNull(high,pending?.first,owner).filter { it!==home }.distinct(); fieldRequest=null; pending=null; high=null; owner=home; home.enter(this); stale.forEach { it.leave(this) }; home.requestDraw() }
+    private fun returned()=owner===low && high==null && pending==null
+    private fun stalePlanes()=listOfNotNull(high,pending?.first,owner).filter { it!==low }.distinct()
+    private fun abandonReturn() { val home=low ?: return; val stale=stalePlanes(); fieldRequest=null; pending=null; high=null; owner=home; home.enter(this); stale.forEach { it.leave(this) }; home.requestDraw() }
     private fun revive() { dismissed=false; if(retired) { retired=false; listOfNotNull(low,high).forEach { it.enter(this) } } }
     private fun followLifetime(intent: Boolean=false) { if(disposed) return; if(intent) fieldRequest=null; val f=following?:return; if(f.opacity.target>0f) { if(intent && dismissed) revive() } else if(dismissed && f.opacity.settled && f.opacity.target==0f) retire(); if(!retired) advance() }
     fun transfer(to: ShadowPlane,profile: MotionProfileId) {
