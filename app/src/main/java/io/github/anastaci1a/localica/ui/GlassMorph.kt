@@ -7,6 +7,7 @@ import io.github.anastaci1a.localica.ui.components.NoneReductionAtlasHost
 import io.github.anastaci1a.localica.ui.layout.PopupViewportSlot
 import io.github.anastaci1a.localica.ui.spec.PopupViewportInsets
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
+import io.github.anastaci1a.localica.ui.spec.PopupKind
 
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -364,6 +365,15 @@ private fun android.view.Window.glassInput(enabled: Boolean) {
 }
 
 @Composable
+/** #854 §2: the one place a popup surface's motion kind is chosen, from its placement and its trigger's role, never by a screen (#884).
+ * A menu from the navigation chrome is the bottom menu; Search, Pages and popup sheets stay Legacy. */
+internal fun GlassPlacement.popupKind(anchor: GlassAnchor): PopupKind = when (this) {
+    GlassPlacement.Menu -> if (anchor.contextual) PopupKind.RowMenu else if (anchor.chromeTrigger) PopupKind.BottomMenu else PopupKind.Menu
+    GlassPlacement.Center -> PopupKind.Dialog
+    GlassPlacement.Search, GlassPlacement.Page, GlassPlacement.Sheet -> PopupKind.Legacy
+}
+
+@Composable
 internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit,
     originPreparation: GlassOriginPreparation? = null, content: @Composable ColumnScope.() -> Unit) {
     GlassMorphPopup(visible, anchor, onDismiss, if (anchor.bounds == Rect.Zero) GlassPlacement.Center else GlassPlacement.Menu,
@@ -390,6 +400,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     heightSizing: GlassDialogHeight = GlassDialogHeight.Content,
     content: @Composable () -> Unit) {
     require(heightSizing == GlassDialogHeight.Content || placement == GlassPlacement.Sheet)
+    val popupKind = placement.popupKind(anchor)
+    require(sharedContent == null || sharedContent.motion.kind == popupKind) { "Shared content runs its popup's motion kind" }
+    @Suppress("NAME_SHADOWING")
+    val content: @Composable () -> Unit = remember(content, popupKind) { { CompositionLocalProvider(LocalPopupKind provides popupKind, content = content) } }
     val retainedHeightSizing = remember(anchor, placement) { heightSizing }
     require(retainedHeightSizing == heightSizing) { "Height sizing is fixed for a popup presentation" }
     val popupHome = LocalGlassPopupHome.current
@@ -418,7 +432,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val progress = anchor.contact.expansion
     SideEffect { popupFlight.chromeTrigger = anchor.chromeTrigger; popupFlight.phase = { progress.value } }
     val continuousOrigin = originPreparation.takeUnless { placement == GlassPlacement.Search }
-    val motion = sharedContent?.motion ?: rememberPopupWindowMotion(anchor, continuousOrigin != null, anchor.quiet)
+    val motion = sharedContent?.motion ?: rememberPopupWindowMotion(anchor, continuousOrigin != null, anchor.quiet, popupKind)
     DisposableEffect(motion, continuousOrigin) {
         progress.bind(motion.expansion, motion.popupCurve)
         continuousOrigin?.bind(motion.expansion.phase, motion.preparationCurve)
@@ -828,7 +842,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 var targetHeight by remember { mutableIntStateOf(0) }
                 var viewportTargetHeight by remember { mutableIntStateOf(0) }
                 val page = placement == GlassPlacement.Page
-                val margin = with(density) { if (page) 0f else 12.dp.toPx() }
+                // #854 §1.7: an overshooting panel stays inside the window. Grow the margin only where the reachable
+                // overshoot of a full-extent panel would pass the side inset (a no-op in portrait phones).
+                val safeInsets = WindowInsets.safeDrawing
+                val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+                val margin = with(density) { if (page) 0f else maxOf(12.dp.toPx(),
+                    motion.overshoot * constraints.maxWidth - minOf(safeInsets.getLeft(density, layoutDirection), safeInsets.getRight(density, layoutDirection)),
+                    motion.overshoot * constraints.maxHeight - minOf(safeInsets.getTop(density), safeInsets.getBottom(density))) }
                 val availableWidth = constraints.maxWidth
                 val availableHeight = constraints.maxHeight
                 // Native inset/resize passes can temporarily consume either axis.

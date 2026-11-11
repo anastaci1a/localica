@@ -15,7 +15,7 @@ internal fun magneticChoicePosition(raw: Float): Float {
     return center + delta * (0.04f + 3.84f * delta * delta)
 }
 
-/** Deliberately slower than transport/page motion, even in Faster animations mode. */
+/** Deliberately slower than transport/page motion, even at a faster animation speed. */
 internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.spring<Float>(1f, 90f * speed * speed, visibilityThreshold = .0001f)
 
 /** One interruptible shape clock; live tuning preserves its current displacement and velocity. */

@@ -38,14 +38,18 @@ internal fun LocalicaUiRoot(state: LocalicaUiRootState = rememberLocalicaUiRoot(
         return
     }
     val settings by state.settings
-    val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
+    val platformScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
+    // #862: a respected platform scale stretches engine time and its 0 is Reduce motion (the #835 fix); off ignores it.
+    val respect = settings.respectSystemAnimationScale
+    val durationScale = if (respect) platformScale else 1f
+    val systemReduced = respect && platformScale == 0f
     val density = LocalDensity.current
     val window = state.window
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val refreshHz = rememberPeakRefreshHz()
     val referenceTravel = expansionReferenceTravel(playerBasis(density, window, navigationInset, StockUiSpec.clearance.getValue(Clearance.BottomChrome)))
-    val resolvedSpec = remember(settings.glass, settings.reducedMotion, settings.fasterMotion, referenceTravel, window, density) {
-        uiSpec(settings, ExpansionGeometryDomain(referenceTravel, maxOf(1f, kotlin.math.hypot(window.width.toFloat(), window.height.toFloat())), 1f / 24), density)
+    val resolvedSpec = remember(settings.glass, settings.reducedMotion, settings.animationSpeedTenths, systemReduced, referenceTravel, window, density) {
+        uiSpec(settings, ExpansionGeometryDomain(referenceTravel, maxOf(1f, kotlin.math.hypot(window.width.toFloat(), window.height.toFloat())), 1f / 24), density, systemReduced)
     }
     ProvideLocalicaEngineContext(refreshHz, referenceTravel, resolvedSpec, durationScale) {
         CompositionLocalProvider(LocalLocalicaUiRoot provides state, LocalUiSpec provides resolvedSpec, content = content)

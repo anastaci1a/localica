@@ -3,14 +3,28 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
+import io.github.anastaci1a.localica.ui.spec.PopupKind
+import io.github.anastaci1a.localica.ui.spec.springOvershoot
+
+/** #854: the surface kind of the enclosing popup; retained faces and presences inside it inherit its motion. */
+internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
 
 /** The native presenter owns one expansion and one measured rectangle. A native
  * receipt releases its gate; changing the envelope rebases those same edges. */
 @Stable internal class PopupWindowMotion(
-    private val clock: UiClock, spec: ExpansionSpec, key: Any, prepared: Boolean, quiet: Boolean
+    private val clock: UiClock, spec: ExpansionSpec, key: Any, prepared: Boolean, quiet: Boolean, val kind: PopupKind = PopupKind.Legacy
 ) {
-    val expansion = ExpandCollapse(clock, spec, false, key)
-    val geometryCurve = if (prepared) Curve.window(.25f, 1f) else if (quiet) Curve.window(.14f, 1f) else Curve.linear(0f, 1f)
+    val expansion = ExpandCollapse(clock, spec, false, key).also { it.usePopupLaw(clock.spec.popupMotion, kind) }
+    private val model = clock.spec.popupMotion
+    /** Whether this window runs the #854 spring model rather than the Legacy v0.33.21 popup law. */
+    val spring = expansion.popupLaw != null
+    private val gate = if (!prepared) 0f else if (spring) model.preparedRamp else .25f
+    // #854 §1.5: prepared origins ramp C1 off the gate and pass the overshoot; quiet row menus leave the trigger at once.
+    val geometryCurve = if (prepared) (if (spring) Curve.ramp(model.preparedRamp, model.rampBlend) else Curve.window(.25f, 1f))
+        else if (quiet && !spring) Curve.window(.14f, 1f) else Curve.linear(0f, 1f)
+    /** The largest reachable edge overshoot as a fraction of edge travel (§1.7): the geometry at the phase peak 1 + κ, so a
+     * prepared ramp's gain is included. 0 for Legacy. */
+    val overshoot = if (spring) geometryCurve.at(1f + springOvershoot(model.open.zeta.toDouble()).toFloat()) - 1f else 0f
     val popupCurve = if (prepared) geometryCurve else Curve.linear(0f, 1f)
     val quietStrength=Curve.window(0f,.14f)
     val quietContent=Curve.window(0f,.25f)
@@ -31,7 +45,7 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     private var nativeWindow: java.lang.ref.WeakReference<Any>? = null
     private var firstNativeMeasurement = false
     private var nativeHost: java.lang.ref.WeakReference<ShadowPlane>? = null
-    init { expansion.nativeGate(if (prepared) .25f else 0f) }
+    init { expansion.nativeGate(gate) }
     fun attached(window: Any, host: ShadowPlane) {
         nativeHost = java.lang.ref.WeakReference(host)
         if (nativeWindow?.get() !== window) {
@@ -67,10 +81,11 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
 }
 
 /** The Engine owns construction, spec updates and disposal; hosts borrow its view. */
-@Composable internal fun rememberPopupWindowMotion(key: Any, prepared: Boolean, quiet: Boolean): PopupWindowMotion {
+@Composable internal fun rememberPopupWindowMotion(key: Any, prepared: Boolean, quiet: Boolean, kind: PopupKind = PopupKind.Legacy): PopupWindowMotion {
     val clock = ownerClock()
     val spec = io.github.anastaci1a.localica.ui.spec.LocalUiSpec.current.spec.expansion
-    val motion = remember(clock, key) { PopupWindowMotion(clock, spec, key, prepared, quiet) }
+    // A kind follows its trigger's role, which binds after the first composition; a changed kind is a new owner, never a retarget.
+    val motion = remember(clock, key, kind) { PopupWindowMotion(clock, spec, key, prepared, quiet, kind) }
     SideEffect { motion.updateSpec(spec) }
     DisposableEffect(motion) { onDispose { motion.dispose() } }
     return motion
