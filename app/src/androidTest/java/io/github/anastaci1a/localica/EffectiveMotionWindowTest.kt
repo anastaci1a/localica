@@ -111,10 +111,27 @@ class EffectiveMotionWindowTest {
                 // Restore while the actual observer is still alive, even after assertion failure.
                 val restored = runCatching {
                     update { contact = 0f; pressure = 0f }
+                    // The window manager re-reads a deleted key with its current value as the default: restore an absent
+                    // key through 1, then require the live scales, not only the Settings key (#862, #869).
+                    val expected = original?.toFloat() ?: 1f
+                    if (original == null) writeScale("1")
                     writeScale(original)
                     assertEquals("Restore exact setting, including absence", original,
                         Settings.Global.getString(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE))
-                    await("Window observes restored system policy") { it.scale == (original?.toFloatOrNull() ?: 1f) }
+                    await("Window observes restored system policy") { it.scale == expected }
+                    val deadline = SystemClock.uptimeMillis() + 5000
+                    var live = ""
+                    while (true) {
+                        val dump = ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand("dumpsys window"))
+                            .bufferedReader().use { it.readText() }
+                        val windowManager = Regex("mAnimatorDurationScale=([0-9.]+)").find(dump)?.groupValues?.get(1)?.toFloatOrNull()
+                        val process = android.animation.ValueAnimator.getDurationScale()
+                        live = "windowManager=$windowManager process=$process"
+                        if (process == expected && (windowManager == null || windowManager == expected)) break
+                        if (SystemClock.uptimeMillis() >= deadline) fail("Live animator scale restored to $expected; $live")
+                        SystemClock.sleep(50)
+                    }
+                    android.util.Log.i("EffectiveMotionWindow", "restored live $live")
                 }.exceptionOrNull()
                 if (restored != null) { if (failure != null) failure.addSuppressed(restored) else throw restored }
             }
