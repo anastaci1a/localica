@@ -130,7 +130,8 @@ fun uiSpec(settings: InterfaceSettings, overrides: UiSpecData? = null, geometry:
     for((key,s) in spring) valid(s.dampingRatio.isFinite() && s.dampingRatio>0 && bounded(s.stiffness,1f,10000f) && s.speedExponent in setOf(0,2) && (key==SpringProfile.Strain || springHorizon(s)<=2),"spring.$key")
     for((key,law) in listOf("expansion" to expansion,"sheetExpansion" to sheetExpansion,"lyricsExpansion" to lyricsExpansion,"selectionExpansion" to selectionExpansion)) with(law) { valid(finiteExpansionFinish(this,geometry?.let { it.maxViewportDiagonalPx.toDouble()/it.referenceTravelPx } ?: (sqrt(2.0)*Int.MAX_VALUE/Float.MIN_VALUE.toDouble()),geometry?.maxDisplayIntervalSeconds?.toDouble() ?: (Long.MAX_VALUE/1e9),geometry!=null),"$key.duration exceeds finite device geometry domain; provide measured geometry for a narrower admission domain"); valid(bounded(band,MinimumContactBand,.1f),"$key.band requires at least ulp(1f) contact room"); valid(curve(core) && curveExtrema(core).let { it.start>=0.0 && it.endInclusive<=1.0+band/2 },"$key.contact core extrema require minimum >= 0 and maximum <= 1 + band/2"); valid(curve(core) && curveExtrema(core).let { it.start>=-band.toDouble() && it.endInclusive<=(1f+band).toDouble() } && bounded(referenceDurationMs,Float.MIN_VALUE,2000f) && bounded(floorMs,Float.MIN_VALUE,2000f) && bounded(positionFloor,Float.MIN_VALUE,1f) && velocityKnee.isFinite() && velocityKnee>0 && velocityExponent.isFinite() && velocityExponent>0 && sizeExponent.isFinite() && sizeExponent>=0 && deadBand.isFinite() && deadBand>=0 && bounded(stationaryOpenAt,0f,1f) && bounded(band,0f,.1f),key) }
     valid(speed.isFinite() && speed in MinimumAnimationSpeed..MaximumAnimationSpeed,"speed")
-    for(reason in popupMotionAdmission(popupMotion)) errors+="popupMotion.$reason"
+    // The live popup band: admission and the engine's extremum proofs read the same value (#854 review S2).
+    for(reason in popupMotionAdmission(popupMotion,expansion.band)) errors+="popupMotion.$reason"
     for((key,m) in material) with(m) { valid(listOf(blur,whiteTint,shadowStrength,shadowSpread).all { bounded(it,0f,1f) } && bounded(contrast,0f,.5f) && bounded(liftShadowStrength,.5f,1.5f) && bounded(shapeDamping,2f,40f) && bounded(depth,.6f,2f),"material.$key") }
     return if(errors.isNotEmpty()) SpecResult.Rejected(errors.toList()) else SpecResult.Accepted(UiSpec(space,radius,control,clearance,motion,spring,expansion,material,if(settings.reducedMotion || o.access==MotionAccess.Reduced) MotionAccess.Reduced else o.access?:MotionAccess.Standard,geometry,sheetExpansion,lyricsExpansion,selectionExpansion,popupMotion,speed))
 }
@@ -156,8 +157,39 @@ internal fun popupMotionAdmission(m: PopupMotionModel, band: Float = StockPopupE
     }
     if(!(m.snapAspect.isFinite() && m.snapAspect>1f)) errors+="snapAspect"
     if(!(m.preparedRamp.isFinite() && m.preparedRamp in 0f..(.5f) && m.rampBlend.isFinite() && m.rampBlend>0f && m.rampBlend<=.25f)) errors+="ramp"
+    if(errors.isEmpty()) for((pair,peak) in popupReversalReach(m)) if(peak.start< -band || peak.endInclusive>1+band) errors+="reversal.$pair"
     if(PopupKind.entries.any { it !in m.variants } || m.variants[PopupKind.Legacy]!=PopupVariant.Legacy || m.variants.any { (k,v) -> k!=PopupKind.Legacy && v==PopupVariant.Legacy }) errors+="variants"
     return errors
+}
+/** The analytic state of a damped spring from (x, v) toward q after t seconds. */
+internal fun springState(x: Double,v: Double,q: Double,w: Double,z: Double,t: Double): Pair<Double,Double> {
+    val o=x-q; val a=z*w
+    return when { z<1 -> { val wd=w*sqrt(1-z*z); val c=(v+a*o)/wd; val e=exp(-a*t); q+e*(o*cos(wd*t)+c*sin(wd*t)) to e*(v*cos(wd*t)-(a*c+o*wd)*sin(wd*t)) }
+        z==1.0 -> { val e=exp(-w*t); q+e*(o+(v+w*o)*t) to e*(v-w*(v+w*o)*t) }
+        else -> { val r=sqrt(z*z-1); val s=w*(z-r); val f=w*(z+r); val b=-(v+s*o)/(f-s); val A=o-b; q+A*exp(-s*t)+b*exp(-f*t) to -s*A*exp(-s*t)-f*b*exp(-f*t) } }
+}
+/** Exact value extrema of a damped spring from (x, v) toward q over all t >= 0: the start, the target and the first velocity zeros
+ * (later underdamped extrema shrink by the overshoot factor each half period). */
+internal fun springExtrema(x: Double,v: Double,q: Double,w: Double,z: Double): ClosedFloatingPointRange<Double> {
+    val o=x-q; val a=z*w; val times=mutableListOf<Double>()
+    when { z<1 -> { val wd=w*sqrt(1-z*z); val c=(v+a*o)/wd; val first=(atan2(v,a*c+o*wd)%PI+PI)%PI; for(k in 0..2) times+=(first+k*PI)/wd }
+        z==1.0 -> { val d=w*(v+w*o); if(d!=0.0) times+=v/d }
+        else -> { val r=sqrt(z*z-1); val s=w*(z-r); val f=w*(z+r); val b=-(v+s*o)/(f-s); val ratio=-f*b/(s*(o-b)); if(ratio>0) times+=ln(ratio)/(f-s) } }
+    val values=listOf(x,q)+times.filter { it>0 }.map { springState(x,v,q,w,z,it).first }
+    return values.min()..values.max()
+}
+/** #854 review S1: the reachable phase of every single reversal at one speed (a uniform omega scale is a pure time scale, so speed 1
+ * stands for all). An open from rest is reversed by a close (or a gate approach) at every switch time on a 1 ms grid over its settle,
+ * and a close from the open rest by an open; the result is each pair's exact extremum range. */
+internal fun popupReversalReach(m: PopupMotionModel): Map<String,ClosedFloatingPointRange<Double>> {
+    fun reach(first: SpringLaw,from: Double,to: Double,second: SpringLaw,back: Double): ClosedFloatingPointRange<Double> {
+        val w1=first.omega.toDouble(); val z1=first.zeta.toDouble(); val horizon=popupLawHorizon(first,1.0); var lo=min(from,to); var hi=max(from,to)
+        var t=0.0; while(t<=horizon) { val (x,v)=springState(from,0.0,to,w1,z1,t); val e=springExtrema(x,v,back,second.omega.toDouble(),second.zeta.toDouble()); lo=min(lo,e.start); hi=max(hi,e.endInclusive); t+=.001 }
+        return springExtrema(from,0.0,to,w1,z1).let { min(lo,it.start)..max(hi,it.endInclusive) }
+    }
+    return mapOf("openClose" to reach(m.open,0.0,1.0,m.close,0.0),"closeOpen" to reach(m.close,1.0,0.0,m.open,1.0),
+        "openGate" to reach(m.open,0.0,1.0,m.gate,m.preparedRamp.toDouble()),"gateOpen" to reach(m.gate,0.0,m.preparedRamp.toDouble(),m.open,1.0),
+        "crossOpenClose" to reach(m.crossOpen,0.0,1.0,m.crossClose,0.0),"crossCloseOpen" to reach(m.crossClose,1.0,0.0,m.crossOpen,1.0))
 }
 /** The settle horizon of [law] at [speed] from its worst admitted state, |x0| <= 1.05 and |v0| <= 1.1 omega_eff (A2.2). */
 internal fun popupLawHorizon(law: SpringLaw, speed: Double): Double {
