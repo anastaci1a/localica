@@ -246,8 +246,10 @@ jobs:
     needs: [identity, test-apks]
     if: ${{ needs.identity.result == 'success' && (!startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-24.04
-    # Normal shards take 13–19 minutes; bound hangs without trimming coverage.
-    timeout-minutes: 35
+    # Normal shards take 13–19 minutes, but the rc3 run (42958371856) needed 22–30 minutes on
+    # completing shards and 8 of 16 hit 35 with no JUnit XML (AGP writes it only at task end).
+    # 50 minutes lets slow shards finish; the index step below records per-method progress if not.
+    timeout-minutes: 50
     env:
       RISK_CLASSES: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_classes || '' }}
       TEST_API: ${{ matrix.api }}
@@ -351,12 +353,25 @@ jobs:
           free -h
           df -h
           sudo dmesg --ctime | tail -100
+      - name: Index per-method device results
+        if: always()
+        run: |
+          # AGP writes TEST-*.xml only when the task ends; a timed-out or cancelled shard has
+          # none. Each finished test leaves logcat-<class>-<method>.txt, so list them here.
+          {
+            echo "xml_files=$(find app/build/outputs/androidTest-results -name 'TEST-*.xml' 2>/dev/null | wc -l)"
+            echo "finished_methods:"
+            find app/build/outputs/androidTest-results -name 'logcat-*.txt' -printf '%f\n' 2>/dev/null \
+              | sed -e 's/^logcat-//' -e 's/\.txt$//' -e 's/-/#/' | sort
+          } > device-method-index.txt
+          wc -l device-method-index.txt
       - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: device-reports-api-${{ matrix.api }}-shard-${{ matrix.shard }}
           path: |
             native-shard-plan.json
+            device-method-index.txt
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
             app/build/outputs/connected_android_test_additional_output/
