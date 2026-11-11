@@ -44,7 +44,7 @@ class LyricsReturnBoundsTest {
         document = lyrics(wrapped)
         assertTrue("The fixture is synced", document.synced)
         position = line * 2_000L + 500L
-        compose.setContent { LocalicaTheme {
+        compose.setContent { LyricsEngineTheme(false) {
             Box(Modifier.width(360.dp).height(320.dp).testTag(SceneTag)) {
                 LyricsLines(document, position, false, {}, Modifier.fillMaxSize())
             }

@@ -69,7 +69,7 @@ class PlayerLyricsMountTest {
         var p by mutableFloatStateOf(1f)
         val metadata = 348f
         val document = LrcParser.parse((0..45).joinToString("\n") { "[00:%02d.00]line %02d".format(it, it) })
-        compose.setContent { LocalicaTheme { Box(Modifier.size(320.dp, 700.dp)) {
+        compose.setContent { LyricsEngineTheme(true) { Box(Modifier.size(320.dp, 700.dp)) {
             val surface = 560f * (1f - p)
             val viewport = playerLyricsViewport(7f + (metadata - 7f) * p, 84f)
             Box(Modifier.offset(y = surface.dp).fillMaxWidth().height(560.dp)) {
