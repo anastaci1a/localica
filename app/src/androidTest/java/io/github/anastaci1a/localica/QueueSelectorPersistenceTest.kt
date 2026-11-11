@@ -111,7 +111,9 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             ListeningQueue(id = "queue-$index", name = if (index == 79) queueName else "Queue ${index + 1}", entries = emptyList())
         } else listOf(ListeningQueue(id = "selected", name = queueName, entries = emptyList()))
         val state = QueueUiState(QueueLibrary(queues, queues.first().id), loading = false, browsedId = queues.last().id)
-        compose.setContent { LocalicaTheme {
+        // Reduced comes from the Engine record in the app (LocalicaUiRoot), not LocalReducedMotion alone; compose it so the
+        // reduced variant meets the snapped popup the app shows, as SettingsOptionsTest does (#854, #869).
+        compose.setContent { EngineTheme(reduced = reducedMotion) {
             val view = LocalView.current
             val ownerClock = LocalUiClock.current
             SideEffect { clock = ownerClock }
