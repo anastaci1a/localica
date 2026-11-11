@@ -756,8 +756,10 @@ class GlassMorphTest {
             assertSame("Native admission belongs to the mounted window", firstWindow, firstHidden.window)
             assertTrue("Native admission follows the mount", firstHidden.nativeNanos > mounts.single().nativeNanos)
             assertTrue("Native admission requires the mounted window's layout", firstHidden.laidOut)
+            assertTrue("Native admission takes the window shadow", firstHidden.shadowOwned)
             points.take(firstHiddenIndex).forEach { point ->
                 assertFalse("First native mount: the trigger stays visible during preparation", point.hidden)
+                assertFalse("The trigger owns its shadow before native admission", point.shadowOwned)
                 assertEquals("Expansion cannot precede native admission", 0f, point.expansion, 0f)
             }
             flushProbe()
