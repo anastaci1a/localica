@@ -710,6 +710,7 @@ class GlassMorphTest {
                             assertFalse("Cancellation starts before native admission", unready.hidden)
                             assertFalse(unready.shadowOwned)
                             assertEquals(0f, unready.expansion, 0f)
+                            probeLines.add(probeState("cancel", view.isLaidOut) + " nativeNanos=${unready.nativeNanos}")
                             cancellations.add(unready)
                             open = false
                         }
