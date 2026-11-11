@@ -58,10 +58,7 @@ def discover(root):
 # Lead-ruled single-method deferrals (never whole classes, never relaxed bounds). Each entry is
 # removed from the expected inventory and reported as DEFERRED; the source method must still exist
 # so a rename or removal cannot silently retire the deferral.
-DEFERRED = {
-    'io.github.anastaci1a.localica.PopupShadowContinuityTest#sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles':
-        'DEFERRED v0.34.2 #815',
-}
+DEFERRED = {}
 
 
 def deferred_for(inv):
