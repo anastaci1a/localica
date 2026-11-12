@@ -56,4 +56,31 @@ class PlayerMappedOutputTest {
             assertEquals(p * mode, playerLyricsMotion(p, mode).contentAlpha, 0f)
         }
     }
+
+    @Test fun titleInputProjectionPreservesMeasuredPixelBounds() {
+        for (titleTop in listOf(-100, 0, 25, 100, 500))
+            for (seekTop in listOf(-100, 0, 25, 100, 500))
+                for (headerBottom in listOf(0, 48, 72))
+                    for (height in listOf(0, 1, 24, 80))
+                        for (padding in listOf(0, 8, 21)) {
+                            // Frozen pre-extraction integer geometry, including empty and occluded bands.
+                            val origin = titleTop - padding
+                            val top = (headerBottom - origin).coerceIn(0, height)
+                            val bottom = minOf(height, seekTop - padding - origin).coerceAtLeast(top)
+                            val projected = playerTitleInputBand(titleTop, seekTop, headerBottom, height, padding)
+                            assertEquals(top, projected.top)
+                            assertEquals(bottom - top, projected.height)
+                        }
+        for (step in 0..1100) {
+            val rowAtPhase = rows(-.05f + step / 1000f, .5f)
+            val before = buildList {
+                add("title"); add("artist")
+                if (rowAtPhase.seekAlpha > 0f) add("seek")
+                if (rowAtPhase.actionsAlpha > 0f) add("actions")
+                add("transport")
+            }
+            assertEquals(before, rowAtPhase.controlNames)
+        }
+    }
+
 }

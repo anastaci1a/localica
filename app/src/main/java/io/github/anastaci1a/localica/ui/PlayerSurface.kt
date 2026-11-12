@@ -92,7 +92,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val p = sheet.expansion.phase.value()
-    val boundedProgress = p.coerceIn(0f, 1f)
+    val boundedProgress = sheet.expansion.boundedProgress()
     // A paused skip can buffer without requesting playback. Only show Pause
     // while playing or buffering with an explicit play-when-ready intent.
     val showPause = sampled.isPlaying || (sampled.isBuffering && sampled.playWhenReady)
@@ -121,7 +121,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // U10.03: the lyrics layout is one expand/collapse owner on the #608 law over the title's travel (basis bound below).
     val lyricsPresence = rememberPresence("player-lyrics", lyricsOpen) { it.lyricsExpansion }
     val lyricVisibility = lyricsPresence.view.phase.value()
-    val boundedLyricVisibility = lyricVisibility.coerceIn(0f, 1f)
+    val boundedLyricVisibility = lyricsPresence.view.boundedProgress()
     val lyricsRest by rememberExpansionRest(lyricsPresence.view)
     val lyricsSettled = lyricsRest == if (lyricsOpen) ExpansionRest.Open else ExpansionRest.Closed
     // A light/dark foreground change during the lyrics animation (or artwork blend, #578) follows that shared phase (U08.02a).
@@ -343,16 +343,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val measuredBackground = polarity.measured["background"]
     val measuredCover = polarity.measured["cover"]
     val measuredViewport = polarity.measured["viewport"]
-    val controlNames = buildList {
-        // Metadata uses the same foreground as transport. Its darker upper
-        // backing must participate too, rather than letting lower controls
-        // choose unreadable ink for the title and artist.
-        add("title")
-        add("artist")
-        if (rowMotion.seekAlpha > 0f) add("seek")
-        if (rowMotion.actionsAlpha > 0f) add("actions")
-        add("transport")
-    }
+    val controlNames = rowMotion.controlNames
     val footprints = playerBackgroundFootprints(measuredBackground, measuredViewport,
         controlNames.mapNotNull { polarity.measured[it] })
     val backgroundGeometry = if (measuredBackground != null && measuredCover != null && footprints.isNotEmpty())
@@ -430,7 +421,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, boundedProgress))) {
     Surface(Modifier.motionBounds(surfaceFrame.x, surfaceFrame.y, surfaceFrame.width, surfaceFrame.height)
         .onGloballyPositioned { polarity.measure("viewport", it) }
-        .pageGlassCaster(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value().coerceIn(0f, 1f) })
+        .pageGlassCaster(surfaceCorner, opacity = { sheet.collapsedOpacity() })
         .then(drag).controlScrollParent { playerDragDirections(expanded, scrubCancel.active) }
         .then(if (!queueClosed) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
         // The Queue must never sample the light browsing glass. Delaying readback alone
@@ -593,12 +584,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 val height = title.height + 2 * padding
                 // Never extend this new input band into the header or seek controls.
                 // The player's existing viewport clip also bounds it while scrolling.
-                val origin = titleY.roundToPx() - padding
-                val inputTop = ((statusInset + 48.dp).roundToPx() - origin).coerceIn(0, height)
-                val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputTop)
-                val target = children.getOrNull(1)?.measure(Constraints.fixed(title.width, inputBottom - inputTop))
+                val input = playerTitleInputBand(titleY.roundToPx(), seekY.roundToPx(),
+                    (statusInset + 48.dp).roundToPx(), height, padding)
+                val target = children.getOrNull(1)?.measure(Constraints.fixed(title.width, input.height))
                 layout(title.width, height) {
-                    target?.place(0, inputTop)
+                    target?.place(0, input.top)
                     title.place(0, padding)
                 }
             }
@@ -614,13 +604,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 Modifier.offset(textX, subtitleY).width(textWidth).zIndex(metadataLayer).scalePlayerText(subtitleScale + (1f - subtitleScale) * boundedProgress).testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
                 style = MaterialTheme.typography.bodyLarge.copy(color = subtitleColor), motionPaused = textMotionPaused,
                 visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
-            if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
-                .testTag("player-seek-row").onGloballyPositioned { polarity.measure("seek", it) }.graphicsLayer { alpha = rowMotion.seekAlpha }) {
+            io.github.anastaci1a.localica.ui.layout.PlayerControlRow(rowMotion.seekAlpha, column = true,
+                modifier = { Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
+                    .testTag("player-seek-row").onGloballyPositioned { polarity.measure("seek", it) }.graphicsLayer { alpha = rowMotion.seekAlpha } }) {
                 PlayerSeekControls(sampled, onSeek, artworkVisit, onSeekRequest = onSeekRequest, position = seekPosition,
                     cancelTarget = { scrubCancel.bounds },
                     onDrag = { active, hovered -> scrubCancel.update(active, hovered); scrubOverCancel = active && hovered })
             }
-            io.github.anastaci1a.localica.ui.layout.PlayerActionRow(rowMotion.actionsAlpha, modifier = { Modifier.offset(x = contentInset, y = actionsY)
+            io.github.anastaci1a.localica.ui.layout.PlayerControlRow(rowMotion.actionsAlpha, modifier = { Modifier.offset(x = contentInset, y = actionsY)
                 .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").onGloballyPositioned { polarity.measure("actions", it) }.graphicsLayer { alpha = rowMotion.actionsAlpha }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier) }) { actions() }
             Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - transportWidth) / 2) * transportMotion,

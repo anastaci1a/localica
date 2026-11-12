@@ -393,7 +393,7 @@ fun LocalicaScreen(
             .then(if (insideCollection || hasPlayer && playerCoversBrowse) Modifier.clearAndSetSemantics {} else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).fillMaxHeight().selectorTrackStacking(tabActivity).testTag("tab-pill")) {
-                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, activity = tabActivity, shadowOpacity = { chromeVisibility * (1f - phase.value().coerceIn(0f, 1f)) }, onReselect = { tab ->
+                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, activity = tabActivity, shadowOpacity = { sheet.collapsedOpacity(chromeVisibility) }, onReselect = { tab ->
                     navigation = navigation.resetTab(tab, clearLibraryFilter = false)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
                 }, noneAtlasInput = shellNoneAtlas) { tab ->
@@ -414,7 +414,7 @@ fun LocalicaScreen(
             val utilityAnchor = rememberGlassAnchor()
             NavigationUtilityPill(utilityAnchor, browseBackdrop,
                 Modifier.width(104.dp).fillMaxHeight(),
-                shadowOpacity = { chromeVisibility * (1f - phase.value().coerceIn(0f, 1f)) },
+                shadowOpacity = { sheet.collapsedOpacity(chromeVisibility) },
                 noneAtlasInput = shellNoneAtlas,
                 onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
                 onMore = { moreOpen = true })
