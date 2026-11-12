@@ -67,10 +67,16 @@ internal class NativeSurfaceField(private val plane: ShadowPlane,private val nod
 }
 
 /** Native draw receipt outside the field's admission/opacity gate. */
-internal fun Modifier.nativePlaneReceipt(plane: ShadowPlane): Modifier = this.drawWithContent {
+internal fun Modifier.nativePlaneReceipt(plane: ShadowPlane,
+    additionalReceipt: () -> (() -> Unit)? = { null }): Modifier = this.drawWithContent {
     plane.revision
     drawContent()
-    if(plane.receipt()) plane.view?.postOnAnimation { plane.admit() }
+    val additional = additionalReceipt()
+    val waiting = plane.receipt()
+    if (waiting || additional != null) plane.view?.postOnAnimation {
+        additional?.invoke()
+        if (waiting) plane.admit()
+    }
 }
 
 /** Platform adapter intents accept the read-only identity; mutation stays Engine-private. */
