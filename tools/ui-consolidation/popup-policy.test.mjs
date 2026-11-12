@@ -432,6 +432,8 @@ test('#854 round 2 G2: presence, face and shared-content factories are pinned; a
  }
  for(const body of ['fun f(shared: PopupSharedContent) { shared.motion.updateSpeed(0.5f) }','fun f(shared: PopupSharedContent?) { shared?.setAnimationSpeed(0.5f) }',
   'fun f(shared: PopupSharedContent) { with(shared) { setAnimationSpeed(0.5f) } }','fun f(shared: PopupSharedContent) { shared.apply { setAnimationSpeed(0.5f) } }',
+  // Round 4 (F8-3): run and let reach the handle too.
+  'fun f(shared: PopupSharedContent) { shared.run { setAnimationSpeed(0.5f) } }','fun f(shared: PopupSharedContent) { shared.let { it.setAnimationSpeed(0.5f) } }',
   'internal val LocalShared = staticCompositionLocalOf<PopupSharedContent?> { null }\n@Composable fun f() { LocalShared.current?.setAnimationSpeed(0.5f) }'])
   assert.ok(rules(head+body).has('ScreenPopupMotion'),body);
  // Honest: the queue selector's slot use, through the remembered handle and a composition local.
@@ -472,5 +474,10 @@ test('#854 round 3 R2-1: every shared entry point other files call has a popup-a
   {path:screen,source:'package io.github.anastaci1a.localica.ui\nimport io.github.anastaci1a.localica.ui.components.*\n@Composable fun Screen() { val s = rememberPopupTiming(0.5f); Box(Modifier.popupSpeed(0.5f)); val r = ::rememberPopupTiming }'}];
  const red=auditPopupTree(added).incidents.filter(i=>/Unclassified/.test(i.note));
  assert.equal(red.length,3,JSON.stringify(red));assert.ok(red.every(i=>i.path===screen));
+ // Round 4 (F8-2): a fully qualified call counts (GlassOriginPreparation.kt called the engine this way); a member call of the same
+ // name on another receiver does not.
+ const qualified=auditPopupTree([added[0],{path:screen,source:'package io.github.anastaci1a.localica.ui\n@Composable fun Screen(other: Timing) { val s = io.github.anastaci1a.localica.ui.components.rememberPopupTiming(0.5f); other.rememberPopupTiming(1f) }'}])
+  .incidents.filter(i=>/Unclassified/.test(i.note));
+ assert.equal(qualified.length,1,JSON.stringify(qualified));
  assert.deepEqual(sharedEntryPoints(component,added[0].source).map(e=>e.name+(e.extension?'+':'')),['rememberPopupTiming','popupSpeed+','inside']);
 });
