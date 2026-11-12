@@ -72,10 +72,9 @@ internal fun SettingsLink(markerColor: Color?, title: String, summary: String? =
     @Composable fun Foreground(modifier: Modifier = Modifier) {
         SettingsLinkFace(title, summary, icon, modifier.settingsLinkMarker(markerColor), headlineStyle, summaryStyle, colors, metrics)
     }
-    SideEffect { if (anchor != null) anchor.face = { Foreground() } }
     val opacity by animateControlStateFloat(if (enabled) 1f else .45f, enabled, "Settings link availability")
     SettingsEntry(title) { LiquidGlassSurface(Modifier.fillMaxWidth().glassShadowOpacity { opacity }
-        .then(if (anchor == null) Modifier else Modifier.glassAnchor(anchor)), cornerRadius = 20.dp, pressFeedback = enabled) {
+        .glassAnchor(anchor, face = { Foreground() }), cornerRadius = 20.dp, pressFeedback = enabled) {
         Foreground(modifier.ownButtonDrag(enabled).clickable(enabled, role = Role.Button, onClick = controlActivation(enabled, onClick)))
     }
 } }

@@ -1,8 +1,12 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.*
 import androidx.compose.ui.layout.boundsInRoot
@@ -326,7 +330,7 @@ class BrowseOrderViewportTest {
                         playingEntryId = queueState.library.active?.takeIf { it.id == fixture.route.collection?.id }?.currentEntryId,
                         // Playlist details own their real collection toolbar; an injected
                         // second Sort would test a duplicate fixture-only route.
-                        header = { if (queue) BrowseOptionsPill(anchor) { fixture.sorting = true } },
+                        header = { if (queue) PopupActionPill(anchor, modifier = Modifier.height(CompactControlSize), role = TriggerRole.BrowseOptions, leadingIcon = AppIcon.ActionSort, trailingIcon = AppIcon.ActionEye, leadingLabel = "Sort", trailingLabel = "View options", tag = "browse-options-trigger", onSearch = { fixture.sorting = true }, onMore = { fixture.sorting = true }) },
                         sortOrigin = anchor, reducedMotion = reducedMotion, queryDispatcher = queries)
                 }
             } }

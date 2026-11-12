@@ -109,14 +109,13 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
             val selection by animateControlStateFloat(if (item in selected) .07f else 0f, item in selected, "Library filter selection", reducedMotion)
             val anchor = rememberGlassAnchor()
             val source = LocalFrostedBackdrop.current
-            SideEffect { anchor.source = source; anchor.face = { Text(label(item), style = style, maxLines = 1) } }
             Box(Modifier.offset { IntOffset(offsets.getValue(item).value.roundToInt(), 0) }
                 .zIndex(if (item in moving) 2f else if (item in selected) 1f else 0f)
                 .width(widths.getValue(item)).fillMaxHeight().testTag(tag(item))
                 .ownButtonDrag(enabled).combinedClickable(enabled = enabled, role = role, onClick = controlActivation(enabled) { onSelect(item) },
                     onLongClick = onLongClick?.let { callback -> { callback(item) } })
                 .semantics { this.selected = item in selected }, contentAlignment = Alignment.Center) {
-                LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(anchor),
+                LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(anchor, source, face = { Text(label(item), style = style, maxLines = 1) }),
                     tint = androidx.compose.ui.graphics.Color.Black.copy(alpha = selection)) {
                     anchor.captureInk()
                     Text(label(item), Modifier.align(Alignment.Center), style = style, maxLines = 1)

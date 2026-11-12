@@ -234,16 +234,16 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val coatingLightMix = panelDark?.let { if (it) 1f else 0f } ?: lightMix
     val coatingDark = coatingLightMix >= .5f
     val ink = if (flat) MaterialTheme.colorScheme.onSurface else inkOverride ?: lerp(Color(0xFF202124), Color.White, lightMix)
-    val anchor = modifier.glassSurfaceAnchor()
+    val anchor = modifier.glassSurfaceAnchor(source, cornerRadius)
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact)
-    val contactShape = contactPresentation ?: { contact.body.value }
+    val contactShape = contactPresentation ?: modifier.glassSurfaceContactPresentation() ?: { contact.body.value }
     val surfaceClip = remember(silhouette, cornerRadius) {
         silhouette?.let { outline -> androidx.compose.foundation.shape.GenericShape { extent, _ ->
             addPath(outline.frame(extent).path)
         } } ?: cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape
     }
     SideEffect { if (anchor != null) {
-        anchor.source = source; anchor.cornerRadius = cornerRadius; anchor.depthScale = depthScale
+        anchor.depthScale = depthScale
         anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
     } }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }

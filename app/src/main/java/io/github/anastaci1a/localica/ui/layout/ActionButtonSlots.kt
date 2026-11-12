@@ -9,12 +9,22 @@ import io.github.anastaci1a.localica.ui.spec.*
 /** Existing action-face dimensions expressed by the reviewed stock spacing and control catalog. */
 @Composable
 internal fun ActionButtonFaceSlot(modifier: Modifier, iconOnly: Boolean,
-    icon: @Composable (Modifier) -> Unit, label: @Composable (Modifier) -> Unit) {
+    icon: @Composable (Modifier) -> Unit, label: @Composable (Modifier) -> Unit,
+    divider: (@Composable () -> Unit)? = null, retainedFace: Boolean = false) {
     val spaces = StockUiSpec.space
-    Row(modifier.padding(horizontal = spaces.getValue(Space.Comfortable) + spaces.getValue(Space.Tight) / 2,
-        vertical = spaces.getValue(Space.Base)), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(spaces.getValue(Space.Base))) {
-        icon(Modifier.size(StockUiSpec.control.getValue(ControlSize.SettingsIcon)))
-        if (!iconOnly) label(Modifier.width(IntrinsicSize.Max))
+    val iconSize = StockUiSpec.control.getValue(ControlSize.SettingsIcon)
+    val dual = divider != null
+    val inset = if (dual) modifier else modifier.padding(
+        horizontal = spaces.getValue(Space.Comfortable) + spaces.getValue(Space.Tight) / 2,
+        vertical = spaces.getValue(Space.Base))
+    Row(inset, verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (dual) Arrangement.Center else Arrangement.spacedBy(spaces.getValue(Space.Base))) {
+        if (dual && retainedFace) Box(Modifier.size(iconSize * 2), contentAlignment = Alignment.Center) { icon(Modifier.size(iconSize)) }
+        else icon(if (dual) Modifier else Modifier.size(iconSize))
+        divider?.invoke()
+        if (!iconOnly) {
+            if (dual && retainedFace) Box(Modifier.size(iconSize * 2), contentAlignment = Alignment.Center) { label(Modifier.size(iconSize)) }
+            else label(if (dual) Modifier else Modifier.width(IntrinsicSize.Max))
+        }
     }
 }

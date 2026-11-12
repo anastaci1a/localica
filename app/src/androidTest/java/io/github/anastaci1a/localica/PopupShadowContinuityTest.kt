@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+
 import io.github.anastaci1a.localica.ui.engine.*
 
 import android.graphics.Bitmap
@@ -421,7 +422,7 @@ class PopupShadowContinuityTest {
                                         it.size.width.toFloat(), it.size.height.toFloat()))
                                 }.pageGlassCaster(),
                                     source = source, shadow = false) {}
-                                NavigationUtilityPill(anchor, source, Modifier.width(104.dp).fillMaxHeight(),
+                                PopupActionPill(anchor, source, Modifier.width(104.dp).fillMaxHeight(),
                                     onSearch = {}, onMore = { open = true })
                             }
                             Menu()

@@ -5,15 +5,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.graphics.lerp
 import io.github.anastaci1a.localica.ui.engine.*
-import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
 import io.github.anastaci1a.localica.ui.spec.MotionProfile
-import io.github.anastaci1a.localica.ui.spec.UiSpec
 
 /** An expand/collapse presence on the #608 law (U10.03 lyrics). The root publishes its measured [basis] after reading the
  * phase; the physical frame then binds and follows it (Rebase-capable, A2.3c). */
 @Stable class Presence internal constructor(val view: ExpansionView) { var basis by mutableStateOf<ExpansionBasis?>(null) }
-@Composable fun rememberPresence(key: Any, shown: Boolean, law: (UiSpec) -> ExpansionSpec = { it.expansion }): Presence {
-    val owner = rememberExpandCollapse(key, shown, law)
+@Composable fun rememberPresence(key: Any, shown: Boolean, role: TriggerRole<Nothing, Nothing> = TriggerRole.Surface): Presence {
+    val owner = rememberExpandCollapse(key, shown) { if (role == TriggerRole.Lyrics) it.lyricsExpansion else it.expansion }
     val presence = remember(owner) { Presence(owner) }
     val basis = presence.basis ?: return presence
     val range = remember(key) { maxOf(1f, 4f * basis.edgeTravelPx) }

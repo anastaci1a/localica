@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -76,7 +78,7 @@ class ArtworkScrollLoadingTest {
                     items(items.size, key = { items[it].key }) { index ->
                         val item = items[index]
                         BrowseItemLayout(item, style, BrowseCellGeometry(columns), this@LookaheadScope, false,
-                            menu = { shown -> if (shown) ActionIcon(AppIcon.ActionEllipsis, "Actions for ${item.title}", quiet = true) {} },
+                            menu = { shown -> if (shown) ActionIcon(AppIcon.ActionEllipsis, "Actions for ${item.title}", role = TriggerRole.PlainIcon) {} },
                             itemIndex = index)
                     }
                 }

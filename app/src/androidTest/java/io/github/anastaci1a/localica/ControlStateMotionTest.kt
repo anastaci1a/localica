@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LocalContentColor
@@ -201,7 +203,7 @@ class ControlStateMotionTest {
         var calls = 0
         compose.setContent { LocalicaTheme { Column(Modifier.width(300.dp)) {
             ActionIcon(AppIcon.ActionShuffle, "Glass icon", enabled = enabled) { calls++ }
-            ActionIcon(AppIcon.ActionShuffle, "Quiet icon", enabled = enabled, quiet = true) { calls++ }
+            ActionIcon(AppIcon.ActionShuffle, "Quiet icon", enabled = enabled, role = TriggerRole.PlainIcon) { calls++ }
             ActionIcon(AppIcon.ActionShuffle, "Plain icon", enabled = enabled, glass = false) { calls++ }
             GlassActionButton(AppIcon.ActionShuffle, "Glass action", enabled = enabled) { calls++ }
             ActionMenuItem("Menu action", enabled, icon = AppIcon.ActionEllipsis) { calls++ }

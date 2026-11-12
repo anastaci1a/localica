@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
 import io.github.anastaci1a.localica.ui.components.PopupSharedContent
 
 import io.github.anastaci1a.localica.ui.components.NoneReductionAtlasHost
@@ -13,6 +14,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -119,7 +121,11 @@ internal class GlassAnchor {
     var face by mutableStateOf<(@Composable () -> Unit)?>(null)
     var depthScale = RaisedGlassDepthScale
     var cornerRadius: androidx.compose.ui.unit.Dp? = null
-    var quiet by mutableStateOf(false)
+    var triggerRole by mutableStateOf<TriggerRole<*, *>>(TriggerRole.Surface)
+        private set
+    fun bindRole(role: TriggerRole<*, *>) { triggerRole = role }
+    val quiet get() = contextual || triggerRole == TriggerRole.PlainIcon
+    val chromeTrigger get() = triggerRole == TriggerRole.Navigation
     var contextual = false
     var bottomClearance = 0f
     var bottomLimit = Float.NaN
@@ -136,10 +142,16 @@ internal class GlassAnchor {
 }
 
 @Composable
-internal fun rememberGlassAnchor(deferContextPlacement: Boolean = false): GlassAnchor {
+internal fun rememberGlassAnchor(deferContextPlacement: Boolean = false,
+    role: TriggerRole<Nothing, Nothing> = TriggerRole.Surface, clearance: androidx.compose.ui.unit.Dp? = null): GlassAnchor {
     val ink = LocalContentColor.current
     val home = LocalGlassPopupHome.current
-    return remember { GlassAnchor().also { it.ink = ink; it.contextPlacementTracked = !deferContextPlacement; it.popupHome = home } }
+    val anchor = remember { GlassAnchor().also { it.ink = ink; it.contextPlacementTracked = !deferContextPlacement; it.popupHome = home; it.bindRole(role) } }
+    if (role == TriggerRole.Contextual) {
+        val contextClearance = with(LocalDensity.current) { (clearance ?: LocalBrowseObscuredInset.current).toPx() }
+        SideEffect { anchor.contextual = true; anchor.bottomClearance = contextClearance }
+    }
+    return anchor
 }
 
 /** Optional evidence of each published context-trigger placement; no behavior depends on it. */
@@ -156,7 +168,7 @@ internal val LocalContextAnchorPlacementObserver = staticCompositionLocalOf<((Re
     val clearance = with(density) { LocalBrowseObscuredInset.current.toPx() }
     val observer = LocalContextAnchorPlacementObserver.current
     val home = LocalGlassPopupHome.current
-    SideEffect { anchor.popupHome = home; anchor.source = source; anchor.quiet = true; anchor.contextual = true; anchor.bottomClearance = clearance; anchor.face = null }
+    SideEffect { anchor.popupHome = home; anchor.source = source; anchor.contextual = true; anchor.bottomClearance = clearance; anchor.face = null }
     fun publish(coordinates: LayoutCoordinates) {
         anchor.bounds = Rect(coordinates.backdropPosition(view), Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
         val location = IntArray(2)
@@ -193,18 +205,97 @@ internal val LocalContextAnchorPlacementObserver = staticCompositionLocalOf<((Re
 }
 
 @Composable
-internal fun GlassAnchor.captureInk() {
+internal fun GlassAnchor?.captureInk() {
     val color = LocalContentColor.current
-    SideEffect { ink = color }
+    SideEffect { this?.ink = color }
+}
+
+private fun TriggerRole.LyricsHeader<GlassSplitContact, GlassOriginPreparation>.presentation(height: Float): GlassOriginPresentation {
+    val separation = originGap(preparation.progress)
+    val left = if (side < 0f) contacts.left else contacts.right
+    val right = if (side < 0f) contacts.right else contacts.left
+    val common = contacts.presentation(contacts.left, contacts.right, 0f).let { if (contacts.left.vertical) it.copy(strain = -it.strain) else it }
+    return GlassOriginPresentation(contacts.presentation(left, right, separation), left.vertical,
+        side * height / 2f * (common.scaleX() - 1f) * (1f - separation))
+}
+
+/** A selection item supplies existing geometry data; the popup system owns its origin mapping. */
+@Composable
+internal fun Modifier.glassAnchor(anchor: GlassAnchor?, role: TriggerRole.SelectionItem<SelectionEntry>): Modifier {
+    val view = LocalView.current
+    val entry = role.entry
+    SideEffect {
+        anchor?.presentation = { entry.presented?.let { lift -> entry.coordinates?.takeIf { it.isAttached }
+            ?.let { GlassLift(lift.scale, it.backdropPosition(view) + lift.pivot) } } }
+    }
+    return this
+}
+
+/** One node-registration implementation for material and retained trigger surfaces. */
+@Composable
+internal fun GlassAnchor?.glassAnchor(role: TriggerRole<ShadowPlane, Nothing>): ((SurfaceView, Boolean) -> Unit)? {
+    val anchor = this ?: return null
+    val plane = when (role) {
+        is TriggerRole.MaterialSurface -> role.plane
+        is TriggerRole.RetainedSurface -> role.plane
+        else -> error("A shadow surface supplies its material or retained role")
+    }
+    if (role is TriggerRole.MaterialSurface) DisposableEffect(plane, anchor) {
+        anchor.shadowPlane = plane
+        onDispose { if (anchor.shadowPlane === plane) anchor.shadowPlane = null }
+    }
+    return { node, bound ->
+        if (bound) {
+            anchor.surfaceNode = node
+            anchor.returningNode = node
+            if (role is TriggerRole.RetainedSurface) anchor.shadowPlane = plane
+        } else if (anchor.surfaceNode === node) {
+            anchor.surfaceNode = null
+            if (node.windowRetained().not()) anchor.returningNode = null
+        }
+    }
+}
+
+/** Material forwarding shares the binding writer without installing another anchor. */
+@Composable
+private fun Modifier.bindGlassSurface(anchor: GlassAnchor?, source: FrostedBackdrop?, cornerRadius: androidx.compose.ui.unit.Dp?): Modifier {
+    val binding = foldIn<GlassDepthMarker?>(null) { found, element -> if (element is GlassDepthMarker) element else found }
+    SideEffect { if (anchor != null) {
+        anchor.source = binding?.source ?: source
+        anchor.cornerRadius = if (binding?.role == TriggerRole.PlainIcon) null else cornerRadius
+    } }
+    return this
 }
 
 @Composable
-internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
+internal fun Modifier.glassAnchor(anchor: GlassAnchor?, source: FrostedBackdrop? = null,
+    role: TriggerRole<GlassSplitContact, GlassOriginPreparation> = TriggerRole.Surface,
+    face: (@Composable () -> Unit)? = null): Modifier {
+    if (anchor == null && role !is TriggerRole.LyricsHeader) return this
+    val originPresentation: ((Float) -> GlassOriginPresentation)? =
+        if (role is TriggerRole.LyricsHeader) remember(role) { { height: Float -> role.presentation(height) } } else null
+    val marker = GlassDepthMarker(anchor, originPresentation, source, role)
+    val presented = if (role is TriggerRole.LyricsHeader) drawWithContent {
+        translate(left = if (role.preparation.separated) role.presentation(size.height).horizontalShift else 0f) { this@drawWithContent.drawContent() }
+    } else this
+    if (anchor == null) return if (role !is TriggerRole.LyricsHeader) this else presented.then(marker)
+    originPresentation?.let { presentation ->
+        DisposableEffect(anchor, presentation) {
+            anchor.originPresentation = presentation
+            onDispose { anchor.clearOriginPresentation(presentation) }
+        }
+    }
     val view = LocalView.current
     val home = LocalGlassPopupHome.current
-    SideEffect { anchor.popupHome = home }
+    SideEffect {
+        anchor.popupHome = home
+        if (source != null) anchor.source = source
+        if (face != null) anchor.face = face
+        anchor.bindRole(role)
+        if (role == TriggerRole.PlainIcon) anchor.cornerRadius = null
+    }
     DisposableEffect(anchor) { anchor.triggerMounted = true; onDispose { anchor.triggerMounted = false } }
-    return then(if (anchor.quiet) Modifier.quietGlassCaster(anchor) else Modifier).then(GlassDepthMarker(anchor)).backdropLocation(anchor.samplingLocation).onGloballyPositioned {
+    return presented.then(if (anchor.quiet) Modifier.quietGlassCaster(anchor) else Modifier).then(marker).backdropLocation(anchor.samplingLocation).onGloballyPositioned {
         anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
         anchor.lastSamplingFootprint = anchor.samplingFootprint()
         if (anchor.contextual) {
@@ -228,13 +319,26 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
 }
 
 /** Carry the material profile with its trigger, including wrappers around shared buttons. */
-private data class GlassDepthMarker(val anchor: GlassAnchor) : Modifier.Element
+private data class GlassDepthMarker(val anchor: GlassAnchor?, val origin: ((Float) -> GlassOriginPresentation)? = null,
+    val source: FrostedBackdrop? = null, val role: TriggerRole<*, *> = TriggerRole.Surface) : Modifier.Element
+@Composable
+internal fun Modifier.glassSurfaceAnchor(source: FrostedBackdrop?, cornerRadius: androidx.compose.ui.unit.Dp?): GlassAnchor? {
+    val anchor = glassSurfaceAnchor()
+    bindGlassSurface(anchor, source, cornerRadius)
+    return anchor
+}
 internal fun Modifier.glassSurfaceAnchor(): GlassAnchor? = foldIn<GlassAnchor?>(null) { anchor, element ->
     if (element is GlassDepthMarker) element.anchor else anchor
 }
 internal fun Modifier.glassDepthScale(): Float = foldIn(1f) { depth, element ->
-    if (element is GlassDepthMarker) element.anchor.depthScale else depth
+    if (element is GlassDepthMarker) element.anchor?.depthScale ?: depth else depth
 }
+
+/** A named trigger carries its shared contact policy into the material host. */
+internal fun Modifier.glassSurfaceContactPresentation(): (() -> GlassShape)? =
+    foldIn<((Float) -> GlassOriginPresentation)?>(null) { origin, element ->
+        if (element is GlassDepthMarker) element.origin ?: origin else origin
+    }?.let { origin -> { origin(0f).shape } }
 
 internal enum class GlassPlacement { Search, Menu, Center, Sheet, Page }
 internal val LocalGlassPanelReady = compositionLocalOf { true }
@@ -304,6 +408,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val wellStrength = LocalGlassAppearance.current.shadowStrength
     val speed = LocalMotionSpeed.current
     val progress = anchor.contact.expansion
+    SideEffect { popupFlight.chromeTrigger = anchor.chromeTrigger; popupFlight.phase = { progress.value } }
     val continuousOrigin = originPreparation.takeUnless { placement == GlassPlacement.Search }
     val motion = sharedContent?.motion ?: rememberPopupWindowMotion(anchor, continuousOrigin != null, anchor.quiet)
     DisposableEffect(motion, continuousOrigin) {
@@ -343,7 +448,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var searchTransitioning by remember { mutableStateOf(false) }
     var searchReturning by remember { mutableStateOf(false) }
     val departingHold = !visible && popupHome?.departing == true && popupHome.mounted &&
-        popupHome.holdsDepartingPopups
+        !anchor.chromeTrigger
     SideEffect {
         motion.updateSpeed(speed)
         if (departingHold) {
@@ -1041,3 +1146,39 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
  * D23: a drawable extent keeps at least one pixel; the window clips a band overshoot. */
 internal fun glassMorphPixelBounds(rect: Rect): MotionPixelRect =
     popupPixelBounds(rect)
+
+/** Both actions press the same shell and keep their own click/drag ownership. */
+@Composable
+internal fun PopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop? = LocalFrostedBackdrop.current,
+    modifier: Modifier = Modifier, noneAtlasInput: NoneAtlasInput? = null,
+    chromeVisibility: Float = 1f, playerExpansion: io.github.anastaci1a.localica.ui.engine.ExpansionView? = null,
+    leadingIcon: AppIcon = AppIcon.ActionSearch, trailingIcon: AppIcon = AppIcon.ActionEllipsis,
+    leadingLabel: String = "Search library", trailingLabel: String = "More", tag: String = "utility-pill",
+    role: TriggerRole<Nothing, Nothing> = TriggerRole.Navigation, menuVisible: Boolean = false, onMenuDismiss: () -> Unit = {},
+    menuContent: (@Composable ColumnScope.() -> Unit)? = null,
+    onSearch: () -> Unit, onMore: () -> Unit) {
+    val raised = role == TriggerRole.Navigation
+    val effectiveShadow: () -> Float = if (playerExpansion == null) ({ chromeVisibility })
+        else ({ chromeVisibility * (1f - playerExpansion.phase.value()) })
+    val iconSize = io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Panel)
+    val face: @Composable () -> Unit = {
+        io.github.anastaci1a.localica.ui.layout.ActionButtonFaceSlot(Modifier, iconOnly = false,
+            divider = { GlassPillDivider() }, retainedFace = true,
+            icon = { Icon(appIconPainter(leadingIcon), null, it) },
+            label = { Icon(appIconPainter(trailingIcon), null, it) })
+    }
+    LiquidGlassSurface(modifier.glassAnchor(anchor, source, role = role, face = face).testTag(tag)
+        .then(if (raised) Modifier.pageGlassCaster(opacity = effectiveShadow) else Modifier), source = source, shadow = !raised,
+        contactAdmission = { raised || !anchor.hidden },
+        depthScale = if (raised) RaisedGlassDepthScale else anchor.depthScale, noneAtlasInput = noneAtlasInput) {
+        anchor.captureInk()
+        io.github.anastaci1a.localica.ui.layout.ActionButtonFaceSlot(
+            if (raised) Modifier.fillMaxSize() else Modifier.align(Alignment.Center), iconOnly = false,
+            divider = { GlassPillDivider() },
+            icon = { ActionIcon(leadingIcon, leadingLabel, glass = false, iconSize = iconSize,
+                onClick = { if (!raised) anchor.reclaimOpening?.invoke(); onSearch() }) },
+            label = { ActionIcon(trailingIcon, trailingLabel, glass = false, iconSize = iconSize,
+                onClick = { if (!raised) anchor.reclaimOpening?.invoke(); onMore() }) })
+    }
+    if (menuContent != null) GlassMenu(menuVisible, anchor, onMenuDismiss, content = menuContent)
+}

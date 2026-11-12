@@ -181,9 +181,8 @@ private fun GlassPreview(source: FrostedBackdrop) {
         val body = rememberGlassBody({ travel.value / limit },
             pressure = { glassEdgePressure((raw - raw.coerceIn(-limit, limit)) / limit) },
             contact = { if (pressed) 1f else 0f })
-        SideEffect { anchor.source = source; anchor.face = { Text("Drag preview") } }
         LiquidGlassSurface(Modifier.offset { androidx.compose.ui.unit.IntOffset(travel.value.toInt(), 0) }
-            .size(180.dp, 56.dp).glassAnchor(anchor).observeGlassContact { pressed = it }
+            .size(180.dp, 56.dp).glassAnchor(anchor, source, face = { Text("Drag preview") }).observeGlassContact { pressed = it }
             .elasticControlDrag(true,
                 onStart = { settling?.cancel(); raw = travel.value }, onDelta = { delta ->
                     raw += delta

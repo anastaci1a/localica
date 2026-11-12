@@ -1,6 +1,6 @@
 # UI policy lint foundation
 
-This JVM tooling module provides thirteen ERROR rules and paired source fixtures. The application loads it through `lintChecks`. Existing incidents are frozen in the generated app baseline; the immutable comparison rejects added identities and equal-count substitutions.
+This JVM tooling module provides eighteen ERROR rules and paired source fixtures. The application loads it through `lintChecks`. Existing incidents are frozen in the generated app baseline; the immutable comparison rejects added identities and equal-count substitutions.
 
 Build and test with the repository's JDK 17 toolchain:
 
@@ -23,3 +23,5 @@ The API and test infrastructure are pinned to the lint version matching AGP. Com
 Escape validation fails closed without exact declarations and frozen expiry inputs. Activation supplies the `knownSteps`, `completedSteps` and `release` lint options from reviewed stage metadata. A manifest's reviewer field does not establish that a human review happened; integration owns that evidence.
 
 Rollback the complete activation before adopting production callers. Never disable an individual rule to conceal a violation.
+
+Popup conformity is a zero-finding release gate. Screen popup homes, motion overrides, private triggers, private draw paths and duplicate popup roles cannot enter the baseline. The exact shared owners are pinned in `src/main/resources/popup-owners.txt`, including the existing components, engine and three legacy popup files. New neighboring files receive no ownership automatically. `popup-roles.txt` pins the existing home and trigger declarations; adding a second implementation fails even inside an existing owner.

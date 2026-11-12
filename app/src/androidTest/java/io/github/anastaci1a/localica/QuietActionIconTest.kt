@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -24,7 +26,7 @@ class QuietActionIconTest {
         compose.setContent { LocalicaTheme {
             anchor = rememberGlassAnchor()
             if (gallery) Box(Modifier.size(96.dp).contextMenuAnchor(anchor))
-            else ActionIcon(AppIcon.ActionEllipsis, "Song actions", anchor = anchor, quiet = true) {}
+            else ActionIcon(AppIcon.ActionEllipsis, "Song actions", anchor = anchor, role = TriggerRole.PlainIcon) {}
         } }
         repeat(3) {
             compose.runOnIdle { assertEquals(16.dp, anchor.cornerRadius); gallery = false }
@@ -43,7 +45,7 @@ class QuietActionIconTest {
         var parentHolds = 0
         compose.setContent { LocalicaTheme {
             Box(Modifier.combinedClickable(onClick = {}, onLongClick = { parentHolds++ })) {
-                ActionIcon(AppIcon.ActionEllipsis, "Song actions", quiet = true,
+                ActionIcon(AppIcon.ActionEllipsis, "Song actions", role = TriggerRole.PlainIcon,
                     onLongClickLabel = "Select song", onLongClick = { holds++ }) { taps++ }
             }
         } }
@@ -64,7 +66,7 @@ class QuietActionIconTest {
             scroll = rememberScrollState()
             Column(Modifier.height(400.dp).controlVerticalScroll(scroll)) {
                 Spacer(Modifier.height(100.dp))
-                ActionIcon(AppIcon.ActionEllipsis, "Song actions", quiet = true,
+                ActionIcon(AppIcon.ActionEllipsis, "Song actions", role = TriggerRole.PlainIcon,
                     onLongClick = { holds++ }) { taps++ }
                 Spacer(Modifier.height(800.dp))
             }

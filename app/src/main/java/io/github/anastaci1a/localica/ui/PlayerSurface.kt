@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
@@ -118,7 +120,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val aspect by animateFloatAsState(artwork.palette.aspect, tween(paletteDuration), label = "Cover proportions")
     val palette = animatedPlayerPalette(paletteTarget, blendClock).copy(aspect = aspect)
     // U10.03: the lyrics layout is one expand/collapse owner on the #608 law over the title's travel (basis bound below).
-    val lyricsPresence = rememberPresence("player-lyrics", lyricsOpen) { it.lyricsExpansion }
+    val lyricsPresence = rememberPresence("player-lyrics", lyricsOpen, role = TriggerRole.Lyrics)
     val lyricVisibility = lyricsPresence.view.phase.value()
     val lyricsRest by rememberExpansionRest(lyricsPresence.view)
     val lyricsSettled = lyricsRest == if (lyricsOpen) ExpansionRest.Open else ExpansionRest.Closed
@@ -416,7 +418,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     }
     PrewarmPlayerBackdrop(polarity, artwork, prewarmGeometry, settings.glass.contrast > 0f)
     val baseColors = MaterialTheme.colorScheme
-    CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
+
     GlassPanelTheme(lightMix) {
     val playerColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = playerColors.copy(onSurface = foreground,
@@ -434,7 +436,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
         shape = surfaceFrame.shape, color = Color.Transparent, contentColor = foreground) {
-        Box(Modifier.fillMaxSize().glassPopupHome(popupHome)) {
+        GlassPopupHome(popupHome) {
         if (workObserver != null) SideEffect { workObserver("surface-content", null) }
         if (inkObserver != null) {
             // Read inside Surface's actual provider, including when the actions row is absent.
@@ -652,7 +654,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             onSettings(settings.copy(artworkTap = value)); configureTap = false
         }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } })
 }
-}
+
 }
 
 /** Record the complete glass scene while displaying only its already-recorded cover.

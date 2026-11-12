@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -58,7 +60,7 @@ class RowMenuRevealTest {
                     Box(Modifier.size(360.dp, 160.dp).background(Color.White)) {
                         BrowseItemLayout(item, BrowseStyle(listSize = size, extraInfo = ExtraInfo.None),
                             BrowseCellGeometry(1), this@LookaheadScope, false,
-                            menu = { drawn -> if (drawn) ActionIcon(AppIcon.ActionEllipsis, "Reveal actions", quiet = true) { clicks++ } },
+                            menu = { drawn -> if (drawn) ActionIcon(AppIcon.ActionEllipsis, "Reveal actions", role = TriggerRole.PlainIcon) { clicks++ } },
                             loadingReveal = loading)
                     }
                 }

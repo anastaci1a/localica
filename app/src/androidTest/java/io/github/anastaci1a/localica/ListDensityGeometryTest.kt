@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -44,7 +46,7 @@ class ListDensityGeometryTest {
                 LookaheadScope {
                     Box(Modifier.width(width.dp).testTag("density-card")) {
                         BrowseItemLayout(item, BrowseStyle(listSize = size, extraInfo = ExtraInfo.Artist),
-                            BrowseCellGeometry(1), this@LookaheadScope, true, menu = { ActionIcon(AppIcon.ActionEllipsis, "Density actions", quiet = true) { clicks++ } })
+                            BrowseCellGeometry(1), this@LookaheadScope, true, menu = { ActionIcon(AppIcon.ActionEllipsis, "Density actions", role = TriggerRole.PlainIcon) { clicks++ } })
                     }
                 }
             }

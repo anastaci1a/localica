@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+
 import android.view.View
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -59,7 +60,7 @@ class SelectorStackingTest {
                             SlidingTabs(tabs, selected, { tabs.indexOf(selected).toFloat() }, source,
                                 activity = activity) { selected = it }
                         }
-                        NavigationUtilityPill(rememberGlassAnchor(), source,
+                        PopupActionPill(rememberGlassAnchor(), source,
                             Modifier.offset(x = 204.dp, y = 24.dp).size(104.dp, 64.dp),
                             onSearch = {}, onMore = {})
                         PresentationMarker { stage }

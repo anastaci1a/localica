@@ -166,34 +166,3 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
             BrowseOptionsWidthMeasurement(declaration, shadowInset)
         })
 }
-
-/** A single source surface for both destinations and their return transition. */
-@Composable
-internal fun BrowseOptionsPill(anchor: GlassAnchor, onChoose: (Boolean) -> Unit) {
-    val source = LocalFrostedBackdrop.current
-    SideEffect {
-        anchor.source = source
-        anchor.face = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(appIconPainter(AppIcon.ActionSort), null) }
-                GlassPillDivider()
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(appIconPainter(AppIcon.ActionEye), null) }
-            }
-        }
-    }
-    LiquidGlassSurface(Modifier.height(CompactControlSize).glassAnchor(anchor).testTag("browse-options-trigger"),
-        contactAdmission = { !anchor.hidden }) {
-        anchor.captureInk()
-        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
-            ActionIcon(AppIcon.ActionSort, "Sort", glass = false) {
-                anchor.reclaimOpening?.invoke()
-                onChoose(false)
-            }
-            GlassPillDivider()
-            ActionIcon(AppIcon.ActionEye, "View options", glass = false) {
-                anchor.reclaimOpening?.invoke()
-                onChoose(true)
-            }
-        }
-    }
-}

@@ -1,3 +1,4 @@
+import {checkPopupTree, popupRules} from '../tools/ui-consolidation/popup-policy.mjs';
 import {strictJson} from '../tools/ui-consolidation/strict-json.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -6,7 +7,7 @@ import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 export const rules = ['RawUiMotion','IndependentUiClock','RawPresentationTransform','RawShadowOrZOrder',
     'ReplacePersistentShape','UnownedSurfaceLifetime','RawMotionMap','MotionReadInComposition',
-    'LiteralUiSpacing','NonPresetScreenLayout','UnvalidatedUiSpec','UiLayerDependency','UnreviewedUiEscape'];
+    'LiteralUiSpacing','NonPresetScreenLayout','UnvalidatedUiSpec','UiLayerDependency','UnreviewedUiEscape',...popupRules];
 const digest = data => crypto.createHash('sha256').update(data).digest('hex');
 const requireThat = (ok, why) => { if (!ok) throw Error(why); };
 const safePath = p => typeof p === 'string' && !path.isAbsolute(p) && !p.split('/').some(s => s === '..' || s === '.') && /^[\w./-]+$/.test(p);
@@ -55,6 +56,7 @@ export function manifest(text, metadata, known) {
     const ids = new Set();
     for (const e of entries) {
         requireThat(Object.keys(e).sort().join() === 'expires,issue,owner,reason,reviewer,rule,symbol', 'Escape keys');
+        requireThat(!popupRules.includes(e.rule), 'Popup conformity rules cannot use escapes');
         requireThat(rules.includes(e.rule) && /^[\w.$]+:[1-9]\d*$/.test(e.symbol), 'Escape identity');
         requireThat(e.reviewer === 'lead' && /^https:\/\/github.com\/anastaci1a\/localica\/issues\/[1-9]\d*$/.test(e.issue), 'Escape review');
         requireThat(e.reason && e.owner, 'Empty escape'); const id = e.rule + ':' + e.symbol;
@@ -225,6 +227,10 @@ export function run(argv) {
     const manifestText = blob(head, o['--escapes']);
     const escapes = manifest(manifestText, meta, known.knownSteps);
     const sourceFiles = git('ls-tree','-r','--name-only',head,'app/src/main').trim().split('\n').filter(f => f.endsWith('.kt'));
+    const popupIncidents = checkPopupTree(sourceFiles.map(path => ({path, source: blob(head,path)})));
+    fs.mkdirSync(o['--out'], {recursive:true});
+    fs.writeFileSync(path.join(o['--out'],'popup-policy.json'), JSON.stringify({sourceSha:head, rules:popupRules, incidents:popupIncidents, accepted:popupIncidents.length===0},null,2)+'\n');
+    requireThat(popupIncidents.length===0, 'Popup conformity gate failed: '+JSON.stringify(popupIncidents));
     for (const e of escapes) {
         const [fqn,line] = e.symbol.split(':');
         const found = sourceFiles.filter(f => {
@@ -234,6 +240,7 @@ export function run(argv) {
         requireThat(found.length === 1 && /(?:Readback|Window|FrameStats|diagnostics)/i.test(found[0]), 'Missing or non-adapter escape source');
     }
     const diagnostics = ref => xml(blob(ref,o['--baseline'])).map(issue => {
+        requireThat(!popupRules.includes(issue.id), `Popup rule ${issue.id} cannot be baselined`);
         requireThat(rules.includes(issue.id), `Unknown rule ${issue.id}`);
         const loc = issue.locations[0]; let file = loc.file.replaceAll('\\','/');
         if (file.startsWith('src/')) file = 'app/' + file;

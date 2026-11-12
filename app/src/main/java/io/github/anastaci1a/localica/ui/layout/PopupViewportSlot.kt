@@ -14,7 +14,7 @@ import kotlin.math.roundToInt
 /** Actual layout-owned viewport; an IME extent is measured rather than animated here. */
 @Composable
 internal fun PopupViewportSlot(heightSizing: GlassDialogHeight, insets: PopupViewportInsets,
-    modifier: Modifier = Modifier, content: @Composable PopupViewportScope.() -> Unit) {
+    modifier: Modifier = Modifier, contentModifier: Modifier? = null, chrome: (@Composable () -> Unit)? = null, content: @Composable PopupViewportScope.() -> Unit) {
     val fixed = heightSizing is GlassDialogHeight.ViewportFraction
     require(fixed == (insets == PopupViewportInsets.SystemBarsAndCutout))
     val ime = WindowInsets.ime
@@ -28,7 +28,9 @@ internal fun PopupViewportSlot(heightSizing: GlassDialogHeight, insets: PopupVie
         val scope = remember(constraints, heightSizing, ime) {
             PopupViewportScope(constraints, heightSizing, ime, consumed)
         }
-        scope.content()
+        if (contentModifier == null) scope.content()
+        else Box(Modifier.fillMaxSize().then(contentModifier)) { scope.content() }
+        chrome?.invoke()
     }
 }
 

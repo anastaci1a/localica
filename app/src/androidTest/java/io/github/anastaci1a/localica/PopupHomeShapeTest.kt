@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -55,7 +57,7 @@ class PopupHomeShapeTest {
                             .selectionLens(selected, false, itemKey = "row", anchor = anchor)) {
                             when (trigger) {
                                 Trigger.ListMore -> Box(Modifier.align(Alignment.CenterEnd)) {
-                                    ActionIcon(AppIcon.ActionEllipsis, "More", anchor = anchor, quiet = true) { open = true } }
+                                    ActionIcon(AppIcon.ActionEllipsis, "More", anchor = anchor, role = TriggerRole.PlainIcon) { open = true } }
                                 Trigger.PillMore -> Box(Modifier.align(Alignment.CenterEnd)) {
                                     ActionIcon(AppIcon.ActionEllipsis, "More", anchor = anchor, glass = false) { open = true } }
                                 Trigger.Cover -> Box(Modifier.align(Alignment.CenterStart).size(itemHeight)

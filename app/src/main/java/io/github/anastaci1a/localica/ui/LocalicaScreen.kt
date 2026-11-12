@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
@@ -147,7 +149,6 @@ fun LocalicaScreen(
     var exitPrompt by remember { mutableStateOf(false) }
     var consumedRequest by rememberSaveable { mutableLongStateOf(queues.playerRequest) }
     val browsePopupHome = rememberGlassPopupHome(expanded || settingsOpen)
-    val utilityPopupHome = rememberGlassPopupHome(!moreOpen || expanded || settingsOpen, browsePopupHome)
     var settingsPresented by remember { mutableStateOf(false) }
     LaunchedEffect(settingsOpen) {
         if (settingsOpen) browsePopupHome.awaitHandoff()
@@ -313,9 +314,46 @@ fun LocalicaScreen(
         SideEffect { uiRoot.size = androidx.compose.ui.unit.IntSize(constraints.maxWidth, constraints.maxHeight) }
         val queueSelectionMaxHeight = maxHeight / 3
         SongDragScene(dragHost, Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalGlassPopupHome provides browsePopupHome) {
-        Box(Modifier.fillMaxSize().glassPopupHome(browsePopupHome)) {
-        Column(Modifier.fillMaxSize().glassPopupProjection(utilityPopupHome, browseBackdrop)
+
+        GlassPopupHome(browsePopupHome, chrome = {
+        val tabActivity = rememberSelectorTrackActivity()
+        Row(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
+            .padding(bottom = inset + 8.dp).height(NavigationPillHeight).fillMaxWidth()
+            .offset { androidx.compose.ui.unit.IntOffset(0, kotlin.math.round((80.dp + inset).toPx() * maxOf(phase.value(), 1f - chromeVisibility)).toInt()) }
+            .graphicsLayer { alpha = chromeVisibility }
+            .then(if (insideCollection || hasPlayer && playerCoversBrowse) Modifier.clearAndSetSemantics {} else Modifier),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f).fillMaxHeight().selectorTrackStacking(tabActivity).testTag("tab-pill")) {
+                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, activity = tabActivity, shadowOpacity = { chromeVisibility * (1f - phase.value()) }, onReselect = { tab ->
+                    navigation = navigation.resetTab(tab, clearLibraryFilter = false)
+                    scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
+                }, noneAtlasInput = shellNoneAtlas) { tab ->
+                    keyboard?.hide(); focusManager.clearFocus()
+                    requestedTab = tab
+                    navigationScope.launch {
+                        try {
+                            pagePopupHomes[settings.tabs[pager.currentPage]]?.awaitHandoff()
+                            val index = settings.tabs.indexOf(tab)
+                            if (settings.reducedMotion) pager.scrollToPage(index)
+                            else pager.animateScrollToPage(index, animationSpec = androidx.compose.animation.core.spring(dampingRatio = .85f, stiffness = 380f))
+                        } finally { requestedTab = null }
+                    }
+                }
+
+            }
+            val utilityAnchor = rememberGlassAnchor()
+            PopupActionPill(utilityAnchor, browseBackdrop,
+                Modifier.width(104.dp).fillMaxHeight(),
+                chromeVisibility = chromeVisibility, playerExpansion = sheet.expansion,
+                noneAtlasInput = shellNoneAtlas,
+                onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
+                onMore = { moreOpen = true }, menuVisible = moreOpen, onMenuDismiss = { moreOpen = false }, menuContent = {
+                ActionMenuItem("Scan music", icon = AppIcon.TabFolders, onClick = { moreOpen = false; scannerOpen = true })
+                ActionMenuItem("Settings", icon = AppIcon.ActionSettings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
+            })
+        }
+        }) {
+        Column(Modifier.fillMaxSize()
             // The opaque full player covers this entire scene. Keep its composition,
             // scroll state and cached recording, but do not submit hidden pixels.
             .drawWithContent { if (!hasPlayer || !playerFullyOpen) drawContent() }
@@ -346,7 +384,11 @@ fun LocalicaScreen(
                         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("page-heading"))
                     }
                     if (route.tab != MainTab.Queues && (route.tab != MainTab.Home || route.search || route.collection != null)) {
-                        BrowseOptionsPill(sortAnchor) { view -> viewOptions = view; sortingRoute = route.key }
+                        PopupActionPill(sortAnchor, modifier = Modifier.height(CompactControlSize), role = TriggerRole.BrowseOptions,
+                            leadingIcon = AppIcon.ActionSort, trailingIcon = AppIcon.ActionEye,
+                            leadingLabel = "Sort", trailingLabel = "View options", tag = "browse-options-trigger",
+                            onSearch = { viewOptions = false; sortingRoute = route.key },
+                            onMore = { viewOptions = true; sortingRoute = route.key })
                     }
                 }
                 Box(Modifier.weight(1f)) {
@@ -385,45 +427,6 @@ fun LocalicaScreen(
             }
             }
         }
-        val tabActivity = rememberSelectorTrackActivity()
-        Row(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
-            .padding(bottom = inset + 8.dp).height(NavigationPillHeight).fillMaxWidth()
-            .offset { androidx.compose.ui.unit.IntOffset(0, kotlin.math.round((80.dp + inset).toPx() * maxOf(phase.value(), 1f - chromeVisibility)).toInt()) }
-            .graphicsLayer { alpha = chromeVisibility }
-            .then(if (insideCollection || hasPlayer && playerCoversBrowse) Modifier.clearAndSetSemantics {} else Modifier),
-            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f).fillMaxHeight().selectorTrackStacking(tabActivity).testTag("tab-pill")) {
-                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, activity = tabActivity, shadowOpacity = { chromeVisibility * (1f - phase.value()) }, onReselect = { tab ->
-                    navigation = navigation.resetTab(tab, clearLibraryFilter = false)
-                    scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
-                }, noneAtlasInput = shellNoneAtlas) { tab ->
-                    keyboard?.hide(); focusManager.clearFocus()
-                    requestedTab = tab
-                    navigationScope.launch {
-                        try {
-                            pagePopupHomes[settings.tabs[pager.currentPage]]?.awaitHandoff()
-                            val index = settings.tabs.indexOf(tab)
-                            if (settings.reducedMotion) pager.scrollToPage(index)
-                            else pager.animateScrollToPage(index, animationSpec = androidx.compose.animation.core.spring(dampingRatio = .85f, stiffness = 380f))
-                        } finally { requestedTab = null }
-                    }
-                }
-
-            }
-            CompositionLocalProvider(LocalGlassPopupHome provides utilityPopupHome) {
-            val utilityAnchor = rememberGlassAnchor()
-            NavigationUtilityPill(utilityAnchor, browseBackdrop,
-                Modifier.width(104.dp).fillMaxHeight(),
-                shadowOpacity = { chromeVisibility * (1f - phase.value()) },
-                noneAtlasInput = shellNoneAtlas,
-                onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
-                onMore = { moreOpen = true })
-            GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
-                ActionMenuItem("Scan music", icon = AppIcon.TabFolders, onClick = { moreOpen = false; scannerOpen = true })
-                ActionMenuItem("Settings", icon = AppIcon.ActionSettings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
-            }
-            }
-        }
         // The pill is a standard Liquid Glass pill over the page: it samples the browse backdrop and takes the
         // page's ink for its material, icons and menu, like the mini-player and utility pill (#552).
         CompositionLocalProvider(LocalFrostedBackdrop provides browseBackdrop) {
@@ -436,7 +439,7 @@ fun LocalicaScreen(
             }
         }
         } }
-        } }
+        }
         Sheet(sheet) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,

@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
@@ -72,10 +74,7 @@ class CollectionDetailTest {
         compose.setContent { LocalicaTheme {
             val rootAnchor = rememberGlassAnchor()
             Column(Modifier.fillMaxSize()) {
-                if (route.collection == null) BrowseOptionsPill(rootAnchor) {
-                    rootView = it
-                    rootSorting = true
-                }
+                if (route.collection == null) PopupActionPill(rootAnchor, modifier = Modifier.height(CompactControlSize), role = TriggerRole.BrowseOptions, leadingIcon = AppIcon.ActionSort, trailingIcon = AppIcon.ActionEye, leadingLabel = "Sort", trailingLabel = "View options", tag = "browse-options-trigger", onSearch = { rootView = false; rootSorting = true }, onMore = { rootView = true; rootSorting = true })
                 Box(Modifier.weight(1f)) {
                     key(route.key) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route,

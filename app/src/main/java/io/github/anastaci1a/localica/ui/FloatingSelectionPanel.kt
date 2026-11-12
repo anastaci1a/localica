@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
@@ -48,7 +50,7 @@ internal fun rememberFloatingSelectionPanel(visible: Boolean, reducedMotion: Boo
     val visibility = rememberUpdatedState(visible)
     // Access policy comes from the root's validated Engine record, as for all faces.
     // v0.33.21's selection tween, never the popup spring (#869).
-    val face = rememberFaceExpansion(visible && height.value.value > 0f) { it.selectionExpansion }
+    val face = rememberFaceExpansion(visible && height.value.value > 0f, role = TriggerRole.Selection)
     val state = remember(face) { FloatingSelectionPanelState(height, face, visibility) }
     SideEffect { state.observeVisibility(visible) }
     return state

@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -62,7 +64,7 @@ class ListDensityRevisionTest {
                         Box(Modifier.fillMaxWidth().padding(horizontal = geometry.cardInset.dp,
                             vertical = geometry.cardVerticalInset(style).dp)) {
                             BrowseItemLayout(entry, style, geometry, this@LookaheadScope, true,
-                                menu = { ActionIcon(AppIcon.ActionEllipsis, "Density revision actions $index", quiet = true) { clicks++ } })
+                                menu = { ActionIcon(AppIcon.ActionEllipsis, "Density revision actions $index", role = TriggerRole.PlainIcon) { clicks++ } })
                         }
                     }
                 }

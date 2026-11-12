@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -40,7 +42,7 @@ class ActivationHapticsTest {
                     3 -> TransportButton(TransportGlyph.PlayPause, playing, "Action", domainAction,
                         Modifier.size(64.dp), 32.dp, Color.Black, enabled, false)
                     4 -> SettingsLink("Action", enabled = enabled, onClick = domainAction)
-                    5 -> ActionIcon(AppIcon.ActionPlus, "Action", enabled = enabled, quiet = true, onClick = domainAction)
+                    5 -> ActionIcon(AppIcon.ActionPlus, "Action", enabled = enabled, role = TriggerRole.PlainIcon, onClick = domainAction)
                     6 -> ActionIcon(AppIcon.ActionPlus, "Action", enabled = enabled, glass = true, onClick = domainAction)
                     7 -> ActionIcon(AppIcon.ActionPlus, "Action", enabled = enabled, glass = false, onClick = domainAction)
                     8 -> ActionMenuItem("Action", icon = AppIcon.ActionEllipsis, enabled = enabled, onClick = domainAction)

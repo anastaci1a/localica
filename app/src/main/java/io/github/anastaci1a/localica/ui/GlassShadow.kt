@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -82,12 +84,9 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     val density = androidx.compose.ui.platform.LocalDensity.current
     val key = anchor ?: remember { Any() }
     val plane = group ?: rememberShadowPlane()
-    DisposableEffect(plane, anchor) { anchor?.shadowPlane = plane; onDispose { if (anchor?.shadowPlane === plane) anchor.shadowPlane = null } }
+    val registration = anchor.glassAnchor(TriggerRole.MaterialSurface(plane))
     val host = if (group == null) Modifier.shadowPlaneHost(plane, appearance.shadowStrength, appearance.shadowSpread) else Modifier
-    return this.then(host).glassCaster(plane, key, if (group == null) ({ 1f }) else opacity, onNode = anchor?.let { owner -> { node, bound ->
-            if (bound) { owner.surfaceNode = node; owner.returningNode = node }
-            else if (owner.surfaceNode === node) { owner.surfaceNode = null; if (node.windowRetained().not()) owner.returningNode = null }
-        } }, retained = (anchor?.surfaceNode) ?: anchor?.returningNode?.takeIf { it.windowRetained() }, inheritsBodyScale = group == null) {
+    return this.then(host).glassCaster(plane, key, if (group == null) ({ 1f }) else opacity, onNode = registration, retained = (anchor?.surfaceNode) ?: anchor?.returningNode?.takeIf { it.windowRetained() }, inheritsBodyScale = group == null) {
             if (group != null) glassCasterBody(it, density, radius, anchor, opacity())
             else if (anchor?.shadowInModal == true && anchor.surfaceNode?.windowRetained() != true) null else glassCasterBody(it, density, radius, null)
         }
@@ -157,10 +156,7 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
 @Composable internal fun Modifier.quietGlassCaster(anchor: GlassAnchor): Modifier {
     val plane=rememberShadowPlane()
     val density=androidx.compose.ui.platform.LocalDensity.current
-    return this.shadowPlaneHost(plane,0f,0f).glassCaster(plane,anchor,onNode={ node,bound ->
-        if(bound) { anchor.surfaceNode=node; anchor.returningNode=node; anchor.shadowPlane=plane }
-        else if(anchor.surfaceNode===node) { anchor.surfaceNode=null; if (node.windowRetained().not()) anchor.returningNode=null }
-    },retained=(anchor.surfaceNode) ?: anchor.returningNode?.takeIf { it.windowRetained() }, inheritsBodyScale=true) { glassCasterBody(it,density,anchor.cornerRadius,null) }
+    return this.shadowPlaneHost(plane,0f,0f).glassCaster(plane,anchor,onNode=anchor.glassAnchor(TriggerRole.RetainedSurface(plane)),retained=(anchor.surfaceNode) ?: anchor.returningNode?.takeIf { it.windowRetained() }, inheritsBodyScale=true) { glassCasterBody(it,density,anchor.cornerRadius,null) }
 }
 
 /** The split pill's existing field fold registers both bodies; its left identity
@@ -170,9 +166,6 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     val appearance=LocalGlassAppearance.current
     val right=remember(anchor) { Any() }
     return this.shadowPlaneHost(plane,appearance.shadowStrength,appearance.shadowSpread)
-        .glassCaster(plane,anchor,onNode={ node,bound ->
-            if(bound) { anchor.surfaceNode=node; anchor.returningNode=node; anchor.shadowPlane=plane }
-            else if(anchor.surfaceNode===node) { anchor.surfaceNode=null; if (node.windowRetained().not()) anchor.returningNode=null }
-        },retained=(anchor.surfaceNode) ?: anchor.returningNode?.takeIf { it.windowRetained() }) { r -> shape.frame(r.size).bodies.firstOrNull()?.translate(r.topLeft) }
+        .glassCaster(plane,anchor,onNode=anchor.glassAnchor(TriggerRole.RetainedSurface(plane)),retained=(anchor.surfaceNode) ?: anchor.returningNode?.takeIf { it.windowRetained() }) { r -> shape.frame(r.size).bodies.firstOrNull()?.translate(r.topLeft) }
         .glassCaster(plane,right) { r -> shape.frame(r.size).bodies.getOrNull(1)?.translate(r.topLeft) }
 }

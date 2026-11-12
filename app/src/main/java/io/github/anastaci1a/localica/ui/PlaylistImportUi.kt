@@ -40,10 +40,6 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
     var error by remember { mutableStateOf<String?>(null) }
     val menuAnchor = rememberGlassAnchor()
     val menuSource = LocalFrostedBackdrop.current
-    SideEffect {
-        menuAnchor.source = menuSource
-        menuAnchor.face = { Icon(appIconPainter(AppIcon.ActionPlus), null, Modifier.size(24.dp)) }
-    }
     val picker = rememberLauncherForActivityResult(LocalPlaylistPicker()) { uri ->
         if (uri != null) loadJob = scope.launch {
             loading = true; error = null
@@ -71,7 +67,7 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
         }
     }
     Box(modifier) {
-        LiquidGlassSurface(Modifier.size(CompactControlSize).glassAnchor(menuAnchor).clickable { menu = true }) {
+        LiquidGlassSurface(Modifier.size(CompactControlSize).glassAnchor(menuAnchor, menuSource, face = { Icon(appIconPainter(AppIcon.ActionPlus), null, Modifier.size(24.dp)) }).clickable { menu = true }) {
             menuAnchor.captureInk()
             Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Icon(appIconPainter(AppIcon.ActionPlus), "Add playlist", Modifier.size(24.dp))

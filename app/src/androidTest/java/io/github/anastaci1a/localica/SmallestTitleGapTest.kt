@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -49,7 +51,7 @@ class SmallestTitleGapTest {
                         Box(Modifier.fillMaxWidth().testTag("gap-row-$index").padding(
                             horizontal = geometry.cardInset.dp, vertical = geometry.cardVerticalInset(style).dp)) {
                             BrowseItemLayout(entry, style, geometry, this@LookaheadScope, true,
-                                menu = { ActionIcon(AppIcon.ActionEllipsis, "Gap actions $index", quiet = true) { clicks += index } },
+                                menu = { ActionIcon(AppIcon.ActionEllipsis, "Gap actions $index", role = TriggerRole.PlainIcon) { clicks += index } },
                                 trackNumber = if (numbered) "${index + 1}" else null)
                         }
                     }

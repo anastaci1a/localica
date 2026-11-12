@@ -280,3 +280,8 @@ test('a transfer re-anchored twice still continues its original before row, neve
     assert.deepEqual(transferPriorIdentities(twice, [old, {...old, identity:'twin'}], [next]), []);
     assert.deepEqual(transferPriorIdentities(twice, [old], [next, old]), []);
 });
+
+test('popup conformity rules cannot use the escape manifest',()=>{
+ for(const id of ['ScreenPopupHome','ScreenPopupMotion','ScreenPopupTrigger','ScreenPopupDrawPath','DuplicatePopupRole'])
+  assert.throws(()=>manifest(entry('v9.0.0').replace('RawUiMotion',id),{release:'v1.0.0',steps:[]},[]),/cannot use escapes/);
+});

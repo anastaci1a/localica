@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import android.os.Build
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.OverscrollEffect
@@ -457,16 +459,13 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
         entry.layer = layer
         entry.alpha = alpha
         handle?.progress = { visibility.value }
-        // Popups homed on this item follow its lift (#554), however the item is keyed.
-        anchor?.presentation = { entry.presented?.let { lift -> entry.coordinates?.takeIf { it.isAttached }
-            ?.let { GlassLift(lift.scale, it.backdropPosition(view) + lift.pivot) } } }
         val selected = isSelected && !partial
         if (entry.selected != selected) { entry.selected = selected; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 } }
         // Registration is identity-stable; rewrite only a missing or replaced entry.
         if (scene != null && scene.regions[token] !== entry) scene.regions[token] = entry
     }
     DisposableEffect(scene, token) { onDispose { scene?.regions?.remove(token); entry.recorded = false } }
-    return semantics {
+    return glassAnchor(anchor, role = TriggerRole.SelectionItem(entry)).semantics {
         this.selected = isSelected && !partial
         if (partial) stateDescription = "Partially selected"
     }.onPlaced {

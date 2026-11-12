@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -44,7 +46,7 @@ class GalleryMenuInputTest {
             CompositionLocalProvider(LocalContentColor provides Color(0xFF0044FF)) {
                 Box(Modifier.size(64.dp).background(Color.White).testTag("retained-action-scene"),
                     contentAlignment = Alignment.Center) {
-                    ActionIcon(AppIcon.ActionEllipsis, "Retained action", quiet = true,
+                    ActionIcon(AppIcon.ActionEllipsis, "Retained action", role = TriggerRole.PlainIcon,
                         quietInputEnabled = inputEnabled, onLongClickLabel = "Hold retained action",
                         onLongClick = { holds++ }) { clicks++ }
                     PresentationMarker(Modifier.align(Alignment.TopStart)) { stage }

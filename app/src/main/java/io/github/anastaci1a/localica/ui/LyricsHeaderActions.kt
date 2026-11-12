@@ -1,13 +1,13 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -25,22 +25,7 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     fun horizontal(shape: GlassShape, contact: GlassContact) =
         if (contact.vertical) shape.copy(strain = -shape.strain) else shape
     val separated=preparation.separated
-    fun gap()=originGap(preparation.progress)
     val surface = rememberLyricsHeaderSurface(reveal) { preparation.progress }
-    val originPresentation: (Float) -> GlassOriginPresentation = remember(anchor, contacts, preparation) {
-        { homeHeight ->
-            val separation = originGap(preparation.progress)
-            val common = horizontal(contacts.presentation(contacts.left, contacts.right, 0f), contacts.left)
-            GlassOriginPresentation(
-                shape = contacts.presentation(contacts.left, contacts.right, separation),
-                vertical = contacts.left.vertical,
-                horizontalShift = -homeHeight / 2f * (common.scaleX() - 1f) * (1f - separation))
-        }
-    }
-    DisposableEffect(anchor, originPresentation) {
-        anchor.originPresentation = originPresentation
-        onDispose { anchor.clearOriginPresentation(originPresentation) }
-    }
     // A fast source tap can finish the still-growing two-action header without
     // substituting a full-width pill at the beginning of preparation.
     val pill = rememberSplitPill { preparation.progress }
@@ -63,12 +48,8 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     }
     SideEffect {
         contacts.update(separated)
-        anchor.quiet = false
-        anchor.depthScale = RaisedGlassDepthScale
-        anchor.face = { Icon(appIconPainter(AppIcon.ActionLyrics), null, Modifier.size(24.dp)) }
     }
     val source = LocalFrostedBackdrop.current
-    SideEffect { anchor.source = source }
 
     @Composable fun leftAction() {
         anchor.captureInk()
@@ -95,25 +76,15 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
             LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = pill.silhouette, shadow = false,
                 sharedContact = contacts.joined, depthScale = RaisedGlassDepthScale) {
                 LyricsHeaderJoinedLayout(CompactControlSize, reveal > 0f || preparation.active, lyricsOpen,
-                    surface, Modifier.glassAnchor(anchor), { leftAction() },
+                    surface, Modifier.glassAnchor(anchor, source, face = { Icon(appIconPainter(AppIcon.ActionLyrics), null, Modifier.size(io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Panel))) }, role = TriggerRole.LyricsHeader(contacts, preparation)), { leftAction() },
                     { GlassPillDivider(it) }, { rightAction() })
             }
         } else {
-            fun Modifier.pivotCompensation(side: Float) = drawWithContent {
-                val common = horizontal(contacts.presentation(contacts.left, contacts.right, 0f), contacts.left)
-                val shift = if (side < 0f) originPresentation(CompactControlSize.toPx()).horizontalShift
-                    else side * CompactControlSize.toPx() / 2f * (common.scaleX() - 1f) * (1f - gap())
-                // Like shared contact scaling, this is a draw-space correction.
-                // Moving layout coordinates would resample the backdrop at the cut.
-                translate(left = shift) { this@drawWithContent.drawContent() }
-            }
             LiquidGlassSurface(Modifier.align(Alignment.CenterStart).size(CompactControlSize)
-                .pivotCompensation(-1f).glassAnchor(anchor),
-                contactPresentation = { originPresentation(0f).shape },
+                .glassAnchor(anchor, source, face = { Icon(appIconPainter(AppIcon.ActionLyrics), null, Modifier.size(io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Panel))) }, role = TriggerRole.LyricsHeader(contacts, preparation)),
                 shadow = false, depthScale = RaisedGlassDepthScale) { leftAction() }
-            LiquidGlassSurface(Modifier.align(Alignment.CenterEnd).size(CompactControlSize).pivotCompensation(1f),
+            LiquidGlassSurface(Modifier.align(Alignment.CenterEnd).size(CompactControlSize).glassAnchor(null, role = TriggerRole.LyricsHeader(contacts, preparation, side = 1f)),
                 sharedContact = contacts.right,
-                contactPresentation = { contacts.presentation(contacts.right, contacts.left, gap()) },
                 shadow = false, depthScale = RaisedGlassDepthScale) { rightAction() }
         }
     }

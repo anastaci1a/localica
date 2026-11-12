@@ -12,6 +12,8 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.view.Window
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.asAndroidBitmap
+import kotlinx.coroutines.runBlocking
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.*
@@ -35,7 +37,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.math.max
 
-/** #667: the actual overflow route keeps its returning pixels below both pieces of bottom chrome. */
+/** #867/#667: the real overflow starts above tabs, then retracts beneath bottom chrome. */
 class PopupChromeDepthTest {
     @get:Rule val compose = localicaComposeRule()
     private val markers = IdentityHashMap<View, Marker>()
@@ -113,15 +115,54 @@ class PopupChromeDepthTest {
                 flights(home).single()
             }
             compose.onNodeWithText(destination, substring = false).performClick()
+            var fullSizeFrames = 0
             var valid = 0
             var highest = 0f
             var lowest = 1f
             val violations = mutableListOf<String>()
             val inset = 4f * host.resources.displayMetrics.density
             for (frame in 0 until 96) {
-                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                if (frame < 8) compose.mainClock.advanceTimeBy(1) else compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
                 if (!window.decorView.isAttachedToWindow) break
                 val p = progress.coerceIn(0f, 1f)
+                if (p > .9f && flight.prepared) {
+                    val modal = original(window, output, "full-$frame-popup")
+                    val root = original(activity, output, "full-$frame-root")
+                    val layer = runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap()
+                    try {
+                        val rootAt = IntArray(2); val modalAt = IntArray(2)
+                        var nativeAlpha = 1f
+                        compose.runOnUiThread {
+                            activity.decorView.getLocationOnScreen(rootAt); window.decorView.getLocationOnScreen(modalAt)
+                            nativeAlpha = window.attributes.alpha
+                        }
+                        val bounds = regions.single { it.first == "tabs" }.second
+                        val origin = flight.origin
+                        var count = 0; var bad = 0
+                        for (y in bounds.top.toInt() until bounds.bottom.toInt() step 2)
+                            for (x in bounds.left.toInt() until bounds.right.toInt() step 2) {
+                                val lx = x + rootAt[0] - origin.x.toInt(); val ly = y + rootAt[1] - origin.y.toInt()
+                                if (lx !in 0 until layer.width || ly !in 0 until layer.height) continue
+                                val expected = layer.getPixel(lx, ly)
+                                // Fully opaque menu interior has no permitted chrome contribution.
+                                if (Color.alpha(expected) < 254) continue
+                                val mx = x + rootAt[0] - modalAt[0]; val my = y + rootAt[1] - modalAt[1]
+                                val m = if (mx in 0 until modal.width && my in 0 until modal.height) modal.getPixel(mx, my) else Color.TRANSPARENT
+                                val a = Color.alpha(m) / 255f * nativeAlpha
+                                val r = root.getPixel(x, y)
+                                if (channels.maxOf { abs(it(m) * a + it(r) * (1f - a) - it(expected)) } > 14f) bad++
+                                count++
+                            }
+                        if (count > 100) {
+                            fullSizeFrames++
+                            samples.put(JSONObject().put("frame", frame).put("phase", p).put("routing", "above-chrome").put("pixels", count).put("changed", bad))
+                            save()
+                            assertTrue("#867 tabs must not cover the full-size More menu: p=$p changed=$bad/$count", bad <= max(4, count / 1000))
+                        }
+                    } finally { modal.recycle(); root.recycle(); layer.recycle() }
+                    continue
+                }
                 if (p !in .04f.. .9f) continue
                 val before = compose.runOnUiThread { flight.handedOff }
                 val sample = JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
@@ -175,9 +216,10 @@ class PopupChromeDepthTest {
                 } finally { modal.recycle() }
                 save()
             }
-            report.put("validFrames", valid).put("highestPhase", highest).put("lowestPhase", lowest)
+            report.put("fullSizeFrames", fullSizeFrames).put("validFrames", valid).put("highestPhase", highest).put("lowestPhase", lowest)
                 .put("violations", JSONArray(violations)).put("status", if (violations.isEmpty()) "sampled" else "failed-depth")
             save()
+            assertTrue("#867 requires a presented full-size menu overlapping the tabs", fullSizeFrames > 0)
             assertTrue("#667 needs actual intermediate-frame coverage: $report", valid >= 3 && highest >= .6f && lowest <= .2f)
             assertTrue("#667 returning $destination pixels crossed bottom chrome: $violations", violations.isEmpty())
             assertFalse("The overflow's original native window retires after return", window.decorView.isAttachedToWindow)

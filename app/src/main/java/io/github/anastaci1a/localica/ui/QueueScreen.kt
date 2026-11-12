@@ -62,7 +62,6 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
             Icon(appIconPainter(AppIcon.ActionChevronDown), "Select queue", Modifier.size(24.dp))
         }
     }
-    SideEffect { selectorAnchor.face = { SelectorFace(copy = true) } }
     val position = remember(active?.entries, active?.currentEntryId) {
         active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
     }
@@ -96,7 +95,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         onMinimize?.let { ActionIcon(AppIcon.ActionChevronDown, "Minimize queue", onClick = it) }
-                        LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor)) {
+                        LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor, face = { SelectorFace(copy = true) })) {
                             Box(Modifier.fillMaxWidth().height(CompactControlSize).ownButtonDrag(state.library.queues.isNotEmpty())
                                 .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { selectorAnchor.captureInk(); SelectorFace() }
 
@@ -149,10 +148,9 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     onSelect = { controller?.switchTo(it); selector = false }, onRename = { renameId = it },
                     onDelete = { deleting = setOf(it) }, onOffset = { id, offset -> controller?.moveQueue(id, offset) },
                     onMove = { id, before, complete -> controller?.moveQueueBefore(id, before, complete) ?: complete(false) })
-                SideEffect { removeOthersAnchor.face = { GlassActionButtonFace(AppIcon.ActionTrash, "Remove all other queues",
-                    Modifier.fillMaxHeight().wrapContentHeight(Alignment.CenterVertically)) } }
                 if (state.library.queues.size > 1) GlassActionButton(AppIcon.ActionTrash, "Remove all other queues",
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp).glassAnchor(removeOthersAnchor),
+                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp).glassAnchor(removeOthersAnchor, face = { GlassActionButtonFace(AppIcon.ActionTrash, "Remove all other queues",
+                        Modifier.fillMaxHeight().wrapContentHeight(Alignment.CenterVertically)) }),
                     enabled = state.library.queues.size > 1, onClick = {
                     deletionOrigin = removeOthersAnchor
                     deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet()

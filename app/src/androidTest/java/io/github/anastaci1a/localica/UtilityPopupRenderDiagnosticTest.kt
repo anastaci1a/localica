@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+
 import io.github.anastaci1a.localica.ui.engine.*
 
 import android.graphics.Bitmap
@@ -297,7 +298,7 @@ class UtilityPopupRenderDiagnosticTest {
                                         .pageGlassCaster(), source = browse, shadow = false, depthScale = BottomPillDepthScale) {
                                         Text("Home     Library", Modifier.align(Alignment.Center))
                                     }
-                                    NavigationUtilityPill(anchor, browse, Modifier.width(104.dp).fillMaxHeight(),
+                                    PopupActionPill(anchor, browse, Modifier.width(104.dp).fillMaxHeight(),
                                         onSearch = {}, onMore = { open = true })
                                 }
                             }

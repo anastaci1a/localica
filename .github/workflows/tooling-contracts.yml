@@ -96,7 +96,7 @@ jobs:
                   raise RuntimeError('Missing required contract file: ' + name)
           commands = [[sys.executable, '-m', 'unittest', 'discover', '-v', '-s', '.github/tests', '-p', name] for name in names]
           commands.append(['node', '--test', '--test-reporter=tap', '.github/tests/test_publish_test_evidence.mjs'])
-          commands.append(['node', '--test', '.github/tests/test_ui_lint_contract.mjs', 'tools/ui-consolidation/pin.test.mjs', 'tools/ui-consolidation/adopt-baseline.test.mjs', 'tools/performance/none-contract.test.mjs', 'tools/performance/summarize-ui.test.mjs'])
+          commands.append(['node', '--test', '.github/tests/test_ui_lint_contract.mjs', 'tools/ui-consolidation/pin.test.mjs', 'tools/ui-consolidation/popup-policy.test.mjs', 'tools/ui-consolidation/adopt-baseline.test.mjs', 'tools/performance/none-contract.test.mjs', 'tools/performance/summarize-ui.test.mjs'])
           results = []
           for index, argv in enumerate(commands):
               log = root / ('contract-%02d.log' % index)

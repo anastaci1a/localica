@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.foundation.background
@@ -98,9 +99,9 @@ class IconRegistryVisualTest {
                 Box(Modifier.fillMaxWidth().height(72.dp)) {
                     PlayerActionStrip(PlayerActionSettings(slots = mapOf(ActionSlot(0, 0) to PlayerAction.More)), { it.label }, {}, {})
                 }
-                Text("NavigationUtilityPill — live")
-                NavigationUtilityPill(anchor, backdrop, Modifier.width(104.dp).height(48.dp), onSearch = {}, onMore = {})
-                Text("NavigationUtilityPill — retained descriptor")
+                Text("PopupActionPill — live")
+                PopupActionPill(anchor, backdrop, Modifier.width(104.dp).height(48.dp), onSearch = {}, onMore = {})
+                Text("PopupActionPill — retained descriptor")
                 Box(Modifier.width(104.dp).height(48.dp)) { face?.invoke() }
             }
             SideEffect { if (face == null) face = anchor.face }

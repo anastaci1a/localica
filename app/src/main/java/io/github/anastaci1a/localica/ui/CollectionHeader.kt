@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -226,7 +229,10 @@ internal fun BoxScope.CollectionToolbar(grid: LazyGridState, width: Int, title: 
         Text(title, Modifier.weight(1f).graphicsLayer { alpha = fade.value }
             .then(if (!titled) Modifier.clearAndSetSemantics {} else Modifier), maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-        BrowseOptionsPill(anchor, onOptions)
+        PopupActionPill(anchor, modifier = Modifier.height(CompactControlSize), role = TriggerRole.BrowseOptions,
+            leadingIcon = AppIcon.ActionSort, trailingIcon = AppIcon.ActionEye,
+            leadingLabel = "Sort", trailingLabel = "View options", tag = "browse-options-trigger",
+            onSearch = { onOptions(false) }, onMore = { onOptions(true) })
         menu()
     }
 }

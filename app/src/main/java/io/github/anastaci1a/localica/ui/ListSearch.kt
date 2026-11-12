@@ -34,10 +34,9 @@ internal val ListPillVerticalInset = 4.dp
 internal fun ListSearchPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, anchor: GlassAnchor? = null) {
     val interaction = remember { MutableInteractionSource() }
     val source = LocalFrostedBackdrop.current
-    SideEffect { anchor?.source = source; anchor?.face = { SearchPillFace(label) } }
     Box(modifier.fillMaxWidth().height(listPillTargetHeight()).ownButtonDrag().clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
         .testTag("list-search-pill"), contentAlignment = Alignment.Center) {
-        LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)) {
+        LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(anchor, source, face = { SearchPillFace(label) })) {
             anchor?.captureInk()
             SearchPillFace(label)
         }

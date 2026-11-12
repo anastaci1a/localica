@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import io.github.anastaci1a.localica.ui.engine.*
 import io.github.anastaci1a.localica.ui.spec.MotionAccess
 
@@ -58,6 +60,38 @@ internal fun ComposeTestRule.advanceMorphOpening(
 
 class GlassMorphTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun omittedAnchorInputsDoNotClobberEarlierSameFrameWriters() {
+        lateinit var anchor: GlassAnchor
+        lateinit var source: FrostedBackdrop
+        val retained: @Composable () -> Unit = { Text("Retained") }
+        compose.setContent { LocalicaTheme {
+            anchor = rememberGlassAnchor()
+            source = rememberFrostedBackdrop(Unit)
+            SideEffect { anchor.source = source; anchor.face = retained }
+            Box(Modifier.size(64.dp).glassAnchor(anchor))
+        } }
+        compose.runOnIdle {
+            assertSame("An omitted source leaves the earlier writer intact", source, anchor.source)
+            assertSame("An omitted face leaves the earlier writer intact", retained, anchor.face)
+        }
+    }
+
+    @Test fun materialBindingHonorsExplicitAnchorSourceAndRadiusReset() {
+        lateinit var anchor: GlassAnchor
+        lateinit var explicit: FrostedBackdrop
+        compose.setContent { LocalicaTheme {
+            anchor = rememberGlassAnchor()
+            explicit = rememberFrostedBackdrop("explicit")
+            val ambient = rememberFrostedBackdrop("ambient")
+            LiquidGlassSurface(Modifier.size(64.dp).glassAnchor(anchor, explicit, role = TriggerRole.PlainIcon),
+                source = ambient, cornerRadius = 20.dp) {}
+        } }
+        compose.runOnIdle {
+            assertSame("The one binding owner preserves the explicit source", explicit, anchor.source)
+            assertNull("The material host cannot overwrite a requested radius reset", anchor.cornerRadius)
+        }
+    }
 
     @Test fun openingAndLateReversalKeepOneSurfaceAndProducePresentedOriginEvidence() {
         val work = PopupCompositionWorkRecorder("io.github.anastaci1a.localica.GlassMorphTest#openingAndLateReversalKeepOneSurfaceAndProducePresentedOriginEvidence")

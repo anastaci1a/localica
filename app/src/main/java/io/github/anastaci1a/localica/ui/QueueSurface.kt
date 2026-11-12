@@ -168,8 +168,8 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
             sheet.expansion.expanded -> ControlScrollDirection.Down; else -> ControlScrollDirection.Up } }
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
         .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel) {
-        CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
-        Box(Modifier.fillMaxSize().glassPopupHome(popupHome)) {
+
+        GlassPopupHome(popupHome) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
             Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (!shown) "Open queue" else "Close queue") {
                 val open = !sheet.expanded
@@ -191,7 +191,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
             }
         }
         }
-        }
+
     }
     }) { measurables, constraints ->
         val drawer = measurables.single().measure(Constraints.fixed(constraints.maxWidth, viewportHeight))

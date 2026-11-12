@@ -1,0 +1,16 @@
+ScreenPopupHome=app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt
+ScreenPopupHome=app/src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt
+ScreenPopupHome=app/src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt
+ScreenPopupMotion=app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt
+ScreenPopupMotion=app/src/main/java/io/github/anastaci1a/localica/ui/components/MorphFaces.kt
+ScreenPopupMotion=app/src/main/java/io/github/anastaci1a/localica/ui/components/Presence.kt
+ScreenPopupMotion=app/src/main/java/io/github/anastaci1a/localica/ui/components/Popup.kt
+ScreenPopupMotion=app/src/main/java/io/github/anastaci1a/localica/ui/components/PopupSharedContent.kt
+ScreenPopupMotion=app/src/main/java/io/github/anastaci1a/localica/ui/engine/ExpandCollapse.kt
+ScreenPopupMotion=app/src/main/java/io/github/anastaci1a/localica/ui/engine/PopupWindowMotion.kt
+ScreenPopupTrigger=app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt
+ScreenPopupTrigger=app/src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt
+ScreenPopupDrawPath=app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt
+ScreenPopupHome=app/src/main/java/io/github/anastaci1a/localica/ui/components/Popup.kt
+ScreenPopupTrigger=app/src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt
+ScreenPopupMotion=app/src/main/java/io/github/anastaci1a/localica/ui/components/Sheet.kt

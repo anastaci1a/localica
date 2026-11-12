@@ -13,6 +13,11 @@ class LocalicaIssueRegistry : IssueRegistry() {
 }
 
 internal enum class UiRuleId(val policy: String) {
+    ScreenPopupHome("Only shared popup owners provide popup homes"),
+    ScreenPopupMotion("The shared popup component derives motion kinds and laws"),
+    ScreenPopupTrigger("Use the shared anchor API; screens cannot implement triggers"),
+    ScreenPopupDrawPath("Use the shared popup draw path"),
+    DuplicatePopupRole("Only shared system owners implement popup home and trigger roles"),
     RawUiMotion("Use Engine trajectories"),
     IndependentUiClock("Use the shared UiClock"),
     RawPresentationTransform("Bind presentation through Modifier.surface"),
@@ -30,7 +35,7 @@ internal enum class UiRuleId(val policy: String) {
     val issue: Issue by lazy {
         Issue.create(name, policy, "$policy. Enforces the Localica UI architecture.",
             Category.CORRECTNESS, 8, Severity.ERROR,
-            Implementation(UiPolicyDetector::class.java, Scope.JAVA_FILE_SCOPE)).also {
+            Implementation(if (name in setOf("ScreenPopupHome", "ScreenPopupMotion", "ScreenPopupTrigger", "ScreenPopupDrawPath", "DuplicatePopupRole")) PopupPolicyDetector::class.java else UiPolicyDetector::class.java, Scope.JAVA_FILE_SCOPE)).also {
             if (this == UnreviewedUiEscape) it.setOptions(listOf(EscapeOptions.known, EscapeOptions.completed, EscapeOptions.release))
         }
     }

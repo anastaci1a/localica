@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
@@ -185,8 +187,8 @@ private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean
                 }
             }
             Row(actionsModifier) {
-                ActionIcon(AppIcon.ActionEdit, "Rename ${queue.name}", enabled = enabled, glass = false, quiet = true, onClick = onRename)
-                ActionIcon(AppIcon.ActionClose, "Delete ${queue.name}", enabled = enabled, glass = false, quiet = true, onClick = onDelete)
+                ActionIcon(AppIcon.ActionEdit, "Rename ${queue.name}", enabled = enabled, glass = false, role = TriggerRole.PlainIcon, onClick = onRename)
+                ActionIcon(AppIcon.ActionClose, "Delete ${queue.name}", enabled = enabled, glass = false, role = TriggerRole.PlainIcon, onClick = onDelete)
             }
         }
     }

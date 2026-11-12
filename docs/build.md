@@ -292,7 +292,7 @@ The [documentation workflow](../.github/workflows/documentation.yml) runs these 
 
 ## UI policy checks
 
-The app consumes thirteen ERROR rules from `:lint`. Run `./gradlew :lint:test :app:lintDebug` and `bash .github/run-ui-lint.sh app/build/reports/ui-lint`. The second command fetches main once and records its immutable SHA.
+The app consumes eighteen ERROR rules from `:lint`. The five popup conformity rules have no baseline or escape allowance. Popup ownership uses the exact paths in `lint/src/main/resources/popup-owners.txt`; a new file under components or engine does not become an owner automatically. Run `./gradlew :lint:test :app:lintDebug` and `bash .github/run-ui-lint.sh app/build/reports/ui-lint`. The second command fetches main once and records its immutable SHA.
 
 The generated `app/lint-baseline.xml` records inherited debt. Initial bootstrap requires the frozen Stage 0 approval and source receipt. Subsequent changes may only remove incident identities; equal-count replacements fail. Never regenerate the baseline to accept new debt.
 

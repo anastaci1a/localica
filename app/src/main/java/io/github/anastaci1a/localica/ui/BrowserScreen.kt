@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateBounds
@@ -1213,8 +1215,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         // mounted with this row for its return morph, dialogs and saveable workflow.
                         var actionsMounted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
                         // Gallery artwork publishes its menu origin only when the menu opens.
-                        val menuAnchor = rememberGlassAnchor(deferContextPlacement = true)
-                        SideEffect { menuAnchor.contextual = true; menuAnchor.bottomClearance = with(density) { obscuredInset.toPx() } }
+                        val menuAnchor = rememberGlassAnchor(deferContextPlacement = true, role = TriggerRole.Contextual, clearance = obscuredInset)
                         val mutableSong = item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)
                         val holdLabel = if (mutableSong) "Select song" else if (item.row != null) "Song actions" else "Collection actions"
                         val onHold = {
@@ -1224,7 +1225,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
                                 if (showButton) ActionIcon(AppIcon.ActionEllipsis, "Actions for " + item.title, anchor = menuAnchor,
-                                    quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, onLongClickLabel = holdLabel,
+                                    quietInputEnabled = displayedStyle.presentation == Presentation.List, role = TriggerRole.PlainIcon, onLongClickLabel = holdLabel,
                                     onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { menuAnchor.prepareContextPlacement(); contextMenu = item.key }
                                 val menuOpen = contextMenu == item.key
                                 if (menuOpen || actionsMounted) {

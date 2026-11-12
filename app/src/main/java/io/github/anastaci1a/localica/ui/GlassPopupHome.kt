@@ -24,8 +24,6 @@ import kotlinx.coroutines.flow.first
 internal class GlassPopupHome(private val leaving: State<Boolean>) {
     val departing get() = leaving.value
     var mounted by mutableStateOf(true)
-    /** A projection host never leaves; its returning popups keep their own motion (#667). */
-    var holdsDepartingPopups = true
     var backdrop by mutableStateOf<FrostedBackdrop?>(null)
     val flights = mutableStateListOf<GlassPopupFlight>()
     val children = mutableStateListOf<GlassPopupHome>()
@@ -37,6 +35,8 @@ internal class GlassPopupHome(private val leaving: State<Boolean>) {
 }
 
 internal class GlassPopupFlight {
+    var chromeTrigger = false
+    var phase: () -> Float = { 0f }
     var layer by mutableStateOf<GraphicsLayer?>(null)
     var origin = Offset.Zero
     var homeOrigin = Offset.Zero
@@ -60,7 +60,7 @@ internal fun rememberGlassPopupHome(departing: Boolean, parent: GlassPopupHome? 
 }
 
 @Composable
-internal fun Modifier.glassPopupHome(home: GlassPopupHome): Modifier {
+internal fun Modifier.glassPopupHome(home: GlassPopupHome, aboveChrome: Boolean? = null): Modifier {
     val view = LocalView.current
     // Keep size/readback subscriptions in this layout scope, not in the modal's
     // committed window owner above the per-frame geometry scope.
@@ -96,15 +96,20 @@ internal fun Modifier.glassPopupHome(home: GlassPopupHome): Modifier {
             androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { backdrop.location.transformRevision++ }
         }
         drawContent()
-        projectFlights(home)
+        projectFlights(home, aboveChrome)
     // Sampling is deliberately inside the overlay. Retained ancestor RenderNodes
     // can contain this home, so merely freezing an ancestor recording is insufficient
     // to prevent a modal from sampling itself during the inline handoff.
     }.then(recording)
 }
 
-private fun ContentDrawScope.projectFlights(home: GlassPopupHome) {
+private const val ChromeReturnDepthHandoff = .9f
+
+private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: Boolean? = null) {
     home.flights.forEach { flight ->
+        // A full-size chrome menu stays above chrome at the start of close (#867).
+        // Its converging chip returns underneath the same chrome (#667).
+        if (aboveChrome != null && aboveChrome != (flight.chromeTrigger && flight.phase() > ChromeReturnDepthHandoff)) return@forEach
         flight.revision
         val layer = flight.layer
         if ((home.departing || flight.handedOff) && flight.prepared && layer != null && !layer.isReleased) {
@@ -116,40 +121,27 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome) {
     }
 }
 
-/** Utility flights return beneath chrome. The supplied producer is recorded before
- * this projection, so neither native sampling nor a retained ancestor can feed back. */
-@Composable
-internal fun Modifier.glassPopupProjection(home: GlassPopupHome, source: FrostedBackdrop): Modifier {
-    val view = LocalView.current
-    SideEffect {
-        home.backdrop = source
-        home.holdsDepartingPopups = false
-    }
-    DisposableEffect(home, source) {
-        home.mounted = true
-        onDispose { home.mounted = false; home.backdrop = null }
-    }
-    return onGloballyPositioned {
-        home.currentOrigin = it.backdropPosition(view)
-    }.drawWithContent {
-        drawContent()
-        projectFlights(home)
-    }
-}
-
 @Composable
 internal fun GlassPopupHome(departing: Boolean = false, content: @Composable () -> Unit) {
     val home = rememberGlassPopupHome(departing)
-    GlassPopupHome(home, content)
+    GlassPopupHome(home, content = content)
 }
 
 @Composable
-internal fun GlassPopupHome(home: GlassPopupHome, content: @Composable () -> Unit) {
+internal fun GlassPopupHome(home: GlassPopupHome, chrome: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     // An idle home adds no layer: native draw observers and backdrop producers
     // keep their existing ordering until a popup actually needs containment.
     val containing = home.flights.isNotEmpty() && (home.departing || home.flights.any { it.handedOff })
-    Box(Modifier.fillMaxSize().then(if (containing) Modifier.clipToBounds() else Modifier).glassPopupHome(home)
-        .then(if (home.departing) Modifier.clearAndSetSemantics { } else Modifier)) {
+    val host = Modifier.fillMaxSize().then(if (containing) Modifier.clipToBounds() else Modifier)
+        .then(if (home.departing) Modifier.clearAndSetSemantics { } else Modifier)
+    if (chrome == null) Box(host.glassPopupHome(home)) {
+        CompositionLocalProvider(LocalGlassPopupHome provides home, content = content)
+    } else io.github.anastaci1a.localica.ui.layout.PopupViewportSlot(
+        io.github.anastaci1a.localica.ui.spec.GlassDialogHeight.Content,
+        io.github.anastaci1a.localica.ui.spec.PopupViewportInsets.None,
+        modifier = host.drawWithContent { drawContent(); projectFlights(home, aboveChrome = true) },
+        contentModifier = Modifier.glassPopupHome(home, aboveChrome = false),
+        chrome = { CompositionLocalProvider(LocalGlassPopupHome provides home) { chrome() } }) {
         CompositionLocalProvider(LocalGlassPopupHome provides home, content = content)
     }
 }

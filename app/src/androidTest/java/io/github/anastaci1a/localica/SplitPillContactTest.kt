@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -29,9 +32,9 @@ class SplitPillContactTest {
                 Box(Modifier.fillMaxSize()) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.White) }
                     Column(Modifier.padding(40.dp), verticalArrangement = Arrangement.spacedBy(32.dp)) {
-                        NavigationUtilityPill(utility, source, Modifier.size(104.dp, 64.dp),
+                        PopupActionPill(utility, source, Modifier.size(104.dp, 64.dp),
                             onSearch = { clicks++ }, onMore = { clicks++ })
-                        BrowseOptionsPill(options) { clicks++ }
+                        PopupActionPill(options, modifier = Modifier.height(CompactControlSize), role = TriggerRole.BrowseOptions, leadingIcon = AppIcon.ActionSort, trailingIcon = AppIcon.ActionEye, leadingLabel = "Sort", trailingLabel = "View options", tag = "browse-options-trigger", onSearch = { clicks++ }, onMore = { clicks++ })
                     }
                 }
             }
@@ -90,7 +93,7 @@ class SplitPillContactTest {
             anchor = rememberGlassAnchor()
             Box(Modifier.fillMaxSize()) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.White) }
-                NavigationUtilityPill(anchor, source,
+                PopupActionPill(anchor, source,
                     Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(32.dp).size(104.dp, 64.dp),
                     onSearch = {}, onMore = { open = true })
                 GlassMenu(open, anchor, { open = false }) {
