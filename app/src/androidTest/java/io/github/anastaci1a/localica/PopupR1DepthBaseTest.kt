@@ -79,6 +79,7 @@ class PopupR1DepthBaseTest {
         var baseScenePixels: Bitmap? = null
         var open by mutableStateOf(false)
         var leaving by mutableStateOf(false)
+        var leaveClicked = false
         val receipts = JSONArray()
         try {
             preferences.write(InterfaceSettings(glass = GlassAppearance(renderer = mode)))
@@ -109,7 +110,7 @@ class PopupR1DepthBaseTest {
                             R1BasePopupActionPill(rememberGlassAnchor().also { fixtureAnchor = it }, source = page,
                                 modifier = Modifier.size(104.dp, 64.dp), trailingLabel = "Open overlap menu", menuVisible = open, onMenuDismiss = { open = false },
                                 menuContent = {
-                                    ActionMenuItem("Leave page", icon = AppIcon.TabFolders, onClick = { open = false; leaving = true })
+                                    ActionMenuItem("Leave page", icon = AppIcon.TabFolders, onClick = { leaveClicked = true; open = false; leaving = true })
                                     Box(Modifier.fillMaxWidth().height(240.dp).background(androidx.compose.ui.graphics.Color.Green))
                                 }, onSearch = {}, onMore = { open = true })
                         }
@@ -142,6 +143,33 @@ class PopupR1DepthBaseTest {
             val flight = compose.runOnUiThread { home.flights.single() }
             // Published base has no chromeTrigger field: its ordinary flights all project above chrome.
             val tabBounds = compose.onNodeWithTag("overlap-tabs").fetchSemanticsNode().boundsInRoot
+            // The pre-open scene remains evidence of the retiring trigger field.
+            // Freeze the independent complete-home record at the same hidden-trigger state as return.
+            original(activity, output, "reference-ready-root").recycle()
+            val referenceState = compose.runOnUiThread {
+                JSONObject().put("phase", popupPhase).put("flightPhase", r1CandidateFlightPhase(flight) ?: JSONObject.NULL).put("popupFocused", window.decorView.hasWindowFocus())
+                    .put("triggerHidden", fixtureAnchor.hidden).put("handedOff", flight.handedOff)
+                    .put("wasProjected", flight.wasProjected).put("homeDeparting", home.departing)
+                    .put("leavePageClicked", leaveClicked)
+            }
+            File(output, "reference-freeze-state.json").writeText(referenceState.toString(2))
+            assertTrue("R1 reference freezes a fully open menu", referenceState.getDouble("phase") >= .999)
+            assertTrue("R1 reference freezes the focused popup", referenceState.getBoolean("popupFocused"))
+            assertTrue("R1 reference freezes after trigger hiding", referenceState.getBoolean("triggerHidden"))
+            assertFalse("R1 reference precedes handoff", referenceState.getBoolean("handedOff"))
+            assertFalse("R1 reference precedes projection", referenceState.getBoolean("wasProjected"))
+            assertFalse("R1 reference precedes page departure", referenceState.getBoolean("homeDeparting"))
+            assertFalse("R1 reference precedes Leave page input", referenceState.getBoolean("leavePageClicked"))
+            val preOpenPixels = requireNotNull(baseScenePixels)
+            baseScenePixels = runBlocking { baseScene.toImageBitmap() }.asAndroidBitmap()
+            try {
+                File(output, "base-return-reference-scene.png").outputStream().use {
+                    assertTrue(requireNotNull(baseScenePixels).compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+                val hostAt = IntArray(2).also { compose.runOnUiThread { host.getLocationOnScreen(it) } }
+                verifyR1ReferenceClass(preOpenPixels, requireNotNull(baseScenePixels), tabBounds,
+                    hostAt, home.currentOrigin, context.resources.displayMetrics.densityDpi, output)
+            } finally { preOpenPixels.recycle() }
             compose.onNodeWithText("Leave page").performClick()
             // A mounted departing page deliberately holds its menu at full size.
             // Cancel that page transition only after its inline draw is admitted;
