@@ -230,7 +230,10 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 val property = symbol.navigationElement as? org.jetbrains.kotlin.psi.KtProperty
                 val fqn = property?.fqName?.asString()
                 if (fqn in setOf("io.github.anastaci1a.localica.ui.LocalMotionSpeed",
-                        "io.github.anastaci1a.localica.ui.LocalReducedMotion", "io.github.anastaci1a.localica.ui.spec.LocalUiSpec")) return fqn
+                        "io.github.anastaci1a.localica.ui.LocalReducedMotion", "io.github.anastaci1a.localica.ui.spec.LocalUiSpec",
+                        "io.github.anastaci1a.localica.ui.engine.LocalEngineContext",
+                        "io.github.anastaci1a.localica.ui.engine.LocalUiClock",
+                        "io.github.anastaci1a.localica.ui.engine.LocalClockOwner")) return fqn
                 val initializer = (symbol as? com.intellij.psi.PsiVariable)?.toUElementOfType<UVariable>()?.uastInitializer
                     ?: property?.initializer?.toUElementOfType<UExpression>()
                 return motionLocal((initializer as? UResolvable)?.resolve(), seen)

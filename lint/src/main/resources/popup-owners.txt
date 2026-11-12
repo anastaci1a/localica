@@ -91,3 +91,6 @@ PillArgument.playerExpansion=app/src/main/java/io/github/anastaci1a/localica/ui/
 MotionIngress.LocalicaUiRoot=app/src/main/java/io/github/anastaci1a/localica/MainActivity.kt
 MotionIngress.LocalicaUiRoot=app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt
 MotionIngress.ProvideLocalicaEngineContext=app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt
+MotionProvider.LocalEngineContext=app/src/main/java/io/github/anastaci1a/localica/ui/layout/LocalicaEngineRoot.kt
+MotionProvider.LocalUiClock=app/src/main/java/io/github/anastaci1a/localica/ui/engine/UiClock.kt
+MotionProvider.LocalClockOwner=app/src/main/java/io/github/anastaci1a/localica/ui/engine/UiClock.kt

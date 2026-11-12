@@ -114,7 +114,7 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
         const first=typeIdentity.get(tokens[begin]?.text)||tokens[begin]?.text;
         return first+tokens.slice(begin+1,i+1).map(t=>t.text).join('');
     }
-    const motionNames = new Map([['LocalMotionSpeed','io.github.anastaci1a.localica.ui.LocalMotionSpeed'],['LocalReducedMotion','io.github.anastaci1a.localica.ui.LocalReducedMotion'],['LocalUiSpec','io.github.anastaci1a.localica.ui.spec.LocalUiSpec']]);
+    const motionNames = new Map([['LocalMotionSpeed','io.github.anastaci1a.localica.ui.LocalMotionSpeed'],['LocalReducedMotion','io.github.anastaci1a.localica.ui.LocalReducedMotion'],['LocalUiSpec','io.github.anastaci1a.localica.ui.spec.LocalUiSpec'],['LocalEngineContext','io.github.anastaci1a.localica.ui.engine.LocalEngineContext'],['LocalUiClock','io.github.anastaci1a.localica.ui.engine.LocalUiClock'],['LocalClockOwner','io.github.anastaci1a.localica.ui.engine.LocalClockOwner']]);
     const providerAliases = new Map();
     function motionLocal(i) {
         const n=name(i), canonical=motionNames.get(n);

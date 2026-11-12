@@ -36,7 +36,7 @@ sealed interface TriggerRole { data object Selection: TriggerRole }
 """).indented(),
   kotlin("src/main/java/androidx/compose/runtime/Remember.kt", """package androidx.compose.runtime
 class ProvidedValue<T>
-open class ProvidableCompositionLocal<T> { infix fun provides(value: T) = ProvidedValue<T>(); infix fun providesDefault(value: T) = ProvidedValue<T>(); infix fun providesComputed(value: () -> T) = ProvidedValue<T>() }
+open class ProvidableCompositionLocal<T> { val current: T get() = error("stub"); infix fun provides(value: T) = ProvidedValue<T>(); infix fun providesDefault(value: T) = ProvidedValue<T>(); infix fun providesComputed(value: () -> T) = ProvidedValue<T>() }
 fun CompositionLocalProvider(vararg values: ProvidedValue<*>, content: () -> Unit) { content() }
 interface MutableState<T> { var value: T }
 fun <T> remember(calculation: () -> T): T = calculation()""").indented(),
@@ -86,7 +86,13 @@ fun LocalicaUiRoot(state: LocalicaUiRootState? = null, content: () -> Unit) {}""
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/layout/LocalicaEngineRoot.kt", """package io.github.anastaci1a.localica.ui.layout
 fun ProvideLocalicaEngineContext(refreshHz: Float, referenceTravel: Float, resolvedSpec: Any?, durationScale: Float, content: () -> Unit) {}"""),
   kotlin("src/main/java/io/github/anastaci1a/localica/navigation/InterfaceSettings.kt", """package io.github.anastaci1a.localica.navigation
-data class InterfaceSettings(val reducedMotion: Boolean = false)""")
+data class InterfaceSettings(val reducedMotion: Boolean = false)"""),
+  kotlin("src/main/java/io/github/anastaci1a/localica/ui/engine/ClockLocals.kt", """package io.github.anastaci1a.localica.ui.engine
+data class EngineContext(val durationScale: Float = 1f)
+class UiClock
+val LocalEngineContext = androidx.compose.runtime.ProvidableCompositionLocal<EngineContext>()
+val LocalUiClock = androidx.compose.runtime.ProvidableCompositionLocal<UiClock>()
+val LocalClockOwner = androidx.compose.runtime.ProvidableCompositionLocal<UiClock?>()""")
  )
  private fun check(body: String, imports: String = "", name: String = "Subject") {
   val source="package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n".replace("\\n", "\n") + imports + "\n".replace("\\n", "\n") + body
@@ -349,5 +355,25 @@ fun f() { io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext(1
 """)
   lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.filterIndexed { index, _ -> index != 6 } + file).toTypedArray()))
    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
+ }
+ fun testE_LocalEngineContext_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalEngineContext provides io.github.anastaci1a.localica.ui.engine.LocalEngineContext.current) {} }", "")
+ fun testE_LocalEngineContext_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalEngineContext provides LocalEngineContext.current) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalEngineContext")
+ fun testE_LocalEngineContext_alias() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides Policy.current) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalEngineContext as Policy")
+ fun testE_LocalEngineContext_local() = check("fun f() { val Policy=LocalEngineContext; androidx.compose.runtime.CompositionLocalProvider(Policy provides LocalEngineContext.current) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalEngineContext")
+ fun testE_LocalUiClock_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalUiClock provides io.github.anastaci1a.localica.ui.engine.LocalUiClock.current) {} }", "")
+ fun testE_LocalUiClock_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalUiClock provides LocalUiClock.current) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalUiClock")
+ fun testE_LocalUiClock_alias() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides Policy.current) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalUiClock as Policy")
+ fun testE_LocalUiClock_local() = check("fun f() { val Policy=LocalUiClock; androidx.compose.runtime.CompositionLocalProvider(Policy provides LocalUiClock.current) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalUiClock")
+ fun testE_LocalClockOwner_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalClockOwner provides io.github.anastaci1a.localica.ui.engine.LocalClockOwner.current) {} }", "")
+ fun testE_LocalClockOwner_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalClockOwner provides LocalClockOwner.current) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalClockOwner")
+ fun testE_LocalClockOwner_alias() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides Policy.current) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalClockOwner as Policy")
+ fun testE_LocalClockOwner_local() = check("fun f() { val Policy=LocalClockOwner; androidx.compose.runtime.CompositionLocalProvider(Policy provides LocalClockOwner.current) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalClockOwner")
+ fun testE_engine_copy() = check("fun f(anchor: GlassAnchor) { androidx.compose.runtime.CompositionLocalProvider(LocalEngineContext provides LocalEngineContext.current.copy(durationScale = 4f)) { GlassMenu(true, anchor, {}) {} } }", "import io.github.anastaci1a.localica.ui.engine.LocalEngineContext")
+ fun testSanctionedEngineClockProviders() {
+  for ((path, locals) in listOf("layout/LocalicaEngineRoot.kt" to listOf("LocalEngineContext"), "engine/UiClock.kt" to listOf("LocalUiClock", "LocalClockOwner"))) {
+   val file=kotlin("src/main/java/io/github/anastaci1a/localica/ui/" + path, "package io.github.anastaci1a.localica.ui\nimport io.github.anastaci1a.localica.ui.engine.*\nfun f() { androidx.compose.runtime.CompositionLocalProvider(" + locals.joinToString(",") { it + " provides " + it + ".current" } + ") {} }")
+   lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.filter { !it.targetRelativePath.endsWith("/" + path) } + file).toTypedArray()))
+    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
+  }
  }
 }

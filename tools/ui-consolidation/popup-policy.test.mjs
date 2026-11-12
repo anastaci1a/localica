@@ -240,7 +240,7 @@ test('obsolete argument permissions cannot widen callers',()=>{
 });
 
 test('motion providers permit every operator only at the exact shared ingress',()=>{
- for(const [local,owner] of [['LocalUiSpec','LocalicaUiRoot'],['LocalReducedMotion','LocalicaScreen'],['LocalMotionSpeed','LocalicaScreen']]) {
+ for(const [local,owner] of [['LocalUiSpec','LocalicaUiRoot'],['LocalReducedMotion','LocalicaScreen'],['LocalMotionSpeed','LocalicaScreen'],['LocalEngineContext','layout/LocalicaEngineRoot'],['LocalUiClock','engine/UiClock'],['LocalClockOwner','engine/UiClock']]) {
   for(const op of ['provides','providesDefault','providesComputed'])for(const dot of [false,true]) {
    const expression=dot?local+'.'+op+'(value)':local+' '+op+' value';
    const source='fun f() { CompositionLocalProvider('+expression+') {} }';

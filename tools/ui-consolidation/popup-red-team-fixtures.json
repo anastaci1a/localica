@@ -813,5 +813,70 @@
     "id": "testD_engine_reference",
     "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
     "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext\nval borrowed=::ProvideLocalicaEngineContext"
+  },
+  {
+    "id": "testE_LocalEngineContext_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalEngineContext provides io.github.anastaci1a.localica.ui.engine.LocalEngineContext.current) {} }"
+  },
+  {
+    "id": "testE_LocalEngineContext_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.engine.LocalEngineContext\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalEngineContext provides LocalEngineContext.current) {} }"
+  },
+  {
+    "id": "testE_LocalEngineContext_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.engine.LocalEngineContext as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides Policy.current) {} }"
+  },
+  {
+    "id": "testE_LocalEngineContext_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.engine.LocalEngineContext\nfun f() { val Policy=LocalEngineContext; androidx.compose.runtime.CompositionLocalProvider(Policy provides LocalEngineContext.current) {} }"
+  },
+  {
+    "id": "testE_LocalUiClock_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalUiClock provides io.github.anastaci1a.localica.ui.engine.LocalUiClock.current) {} }"
+  },
+  {
+    "id": "testE_LocalUiClock_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.engine.LocalUiClock\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalUiClock provides LocalUiClock.current) {} }"
+  },
+  {
+    "id": "testE_LocalUiClock_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.engine.LocalUiClock as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides Policy.current) {} }"
+  },
+  {
+    "id": "testE_LocalUiClock_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.engine.LocalUiClock\nfun f() { val Policy=LocalUiClock; androidx.compose.runtime.CompositionLocalProvider(Policy provides LocalUiClock.current) {} }"
+  },
+  {
+    "id": "testE_LocalClockOwner_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalClockOwner provides io.github.anastaci1a.localica.ui.engine.LocalClockOwner.current) {} }"
+  },
+  {
+    "id": "testE_LocalClockOwner_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.engine.LocalClockOwner\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalClockOwner provides LocalClockOwner.current) {} }"
+  },
+  {
+    "id": "testE_LocalClockOwner_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.engine.LocalClockOwner as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides Policy.current) {} }"
+  },
+  {
+    "id": "testE_LocalClockOwner_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.engine.LocalClockOwner\nfun f() { val Policy=LocalClockOwner; androidx.compose.runtime.CompositionLocalProvider(Policy provides LocalClockOwner.current) {} }"
+  },
+  {
+    "id": "testE_engine_copy",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.engine.LocalEngineContext\nfun f(anchor: GlassAnchor) { androidx.compose.runtime.CompositionLocalProvider(LocalEngineContext provides LocalEngineContext.current.copy(durationScale = 4f)) { GlassMenu(true, anchor, {}) {} } }"
   }
 ]
