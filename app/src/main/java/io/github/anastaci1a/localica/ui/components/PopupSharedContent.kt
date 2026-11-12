@@ -50,7 +50,7 @@ import io.github.anastaci1a.localica.ui.engine.*
     // Borrow the source recording before moving its one live instance. The window's
     // preparatory material remains gated; only this shared replay can draw there.
     internal fun prepareNative(generation: Long, window: android.view.Window): NativeReplay =
-        NativeReplay(generation, window).also { preparation = it }
+        NativeReplay(generation, window).apply { submitted = true }
     internal fun cancelNativePreparation(replay: NativeReplay) {
         if (preparation === replay) preparation = null
     }
