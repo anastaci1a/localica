@@ -400,8 +400,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
                 "val boundedProgress = p.coerceIn(0f, 1f)",
                 "val boundedLyricVisibility = lyricVisibility.coerceIn(0f, 1f)",
                 "val opacity = { 1f - sheet.expansion.phase.value().coerceIn(0f, 1f) }",
-                "val inputTop = (statusInset + 48 - origin).coerceIn(0, height)",
-                "val inputBottom = minOf(height, seekY - padding - origin).coerceAtLeast(0)",
+                "val inputBottom = minOf(height, seekY - padding - origin).coerceAtLeast(inputTop)",
             ).let { if (reverse) it.reversed() else it }.joinToString("\n")
             check(UiRuleId.RawMotionMap, """
                 import io.github.anastaci1a.localica.ui.engine.*
@@ -417,6 +416,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
                     val origin = titleY - padding
                     val row = rowMotion(p)
                     val seekY = row.seekY
+                    val inputTop = (statusInset + 48 - origin).coerceIn(0, height)
                     $mappings
                 }
             """, 6, "screens")
