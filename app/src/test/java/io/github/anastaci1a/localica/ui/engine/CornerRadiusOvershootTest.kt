@@ -21,7 +21,7 @@ class CornerRadiusOvershootTest {
                     h.advance(1.0 / hz)
                     val p = rig.owner.phase.value()
                     minimum = minOf(minimum, p); maximum = maxOf(maximum, p)
-                    for (curve in listOf(Curve.linear(0f, 1f), Curve.ramp(model.preparedRamp, model.rampBlend))) {
+                    for (curve in listOf(Curve.linear(0f, 1f), Curve.ramp(model.preparedRamp, model.rampBlend), Curve.window(.25f, 1f))) {
                         val g = curve.at(p)
                         for (home in listOf(0.dp, .001f.dp, 24.dp, 48.dp)) {
                             val radius = popupCornerRadius(home, 28.dp, g)

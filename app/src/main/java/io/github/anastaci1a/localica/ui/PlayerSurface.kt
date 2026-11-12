@@ -581,7 +581,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             val titleInputY = with(density) { (titleY.roundToPx() - titlePadding.roundToPx()).toDp() }
             Layout(modifier = Modifier.offset(textX, titleInputY).width(textWidth).zIndex(metadataLayer), content = {
                 MarqueeTitle(sampled.title, settings.reducedMotion,
-                    Modifier.fillMaxWidth().scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title").onGloballyPositioned { polarity.measure("title", it) },
+                    Modifier.fillMaxWidth().scalePlayerText(titleScale + (1f - titleScale) * boundedProgress).testTag("player-title").onGloballyPositioned { polarity.measure("title", it) },
                     style = titleStyle, motionPaused = textMotionPaused)
                 if (titleOpensLyrics) Box(Modifier.testTag("player-lyrics-title-target")
                     .clickable(interactionSource = null, indication = null, role = Role.Button,
@@ -611,7 +611,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     append(" · "); append(album)
                 } }
             }, settings.reducedMotion,
-                Modifier.offset(textX, subtitleY).width(textWidth).zIndex(metadataLayer).scalePlayerText(subtitleScale + (1f - subtitleScale) * p).testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
+                Modifier.offset(textX, subtitleY).width(textWidth).zIndex(metadataLayer).scalePlayerText(subtitleScale + (1f - subtitleScale) * boundedProgress).testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
                 style = MaterialTheme.typography.bodyLarge.copy(color = subtitleColor), motionPaused = textMotionPaused,
                 visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
             if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
