@@ -1187,7 +1187,7 @@ internal fun PopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop? = Loc
     onSearch: () -> Unit, onMore: () -> Unit) {
     val raised = role == TriggerRole.Navigation
     val effectiveShadow: () -> Float = if (playerExpansion == null) chromeVisibility
-        else ({ chromeVisibility() * (1f - playerExpansion.phase.value().coerceIn(0f, 1f)) })
+        else ({ chromeVisibility() * (1f - playerExpansion.boundedProgress()) })
     val iconSize = if (raised) io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Panel)
         else io.github.anastaci1a.localica.ui.spec.StockUiSpec.control.getValue(io.github.anastaci1a.localica.ui.spec.ControlSize.SettingsIcon)
     val face: @Composable () -> Unit = {

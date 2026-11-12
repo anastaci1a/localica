@@ -23,7 +23,17 @@ private fun coordinates(r: Rect)=doubleArrayOf(r.left.toDouble(),r.top.toDouble(
 sealed interface BasisChange { data object Rescale: BasisChange; data object Rebase: BasisChange }
 enum class ExpansionReason { User,Programmatic,Restore,Cancel }
 @Immutable data class ReleaseDecision(val expanded: Boolean,val durationSeconds: Float,val handOffVelocity: Float)
-@Stable interface ExpansionView { val phase: MotionValue; val expanded: Boolean; val inContact: Boolean; val canContact: Boolean }
+@Stable interface ExpansionView {
+    val phase: MotionValue
+    val expanded: Boolean
+    val inContact: Boolean
+    val canContact: Boolean
+    /** Bounded presentation values share the owner; geometry continues to read the raw phase. */
+    fun boundedProgress(curve: Curve? = null): Float {
+        val p = phase.value()
+        return (curve?.at(p) ?: p).coerceIn(0f, 1f)
+    }
+}
 /** Whether a sampled expansion [phase] is the collapsed rest: exactly 0, with no tolerance. */
 internal fun collapsedPhase(phase: Float): Boolean = phase == 0f
 internal fun expansionDuration(spec: ExpansionSpec,travel: Double,reference: Double,p: Double,v: Double,q: Double,sigma: Double,display: Double): Double { val full=spec.referenceDurationMs/1000.0; val objectTime=max(spec.floorMs/1000.0,full*(travel/reference).pow(spec.sizeExponent.toDouble())); val raw=sigma*objectTime*(spec.positionFloor+(1.0-spec.positionFloor)*abs(q-p))/max(1.0,abs(v*sigma*objectTime/full)/spec.velocityKnee).pow(spec.velocityExponent.toDouble()); return max(raw,2*display).also { require(it.isFinite() && it.toFloat().isFinite()) } }

@@ -15,14 +15,21 @@ class CornerRadiusOvershootTest {
             EngineHarness().use { h ->
                 val basis = ExpansionBasis(Rect(300f, 100f, 400f, 150f), Rect(0f, 100f, 400f, 600f), 1f)
                 val rig = PopupRig(h, basis, PopupKind.Menu, model = model, bound = false)
+                val borrowed = GlassExpansion()
                 var minimum = 0f
                 var maximum = 0f
                 fun frames(count: Int) = repeat(count) {
                     h.advance(1.0 / hz)
                     val p = rig.owner.phase.value()
+                    val bounded = p.coerceIn(0f, 1f)
+                    assertEquals(bounded.toRawBits(), rig.owner.boundedProgress().toRawBits())
                     minimum = minOf(minimum, p); maximum = maxOf(maximum, p)
                     for (curve in listOf(Curve.linear(0f, 1f), Curve.ramp(model.preparedRamp, model.rampBlend), Curve.window(.25f, 1f))) {
                         val g = curve.at(p)
+                        borrowed.bind(rig.owner, curve)
+                        val before = g.coerceIn(0f, 1f)
+                        assertEquals(before.toRawBits(), rig.owner.boundedProgress(curve).toRawBits())
+                        assertEquals(before.toRawBits(), borrowed.value.toRawBits())
                         for (home in listOf(0.dp, .001f.dp, 24.dp, 48.dp)) {
                             val radius = popupCornerRadius(home, 28.dp, g)
                             assertTrue("popup radius=$radius phase=$p geometry=$g home=$home", radius.value >= 0f)

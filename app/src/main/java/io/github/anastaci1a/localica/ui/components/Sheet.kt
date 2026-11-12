@@ -6,7 +6,14 @@ import androidx.compose.ui.unit.Dp
 import io.github.anastaci1a.localica.ui.engine.*
 import kotlinx.coroutines.flow.first
 
-@Stable interface SheetState { val expanded: Boolean; val expansion: ExpansionView; val contact: SheetContact; fun expand(); fun collapse() }
+@Stable interface SheetState {
+    val expanded: Boolean
+    val expansion: ExpansionView
+    val contact: SheetContact
+    fun expand()
+    fun collapse()
+    fun collapsedOpacity(visibility: Float = 1f): Float = visibility * (1f - expansion.boundedProgress())
+}
 @Stable interface SheetScope { val expanded: Boolean; val navigationInset: Dp }
 /** Optional lifecycle receipts for retained sheet content, independent of cleared semantics or drawing. */
 internal val LocalSheetContentObserver = staticCompositionLocalOf<((String, Boolean) -> Unit)?> { null }
