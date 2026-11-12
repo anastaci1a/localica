@@ -109,9 +109,9 @@ class PopupMotionModelTest {
         assertFalse("ramp" in popupMotionAdmission(m.copy(preparedRamp = 0f, rampBlend = .25f)))
         assertFalse("ramp" in popupMotionAdmission(m.copy(preparedRamp = .5f, rampBlend = .01f)))
         rejects("variants", m.copy(variants = m.variants - PopupKind.Dialog))
-        rejects("variants", m.copy(variants = m.variants + (PopupKind.Legacy to PopupVariant.Base)))
-        rejects("variants", m.copy(variants = m.variants + (PopupKind.Menu to PopupVariant.Legacy)))
-        assertFalse("variants" in popupMotionAdmission(m.copy(variants = m.variants + (PopupKind.Menu to PopupVariant.Auto))))
+        rejects("variants", m.copy(variants = m.variants + (PopupKind.Legacy to PopupMotionVariant.Base)))
+        rejects("variants", m.copy(variants = m.variants + (PopupKind.Menu to PopupMotionVariant.Legacy)))
+        assertFalse("variants" in popupMotionAdmission(m.copy(variants = m.variants + (PopupKind.Menu to PopupMotionVariant.Auto))))
     }
 
     @Test fun speedIsAdmittedOnlyInItsRange() {
