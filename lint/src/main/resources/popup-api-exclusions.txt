@@ -1,0 +1,61 @@
+BindBrowsePinchProgress|app/src/main/java/io/github/anastaci1a/localica/ui/components/BrowsePinchProgress.kt|browse pinch zoom clock binding, not a popup; its timing is the window scale (#862)
+ControlProgress|app/src/main/java/io/github/anastaci1a/localica/ui/components/ControlProgress.kt|slider/control progress drawing, not a popup
+DrawerScrim|app/src/main/java/io/github/anastaci1a/localica/ui/components/Drawer.kt|player drawer scrim drawn from an existing expansion; no motion input
+NoneReductionAtlasHost|app/src/main/java/io/github/anastaci1a/localica/ui/components/NoneReductionAtlas.kt|glass None-mode atlas host (optics, rule 7), no motion input
+NoneReductionAtlasHost|app/src/main/java/io/github/anastaci1a/localica/ui/engine/NoneReductionAtlas.kt|glass None-mode atlas host (optics, rule 7), no motion input
+ProvideUiClock|app/src/main/java/io/github/anastaci1a/localica/ui/engine/UiClock.kt|root clock provider, pinned by the UiLayerDependency rootClockProvider rule to Theme.kt
+SettingsIconComparisonRow|app/src/main/java/io/github/anastaci1a/localica/ui/components/SettingsStockSlots.kt|settings layout slot, not a popup
+SettingsOrderCard|app/src/main/java/io/github/anastaci1a/localica/ui/components/SettingsStockSlots.kt|settings layout slot, not a popup
+ShadowPlaneHost|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|shadow compositing host, no motion input
+ShadowPlanePanel|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|shadow compositing panel, no motion input
+ShadowPlaneViewport|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|shadow compositing viewport, no motion input
+awaitHandoff|app/src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt|suspends until a popup home hands off; takes no argument
+boundedProgress|app/src/main/java/io/github/anastaci1a/localica/ui/engine/ExpandCollapse.kt|read-only bounded projection of an existing expansion (#878)
+centeredFrame|app/src/main/java/io/github/anastaci1a/localica/ui/engine/MorphLayout.kt|pure layout geometry
+collapsedPhase|app/src/main/java/io/github/anastaci1a/localica/ui/engine/ExpandCollapse.kt|read-only phase projection
+concaveFilletPath|app/src/main/java/io/github/anastaci1a/localica/ui/engine/AnalyticSelectionOutline.kt|pure selection-outline geometry
+currentGlassDialogAppearance|app/src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt|reads the dialog appearance; no argument
+drawGlassRim|app/src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt|glass rim drawing (optics, rule 7), no motion input
+drawTransportTaper|app/src/main/java/io/github/anastaci1a/localica/ui/components/TransportOutline.kt|transport control outline drawing, not a popup
+drawTransportTaper|app/src/main/java/io/github/anastaci1a/localica/ui/engine/TransportOutline.kt|transport control outline drawing, not a popup
+filletStrength|app/src/main/java/io/github/anastaci1a/localica/ui/engine/AnalyticSelectionOutline.kt|pure selection-outline geometry
+glassCaster|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|shadow caster modifier, no motion input
+glassSurfaceAnchor|app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt|surface anchor writer, already pinned by SurfaceAnchorWriter (both gates)
+materialReductionExtent|app/src/main/java/io/github/anastaci1a/localica/ui/components/MaterialAreaReduction.kt|material reduction geometry (optics), no motion input
+materialReductionExtent|app/src/main/java/io/github/anastaci1a/localica/ui/engine/MaterialAreaReduction.kt|material reduction geometry (optics), no motion input
+motionPixelRect|app/src/main/java/io/github/anastaci1a/localica/ui/engine/MotionPixelRect.kt|pure pixel rounding of a rectangle
+motionScale|app/src/main/java/io/github/anastaci1a/localica/ui/engine/MotionPixelRect.kt|pure pixel scale arithmetic
+motionSnap|app/src/main/java/io/github/anastaci1a/localica/ui/engine/MotionPixelRect.kt|pure pixel snapping arithmetic
+observeGlassContact|app/src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt|reads glass contact state; mutation is gated by GlassContactMutation
+originExpansion|app/src/main/java/io/github/anastaci1a/localica/ui/engine/OriginPhaseProjection.kt|read-only origin phase projection
+originGap|app/src/main/java/io/github/anastaci1a/localica/ui/engine/OriginPhaseProjection.kt|read-only origin phase projection
+placeRetainedLayer|app/src/main/java/io/github/anastaci1a/localica/ui/components/RetainedLayer.kt|placement of a retained draw layer, no motion input
+refreshSource|app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt|backdrop refresh request, no motion input
+rememberArtworkReveal|app/src/main/java/io/github/anastaci1a/localica/ui/components/ArtworkReveal.kt|artwork load reveal, not a popup (reviewer's example)
+rememberExpansionClosed|app/src/main/java/io/github/anastaci1a/localica/ui/components/Drawer.kt|reads whether an existing expansion rests closed
+rememberExpansionRest|app/src/main/java/io/github/anastaci1a/localica/ui/components/Drawer.kt|reads an existing expansion's rest state
+rememberGlassLayer|app/src/main/java/io/github/anastaci1a/localica/ui/components/GlassWork.kt|glass work layer (optics), no motion input
+rememberGlassLayer|app/src/main/java/io/github/anastaci1a/localica/ui/engine/GlassWork.kt|glass work layer (optics), no motion input
+rememberGlassShadow|app/src/main/java/io/github/anastaci1a/localica/ui/engine/GlassShadowRenderer.kt|shadow renderer, no motion input
+rememberLyricsHeaderSurface|app/src/main/java/io/github/anastaci1a/localica/ui/components/LyricsHeaderSurface.kt|lyrics header surface; its role is pinned (TriggerRole.LyricsHeader)
+rememberMaterialAreaReduction|app/src/main/java/io/github/anastaci1a/localica/ui/components/MaterialAreaReduction.kt|material reduction (optics), no motion input
+rememberMaterialAreaReduction|app/src/main/java/io/github/anastaci1a/localica/ui/engine/MaterialAreaReduction.kt|material reduction (optics), no motion input
+rememberNativeViewportRelocation|app/src/main/java/io/github/anastaci1a/localica/ui/components/NativeViewportRelocation.kt|IME viewport relocation, not a popup
+rememberNoneReductionAtlas|app/src/main/java/io/github/anastaci1a/localica/ui/components/NoneReductionAtlas.kt|glass None-mode atlas (optics), no motion input
+rememberPhaseShape|app/src/main/java/io/github/anastaci1a/localica/ui/engine/PersistentShape.kt|shape following an existing phase, no motion input
+rememberProfileColor|app/src/main/java/io/github/anastaci1a/localica/ui/components/Presence.kt|control colour on a stock motion profile, not a popup
+rememberProfileValue|app/src/main/java/io/github/anastaci1a/localica/ui/components/Presence.kt|control value on a stock motion profile, not a popup
+rememberScrollbarMotion|app/src/main/java/io/github/anastaci1a/localica/ui/engine/ScrollbarMotion.kt|list scrollbar motion, not a popup
+rememberSelectionInsetScroll|app/src/main/java/io/github/anastaci1a/localica/ui/components/SelectionInsetScroll.kt|selection list scrolling, not a popup
+rememberShadowPlane|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|shadow plane, no motion input
+rememberTransportOutline|app/src/main/java/io/github/anastaci1a/localica/ui/components/TransportOutline.kt|transport control outline, not a popup
+retainedFaceProgress|app/src/main/java/io/github/anastaci1a/localica/ui/engine/CompositorFace.kt|read-only bounded projection (#878)
+revealAlpha|app/src/main/java/io/github/anastaci1a/localica/ui/components/PresentedAlpha.kt|alpha from an existing reveal, no motion input
+scrollbarInput|app/src/main/java/io/github/anastaci1a/localica/ui/components/ScrollbarInput.kt|scrollbar input handling, not a popup
+scrollbarPresentation|app/src/main/java/io/github/anastaci1a/localica/ui/engine/ScrollbarMotion.kt|scrollbar drawing, not a popup
+selectionOpacitySlices|app/src/main/java/io/github/anastaci1a/localica/ui/engine/SelectionOpacityOutline.kt|pure selection-outline geometry
+settingsSearchEntryModifier|app/src/main/java/io/github/anastaci1a/localica/ui/components/SettingsSearchEntry.kt|settings search highlight, not a popup (reviewer's example class)
+shadowPlaneHost|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|shadow plane host modifier, no motion input
+surface|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|binds presentation through the compositor (RawPresentationTransform rule)
+windowRetained|app/src/main/java/io/github/anastaci1a/localica/ui/engine/NativeShadowPlane.kt|native window retention for shadows, no motion input
+captureInk|app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt|records the trigger's current ink on its anchor; takes no argument

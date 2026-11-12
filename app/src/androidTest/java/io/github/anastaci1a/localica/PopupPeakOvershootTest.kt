@@ -63,28 +63,23 @@ abstract class PopupPeakOvershootTest(private val landscape: Boolean) {
         } }
         compose.runOnIdle { open = true }
         compose.onNodeWithTag("tall").assertExists()
-        compose.waitForIdle()
-        val rest = compose.runOnIdle { samples.last() }
-        val flight = compose.runOnIdle { samples.toList() }
-        val tag = if (landscape) "landscape" else "portrait"
-        // Rest: v0.34.1's margin from the window on every side (insets only add to it), and near-full height.
-        assertTrue("$tag rest $rest in $window", rest.top >= window.top + marginPx - 1 && rest.bottom <= window.bottom - marginPx + 1 &&
-            rest.left >= window.left + marginPx - 1 && rest.right <= window.right - marginPx + 1)
-        assertTrue("$tag near-full-height: $rest of $window", rest.height >= window.height * .6f)
-        // Flight: finite, never empty, and past the rest rectangle by at most kappa x travel on every edge (prepared ramp gain included).
-        val kappa = springOvershoot(StockPopupMotion.open.zeta.toDouble()).toFloat() / (1f - StockPopupMotion.preparedRamp - StockPopupMotion.rampBlend / 2f)
-        val start = anchor.bounds
-        var peak = 0f; var clipped = 0f
-        for (r in flight) {
-            assertTrue("$tag sample $r", listOf(r.left, r.top, r.right, r.bottom).all { it.isFinite() } && r.width >= 1f && r.height >= 1f)
-            val excess = listOf(rest.left - r.left to abs(rest.left - start.left), rest.top - r.top to abs(rest.top - start.top),
-                r.right - rest.right to abs(rest.right - start.right), r.bottom - rest.bottom to abs(rest.bottom - start.bottom))
-            for ((beyond, travel) in excess) assertTrue("$tag overshoot $beyond > kappa $kappa x travel $travel", beyond <= kappa * travel + 2f)
-            peak = max(peak, excess.maxOf { it.first })
-            clipped = max(clipped, listOf(window.top - r.top, r.bottom - window.bottom, window.left - r.left, r.right - window.right).max())
+        // R2-2: waitForIdle does not wait for the engine clock. Step frames until the panel has stopped moving for 60 frames
+        // (the engine's settle is well under that at 1.0x), so rest is the settled rectangle, not a mid-flight one.
+        var still = 0; var frames = 0; var seen = 0
+        while (still < 60 && frames < 1200) {
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); frames++
+            val count = compose.runOnIdle { samples.size }
+            if (count == seen) still++ else { still = 0; seen = count }
         }
-        assertEquals("$tag settles back on its rest rectangle", rest, compose.runOnIdle { samples.last() })
-        Log.i("PopupPeakOvershoot", "$tag window=$window margin=$marginPx rest=$rest samples=${flight.size} peakBeyondRest=$peak beyondWindow=$clipped kappa=$kappa")
+        val flight = compose.runOnIdle { samples.toList() }
+        val rest = flight.last()
+        val tag = if (landscape) "landscape" else "portrait"
+        val kappa = springOvershoot(StockPopupMotion.open.zeta.toDouble()).toFloat() / (1f - StockPopupMotion.preparedRamp - StockPopupMotion.rampBlend / 2f)
+        // Rest margin and near-full height; the flight was observed (>= 10 samples, some smaller than rest, a real overshoot past
+        // rest), stayed within kappa x travel on every edge, and settled back exactly (peakOvershootVerdict, JVM-proven non-vacuous).
+        val verdict = peakOvershootVerdict(flight, rest, anchor.bounds, window, marginPx, kappa)
+        Log.i("PopupPeakOvershoot", "$tag window=$window margin=$marginPx rest=$rest samples=${flight.size} frames=$frames peakBeyondRest=${verdict.peakBeyondRest} beyondWindow=${verdict.beyondWindow} kappa=$kappa")
+        assertEquals("$tag", emptyList<String>(), verdict.failures)
         compose.runOnIdle { open = false }
         compose.waitForIdle()
     }

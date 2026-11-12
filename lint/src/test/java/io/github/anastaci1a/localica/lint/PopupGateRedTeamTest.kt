@@ -524,4 +524,27 @@ fun rememberPopupSharedContent(key: Any, shared: () -> Unit): PopupSharedContent
  fun testG2_shared_content_scope_function() { components = evolved("components/PopupSharedContent.kt", sharedStub + "\nfun PopupSharedContent.setAnimationSpeed(speed: Float) {}")
   surface(subject("import io.github.anastaci1a.localica.ui.components.*\nfun f(shared: PopupSharedContent) { with(shared) { setAnimationSpeed(.5f) } }")).expectMatches(red) }
  fun testG2_honest_slots_and_factories() = surface(subject("import io.github.anastaci1a.localica.ui.components.*\nfun f(k: Any, copy: Boolean, shared: PopupSharedContent?) { val nameMorph = rememberPopupSharedContent(k) {}; if (copy) nameMorph.CompactCopy() else nameMorph.Compact(); shared?.Expanded(); shared?.ExpandedCopy() }")).expectClean()
+ // #854 round 3 R2-1: X1-X4, a timing formal on each newly pinned shared API, and an unclassified composable entry point.
+ private fun timed(extra: Boolean) = if (!extra) "" else ", animationSpeed: Float = 1f"
+ private fun r3(subject: com.android.tools.lint.checks.infrastructure.TestFile, timing: Boolean): com.android.tools.lint.checks.infrastructure.TestLintResult {
+  components = components + listOf(
+   kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt", "package io.github.anastaci1a.localica.ui\nfun GlassDialog(onDismiss: () -> Unit, placement: Int = 0, fitContent: Boolean = false, heightSizing: Int = 0" + timed(timing) + ", content: () -> Unit) {}"),
+   kotlin("src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt", "package io.github.anastaci1a.localica.ui\nfun ActionIcon(resource: Int, label: String, enabled: Boolean = true, anchor: GlassAnchor? = null, glass: Boolean = true, role: Any? = null, iconSize: Int = 24, onLongClickLabel: String? = null, onLongClick: (() -> Unit)? = null, quietInputEnabled: Boolean = true, glyph: (() -> Unit)? = null" + timed(timing) + ", onClick: () -> Unit) {}"))
+  return surface(subject, glassMorphStub + "\nfun rememberGlassAnchor(deferContextPlacement: Boolean = false, role: Any? = null, clearance: Float? = null" + timed(timing) + "): GlassAnchor = GlassAnchor()\n" +
+   "fun SurfaceModifier.glassAnchor(anchor: GlassAnchor?, source: Any? = null, role: Any? = null, face: (() -> Unit)? = null" + timed(timing) + "): SurfaceModifier = this\n")
+ }
+ fun testR3_X1_rememberGlassAnchor_timing() = r3(subject("fun f() = rememberGlassAnchor(animationSpeed = .5f)"), true).expectMatches(unpinned("animationSpeed", "rememberGlassAnchor"))
+ fun testR3_X2_GlassDialog_timing() = r3(subject("fun f() { GlassDialog({}, animationSpeed = .5f) {} }"), true).expectMatches(unpinned("animationSpeed", "GlassDialog"))
+ fun testR3_X3_ActionIcon_timing() = r3(subject("fun f() { ActionIcon(1, \"Play\", animationSpeed = .5f) {} }"), true).expectMatches(unpinned("animationSpeed", "ActionIcon"))
+ fun testR3_X4_glassAnchor_timing() = r3(subject("fun f(a: GlassAnchor) = SurfaceModifier().glassAnchor(a, animationSpeed = .5f)"), true).expectMatches(unpinned("animationSpeed", "glassAnchor"))
+ fun testR3_honest_pinned_callers() = r3(subject("fun f() { val a = rememberGlassAnchor(clearance = 1f); GlassDialog({}, placement = 1) {}; ActionIcon(1, \"Play\", anchor = a) {}; SurfaceModifier().glassAnchor(a, face = null) }"), false).expectClean()
+ private fun composable(body: String) = "package io.github.anastaci1a.localica.ui.components\n" + body
+ private val composableStub = kotlin("src/main/java/androidx/compose/runtime/Composable.kt", "package androidx.compose.runtime\n@Target(AnnotationTarget.FUNCTION) annotation class Composable")
+ fun testR3_unclassified_composable_entry_point() { components = components + composableStub + kotlin("src/main/java/io/github/anastaci1a/localica/ui/components/PopupTiming.kt",
+   composable("@androidx.compose.runtime.Composable fun rememberPopupTiming(speed: Float): Float = speed"))
+  surface(subject("import io.github.anastaci1a.localica.ui.components.*\n@androidx.compose.runtime.Composable fun f() = rememberPopupTiming(.5f)"))
+   .expectMatches("(?s).*Subject[.]kt:[0-9]+: Error: Unclassified shared popup entry point rememberPopupTiming.*") }
+ fun testR3_excluded_composable_entry_point() { components = components + composableStub + kotlin("src/main/java/io/github/anastaci1a/localica/ui/components/ArtworkReveal.kt",
+   composable("@androidx.compose.runtime.Composable fun rememberArtworkReveal(): Int = 1"))
+  surface(subject("import io.github.anastaci1a.localica.ui.components.*\n@androidx.compose.runtime.Composable fun f() = rememberArtworkReveal()")).expectClean() }
 }
