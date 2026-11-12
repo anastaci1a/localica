@@ -7,6 +7,9 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.view.Window
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
+import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.test.platform.app.InstrumentationRegistry
 import org.json.JSONObject
 import org.junit.Assert.*
 import java.io.File
@@ -19,6 +22,14 @@ import kotlin.math.abs
 internal class PopupWindowEvidence(private val compose: ComposeContentTestRule) {
     private val markers = IdentityHashMap<View, Marker>()
     private var stage = 0
+    /** Open the real control without moving an anchor deliberately overlapped by chrome. */
+    fun openReferenceTrigger(description: String) {
+        val node = compose.onNodeWithContentDescription(description)
+        if (InstrumentationRegistry.getArguments().getString("popupReferenceOpeningMutant") == "covered-touch") {
+            // Negative control: restore the occluded physical touch that cannot reach the trigger.
+            node.performClick()
+        } else node.performSemanticsAction(SemanticsActions.OnClick) { it() }
+    }
     fun dispose() = compose.runOnUiThread { markers.forEach { (view, marker) -> view.overlay.remove(marker) } }
     fun capture(window: Window, output: File, name: String): Bitmap {
         val view = window.decorView

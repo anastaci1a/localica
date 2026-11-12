@@ -92,7 +92,7 @@ class PopupBrowseReturnReferenceTest {
                 }
             } }
             compose.mainClock.autoAdvance = false
-            compose.onNodeWithContentDescription("Open reference menu").performClick()
+            frames.openReferenceTrigger("Open reference menu")
             try {
             compose.waitUntil(10000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
