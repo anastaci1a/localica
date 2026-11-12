@@ -101,7 +101,7 @@ class PopupBrowseReturnReferenceTest {
             } catch (failure: Throwable) {
                 report.put("openingFailure", JSONObject().put("windowAttached", popup?.decorView?.isAttachedToWindow)
                     .put("windowFocus", popup?.decorView?.hasWindowFocus()).put("observedGeometryPhase", progress)
-                    .put("homeFlights", home.flights.size).put("flightPhases", JSONArray(home.flights.map { it.phase() })))
+                    .put("homeFlights", home.flights.size))
                 save()
                 throw failure
             }
