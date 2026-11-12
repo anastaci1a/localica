@@ -22,12 +22,14 @@ class CornerRadiusOvershootTest {
                     h.advance(1.0 / hz)
                     val p = rig.owner.phase.value()
                     val bounded = p.coerceIn(0f, 1f)
+                    assertEquals(bounded.toRawBits(), boundedProgress(p).toRawBits())
                     assertEquals(bounded.toRawBits(), rig.owner.boundedProgress().toRawBits())
                     minimum = minOf(minimum, p); maximum = maxOf(maximum, p)
                     for (curve in listOf(Curve.linear(0f, 1f), Curve.ramp(model.preparedRamp, model.rampBlend), Curve.window(.25f, 1f))) {
                         val g = curve.at(p)
                         borrowed.bind(rig.owner, curve)
                         val before = g.coerceIn(0f, 1f)
+                        assertEquals(before.toRawBits(), boundedProgress(p, curve).toRawBits())
                         assertEquals(before.toRawBits(), rig.owner.boundedProgress(curve).toRawBits())
                         assertEquals(before.toRawBits(), borrowed.value.toRawBits())
                         for (home in listOf(0.dp, .001f.dp, 24.dp, 48.dp)) {
