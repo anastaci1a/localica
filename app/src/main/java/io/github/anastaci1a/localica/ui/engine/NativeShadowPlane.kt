@@ -83,8 +83,12 @@ internal fun SurfaceView.returnPlane()=(this as SurfaceNode).sourceReturnPlane
 /** A retained but undrawn origin cannot acknowledge restoration. Keep the native
  * receipts on the normal path, but retire after the base's six-frame allowance.
  * Bound the field return too: a hidden home cannot submit its owned field. */
-internal suspend fun awaitTriggerReturn(returnHome: suspend () -> Unit) = coroutineScope {
-    val returned = async(start = CoroutineStart.UNDISPATCHED) { returnHome() }
+internal suspend fun awaitTriggerReturn(returnHome: suspend () -> Unit) = withinNativeDeadline(returnHome)
+
+/** A native receipt bounded by the base's six-frame allowance: the trigger return above and the first admitted presentation
+ * (#854 F-I5-2) share it, so an undrawn or detached window can never hold a gate open. */
+internal suspend fun withinNativeDeadline(receipt: suspend () -> Unit) = coroutineScope {
+    val returned = async(start = CoroutineStart.UNDISPATCHED) { receipt() }
     val deadline = async { repeat(6) { withFrameNanos { } } }
     try {
         select<Unit> {

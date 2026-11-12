@@ -9,7 +9,10 @@ import kotlinx.coroutines.channels.Channel
 
 @Immutable class FrameStamp internal constructor(val nanos: Long,val sequence: Long) { fun secondsSince(other: FrameStamp)=(nanos-other.nanos)/1e9f }
 /** [onFrame] runs inside the frame callback, so state it writes is read by that same frame's composition, layout and draw. */
-interface FrameSource { suspend fun awaitFrame(): Long; suspend fun <R> awaitFrame(onFrame: (Long)->R): R=onFrame(awaitFrame()) }
+interface FrameSource { suspend fun awaitFrame(): Long; suspend fun <R> awaitFrame(onFrame: (Long)->R): R=onFrame(awaitFrame())
+    /** #854 F-I5-2: the presentation receipt of a frame of [window] drawn after this call. A virtual source (fixtures, FixtureTime)
+     * presents with its next frame; the production source waits for the window's frame metrics, delivered after RenderThread work. */
+    suspend fun awaitPresented(window: android.view.Window) { awaitFrame() } }
 internal interface ActiveMotion { val id: Long; val presented: Boolean; val settled: Boolean; val reducesWithAccess: Boolean get()=true; fun frame(stamp: FrameStamp) {}; fun endsAt(stamp: FrameStamp): Boolean; fun finish(stamp: FrameStamp); fun reduce(stamp: FrameStamp) }
 internal fun interface FrameObserver { fun onFrame(stamp: FrameStamp,active: List<ActiveMotion>) }
 /** [speed] is the #860 animation speed s: engine laws run with the time scale sigma = 1/s, springs with omega·s. */
@@ -29,6 +32,7 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     val activeCount: Int get()=active.size
     internal val presentedStamp: FrameStamp get()=last
     internal val isObserving: Boolean get()=observing
+    internal suspend fun awaitPresented(window: android.view.Window)=source.awaitPresented(window)
     internal fun checkMutation() { checkOwner(); check(!observing) { "An observer cannot drive presentation" } }
     internal fun allocateId(): Long { checkMutation(); return ++nextId }
     internal fun register(motion: ActiveMotion) { checkMutation(); if(active.add(motion)) wake.trySend(Unit) }
@@ -53,9 +57,31 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     val inherited=LocalClockOwner.current
     val base=remember { FrameBase() }
     val clock=inherited?:remember { UiClock(object: FrameSource { override suspend fun awaitFrame()=awaitFrame { it }
-        override suspend fun <R> awaitFrame(onFrame: (Long)->R)=withFrameNanos { base.frame(it); onFrame(it) } },base::now) }
+        override suspend fun <R> awaitFrame(onFrame: (Long)->R)=withFrameNanos { base.frame(it); onFrame(it) }
+        override suspend fun awaitPresented(window: android.view.Window)=presentedFrame(window) },base::now) }
     if(inherited==null) LaunchedEffect(clock) { withFrameNanos { base.frame(it) }; clock.run() }
     CompositionLocalProvider(LocalClockOwner provides clock,LocalUiClock provides clock,content=content)
+}
+/** Releases a platform listener exactly once. Only the main thread touches it: queued callbacks after the first, and a cancel that
+ * races one, find it released and do nothing (#854 F-I5-2 review C3-a: a second removal throws on the main thread). */
+internal class ReceiptRelease(private val remove: ()->Unit) {
+    var released=false; private set
+    fun release() { if(released) return; released=true; runCatching(remove) }
+}
+/** One frame of [window] whose intended vsync follows this call has finished its RenderThread work (frame metrics, API 24+). */
+private suspend fun presentedFrame(window: android.view.Window)=kotlinx.coroutines.suspendCancellableCoroutine<Unit> { presented ->
+    val since=System.nanoTime(); val main=android.os.Handler(Looper.getMainLooper())
+    lateinit var receipt: ReceiptRelease
+    val listener=object: android.view.Window.OnFrameMetricsAvailableListener {
+        override fun onFrameMetricsAvailable(source: android.view.Window,metrics: android.view.FrameMetrics,dropped: Int) {
+            if(receipt.released || metrics.getMetric(android.view.FrameMetrics.INTENDED_VSYNC_TIMESTAMP)<since) return
+            receipt.release()
+            if(presented.isActive) presented.resumeWith(Result.success(Unit))
+        }
+    }
+    receipt=ReceiptRelease { window.removeOnFrameMetricsAvailableListener(listener) }
+    window.addOnFrameMetricsAvailableListener(listener,main); window.decorView.invalidate()
+    presented.invokeOnCancellation { main.post { receipt.release() } }
 }
 @Composable internal fun ownerClock(): UiClock {
     val context=LocalEngineContext.current; val clock=LocalUiClock.current; val spec=LocalUiSpec.current.spec; val domain=requireNotNull(spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a motion owner" }; require(domain.referenceTravelPx==context.fullPlayerReferenceTravelPx && context.displayIntervalSeconds<=domain.maxDisplayIntervalSeconds) { "Engine context and admitted geometry must come from one root record" }

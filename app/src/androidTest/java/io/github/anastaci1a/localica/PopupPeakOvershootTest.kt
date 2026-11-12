@@ -103,6 +103,48 @@ abstract class PopupPeakOvershootTest(private val landscape: Boolean) {
         compose.runOnIdle { open = false }
         compose.waitForIdle()
     }
+
+    /** #854 F-I5-2 (reviewer bar 3): a cold window's first admitted glass frame is slow; here it takes 50 ms (one clock step) at the
+     * trigger, at phase 0. The opening must begin on that frame's presentation receipt, not when admission was recorded: the first
+     * presented panel sample sits at the trigger and no presented progress step exceeds 0.35 in the first 5 visible frames at 1.0x. */
+    @Test fun aSlowFirstAdmittedFrameDoesNotSkipTheOpening() {
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        compose.setContent { LocalicaTheme {
+            anchor = rememberGlassAnchor()
+            val view = LocalView.current; val density = LocalDensity.current
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.offset { IntOffset(view.width / 2 - 60, view.height - 220) }.size(with(density) { 120.toDp() }, with(density) { 64.toDp() })
+                    .testTag("trigger").glassAnchor(anchor).clickable { open = true })
+                GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center) { Box(Modifier.fillMaxWidth().height(400.dp)) }
+            }
+        } }
+        compose.waitForIdle()
+        val trigger = compose.onNodeWithTag("trigger").fetchSemanticsNode().boundsInWindow
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("trigger").performClick()
+        // Step until the body is admitted at the trigger (phase 0), then make that first admitted frame a slow one.
+        var frames = 0
+        while (compose.runOnIdle { !anchor.hidden } && frames < 600) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); frames++ }
+        assertTrue("admitted before the cap (frames=$frames)", frames < 600)
+        // The first presented panel sample is the admitted body at the trigger, at phase 0 (unclipped drawn rect).
+        val admitted = compose.onAllNodesWithTag("glass-morph-surface", useUnmergedTree = true).fetchSemanticsNodes().single().layoutInfo.coordinates.let { drawn(it) }
+        assertTrue("admitted sample $admitted is not at the trigger $trigger", listOf(admitted.left - trigger.left, admitted.top - trigger.top,
+            admitted.right - trigger.right, admitted.bottom - trigger.bottom).all { abs(it) <= 2f })
+        compose.mainClock.advanceTimeBy(50); compose.waitForIdle()
+        val visible = mutableListOf<Pair<Float, Rect>>()
+        while (visible.size < 5 && frames < 1200) {
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); frames++
+            val p = compose.runOnIdle { anchor.contact.expansion.value }
+            val panel = compose.onAllNodesWithTag("glass-morph-surface", useUnmergedTree = true).fetchSemanticsNodes().singleOrNull()
+            if (p > 0f && panel != null && panel.layoutInfo.isAttached) visible += p to drawn(panel.layoutInfo.coordinates)
+        }
+        compose.mainClock.autoAdvance = true
+        val steps = (listOf(0f) + visible.map { it.first }).zipWithNext { a, b -> b - a }
+        Log.i("PopupPeakOvershoot", "slow-first-frame progress=${visible.map { it.first }} steps=$steps frames=$frames")
+        assertTrue("5 visible frames before the cap (frames=$frames)", visible.size == 5)
+        assertTrue("a presented progress step exceeds 0.35: $steps", steps.all { it <= .35f })
+    }
 }
 
 class PopupPeakOvershootPortraitTest : PopupPeakOvershootTest(landscape = false)
