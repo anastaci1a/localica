@@ -22,7 +22,8 @@ class HeldOpeningBeginTest {
         .also { it.show(true); it.place(Rect(0f, 0f, 48f, 48f), Rect(20f, 30f, 400f, 600f), 1f); assertTrue(it.expansion.awaitingNativeGate) }
     private fun PopupWindowMotion.value(h: EngineHarness) = expansion.phase.valueAt(h.clock.stampNow)
     private fun PopupWindowMotion.acknowledge(begin: FrameStamp? = null) = assertTrue(expansion.acknowledgeNativeGate(expansion.nativeGeneration, begin))
-    private fun capNanos(scale: Pair<Float, Float>) = (minOf(3.0 / 120, .025 * scale.first / scale.second) * 1e9).toLong()
+    /** The cap: catch-up plus one frame span at most 25 ms + one frame of law time at 1x; the catch-up at most 3 frames. */
+    private fun capNanos(scale: Pair<Float, Float>) = (minOf(3.0 / 120, ((.025 + 1.0 / 120) * scale.first / scale.second - 1.0 / 120).coerceAtLeast(0.0)) * 1e9).toLong()
 
     /** The held opening, acknowledged a frame late with its begin, is on every later frame where an opening acknowledged at that
      * begin is: it is evaluated at now - begin. Its first acknowledged frame steps at most .35. */
@@ -31,7 +32,8 @@ class HeldOpeningBeginTest {
         h.advance(frame); val begin = h.clock.stampNow
         prompt.acknowledge()
         h.advance(frame); val rest = held.value(h)
-        assertEquals("$scale: one frame back is inside the cap", begin.nanos, held.expansion.heldOpeningBegin(begin)?.nanos)
+        // The display interval is a Float: at 0.5x the cap is one frame to within a nanosecond.
+        assertEquals("$scale: one frame back is inside the cap", begin.nanos.toDouble(), held.expansion.heldOpeningBegin(begin)!!.nanos.toDouble(), 1.0)
         held.acknowledge(begin)
         h.advance(frame); val step = held.value(h) - rest
         assertTrue("$scale: first acknowledged step $step in (0, .35]", step > 0f && step <= .35f)
@@ -88,7 +90,7 @@ class HeldOpeningBeginTest {
 
     /** A receipt delayed by main-thread jank lifts its begin to now - cap, the cap shortened in real time by a faster speed or
      * animator scale: the first step stays within .35 at every scale. A presentation time in the future is now. */
-    @Test fun aDelayedReceiptIsLiftedToTheCatchUpCap() { for (scale in scales) harness(scale).use { h ->
+    @Test fun aDelayedReceiptIsLiftedToTheCatchUpCap() { for (scale in scales + (.25f to 1f)) harness(scale).use { h ->
         val p = popup(h, "delayed")
         h.advance(frame); val admitted = h.clock.stampNow
         repeat(12) { h.advance(frame) }
@@ -102,6 +104,21 @@ class HeldOpeningBeginTest {
         assertTrue("$scale: capped first step $step in (0, .35]", step > 0f && step <= .35f)
         p.dispose()
     } }
+
+    /** Strictly inside the zero-cap region (one frame alone spans the 1x budget, here 0.1x) the held opening begins now: it is the
+     * natural ungated opening, frame for frame. */
+    @Test fun belowTheBudgetAHeldOpeningBeginsNow() = harness(.1f to 1f).use { h ->
+        val plain = popup(h, "plain"); val held = popup(h, "held")
+        h.advance(frame); val begin = h.clock.stampNow
+        h.advance(frame)
+        assertEquals(h.clock.stampNow.nanos, held.expansion.heldOpeningBegin(begin)!!.nanos)
+        plain.acknowledge(); held.acknowledge(begin)
+        repeat(30) {
+            h.advance(frame)
+            assertEquals("frame $it", plain.value(h), held.value(h), 1e-6f)
+        }
+        plain.dispose(); held.dispose()
+    }
 
     /** At an instant animator scale the cap is zero: the opening begins now. */
     @Test fun anInstantScaleBeginsNow() = harness(0f to 1f).use { h ->
