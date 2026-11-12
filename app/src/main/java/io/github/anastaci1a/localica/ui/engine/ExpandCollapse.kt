@@ -94,15 +94,17 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         if(pendingNative!=true || logical) nativeSide=requireNotNull(pendingNative)
         pendingNative=null; identity=null; if(heldBegin!=null) target(logical,at=heldBegin,heldOpening=true) else target(logical); return true
     }
-    /** The held opening's begin, or null to begin now. Its catch-up is at most min(3 display intervals, 25 ms of law time): the
-     * law runs at durationScale x [timeScale] real seconds per second, so a faster speed or animator scale shortens the real cap and
-     * an instant scale makes it zero, keeping the first acknowledged step within the same bound at every scale. */
+    /** The held opening's begin, or null to begin now. Its catch-up and the first acknowledged frame together span at most the law
+     * time of 25 ms plus one frame at 1x, and the catch-up at most 3 display intervals. The law runs at durationScale x [timeScale]
+     * real seconds per second, so a faster speed or animator scale shortens the real cap (to zero once one frame alone spans that law
+     * time, and at an instant scale), keeping the first acknowledged step within the same bound at every scale. */
     internal fun heldOpeningBegin(begin: FrameStamp?): FrameStamp? {
         if(begin==null || pendingNative!=true || !logical || held || touching) return null
         // acknowledgeNativeGate admits only at physicalRest, so restSince is never null here; the null refusal is defence in depth.
         val rested=(listOfNotNull(motion,cross)+(bound?.channels?.toList()?:emptyList())).map { it.restSince?:return null }.maxOf { it.nanos }
         val now=clock.stampNow; val ctx=context()
-        val cap=(minOf(3.0*ctx.displayIntervalSeconds,.025*ctx.durationScale*timeScale())*1e9).toLong()
+        val frame=ctx.displayIntervalSeconds.toDouble()
+        val cap=(minOf(3*frame,((.025+frame)*ctx.durationScale*timeScale()-frame).coerceAtLeast(0.0))*1e9).toLong()
         if(begin.nanos<lastStamp.nanos || begin.nanos<rested || begin.nanos>now.nanos) return null
         return FrameStamp(maxOf(begin.nanos,now.nanos-cap),begin.sequence)
     }
