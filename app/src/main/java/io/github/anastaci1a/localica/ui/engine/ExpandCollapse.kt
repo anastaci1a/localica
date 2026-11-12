@@ -8,9 +8,9 @@ import kotlin.math.*
 import kotlinx.coroutines.flow.first
 
 private val IdentityCurve=Curve.linear(0f,1f)
-/** #854: a covered owner's spring model, its surface kind and the variant that kind selects. */
 /** #854 review S2: release builds record an unproven spring extremum here instead of throwing (U05 "validate, never clamp"). */
 internal object SpringBandTelemetry { @Volatile var violations=0L; @Volatile var last: String?=null; @Volatile var strict: Boolean=BuildConfig.DEBUG }
+/** #854: a covered owner's spring model, its surface kind and the variant that kind selects. */
 internal data class ResolvedPopupLaw(val model: PopupMotionModel,val kind: PopupKind,val variant: PopupMotionVariant)
 private fun coordinates(r: Rect)=doubleArrayOf(r.left.toDouble(),r.top.toDouble(),r.right.toDouble(),r.bottom.toDouble())
 @Immutable data class ExpansionBasis(val startBounds: Rect,val endBounds: Rect,val density: Float,val durationTravelPx: Float?=null) {

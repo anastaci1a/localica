@@ -38,7 +38,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
             val tenths = value.animationSpeedTenths.coerceIn(MinimumAnimationSpeedTenths, MaximumAnimationSpeedTenths)
             // Reduce motion has priority; both controls stay visible but inactive while it is on.
             CompositionLocalProvider(LocalSettingsEnabled provides (LocalSettingsEnabled.current && !value.reducedMotion)) {
-                SliderPreference("Animation speed · ${tenths / 10}.${tenths % 10}×", tenths / 10f,
+                SliderPreference("Animation speed · ${value.animationSpeedLabel}", tenths / 10f,
                     { onChange(value.copy(animationSpeedTenths = kotlin.math.round(it * 10).toInt().coerceIn(MinimumAnimationSpeedTenths, MaximumAnimationSpeedTenths))) },
                     valueRange = .5f..1.5f, steps = 9, low = "Slower", high = "Faster",
                     description = if (value.reducedMotion) "Reduce motion is on." else "1.0× is normal. Higher values make every animation shorter.")
