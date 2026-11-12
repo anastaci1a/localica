@@ -104,9 +104,10 @@ abstract class PopupPeakOvershootTest(private val landscape: Boolean) {
         compose.waitForIdle()
     }
 
-    /** #854 F-I5-2 (reviewer bar 3): a cold window's first admitted glass frame is slow; here it takes 50 ms (one clock step) at the
-     * trigger, at phase 0. The opening must begin on that frame's presentation receipt, not when admission was recorded: the first
-     * presented panel sample sits at the trigger and no presented progress step exceeds 0.35 in the first 5 visible frames at 1.0x. */
+    /** #854 F-I5-2 (reviewer bar 3): a cold window's first admitted glass frame is slow. Here its presentation receipt is held for 50 ms
+     * of clock at the trigger, at phase 0 (FixtureTime.presentation), then released. The opening must begin on that receipt, not when
+     * admission was recorded: the first presented panel sample sits at the trigger and no presented progress step exceeds 0.35 in the
+     * first 5 visible frames at 1.0x. */
     @Test fun aSlowFirstAdmittedFrameDoesNotSkipTheOpening() {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
@@ -122,6 +123,9 @@ abstract class PopupPeakOvershootTest(private val landscape: Boolean) {
         compose.waitForIdle()
         val trigger = compose.onNodeWithTag("trigger").fetchSemanticsNode().boundsInWindow
         compose.mainClock.autoAdvance = false
+        val slowPresentation = kotlinx.coroutines.CompletableDeferred<Unit>()
+        FixtureTime.presentation = slowPresentation
+        try {
         compose.onNodeWithTag("trigger").performClick()
         // Step until the body is admitted at the trigger (phase 0), then make that first admitted frame a slow one.
         var frames = 0
@@ -132,18 +136,25 @@ abstract class PopupPeakOvershootTest(private val landscape: Boolean) {
         assertTrue("admitted sample $admitted is not at the trigger $trigger", listOf(admitted.left - trigger.left, admitted.top - trigger.top,
             admitted.right - trigger.right, admitted.bottom - trigger.bottom).all { abs(it) <= 2f })
         compose.mainClock.advanceTimeBy(50); compose.waitForIdle()
+        // The receipt, not the six-frame deadline, must start the opening: still at rest when the held receipt is released.
+        val held = compose.runOnIdle { anchor.contact.expansion.value }
+        slowPresentation.complete(Unit)
+        val released = frames; var firstVisible = -1
         val visible = mutableListOf<Pair<Float, Rect>>()
         while (visible.size < 5 && frames < 1200) {
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); frames++
             val p = compose.runOnIdle { anchor.contact.expansion.value }
             val panel = compose.onAllNodesWithTag("glass-morph-surface", useUnmergedTree = true).fetchSemanticsNodes().singleOrNull()
-            if (p > 0f && panel != null && panel.layoutInfo.isAttached) visible += p to drawn(panel.layoutInfo.coordinates)
+            if (p > 0f && panel != null && panel.layoutInfo.isAttached) { if (visible.isEmpty()) firstVisible = frames - released; visible += p to drawn(panel.layoutInfo.coordinates) }
         }
         compose.mainClock.autoAdvance = true
         val steps = (listOf(0f) + visible.map { it.first }).zipWithNext { a, b -> b - a }
-        Log.i("PopupPeakOvershoot", "slow-first-frame progress=${visible.map { it.first }} steps=$steps frames=$frames")
+        Log.i("PopupPeakOvershoot", "slow-first-frame heldProgress=$held framesToFirstVisible=$firstVisible progress=${visible.map { it.first }} steps=$steps frames=$frames")
         assertTrue("5 visible frames before the cap (frames=$frames)", visible.size == 5)
+        assertEquals("progress while the receipt is held", 0f, held)
+        assertTrue("first visible frame $firstVisible frames after the receipt", firstVisible in 1..2)
         assertTrue("a presented progress step exceeds 0.35: $steps", steps.all { it <= .35f })
+        } finally { slowPresentation.complete(Unit); FixtureTime.presentation = null }
     }
 }
 
