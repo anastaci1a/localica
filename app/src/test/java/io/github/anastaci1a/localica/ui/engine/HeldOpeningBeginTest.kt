@@ -31,7 +31,7 @@ class HeldOpeningBeginTest {
         h.advance(frame); val begin = h.clock.stampNow
         prompt.acknowledge()
         h.advance(frame); val rest = held.value(h)
-        assertEquals("$scale: one frame back is inside the cap", begin, held.expansion.heldOpeningBegin(begin))
+        assertEquals("$scale: one frame back is inside the cap", begin.nanos, held.expansion.heldOpeningBegin(begin)?.nanos)
         held.acknowledge(begin)
         h.advance(frame); val step = held.value(h) - rest
         assertTrue("$scale: first acknowledged step $step in (0, .35]", step > 0f && step <= .35f)
@@ -49,9 +49,10 @@ class HeldOpeningBeginTest {
         h.advance(frame)
         val now = popup(h, "now"); val rested = popup(h, "rested"); val reversed = popup(h, "reversed")
         h.advance(frame); val begin = h.clock.stampNow
-        reversed.show(false); reversed.show(true); assertTrue(reversed.expansion.awaitingNativeGate)
+        // The reversal comes after the begin, while the opening waits at its gate.
+        h.now += 1_000_000; reversed.show(false); reversed.show(true); assertTrue(reversed.expansion.awaitingNativeGate)
         h.advance(frame)
-        assertNull(rested.expansion.heldOpeningBegin(early)); assertNull(reversed.expansion.heldOpeningBegin(begin))
+        assertNull("$scale rested", rested.expansion.heldOpeningBegin(early)); assertNull("$scale reversed", reversed.expansion.heldOpeningBegin(begin))
         now.acknowledge(); rested.acknowledge(early); reversed.acknowledge(begin)
         repeat(30) {
             h.advance(frame)
@@ -94,7 +95,8 @@ class HeldOpeningBeginTest {
         assertEquals(h.clock.stampNow.nanos, h.clock.beginStamp(h.clock.stampNow.nanos + 5_000_000, admitted).nanos)
         val begin = h.clock.beginStamp(admitted.nanos + 1_000_000, admitted)
         assertEquals(admitted.nanos + 1_000_000, begin.nanos)
-        assertEquals("$scale", h.clock.stampNow.nanos - capNanos(scale), p.expansion.heldOpeningBegin(begin)!!.nanos)
+        // The display interval is a Float: the cap may differ from this Double reckoning by a nanosecond.
+        assertEquals("$scale", (h.clock.stampNow.nanos - capNanos(scale)).toDouble(), p.expansion.heldOpeningBegin(begin)!!.nanos.toDouble(), 1.0)
         val rest = p.value(h); p.acknowledge(begin)
         h.advance(frame); val step = p.value(h) - rest
         assertTrue("$scale: capped first step $step in (0, .35]", step > 0f && step <= .35f)
