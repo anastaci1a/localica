@@ -93,9 +93,17 @@ class PopupBrowseReturnReferenceTest {
             } }
             compose.mainClock.autoAdvance = false
             compose.onNodeWithContentDescription("Open reference menu").performClick()
+            try {
             compose.waitUntil(10000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 popup?.decorView?.hasWindowFocus() == true && progress >= .999f && home.flights.size == 1
+            }
+            } catch (failure: Throwable) {
+                report.put("openingFailure", JSONObject().put("windowAttached", popup?.decorView?.isAttachedToWindow)
+                    .put("windowFocus", popup?.decorView?.hasWindowFocus()).put("observedGeometryPhase", progress)
+                    .put("homeFlights", home.flights.size).put("flightPhases", JSONArray(home.flights.map { it.phase() })))
+                save()
+                throw failure
             }
             val window = requireNotNull(popup)
             val flight = compose.runOnUiThread { home.flights.single() }
