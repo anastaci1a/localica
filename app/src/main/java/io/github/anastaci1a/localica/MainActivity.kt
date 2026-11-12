@@ -25,6 +25,7 @@ import io.github.anastaci1a.localica.library.AndroidLibraryQueryPreferences
 import io.github.anastaci1a.localica.playback.PlaybackConnection
 import io.github.anastaci1a.localica.ui.LibraryViewModel
 import io.github.anastaci1a.localica.ui.LocalicaScreen
+import io.github.anastaci1a.localica.ui.installLocalicaWindowMotion
 import io.github.anastaci1a.localica.ui.LocalicaTheme
 
 private const val STARTUP_SCAN_DELAY_MILLIS = 1_000L
@@ -65,6 +66,9 @@ class MainActivity : ComponentActivity() {
                 lifecycle.withStarted { model.scanOnLaunch(scanPreferences.scanOnLaunch, scanPreferences.fullScanOnLaunch) }
             }
         }
+        // #862: the window's one MotionDurationScale, read by Compose animations, coroutine readers and the engine, before any
+        // composition exists; the root keeps its respect flag in step with the setting.
+        installLocalicaWindowMotion(io.github.anastaci1a.localica.navigation.InterfacePreferences(this).read().respectSystemAnimationScale)
         setContent {
             // Seed policy before any backdrop producer or retained dialog host exists.
             val glassRenderer = androidx.compose.runtime.remember {

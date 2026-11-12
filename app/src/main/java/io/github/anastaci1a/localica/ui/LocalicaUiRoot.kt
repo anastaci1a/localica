@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.*
-import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -38,11 +37,14 @@ internal fun LocalicaUiRoot(state: LocalicaUiRootState = rememberLocalicaUiRoot(
         return
     }
     val settings by state.settings
-    val platformScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
-    // #862: a respected platform scale stretches engine time and its 0 is Reduce motion (the #835 fix); off ignores it.
+    val windowContext = rememberCoroutineScope().coroutineContext
+    val platformScale = windowContext.platformDurationScale
+    // #862: a respected platform scale stretches engine time and its 0 is Reduce motion (the #835 fix); off ignores it. The same
+    // preference sets the window's one MotionDurationScale, so Compose animations and every coroutine reader follow it too.
     val respect = settings.respectSystemAnimationScale
-    val durationScale = if (respect) platformScale else 1f
-    val systemReduced = respect && platformScale == 0f
+    SideEffect { windowContext.bindRespectSystemAnimationScale(respect) }
+    val durationScale = effectiveDurationScale(platformScale, respect)
+    val systemReduced = effectiveReducedMotion(false, platformScale, respect)
     val density = LocalDensity.current
     val window = state.window
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
