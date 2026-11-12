@@ -39,15 +39,15 @@ enum class GlassMode { Normal, SingleToneBlur, FlatNone }
 @Immutable data class SpringLaw(val omega: Float, val zeta: Float)
 /** The popup surface families of the #854 model. [Legacy] keeps the v0.33.21 popup spring ([UiSpec.expansion]). */
 enum class PopupKind { Menu, RowMenu, BottomMenu, Dialog, SelectionPill, Legacy }
-enum class PopupVariant { Base, CrossAxisSnap, Auto, Legacy }
+enum class PopupMotionVariant { Base, CrossAxisSnap, Auto, Legacy }
 enum class PopupDirection { Open, Close, Gate }
 /** #854/#855 measured Apple popup motion. Every popup trajectory, test reference and admission bound derives from this.
  * Laws are read only through [law], so a revision can make them per kind without touching callers. */
 @Immutable data class PopupMotionModel(val revision: String, val open: SpringLaw, val close: SpringLaw, val crossOpen: SpringLaw, val crossClose: SpringLaw, val gate: SpringLaw,
-    val snapAspect: Float, val preparedRamp: Float, val rampBlend: Float, val variants: Map<PopupKind,PopupVariant>,
+    val snapAspect: Float, val preparedRamp: Float, val rampBlend: Float, val variants: Map<PopupKind,PopupMotionVariant>,
     /** The phase band [-band, 1 + band] every spring channel must stay in; admission and the engine's extremum proofs both read it. */
     val band: Float = StockPopupExpansionBand) {
-    fun variant(kind: PopupKind): PopupVariant = variants[kind] ?: PopupVariant.Base
+    fun variant(kind: PopupKind): PopupMotionVariant = variants[kind] ?: PopupMotionVariant.Base
     /** One channel's law: the main axis by [direction]; [cross] channels use the snap laws (a cross-axis gate approach uses the cross close law). */
     @Suppress("UNUSED_PARAMETER") fun law(kind: PopupKind, direction: PopupDirection, cross: Boolean): SpringLaw =
         if(cross) { if(direction==PopupDirection.Open) crossOpen else crossClose } else when(direction) { PopupDirection.Open -> open; PopupDirection.Close -> close; PopupDirection.Gate -> gate }
@@ -60,8 +60,8 @@ internal val StockPopupMotionRecord: Map<String,List<Float>> = mapOf("open" to l
     "crossClose" to listOf(120f,1f), "gate" to listOf(20f,1f), "snapAspect" to listOf(1.4f), "preparedRamp" to listOf(.25f,.05f))
 internal const val StockPopupMotionRevision = "855-ios262-60fps-interim"
 internal val StockPopupMotion = PopupMotionModel(StockPopupMotionRevision, SpringLaw(28f,.78f), SpringLaw(20f,1f), SpringLaw(120f,1f), SpringLaw(120f,1f), SpringLaw(20f,1f), 1.4f, .25f, .05f,
-    mapOf(PopupKind.Menu to PopupVariant.Base, PopupKind.RowMenu to PopupVariant.Base, PopupKind.BottomMenu to PopupVariant.CrossAxisSnap, PopupKind.Dialog to PopupVariant.Base,
-        PopupKind.SelectionPill to PopupVariant.Base, PopupKind.Legacy to PopupVariant.Legacy))
+    mapOf(PopupKind.Menu to PopupMotionVariant.Base, PopupKind.RowMenu to PopupMotionVariant.Base, PopupKind.BottomMenu to PopupMotionVariant.CrossAxisSnap, PopupKind.Dialog to PopupMotionVariant.Base,
+        PopupKind.SelectionPill to PopupMotionVariant.Base, PopupKind.Legacy to PopupMotionVariant.Legacy))
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
 const val MinimumAnimationSpeed = .5f
 const val MaximumAnimationSpeed = 1.5f
@@ -161,7 +161,7 @@ internal fun popupMotionAdmission(m: PopupMotionModel): List<String> {
     if(!(m.snapAspect.isFinite() && m.snapAspect>1f)) errors+="snapAspect"
     if(!(m.preparedRamp.isFinite() && m.preparedRamp in 0f..(.5f) && m.rampBlend.isFinite() && m.rampBlend>0f && m.rampBlend<=.25f)) errors+="ramp"
     if(errors.isEmpty()) for((pair,peak) in popupReversalReach(m)) if(peak.start< -band || peak.endInclusive>1+band) errors+="reversal.$pair"
-    if(PopupKind.entries.any { it !in m.variants } || m.variants[PopupKind.Legacy]!=PopupVariant.Legacy || m.variants.any { (k,v) -> k!=PopupKind.Legacy && v==PopupVariant.Legacy }) errors+="variants"
+    if(PopupKind.entries.any { it !in m.variants } || m.variants[PopupKind.Legacy]!=PopupMotionVariant.Legacy || m.variants.any { (k,v) -> k!=PopupKind.Legacy && v==PopupMotionVariant.Legacy }) errors+="variants"
     return errors
 }
 /** The analytic state of a damped spring from (x, v) toward q after t seconds. */
@@ -194,9 +194,10 @@ internal fun popupReversalReach(m: PopupMotionModel): Map<String,ClosedFloatingP
         "openGate" to reach(m.open,0.0,1.0,m.gate,m.preparedRamp.toDouble()),"gateOpen" to reach(m.gate,0.0,m.preparedRamp.toDouble(),m.open,1.0),
         "crossOpenClose" to reach(m.crossOpen,0.0,1.0,m.crossClose,0.0),"crossCloseOpen" to reach(m.crossClose,1.0,0.0,m.crossOpen,1.0))
 }
-/** The settle horizon of [law] at [speed] from its worst admitted state, |x0| <= 1.05 and |v0| <= 1.1 omega_eff (A2.2). */
-internal fun popupLawHorizon(law: SpringLaw, speed: Double): Double {
-    val w=law.omega*speed; val shape=SpringProfileSpec(law.zeta,(w*w).toFloat())
+/** The settle horizon of [spring] at [speed] from its worst admitted state, |x0| <= 1.05 and |v0| <= 1.1 omega_eff (A2.2). The parameter is not
+ * named law: #884 reserves that name for motion-selecting arguments, and this is the spec's own admission math. */
+internal fun popupLawHorizon(spring: SpringLaw, speed: Double): Double {
+    val w=spring.omega*speed; val shape=SpringProfileSpec(spring.zeta,(w*w).toFloat())
     return listOf(-1.05,0.0,1.05).flatMap { x -> listOf(-1.1*w,0.0,1.1*w).map { v -> if(x==0.0 && v==0.0) 0.0 else springHorizon(shape,x,v,1.0,1.0) } }.max()
 }
 internal fun springHorizon(s: SpringProfileSpec, x0: Double = 1.05, v0: Double = vMax.toDouble(), range: Double = 1.0, speed: Double = 4.0/3): Double {

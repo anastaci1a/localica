@@ -11,7 +11,7 @@ class CrossAxisSnapTest {
     private val model = StockPopupMotion
     private val crossOpen = model.law(PopupKind.BottomMenu, PopupDirection.Open, true); private val crossClose = model.law(PopupKind.BottomMenu, PopupDirection.Close, true)
     private val open = model.open; private val close = model.close
-    private val autoModel = model.copy(variants = model.variants + (PopupKind.Menu to PopupVariant.Auto))
+    private val autoModel = model.copy(variants = model.variants + (PopupKind.Menu to PopupMotionVariant.Auto))
     private fun z(l: SpringLaw) = l.zeta.toDouble(); private fun w(l: SpringLaw) = l.omega.toDouble()
     /** A menu opening from a trigger inside its corner: the main axis is y (travel 700), the cross edges are the x edges (left moves 300, right stays). */
     private val menu = ExpansionBasis(Rect(300f, 700f, 400f, 800f), Rect(0f, 0f, 400f, 700f), 1f)
@@ -20,14 +20,14 @@ class CrossAxisSnapTest {
     private fun fraction(rig: PopupRig, i: Int, stamp: FrameStamp) = (rig.edge(i, stamp) - rig.start[i]) / (rig.end[i] - rig.start[i])
 
     @Test fun kindToVariantTableFollowsSectionTwo() {
-        assertEquals(mapOf(PopupKind.Menu to PopupVariant.Base, PopupKind.RowMenu to PopupVariant.Base, PopupKind.BottomMenu to PopupVariant.CrossAxisSnap,
-            PopupKind.Dialog to PopupVariant.Base, PopupKind.SelectionPill to PopupVariant.Base, PopupKind.Legacy to PopupVariant.Legacy), model.variants)
+        assertEquals(mapOf(PopupKind.Menu to PopupMotionVariant.Base, PopupKind.RowMenu to PopupMotionVariant.Base, PopupKind.BottomMenu to PopupMotionVariant.CrossAxisSnap,
+            PopupKind.Dialog to PopupMotionVariant.Base, PopupKind.SelectionPill to PopupMotionVariant.Base, PopupKind.Legacy to PopupMotionVariant.Legacy), model.variants)
         for (kind in PopupKind.entries) EngineHarness().use { h ->
             val owner = ExpandCollapse(h.clock, StockUiSpec.expansion, false).also { it.usePopupLaw(model, kind) }
             val variant = model.variant(kind)
-            assertEquals("$kind", variant != PopupVariant.Legacy, owner.popupLaw != null)
-            assertEquals("$kind", variant, owner.popupLaw?.variant ?: PopupVariant.Legacy)
-            assertEquals("$kind has a cross phase only when it can snap", variant == PopupVariant.CrossAxisSnap, owner.crossPhase() != null)
+            assertEquals("$kind", variant != PopupMotionVariant.Legacy, owner.popupLaw != null)
+            assertEquals("$kind", variant, owner.popupLaw?.variant ?: PopupMotionVariant.Legacy)
+            assertEquals("$kind has a cross phase only when it can snap", variant == PopupMotionVariant.CrossAxisSnap, owner.crossPhase() != null)
             owner.dispose()
         }
         // Auto owners also carry a cross phase.
