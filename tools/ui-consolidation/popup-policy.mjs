@@ -186,6 +186,17 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
             else if(root)handles.set(tokens[i+1].text,expression.some(t=>['contact','state','momentum','expansion','output'].includes(t))?'GlassContactMutation':root);
         }
     }
+    // Shared-content handles: rememberPopupSharedContent results, PopupSharedContent-typed names and this file's locals of that type.
+    const sharedSlots=new Set(['Compact','Expanded','CompactCopy','ExpandedCopy']), sharedHandles=new Set(), sharedLocals=new Set();
+    for(let i=0;i<tokens.length;i++)if(['staticCompositionLocalOf','compositionLocalOf'].includes(tokens[i].text) && tokens[i+1]?.text==='<' && name(i+2)==='PopupSharedContent' && tokens[i-1]?.text==='=')sharedLocals.add(tokens[i-2].text);
+    for(let i=0;i<tokens.length;i++) {
+        if(tokens[i+1]?.text===':' && name(i+2)==='PopupSharedContent')sharedHandles.add(tokens[i].text);
+        if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=' && (name(i+3)==='rememberPopupSharedContent' || sharedLocals.has(tokens[i+3]?.text) && tokens[i+5]?.text==='current'))sharedHandles.add(tokens[i+1].text);
+    }
+    function sharedReceiver(i) {
+        let r=i-2;while(['?','!'].includes(tokens[r]?.text))r--;
+        return sharedHandles.has(tokens[r]?.text) || tokens[r]?.text==='current' && tokens[r-1]?.text==='.' && sharedLocals.has(tokens[r-2]?.text);
+    }
     const lambdaHandles=[];
     function receiverRule(i) {
         let begin=i;
@@ -255,6 +266,8 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
         ProvideLocalicaEngineContext:{identity:'io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext',owner:'app/src/main/java/io/github/anastaci1a/localica/ui/layout/LocalicaEngineRoot.kt'},
         // #862: the window's one MotionDurationScale. An extension: any receiver spelling is the same ingress.
         installLocalicaWindowMotion:{identity:'io.github.anastaci1a.localica.ui.installLocalicaWindowMotion',owner:'app/src/main/java/io/github/anastaci1a/localica/ui/InterfaceMotion.kt',extension:true},
+        // #854 round 2 (G1): the app-wide respect policy is bound by the root alone.
+        bindRespectSystemAnimationScale:{identity:'io.github.anastaci1a.localica.ui.bindRespectSystemAnimationScale',owner:'app/src/main/java/io/github/anastaci1a/localica/ui/InterfaceMotion.kt',extension:true},
     };
     // #854 review (Astra 1): each shared API's whole formal list is pinned, not only its motion-selecting arguments. An argument for any
     // other formal (a new timing input such as animationSpeed added to the shared declaration) is an incident until this table, and its
@@ -353,7 +366,12 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
         // #862 / #854 review: the window's WindowMotionScale is the one source of animation time scale. Reading the coroutine element
         // (context[MotionDurationScale]) is allowed; any other naming (an implementation, object, alias, typealias, key, reference or
         // type argument) could rescale durations outside the shared policy.
-        if(n==='MotionDurationScale' && !importTokens.has(i) && !(previous==='[' && next===']') && !ownsPopups(file,'MotionDurationScale'))emit('ScreenPopupMotion',i,'Only the window motion scale owner provides a MotionDurationScale');
+        // Round 2 (G1): the app's own WindowMotionScale too: constructing one, casting to it or writing its platform/respect.
+        if(['MotionDurationScale','WindowMotionScale'].includes(n) && !importTokens.has(i) && !(previous==='[' && next===']') && !ownsPopups(file,'MotionDurationScale'))emit('ScreenPopupMotion',i,'Only the window motion scale owner provides a MotionDurationScale');
+        // Round 2 (G2): a shared-content handle exposes only its slots to screens. Any other member, extension or scope function on it
+        // (a timing setter, motion.updateSpeed, let/apply/with) belongs to the shared owner.
+        if((previous==='.' && sharedReceiver(i) || n==='with' && next==='(' && sharedHandles.has(tokens[i+2]?.text)) && !sharedSlots.has(n))
+            emit('ScreenPopupMotion',i,'A shared-content handle exposes only its slots to screens');
         if(['shadowOpacity','opacity'].includes(n) && assignment && calls.some(c=>['PopupActionPill','GlassMenu','GlassMorphPopup','GlassDialog','Popup','glassAnchor'].includes(c)))emit('ScreenPopupTrigger',i,'Popup opacity and shadow wiring belong to the shared component');
         if(n==='law' && assignment)emit('ScreenPopupMotion',i,'Screens cannot override a motion law');
         if(['rememberPopupMotion','rememberPopupWindowMotion','rememberExpandCollapse'].includes(n) && (next==='(' || (previous===':' && tokens[i-2]?.text===':')))emit('ScreenPopupMotion',i,'Popup motion owners are internal to the shared system');
