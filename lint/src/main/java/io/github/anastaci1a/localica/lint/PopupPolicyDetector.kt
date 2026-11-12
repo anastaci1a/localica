@@ -308,6 +308,14 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                     generateSequence(node.uastParent) { it.uastParent }.none { it is UImportStatement }) reportScale(node)
                 if ((resolved as? PsiMember)?.containingClass?.qualifiedName == sharedContent && resolved !is com.intellij.psi.PsiClass &&
                     (resolved as? com.intellij.psi.PsiNamedElement)?.name !in sharedSlots) report(UiRuleId.ScreenPopupMotion, node)
+                // Round 5 (R4-1): a Kotlin property of the handle (a body val or a constructor val) can resolve to a light getter,
+                // a light constructor parameter or the Kotlin declaration itself; its navigation element is the KtProperty or
+                // KtParameter in every case.
+                val origin = resolved?.navigationElement
+                val handleProperty: org.jetbrains.kotlin.psi.KtNamedDeclaration? = (origin as? org.jetbrains.kotlin.psi.KtProperty)?.takeIf { !it.isLocal }
+                    ?: (origin as? org.jetbrains.kotlin.psi.KtParameter)?.takeIf { it.hasValOrVar() }
+                if (handleProperty != null && handleProperty.name !in sharedSlots && com.intellij.psi.util.PsiTreeUtil.getParentOfType(
+                        handleProperty, org.jetbrains.kotlin.psi.KtClassOrObject::class.java)?.fqName?.asString() == sharedContent) report(UiRuleId.ScreenPopupMotion, node)
                 val name = resolved?.let { (it as? com.intellij.psi.PsiNamedElement)?.name } ?: node.identifier
                 if (Regex("(?:get)?Local.*Popup.*Home.*").matches(name)) report(UiRuleId.ScreenPopupHome, node)
                 if (name in setOf("LocalPopupBodyPresenter", "getLocalPopupBodyPresenter") &&

@@ -536,6 +536,13 @@ fun rememberPopupSharedContent(key: Any, shared: () -> Unit): PopupSharedContent
  fun testF8_3_shared_content_let() { timedHandle(); surface(subject(handle + "fun f(shared: PopupSharedContent) { shared.let { it.setAnimationSpeed(.5f) } }")).expectMatches(red) }
  fun testF8_3_shared_content_with_member() { surface(subject(handle + "fun f(shared: PopupSharedContent) { with(shared) { println(motion) } }")).expectMatches(red) }
  fun testF8_3_shared_content_scope_on_slots() { surface(subject(handle + "fun f(shared: PopupSharedContent) { shared.let { it.Compact() } }")).expectMatches(red) }
+ // #854 round 5 (R4-1): a property read on the handle through a local alias or another file's composition local. Node knows handles
+ // by name within one file only, so lint is the gate of record for these two.
+ fun testR4_1_alias_property_read() { surface(subject(handle + "fun f(shared: PopupSharedContent) { val alias = shared; println(alias.motion) }")).expectMatches(red) }
+ fun testR4_1_composition_local_property_read() { components = components + kotlin("src/main/java/io/github/anastaci1a/localica/ui/QueueSelectorList.kt",
+   "package io.github.anastaci1a.localica.ui\nimport io.github.anastaci1a.localica.ui.components.PopupSharedContent\n" +
+   "internal val LocalQueueSelectorSharedName = androidx.compose.runtime.ProvidableCompositionLocal<PopupSharedContent?>()")
+  surface(subject("fun f() { println(LocalQueueSelectorSharedName.current!!.motion) }")).expectMatches(red) }
  fun testF8_3_honest_slots_in_scope() { surface(subject(handle + "fun f(shared: PopupSharedContent) { shared.Compact(); shared.Expanded() }")).expectClean() }
  fun testG2_honest_slots_and_factories() { surface(subject(handle + "fun f(k: Any, copy: Boolean, shared: PopupSharedContent?) { val nameMorph = rememberPopupSharedContent(k) {}; if (copy) nameMorph.CompactCopy() else nameMorph.Compact(); shared?.Expanded(); shared?.ExpandedCopy() }")).expectClean() }
  // #854 round 3 R2-1: X1-X4, a timing formal on each newly pinned shared API, and an unclassified composable entry point.
