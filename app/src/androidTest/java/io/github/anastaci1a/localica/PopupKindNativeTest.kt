@@ -30,16 +30,18 @@ class PopupKindNativeTest {
 
     private class Scene { var open by mutableStateOf(false); val seen = mutableListOf<PopupKind>() }
 
-    private fun menu(anchor: GlassAnchor, scene: Scene) {
-        compose.setContent { LocalicaTheme {
-            Box(Modifier.fillMaxSize()) {
-                GlassMenu(scene.open, anchor, { scene.open = false }) {
-                    val kind = LocalPopupKind.current
-                    SideEffect { scene.seen += kind }
-                    Text("Kind", Modifier.testTag("kind-content"))
-                }
+    @Composable private fun MenuScene(anchor: GlassAnchor, scene: Scene) {
+        Box(Modifier.fillMaxSize()) {
+            GlassMenu(scene.open, anchor, { scene.open = false }) {
+                val kind = LocalPopupKind.current
+                SideEffect { scene.seen += kind }
+                Text("Kind", Modifier.testTag("kind-content"))
             }
-        } }
+        }
+    }
+
+    private fun menu(anchor: GlassAnchor, scene: Scene) {
+        compose.setContent { LocalicaTheme { MenuScene(anchor, scene) } }
     }
 
     private fun present(scene: Scene): List<PopupKind> {
@@ -55,11 +57,14 @@ class PopupKindNativeTest {
     }
 
     @Test fun eachTriggerRoleOpensItsDerivedKind() {
+        // The rule allows one setContent per test: each role gets a fresh anchor and scene, keyed into the same content.
+        var current by mutableStateOf<Pair<GlassAnchor, Scene>?>(null)
+        compose.setContent { LocalicaTheme { current?.let { (anchor, scene) -> key(anchor) { MenuScene(anchor, scene) } } } }
         for ((role, contextual, expected) in listOf(Triple(TriggerRole.Surface, false, PopupKind.Menu), Triple(TriggerRole.Navigation, false, PopupKind.BottomMenu),
                 Triple(TriggerRole.PlainIcon, false, PopupKind.Menu), Triple(TriggerRole.Surface, true, PopupKind.RowMenu), Triple(TriggerRole.Navigation, true, PopupKind.RowMenu))) {
             val anchor = GlassAnchor().apply { bounds = measured; bindRole(role); this.contextual = contextual }
             val scene = Scene()
-            menu(anchor, scene)
+            compose.runOnIdle { current = anchor to scene }
             val kinds = present(scene)
             assertTrue("$role contextual=$contextual: $kinds", kinds.isNotEmpty() && kinds.all { it == expected })
             if (expected == PopupKind.BottomMenu) assertEquals(PopupMotionVariant.CrossAxisSnap, StockPopupMotion.variants[expected])
