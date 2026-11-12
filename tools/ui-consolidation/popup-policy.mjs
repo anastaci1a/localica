@@ -6,6 +6,9 @@ export const popupRatchet = fs.readFileSync(new URL('../../lint/src/main/resourc
 export const popupOwners = [...new Set(ownership.map(([,path])=>path))];
 const popupHosts = new Map(fs.readFileSync(new URL('../../lint/src/main/resources/popup-hosts.txt',import.meta.url),'utf8').trim().split('\n').map(row=>{const [path,counts]=row.split('=');return [path,counts.split(',').map(Number)];}));
 const popupRoles = new Set(fs.readFileSync(new URL('../../lint/src/main/resources/popup-roles.txt',import.meta.url),'utf8').trim().split('\n'));
+/** #854 review: each shared popup/motion API's whole formal list and its motion-selecting formals, one table for both gates. */
+export const popupApiSurface = new Map(fs.readFileSync(new URL('../../lint/src/main/resources/popup-api.txt',import.meta.url),'utf8').trim().split('\n').map(row=>{
+    const [api,identity,file,key,parameters,motion]=row.split('|');return [api,{identity,file,key,parameters:parameters.split(','),motion:motion?motion.split(','):[]}];}));
 export function ownsPopups(file, rule) { return ownership.some(([r,path])=>path===file && (!rule || r===rule)); }
 // Tokenize Kotlin so comments, ordinary/raw strings and whitespace cannot hide or fabricate a call.
 // Offsets are retained for exact source receipts. Import aliases and qualified calls resolve to the same spelling.
@@ -46,7 +49,7 @@ export function kotlinTokens(source) {
     scan();
     return tokens;
 }
-function declaredFunctions(file, source) {
+export function declaredFunctions(file, source) {
     const tokens=kotlinTokens(source), declarations=[];
     const packageAt=tokens.findIndex(t=>t.text==='package');let pkg='';
     for(let i=packageAt+1;packageAt>=0 && i<tokens.length;i++) {
@@ -250,21 +253,19 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
     const motionIngress={
         LocalicaUiRoot:{identity:'io.github.anastaci1a.localica.ui.LocalicaUiRoot',owner:'app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt'},
         ProvideLocalicaEngineContext:{identity:'io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext',owner:'app/src/main/java/io/github/anastaci1a/localica/ui/layout/LocalicaEngineRoot.kt'},
+        // #862: the window's one MotionDurationScale. An extension: any receiver spelling is the same ingress.
+        installLocalicaWindowMotion:{identity:'io.github.anastaci1a.localica.ui.installLocalicaWindowMotion',owner:'app/src/main/java/io/github/anastaci1a/localica/ui/InterfaceMotion.kt',extension:true},
     };
-    const pinnedApis={
-        PopupActionPill:{owner:'GlassMorph',key:'PillArgument.',parameters:['anchor','source','modifier','noneAtlasInput','chromeVisibility','playerExpansion','leadingIcon','trailingIcon','leadingLabel','trailingLabel','tag','role','menuVisible','onMenuDismiss','menuContent','onSearch','onMore']},
-        GlassMenu:{owner:'GlassMorph',key:'PopupArgument.',parameters:['visible','anchor','onDismiss','originPreparation','content']},
-        GlassMorphPopup:{owner:'GlassMorph',key:'PopupArgument.',parameters:['visible','anchor','onDismiss','placement','darkOverride','fitContent','originPreparation','searchDismissOnImeBack','sharedContent','heightSizing','content']},
-        GlassPopupHome:{owner:'GlassPopupHome',key:'HomeArgument.',parameters:['home','chrome','container','modifier','content']},
-        LyricsPanel:{owner:'LyricsPanel',key:'LyricsArgument.',parameters:['track','positionMs','reducedMotion','onSeek','modifier','sourcesRequest','sourcesAnchor','sampledAtMs','playing','speed','delayMs','durationMs','contentHeight','contentOffset','result','sourcesVisible','onSourcesDismiss','originPreparation','contentAlpha']},
-        LyricsBackdrop:{owner:'LyricsBackdrop',key:'LyricsBackdropArgument.',parameters:['key','modifier','contentAlpha','content']},
-    };
+    // #854 review (Astra 1): each shared API's whole formal list is pinned, not only its motion-selecting arguments. An argument for any
+    // other formal (a new timing input such as animationSpeed added to the shared declaration) is an incident until this table, and its
+    // review, admit it; the live-tree contract keeps each declaration equal to its row.
+    const pinnedApis=popupApiSurface;
     function checkArguments(i, api) {
-        const spec=pinnedApis[api];if(!spec || tokens[i+1]?.text!=='(' || tokens[i-1]?.text==='fun')return;
-        const identity='io.github.anastaci1a.localica.ui.'+api;
+        const spec=pinnedApis.get(api);if(!spec || tokens[i+1]?.text!=='(' || tokens[i-1]?.text==='fun')return;
+        const identity=spec.identity;
         const imported=imports.get(tokens[i].text);
         if(imported && imported!==identity)return;
-        const canonical='app/src/main/java/io/github/anastaci1a/localica/ui/'+spec.owner+'.kt';
+        const canonical=spec.file;
         if(tokens[i-1]?.text!=='.' && !imported && localDeclarations.some(d=>d.name===api && d.file!==canonical))return;
         if(tokens[i-1]?.text==='.' && identityAt(i)!==identity)return;
         const formals=declarations.filter(d=>d.qualified===identity && d.file===canonical);
@@ -273,10 +274,11 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
             const t=tokens[j].text;
             if(depth===0 && (t===',' || t===')')) {
                 if(j>start) {
-                    const named=tokens[start+1]?.text==='=';
+                    // `a == b` is a positional comparison, not the named argument `a =`.
+                    const named=tokens[start+1]?.text==='=' && tokens[start+2]?.text!=='=';
                     const parameter=named?tokens[start].text:(formals.length===1?formals[0].parameters:spec.parameters)?.[ordinal];
-                    const motion=spec.key==='PillArgument.'?['chromeVisibility','playerExpansion']:spec.key==='HomeArgument.'?['modifier','container','chrome']:spec.key==='PopupArgument.'?['originPreparation','sharedContent']:['originPreparation','contentAlpha'];
-                    if(motion.includes(parameter) && !ownsPopups(file,spec.key+parameter))emit('ScreenPopupMotion',start,'Popup argument '+parameter+' is restricted to its pinned callers');
+                    if(!spec.parameters.includes(parameter))emit('ScreenPopupMotion',start,'Argument '+parameter+' is not part of '+api+"'s pinned surface");
+                    else if(spec.motion.includes(parameter) && !ownsPopups(file,spec.key+parameter))emit('ScreenPopupMotion',start,'Popup argument '+parameter+' is restricted to its pinned callers');
                     ordinal++;
                 }
                 if(t===')')break;start=j+1;continue;
@@ -293,10 +295,12 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
         const n=name(i),next=tokens[i+1]?.text,previous=tokens[i-1]?.text;
         checkArguments(i,n);
         const ingress=Object.hasOwn(motionIngress,n)?motionIngress[n]:null, importedIngress=imports.get(tokens[i].text);
-        if(ingress && !importTokens.has(i) && previous!=='fun' &&
+        let declaredAt=i;while(tokens[declaredAt-1]?.text==='.')declaredAt-=2;
+        // An extension declaration (fun Receiver.name) declares the ingress; it does not invoke it.
+        if(ingress && !importTokens.has(i) && previous!=='fun' && !(ingress.extension && tokens[declaredAt-1]?.text==='fun') &&
             (next==='(' || next==='{' || previous===':' && tokens[i-2]?.text===':') &&
             (!importedIngress || importedIngress===ingress.identity) &&
-            (previous==='.'?identityAt(i)===ingress.identity:!localDeclarations.some(d=>d.name===n && d.file!==ingress.owner)) &&
+            (previous==='.' && !ingress.extension?identityAt(i)===ingress.identity:!localDeclarations.some(d=>d.name===n && d.file!==ingress.owner)) &&
             !ownsPopups(file,'MotionIngress.'+n))emit('ScreenPopupMotion',i,'Only the sanctioned hosts may invoke shared motion ingress');
         if(n==='glassSurfaceAnchor' && next==='(' && previous!=='fun') {
             const writing=tokens[i+2]?.text!==')';
@@ -346,6 +350,10 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
         // #854: only the motion owners and the spec that declares the kinds name them. Members, imports (star and member imports too),
         // aliases, typealias targets, callable references and type arguments all count.
         if(['PopupKind','PopupMotionKind'].includes(n) && !ownsPopups(file,'PopupKindModel'))emit('ScreenPopupMotion',i,'Screens cannot select popup motion kinds');
+        // #862 / #854 review: the window's WindowMotionScale is the one source of animation time scale. Reading the coroutine element
+        // (context[MotionDurationScale]) is allowed; any other naming (an implementation, object, alias, typealias, key, reference or
+        // type argument) could rescale durations outside the shared policy.
+        if(n==='MotionDurationScale' && !importTokens.has(i) && !(previous==='[' && next===']') && !ownsPopups(file,'MotionDurationScale'))emit('ScreenPopupMotion',i,'Only the window motion scale owner provides a MotionDurationScale');
         if(['shadowOpacity','opacity'].includes(n) && assignment && calls.some(c=>['PopupActionPill','GlassMenu','GlassMorphPopup','GlassDialog','Popup','glassAnchor'].includes(c)))emit('ScreenPopupTrigger',i,'Popup opacity and shadow wiring belong to the shared component');
         if(n==='law' && assignment)emit('ScreenPopupMotion',i,'Screens cannot override a motion law');
         if(['rememberPopupMotion','rememberPopupWindowMotion','rememberExpandCollapse'].includes(n) && (next==='(' || (previous===':' && tokens[i-2]?.text===':')))emit('ScreenPopupMotion',i,'Popup motion owners are internal to the shared system');
@@ -363,7 +371,7 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
         if(fieldWrite && protectedRule && (previous==='.' || lambdaHandles.some(x=>x.start<i && i<x.end && x.name===null)))emit(protectedRule,i,'Only the shared owner mutates popup handles');
         if(next==='(' && ['add','addAll','clear','remove','removeAll','removeAt','removeIf','retainAll','set','put','putAll','replace','replaceAll','sort','sortWith','sortBy','sortDescending','reverse','shuffle','fill','bind','unbind','reset','advance','blendFrom'].includes(n) && protectedRule)emit(protectedRule,i,'Only the shared owner mutates popup collections');
         if(previous===':' && tokens[i-2]?.text===':') {
-            if(pinnedApis[n])emit('ScreenPopupMotion',i,'A callable reference cannot transfer gated popup arguments');
+            if(pinnedApis.has(n))emit('ScreenPopupMotion',i,'A callable reference cannot transfer gated popup arguments');
             const rule=n==='GlassAnchor'?'ScreenPopupTrigger':['GlassPopupHome','GlassPopupFlight','rememberGlassPopupHome','glassPopupHome','glassPopupProjection'].includes(n)?'ScreenPopupHome':receiverRule(i-3);
             if(rule)emit(rule,i,'A callable reference cannot transfer popup ownership');
         }

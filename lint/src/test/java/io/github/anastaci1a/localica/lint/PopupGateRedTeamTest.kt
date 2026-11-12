@@ -46,7 +46,8 @@ open class Dialog
 open class DialogFragment { fun show() {}; fun showNow() {} }
 open class AlertDialog : android.app.Dialog() { class Builder }""").indented(),
   kotlin("src/main/java/androidx/activity/Windows.kt", """package androidx.activity
-open class ComponentDialog """).indented(),
+open class ComponentDialog
+open class ComponentActivity """).indented(),
   kotlin("src/main/java/androidx/fragment/app/Windows.kt", """package androidx.fragment.app
 open class DialogFragment { fun show() {}; fun showNow() {} } """).indented(),
   kotlin("src/main/java/android/widget/Windows.kt", """package android.widget
@@ -449,4 +450,47 @@ fun f() { io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext(1
     .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
   }
  }
+ // #854 review F3/F4 and #862 (checklist 44): the pinned API surface, the window motion scale and its installer. Each red case has
+ // an honest twin that stays clean in its own run.
+ private val scaleStub = kotlin("src/main/java/androidx/compose/ui/MotionDurationScale.kt", """package androidx.compose.ui
+interface MotionDurationScale : kotlin.coroutines.CoroutineContext.Element {
+    val scaleFactor: Float
+    override val key: kotlin.coroutines.CoroutineContext.Key<*> get() = TODO()
+    companion object Key : kotlin.coroutines.CoroutineContext.Key<MotionDurationScale>
+}""").indented()
+ private fun surface(subject: com.android.tools.lint.checks.infrastructure.TestFile, glass: String = glassMorphStub, reduced: String = "", motion: String = "") =
+  lint().projects(project().name("app").files(*(listOf(kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt", glass).indented()) + stubs.drop(1) +
+   wrapperStubs.filterNot { it.targetRelativePath.endsWith("ui/InterfaceMotion.kt") } + kotlin("src/main/java/io/github/anastaci1a/localica/ui/InterfaceMotion.kt",
+   "package io.github.anastaci1a.localica.ui\nval LocalMotionSpeed = androidx.compose.runtime.ProvidableCompositionLocal<Float>()\n" +
+   "val LocalReducedMotion = androidx.compose.runtime.ProvidableCompositionLocal<Boolean>()\nval LocalRespectSystemAnimationScale = androidx.compose.runtime.ProvidableCompositionLocal<Boolean>()\n" +
+   "fun rememberEffectiveReducedMotion(appReducedMotion: Boolean" + reduced + "): Boolean = appReducedMotion\n" +
+   "fun androidx.activity.ComponentActivity.installLocalicaWindowMotion(respect: Boolean) {}\n" + motion) + scaleStub + subject).toTypedArray()))
+   .issues(*getIssues().toTypedArray()).allowMissingSdk().testModes(TestMode.DEFAULT).run()
+ private fun subject(body: String) = kotlin("src/main/java/io/github/anastaci1a/localica/ui/Subject.kt", "package io.github.anastaci1a.localica.ui\n" + body)
+ private val red = "(?s).*Subject[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*"
+ private fun unpinned(formal: String, api: String) = "(?s).*Subject[.]kt:[0-9]+: Error: Argument $formal is not part of $api's pinned surface " + Regex.escape("[") + "ScreenPopupMotion.*"
+ // Astra's witness: a scalar timing input added to the real shared declaration.
+ private val timedGlass = glassMorphStub.replace("sharedContent: PopupSharedContent? = null, content: () -> Unit", "sharedContent: PopupSharedContent? = null, animationSpeed: Float? = null, content: () -> Unit")
+ fun testF4_timing_stub_is_extended() = assertTrue(timedGlass != glassMorphStub)
+ fun testF4_named_timing_argument() = surface(subject("fun f(anchor: GlassAnchor) { GlassMorphPopup(true, anchor, {}, animationSpeed = .5f) {} }"), timedGlass).expectMatches(unpinned("animationSpeed", "GlassMorphPopup"))
+ fun testF4_positional_timing_argument() = surface(subject("fun f(anchor: GlassAnchor) { GlassMorphPopup(true, anchor, {}, 0, null, false, null, false, null, .5f) {} }"), timedGlass).expectMatches(unpinned("animationSpeed", "GlassMorphPopup"))
+ fun testF4_honest_caller_of_the_extended_declaration() = surface(subject("fun f(anchor: GlassAnchor, open: Int?, filter: Int) { GlassMorphPopup(true, anchor, {}, placement = 1, darkOverride = false) {}; GlassMenu(open == filter, anchor, {}) {} }"), timedGlass).expectClean()
+ fun testF3_readded_respect_slot_named() = surface(subject("fun f(r: Boolean) = rememberEffectiveReducedMotion(r, respectSystemScale = false)"), reduced = ", respectSystemScale: Boolean = true").expectMatches(unpinned("respectSystemScale", "rememberEffectiveReducedMotion"))
+ fun testF3_readded_respect_slot_positional() = surface(subject("fun f(r: Boolean) = rememberEffectiveReducedMotion(r, false)"), reduced = ", respectSystemScale: Boolean = true").expectMatches(unpinned("respectSystemScale", "rememberEffectiveReducedMotion"))
+ fun testF3_honest_reduced_motion_caller() = surface(subject("fun f(r: Boolean) = rememberEffectiveReducedMotion(r || LocalReducedMotion.current)"), reduced = ", respectSystemScale: Boolean = true").expectClean()
+ fun testScale_object() = surface(subject("val s = object : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 2f }")).expectMatches(red)
+ fun testScale_class() = surface(subject("class Slow : androidx.compose.ui.MotionDurationScale { override val scaleFactor get() = 2f }")).expectMatches(red)
+ fun testScale_import_alias() = surface(subject("import androidx.compose.ui.MotionDurationScale as Scale\nval s = object : Scale { override val scaleFactor = 2f }")).expectMatches(red)
+ fun testScale_typealias() = surface(subject("typealias Scale = androidx.compose.ui.MotionDurationScale\nval s = object : Scale { override val scaleFactor = 2f }")).expectMatches(red)
+ fun testScale_key() = surface(subject("val key = androidx.compose.ui.MotionDurationScale.Key")).expectMatches(red)
+ fun testScale_type_argument() = surface(subject("val all = listOf<androidx.compose.ui.MotionDurationScale>()")).expectMatches(red)
+ fun testScale_callable_reference() = surface(subject("val read = androidx.compose.ui.MotionDurationScale::scaleFactor")).expectMatches(red)
+ fun testScale_in_a_file_with_other_grants() = surface(kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
+  "package io.github.anastaci1a.localica.ui\nval s = object : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 2f }"))
+  .expectMatches("(?s).*LocalicaScreen[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*")
+ fun testScale_read_stays_allowed() = surface(subject("import androidx.compose.ui.MotionDurationScale\nfun f(c: kotlin.coroutines.CoroutineContext) = c[MotionDurationScale]?.scaleFactor ?: 1f")).expectClean()
+ fun testScale_owner_implements() = surface(subject("fun g() {}"), motion = "class WindowMotionScale : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 1f }").expectClean()
+ fun testScale_installer_outside_main() = surface(subject("fun f(a: androidx.activity.ComponentActivity) { a.installLocalicaWindowMotion(false) }")).expectMatches(red)
+ fun testScale_installer_in_main() = surface(kotlin("src/main/java/io/github/anastaci1a/localica/MainActivity.kt",
+  "package io.github.anastaci1a.localica\nimport io.github.anastaci1a.localica.ui.installLocalicaWindowMotion\nclass Main : androidx.activity.ComponentActivity() { fun start() { installLocalicaWindowMotion(true) } }")).expectClean()
 }
