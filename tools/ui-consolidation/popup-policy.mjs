@@ -8,7 +8,7 @@ const popupHosts = new Map(fs.readFileSync(new URL('../../lint/src/main/resource
 const popupRoles = new Set(fs.readFileSync(new URL('../../lint/src/main/resources/popup-roles.txt',import.meta.url),'utf8').trim().split('\n'));
 /** #854 review: each shared popup/motion API's whole formal list and its motion-selecting formals, one table for both gates. */
 export const popupApiSurface = new Map(fs.readFileSync(new URL('../../lint/src/main/resources/popup-api.txt',import.meta.url),'utf8').trim().split('\n').map(row=>{
-    const [api,identity,file,key,parameters,motion,form]=row.split('|');return [api,{identity,file,key,parameters:parameters.split(','),motion:motion?motion.split(','):[],extension:form==='extension'}];}));
+    const [api,identity,file,key,parameters,motion,form]=row.split('|');return [api,{identity,file,key,parameters:parameters?parameters.split(','):[],motion:motion?motion.split(','):[],extension:form==='extension'}];}));
 /** #854 round 3 (R2-1): shared entry points that are not popup/motion APIs, each with a one-line reason. Together with popupApiSurface
  * this classifies every non-private top-level function of the rule-11 owner files, ui/components and ui/engine that other files call. */
 export const popupApiExclusions = fs.readFileSync(new URL('../../lint/src/main/resources/popup-api-exclusions.txt',import.meta.url),'utf8').trim().split('\n').map(row=>{
@@ -39,7 +39,8 @@ export function sharedEntryPoints(file, source) {
 /** Calls from non-shared files to shared entry points that have neither a popup-api.txt row nor an exclusion. */
 export function unclassifiedEntryPointCalls(files) {
     const classified=new Set([...[...popupApiSurface].map(([api,spec])=>api+'|'+spec.file),...popupApiExclusions.map(e=>e.name+'|'+e.file)]);
-    const open=files.filter(f=>f.path.includes('/src/main/') && sharedPopupFile(f.path)).flatMap(f=>sharedEntryPoints(f.path,f.source)).filter(e=>!classified.has(e.name+'|'+e.file));
+    const open=files.filter(f=>f.path.includes('/src/main/') && sharedPopupFile(f.path)).flatMap(f=>sharedEntryPoints(f.path,f.source)
+        .map(e=>({...e,pkg:/^\s*package\s+([\w.]+)/m.exec(f.source)?.[1]}))).filter(e=>!classified.has(e.name+'|'+e.file));
     const byName=new Map();for(const e of open){if(!byName.has(e.name))byName.set(e.name,[]);byName.get(e.name).push(e);}
     const incidents=[];
     for(const {path,source} of files) {
@@ -51,7 +52,9 @@ export function unclassifiedEntryPointCalls(files) {
             const previous=tokens[i-1]?.text,next=tokens[i+1]?.text;
             const reference=previous===':' && tokens[i-2]?.text===':';
             if(previous==='fun' || !(next==='(' || next==='{' || reference))continue;
-            const entry=candidates.find(e=>e.extension || previous!=='.' || reference);if(!entry)continue;
+            // Round 4 (F8-2): a fully qualified call (io.github.….engine.rememberOriginPhaseProjection()) names the top-level entry too.
+            let qualifier=[],q=i-1;while(tokens[q]?.text==='.' && /^[A-Za-z_]\w*$/.test(tokens[q-1]?.text||'')){qualifier.unshift(tokens[q-1].text);q-=2;}
+            const entry=candidates.find(e=>e.extension || previous!=='.' || reference || qualifier.join('.')===e.pkg);if(!entry)continue;
             incidents.push({rule:'ScreenPopupMotion',path,line:source.slice(0,tokens[i].start).split('\n').length,
                 note:'Unclassified shared popup entry point '+entry.name+' ('+entry.file+'): add a popup-api.txt row or a popup-api-exclusions.txt reason'});
         }

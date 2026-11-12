@@ -227,25 +227,25 @@ fun LiquidGlassSurface(modifier: SurfaceModifier) { modifier.glassSurfaceAnchor(
    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
  }
  /** #854: the spec that declares the kinds may name them (PopupKindModel), and stays a non-owner for every other motion check. */
- private fun withSpec(body: String, vararg files: com.android.tools.lint.checks.infrastructure.TestFile) = lint().projects(project().name("app").files(*(stubs +
-  wrapperStubs.filterNot { it.targetRelativePath.endsWith("spec/UiSpec.kt") } + kotlin("src/main/java/io/github/anastaci1a/localica/ui/spec/UiSpec.kt",
+ private fun withSpec(body: String, vararg files: com.android.tools.lint.checks.infrastructure.TestFile) = lint().projects(project().name("app").files(*(quiet(stubs) +
+  quiet(wrapperStubs).filterNot { it.targetRelativePath.endsWith("spec/UiSpec.kt") } + kotlin("src/main/java/io/github/anastaci1a/localica/ui/spec/UiSpec.kt",
   "package io.github.anastaci1a.localica.ui.spec\nval LocalUiSpec = androidx.compose.runtime.ProvidableCompositionLocal<Int>()\nenum class PopupKind { Menu, BottomMenu, Dialog, Legacy }\n" + body) +
   files).toTypedArray())).issues(*getIssues().toTypedArray()).allowMissingSdk().testModes(TestMode.DEFAULT).run()
- fun testSanctionedKindModel() = withSpec("val stock=mapOf(PopupKind.Menu to 0, PopupKind.BottomMenu to 1)\nval all=PopupKind.values()\nval named=PopupKind::valueOf").expectClean()
- fun testKindModelCannotProvideTheKind() = withSpec("fun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalPopupKind provides 1) {} }")
-  .expectMatches("(?s).*UiSpec[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*")
- fun testKindModelCannotProvideTheRespectedScale() = withSpec("fun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale provides false) {} }")
-  .expectMatches("(?s).*UiSpec[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*")
+ fun testSanctionedKindModel() { withSpec("val stock=mapOf(PopupKind.Menu to 0, PopupKind.BottomMenu to 1)\nval all=PopupKind.values()\nval named=PopupKind::valueOf").expectClean() }
+ fun testKindModelCannotProvideTheKind() { withSpec("fun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalPopupKind provides 1) {} }")
+  .expectMatches("(?s).*UiSpec[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*") }
+ fun testKindModelCannotProvideTheRespectedScale() { withSpec("fun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale provides false) {} }")
+  .expectMatches("(?s).*UiSpec[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*") }
  // Each sanctioned provider is its own clean run: expectMatches finds, so a lookahead could never prove an absence.
- fun testSanctionedRespectProvider() = withSpec("",
+ fun testSanctionedRespectProvider() { withSpec("",
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt", "package io.github.anastaci1a.localica.ui\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalRespectSystemAnimationScale provides false) {} }"))
-  .expectClean()
- fun testKindProviderOutsideItsOwner() = withSpec("",
+  .expectClean() }
+ fun testKindProviderOutsideItsOwner() { withSpec("",
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/Popups.kt", "package io.github.anastaci1a.localica.ui\nfun g() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalPopupKind provides 1) {} }"))
-  .expectMatches("(?s).*Popups[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*")
- fun testSanctionedKindProviderInTheSurfaceOwner() = lint().projects(project().name("app").files(*(listOf(kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt",
+  .expectMatches("(?s).*Popups[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*") }
+ fun testSanctionedKindProviderInTheSurfaceOwner() { lint().projects(project().name("app").files(*(listOf(kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt",
   glassMorphStub + "\nfun provideKind() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalPopupKind provides 1) {} }").indented()) +
-  stubs.drop(1) + wrapperStubs).toTypedArray())).issues(*getIssues().toTypedArray()).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
+  quiet(stubs.drop(1) + wrapperStubs)).toTypedArray())).issues(*getIssues().toTypedArray()).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean() }
  fun testSanctionedSpeedProvider() {
   val file=kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt", """package io.github.anastaci1a.localica.ui
 fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed provides 2f) {} }
@@ -458,9 +458,13 @@ interface MotionDurationScale : kotlin.coroutines.CoroutineContext.Element {
     override val key: kotlin.coroutines.CoroutineContext.Key<*> get() = TODO()
     companion object Key : kotlin.coroutines.CoroutineContext.Key<MotionDurationScale>
 }""").indented()
+ // #854 round 4 (F8-4): the native window stubs declare Dialog subclasses (class AlertDialog : android.app.Dialog()), which the
+ // draw-path rule rightly reports in any app file. A fixture that expects a clean result leaves them out, as the sanctioned tests do.
+ private fun quiet(files: List<com.android.tools.lint.checks.infrastructure.TestFile>) =
+  files.filterNot { it.targetRelativePath.endsWith("android/app/Windows.kt") || it.targetRelativePath.endsWith("androidx/appcompat/app/AlertDialog.kt") }
  private fun surface(subject: com.android.tools.lint.checks.infrastructure.TestFile, glass: String = glassMorphStub, reduced: String = "", motion: String = "") =
-  lint().projects(project().name("app").files(*(listOf(kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt", glass).indented()) + stubs.drop(1) +
-   wrapperStubs.filterNot { it.targetRelativePath.endsWith("ui/InterfaceMotion.kt") } + kotlin("src/main/java/io/github/anastaci1a/localica/ui/InterfaceMotion.kt",
+  lint().projects(project().name("app").files(*(listOf(kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt", glass).indented()) + quiet(stubs.drop(1)) +
+   quiet(wrapperStubs).filterNot { it.targetRelativePath.endsWith("ui/InterfaceMotion.kt") } + kotlin("src/main/java/io/github/anastaci1a/localica/ui/InterfaceMotion.kt",
    "package io.github.anastaci1a.localica.ui\nval LocalMotionSpeed = androidx.compose.runtime.ProvidableCompositionLocal<Float>()\n" +
    "val LocalReducedMotion = androidx.compose.runtime.ProvidableCompositionLocal<Boolean>()\nval LocalRespectSystemAnimationScale = androidx.compose.runtime.ProvidableCompositionLocal<Boolean>()\n" +
    "fun rememberEffectiveReducedMotion(appReducedMotion: Boolean" + reduced + "): Boolean = appReducedMotion\n" +
@@ -484,35 +488,35 @@ fun rememberPopupSharedContent(key: Any, shared: () -> Unit): PopupSharedContent
  // Astra's witness: a scalar timing input added to the real shared declaration.
  private val timedGlass = glassMorphStub.replace("sharedContent: PopupSharedContent? = null, content: () -> Unit", "sharedContent: PopupSharedContent? = null, animationSpeed: Float? = null, content: () -> Unit")
  fun testF4_timing_stub_is_extended() = assertTrue(timedGlass != glassMorphStub)
- fun testF4_named_timing_argument() = surface(subject("fun f(anchor: GlassAnchor) { GlassMorphPopup(true, anchor, {}, animationSpeed = .5f) {} }"), timedGlass).expectMatches(unpinned("animationSpeed", "GlassMorphPopup"))
- fun testF4_positional_timing_argument() = surface(subject("fun f(anchor: GlassAnchor) { GlassMorphPopup(true, anchor, {}, 0, null, false, null, false, null, .5f) {} }"), timedGlass).expectMatches(unpinned("animationSpeed", "GlassMorphPopup"))
- fun testF4_honest_caller_of_the_extended_declaration() = surface(subject("fun f(anchor: GlassAnchor, open: Int?, filter: Int) { GlassMorphPopup(true, anchor, {}, placement = 1, darkOverride = false) {}; GlassMenu(open == filter, anchor, {}) {} }"), timedGlass).expectClean()
- fun testF3_readded_respect_slot_named() = surface(subject("fun f(r: Boolean) = rememberEffectiveReducedMotion(r, respectSystemScale = false)"), reduced = ", respectSystemScale: Boolean = true").expectMatches(unpinned("respectSystemScale", "rememberEffectiveReducedMotion"))
- fun testF3_readded_respect_slot_positional() = surface(subject("fun f(r: Boolean) = rememberEffectiveReducedMotion(r, false)"), reduced = ", respectSystemScale: Boolean = true").expectMatches(unpinned("respectSystemScale", "rememberEffectiveReducedMotion"))
- fun testF3_honest_reduced_motion_caller() = surface(subject("fun f(r: Boolean) = rememberEffectiveReducedMotion(r || LocalReducedMotion.current)"), reduced = ", respectSystemScale: Boolean = true").expectClean()
- fun testScale_object() = surface(subject("val s = object : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 2f }")).expectMatches(red)
- fun testScale_class() = surface(subject("class Slow : androidx.compose.ui.MotionDurationScale { override val scaleFactor get() = 2f }")).expectMatches(red)
- fun testScale_import_alias() = surface(subject("import androidx.compose.ui.MotionDurationScale as Scale\nval s = object : Scale { override val scaleFactor = 2f }")).expectMatches(red)
- fun testScale_typealias() = surface(subject("typealias Scale = androidx.compose.ui.MotionDurationScale\nval s = object : Scale { override val scaleFactor = 2f }")).expectMatches(red)
- fun testScale_key() = surface(subject("val key = androidx.compose.ui.MotionDurationScale.Key")).expectMatches(red)
- fun testScale_type_argument() = surface(subject("val all = listOf<androidx.compose.ui.MotionDurationScale>()")).expectMatches(red)
- fun testScale_callable_reference() = surface(subject("val read = androidx.compose.ui.MotionDurationScale::scaleFactor")).expectMatches(red)
- fun testScale_in_a_file_with_other_grants() = surface(kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
+ fun testF4_named_timing_argument() { surface(subject("fun f(anchor: GlassAnchor) { GlassMorphPopup(true, anchor, {}, animationSpeed = .5f) {} }"), timedGlass).expectMatches(unpinned("animationSpeed", "GlassMorphPopup")) }
+ fun testF4_positional_timing_argument() { surface(subject("fun f(anchor: GlassAnchor) { GlassMorphPopup(true, anchor, {}, 0, null, false, null, false, null, .5f) {} }"), timedGlass).expectMatches(unpinned("animationSpeed", "GlassMorphPopup")) }
+ fun testF4_honest_caller_of_the_extended_declaration() { surface(subject("fun f(anchor: GlassAnchor, open: Int?, filter: Int) { GlassMorphPopup(true, anchor, {}, placement = 1, darkOverride = false) {}; GlassMenu(open == filter, anchor, {}) {} }"), timedGlass).expectClean() }
+ fun testF3_readded_respect_slot_named() { surface(subject("fun f(r: Boolean) = rememberEffectiveReducedMotion(r, respectSystemScale = false)"), reduced = ", respectSystemScale: Boolean = true").expectMatches(unpinned("respectSystemScale", "rememberEffectiveReducedMotion")) }
+ fun testF3_readded_respect_slot_positional() { surface(subject("fun f(r: Boolean) = rememberEffectiveReducedMotion(r, false)"), reduced = ", respectSystemScale: Boolean = true").expectMatches(unpinned("respectSystemScale", "rememberEffectiveReducedMotion")) }
+ fun testF3_honest_reduced_motion_caller() { surface(subject("fun f(r: Boolean) = rememberEffectiveReducedMotion(r || LocalReducedMotion.current)"), reduced = ", respectSystemScale: Boolean = true").expectClean() }
+ fun testScale_object() { surface(subject("val s = object : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 2f }")).expectMatches(red) }
+ fun testScale_class() { surface(subject("class Slow : androidx.compose.ui.MotionDurationScale { override val scaleFactor get() = 2f }")).expectMatches(red) }
+ fun testScale_import_alias() { surface(subject("import androidx.compose.ui.MotionDurationScale as Scale\nval s = object : Scale { override val scaleFactor = 2f }")).expectMatches(red) }
+ fun testScale_typealias() { surface(subject("typealias Scale = androidx.compose.ui.MotionDurationScale\nval s = object : Scale { override val scaleFactor = 2f }")).expectMatches(red) }
+ fun testScale_key() { surface(subject("val key = androidx.compose.ui.MotionDurationScale.Key")).expectMatches(red) }
+ fun testScale_type_argument() { surface(subject("val all = listOf<androidx.compose.ui.MotionDurationScale>()")).expectMatches(red) }
+ fun testScale_callable_reference() { surface(subject("val read = androidx.compose.ui.MotionDurationScale::scaleFactor")).expectMatches(red) }
+ fun testScale_in_a_file_with_other_grants() { surface(kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
   "package io.github.anastaci1a.localica.ui\nval s = object : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 2f }"))
-  .expectMatches("(?s).*LocalicaScreen[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*")
- fun testScale_read_stays_allowed() = surface(subject("import androidx.compose.ui.MotionDurationScale\nfun f(c: kotlin.coroutines.CoroutineContext) = c[MotionDurationScale]?.scaleFactor ?: 1f")).expectClean()
- fun testScale_owner_implements() = surface(subject("fun g() {}"), motion = "class SecondScale : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 1f }").expectClean()
- fun testScale_installer_outside_main() = surface(subject("fun f(a: androidx.activity.ComponentActivity) { a.installLocalicaWindowMotion(false) }")).expectMatches(red)
- fun testScale_installer_in_main() = surface(kotlin("src/main/java/io/github/anastaci1a/localica/MainActivity.kt",
-  "package io.github.anastaci1a.localica\nimport io.github.anastaci1a.localica.ui.installLocalicaWindowMotion\nclass Main : androidx.activity.ComponentActivity() { fun start() { installLocalicaWindowMotion(true) } }")).expectClean()
+  .expectMatches("(?s).*LocalicaScreen[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*") }
+ fun testScale_read_stays_allowed() { surface(subject("import androidx.compose.ui.MotionDurationScale\nfun f(c: kotlin.coroutines.CoroutineContext) = c[MotionDurationScale]?.scaleFactor ?: 1f")).expectClean() }
+ fun testScale_owner_implements() { surface(subject("fun g() {}"), motion = "class SecondScale : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 1f }").expectClean() }
+ fun testScale_installer_outside_main() { surface(subject("fun f(a: androidx.activity.ComponentActivity) { a.installLocalicaWindowMotion(false) }")).expectMatches(red) }
+ fun testScale_installer_in_main() { surface(kotlin("src/main/java/io/github/anastaci1a/localica/MainActivity.kt",
+  "package io.github.anastaci1a.localica\nimport io.github.anastaci1a.localica.ui.installLocalicaWindowMotion\nclass Main : androidx.activity.ComponentActivity() { fun start() { installLocalicaWindowMotion(true) } }")).expectClean() }
  // #854 round 2 G1: the app's WindowMotionScale and the respect binder.
- fun testG1_window_scale_constructed() = surface(subject("val s = WindowMotionScale(.5f, true)")).expectMatches(red)
- fun testG1_window_scale_platform_write() = surface(subject("fun f(s: WindowMotionScale) { s.platform = 0f }")).expectMatches(red)
- fun testG1_window_scale_respect_write_after_cast() = surface(subject("import androidx.compose.ui.MotionDurationScale\nfun f(c: kotlin.coroutines.CoroutineContext) { (c[MotionDurationScale] as WindowMotionScale).respect = false }")).expectMatches(red)
- fun testG1_binder_from_a_screen() = surface(subject("fun f(c: kotlin.coroutines.CoroutineContext) { c.bindRespectSystemAnimationScale(false) }")).expectMatches(red)
- fun testG1_binder_reference() = surface(subject("val bind = kotlin.coroutines.CoroutineContext::bindRespectSystemAnimationScale")).expectMatches(red)
- fun testG1_binder_in_the_root() = surface(kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt",
-  "package io.github.anastaci1a.localica.ui\nfun root(c: kotlin.coroutines.CoroutineContext, respect: Boolean) { c.bindRespectSystemAnimationScale(respect) }")).expectClean()
+ fun testG1_window_scale_constructed() { surface(subject("val s = WindowMotionScale(.5f, true)")).expectMatches(red) }
+ fun testG1_window_scale_platform_write() { surface(subject("fun f(s: WindowMotionScale) { s.platform = 0f }")).expectMatches(red) }
+ fun testG1_window_scale_respect_write_after_cast() { surface(subject("import androidx.compose.ui.MotionDurationScale\nfun f(c: kotlin.coroutines.CoroutineContext) { (c[MotionDurationScale] as WindowMotionScale).respect = false }")).expectMatches(red) }
+ fun testG1_binder_from_a_screen() { surface(subject("fun f(c: kotlin.coroutines.CoroutineContext) { c.bindRespectSystemAnimationScale(false) }")).expectMatches(red) }
+ fun testG1_binder_reference() { surface(subject("val bind = kotlin.coroutines.CoroutineContext::bindRespectSystemAnimationScale")).expectMatches(red) }
+ fun testG1_binder_in_the_root() { surface(kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt",
+  "package io.github.anastaci1a.localica.ui\nfun root(c: kotlin.coroutines.CoroutineContext, respect: Boolean) { c.bindRespectSystemAnimationScale(respect) }")).expectClean() }
  // #854 round 2 G2: the blind recheck's variants, each on its real shared file, and the shared-content handle.
  fun testG2_presence_timing_formal() { components = evolved("components/Presence.kt", presenceStub.replace("shown: Boolean,", "shown: Boolean, animationSpeed: Float = 1f,"))
   surface(subject("fun f(k: Any) { io.github.anastaci1a.localica.ui.components.rememberPresence(k, true, animationSpeed = .5f) }")).expectMatches(unpinned("animationSpeed", "rememberPresence")) }
@@ -520,10 +524,20 @@ fun rememberPopupSharedContent(key: Any, shared: () -> Unit): PopupSharedContent
   surface(subject("fun f() { io.github.anastaci1a.localica.ui.components.rememberFaceExpansion(true, animationSpeed = .5f) }")).expectMatches(unpinned("animationSpeed", "rememberFaceExpansion")) }
  fun testG2_shared_content_timing_extension() { components = evolved("components/PopupSharedContent.kt", sharedStub + "\nfun PopupSharedContent.setAnimationSpeed(speed: Float) {}")
   surface(subject("import io.github.anastaci1a.localica.ui.components.*\nfun f(k: Any) { val shared = rememberPopupSharedContent(k) {}; shared.setAnimationSpeed(.5f) }")).expectMatches(red) }
- fun testG2_shared_content_motion_member() = surface(subject("fun f(shared: io.github.anastaci1a.localica.ui.components.PopupSharedContent) { println(shared.motion) }")).expectMatches(red)
+ fun testG2_shared_content_motion_member() { surface(subject("fun f(shared: io.github.anastaci1a.localica.ui.components.PopupSharedContent) { println(shared.motion) }")).expectMatches(red) }
  fun testG2_shared_content_scope_function() { components = evolved("components/PopupSharedContent.kt", sharedStub + "\nfun PopupSharedContent.setAnimationSpeed(speed: Float) {}")
-  surface(subject("import io.github.anastaci1a.localica.ui.components.*\nfun f(shared: PopupSharedContent) { with(shared) { setAnimationSpeed(.5f) } }")).expectMatches(red) }
- fun testG2_honest_slots_and_factories() = surface(subject("import io.github.anastaci1a.localica.ui.components.*\nfun f(k: Any, copy: Boolean, shared: PopupSharedContent?) { val nameMorph = rememberPopupSharedContent(k) {}; if (copy) nameMorph.CompactCopy() else nameMorph.Compact(); shared?.Expanded(); shared?.ExpandedCopy() }")).expectClean()
+  surface(subject(handle + "fun f(shared: PopupSharedContent) { with(shared) { setAnimationSpeed(.5f) } }")).expectMatches(red) }
+ // #854 round 4 (F8-3): the subject imports the handle explicitly; the GlassMorph stub declares a ui-package PopupSharedContent that a
+ // star import does not shadow, so the old subject called an unresolved extension. Every scope function reaches the handle.
+ private val handle = "import io.github.anastaci1a.localica.ui.components.*\nimport io.github.anastaci1a.localica.ui.components.PopupSharedContent\n"
+ private fun timedHandle() { components = evolved("components/PopupSharedContent.kt", sharedStub + "\nfun PopupSharedContent.setAnimationSpeed(speed: Float) {}") }
+ fun testF8_3_shared_content_run() { timedHandle(); surface(subject(handle + "fun f(shared: PopupSharedContent) { shared.run { setAnimationSpeed(.5f) } }")).expectMatches(red) }
+ fun testF8_3_shared_content_apply() { timedHandle(); surface(subject(handle + "fun f(shared: PopupSharedContent) { shared.apply { setAnimationSpeed(.5f) } }")).expectMatches(red) }
+ fun testF8_3_shared_content_let() { timedHandle(); surface(subject(handle + "fun f(shared: PopupSharedContent) { shared.let { it.setAnimationSpeed(.5f) } }")).expectMatches(red) }
+ fun testF8_3_shared_content_with_member() { surface(subject(handle + "fun f(shared: PopupSharedContent) { with(shared) { println(motion) } }")).expectMatches(red) }
+ fun testF8_3_shared_content_scope_on_slots() { surface(subject(handle + "fun f(shared: PopupSharedContent) { shared.let { it.Compact() } }")).expectMatches(red) }
+ fun testF8_3_honest_slots_in_scope() { surface(subject(handle + "fun f(shared: PopupSharedContent) { shared.Compact(); shared.Expanded() }")).expectClean() }
+ fun testG2_honest_slots_and_factories() { surface(subject(handle + "fun f(k: Any, copy: Boolean, shared: PopupSharedContent?) { val nameMorph = rememberPopupSharedContent(k) {}; if (copy) nameMorph.CompactCopy() else nameMorph.Compact(); shared?.Expanded(); shared?.ExpandedCopy() }")).expectClean() }
  // #854 round 3 R2-1: X1-X4, a timing formal on each newly pinned shared API, and an unclassified composable entry point.
  private fun timed(extra: Boolean) = if (!extra) "" else ", animationSpeed: Float = 1f"
  private fun r3(subject: com.android.tools.lint.checks.infrastructure.TestFile, timing: Boolean): com.android.tools.lint.checks.infrastructure.TestLintResult {
@@ -533,16 +547,21 @@ fun rememberPopupSharedContent(key: Any, shared: () -> Unit): PopupSharedContent
   return surface(subject, glassMorphStub + "\nfun rememberGlassAnchor(deferContextPlacement: Boolean = false, role: Any? = null, clearance: Float? = null" + timed(timing) + "): GlassAnchor = GlassAnchor()\n" +
    "fun SurfaceModifier.glassAnchor(anchor: GlassAnchor?, source: Any? = null, role: Any? = null, face: (() -> Unit)? = null" + timed(timing) + "): SurfaceModifier = this\n")
  }
- fun testR3_X1_rememberGlassAnchor_timing() = r3(subject("fun f() = rememberGlassAnchor(animationSpeed = .5f)"), true).expectMatches(unpinned("animationSpeed", "rememberGlassAnchor"))
- fun testR3_X2_GlassDialog_timing() = r3(subject("fun f() { GlassDialog({}, animationSpeed = .5f) {} }"), true).expectMatches(unpinned("animationSpeed", "GlassDialog"))
- fun testR3_X3_ActionIcon_timing() = r3(subject("fun f() { ActionIcon(1, \"Play\", animationSpeed = .5f) {} }"), true).expectMatches(unpinned("animationSpeed", "ActionIcon"))
- fun testR3_X4_glassAnchor_timing() = r3(subject("fun f(a: GlassAnchor) = SurfaceModifier().glassAnchor(a, animationSpeed = .5f)"), true).expectMatches(unpinned("animationSpeed", "glassAnchor"))
- fun testR3_honest_pinned_callers() = r3(subject("fun f() { val a = rememberGlassAnchor(clearance = 1f); GlassDialog({}, placement = 1) {}; ActionIcon(1, \"Play\", anchor = a) {}; SurfaceModifier().glassAnchor(a, face = null) }"), false).expectClean()
+ fun testR3_X1_rememberGlassAnchor_timing() { r3(subject("fun f() = rememberGlassAnchor(animationSpeed = .5f)"), true).expectMatches(unpinned("animationSpeed", "rememberGlassAnchor")) }
+ fun testR3_X2_GlassDialog_timing() { r3(subject("fun f() { GlassDialog({}, animationSpeed = .5f) {} }"), true).expectMatches(unpinned("animationSpeed", "GlassDialog")) }
+ fun testR3_X3_ActionIcon_timing() { r3(subject("fun f() { ActionIcon(1, \"Play\", animationSpeed = .5f) {} }"), true).expectMatches(unpinned("animationSpeed", "ActionIcon")) }
+ fun testR3_X4_glassAnchor_timing() { r3(subject("fun f(a: GlassAnchor) = SurfaceModifier().glassAnchor(a, animationSpeed = .5f)"), true).expectMatches(unpinned("animationSpeed", "glassAnchor")) }
+ fun testR3_honest_pinned_callers() { r3(subject("fun f() { val a = rememberGlassAnchor(clearance = 1f); GlassDialog({}, placement = 1) {}; ActionIcon(1, \"Play\", anchor = a) {}; SurfaceModifier().glassAnchor(a, face = null) }"), false).expectClean() }
  private fun composable(body: String) = "package io.github.anastaci1a.localica.ui.components\n" + body
  private val composableStub = kotlin("src/main/java/androidx/compose/runtime/Composable.kt", "package androidx.compose.runtime\n@Target(AnnotationTarget.FUNCTION) annotation class Composable")
  fun testR3_unclassified_composable_entry_point() { components = components + composableStub + kotlin("src/main/java/io/github/anastaci1a/localica/ui/components/PopupTiming.kt",
    composable("@androidx.compose.runtime.Composable fun rememberPopupTiming(speed: Float): Float = speed"))
   surface(subject("import io.github.anastaci1a.localica.ui.components.*\n@androidx.compose.runtime.Composable fun f() = rememberPopupTiming(.5f)"))
+   .expectMatches("(?s).*Subject[.]kt:[0-9]+: Error: Unclassified shared popup entry point rememberPopupTiming.*") }
+ // #854 round 4 (F8-2): the fully qualified call GlassOriginPreparation.kt made, without an import.
+ fun testR3_unclassified_qualified_call() { components = components + composableStub + kotlin("src/main/java/io/github/anastaci1a/localica/ui/components/PopupTiming.kt",
+   composable("@androidx.compose.runtime.Composable fun rememberPopupTiming(speed: Float): Float = speed"))
+  surface(subject("@androidx.compose.runtime.Composable fun f() = io.github.anastaci1a.localica.ui.components.rememberPopupTiming(.5f)"))
    .expectMatches("(?s).*Subject[.]kt:[0-9]+: Error: Unclassified shared popup entry point rememberPopupTiming.*") }
  fun testR3_excluded_composable_entry_point() { components = components + composableStub + kotlin("src/main/java/io/github/anastaci1a/localica/ui/components/ArtworkReveal.kt",
    composable("@androidx.compose.runtime.Composable fun rememberArtworkReveal(): Int = 1"))
