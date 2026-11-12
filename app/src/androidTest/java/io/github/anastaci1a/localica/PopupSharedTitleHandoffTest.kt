@@ -85,7 +85,8 @@ class PopupSharedTitleHandoffTest {
                     Box(Modifier.fillMaxSize().recordFrostedBackdrop(source))
                     CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalContentColor provides Color.Blue) {
                         LiquidGlassSurface(Modifier.padding(36.dp).width(220.dp)
-                            .glassAnchor(anchor, face = { shared.CompactCopy(Modifier.fillMaxWidth()) })) {
+                            .glassAnchor(anchor, face = { shared.CompactCopy(Modifier.fillMaxWidth()) }),
+                            inkOverride = Color.Blue) {
                             Box(Modifier.fillMaxWidth().height(56.dp).testTag("title-trigger")
                                 .clickable { open = true }.padding(horizontal = 12.dp),
                                 contentAlignment = Alignment.CenterStart) { shared.Compact() }
