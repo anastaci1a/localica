@@ -22,6 +22,8 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
     internal val kind: Int get()=segment.kind
     override val target: Float get()=destination.floatValue
     override val settled: Boolean get()=segment.kind==0
+    /** When this value came to rest, while it rests (#854 F-I5-2): its presented value is unchanged from then until now. */
+    internal val restSince: FrameStamp? get()=if(segment.kind==0) started else null
     init { clock.checkMutation(); require(initial.isFinite() && range.isFinite() && range>0 && (bounds==null || initial.toDouble() in bounds)); id=clock.allocateId(); clock.events?.let { sink -> clock.observe { sink.created(this); sink.joined(this,MotionJoin(0,started,Kinematic(initial,0f),Kinematic(initial,0f),0,0,"Initial")) } } }
     // Compose keeps evaluator velocity in play-time units; only timed elapsed is scaled.
     // Driven values and their input velocities always retain real timestamp units.
