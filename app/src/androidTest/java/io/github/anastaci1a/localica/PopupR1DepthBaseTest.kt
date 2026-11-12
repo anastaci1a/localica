@@ -74,6 +74,7 @@ class PopupR1DepthBaseTest {
         var popup: Window? = null
         var popupPhase = 0f
         lateinit var fixtureAnchor: GlassAnchor
+        lateinit var fixtureBackdrop: FrostedBackdrop
         val phaseControl = JSONArray()
         lateinit var baseScene: androidx.compose.ui.graphics.layer.GraphicsLayer
         var baseScenePixels: Bitmap? = null
@@ -87,7 +88,7 @@ class PopupR1DepthBaseTest {
             compose.setContent { LocalicaTheme {
                 host = LocalView.current
                 home = rememberGlassPopupHome(leaving)
-                val page = rememberFrostedBackdrop(home, dark = false)
+                val page = rememberFrostedBackdrop(home, dark = false).also { fixtureBackdrop = it }
                 baseScene = rememberGraphicsLayer()
                 BackdropLease(home.backdrop)
                 CompositionLocalProvider(LocalGlassMorphWorkObserver provides { kind, window, phase ->
@@ -131,7 +132,7 @@ class PopupR1DepthBaseTest {
                 (owner as Activity).window
             }
             original(activity, output, "base-complete-root").recycle()
-            compose.runOnUiThread { assertR1BackdropIndependent(page, fixtureAnchor, output) }
+            compose.runOnUiThread { assertR1BackdropIndependent(fixtureBackdrop, fixtureAnchor, output) }
             baseScenePixels = runBlocking { baseScene.toImageBitmap() }.asAndroidBitmap()
             File(output, "base-complete-scene.png").outputStream().use {
                 assertTrue(requireNotNull(baseScenePixels).compress(Bitmap.CompressFormat.PNG, 100, it))
