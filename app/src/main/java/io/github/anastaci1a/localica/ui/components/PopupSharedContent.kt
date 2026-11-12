@@ -24,6 +24,12 @@ import io.github.anastaci1a.localica.ui.engine.*
     private val key = Any()
     private var nativeDrawing by mutableStateOf(false)
     private var sourceDrawing by mutableStateOf(true)
+    internal class NativeReplay(val generation: Long, val window: android.view.Window) {
+        internal var drawn = false
+        internal var scheduled = false
+        internal var submitted by mutableStateOf(false)
+    }
+    private var preparation by mutableStateOf<NativeReplay?>(null)
 
     @Composable fun Compact(modifier: Modifier = Modifier) {
         Box(modifier.then(host.slots.externalHost { sourceDrawing })) {
@@ -41,14 +47,37 @@ import io.github.anastaci1a.localica.ui.engine.*
     }
 
     internal fun admitNative() { host.expanded = true; sourceDrawing = false; nativeDrawing = true }
+    // Borrow the source recording before moving its one live instance. The window's
+    // preparatory material remains gated; only this shared replay can draw there.
+    internal fun prepareNative(generation: Long, window: android.view.Window): NativeReplay =
+        NativeReplay(generation, window).also { preparation = it }
+    internal fun cancelNativePreparation(replay: NativeReplay) {
+        if (preparation === replay) preparation = null
+    }
+    internal fun preparingNative(window: android.view.Window?) = preparation?.window === window && window != null
+    internal fun nativeReplayReceipt(window: android.view.Window?): (() -> Unit)? {
+        val replay = preparation?.takeIf { it.window === window && it.drawn && !it.scheduled } ?: return null
+        replay.scheduled = true
+        return {
+            if (preparation === replay && replay.window.decorView.isAttachedToWindow &&
+                motion.expansion.nativeGeneration == replay.generation && motion.expansion.nativeOpening == true) {
+                replay.submitted = true
+            }
+        }
+    }
     // The source restoration receipt must include the shared recording. The existing native
     // surface keeps replaying that same instance until the real source draw is acknowledged.
     internal fun restoreInstance() { host.expanded = false; sourceDrawing = true }
-    internal fun releaseNative() { nativeDrawing = false }
+    internal fun releaseNative() { nativeDrawing = false; preparation = null }
     internal fun destination(coordinates: LayoutCoordinates?) = host.slots.destinationLayout(coordinates)
     internal fun destinationOrigin(origin: Offset) = host.slots.destinationOrigin(origin)
-    internal fun drawNative(scope: DrawScope, coordinates: LayoutCoordinates, view: android.view.View) {
-        if (nativeDrawing) host.slots.drawExternal(scope, coordinates, view)
+    internal fun drawNative(scope: DrawScope, coordinates: LayoutCoordinates, view: android.view.View,
+        window: android.view.Window?) {
+        val replay = preparation?.takeIf { it.window === window }
+        if (nativeDrawing || replay != null) {
+            val drawn = host.slots.drawExternal(scope, coordinates, view)
+            if (drawn) replay?.drawn = true
+        }
     }
 }
 

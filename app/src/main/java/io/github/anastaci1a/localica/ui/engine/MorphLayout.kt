@@ -101,7 +101,7 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
     /** Native adapters supply actual fixed foreground layout plus its measured final envelope.
      * Never interpolate toward the already-scaled current popup rectangle. */
     internal fun drawExternal(scope: DrawScope, coordinates: LayoutCoordinates, view: android.view.View) = with(scope) {
-        if (!coordinates.isAttached) return@with
+        if (!coordinates.isAttached) return@with false
         val origin = screenPosition(coordinates, view)
         drawShared { slot, face ->
             val child = slot.frames[face]?.takeIf { it.isAttached }
@@ -129,16 +129,21 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
         return coordinates.positionInRoot() + Offset(origin[0].toFloat(), origin[1].toFloat())
     }
 
-    private fun DrawScope.drawShared(frameOf: (Slot, Int) -> Rect?) {
+    private fun DrawScope.drawShared(frameOf: (Slot, Int) -> Rect?): Boolean {
         val p = progress()
+        var complete = slots.isNotEmpty()
         for (slot in slots.values) {
-            val layer = slot.layer ?: continue
+            val layer = slot.layer
+            if (layer == null) { complete = false; continue }
             val frames = (0..1).map { frameOf(slot, it) }
-            val from = frames[0] ?: frames[1] ?: continue; val to = frames[1] ?: from
+            val from = frames[0] ?: frames[1]
+            if (from == null) { complete = false; continue }
+            val to = frames[1] ?: from
             val ink = slot.ink.takeIf { it[0] != it[1] && it.all { c -> c.isSpecified } }?.let { lerp(it[0], it[1], p) }
             layer.colorFilter = ink?.let { ColorFilter.tint(it) }
             val frame = sharedFrame(from, to, p); translate(frame.left, frame.top) { drawLayer(layer) }
         }
+        return complete
     }
 }
 

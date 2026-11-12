@@ -572,23 +572,29 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         nativeLease[0]=node.retainNativeWindow()
                         leasedNode=node
                     }
-                    node.followWindow(motion)
-                    node.transferWindow(plane)
-                    window.decorView.invalidate()
-                    snapshotFlow { node.ownsWindow(plane) }.first { it }
-                    if (!gateCurrent()) continue@gateLoop
-                    originFootprint = anchor.samplingFootprint()
-                    measuredHome = anchor.samplingLocation.coordinates?.isAttached == true
-                    source?.refresh()
-                    readyWindow = window
-                    originAdmitted = true
-                    anchor.modalPresent = true; anchor.contact.modal = true
-                    sharedContent?.admitNative()
-                    anchor.hidden = true; anchor.shadowInModal = true
-                    // A closing gate can finish after visibility reversed; its
-                    // input release must not outlive the new native admission.
-                    if (continuousOrigin == null) {
-                        window.glassInput(true); gestures.activate()
+                    val replay = sharedContent?.prepareNative(generation, window)
+                    try {
+                        node.followWindow(motion)
+                        node.transferWindow(plane)
+                        window.decorView.invalidate()
+                        snapshotFlow { modalWindow !== window ||
+                            node.ownsWindow(plane) && (replay == null || replay.submitted) }.first { it }
+                        if (!gateCurrent() || modalWindow !== window) continue@gateLoop
+                        originFootprint = anchor.samplingFootprint()
+                        measuredHome = anchor.samplingLocation.coordinates?.isAttached == true
+                        source?.refresh()
+                        readyWindow = window
+                        originAdmitted = true
+                        anchor.modalPresent = true; anchor.contact.modal = true
+                        sharedContent?.admitNative()
+                        anchor.hidden = true; anchor.shadowInModal = true
+                        // A closing gate can finish after visibility reversed; its
+                        // input release must not outlive the new native admission.
+                        if (continuousOrigin == null) {
+                            window.glassInput(true); gestures.activate()
+                        }
+                    } finally {
+                        if (replay != null) sharedContent?.cancelNativePreparation(replay)
                     }
                 } else if (motion.expansion.nativeOpening == false && visible && continuousOrigin == null &&
                     anchor.hidden && anchor.modalPresent && modalWindow != null && modalWindow === readyWindow) {
@@ -791,7 +797,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val sliderCancel = rememberSliderCancelHost()
         Box(Modifier.fillMaxSize()
             .onGloballyPositioned { popupFlight.origin = it.backdropPosition(view) }
-            .nativePlaneReceipt(windowPlane)
+            .nativePlaneReceipt(windowPlane) { sharedContent?.nativeReplayReceipt(window) }
             .drawWithContent {
                 if (popupHome == null || !returningInline && !popupFlight.wasProjected) drawContent()
                 else {
@@ -806,7 +812,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             }
             .then(if (returningSemantics) Modifier.clearAndSetSemantics { } else Modifier)
             .then(if (continuousOrigin != null) Modifier
-                .drawWithContent { if (admittedDraw) drawContent() }
+                .drawWithContent { if (admittedDraw || sharedContent?.preparingNative(window) == true) drawContent() }
                 .then(if (!admittedDraw) Modifier.clearAndSetSemantics { } else Modifier)
                 else Modifier)
             .drawBehind { drawRect(Color.Black.copy(alpha = .16f * progress.value)) }
@@ -991,8 +997,17 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             shadowExclusion[0] = nativeShadowExclusion(neighbors, surfaceOrigin, size,
                                 fieldSx, fieldSy, fieldShift, weight = phase())
                         }
+                        fun drawForeground(sharedOnly: Boolean) {
+                            translate(left = pose?.horizontalShift ?: 0f) {
+                                scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
+                                    if (!sharedOnly) this@drawWithContent.drawContent()
+                                    wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view, window) }
+                                }
+                            }
+                        }
                         // Composite field and material once, with the original padded footprint.
-                        nativeField.draw(this,surfaceOpacity(),wellStrength *
+                        val opacity = surfaceOpacity()
+                        nativeField.draw(this,opacity,wellStrength *
                             (if(anchor.quiet) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
                             radius().toPx(),shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
                             shadowReceiver[0],shadowExclusion[0]) {
@@ -1000,13 +1015,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             // this body must not lens it. Waiting for the receipt keeps the pill covered (#847).
                             if (continuousOrigin == null && !visible && !anchor.hidden &&
                                 anchor.restoredPresentedReceipt == anchor.restoredDrawRequest) return@draw
-                            translate(left = pose?.horizontalShift ?: 0f) {
-                                scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
-                                    this@drawWithContent.drawContent()
-                                    wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
-                                }
-                            }
+                            drawForeground(sharedOnly = false)
                         }
+                        // The source keeps its live instance until this retained replay
+                        // participates in the native window's submission receipt.
+                        if (opacity <= 0f && sharedContent?.preparingNative(window) == true)
+                            drawForeground(sharedOnly = true)
                     }
                         .graphicsLayer { shape=RoundedCornerShape(radius()); clip=true }.glassPopupHome(childHome)
                         .recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
