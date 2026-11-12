@@ -83,6 +83,9 @@ class NoneShadowScreenshotTest {
     }
 
     @Test fun floatingPillSelectedRowAndPopup() {
+        var leakReceipt = ""
+        compose.runOnUiThread { leakReceipt = NoneShadowLeakReceipt.snapshot() }
+        File(output, "before-selected-row-shadow-lifetimes.json").writeText(leakReceipt)
         val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
         var popup by mutableStateOf(false)
         lateinit var source: FrostedBackdrop
