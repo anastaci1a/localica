@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -81,6 +82,8 @@ class UtilityPopupRenderDiagnosticTest {
     private val records = JSONArray()
     private val trace = JSONArray()
     private val endpointObservations = JSONArray()
+    private val readbackProbeFrames = JSONArray()
+    private var readbackProbeActive by mutableStateOf(false)
     private lateinit var output: File
     private lateinit var report: JSONObject
     private var entryKeys = emptySet<Any>()
@@ -124,6 +127,7 @@ class UtilityPopupRenderDiagnosticTest {
             .put("density", compose.density.density)
             .put("interpretation", "App-shadow-on/off pairs are intended controls for configured app shadows, including recorded backdrops. Completed thumbnail requests and endpoint quiescence establish readback readiness, not atomic native presentation. These pairs do not by themselves prove cause. Residual edges can still be material/refraction/rim, scrim or native-window effects. A bright contour is not by itself the reported straight stripe. Compare central top/bottom scans with all four corner normals. No optical fix or shadow accumulation is presumed.")
             .put("frames", records).put("closingTrace", trace).put("observedEndpointQuiescence", endpointObservations)
+            .put("readbackProbeFrames", readbackProbeFrames)
         compose.setContent { Fixture(scene) }
         compose.waitForIdle()
         entryKeys = group.casters.map { it.key }.toSet()
@@ -148,13 +152,14 @@ class UtilityPopupRenderDiagnosticTest {
                 assertTrue("This must interrupt a live return", anchor.modalPresent)
                 assertTrue("Close has travelled away from the expanded endpoint", anchor.contact.expansion.value < 1f)
                 beforeOpenRequest = modalSource.snapshotReadbackRequest
-                compose.runOnIdle { open = true }
+                compose.runOnIdle { readbackProbeActive = true; open = true }
                 advance(96)
                 capture("reverse-$cycle-reopening", save = false)
                 assertTrue("Reopening keeps the same modal lifetime", anchor.modalPresent)
                 assertSame("Interrupted reversal cannot allocate a second dialog", firstWindow, popupWindow)
             }
             settleEndpoint(beforeOpenRequest)
+            compose.runOnIdle { readbackProbeActive = false }
             val repeatedOpen = capture("repeated-open", save = true)
             assertMatchedGeometry(firstOpen, repeatedOpen, "expanded before/after repeated interruptions")
 
@@ -235,6 +240,7 @@ class UtilityPopupRenderDiagnosticTest {
             }
             throw failure
         } finally {
+            compose.runOnIdle { readbackProbeActive = false }
             try {
                 try {
                     if (diagnostic || report.optString("status").startsWith("failed:")) writeReport()
@@ -261,6 +267,22 @@ class UtilityPopupRenderDiagnosticTest {
                 val modal = rememberFrostedBackdrop(scene, dark = scene.dark)
                 browseSource = browse
                 modalSource = modal
+                LaunchedEffect(Unit) {
+                    snapshotFlow { readbackProbeActive }.collectLatest { active ->
+                        if (active) while (true) {
+                            withFrameNanos { frameNanos ->
+                                if (readbackProbeActive) readbackProbeFrames.put(JSONObject()
+                                    .put("frameNanos", frameNanos)
+                                    .put("consumers", modal.consumers)
+                                    .put("recordings", modal.recordings)
+                                    .put("revision", modal.revision)
+                                    .put("readbackRequest", modal.readbackRequest)
+                                    .put("snapshotReadbackRequest", modal.snapshotReadbackRequest)
+                                    .put("anchorHidden", anchor.hidden))
+                            }
+                        }
+                    }
+                }
                 group = rememberShadowPlane()
                 anchor = rememberGlassAnchor()
                 pageView = LocalView.current
@@ -404,6 +426,8 @@ class UtilityPopupRenderDiagnosticTest {
         var layoutChanges = 0
         val observation = JSONObject().put("requestedOpen", open).put("thumbnailRequired", thumbnail)
             .put("freshModalRequired", thumbnail && previousModal != null)
+        val termObservations = JSONArray()
+        observation.put("termObservations", termObservations)
         endpointObservations.put(observation)
         // Endpoint-only, both APIs: virtual time alone cannot finish native inset/
         // layout callbacks or thumbnail readback. Observe unchanged layout
@@ -426,6 +450,24 @@ class UtilityPopupRenderDiagnosticTest {
                 stableSamples++
                 val refreshed = !thumbnail || !open || previousModal == null ||
                     modalSource.snapshotReadbackRequest > previousModal
+                // Diagnostic-only predicate receipts; keep the original wait unchanged.
+                termObservations.put(JSONObject()
+                    .put("layoutReady", layout.ready)
+                    .put("browseRecorded", browseSource.recorded)
+                    .put("modalRecorded", modalSource.recorded)
+                    .put("requestedOpen", open)
+                    .put("browseRastersNonNull", browse.all { it != null })
+                    .put("modalRastersNonNull", modal.all { it != null })
+                    .put("allRastersNonNull", current.all { it != null })
+                    .put("browseSnapshotReadbackRequest", browseSource.snapshotReadbackRequest)
+                    .put("modalSnapshotReadbackRequest", modalSource.snapshotReadbackRequest)
+                    .put("previousModal", previousModal ?: JSONObject.NULL)
+                    .put("freshModalRequired", thumbnail && open && previousModal != null)
+                    .put("refreshed", refreshed)
+                    .put("quietWallMs", SystemClock.uptimeMillis() - unchangedSince)
+                    .put("quietClockMs", compose.mainClock.currentTime - unchangedFrameSince)
+                    .put("stableSamples", stableSamples)
+                    .put("layoutChanges", layoutChanges))
                 layout.ready && browseSource.recorded && (!open || modalSource.recorded) &&
                     current.all { it != null } && refreshed && SystemClock.uptimeMillis() - unchangedSince >= 200 &&
                     compose.mainClock.currentTime - unchangedFrameSince >= 600 && stableSamples >= 4

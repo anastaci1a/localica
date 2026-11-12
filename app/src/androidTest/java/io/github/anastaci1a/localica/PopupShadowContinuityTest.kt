@@ -25,6 +25,11 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -537,6 +542,29 @@ class PopupShadowContinuityTest {
     private fun verifyField(name: String, popup: Boolean = true) {
         // This is the highest (tested) native window, including for a nested menu.
         val nodes = if (popup) compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes() else emptyList()
+        if (popup && name == "closing-0") {
+            val unmerged = compose.onAllNodesWithTag("glass-morph-surface", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+            val snapshot = compose.runOnIdle {
+                val chains = JSONArray()
+                for (match in unmerged) {
+                    val chain = JSONArray()
+                    var node: SemanticsNode? = match
+                    while (node != null) {
+                        val current = node
+                        chain.put(JSONObject().put("id", current.id)
+                            .put("isMergingSemanticsOfDescendants", current.config.isMergingSemanticsOfDescendants)
+                            .put("isClearingSemantics", current.config.isClearingSemantics)
+                            .put("testTag", current.config.getOrNull(SemanticsProperties.TestTag) ?: JSONObject.NULL))
+                        node = current.parent
+                    }
+                    chains.put(chain)
+                }
+                JSONObject().put("name", name).put("mergedCount", nodes.size)
+                    .put("unmergedCount", unmerged.size).put("ancestorChains", chains).toString(2)
+            }
+            File(output, "closing-0-semantics-diagnostic.json").writeText(snapshot)
+        }
         val bounds = if (popup) nodes.minBy { it.boundsInRoot.width * it.boundsInRoot.height }.boundsInRoot else anchor.bounds
         val origin = IntArray(2)
         if (popup) compose.runOnIdle { requireNotNull(popupView).getLocationOnScreen(origin) }
