@@ -423,7 +423,7 @@ class PopupShadowContinuityTest {
                                 }.pageGlassCaster(),
                                     source = source, shadow = false) {}
                                 PopupActionPill(anchor, source, Modifier.width(104.dp).fillMaxHeight(),
-                                    onSearch = {}, onMore = { open = true })
+                                    onSearch = {}, onMore = { open = true }, role = io.github.anastaci1a.localica.ui.components.TriggerRole.Navigation)
                             }
                             Menu()
                         }

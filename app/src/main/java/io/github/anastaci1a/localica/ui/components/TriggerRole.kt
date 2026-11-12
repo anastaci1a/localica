@@ -13,6 +13,6 @@ sealed interface TriggerRole<out Contact, out Preparation> {
     data class SelectionItem<Entry>(val entry: Entry) : TriggerRole<Entry, Nothing>
     data class MaterialSurface<Plane>(val plane: Plane) : TriggerRole<Plane, Nothing>
     data class RetainedSurface<Plane>(val plane: Plane) : TriggerRole<Plane, Nothing>
-    data class LyricsHeader<Contact, Preparation>(val contacts: Contact, val preparation: Preparation,
+    data class LyricsHeader<Contact, Preparation>(val contacts: Contact, val preparation: Preparation, val separated: Boolean,
         val side: Float = -1f) : TriggerRole<Contact, Preparation>
 }

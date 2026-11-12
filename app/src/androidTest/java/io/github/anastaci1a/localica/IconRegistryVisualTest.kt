@@ -100,7 +100,7 @@ class IconRegistryVisualTest {
                     PlayerActionStrip(PlayerActionSettings(slots = mapOf(ActionSlot(0, 0) to PlayerAction.More)), { it.label }, {}, {})
                 }
                 Text("PopupActionPill — live")
-                PopupActionPill(anchor, backdrop, Modifier.width(104.dp).height(48.dp), onSearch = {}, onMore = {})
+                PopupActionPill(anchor, backdrop, Modifier.width(104.dp).height(48.dp), onSearch = {}, onMore = {}, role = io.github.anastaci1a.localica.ui.components.TriggerRole.Navigation)
                 Text("PopupActionPill — retained descriptor")
                 Box(Modifier.width(104.dp).height(48.dp)) { face?.invoke() }
             }

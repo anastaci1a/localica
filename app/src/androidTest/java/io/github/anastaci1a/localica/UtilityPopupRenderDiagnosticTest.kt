@@ -299,7 +299,7 @@ class UtilityPopupRenderDiagnosticTest {
                                         Text("Home     Library", Modifier.align(Alignment.Center))
                                     }
                                     PopupActionPill(anchor, browse, Modifier.width(104.dp).fillMaxHeight(),
-                                        onSearch = {}, onMore = { open = true })
+                                        onSearch = {}, onMore = { open = true }, role = io.github.anastaci1a.localica.ui.components.TriggerRole.Navigation)
                                 }
                             }
                         }

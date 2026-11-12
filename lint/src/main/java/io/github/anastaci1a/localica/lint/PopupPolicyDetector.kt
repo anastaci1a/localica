@@ -18,20 +18,83 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
     }
     override fun getApplicableUastTypes() = listOf(UCallExpression::class.java,
         USimpleNameReferenceExpression::class.java, UBinaryExpression::class.java, UPrefixExpression::class.java,
-        UPostfixExpression::class.java, UClass::class.java, UVariable::class.java)
+        UPostfixExpression::class.java, UCallableReferenceExpression::class.java, UClass::class.java, UVariable::class.java)
 
     override fun createUastHandler(context: JavaContext): UElementHandler? {
         val path = context.file.invariantSeparatorsPath
         val relative = "app/src/main/java/" + path.substringAfterLast("/src/main/java/", missingDelimiterValue = path)
         return object : UElementHandler() {
+            private val reported = mutableSetOf<Pair<UiRuleId, UElement>>()
             private fun report(rule: UiRuleId, node: UElement) {
-                if (relative !in popupOwnerPaths[rule.name].orEmpty()) context.report(rule.issue, node, context.getLocation(node), rule.policy)
+                if (relative !in popupOwnerPaths[rule.name].orEmpty() && reported.add(rule to node)) context.report(rule.issue, node, context.getLocation(node), rule.policy)
+            }
+
+            private fun memberRule(symbol: PsiMember?): UiRuleId? = when (symbol?.containingClass?.qualifiedName) {
+                "io.github.anastaci1a.localica.ui.GlassAnchor" -> UiRuleId.ScreenPopupTrigger
+                "io.github.anastaci1a.localica.ui.GlassPopupHome", "io.github.anastaci1a.localica.ui.GlassPopupFlight" -> UiRuleId.ScreenPopupHome
+                else -> null
+            }
+
+            // Follow collection handles and local aliases back to their resolved
+            // owner; spelling a local 'home' or 'flights' is not authority.
+            private fun ownedReceiver(expression: UExpression?, seen: MutableSet<UElement> = mutableSetOf()): UiRuleId? {
+                if (expression == null || !seen.add(expression)) return null
+                val reference = when (expression) {
+                    is UQualifiedReferenceExpression -> expression.selector
+                    else -> expression
+                }
+                val resolved = (reference as? UResolvable)?.resolve()
+                memberRule(resolved as? PsiMember)?.let { return it }
+                val initializer = (resolved as? com.intellij.psi.PsiVariable)?.toUElementOfType<UVariable>()?.uastInitializer
+                return ownedReceiver(initializer, seen) ?: when (expression) {
+                    is UQualifiedReferenceExpression -> ownedReceiver(expression.receiver, seen)
+                    is UCallExpression -> ownedReceiver(expression.receiver, seen)
+                    else -> null
+                }
+            }
+
+            private fun namedRole(symbol: com.intellij.psi.PsiElement?): String? {
+                val qualified = when (symbol) {
+                    is com.intellij.psi.PsiClass -> symbol.qualifiedName
+                    is PsiMember -> symbol.containingClass?.qualifiedName?.let {
+                        if (it.endsWith(".TriggerRole") || it.endsWith(".HomeKind") || it.endsWith(".PopupVariant")) it + "." + symbol.name else it
+                    }
+                    else -> null
+                } ?: return null
+                val prefix = "io.github.anastaci1a.localica.ui.components."
+                return qualified.removePrefix(prefix).takeIf { qualified.startsWith(prefix) &&
+                    it.substringBefore('.') in setOf("TriggerRole", "HomeKind", "PopupVariant") && it.contains('.') }
+            }
+
+            private fun reportRole(symbol: com.intellij.psi.PsiElement?, node: UElement) {
+                val role = namedRole(symbol) ?: return
+                if (relative !in popupOwnerPaths[role].orEmpty()) context.report(UiRuleId.ScreenPopupMotion.issue, node, context.getLocation(node), "Named popup role $role is restricted to its pinned callers")
+            }
+
+            private fun registration(method: com.intellij.psi.PsiMethod) = method.name == "glassAnchor" &&
+                method.parameterList.parameters.any { it.type.canonicalText.contains("TriggerRole.MaterialSurface") || it.type.canonicalText.contains("TriggerRole.RetainedSurface") }
+
+            private fun reportRegistration(method: com.intellij.psi.PsiMethod, node: UElement) {
+                if (registration(method) && relative !in popupOwnerPaths["ShadowRegistration"].orEmpty()) context.report(UiRuleId.ScreenPopupTrigger.issue, node, context.getLocation(node), "Only GlassShadow registers popup surface nodes")
+            }
+
+            override fun visitCallableReferenceExpression(node: UCallableReferenceExpression) {
+                reportRole(node.resolve(), node)
+                (node.resolve() as? com.intellij.psi.PsiMethod)?.let {
+                    reportRegistration(it, node)
+                    if (it.name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !it.isConstructor && relative !in popupHosts) report(UiRuleId.ScreenPopupHome, node)
+                    if (it.name in setOf("glassPopupHome", "glassPopupProjection")) report(UiRuleId.ScreenPopupHome, node)
+                }
+                (memberRule(node.resolve() as? PsiMember) ?: ownedReceiver(node.qualifierExpression))?.let { report(it, node) }
             }
 
             override fun visitSimpleNameReferenceExpression(node: USimpleNameReferenceExpression) {
                 val resolved = node.resolve()
+                reportRole(resolved, node)
                 val name = resolved?.let { (it as? com.intellij.psi.PsiNamedElement)?.name } ?: node.identifier
                 if (Regex("(?:get)?Local.*Popup.*Home.*").matches(name)) report(UiRuleId.ScreenPopupHome, node)
+                if (name in setOf("LocalPopupBodyPresenter", "getLocalPopupBodyPresenter") &&
+                    (resolved as? PsiMember)?.containingClass?.qualifiedName == "io.github.anastaci1a.localica.ui.components.PopupKt") report(UiRuleId.ScreenPopupHome, node)
                 val owner = (resolved as? PsiMember)?.containingClass?.name.orEmpty()
                 if (owner in setOf("PopupKind", "PopupMotionKind")) report(UiRuleId.ScreenPopupMotion, node)
             }
@@ -39,6 +102,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
             override fun visitCallExpression(node: UCallExpression) {
                 val method = node.resolve() ?: return
                 val name = method.name
+                reportRegistration(method, node)
                 val owner = method.containingClass?.qualifiedName.orEmpty()
                 if (name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !method.isConstructor && relative !in popupHosts) report(UiRuleId.ScreenPopupHome, node)
                 if (name in setOf("glassPopupHome", "glassPopupProjection")) report(UiRuleId.ScreenPopupHome, node)
@@ -50,6 +114,15 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 if (method.isConstructor && method.containingClass?.name == "GlassPopupHome") report(UiRuleId.ScreenPopupHome, node)
                 if (method.isConstructor && method.containingClass?.name == "GlassAnchor") report(UiRuleId.ScreenPopupTrigger, node)
                 if (method.containingClass?.name == "GlassAnchor" && !method.isConstructor && !name.startsWith("get") && name != "prepareContextPlacement") report(UiRuleId.ScreenPopupTrigger, node)
+                if (method.containingClass?.name in setOf("GlassPopupHome", "GlassPopupFlight") && !method.isConstructor && !name.startsWith("get")) report(UiRuleId.ScreenPopupHome, node)
+                if (name in setOf("add", "addAll", "clear", "remove", "removeAll", "removeAt", "removeIf", "retainAll", "set", "put", "putAll", "replace", "replaceAll", "sort", "sortWith", "sortBy", "sortDescending", "reverse", "shuffle", "fill")) {
+                    ownedReceiver(node.receiver)?.let { report(it, node) }
+                }
+                if (!method.isConstructor && !method.hasModifierProperty(com.intellij.psi.PsiModifier.STATIC) &&
+                    memberRule(method) == null && !name.startsWith("get") &&
+                    name !in setOf("equals", "hashCode", "toString", "contains", "containsAll", "isEmpty", "size", "first", "last", "iterator", "hasNext", "next")) {
+                    ownedReceiver(node.receiver)?.let { report(it, node) }
+                }
                 if (name in setOf("PopupActionPill", "GlassMenu", "GlassMorphPopup", "GlassDialog", "Popup", "glassAnchor") &&
                     method.parameterList.parameters.withIndex().any { (i, p) -> p.name in setOf("shadowOpacity", "opacity") && node.getArgumentForParameter(i) != null }) report(UiRuleId.ScreenPopupTrigger, node)
                 if (name == "NavigationUtilityPill") report(UiRuleId.ScreenPopupTrigger, node)
@@ -75,9 +148,17 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
             private fun reportAnchorWrite(operand: UExpression, node: UElement) {
                 val left = (operand as? UQualifiedReferenceExpression)?.selector ?: operand
                 val symbol = (left as? UReferenceExpression)?.resolve() as? PsiMember ?: return
-                if (symbol.containingClass?.name == "GlassAnchor") {
-                    report(UiRuleId.ScreenPopupTrigger, node)
-                }
+                val explicit = (operand as? UQualifiedReferenceExpression)?.receiver
+                val implicit = if (explicit == null) generateSequence(node.uastParent) { it.uastParent }
+                    .filterIsInstance<UCallExpression>().mapNotNull { scope ->
+                        val receiver = when (scope.resolve()?.name) {
+                            "with" -> scope.valueArguments.firstOrNull()
+                            "apply", "run" -> scope.receiver
+                            else -> null
+                        }
+                        if (receiver?.getExpressionType()?.canonicalText == symbol.containingClass?.qualifiedName) ownedReceiver(receiver) else null
+                    }.firstOrNull() else null
+                (memberRule(symbol) ?: ownedReceiver(explicit) ?: implicit)?.let { report(it, node) }
             }
 
             override fun visitVariable(node: UVariable) {

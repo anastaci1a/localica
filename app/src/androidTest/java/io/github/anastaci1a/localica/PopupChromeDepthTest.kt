@@ -12,6 +12,19 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.view.Window
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.asAndroidBitmap
 import kotlinx.coroutines.runBlocking
 import androidx.compose.ui.geometry.Rect
@@ -22,6 +35,10 @@ import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.navigation.InterfacePreferences
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
+import io.github.anastaci1a.localica.navigation.GlassAppearance
+import io.github.anastaci1a.localica.navigation.GlassRendererMode
+import io.github.anastaci1a.localica.navigation.MainTab
+import io.github.anastaci1a.localica.ui.components.TriggerRole
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
@@ -50,21 +67,256 @@ class PopupChromeDepthTest {
 
     @Test fun overflowSettingsRetractsBehindMiniPlayerAndTabs() { overflow("Settings") }
     @Test fun overflowScanRetractsBehindMiniPlayerAndTabs() { overflow("Scan music") }
+    @Test fun overflowBackReturnsInlineBehindChrome() { overflow("Back") }
+    @Test fun overflowOutsideTapReturnsInlineBehindChrome() { overflow("Outside tap") }
+    @Test fun overflowTriggerTapReturnsInlineBehindChrome() { overflow("Trigger") }
+    @Test fun singleToneSettingsReturnsInlineBehindChrome() { overflow("Settings", GlassRendererMode.SingleToneBlur) }
+    @Test fun singleToneScanReturnsInlineBehindChrome() { overflow("Scan music", GlassRendererMode.SingleToneBlur) }
+    @Test fun singleToneBackReturnsInlineBehindChrome() { overflow("Back", GlassRendererMode.SingleToneBlur) }
+    @Test fun singleToneOutsideTapReturnsInlineBehindChrome() { overflow("Outside tap", GlassRendererMode.SingleToneBlur) }
+    @Test fun singleToneTriggerTapReturnsInlineBehindChrome() { overflow("Trigger", GlassRendererMode.SingleToneBlur) }
+    @Test fun normalBelowChromeProjectionIsOutsideItsSampledBackdrop() { cleanBackdrop(GlassRendererMode.Normal) }
+    @Test fun singleToneBelowChromeProjectionIsOutsideItsSampledBackdrop() { cleanBackdrop(GlassRendererMode.SingleToneBlur) }
+    @Test fun normalDepartingBrowseMenuStaysAboveTabs() { nonChromeMenu(GlassRendererMode.Normal) }
+    @Test fun singleToneDepartingBrowseMenuStaysAboveTabs() { nonChromeMenu(GlassRendererMode.SingleToneBlur) }
+    @Test fun normalSelectionPillKeepsItsShellDepth() { selectionPill(GlassRendererMode.Normal) }
+    @Test fun singleToneSelectionPillKeepsItsShellDepth() { selectionPill(GlassRendererMode.SingleToneBlur) }
+    @Test fun collapsedShellControlsRemainAccessible() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = InterfacePreferences(context)
+        val previous = preferences.read()
+        val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)), "shell-accessibility").apply { mkdirs() }
+        lateinit var host: View
+        try {
+            preferences.write(InterfaceSettings(reducedMotion = true))
+            val track = Track("identity:accessible", "Accessible song", artist = "Test", fileName = "accessible.mp3", relativePath = "accessible.mp3")
+            compose.setContent { LocalicaTheme {
+                host = LocalView.current
+                LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = listOf(track)), loading = false),
+                    PlaybackState(connected = true, trackId = track.id, trackUri = track.id, title = track.title, durationMs = 120000),
+                    {}, {}, {}, {}, {}, {}, playlist = PlaylistState(loading = false))
+            } }
+            compose.onNodeWithContentDescription("Play", useUnmergedTree = true).assertExists()
+            compose.onNodeWithTag("player-title", useUnmergedTree = true).assertExists()
+            val activity = compose.runOnUiThread {
+                var owner = host.context
+                while (owner is ContextWrapper && owner !is Activity) owner = owner.baseContext
+                (owner as Activity).window
+            }
+            original(activity, output, "collapsed-mini-player").recycle()
+            compose.onNodeWithTag("player-surface").performTouchInput { swipeUp() }
+            compose.waitForIdle()
+            compose.onNodeWithContentDescription("Open queue", useUnmergedTree = true).assertExists()
+            original(activity, output, "collapsed-queue-bar").recycle()
+            File(output, "semantics.txt").writeText(compose.onRoot(useUnmergedTree = true).printToString())
+        } finally { preferences.write(previous) }
+    }
 
-    private fun overflow(destination: String) {
+    private fun selectionPill(mode: GlassRendererMode) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
         val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
-            destination.replace(' ', '-')).apply { mkdirs() }
+            "${mode.name}/selection-pill").apply { mkdirs() }
+        lateinit var host: View
+        try {
+            preferences.write(InterfaceSettings(tabs = listOf(MainTab.Albums, MainTab.Artists, MainTab.Songs, MainTab.Playlists),
+                reducedMotion = true, glass = GlassAppearance(renderer = mode)))
+            val tracks = (1..2).map { Track("identity:depth-$it", "Song $it", artist = "Shared artist", album = "Shared album",
+                fileName = "$it.mp3", relativePath = "$it.mp3") }
+            compose.setContent { LocalicaTheme {
+                host = LocalView.current
+                LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaybackState(connected = true),
+                    {}, {}, {}, {}, {}, {}, playlist = PlaylistState(loading = false))
+            } }
+            compose.awaitRowActions("Shared album").performClick()
+            compose.onNodeWithText("Select all songs").performClick()
+            compose.onNodeWithText("2 selected").assertIsDisplayed()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() }
+            compose.awaitExpectedWindowFocus(compose.onNodeWithContentDescription("Collapse selection"))
+            compose.onNodeWithContentDescription("Collapse selection").performClick()
+            val pill = compose.onNodeWithTag("selection-minimized").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            val tabs = compose.onNodeWithTag("tab-pill", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            val activity = compose.runOnUiThread {
+                var owner = host.context
+                while (owner is ContextWrapper && owner !is Activity) owner = owner.baseContext
+                (owner as Activity).window
+            }
+            original(activity, output, "selection-and-tabs").recycle()
+            File(output, "scene.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA).put("renderer", mode.name)
+                .put("api", Build.VERSION.SDK_INT).put("reducedMotion", true).put("selection", pill.toString()).put("tabs", tabs.toString())
+                .put("density", host.resources.displayMetrics.density).toString(2))
+        } finally { preferences.write(previous) }
+    }
+
+    private fun nonChromeMenu(mode: GlassRendererMode) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = InterfacePreferences(context)
+        val previous = preferences.read()
+        val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
+            "${mode.name}/non-chrome-menu").apply { mkdirs() }
+        lateinit var host: View
+        lateinit var home: GlassPopupHome
+        var popup: Window? = null
+        var open by mutableStateOf(false)
+        var leaving by mutableStateOf(false)
+        val receipts = JSONArray()
+        try {
+            preferences.write(InterfaceSettings(glass = GlassAppearance(renderer = mode)))
+            compose.setContent { LocalicaTheme {
+                host = LocalView.current
+                home = rememberGlassPopupHome(leaving)
+                CompositionLocalProvider(LocalGlassMorphWorkObserver provides { kind, window, _ ->
+                    if (kind == "dialog" && window != null && popup == null) popup = window
+                }) {
+                    GlassPopupHome(home, chrome = {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                            Box(Modifier.fillMaxWidth().height(64.dp).testTag("overlap-tabs")) {
+                                SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, { 0f }, source = home.backdrop) {}
+                            }
+                        }
+                    }) {
+                        Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White), contentAlignment = Alignment.BottomEnd) {
+                            PopupActionPill(rememberGlassAnchor(), source = home.backdrop,
+                                modifier = Modifier.size(104.dp, 64.dp), role = TriggerRole.BrowseOptions,
+                                trailingLabel = "Open overlap menu", menuVisible = open, onMenuDismiss = { open = false },
+                                menuContent = {
+                                    ActionMenuItem("Leave page", icon = AppIcon.TabFolders, onClick = { open = false; leaving = true })
+                                    Box(Modifier.fillMaxWidth().height(240.dp).background(androidx.compose.ui.graphics.Color.Green))
+                                }, onSearch = {}, onMore = { open = true })
+                        }
+                    }
+                }
+            } }
+            compose.mainClock.autoAdvance = false
+            compose.onNodeWithContentDescription("Open overlap menu").performClick()
+            compose.waitUntil(10000) {
+                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                popup?.decorView?.hasWindowFocus() == true && home.flights.singleOrNull()?.phase?.invoke()?.let { it >= .999f } == true
+            }
+            val window = requireNotNull(popup)
+            val flight = compose.runOnUiThread { home.flights.single() }
+            assertFalse("BrowseOptions is a non-chrome role", flight.chromeTrigger)
+            val tabBounds = compose.onNodeWithTag("overlap-tabs").fetchSemanticsNode().boundsInRoot
+            val activity = compose.runOnUiThread {
+                var owner = host.context
+                while (owner is ContextWrapper && owner !is Activity) owner = owner.baseContext
+                (owner as Activity).window
+            }
+            compose.onNodeWithText("Leave page").performClick()
+            var qualified = 0
+            for (frame in 0 until 96) {
+                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                if (!window.decorView.isAttachedToWindow) break
+                val phase = flight.phase()
+                if (phase !in .1f.. .8f || !flight.prepared) continue
+                val modal = original(window, output, "return-$frame-popup")
+                val root = original(activity, output, "return-$frame-root")
+                val layer = runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap()
+                try {
+                    if (!flight.handedOff) continue
+                    val hostAt = IntArray(2); val rootAt = IntArray(2)
+                    compose.runOnUiThread { host.getLocationOnScreen(hostAt); activity.decorView.getLocationOnScreen(rootAt) }
+                    var sampled = 0; var bad = 0
+                    for (y in tabBounds.top.toInt() until tabBounds.bottom.toInt() step 2)
+                        for (x in tabBounds.left.toInt() until tabBounds.right.toInt() step 2) {
+                            val lx = x + hostAt[0] - flight.origin.x.toInt()
+                            val ly = y + hostAt[1] - flight.origin.y.toInt()
+                            if (lx !in 0 until layer.width || ly !in 0 until layer.height) continue
+                            val expected = layer.getPixel(lx, ly)
+                            if (Color.alpha(expected) < 254 || Color.green(expected) < 200 || Color.red(expected) > 40 || Color.blue(expected) > 40) continue
+                            val actual = root.getPixel(x + hostAt[0] - rootAt[0], y + hostAt[1] - rootAt[1])
+                            if (channels.maxOf { abs(it(expected) - it(actual)) } > 14) bad++
+                            sampled++
+                        }
+                    receipts.put(JSONObject().put("frame", frame).put("phase", phase).put("pixels", sampled).put("changed", bad))
+                    File(output, "frames.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
+                        .put("renderer", mode.name).put("samples", receipts).toString(2))
+                    if (sampled > 10) {
+                        qualified++
+                        assertTrue("Non-chrome departing menu stays above actual tabs: $bad/$sampled", bad <= max(4, sampled / 1000))
+                    }
+                } finally { modal.recycle(); root.recycle(); layer.recycle() }
+            }
+            assertTrue("Non-chrome menu overlaps tabs in at least three return frames: $receipts", qualified >= 3)
+        } finally { compose.mainClock.autoAdvance = true; preferences.write(previous) }
+    }
+
+    private fun cleanBackdrop(mode: GlassRendererMode) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = InterfacePreferences(context)
+        val previous = preferences.read()
+        val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
+            "${mode.name}/clean-backdrop").apply { mkdirs() }
+        lateinit var host: View
+        lateinit var home: GlassPopupHome
+        lateinit var flight: GlassPopupFlight
+        try {
+            preferences.write(InterfaceSettings(glass = GlassAppearance(renderer = mode)))
+            compose.setContent { LocalicaTheme {
+                host = LocalView.current
+                home = rememberGlassPopupHome(false)
+                flight = remember { GlassPopupFlight() }
+                val layer = rememberGraphicsLayer()
+                BackdropLease(home.backdrop)
+                DisposableEffect(home, layer) {
+                    flight.layer = layer; flight.chromeTrigger = true; flight.phase = { .5f }; flight.prepared = true
+                    home.flights.add(flight)
+                    onDispose { home.flights.remove(flight) }
+                }
+                GlassPopupHome(home, chrome = {}) {
+                    Box(Modifier.fillMaxSize().drawWithContent {
+                        layer.record(size = IntSize(size.width.toInt(), size.height.toInt())) {
+                            drawRect(androidx.compose.ui.graphics.Color.Magenta)
+                        }
+                        drawRect(androidx.compose.ui.graphics.Color.Green)
+                    })
+                }
+            } }
+            compose.waitForIdle()
+            val activity = compose.runOnUiThread {
+                var owner = host.context
+                while (owner is ContextWrapper && owner !is Activity) owner = owner.baseContext
+                (owner as Activity).window
+            }
+            for (frame in 0..2) {
+                val root = original(activity, output, "clean-$frame-root")
+                val sampled = runBlocking { requireNotNull(home.backdrop).layer.toImageBitmap() }.asAndroidBitmap()
+                try {
+                    File(output, "clean-$frame-sampled-backdrop.png").outputStream().use {
+                        assertTrue(sampled.compress(Bitmap.CompressFormat.PNG, 100, it))
+                    }
+                    val rootAt = IntArray(2).also { compose.runOnUiThread { activity.decorView.getLocationOnScreen(it) } }
+                    val x = sampled.width / 2; val y = sampled.height / 2
+                    val rootX = (home.currentOrigin.x - rootAt[0]).toInt() + x
+                    val rootY = (home.currentOrigin.y - rootAt[1]).toInt() + y
+                    val samplePixel = sampled.getPixel(x, y)
+                    val displayPixel = root.getPixel(rootX, rootY)
+                    File(output, "clean-$frame.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
+                        .put("renderer", mode.name).put("phase", flight.phase()).put("projected", flight.wasProjected)
+                        .put("samplePixel", samplePixel).put("displayPixel", displayPixel).toString(2))
+                    assertTrue("Below-chrome projection is actually displayed", flight.wasProjected)
+                    assertEquals("Displayed flight control is magenta", Color.MAGENTA, displayPixel)
+                    assertEquals("Below-chrome projection must not enter the backdrop sampled by its flight", Color.GREEN, samplePixel)
+                } finally { root.recycle(); sampled.recycle() }
+            }
+        } finally { preferences.write(previous) }
+    }
+
+    private fun overflow(destination: String, mode: GlassRendererMode = GlassRendererMode.Normal) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = InterfacePreferences(context)
+        val previous = preferences.read()
+        val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
+            "${mode.name}/" + destination.replace(' ', '-')).apply { mkdirs() }
         val samples = JSONArray()
-        val report = JSONObject().put("source", BuildConfig.SOURCE_SHA).put("destination", destination)
+        val report = JSONObject().put("source", BuildConfig.SOURCE_SHA).put("destination", destination).put("renderer", mode.name)
             .put("samples", samples).put("status", "preparing").put("captureOrder", "popup-before-activity")
             .put("comparison", "Original activity and overflow buffers, SrcOver in source space; destination excluded; neutral black scrim only")
         fun save() { File(output, "frames.json").writeText(report.toString(2)) }
         var baseline: Bitmap? = null
         try {
-            preferences.write(InterfaceSettings(reducedMotion = false, fasterMotion = false))
+            preferences.write(InterfaceSettings(reducedMotion = false, fasterMotion = false, glass = GlassAppearance(renderer = mode)))
             val track = Track("file:///missing-667.mp3", "One", artist = "Test", album = "One",
                 fileName = "missing-667.mp3", relativePath = "missing-667.mp3")
             lateinit var host: View
@@ -101,11 +353,12 @@ class PopupChromeDepthTest {
             report.put("chrome", JSONArray(regions.map { (name, r) -> JSONObject().put("name", name).put("bounds", r.toString()) }))
             compose.mainClock.autoAdvance = false
             baseline = original(activity, output, "baseline")
+            val trigger = compose.onNodeWithContentDescription("More").fetchSemanticsNode().boundsInRoot.center
             compose.onNodeWithContentDescription("More").performClick()
             compose.waitUntil(10_000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 popup?.decorView?.isAttachedToWindow == true && progress >= .999f &&
-                    compose.onAllNodesWithText(destination, substring = false).fetchSemanticsNodes().size == 1
+                    compose.onAllNodesWithText("Scan music", substring = false).fetchSemanticsNodes().size == 1
             }
             val window = requireNotNull(popup)
             compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
@@ -114,7 +367,19 @@ class PopupChromeDepthTest {
                 fun flights(h: GlassPopupHome): List<GlassPopupFlight> = h.flights.toList() + h.children.flatMap(::flights)
                 flights(home).single()
             }
-            compose.onNodeWithText(destination, substring = false).performClick()
+            val device = androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+            when (destination) {
+                "Back" -> assertTrue("Back input is injected", device.pressBack())
+                "Outside tap" -> {
+                    val screen = IntArray(2).also { compose.runOnUiThread { host.getLocationOnScreen(it) } }
+                    assertTrue("Outside input is injected", device.click(screen[0] + host.width / 2, screen[1] + 64))
+                }
+                "Trigger" -> {
+                    val screen = IntArray(2).also { compose.runOnUiThread { host.getLocationOnScreen(it) } }
+                    assertTrue("Trigger input is injected", device.click(screen[0] + trigger.x.toInt(), screen[1] + trigger.y.toInt()))
+                }
+                else -> compose.onNodeWithText(destination, substring = false).performClick()
+            }
             var fullSizeFrames = 0
             var valid = 0
             var highest = 0f
@@ -222,6 +487,7 @@ class PopupChromeDepthTest {
             assertTrue("#867 requires a presented full-size menu overlapping the tabs", fullSizeFrames > 0)
             assertTrue("#667 needs actual intermediate-frame coverage: $report", valid >= 3 && highest >= .6f && lowest <= .2f)
             assertTrue("#667 returning $destination pixels crossed bottom chrome: $violations", violations.isEmpty())
+            assertTrue("Every More close intent must use the inline return: $destination", flight.wasProjected)
             assertFalse("The overflow's original native window retires after return", window.decorView.isAttachedToWindow)
             report.put("status", "passed"); save()
         } catch (failure: Throwable) {

@@ -1,8 +1,35 @@
 import test from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {checkPopupSource, ownsPopups, popupRules, popupOwners} from './popup-policy.mjs';
 const screen='app/src/main/java/io/github/anastaci1a/localica/ui/Screen.kt';
 const rules=source=>new Set(checkPopupSource(screen,source).map(x=>x.rule));
+test('calibration note 6: named roles are pinned to their actual callers',()=>{
+ assert.ok(rules('import io.github.anastaci1a.localica.ui.components.TriggerRole as Role\nfun f(){ println(Role.Selection); println(Role.Lyrics); println(Role.Navigation) }').has('ScreenPopupMotion'));
+});
+test('calibration note 7: anchor node registration belongs only to GlassShadow',()=>{
+ assert.ok(rules('fun f(anchor: GlassAnchor){ anchor.glassAnchor(materialRole()) }').has('ScreenPopupTrigger'));
+});
+test('calibration note 8: nested contact state and its mutators are protected',()=>{
+ for(const expression of ['anchor.contact.modal = true','anchor.contact.state.impulseScale = 2f','anchor.contact.expansion.bind()'])
+  assert.ok(rules('fun f(anchor: GlassAnchor){ '+expression+' }').has('ScreenPopupTrigger'),expression);
+});
+test('calibration C3: presenter provision resolves aliases',()=>{
+ for(const local of ['LocalPopupBodyPresenter','Presenter']) {
+  const source='import io.github.anastaci1a.localica.ui.components.LocalPopupBodyPresenter as '+local+'\nfun f(){ CompositionLocalProvider('+local+' provides {}) {} }';
+  assert.ok(rules(source).has('ScreenPopupHome'));
+  assert.equal(checkPopupSource(screen.replace('Screen.kt','components/Popup.kt'),source).length,0);
+ }
+});
+test('calibration C4: home and flight mutation through anchors is forbidden',()=>{
+ for(const expression of ['home.mounted = false','home.flights.clear()','home.children.add(home)','flight.chromeTrigger = false','flight.phase = { 0f }']) {
+  assert.ok(rules('fun f(anchor: GlassAnchor){ val home=anchor.popupHome ?: return; val flight=home.flights.first(); '+expression+' }').has('ScreenPopupHome'),expression);
+ }
+});
+test('calibration C5: constructor and writable property references are forbidden',()=>{
+ for(const expression of ['val make=::GlassAnchor','val field=anchor::face; field.set({})'])
+  assert.ok(rules('fun f(anchor: GlassAnchor){ '+expression+' }').has('ScreenPopupTrigger'),expression);
+});
 const fixtures={
  ScreenPopupHome:'fun Screen() { CompositionLocalProvider(LocalGlassPopupHome provides home) {} }',
  ScreenPopupMotion:'fun Screen() { GlassMenu(motionKind = PopupKind.Utility, law = { it.expansion }) }',
@@ -78,7 +105,7 @@ test('raw renamed boolean motion selectors fail',()=>{
 
 test('an arbitrarily renamed raw Boolean flag fails; intent callbacks and nested content pass',()=>{
  assert.ok(rules('fun f(){ glassAnchor(anchor, magicMotionSwitch = true) }').has('ScreenPopupMotion'));
- assert.equal(rules('fun f(){ PopupActionPill(anchor, onMore = { menu = true }); glassAnchor(anchor, face = { CheckBox(checked = true) }); rememberPresence(key, shown = true, role = TriggerRole.Lyrics) }').size,0);
+ assert.equal(rules('fun f(){ PopupActionPill(anchor, onMore = { menu = true }); glassAnchor(anchor, face = { CheckBox(checked = true) }); rememberPresence(key, shown = true) }').size,0);
 });
 
 test('only the pinned shell hosts may create shared homes',()=>{
@@ -90,4 +117,32 @@ test('only the pinned shell hosts may create shared homes',()=>{
 test('compound and prefix/postfix anchor mutations are rejected',()=>{
  for(const expression of ['anchor.futureField += 1','anchor.futureField -= 1','anchor.futureField *= 2','anchor.futureField /= 2','anchor.futureField %= 2','anchor.futureField++','++anchor.futureField','anchor.futureField--','--anchor.futureField']) assert.ok(rules('fun f(anchor: GlassAnchor) { '+expression+' }').has('ScreenPopupTrigger'),expression);
  assert.equal(rules('fun f(){ var value=0; value++; value+=2 }').size,0);
+});
+
+test('nested aliases and scope receivers retain anchor ownership',()=>{
+ for(const body of ['val contact=anchor.contact; val state=contact.state; state.impulseScale += 1f','val expansion=anchor.contact.expansion; expansion.bind()','rememberGlassAnchor().also { it.source = source }','anchor.let { borrowed -> borrowed.contact.modal = true }','rememberGlassAnchor().apply { source = source }'])
+  assert.ok(rules('fun f(anchor: GlassAnchor){ '+body+' }').has('ScreenPopupTrigger'),body);
+});
+test('nested callable references, with and nullable scope receivers stay protected',()=>{
+ for(const body of ['val bind=anchor.contact.expansion::bind','with(anchor.contact) { modal = true }','anchor?.let { borrowed -> borrowed.contact.modal = true }'])
+  assert.ok(rules('fun f(anchor: GlassAnchor){ '+body+' }').has('ScreenPopupTrigger'),body);
+ for(const body of ['val factory=::rememberGlassPopupHome','val projection=::glassPopupProjection'])
+  assert.ok(rules('fun f(){ '+body+' }').has('ScreenPopupHome'),body);
+});
+test('aliased data role constructors cannot borrow another surface policy',()=>{
+ for(const role of ['SelectionItem','LyricsHeader','MaterialSurface','RetainedSurface'])
+  assert.ok(rules('import io.github.anastaci1a.localica.ui.components.TriggerRole.'+role+' as Borrowed\nfun f(){ Borrowed(1) }').has('ScreenPopupMotion'),role);
+});
+test('pinned role callers and shadow registration are sanctioned',()=>{
+ for(const [file,role] of [['FloatingSelectionPanel','Selection'],['PlayerSurface','Lyrics'],['LocalicaScreen','Navigation']]) assert.equal(checkPopupSource(screen.replace('Screen',file),'import io.github.anastaci1a.localica.ui.components.TriggerRole as Role\nfun f(){ println(Role.'+role+') }').length,0);
+ assert.equal(checkPopupSource(screen.replace('Screen','GlassShadow'),'fun f(anchor: GlassAnchor){ anchor.glassAnchor(materialRole()) }').length,0);
+});
+
+test('every declared popup role case has exact manifest owners and no wildcard',()=>{
+ const manifest=fs.readFileSync(new URL('../../lint/src/main/resources/popup-owners.txt',import.meta.url),'utf8').trim().split('\n').map(row=>row.split('='));
+ const trigger=fs.readFileSync(new URL('../../app/src/main/java/io/github/anastaci1a/localica/ui/components/TriggerRole.kt',import.meta.url),'utf8');
+ const cases=[...trigger.matchAll(/data (?:object|class) (\w+)/g)].map(m=>m[1]);
+ assert.equal(cases.length,11);
+ for(const c of cases){const key='TriggerRole.'+c;const rows=manifest.filter(([role])=>role===key);assert.ok(rows.length>0,key);assert.equal(new Set(rows.map(([,path])=>path)).size,rows.length,key);assert.ok(rows.every(([,path])=>path.startsWith('app/src/main/java/')&&path.endsWith('.kt')&&!path.includes('*')));assert.ok(checkPopupSource(screen,'import io.github.anastaci1a.localica.ui.components.TriggerRole as Role\nfun f(){ println(Role.'+c+') }').some(x=>x.rule==='ScreenPopupMotion'),key);}
+ for(const [kind,cases] of [['HomeKind',['Surface','Quiet','Contextual','Detached','Page','Search']],['PopupVariant',['Menu','Choice','Dialog','Sheet','Page','Search']]])for(const c of cases)assert.ok(manifest.some(([key])=>key===kind+'.'+c));
 });

@@ -76,14 +76,14 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
             LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = pill.silhouette, shadow = false,
                 sharedContact = contacts.joined, depthScale = RaisedGlassDepthScale) {
                 LyricsHeaderJoinedLayout(CompactControlSize, reveal > 0f || preparation.active, lyricsOpen,
-                    surface, Modifier.glassAnchor(anchor, source, face = { Icon(appIconPainter(AppIcon.ActionLyrics), null, Modifier.size(io.github.anastaci1a.localica.ui.spec.StockUiSpec.control.getValue(io.github.anastaci1a.localica.ui.spec.ControlSize.SettingsIcon))) }, role = TriggerRole.LyricsHeader(contacts, preparation)), { leftAction() },
+                    surface, Modifier.glassAnchor(anchor, source, face = { Icon(appIconPainter(AppIcon.ActionLyrics), null, Modifier.size(io.github.anastaci1a.localica.ui.spec.StockUiSpec.control.getValue(io.github.anastaci1a.localica.ui.spec.ControlSize.SettingsIcon))) }, role = TriggerRole.LyricsHeader(contacts, preparation, separated = separated)), { leftAction() },
                     { GlassPillDivider(it) }, { rightAction() })
             }
         } else {
             LiquidGlassSurface(Modifier.align(Alignment.CenterStart).size(CompactControlSize)
-                .glassAnchor(anchor, source, face = { Icon(appIconPainter(AppIcon.ActionLyrics), null, Modifier.size(io.github.anastaci1a.localica.ui.spec.StockUiSpec.control.getValue(io.github.anastaci1a.localica.ui.spec.ControlSize.SettingsIcon))) }, role = TriggerRole.LyricsHeader(contacts, preparation)),
+                .glassAnchor(anchor, source, face = { Icon(appIconPainter(AppIcon.ActionLyrics), null, Modifier.size(io.github.anastaci1a.localica.ui.spec.StockUiSpec.control.getValue(io.github.anastaci1a.localica.ui.spec.ControlSize.SettingsIcon))) }, role = TriggerRole.LyricsHeader(contacts, preparation, separated = separated)),
                 shadow = false, depthScale = RaisedGlassDepthScale) { leftAction() }
-            LiquidGlassSurface(Modifier.align(Alignment.CenterEnd).size(CompactControlSize).glassAnchor(null, role = TriggerRole.LyricsHeader(contacts, preparation, side = 1f)),
+            LiquidGlassSurface(Modifier.align(Alignment.CenterEnd).size(CompactControlSize).glassAnchor(null, role = TriggerRole.LyricsHeader(contacts, preparation, separated = separated, side = 1f)),
                 sharedContact = contacts.right,
                 shadow = false, depthScale = RaisedGlassDepthScale) { rightAction() }
         }

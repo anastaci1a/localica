@@ -62,7 +62,7 @@ class SelectorStackingTest {
                         }
                         PopupActionPill(rememberGlassAnchor(), source,
                             Modifier.offset(x = 204.dp, y = 24.dp).size(104.dp, 64.dp),
-                            onSearch = {}, onMore = {})
+                            onSearch = {}, onMore = {}, role = io.github.anastaci1a.localica.ui.components.TriggerRole.Navigation)
                         PresentationMarker { stage }
                     }
                 }

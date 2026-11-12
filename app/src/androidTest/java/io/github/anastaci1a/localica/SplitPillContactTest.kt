@@ -33,7 +33,7 @@ class SplitPillContactTest {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.White) }
                     Column(Modifier.padding(40.dp), verticalArrangement = Arrangement.spacedBy(32.dp)) {
                         PopupActionPill(utility, source, Modifier.size(104.dp, 64.dp),
-                            onSearch = { clicks++ }, onMore = { clicks++ })
+                            onSearch = { clicks++ }, onMore = { clicks++ }, role = io.github.anastaci1a.localica.ui.components.TriggerRole.Navigation)
                         PopupActionPill(options, modifier = Modifier.height(CompactControlSize), role = TriggerRole.BrowseOptions, leadingIcon = AppIcon.ActionSort, trailingIcon = AppIcon.ActionEye, leadingLabel = "Sort", trailingLabel = "View options", tag = "browse-options-trigger", onSearch = { clicks++ }, onMore = { clicks++ })
                     }
                 }
@@ -95,7 +95,7 @@ class SplitPillContactTest {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.White) }
                 PopupActionPill(anchor, source,
                     Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(32.dp).size(104.dp, 64.dp),
-                    onSearch = {}, onMore = { open = true })
+                    onSearch = {}, onMore = { open = true }, role = io.github.anastaci1a.localica.ui.components.TriggerRole.Navigation)
                 GlassMenu(open, anchor, { open = false }) {
                     ActionMenuItem("Settings", icon = AppIcon.ActionSettings, onClick = {})
                     ActionMenuItem("Scan music", icon = AppIcon.TabFolders, onClick = {})

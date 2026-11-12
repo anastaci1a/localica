@@ -25,19 +25,60 @@ export function kotlinTokens(source) {
 }
 export function checkPopupSource(file, source) {
     if(!file.startsWith('app/src/main/') || !file.endsWith('.kt') )return [];
-    const tokens=kotlinTokens(source), aliases=new Map(), imports=new Map(), anchors=new Set();
+    const tokens=kotlinTokens(source), aliases=new Map(), imports=new Map(), anchors=new Set(), importTokens=new Set();
     for(let i=0;i<tokens.length;i++)if(tokens[i].text==='import') {
         let j=i+1,last='', qualified='';while(j<tokens.length && !['as',';','import','package'].includes(tokens[j].text)) {
             if(j>i+1 && source.slice(tokens[j-1].start,tokens[j].start).includes('\n'))break;
             qualified+=tokens[j].text;if(tokens[j].text!=='.')last=tokens[j].text;j++;
         }
         const local=tokens[j]?.text==='as'?tokens[j+1]?.text:last;
+        for(let k=i;k<j+(tokens[j]?.text==='as'?2:0);k++)importTokens.add(k);
         imports.set(local,qualified);if(local!==last)aliases.set(local,last);
     }
     const name=i=>aliases.get(tokens[i]?.text)||tokens[i]?.text;
     for(let i=0;i<tokens.length;i++) {
         if(tokens[i+1]?.text===':' && name(i+2)==='GlassAnchor') anchors.add(tokens[i].text);
         if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=' && ['rememberGlassAnchor','GlassAnchor'].includes(name(i+3))) anchors.add(tokens[i+1].text);
+    }
+    const handles=new Map([...anchors].map(a=>[a,'ScreenPopupTrigger']));
+    for(let pass=0;pass<3;pass++)for(let i=0;i<tokens.length;i++) {
+        if(tokens[i+1]?.text===':' && ['GlassPopupHome','GlassPopupFlight'].includes(name(i+2)))handles.set(tokens[i].text,'ScreenPopupHome');
+        if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=') {
+            const start=i+3;let end=start;
+            while(end<tokens.length && tokens[end].text!==';' && (end===start || !source.slice(tokens[end-1].start,tokens[end].start).includes('\n')))end++;
+            const expression=tokens.slice(start,end).map(t=>t.text);
+            const root=handles.get(tokens[start]?.text);
+            if(root && expression.some(t=>['popupHome','flights','children'].includes(t))) handles.set(tokens[i+1].text,'ScreenPopupHome');
+            else if(root)handles.set(tokens[i+1].text,root);
+        }
+    }
+    const lambdaHandles=[];
+    function receiverRule(i) {
+        let begin=i;
+        while(begin>=2 && tokens[begin-1]?.text==='.') {
+            begin-=2;
+            while(begin>0 && ['?','!'].includes(tokens[begin]?.text))begin--;
+        }
+        const rule=handles.get(tokens[begin]?.text) || lambdaHandles.findLast(x=>x.start<i && i<x.end && x.name===tokens[begin]?.text)?.rule;
+        if(!rule)return;
+        return tokens.slice(begin,i+1).some(t=>t.text==='popupHome')?'ScreenPopupHome':rule;
+    }
+    // Scope-function receiver aliases retain the ownership of their source.
+    for(let i=0;i<tokens.length;i++)if(['also','let','apply','run'].includes(name(i)) && tokens[i-1]?.text==='.' && tokens[i+1]?.text==='{') {
+        let end=i+2,depth=1;while(end<tokens.length && depth){if(tokens[end].text==='{')depth++;if(tokens[end].text==='}')depth--;end++;}
+        let rule=receiverRule(tokens[i-2]?.text==='?'?i-3:i-2);
+        if(tokens[i-2]?.text===')') {
+            let begin=i-3,nesting=1;for(;begin>=0 && nesting;begin--){if(tokens[begin].text===')')nesting++;if(tokens[begin].text==='(')nesting--;}
+            if(['rememberGlassAnchor','GlassAnchor'].includes(name(begin)))rule='ScreenPopupTrigger';
+        }
+        if(rule)lambdaHandles.push({start:i+1,end,name:tokens[i+3]?.text==='-' && tokens[i+4]?.text==='>'?tokens[i+2].text:['apply','run'].includes(name(i))?null:'it',rule});
+    }
+    for(let i=0;i<tokens.length;i++)if(name(i)==='with' && tokens[i+1]?.text==='(') {
+        let close=i+2,depth=1;while(close<tokens.length && depth){if(tokens[close].text==='(')depth++;if(tokens[close].text===')')depth--;close++;}
+        if(tokens[close]?.text!=='{')continue;
+        const rule=receiverRule(close-2);
+        let end=close+1;depth=1;while(end<tokens.length && depth){if(tokens[end].text==='{')depth++;if(tokens[end].text==='}')depth--;end++;}
+        if(rule)lambdaHandles.push({start:close,end,name:null,rule});
     }
     const incidents=[],seen=new Set();
     function emit(rule,i,note){if(ownsPopups(file,rule))return;const offset=tokens[i].start,key=rule+':'+offset;if(seen.has(key))return;seen.add(key);incidents.push({rule,path:file,line:source.slice(0,offset).split('\n').length,note});}
@@ -52,8 +93,16 @@ export function checkPopupSource(file, source) {
         if(tokens[i].text==='{')scopes.push(tokens[i-1]?.text===')'?closedCall:name(i-1));
         if(tokens[i].text==='}')scopes.pop();
         const n=name(i),next=tokens[i+1]?.text,previous=tokens[i-1]?.text;
+        if(!importTokens.has(i)) {
+            const imported=imports.get(tokens[i].text);
+            const qualified=imported?.startsWith('io.github.anastaci1a.localica.ui.components.')?imported.slice('io.github.anastaci1a.localica.ui.components.'.length):null;
+            const key=qualified && /^(TriggerRole|HomeKind|PopupVariant)\.[^.]+$/.test(qualified)?qualified:
+                previous==='.' && ['TriggerRole','HomeKind','PopupVariant'].includes(name(i-2))?name(i-2)+'.'+n:null;
+            if(key && !ownsPopups(file,key))emit('ScreenPopupMotion',i,'Named popup roles are restricted to their pinned callers');
+        }
         const assignment=next==='=' && tokens[i+2]?.text!=='=';
         if(home.test(n||''))emit('ScreenPopupHome',i,'A screen cannot provide a popup home');
+        if(n==='LocalPopupBodyPresenter' && (imports.get(tokens[i].text)==='io.github.anastaci1a.localica.ui.components.LocalPopupBodyPresenter' || previous==='.' || !imports.has(tokens[i].text)))emit('ScreenPopupHome',i,'Only the stock presenter owner may provide its local');
         if(['GlassPopupHome','rememberGlassPopupHome'].includes(n) && next==='(' && previous!=='fun' && !popupHosts.has(file))emit('ScreenPopupHome',i,'Only the pinned application shells host popup homes');
         if(rawHomeCalls.has(n) && next==='(')emit('ScreenPopupHome',i,'Use the shared component home scope');
         if(['motionKind','popupKind','popupLaw','motionLaw','quiet','originPresentation','contactPresentation'].includes(n) && assignment)emit('ScreenPopupMotion',i,'The popup component derives its motion');
@@ -71,6 +120,14 @@ export function checkPopupSource(file, source) {
         const fieldWrite=(assignment || (['+','-','*','/','%'].includes(next) && tokens[i+2]?.text==='=') || (['+','-'].includes(next) && tokens[i+2]?.text===next) || (['+','-'].includes(previous) && tokens[i-2]?.text===previous));
         const receiver = previous==='.' ? tokens[i-2]?.text : undefined;
         const prefixReceiver = tokens[i+1]?.text==='.' ? tokens[i].text : undefined;
+        const protectedRule=receiverRule(i) || (fieldWrite && previous!=='.'?lambdaHandles.findLast(x=>x.start<i && i<x.end && x.name===null)?.rule:undefined);
+        if(n==='glassAnchor' && next==='(' && previous==='.' && receiverRule(i-2) && !ownsPopups(file,'ShadowRegistration'))emit('ScreenPopupTrigger',i,'Only GlassShadow registers popup surface nodes');
+        if(fieldWrite && protectedRule && (previous==='.' || lambdaHandles.some(x=>x.start<i && i<x.end && x.name===null)))emit(protectedRule,i,'Only the shared owner mutates popup handles');
+        if(next==='(' && ['add','addAll','clear','remove','removeAll','removeAt','removeIf','retainAll','set','put','putAll','replace','replaceAll','sort','sortWith','sortBy','sortDescending','reverse','shuffle','fill','bind'].includes(n) && protectedRule)emit(protectedRule,i,'Only the shared owner mutates popup collections');
+        if(previous===':' && tokens[i-2]?.text===':') {
+            const rule=n==='GlassAnchor'?'ScreenPopupTrigger':['GlassPopupHome','GlassPopupFlight','rememberGlassPopupHome','glassPopupHome','glassPopupProjection'].includes(n)?'ScreenPopupHome':receiverRule(i-3);
+            if(rule)emit(rule,i,'A callable reference cannot transfer popup ownership');
+        }
         if(fieldWrite && anchors.has(receiver))emit('ScreenPopupTrigger',i,'Only the shared component writes anchor fields');
         if(anchors.has(prefixReceiver) && ['+','-'].includes(previous) && tokens[i-2]?.text===previous)emit('ScreenPopupTrigger',i,'Only the shared component writes anchor fields');
         if(['face','quiet','popupHome','originPresentation'].includes(n) && assignment && (previous==='.' || [...calls,...scopes].some(c=>['apply','with'].includes(c))))emit('ScreenPopupTrigger',i,'Screens cannot configure popup anchor internals');

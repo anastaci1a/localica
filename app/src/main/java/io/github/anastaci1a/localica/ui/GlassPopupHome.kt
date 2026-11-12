@@ -112,7 +112,9 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: B
         if (aboveChrome != null && aboveChrome != (!flight.chromeTrigger || flight.phase() > ChromeReturnDepthHandoff)) return@forEach
         flight.revision
         val layer = flight.layer
-        if ((home.departing || flight.handedOff) && flight.prepared && layer != null && !layer.isReleased) {
+        // prepared is published only after the native presenter has selected this
+        // home's clean sampling source, including a chrome trigger's own close.
+        if (flight.prepared && layer != null && !layer.isReleased) {
             if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
             drawPopupProjection(layer, flight.origin - flight.homeOrigin)
             flight.handedOff = true
@@ -124,23 +126,32 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: B
 @Composable
 internal fun GlassPopupHome(departing: Boolean = false, content: @Composable () -> Unit) {
     val home = rememberGlassPopupHome(departing)
-    GlassPopupHome(home, content = content)
+    GlassPopupHome(home, modifier = Modifier.popupPage(home), content = content)
+}
+
+// Only retained pages had this policy at base. Shell homes remain accessible
+// while collapsed and preserve their original unclipped drawing extent.
+private fun Modifier.popupPage(home: GlassPopupHome): Modifier {
+    val containing = home.flights.isNotEmpty() && (home.departing || home.flights.any { it.prepared || it.handedOff })
+    return then(if (containing) Modifier.clipToBounds() else Modifier)
+        .then(if (home.departing) Modifier.clearAndSetSemantics { } else Modifier)
 }
 
 @Composable
 internal fun GlassPopupHome(home: GlassPopupHome, chrome: (@Composable () -> Unit)? = null,
-    container: @Composable (@Composable () -> Unit) -> Unit = { it() }, content: @Composable () -> Unit) {
+    container: @Composable (@Composable () -> Unit) -> Unit = { it() }, modifier: Modifier = Modifier,
+    content: @Composable () -> Unit) {
     // An idle home adds no layer: native draw observers and backdrop producers
     // keep their existing ordering until a popup actually needs containment.
-    val containing = home.flights.isNotEmpty() && (home.departing || home.flights.any { it.handedOff })
-    val host = Modifier.fillMaxSize().then(if (containing) Modifier.clipToBounds() else Modifier)
-        .then(if (home.departing) Modifier.clearAndSetSemantics { } else Modifier)
+    val host = Modifier.fillMaxSize().then(modifier)
     CompositionLocalProvider(LocalGlassPopupHome provides home) {
         container {
             if (chrome == null) Box(host.glassPopupHome(home)) { content() }
             else io.github.anastaci1a.localica.ui.layout.PopupViewportSlot(
-                modifier = host.glassPopupHome(home, aboveChrome = true),
-                contentModifier = Modifier.drawWithContent { drawContent(); projectFlights(home, aboveChrome = false) },
+                // Both projections surround the clean content recording. In
+                // particular the below-chrome flight must never sample itself.
+                modifier = host.drawWithContent { drawContent(); projectFlights(home, aboveChrome = true) },
+                contentModifier = Modifier.glassPopupHome(home, aboveChrome = false),
                 chrome = chrome, content = content)
         }
     }
@@ -182,6 +193,6 @@ internal fun <T : Any> GlassPopupNavigation(target: T, modifier: Modifier = Modi
         SideEffect { shown.home = home; if (shown === page) onHome?.invoke(home) }
         // Same-screen edits must reach controlled fields in this composition,
         // before a subsequent input event can observe the old value.
-        GlassPopupHome(home) { content(if (shown === page) target else shown.target) }
+        GlassPopupHome(home, modifier = Modifier.popupPage(home)) { content(if (shown === page) target else shown.target) }
     }
 }

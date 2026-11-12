@@ -344,6 +344,7 @@ fun LocalicaScreen(
             val utilityAnchor = rememberGlassAnchor()
             PopupActionPill(utilityAnchor, browseBackdrop,
                 Modifier.width(104.dp).fillMaxHeight(),
+                role = TriggerRole.Navigation,
                 chromeVisibility = chromeVisibility, playerExpansion = sheet.expansion,
                 noneAtlasInput = shellNoneAtlas,
                 onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },

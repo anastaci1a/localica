@@ -210,6 +210,8 @@ internal fun GlassAnchor?.captureInk() {
     SideEffect { this?.ink = color }
 }
 
+internal fun GlassAnchor.refreshSource() { source?.refresh() }
+
 private fun TriggerRole.LyricsHeader<GlassSplitContact, GlassOriginPreparation>.presentation(height: Float): GlassOriginPresentation {
     val separation = originGap(preparation.progress)
     val left = if (side < 0f) contacts.left else contacts.right
@@ -280,7 +282,7 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor?, source: FrostedBackdrop?
         if (role is TriggerRole.LyricsHeader) remember(role) { { height: Float -> role.presentation(height) } } else null
     val marker = GlassDepthMarker(anchor, originPresentation, source, role)
     val presented = if (role is TriggerRole.LyricsHeader) drawWithContent {
-        translate(left = if (role.preparation.separated) role.presentation(size.height).horizontalShift else 0f) { this@drawWithContent.drawContent() }
+        translate(left = if (role.separated) role.presentation(size.height).horizontalShift else 0f) { this@drawWithContent.drawContent() }
     } else this
     if (anchor == null) return if (role !is TriggerRole.LyricsHeader) this else presented.then(marker)
     originPresentation?.let { presentation ->
@@ -394,7 +396,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val popupHome = LocalGlassPopupHome.current
     val popupFlight = remember { GlassPopupFlight() }
     val requestedVisible = visible
-    val returningInline = popupHome?.departing == true || popupFlight.handedOff && !requestedVisible
+    // Chrome owns its return on every close intent, even when the page stays put.
+    val returningInline = popupHome?.departing == true || !requestedVisible &&
+        (popupFlight.handedOff || anchor.chromeTrigger && anchor.modalPresent)
     @Suppress("NAME_SHADOWING")
     val visible = requestedVisible && popupHome?.departing != true
     // The screen layer supplies departing motion; the return keeps its original basis.
@@ -1158,7 +1162,7 @@ internal fun PopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop? = Loc
     chromeVisibility: Float = 1f, playerExpansion: io.github.anastaci1a.localica.ui.engine.ExpansionView? = null,
     leadingIcon: AppIcon = AppIcon.ActionSearch, trailingIcon: AppIcon = AppIcon.ActionEllipsis,
     leadingLabel: String = "Search library", trailingLabel: String = "More", tag: String = "utility-pill",
-    role: TriggerRole<Nothing, Nothing> = TriggerRole.Navigation, menuVisible: Boolean = false, onMenuDismiss: () -> Unit = {},
+    role: TriggerRole<Nothing, Nothing>, menuVisible: Boolean = false, onMenuDismiss: () -> Unit = {},
     menuContent: (@Composable ColumnScope.() -> Unit)? = null,
     onSearch: () -> Unit, onMore: () -> Unit) {
     val raised = role == TriggerRole.Navigation

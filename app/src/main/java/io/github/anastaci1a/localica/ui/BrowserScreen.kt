@@ -437,7 +437,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
             searchOriginalOffset = -1; searchVacancy = 0f
         }
-        searchAnchor.source?.refresh()
+        searchAnchor.refreshSource()
         modalBackdrop?.refresh()
     }
     val searchSlotLayoutOwner = remember { SearchSlotLayout() }
