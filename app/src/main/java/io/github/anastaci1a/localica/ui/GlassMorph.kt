@@ -669,8 +669,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         ?: ambientSource?.takeUnless(::retired)
         ?: anchor.source?.takeUnless(::retired)
     SideEffect { if (source !== currentSource) source = currentSource }
-    val departingSource = (if (anchor.chromeTrigger) anchor.source else popupHome?.backdrop)
-        .takeIf { returningInline || popupFlight.wasProjected }?.takeUnless(::retired)
+    val departingSource = if (anchor.chromeTrigger) {
+        anchor.source.takeIf { returningInline }?.takeUnless(::retired)
+    } else {
+        popupHome?.backdrop.takeIf { returningInline || popupFlight.wasProjected }?.takeUnless(::retired)
+    }
     // Navigation keeps the native window in place until this scene is ready.
     // Ordinary popup input must not continuously capture the full-screen
     // backdrop: that readback can starve drag cleanup and fresh fling admission.

@@ -354,3 +354,56 @@ test('hosted chrome preparation preserves the published accessibility timing',()
    'a home-less close without handoff never clears the native merged tree');
  }
 });
+
+function actualPopupDeparturePolicy(source) {
+ const expression=source.match(/val departingSource = ([\s\S]*?)\n    \/\/ Navigation keeps/)[1].trim();
+ const takeIf=(value,predicate)=>predicate()?value:null;
+ const takeUnless=(value,predicate)=>value==null||predicate(value)?null:value;
+ const leaf=text=>text.trim().replace(/(anchor\.source|popupHome\?\.backdrop|\(anchor\.chromeTrigger \? anchor\.source : popupHome\?\.backdrop\))\s*\.takeIf \{ ([^}]+) \}\?\.takeUnless\(::retired\)/g,
+  (_,value,predicate)=>'takeUnless(takeIf('+value+',()=>('+predicate+')),retired)');
+ const branch=expression.match(/^if \(anchor\.chromeTrigger\) \{([\s\S]*?)\} else \{([\s\S]*?)\}$/);
+ const executable=branch?'anchor.chromeTrigger ? ('+leaf(branch[1])+') : ('+leaf(branch[2])+')':
+  leaf(expression.replace('(if (anchor.chromeTrigger) anchor.source else popupHome?.backdrop)',
+   '(anchor.chromeTrigger ? anchor.source : popupHome?.backdrop)'));
+ return Function('anchor','popupHome','popupFlight','returningInline','retired','takeIf','takeUnless',
+  'return '+executable).bind(null);
+}
+
+function actualPopupDeparture(source, chromeTrigger, returningInline, wasProjected, retired=false) {
+ const browse={name:'browse',retired}, modal={name:'modal'}, home={backdrop:{name:'home'}};
+ const takeIf=(value,predicate)=>predicate()?value:null;
+ const takeUnless=(value,predicate)=>value==null||predicate(value)?null:value;
+ const departure=actualPopupDeparturePolicy(source)({chromeTrigger,source:browse},home,{wasProjected},returningInline,
+  value=>value.retired===true,takeIf,takeUnless);
+ const sampling=source.match(/val samplingSource = ([^\n]+)/)[1];
+ assert.equal(sampling,'departingSource.takeIf { homeSampleReady } ?: currentSource');
+ return {departure,sampling:departure??modal};
+}
+
+const popupDepartureSource=()=>fs.readFileSync(new URL('../../app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt',import.meta.url),'utf8');
+
+test('chrome reopen releases the projected browse departure lease',()=>{
+ const source=popupDepartureSource();
+ for(const projected of [false,true]) {
+  assert.equal(actualPopupDeparture(source,true,false,projected).departure,null,
+   'an open chrome popup must release its browse departure lease even after projection');
+ }
+ assert.equal(actualPopupDeparture(source,true,true,true).departure.name,'browse');
+ assert.equal(actualPopupDeparture(source,true,true,false).departure.name,'browse');
+});
+
+test('chrome reopen samples the current modal after an interrupted projected return',()=>{
+ const source=popupDepartureSource();
+ assert.match(source,/SideEffect \{ if \(!returningInline\) \{ popupFlight.prepared = false; popupFlight.handedOff = false \} \}/);
+ assert.equal(actualPopupDeparture(source,true,false,true).sampling.name,'modal',
+  'the reopened modal must regain its sampling consumer after the handoff resets');
+ assert.equal(actualPopupDeparture(source,true,true,true,true).departure,null);
+});
+
+test('ordinary popup departure retains the published source latch byte for byte',()=>{
+ const source=popupDepartureSource();
+ for(const inline of [false,true]) for(const projected of [false,true]) {
+  const actual=actualPopupDeparture(source,false,inline,projected).departure;
+  assert.equal(actual?.name??null,inline||projected?'home':null);
+ }
+});
