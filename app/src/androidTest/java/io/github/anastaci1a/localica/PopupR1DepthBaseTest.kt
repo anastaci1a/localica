@@ -72,6 +72,7 @@ class PopupR1DepthBaseTest {
         lateinit var host: View
         lateinit var home: GlassPopupHome
         var popup: Window? = null
+        var popupPhase = 0f
         lateinit var baseScene: androidx.compose.ui.graphics.layer.GraphicsLayer
         var baseScenePixels: Bitmap? = null
         var open by mutableStateOf(false)
@@ -85,8 +86,9 @@ class PopupR1DepthBaseTest {
                 val page = rememberFrostedBackdrop(home, dark = false)
                 baseScene = rememberGraphicsLayer()
                 BackdropLease(home.backdrop)
-                CompositionLocalProvider(LocalGlassMorphWorkObserver provides { kind, window, _ ->
+                CompositionLocalProvider(LocalGlassMorphWorkObserver provides { kind, window, phase ->
                     if (kind == "dialog" && window != null && popup == null) popup = window
+                    if (kind == "geometry" && window === popup && phase != null) popupPhase = phase
                 }) {
                     // Base's home recorded this complete scene: page plus chrome,
                     // before any non-chrome flight was drawn above the home.
@@ -128,11 +130,11 @@ class PopupR1DepthBaseTest {
             frames.openReferenceTrigger("Open overlap menu")
             compose.waitUntil(10000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-                popup?.decorView?.hasWindowFocus() == true && home.flights.singleOrNull()?.phase?.invoke()?.let { it >= .999f } == true
+                popup?.decorView?.hasWindowFocus() == true && home.flights.size == 1 && popupPhase >= .999f
             }
             val window = requireNotNull(popup)
             val flight = compose.runOnUiThread { home.flights.single() }
-            assertFalse("BrowseOptions is a non-chrome role", flight.chromeTrigger)
+            // Published base has no chromeTrigger field: its ordinary flights all project above chrome.
             val tabBounds = compose.onNodeWithTag("overlap-tabs").fetchSemanticsNode().boundsInRoot
             compose.onNodeWithText("Leave page").performClick()
             // A mounted departing page deliberately holds its menu at full size.
@@ -147,7 +149,7 @@ class PopupR1DepthBaseTest {
             for (frame in 0 until 96) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 if (!window.decorView.isAttachedToWindow) break
-                val phase = flight.phase()
+                val phase = popupPhase
                 if (phase !in .1f.. .8f || !flight.prepared) continue
                 val modal = original(window, output, "return-$frame-popup")
                 val root = original(activity, output, "return-$frame-root")
