@@ -138,13 +138,10 @@ internal fun GlassPopupHome(home: GlassPopupHome, chrome: (@Composable () -> Uni
     CompositionLocalProvider(LocalGlassPopupHome provides home) {
         container {
             if (chrome == null) Box(host.glassPopupHome(home)) { content() }
-            else Box(host.glassPopupHome(home, aboveChrome = true)) {
-                Box(Modifier.fillMaxSize().drawWithContent {
-                    drawContent()
-                    projectFlights(home, aboveChrome = false)
-                }) { content() }
-                chrome()
-            }
+            else io.github.anastaci1a.localica.ui.layout.PopupViewportSlot(
+                modifier = host.glassPopupHome(home, aboveChrome = true),
+                contentModifier = Modifier.drawWithContent { drawContent(); projectFlights(home, aboveChrome = false) },
+                chrome = chrome, content = content)
         }
     }
 }
