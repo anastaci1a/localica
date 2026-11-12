@@ -18,7 +18,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
 
     override fun createUastHandler(context: JavaContext): UElementHandler? {
         val path = context.file.invariantSeparatorsPath
-        val relative = "app/src/main/java" + path.substringAfter("/java", missingDelimiterValue = path.substringAfter("/src/main", ""))
+        val relative = "app/src/main/java/" + path.substringAfterLast("/src/main/java/", missingDelimiterValue = path)
         return object : UElementHandler() {
             private fun report(rule: UiRuleId, node: UElement) {
                 if (relative !in popupOwnerPaths[rule.name].orEmpty()) context.report(rule.issue, node, context.getLocation(node), rule.policy)
