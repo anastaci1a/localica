@@ -32,6 +32,16 @@ internal fun PopupViewportSlot(heightSizing: GlassDialogHeight, insets: PopupVie
     }
 }
 
+/** A chrome viewport has no constraint consumer and needs no subcomposition. */
+@Composable
+internal fun PopupViewportSlot(modifier: Modifier, contentModifier: Modifier,
+    chrome: @Composable () -> Unit, content: @Composable () -> Unit) {
+    Box(modifier) {
+        Box(Modifier.fillMaxSize().then(contentModifier)) { content() }
+        chrome()
+    }
+}
+
 internal data class PopupViewportMeasurement(val viewportHeight: Int, val contentMaxHeight: Int,
     val fixedHeight: Int?, val remainingIme: Int) {
     val empty: Boolean get() = fixedHeight == 0

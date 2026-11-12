@@ -658,8 +658,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     }
 }
 
-}
-
 /** Record the complete glass scene while displaying only its already-recorded cover.
  * Replaying drawContent for display would mutate nested blend owners during readback. */
 @Composable
