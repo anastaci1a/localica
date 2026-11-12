@@ -7,6 +7,7 @@ import org.jetbrains.uast.*
 
 /** Hard rules 11–12: the shared popup owners are exact source paths, not screen conventions. */
 internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
+    private data class Ownership(val rule: UiRuleId, val capability: String = rule.name)
     private val popupOwnerPaths by lazy {
         requireNotNull(javaClass.getResourceAsStream("/popup-owners.txt")).bufferedReader().use { it.readLines().map { row -> row.split("=", limit = 2) }.groupBy({ it[0] }, { it[1] }) }
     }
@@ -18,7 +19,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
     }
     override fun getApplicableUastTypes() = listOf(UCallExpression::class.java,
         USimpleNameReferenceExpression::class.java, UBinaryExpression::class.java, UPrefixExpression::class.java,
-        UPostfixExpression::class.java, UCallableReferenceExpression::class.java, UClass::class.java, UVariable::class.java)
+        UPostfixExpression::class.java, UCallableReferenceExpression::class.java, UClassLiteralExpression::class.java, UClass::class.java, UVariable::class.java)
 
     override fun createUastHandler(context: JavaContext): UElementHandler? {
         val path = context.file.invariantSeparatorsPath
@@ -37,16 +38,25 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 if (relative !in popupOwnerPaths[rule.name].orEmpty() && reported.add(rule to node)) context.report(rule.issue, node, context.getLocation(node), rule.policy)
             }
 
-            private fun memberRule(symbol: PsiMember?): UiRuleId? = when ((symbol as? com.intellij.psi.PsiClass)?.qualifiedName ?: symbol?.containingClass?.qualifiedName) {
-                "io.github.anastaci1a.localica.ui.GlassAnchor" -> UiRuleId.ScreenPopupTrigger
-                "io.github.anastaci1a.localica.ui.GlassPopupHome", "io.github.anastaci1a.localica.ui.GlassPopupFlight" -> UiRuleId.ScreenPopupHome
+            private fun report(ownership: Ownership, node: UElement) {
+                if (relative !in popupOwnerPaths[ownership.capability].orEmpty() && reported.add(ownership.rule to node))
+                    context.report(ownership.rule.issue, node, context.getLocation(node), ownership.rule.policy)
+            }
+
+            private fun memberRule(symbol: PsiMember?): Ownership? = when ((symbol as? com.intellij.psi.PsiClass)?.qualifiedName ?: symbol?.containingClass?.qualifiedName) {
+                "io.github.anastaci1a.localica.ui.GlassAnchor" -> Ownership(UiRuleId.ScreenPopupTrigger)
+                "io.github.anastaci1a.localica.ui.GlassPopupHome", "io.github.anastaci1a.localica.ui.GlassPopupFlight" -> Ownership(UiRuleId.ScreenPopupHome)
+                "io.github.anastaci1a.localica.ui.GlassContact", "io.github.anastaci1a.localica.ui.GlassExpansion",
+                "io.github.anastaci1a.localica.ui.GlassBodyState", "io.github.anastaci1a.localica.ui.GlassMomentum" ->
+                    Ownership(UiRuleId.ScreenPopupTrigger, "GlassContactMutation")
                 else -> null
             }
 
             // Follow collection handles and local aliases back to their resolved
             // owner; spelling a local 'home' or 'flights' is not authority.
-            private fun ownedReceiver(expression: UExpression?, seen: MutableSet<UElement> = mutableSetOf()): UiRuleId? {
+            private fun ownedReceiver(expression: UExpression?, seen: MutableSet<UElement> = mutableSetOf()): Ownership? {
                 if (expression == null || !seen.add(expression)) return null
+                memberRule((expression.getExpressionType() as? com.intellij.psi.PsiClassType)?.resolve())?.let { return it }
                 val reference = when (expression) {
                     is UQualifiedReferenceExpression -> expression.selector
                     else -> expression
@@ -87,9 +97,44 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
             }
 
             private fun nativeClass(klass: com.intellij.psi.PsiClass): Boolean =
-                setOf("android.app.Dialog", "android.widget.PopupWindow", "android.widget.PopupMenu", "android.widget.ListPopupWindow", "android.app.AlertDialog.Builder", "androidx.appcompat.app.AlertDialog.Builder", "androidx.appcompat.widget.PopupMenu", "androidx.appcompat.widget.ListPopupWindow").any {
+                setOf("android.app.Dialog", "android.app.AlertDialog", "androidx.appcompat.app.AlertDialog", "androidx.activity.ComponentDialog", "android.app.DialogFragment", "androidx.fragment.app.DialogFragment", "android.widget.PopupWindow", "android.widget.PopupMenu", "android.widget.ListPopupWindow", "android.app.AlertDialog.Builder", "androidx.appcompat.app.AlertDialog.Builder", "androidx.appcompat.widget.PopupMenu", "androidx.appcompat.widget.ListPopupWindow").any {
                     klass.qualifiedName == it || context.evaluator.extendsClass(klass, it, false)
                 }
+
+            private fun windowManager(method: com.intellij.psi.PsiMethod, receiver: UExpression?): Boolean {
+                if (method.name != "addView") return false
+                val type = (receiver?.getExpressionType() as? com.intellij.psi.PsiClassType)?.resolve()
+                val owner = method.containingClass
+                return listOfNotNull(type, owner).any { it.qualifiedName == "android.view.WindowManager" ||
+                    context.evaluator.extendsClass(it, "android.view.WindowManager", false) ||
+                    context.evaluator.implementsInterface(it, "android.view.WindowManager", false) }
+            }
+
+            private fun argumentPins(method: com.intellij.psi.PsiMethod, node: UCallExpression) {
+                val owner = method.containingClass?.qualifiedName
+                val api = when {
+                    owner == "io.github.anastaci1a.localica.ui.GlassMorphKt" && method.name in setOf("GlassMenu", "GlassMorphPopup") -> "PopupArgument."
+                    owner == "io.github.anastaci1a.localica.ui.LyricsPanelKt" && method.name == "LyricsPanel" -> "LyricsArgument."
+                    owner == "io.github.anastaci1a.localica.ui.LyricsBackdropKt" && method.name == "LyricsBackdrop" -> "LyricsBackdropArgument."
+                    owner == "io.github.anastaci1a.localica.ui.GlassPopupHomeKt" && method.name == "GlassPopupHome" -> "HomeArgument."
+                    else -> return
+                }
+                method.parameterList.parameters.forEachIndexed { index, formal ->
+                    if (formal.name in (if (api == "HomeArgument.") setOf("modifier", "container") else setOf("sharedContent", "originPreparation", "contentAlpha")) &&
+                        node.getArgumentForParameter(index) != null && relative !in popupOwnerPaths[api + formal.name].orEmpty())
+                        context.report(UiRuleId.ScreenPopupMotion.issue, node, context.getLocation(node), "Popup argument "+formal.name+" is restricted to its pinned callers")
+                }
+            }
+
+            override fun visitClassLiteralExpression(node: UClassLiteralExpression) {
+                val klass = (node.type as? com.intellij.psi.PsiClassType)?.resolve() ?: return
+                if (nativeClass(klass) || klass.qualifiedName == "android.view.WindowManager") report(UiRuleId.ScreenPopupDrawPath, node)
+                memberRule(klass)?.let { report(it, node) }
+                if (klass.qualifiedName in setOf("io.github.anastaci1a.localica.ui.components.HomeRef",
+                        "io.github.anastaci1a.localica.ui.components.PopupState", "io.github.anastaci1a.localica.ui.components.PopupScope"))
+                    report(UiRuleId.DuplicatePopupRole, node)
+                reportRole(klass, node)
+            }
 
             private fun privateEntry(method: com.intellij.psi.PsiMethod, node: UElement) {
                 val name = method.name
@@ -99,8 +144,8 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 val klass = method.containingClass
                 val nativeConstructor = method.isConstructor && klass != null && nativeClass(klass)
                 val composeWindow = owner.startsWith("androidx.compose.ui.window.") && name in setOf("Popup", "Dialog")
-                val materialWindow = owner.startsWith("androidx.compose.material") && name in setOf("AlertDialog", "BasicAlertDialog", "DropdownMenu", "ModalBottomSheet", "DatePickerDialog", "TooltipBox", "ExposedDropdownMenu", "SearchBar")
-                if (nativeConstructor || composeWindow || materialWindow) report(UiRuleId.ScreenPopupDrawPath, node)
+                val materialWindow = owner.startsWith("androidx.compose.material") && name in setOf("AlertDialog", "BasicAlertDialog", "DropdownMenu", "ModalBottomSheet", "DatePickerDialog", "TooltipBox", "ExposedDropdownMenu", "ExposedDropdownMenuBox", "SearchBar")
+                if (nativeConstructor || klass != null && nativeClass(klass) && name in setOf("show", "showNow", "showAsDropDown", "showAtLocation") || composeWindow || materialWindow) report(UiRuleId.ScreenPopupDrawPath, node)
             }
 
             // Intent is the exact stock declaration and formal parameter, never a
@@ -125,6 +170,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 (node.resolve() as? com.intellij.psi.PsiMethod)?.let {
                     reportRegistration(it, node)
                     privateEntry(it, node)
+                    if (windowManager(it, node.qualifierExpression)) report(UiRuleId.ScreenPopupDrawPath, node)
                     if (it.name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !it.isConstructor) report(UiRuleId.ScreenPopupHome, node)
                     if (it.name in setOf("glassPopupHome", "glassPopupProjection")) report(UiRuleId.ScreenPopupHome, node)
                 }
@@ -138,6 +184,9 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 if (Regex("(?:get)?Local.*Popup.*Home.*").matches(name)) report(UiRuleId.ScreenPopupHome, node)
                 if (name in setOf("LocalPopupBodyPresenter", "getLocalPopupBodyPresenter") &&
                     (resolved as? PsiMember)?.containingClass?.qualifiedName == "io.github.anastaci1a.localica.ui.components.PopupKt") report(UiRuleId.ScreenPopupHome, node)
+                if (name in setOf("triggerRole", "getTriggerRole") &&
+                    (resolved as? PsiMember)?.containingClass?.qualifiedName == "io.github.anastaci1a.localica.ui.GlassAnchor")
+                    report(UiRuleId.ScreenPopupTrigger, node)
                 val owner = (resolved as? PsiMember)?.containingClass?.name.orEmpty()
                 if (owner in setOf("PopupKind", "PopupMotionKind")) report(UiRuleId.ScreenPopupMotion, node)
             }
@@ -147,6 +196,8 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 val name = method.name
                 reportRegistration(method, node)
                 privateEntry(method, node)
+                argumentPins(method, node)
+                if (windowManager(method, node.receiver)) report(UiRuleId.ScreenPopupDrawPath, node)
                 val owner = method.containingClass?.qualifiedName.orEmpty()
                 if (name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !method.isConstructor) hostCall(name, node)
                 if (name in setOf("glassPopupHome", "glassPopupProjection")) report(UiRuleId.ScreenPopupHome, node)
@@ -159,6 +210,8 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 if (method.isConstructor && method.containingClass?.name == "GlassAnchor") report(UiRuleId.ScreenPopupTrigger, node)
                 if (method.containingClass?.name == "GlassAnchor" && !method.isConstructor && !name.startsWith("get") && name != "prepareContextPlacement") report(UiRuleId.ScreenPopupTrigger, node)
                 if (method.containingClass?.name in setOf("GlassPopupHome", "GlassPopupFlight") && !method.isConstructor && !name.startsWith("get")) report(UiRuleId.ScreenPopupHome, node)
+                memberRule(method)?.takeIf { it.capability == "GlassContactMutation" && !method.isConstructor &&
+                    !name.startsWith("get") && name !in setOf("equals", "hashCode", "toString", "component1", "component2") }?.let { report(it, node) }
                 if (name in setOf("add", "addAll", "clear", "remove", "removeAll", "removeAt", "removeIf", "retainAll", "set", "put", "putAll", "replace", "replaceAll", "sort", "sortWith", "sortBy", "sortDescending", "reverse", "shuffle", "fill")) {
                     ownedReceiver(node.receiver)?.let { report(it, node) }
                 }

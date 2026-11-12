@@ -121,8 +121,7 @@ internal class GlassAnchor {
     var face by mutableStateOf<(@Composable () -> Unit)?>(null)
     var depthScale = RaisedGlassDepthScale
     var cornerRadius: androidx.compose.ui.unit.Dp? = null
-    var triggerRole by mutableStateOf<TriggerRole<*, *>>(TriggerRole.Surface)
-        private set
+    private var triggerRole by mutableStateOf<TriggerRole<*, *>>(TriggerRole.Surface)
     fun bindRole(role: TriggerRole<*, *>) { triggerRole = role }
     val quiet get() = contextual || triggerRole == TriggerRole.PlainIcon
     val chromeTrigger get() = triggerRole == TriggerRole.Navigation
@@ -398,7 +397,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val requestedVisible = visible
     // Chrome owns its return on every close intent, even when the page stays put.
     val returningInline = popupHome?.departing == true || !requestedVisible &&
-        (popupFlight.handedOff || anchor.chromeTrigger && anchor.modalPresent)
+        (popupFlight.handedOff || anchor.chromeTrigger)
     @Suppress("NAME_SHADOWING")
     val visible = requestedVisible && popupHome?.departing != true
     // The screen layer supplies departing motion; the return keeps its original basis.

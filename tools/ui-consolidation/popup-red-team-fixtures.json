@@ -1,0 +1,347 @@
+[
+  {
+    "id": "testfunction_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval factory=::rememberGlassPopupHome"
+  },
+  {
+    "id": "testproperty_reference_and_setter",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor){ val field=anchor::face; field.set({}) }"
+  },
+  {
+    "id": "testconstructor_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval factory=::GlassAnchor"
+  },
+  {
+    "id": "testclass_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval type=GlassAnchor::class; val make=type.constructors.first(); val anchor=make.call()"
+  },
+  {
+    "id": "testimport_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.GlassAnchor as Make\n\nfun f(){ Make() }"
+  },
+  {
+    "id": "testremember_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor){ val copied=remember { anchor }; copied.face={} }"
+  },
+  {
+    "id": "testconditional_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor, other: GlassAnchor, flag: Boolean){ val copied=if(flag) anchor else other; copied.face={} }"
+  },
+  {
+    "id": "testhelper_parameter",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun patch(anchor: GlassAnchor){ anchor.face={} }"
+  },
+  {
+    "id": "teststar_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.*\n\nfun f(){ GlassAnchor() }"
+  },
+  {
+    "id": "testexecutable_string_template",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ println(\"${GlassAnchor()}\") }"
+  },
+  {
+    "id": "testnested_contact_write",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor){ anchor.contact.state.impulseScale=2f }"
+  },
+  {
+    "id": "testhome_field_write",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor){ anchor.popupHome!!.mounted=false }"
+  },
+  {
+    "id": "testflight_field_write",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor){ val flight=anchor.popupHome!!.flights.first(); flight.phase={0f} }"
+  },
+  {
+    "id": "testmutable_home_collection",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor){ anchor.popupHome!!.flights.clear() }"
+  },
+  {
+    "id": "testpublic_role_getter",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval borrowed get()=TriggerRole.Selection"
+  },
+  {
+    "id": "testandroid_app_Dialog",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ android.app.Dialog() }"
+  },
+  {
+    "id": "testandroidx_activity_ComponentDialog",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ androidx.activity.ComponentDialog() }"
+  },
+  {
+    "id": "testandroid_app_DialogFragment",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ android.app.DialogFragment() }"
+  },
+  {
+    "id": "testandroidx_fragment_app_DialogFragment",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ androidx.fragment.app.DialogFragment() }"
+  },
+  {
+    "id": "testandroid_widget_PopupWindow",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ android.widget.PopupWindow() }"
+  },
+  {
+    "id": "testandroid_widget_ListPopupWindow",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ android.widget.ListPopupWindow() }"
+  },
+  {
+    "id": "testandroid_widget_PopupMenu",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ android.widget.PopupMenu() }"
+  },
+  {
+    "id": "testandroid_app_AlertDialog",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ android.app.AlertDialog() }"
+  },
+  {
+    "id": "testandroidx_compose_material3_AlertDialog",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ androidx.compose.material3.AlertDialog() }"
+  },
+  {
+    "id": "testandroidx_compose_material3_BasicAlertDialog",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ androidx.compose.material3.BasicAlertDialog() }"
+  },
+  {
+    "id": "testandroidx_compose_material3_DatePickerDialog",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ androidx.compose.material3.DatePickerDialog() }"
+  },
+  {
+    "id": "testandroidx_compose_material3_TooltipBox",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ androidx.compose.material3.TooltipBox() }"
+  },
+  {
+    "id": "testandroidx_compose_material3_ExposedDropdownMenuBox",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ androidx.compose.material3.ExposedDropdownMenuBox() }"
+  },
+  {
+    "id": "testandroidx_compose_material3_SearchBar",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ androidx.compose.material3.SearchBar() }"
+  },
+  {
+    "id": "testDialog_subclass",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nclass Mine : android.app.Dialog()\nfun f(){ Mine() }"
+  },
+  {
+    "id": "testWindowManager_addView",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(wm: android.view.WindowManager, view: android.view.View, params: android.view.WindowManager.LayoutParams){ wm.addView(view, params) }"
+  },
+  {
+    "id": "testshared_content_slot",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor, shared: PopupSharedContent){ GlassMorphPopup(true, anchor, {}, sharedContent=shared) {} }"
+  },
+  {
+    "id": "testorigin_preparation_slot",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor, preparation: GlassOriginPreparation){ GlassMorphPopup(true, anchor, {}, originPreparation=preparation) {} }"
+  },
+  {
+    "id": "testopen_container_slot",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(container: (() -> Unit) -> Unit){ container { android.app.Dialog() } }"
+  },
+  {
+    "id": "testExposedDropdownMenu",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ androidx.compose.material3.ExposedDropdownMenu() }"
+  },
+  {
+    "id": "testfile_level_host_pin",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(){ rememberGlassPopupHome(); rememberGlassPopupHome(); rememberGlassPopupHome(); rememberGlassPopupHome() }"
+  },
+  {
+    "id": "testG1_helper_contact",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(contact: GlassContact) { contact.modal=true }"
+  },
+  {
+    "id": "testG1_remember_contact",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor) { val contact=remember { anchor.contact }; contact.modal=true }"
+  },
+  {
+    "id": "testG1_conditional_contact",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(a: GlassContact, b: GlassContact, flag: Boolean) { val contact=if(flag) a else b; contact.modal=true }"
+  },
+  {
+    "id": "testG1_body_state",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(state: GlassBodyState) { state.impulseScale=2f }"
+  },
+  {
+    "id": "testG1_output_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(state: GlassBodyState) { val output=state.output; output.value=2f }"
+  },
+  {
+    "id": "testG1_momentum_helper",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(momentum: GlassMomentum) { momentum.reset() }"
+  },
+  {
+    "id": "testG1_expansion_helper",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(expansion: GlassExpansion) { expansion.bind() }"
+  },
+  {
+    "id": "testG2_framework_show",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(fragment: android.app.DialogFragment) { fragment.show() }"
+  },
+  {
+    "id": "testG2_androidx_show",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(fragment: androidx.fragment.app.DialogFragment) { fragment.showNow() }"
+  },
+  {
+    "id": "testG2_framework_subclass",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nclass Mine : android.app.DialogFragment()"
+  },
+  {
+    "id": "testG2_androidx_subclass",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nclass Mine : androidx.fragment.app.DialogFragment()"
+  },
+  {
+    "id": "testG2_fragment_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport android.app.DialogFragment as Fragment\nval make=::Fragment"
+  },
+  {
+    "id": "testG2_component_subclass",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nclass Mine : androidx.activity.ComponentDialog()"
+  },
+  {
+    "id": "testG3_positional_origin",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor, preparation: GlassOriginPreparation) { GlassMorphPopup(true, anchor, {}, 0, null, false, preparation) {} }"
+  },
+  {
+    "id": "testG3_alias_shared",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.GlassMorphPopup as Morph\nfun f(anchor: GlassAnchor, shared: PopupSharedContent) { Morph(true, anchor, {}, sharedContent=shared) {} }"
+  },
+  {
+    "id": "testG4_modifier_slot",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(home: GlassPopupHome) { GlassPopupHome(home, modifier=Any()) {} }"
+  },
+  {
+    "id": "testG4_container_slot",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(home: GlassPopupHome) { GlassPopupHome(home, container={}) {} }"
+  },
+  {
+    "id": "testG5_role_getter",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(other: GlassAnchor) { println(other.triggerRole) }"
+  },
+  {
+    "id": "testG5_role_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(other: GlassAnchor) { val borrowed=other::triggerRole }"
+  },
+  {
+    "id": "testG6_addView_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(wm: android.view.WindowManager) { val borrowed=wm::addView }"
+  },
+  {
+    "id": "testG6_addView_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(wm: android.view.WindowManager, view: android.view.View, params: android.view.WindowManager.LayoutParams) { val alias=wm; alias.addView(view, params) }"
+  },
+  {
+    "id": "testF3_role_star",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.components.TriggerRole.*\nval borrowed=Selection"
+  },
+  {
+    "id": "testF3_raw_template",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { println(\"\"\"${GlassAnchor()}\"\"\") }"
+  },
+  {
+    "id": "testG_class_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.GlassAnchor as Anchor\nval borrowed=Anchor::class"
+  },
+  {
+    "id": "testG_native_class_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval borrowed=android.app.DialogFragment::class"
+  },
+  {
+    "id": "testG3_wrapper_alpha",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { LyricsPanel(contentAlpha={ 0f }) }"
+  },
+  {
+    "id": "testG3_wrapper_origin",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(preparation: GlassOriginPreparation) { LyricsPanel(originPreparation=preparation) }"
+  },
+  {
+    "id": "testG3_backdrop_alpha",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { LyricsBackdrop(null, contentAlpha={ 0f }) {} }"
+  },
+  {
+    "id": "testG3_wrapper_positional_alpha",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { LyricsPanel(null, 0L, false, {}, null, 0, null, 0L, false, 1f, 0, null, null, null, null, null, null, null, { 0f }) }"
+  },
+  {
+    "id": "testG4_positional_container",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(home: GlassPopupHome) { GlassPopupHome(home, null, {}) {} }"
+  },
+  {
+    "id": "testG_native_framework_builder",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { android.app.AlertDialog.Builder() }"
+  },
+  {
+    "id": "testG_native_appcompat_builder",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.appcompat.app.AlertDialog.Builder() }"
+  },
+  {
+    "id": "testG_native_appcompat_dialog",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.appcompat.app.AlertDialog() }"
+  }
+]

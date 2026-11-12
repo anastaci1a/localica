@@ -233,7 +233,8 @@ class PopupChromeDepthTest {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         // Deliberate collision, as in SelectorStackingTest: use the
                         // shell's real shared controls and ordering with no motion override.
-                        GlassPopupHome(home, modifier = Modifier.size(308.dp, 180.dp), chrome = {
+                        Box(Modifier.size(308.dp, 180.dp)) {
+                        GlassPopupHome(home, chrome = {
                             if (tabsVisible) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(64.dp).testTag("overlap-tabs")) {
                                 SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, { 0f }, source = page) {}
                             }
@@ -246,6 +247,7 @@ class PopupChromeDepthTest {
                                 Box(Modifier.fillMaxSize().recordFrostedBackdrop(page).background(androidx.compose.ui.graphics.Color.Blue))
                                 Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White))
                             }
+                        }
                         }
                     }
                 }

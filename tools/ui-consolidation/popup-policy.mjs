@@ -10,17 +10,39 @@ export function ownsPopups(file, rule) { return ownership.some(([r,path])=>path=
 // Offsets are retained for exact source receipts. Import aliases and qualified calls resolve to the same spelling.
 export function kotlinTokens(source) {
     const tokens=[]; let i=0;
-    while(i<source.length) {
+    function scan(untilBrace = false) {
+      let braces=0;
+      while(i<source.length) {
+        if(untilBrace && source[i]==='}' && braces===0)return;
         if (/\s/.test(source[i])) {i++;continue;}
         if(source.startsWith('//',i)) {i=source.indexOf('\n',i);if(i<0)break;continue;}
         if(source.startsWith('/*',i)) {let depth=1;i+=2;while(i<source.length && depth){if(source.startsWith('/*',i)){depth++;i+=2;}else if(source.startsWith('*/',i)){depth--;i+=2;}else i++;}continue;}
         const start=i;
-        if(source.startsWith('"""',i)){const end=source.indexOf('"""',i+3);i=end<0?source.length:end+3;tokens.push({text:'<string>',start});continue;}
-        if(source[i]==='"' || source[i]==="'"){const quote=source[i++];while(i<source.length){if(source[i++]==='\\')i++;else if(source[i-1]===quote)break;}tokens.push({text:'<string>',start});continue;}
+        if(source[i]==='"') {
+            const raw=source.startsWith('"""',i), delimiter=raw?'"""':'"';i+=delimiter.length;
+            tokens.push({text:'<string>',start});
+            while(i<source.length && !source.startsWith(delimiter,i)) {
+                if(!raw && source[i]==='\\'){i+=2;continue;}
+                if(source[i]==='$' && source[i+1]==='{') {
+                    tokens.push({text:'{',start:i+1});i+=2;scan(true);
+                    if(source[i]==='}')tokens.push({text:'}',start:i++});
+                } else if(source[i]==='$' && /[A-Za-z_]/.test(source[i+1]||'')) {
+                    i++;const begin=i;while(i<source.length && /[\w$]/.test(source[i]))i++;
+                    tokens.push({text:source.slice(begin,i),start:begin});
+                } else i++;
+            }
+            i+=delimiter.length;continue;
+        }
+        if(source[i]==="'"){i++;while(i<source.length){if(source[i++]==='\\')i++;else if(source[i-1]==="'")break;}tokens.push({text:'<char>',start});continue;}
         if(source[i]==='`'){i++;const begin=i;while(i<source.length && source[i]!=='`')i++;tokens.push({text:source.slice(begin,i),start});i++;continue;}
         const word=source.slice(i).match(/^[A-Za-z_$][\w$]*/)?.[0];
-        if(word){tokens.push({text:word,start});i+=word.length;}else tokens.push({text:source[i++],start});
+        if(word){tokens.push({text:word,start});i+=word.length;}else {
+            if(source[i]==='{')braces++;if(source[i]==='}')braces--;
+            tokens.push({text:source[i++],start});
+        }
+      }
     }
+    scan();
     return tokens;
 }
 function declaredFunctions(file, source) {
@@ -33,14 +55,17 @@ function declaredFunctions(file, source) {
     for(let i=0;i<tokens.length;i++)if(tokens[i].text==='fun') {
         let start=i+1;while(start<tokens.length && !['(','{','='].includes(tokens[start].text))start++;
         if(tokens[start]?.text!=='(')continue;
-        const name=tokens[start-1].text, booleans=new Set();let j=start+1,depth=1;
+        const name=tokens[start-1].text, booleans=new Set(), parameters=[];let j=start+1,depth=1;
         while(j<tokens.length && depth) {
             if(tokens[j].text==='(')depth++;
             if(tokens[j].text===')')depth--;
-            if(depth===1 && tokens[j].text===':' && tokens[j+1]?.text==='Boolean')booleans.add(tokens[j-1].text);
+            if(depth===1 && tokens[j].text===':') {
+                parameters.push(tokens[j-1].text);
+                if(tokens[j+1]?.text==='Boolean')booleans.add(tokens[j-1].text);
+            }
             j++;
         }
-        declarations.push({file,name,qualified:pkg?pkg+'.'+name:name,booleans});
+        declarations.push({file,name,qualified:pkg?pkg+'.'+name:name,booleans,parameters});
     }
     return declarations;
 }
@@ -57,7 +82,7 @@ export function checkPopupSource(file, source, declarations = []) {
         imports.set(local,qualified);if(local!==last)aliases.set(local,last);
     }
     // Follow type aliases and local subclass identities before classifying calls/references.
-    const nativeTypes=new Set(['Dialog','PopupWindow','PopupMenu','ListPopupWindow','AlertDialog','Builder']);
+    const nativeTypes=new Set(['ComponentDialog','DialogFragment','Dialog','PopupWindow','PopupMenu','ListPopupWindow','AlertDialog']);
     const protectedTypes=new Set(['io.github.anastaci1a.localica.ui.GlassAnchor','io.github.anastaci1a.localica.ui.GlassPopupHome',
         'io.github.anastaci1a.localica.ui.components.HomeRef','io.github.anastaci1a.localica.ui.components.PopupState','io.github.anastaci1a.localica.ui.components.PopupScope']);
     const typeIdentity=new Map(imports);
@@ -67,14 +92,28 @@ export function checkPopupSource(file, source, declarations = []) {
         let changed=false;
         for(let i=0;i<tokens.length;i++) {
             const isAlias=tokens[i].text==='typealias' && tokens[i+2]?.text==='=';
-            const isClass=tokens[i].text==='class' && tokens[i+2]?.text===':';
+            const isClass=tokens[i].text==='class';
             if(!isAlias && !isClass)continue;
-            const target=tokens[i+3]?.text, identity=typeIdentity.get(target)||target;
+            let begin=i+3;
+            if(isClass) {
+                begin=i+2;let depth=0;
+                while(begin<tokens.length){const t=tokens[begin].text;if(t==='(')depth++;if(t===')')depth--;if(depth===0 && t===':'){begin++;break;}if(depth===0 && ['{','=',';'].includes(t))break;begin++;}
+                if(tokens[begin-1]?.text!==':')continue;
+            }
+            let end=begin;while(tokens[end+1]?.text==='.')end+=2;
+            const target=tokens.slice(begin,end+1).map(t=>t.text).join('');
+            const identity=typeIdentity.get(tokens[begin]?.text)||target;
             if(typeIdentity.get(tokens[i+1].text)!==identity){typeIdentity.set(tokens[i+1].text,identity);changed=true;}
         }
         if(!changed)break;
     }
     const name=i=>aliases.get(tokens[i]?.text)||tokens[i]?.text;
+    function identityAt(i) {
+        let begin=i;while(begin>=2 && tokens[begin-1]?.text==='.')begin-=2;
+        const first=typeIdentity.get(tokens[begin]?.text)||tokens[begin]?.text;
+        return first+tokens.slice(begin+1,i+1).map(t=>t.text).join('');
+    }
+    const nativeBuilder=i=>['android.app.AlertDialog.Builder','androidx.appcompat.app.AlertDialog.Builder'].includes(identityAt(i));
     const localDeclarations=declaredFunctions(file,source);
     const localFunctions=new Set(localDeclarations.map(d=>d.name));
     const booleanValues=new Set(tokens.flatMap((t,i)=>tokens[i+1]?.text===':' && tokens[i+2]?.text==='Boolean'?[t.text]:[]));
@@ -90,16 +129,27 @@ export function checkPopupSource(file, source, declarations = []) {
         if(tokens[i+1]?.text===':' && name(i+2)==='GlassAnchor') anchors.add(tokens[i].text);
         if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=' && ['rememberGlassAnchor','GlassAnchor'].includes(name(i+3))) anchors.add(tokens[i+1].text);
     }
+    const contactTypes=new Set(['GlassContact','GlassExpansion','GlassBodyState','GlassMomentum']);
     const handles=new Map([...anchors].map(a=>[a,'ScreenPopupTrigger']));
     for(let pass=0;pass<3;pass++)for(let i=0;i<tokens.length;i++) {
+        if(tokens[i+1]?.text===':' && contactTypes.has(name(i+2)))handles.set(tokens[i].text,'GlassContactMutation');
         if(tokens[i+1]?.text===':' && ['GlassPopupHome','GlassPopupFlight'].includes(name(i+2)))handles.set(tokens[i].text,'ScreenPopupHome');
         if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=') {
-            const start=i+3;let end=start;
-            while(end<tokens.length && tokens[end].text!==';' && (end===start || !source.slice(tokens[end-1].start,tokens[end].start).includes('\n')))end++;
+            const start=i+3;let end=start,depth=0;
+            while(end<tokens.length) {
+                const t=tokens[end].text;
+                if(depth===0 && (t===';' || end>start && source.slice(tokens[end-1].start,tokens[end].start).includes('\n')))break;
+                if(['(','{','['].includes(t))depth++;
+                if([')','}',']'].includes(t)){if(depth===0)break;depth--;}
+                end++;
+            }
             const expression=tokens.slice(start,end).map(t=>t.text);
-            const root=handles.get(tokens[start]?.text);
+            // Only value-producing aliases carry ownership; mentioning a handle
+            // in a callback must not classify that callback's unrelated result.
+            const returned=expression[0]==='remember'?expression.slice(expression.indexOf('{')+1):expression;
+            const root=returned[0]==='if'?returned.slice(returned.indexOf(')')+1).map(t=>handles.get(t)).find(Boolean):handles.get(returned[0]);
             if(root && expression.some(t=>['popupHome','flights','children'].includes(t))) handles.set(tokens[i+1].text,'ScreenPopupHome');
-            else if(root)handles.set(tokens[i+1].text,root);
+            else if(root)handles.set(tokens[i+1].text,expression.some(t=>['contact','state','momentum','expansion','output'].includes(t))?'GlassContactMutation':root);
         }
     }
     const lambdaHandles=[];
@@ -111,7 +161,8 @@ export function checkPopupSource(file, source, declarations = []) {
         }
         const rule=handles.get(tokens[begin]?.text) || lambdaHandles.findLast(x=>x.start<i && i<x.end && x.name===tokens[begin]?.text)?.rule;
         if(!rule)return;
-        return tokens.slice(begin,i+1).some(t=>t.text==='popupHome')?'ScreenPopupHome':rule;
+        const chain=tokens.slice(begin,i+1);
+        return chain.some(t=>t.text==='popupHome')?'ScreenPopupHome':chain.some(t=>t.text==='contact')?'GlassContactMutation':rule;
     }
     // Scope-function receiver aliases retain the ownership of their source.
     for(let i=0;i<tokens.length;i++)if(['also','let','apply','run'].includes(name(i)) && tokens[i-1]?.text==='.' && tokens[i+1]?.text==='{') {
@@ -130,25 +181,83 @@ export function checkPopupSource(file, source, declarations = []) {
         let end=close+1;depth=1;while(end<tokens.length && depth){if(tokens[end].text==='{')depth++;if(tokens[end].text==='}')depth--;end++;}
         if(rule)lambdaHandles.push({start:close,end,name:null,rule});
     }
+    const windowHandles=new Set(), nativeHandles=new Set();
+    for(let pass=0;pass<3;pass++)for(let i=0;i<tokens.length;i++) {
+        if(tokens[i+1]?.text===':') {
+            let end=i+2;while(tokens[end+1]?.text==='.')end+=2;
+            const type=typeIdentity.get(tokens[i+2]?.text)||tokens.slice(i+2,end+1).map(t=>t.text).join('');
+            if(type==='android.view.WindowManager' || type==='WindowManager')windowHandles.add(tokens[i].text);
+            if(nativeTypes.has(type.split('.').at(-1)))nativeHandles.add(tokens[i].text);
+        }
+        if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=') {
+            if(windowHandles.has(tokens[i+3]?.text))windowHandles.add(tokens[i+1].text);
+            if(nativeHandles.has(tokens[i+3]?.text))nativeHandles.add(tokens[i+1].text);
+        }
+    }
     const incidents=[],seen=new Set(),hostCalls=new Map();
-    function emit(rule,i,note){if(ownsPopups(file,rule))return;const offset=tokens[i].start,key=rule+':'+offset;if(seen.has(key))return;seen.add(key);incidents.push({rule,path:file,line:source.slice(0,offset).split('\n').length,note});}
+    function emit(rule,i,note){if(ownsPopups(file,rule))return;if(rule==='GlassContactMutation')rule='ScreenPopupTrigger';const offset=tokens[i].start,key=rule+':'+offset;if(seen.has(key))return;seen.add(key);incidents.push({rule,path:file,line:source.slice(0,offset).split('\n').length,note});}
     const home=/^Local\w*Popup\w*Home\w*$/;
     const anchorCalls=new Set(['NavigationUtilityPill']);
-    const privateCalls=new Set(['Popup','PopupWindow','Dialog','AlertDialog','BasicAlertDialog','DropdownMenu','ModalBottomSheet','PopupMenu','ListPopupWindow','DatePickerDialog','TooltipBox','ExposedDropdownMenu','SearchBar']);
+    const privateCalls=new Set(['Popup','PopupWindow','Dialog','AlertDialog','BasicAlertDialog','DropdownMenu','ModalBottomSheet','PopupMenu','ListPopupWindow','DatePickerDialog','TooltipBox','ExposedDropdownMenu','ExposedDropdownMenuBox','SearchBar']);
     const rawHomeCalls=new Set(['glassPopupHome','glassPopupProjection']);
     const calls=[], scopes=[];let closedCall;
+    const pinnedApis={
+        GlassMenu:{owner:'GlassMorph',key:'PopupArgument.',parameters:['visible','anchor','onDismiss','originPreparation','content']},
+        GlassMorphPopup:{owner:'GlassMorph',key:'PopupArgument.',parameters:['visible','anchor','onDismiss','placement','darkOverride','fitContent','originPreparation','searchDismissOnImeBack','sharedContent','heightSizing','content']},
+        GlassPopupHome:{owner:'GlassPopupHome',key:'HomeArgument.',parameters:['home','chrome','container','modifier','content']},
+        LyricsPanel:{owner:'LyricsPanel',key:'LyricsArgument.',parameters:['track','positionMs','reducedMotion','onSeek','modifier','sourcesRequest','sourcesAnchor','sampledAtMs','playing','speed','delayMs','durationMs','contentHeight','contentOffset','result','sourcesVisible','onSourcesDismiss','originPreparation','contentAlpha']},
+        LyricsBackdrop:{owner:'LyricsBackdrop',key:'LyricsBackdropArgument.',parameters:['key','modifier','contentAlpha','content']},
+    };
+    function checkArguments(i, api) {
+        const spec=pinnedApis[api];if(!spec || tokens[i+1]?.text!=='(' || tokens[i-1]?.text==='fun')return;
+        const identity='io.github.anastaci1a.localica.ui.'+api;
+        const imported=imports.get(tokens[i].text);
+        if(imported && imported!==identity)return;
+        const canonical='app/src/main/java/io/github/anastaci1a/localica/ui/'+spec.owner+'.kt';
+        if(localDeclarations.some(d=>d.name===api && d.file!==canonical))return;
+        const formals=declarations.filter(d=>d.qualified===identity && d.file===canonical);
+        let depth=0, start=i+2, ordinal=0;
+        for(let j=start;j<tokens.length;j++) {
+            const t=tokens[j].text;
+            if(depth===0 && (t===',' || t===')')) {
+                if(j>start) {
+                    const named=tokens[start+1]?.text==='=';
+                    const parameter=named?tokens[start].text:(formals.length===1?formals[0].parameters:spec.parameters)?.[ordinal];
+                    const motion=spec.key==='HomeArgument.'?['modifier','container']:spec.key==='PopupArgument.'?['originPreparation','sharedContent']:['originPreparation','contentAlpha'];
+                    if(motion.includes(parameter) && !ownsPopups(file,spec.key+parameter))emit('ScreenPopupMotion',start,'Popup argument '+parameter+' is restricted to its pinned callers');
+                    ordinal++;
+                }
+                if(t===')')break;start=j+1;continue;
+            }
+            if(['(','{','['].includes(t))depth++;
+            if([')','}',']'].includes(t))depth--;
+        }
+    }
     for(let i=0;i<tokens.length;i++) {
         if(tokens[i].text==='(')calls.push(name(i-1));
         if(tokens[i].text===')')closedCall=calls.pop();
         if(tokens[i].text==='{')scopes.push(tokens[i-1]?.text===')'?closedCall:name(i-1));
         if(tokens[i].text==='}')scopes.pop();
         const n=name(i),next=tokens[i+1]?.text,previous=tokens[i-1]?.text;
+        checkArguments(i,n);
         if(!importTokens.has(i)) {
             const imported=imports.get(tokens[i].text);
+            const starRoles=[...imports.values()].filter(q=>/\.(TriggerRole|HomeKind|PopupVariant)\.\*$/.test(q));
+            const star=starRoles.map(q=>q.split('.').slice(-2,-1)[0]+'.'+n).find(key=>ownership.some(([r])=>r===key));
             const qualified=imported?.startsWith('io.github.anastaci1a.localica.ui.components.')?imported.slice('io.github.anastaci1a.localica.ui.components.'.length):null;
             const key=qualified && /^(TriggerRole|HomeKind|PopupVariant)\.[^.]+$/.test(qualified)?qualified:
-                previous==='.' && ['TriggerRole','HomeKind','PopupVariant'].includes(name(i-2))?name(i-2)+'.'+n:null;
+                previous==='.' && ['TriggerRole','HomeKind','PopupVariant'].includes(name(i-2))?name(i-2)+'.'+n:star;
             if(key && !ownsPopups(file,key))emit('ScreenPopupMotion',i,'Named popup roles are restricted to their pinned callers');
+        }
+        if(n==='triggerRole' && receiverRule(i))emit('ScreenPopupTrigger',i,'Only the anchor owner can read its role');
+        if(n==='addView' && (previous==='.' && windowHandles.has(tokens[i-2]?.text) || previous===':' && tokens[i-2]?.text===':' && windowHandles.has(tokens[i-3]?.text)))emit('ScreenPopupDrawPath',i,'A screen cannot create a private window');
+        if(['show','showNow','showAsDropDown','showAtLocation'].includes(n) && previous==='.' && nativeHandles.has(tokens[i-2]?.text))emit('ScreenPopupDrawPath',i,'A native presenter cannot bypass the shared owner');
+        const classHandle=next===':' && tokens[i+2]?.text===':' && tokens[i+3]?.text==='class';
+        if(classHandle && !importTokens.has(i)) {
+            if(['GlassAnchor','GlassContact','GlassBodyState','GlassExpansion','GlassMomentum'].includes(n))emit('ScreenPopupTrigger',i,'A protected class handle cannot transfer ownership');
+            if(['HomeRef','PopupState','PopupScope'].includes(n))emit('DuplicatePopupRole',i,'A protected class handle cannot transfer system ownership');
+            if(['GlassPopupHome','GlassPopupFlight'].includes(n))emit('ScreenPopupHome',i,'A protected class handle cannot transfer ownership');
+            if(privateCalls.has(n) || nativeTypes.has((typeIdentity.get(tokens[i].text)||n).split('.').at(-1)) || nativeBuilder(i) || n==='WindowManager')emit('ScreenPopupDrawPath',i,'A native presenter class handle is private');
         }
         const assignment=next==='=' && tokens[i+2]?.text!=='=';
         if(home.test(n||''))emit('ScreenPopupHome',i,'A screen cannot provide a popup home');
@@ -177,7 +286,7 @@ export function checkPopupSource(file, source, declarations = []) {
         const protectedRule=receiverRule(i) || (fieldWrite && previous!=='.'?lambdaHandles.findLast(x=>x.start<i && i<x.end && x.name===null)?.rule:undefined);
         if(n==='glassAnchor' && next==='(' && previous==='.' && receiverRule(i-2) && !ownsPopups(file,'ShadowRegistration'))emit('ScreenPopupTrigger',i,'Only GlassShadow registers popup surface nodes');
         if(fieldWrite && protectedRule && (previous==='.' || lambdaHandles.some(x=>x.start<i && i<x.end && x.name===null)))emit(protectedRule,i,'Only the shared owner mutates popup handles');
-        if(next==='(' && ['add','addAll','clear','remove','removeAll','removeAt','removeIf','retainAll','set','put','putAll','replace','replaceAll','sort','sortWith','sortBy','sortDescending','reverse','shuffle','fill','bind'].includes(n) && protectedRule)emit(protectedRule,i,'Only the shared owner mutates popup collections');
+        if(next==='(' && ['add','addAll','clear','remove','removeAll','removeAt','removeIf','retainAll','set','put','putAll','replace','replaceAll','sort','sortWith','sortBy','sortDescending','reverse','shuffle','fill','bind','unbind','reset','advance','blendFrom'].includes(n) && protectedRule)emit(protectedRule,i,'Only the shared owner mutates popup collections');
         if(previous===':' && tokens[i-2]?.text===':') {
             const rule=n==='GlassAnchor'?'ScreenPopupTrigger':['GlassPopupHome','GlassPopupFlight','rememberGlassPopupHome','glassPopupHome','glassPopupProjection'].includes(n)?'ScreenPopupHome':receiverRule(i-3);
             if(rule)emit(rule,i,'A callable reference cannot transfer popup ownership');
@@ -185,7 +294,7 @@ export function checkPopupSource(file, source, declarations = []) {
         if(fieldWrite && anchors.has(receiver))emit('ScreenPopupTrigger',i,'Only the shared component writes anchor fields');
         if(anchors.has(prefixReceiver) && ['+','-'].includes(previous) && tokens[i-2]?.text===previous)emit('ScreenPopupTrigger',i,'Only the shared component writes anchor fields');
         if(['face','quiet','popupHome','originPresentation'].includes(n) && assignment && (previous==='.' || [...calls,...scopes].some(c=>['apply','with'].includes(c))))emit('ScreenPopupTrigger',i,'Screens cannot configure popup anchor internals');
-        if((privateCalls.has(n) || nativeTypes.has((typeIdentity.get(tokens[i].text)||'').split('.').at(-1))) && !importTokens.has(i) && previous!=='fun' && (next==='(' || next==='{' || (previous===':' && tokens[i-2]?.text===':'))) {
+        if((privateCalls.has(n) || nativeTypes.has(n) || nativeTypes.has((typeIdentity.get(tokens[i].text)||'').split('.').at(-1)) || nativeBuilder(i)) && !importTokens.has(i) && previous!=='fun' && (next==='(' || next==='{' || (previous===':' && tokens[i-2]?.text===':'))) {
             // ui.components.Popup is the standard public API; native and unresolved names fail closed.
             let begin=i;while(begin>=2 && tokens[begin-1].text==='.')begin-=2;
             const qualified=tokens.slice(begin,i+1).map(t=>t.text).join('');

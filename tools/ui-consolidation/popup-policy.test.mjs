@@ -177,3 +177,22 @@ test('blind host pin: restoring the deleted utility home in LocalicaScreen is re
 test('popup names alone do not invent a role implementation',()=>assert.equal(rules('class PopupHomeStatistics').size,0));
 
 test('a class literal is not a new implementation declaration',()=>assert.equal(rules('@OptIn(ExperimentalLayoutApi::class)\nfun f(anchor: GlassAnchor) {}').size,0));
+
+// These source bodies are also independently executed by PopupGateRedTeamTest.
+const redTeamFixtures=JSON.parse(fs.readFileSync(new URL('./popup-red-team-fixtures.json',import.meta.url),'utf8'));
+for(const {id,path,source} of redTeamFixtures)test('checklist 44: '+id,()=>{
+ assert.ok(checkPopupSource(path,source).length>0,id+' must reject this isolated bypass');
+});
+test('executable templates preserve offsets and ignore literal and escaped text',()=>{
+ const source='val sample="literal Dialog() ${GlassAnchor()}"';
+ const incidents=checkPopupSource(screen,source);
+ assert.equal(incidents.length,1);
+ assert.equal(incidents[0].rule,'ScreenPopupTrigger');
+ assert.equal(rules('val text="\\${GlassAnchor()}"').size,0);
+ assert.equal(rules('val text="""literal GlassAnchor()"""').size,0);
+ assert.ok(rules('val text="${run { println("${GlassAnchor()}") }}"').has('ScreenPopupTrigger'));
+});
+test('ordinary view insertion and public content layout remain allowed',()=>{
+ assert.equal(rules('fun f(group: android.view.ViewGroup, view: android.view.View, params: android.view.WindowManager.LayoutParams) { group.addView(view, params) }').size,0);
+ assert.equal(rules('fun f() { HoverDrag(contentAlpha={ 1f }) {} }').size,0);
+});

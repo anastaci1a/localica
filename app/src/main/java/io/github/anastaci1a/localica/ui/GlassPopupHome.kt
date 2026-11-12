@@ -83,12 +83,12 @@ internal fun Modifier.glassPopupHome(home: GlassPopupHome, aboveChrome: Boolean?
         home.liveRegistration = BackdropRegistration.fromMapping(it.size.width.toFloat(), it.size.height.toFloat()) { point ->
             it.localToRoot(point) + offset
         }
-        if (!home.departing && home.flights.none { it.handedOff }) {
+        if (!home.departing && home.flights.none { it.handedOff && !it.chromeTrigger }) {
             home.origin = home.currentOrigin
             home.registration = home.liveRegistration
         }
     }.drawWithContent {
-        val retaining = home.departing || home.flights.any { it.handedOff }
+        val retaining = home.departing || home.flights.any { it.handedOff && !it.chromeTrigger }
         if (!retaining) home.registration = home.liveRegistration
         val registration = home.registration.takeIf { retaining }
         if (backdrop.location.retainedRegistration != registration) {
@@ -139,7 +139,12 @@ private fun Modifier.popupPage(home: GlassPopupHome): Modifier {
 
 @Composable
 internal fun GlassPopupHome(home: GlassPopupHome, chrome: (@Composable () -> Unit)? = null,
-    container: @Composable (@Composable () -> Unit) -> Unit = { it() }, modifier: Modifier = Modifier,
+    container: @Composable (@Composable () -> Unit) -> Unit = { it() },
+    content: @Composable () -> Unit) = GlassPopupHome(home, chrome, container, Modifier, content)
+
+@Composable
+private fun GlassPopupHome(home: GlassPopupHome, chrome: (@Composable () -> Unit)? = null,
+    container: @Composable (@Composable () -> Unit) -> Unit = { it() }, modifier: Modifier,
     content: @Composable () -> Unit) {
     // An idle home adds no layer: native draw observers and backdrop producers
     // keep their existing ordering until a popup actually needs containment.
@@ -147,7 +152,7 @@ internal fun GlassPopupHome(home: GlassPopupHome, chrome: (@Composable () -> Uni
     CompositionLocalProvider(LocalGlassPopupHome provides home) {
         container {
             if (chrome == null) Box(host.glassPopupHome(home)) { content() }
-            else io.github.anastaci1a.localica.ui.layout.PopupViewportSlot(
+            else io.github.anastaci1a.localica.ui.layout.ChromeViewportSlot(
                 // As at base, ordinary flights sample the complete scene with
                 // chrome. The chrome trigger samples its own clean page source.
                 modifier = host.glassPopupHome(home, aboveChrome = true),

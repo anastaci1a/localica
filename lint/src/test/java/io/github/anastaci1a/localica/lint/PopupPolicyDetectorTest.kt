@@ -40,9 +40,9 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
             var futureBindingField: Boolean = false
             val contact = GlassContact()
         }
-        class GlassContact { var modal = false; val state = ContactState(); val expansion = ContactExpansion() }
-        class ContactState { var impulseScale = 1f }
-        class ContactExpansion { fun bind() {} }
+        class GlassContact { var modal = false; val state = GlassBodyState(); val expansion = GlassExpansion() }
+        class GlassBodyState { var impulseScale = 1f }
+        class GlassExpansion { fun bind() {} }
         val LocalGlassPopupHome = 1
         fun glassPopupProjection() {}
         fun menu(motionKind: Int) {}
