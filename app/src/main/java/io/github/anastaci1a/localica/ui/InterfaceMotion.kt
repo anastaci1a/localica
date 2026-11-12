@@ -42,6 +42,10 @@ internal fun InterfaceSettings.motionDuration(normal: Int) =
 internal val InterfaceSettings.legacyMotionSpeed: Float
     get() = 4f * animationSpeedTenths.coerceIn(MinimumAnimationSpeedTenths, MaximumAnimationSpeedTenths) / 30f
 
+/** The speed as the settings show it, in tenths from 0.5× to 1.5×. */
+internal val InterfaceSettings.animationSpeedLabel: String
+    get() = animationSpeedTenths.coerceIn(MinimumAnimationSpeedTenths, MaximumAnimationSpeedTenths).let { "${it / 10}.${it % 10}×" }
+
 /** The artwork swipe spring stiffness, 380 · (650/380)^(ln s / ln 1.5): exactly 380 at 1.0× and 650 at the old Faster 1.5×. */
 internal fun InterfaceSettings.artworkSwipeStiffness(): Float = when (animationSpeedTenths.coerceIn(MinimumAnimationSpeedTenths, MaximumAnimationSpeedTenths)) {
     10 -> 380f
