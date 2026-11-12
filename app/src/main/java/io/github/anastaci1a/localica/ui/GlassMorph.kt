@@ -395,9 +395,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val popupHome = LocalGlassPopupHome.current
     val popupFlight = remember { GlassPopupFlight() }
     val requestedVisible = visible
+    // Accessibility keeps the published native-window timing. Chrome drawing may prepare earlier.
+    val returningSemantics = popupHome?.departing == true || popupFlight.handedOff && !requestedVisible
     // Chrome owns its return on every close intent, even when the page stays put.
-    val returningInline = popupHome?.departing == true || !requestedVisible &&
-        (popupFlight.handedOff || anchor.chromeTrigger)
+    val returningInline = returningSemantics || popupHome != null && !requestedVisible && anchor.chromeTrigger
     @Suppress("NAME_SHADOWING")
     val visible = requestedVisible && popupHome?.departing != true
     // The screen layer supplies departing motion; the return keeps its original basis.
@@ -800,7 +801,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     if (!returningInline || !popupFlight.handedOff) drawLayer(flightLayer)
                 }
             }
-            .then(if (returningInline) Modifier.clearAndSetSemantics { } else Modifier)
+            .then(if (returningSemantics) Modifier.clearAndSetSemantics { } else Modifier)
             .then(if (continuousOrigin != null) Modifier
                 .drawWithContent { if (admittedDraw) drawContent() }
                 .then(if (!admittedDraw) Modifier.clearAndSetSemantics { } else Modifier)

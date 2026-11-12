@@ -312,3 +312,45 @@ test('popup return reference binds the captured home to native presenters',()=>{
  assert.notEqual(missing,source);
  assert.throws(()=>requireHome(missing),/captured home must be provided/);
 });
+
+function actualPopupReturnPolicy() {
+ const source=fs.readFileSync(new URL('../../app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt',import.meta.url),'utf8');
+ const semantics=source.match(/val returningSemantics = ([^\n]+)\n/)?.[1];
+ const inline=source.match(/val returningInline = ([\s\S]*?)\n    @Suppress/)[1].trim();
+ const clear=source.slice(source.indexOf('val admittedDraw')).match(/\.then\(if \((.*?)\) Modifier\.clearAndSetSemantics/)[1];
+ return Function('popupHome','requestedVisible','popupFlight','anchor',
+  (semantics ? 'const returningSemantics = '+semantics+'; ' : '')+
+  'const returningInline = '+inline+'; return {inline:returningInline, semantics:('+clear+')};');
+}
+
+test('home-less chrome closes preserve the published native semantics policy',()=>{
+ const returning=actualPopupReturnPolicy();
+ const cases=[
+  [null,false,false,true,false,'a chrome trigger without a home remains in its native window'],
+  [null,false,false,false,false,'an ordinary trigger without a home keeps native semantics'],
+  [null,false,true,false,true,'an existing handoff retains the published return policy'],
+  [{departing:false},false,false,true,true,'a hosted chrome trigger keeps the #867 inline return'],
+  [{departing:false},true,false,true,false,'an open chrome popup remains native'],
+  [{departing:true},true,false,false,true,'a departing page retains its ordinary popup'],
+  [{departing:false},false,false,false,false,'an ordinary close waits for a real handoff'],
+  [{departing:false},false,true,false,true,'an ordinary handed-off return remains inline'],
+ ];
+ for(const [home,visible,handedOff,chromeTrigger,expected,message] of cases)
+  assert.equal(returning(home,visible,{handedOff},{chromeTrigger}).inline,expected,message);
+});
+
+test('hosted chrome preparation preserves the published accessibility timing',()=>{
+ const returning=actualPopupReturnPolicy();
+ for(const chromeTrigger of [false,true]) {
+  assert.equal(returning({departing:false},false,{handedOff:false},{chromeTrigger}).semantics,false,
+   'a close before handoff retains the native merged tree');
+  assert.equal(returning({departing:false},false,{handedOff:true},{chromeTrigger}).semantics,true,
+   'a completed closed handoff removes native semantics');
+  assert.equal(returning({departing:false},true,{handedOff:true},{chromeTrigger}).semantics,false,
+   'reopening restores native semantics before a new handoff');
+  assert.equal(returning({departing:true},true,{handedOff:false},{chromeTrigger}).semantics,true,
+   'a departing page keeps the published semantics policy');
+  assert.equal(returning(null,false,{handedOff:false},{chromeTrigger}).semantics,false,
+   'a home-less close without handoff never clears the native merged tree');
+ }
+});
