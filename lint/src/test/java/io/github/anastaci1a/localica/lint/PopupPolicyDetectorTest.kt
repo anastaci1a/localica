@@ -8,6 +8,8 @@ import com.android.tools.lint.detector.api.Detector
 class PopupPolicyDetectorTest : LintDetectorTest() {
     override fun getDetector(): Detector = PopupPolicyDetector()
     override fun getIssues() = LocalicaIssueRegistry().issues.filter { it.implementation.detectorClass == PopupPolicyDetector::class.java }
+    private fun appFiles(vararg files: com.android.tools.lint.checks.infrastructure.TestFile) =
+        lint().projects(project().name("app").files(*files))
     private val root = "src/main/java/io/github/anastaci1a/localica/ui/"
     private val modifier = kotlin("src/main/java/androidx/compose/ui/Modifier.kt", """
         package androidx.compose.ui
@@ -31,7 +33,7 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
         package io.github.anastaci1a.localica.ui
         import androidx.compose.ui.Modifier
         import io.github.anastaci1a.localica.ui.components.TriggerRole
-        class GlassAnchor {
+        open class GlassAnchor {
             val popupHome: GlassPopupHome? = null
             var face: (() -> Unit)? = null
             var depthScale: Float = 1f
@@ -47,6 +49,7 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
         fun rememberGlassAnchor() = GlassAnchor()
         fun rememberGlassPopupHome() = Unit
         fun GlassPopupHome(home: Unit, content: () -> Unit) {}
+        fun GlassPopupHome(content: () -> Unit) {}
         fun Modifier.glassAnchor(anchor: GlassAnchor, role: TriggerRole = TriggerRole.Surface, face: (() -> Unit)? = null) = this
         fun GlassAnchor.captureInk() {}
         fun GlassAnchor.glassAnchor(role: TriggerRole.MaterialSurface) = { _: Int, _: Boolean -> Unit }
@@ -55,7 +58,7 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     private val native = kotlin("src/main/java/androidx/compose/ui/window/Dialog.kt", "package androidx.compose.ui.window\nfun Dialog(body: () -> Unit) {}")
     private val homeSource = """
         package io.github.anastaci1a.localica.ui
-        class GlassPopupHome {
+        open class GlassPopupHome {
             var mounted = true
             val flights = mutableListOf<GlassPopupFlight>()
             val children = mutableListOf<GlassPopupHome>()
@@ -74,7 +77,7 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     private val dependencies get() = arrayOf(api, modifier, roles, native, homeApi, presenterApi)
 
     fun testCalibrationNamedRoleCannotBeBorrowedByAnotherSurface() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             import io.github.anastaci1a.localica.ui.components.TriggerRole as Role
             fun screen() { println(Role.Selection); println(Role.Lyrics); println(Role.Navigation) }
@@ -82,14 +85,14 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     }
 
     fun testCalibrationShadowRegistrationIsOnlyForGlassShadow() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             fun screen(anchor: GlassAnchor) { anchor.glassAnchor(materialRole()) }
         """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
     }
 
     fun testCalibrationNestedAnchorContactWritesFail() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             fun screen(anchor: GlassAnchor) {
                 anchor.contact.modal = true
@@ -100,7 +103,7 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     }
 
     fun testCalibrationRoleConstructorsArePinnedIncludingAliases() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             import io.github.anastaci1a.localica.ui.components.TriggerRole as Role
             import io.github.anastaci1a.localica.ui.components.TriggerRole.SelectionItem as Item
@@ -109,7 +112,7 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     }
 
     fun testCalibrationNestedCallableAndImplicitScopeReceiversFail() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             fun screen(anchor: GlassAnchor?) {
                 val present = anchor ?: return
@@ -121,7 +124,7 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     }
 
     fun testCalibrationHomeFactoryCallableReferencesFail() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             fun screen() { val factory = ::rememberGlassPopupHome; val projection = ::glassPopupProjection }
         """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(2)
@@ -129,15 +132,15 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
 
     fun testPinnedRoleAndRegistrationCallersPass() {
         for ((file, role) in listOf("FloatingSelectionPanel.kt" to "Selection", "PlayerSurface.kt" to "Lyrics", "LocalicaScreen.kt" to "Navigation")) {
-            lint().files(*dependencies, kotlin(root + file, "package io.github.anastaci1a.localica.ui\nimport io.github.anastaci1a.localica.ui.components.TriggerRole as Role\nfun screen() { println(Role.$role) }"))
+            appFiles(*dependencies, kotlin(root + file, "package io.github.anastaci1a.localica.ui\nimport io.github.anastaci1a.localica.ui.components.TriggerRole as Role\nfun screen() { println(Role.$role) }"))
                 .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
         }
-        lint().files(*dependencies, kotlin(root + "GlassShadow.kt", "package io.github.anastaci1a.localica.ui\nfun screen(anchor: GlassAnchor) { anchor.glassAnchor(materialRole()) }"))
+        appFiles(*dependencies, kotlin(root + "GlassShadow.kt", "package io.github.anastaci1a.localica.ui\nfun screen(anchor: GlassAnchor) { anchor.glassAnchor(materialRole()) }"))
             .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
     }
 
     fun testNestedContactAliasesAndScopeFunctionReceiversFail() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             fun screen(anchor: GlassAnchor) {
                 val contact = anchor.contact
@@ -158,12 +161,12 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
             import io.github.anastaci1a.localica.ui.components.provides
             fun screen() { println(Presenter provides 2) }
         """.trimIndent()
-        lint().files(*dependencies, kotlin(root + "Screen.kt", source))
+        appFiles(*dependencies, kotlin(root + "Screen.kt", source))
             .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
     }
 
     fun testCalibrationHomeAndFlightWritesAndCollectionMutatorsFail() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             fun screen(anchor: GlassAnchor) {
                 val home = anchor.popupHome ?: return
@@ -178,14 +181,14 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     }
 
     fun testCalibrationCallableReferencesCannotConstructOrWriteAnchors() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             fun screen(anchor: GlassAnchor) {
                 val make = ::GlassAnchor
                 val field = anchor::face
                 field.set({})
             }
-        """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(2)
+        """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(3)
     }
     private val sanctioned = """
         import androidx.compose.ui.Modifier
@@ -204,23 +207,23 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
             "ScreenPopupMotion" to "fun screen() { menu(motionKind = 1) }",
             "ScreenPopupTrigger" to "fun screen() { GlassAnchor() }",
             "ScreenPopupDrawPath" to "fun screen() { androidx.compose.ui.window.Dialog {} }",
-            "DuplicatePopupRole" to "class SecondPopupAnchor",
+            "DuplicatePopupRole" to "class SecondPopupAnchor : GlassAnchor()",
         )
         for ((id, source) in mutants) {
-            lint().files(*dependencies, kotlin(root + "Screen.kt", "package io.github.anastaci1a.localica.ui\n" + source))
+            appFiles(*dependencies, kotlin(root + "Screen.kt", "package io.github.anastaci1a.localica.ui\n" + source))
                 .issues(LocalicaIssueRegistry().issues.single { it.id == id })
                 .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
-            lint().files(*dependencies, kotlin(root + "InterfaceComponents.kt", "package io.github.anastaci1a.localica.ui\n" + sanctioned))
+            appFiles(*dependencies, kotlin(root + "InterfaceComponents.kt", "package io.github.anastaci1a.localica.ui\n" + sanctioned))
                 .issues(LocalicaIssueRegistry().issues.single { it.id == id })
                 .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
-            lint().files(*dependencies, kotlin(root + "components/ControlProgress.kt", "package io.github.anastaci1a.localica.ui.components\nimport io.github.anastaci1a.localica.ui.*\n" + source))
+            appFiles(*dependencies, kotlin(root + "components/ControlProgress.kt", "package io.github.anastaci1a.localica.ui.components\nimport io.github.anastaci1a.localica.ui.*\n" + source))
                 .issues(LocalicaIssueRegistry().issues.single { it.id == id })
                 .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
         }
     }
 
     fun testAliasedHomesAndNativeWindowsStillFail() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             import androidx.compose.ui.window.Dialog as PrivateDialog
             import io.github.anastaci1a.localica.ui.LocalGlassPopupHome as LocalHome
@@ -229,27 +232,27 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     }
 
     fun testPerRuleOwnersCannotBorrowAnotherCapability() {
-        lint().files(*dependencies.filter { it !== homeApi }.toTypedArray(), kotlin(root + "GlassPopupHome.kt", homeSource + "\n" + """
+        appFiles(*dependencies.filter { it !== homeApi }.toTypedArray(), kotlin(root + "GlassPopupHome.kt", homeSource + "\n" + """
             fun bindHome() { println(LocalGlassPopupHome) }
             fun forbidden() { androidx.compose.ui.window.Dialog {} }
         """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
     }
 
     fun testOwnerCannotGrowAnotherRoleImplementation() {
-        lint().files(*dependencies.filter { it !== homeApi }.toTypedArray(), kotlin(root + "GlassPopupHome.kt", homeSource + "\n" + """
-            class SecondPopupHome
+        appFiles(*dependencies.filter { it !== homeApi }.toTypedArray(), kotlin(root + "GlassPopupHome.kt", homeSource + "\n" + """
+            class SecondPopupHome : GlassPopupHome()
         """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
     }
 
     fun testNeighboringOwnerFilenameDoesNotBypassThePolicy() {
-        lint().files(*dependencies, kotlin(root + "GlassMorphCopy.kt", """
+        appFiles(*dependencies, kotlin(root + "GlassMorphCopy.kt", """
             package io.github.anastaci1a.localica.ui
             fun copy() { glassPopupProjection() }
         """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
     }
 
     fun testAllAnchorFieldsAreProtectedIncludingFutureFieldsAndImplicitWriters() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             fun override(anchor: GlassAnchor) {
                 anchor.apply { face = {} }
@@ -262,17 +265,17 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     fun testOnlyPinnedShellsCanHostHomes() {
         val source = "fun screen() { GlassPopupHome(rememberGlassPopupHome()) {} }"
         for (file in listOf("Screen.kt", "components/ControlProgress.kt")) {
-            lint().files(*dependencies, kotlin(root + file, "package io.github.anastaci1a.localica.ui\n" + source))
+            appFiles(*dependencies, kotlin(root + file, "package io.github.anastaci1a.localica.ui\n" + source))
                 .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(2)
         }
-        for (file in listOf("LocalicaScreen.kt", "PlayerSurface.kt", "QueueSurface.kt", "Theme.kt")) {
-            lint().files(*dependencies, kotlin(root + file, "package io.github.anastaci1a.localica.ui\n" + source))
+        for (file in listOf("LocalicaScreen.kt", "PlayerSurface.kt", "QueueSurface.kt")) {
+            appFiles(*dependencies, kotlin(root + file, "package io.github.anastaci1a.localica.ui\n" + source))
                 .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
         }
     }
 
     fun testCompoundAndUnaryAnchorWritesFail() {
-        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui
             fun mutate(anchor: GlassAnchor) {
                 anchor.depthScale += 1f
@@ -289,7 +292,7 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     }
 
     fun testRenamingABooleanMotionSwitchCannotBypassTheGate() {
-        lint().files(*dependencies, kotlin(root + "components/Legacy.kt", """
+        appFiles(*dependencies, kotlin(root + "components/Legacy.kt", """
             package io.github.anastaci1a.localica.ui.components
             fun rememberPresence(key: Any, shown: Boolean, renamedMotionSwitch: Boolean) {}
         """.trimIndent()), kotlin(root + "Screen.kt", """
@@ -298,4 +301,109 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
             fun screen() { rememberPresence("key", true, renamedMotionSwitch = true) }
         """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
     }
+    fun testBlindNativeConstructorReferencesAndAliases() {
+        appFiles(*dependencies,
+            kotlin("src/main/java/android/app/Dialog.kt", "package android.app\nopen class Dialog"),
+            kotlin(root + "Screen.kt", """
+                package io.github.anastaci1a.localica.ui
+                import android.app.Dialog as Window
+                typealias OtherWindow = Window
+                class CustomWindow : Window()
+                fun screen() { val a = ::Window; val b = ::OtherWindow; CustomWindow() }
+            """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(4)
+    }
+
+    fun testBlindPrivateMotionEntryPointsAndReferences() {
+        appFiles(*dependencies,
+            kotlin(root + "engine/BlindMotion.kt", """
+                package io.github.anastaci1a.localica.ui.engine
+                fun rememberPopupMotion() {}
+                fun rememberExpandCollapse() {}
+                fun drawPopupProjection() {}
+            """.trimIndent()), kotlin(root + "Screen.kt", """
+                package io.github.anastaci1a.localica.ui
+                import io.github.anastaci1a.localica.ui.engine.*
+                fun screen() { rememberPopupMotion(); rememberExpandCollapse(); drawPopupProjection(); val project = ::drawPopupProjection }
+            """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(4)
+    }
+
+    private fun assertPolicyFlagCannotBorrowIntentName(type: String) {
+        appFiles(*dependencies, kotlin(root + "components/Legacy.kt", """
+            package io.github.anastaci1a.localica.ui.components
+            fun rememberPresence(key: Any, visible: $type) {}
+        """.trimIndent()), kotlin(root + "Screen.kt", """
+            package io.github.anastaci1a.localica.ui
+            import io.github.anastaci1a.localica.ui.components.rememberPresence
+            fun screen() { rememberPresence("key", visible = true) }
+        """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
+    }
+
+    fun testBlindPrimitivePolicyFlagCannotBorrowIntentName() = assertPolicyFlagCannotBorrowIntentName("Boolean")
+    fun testBlindNullablePolicyFlagCannotBorrowIntentName() = assertPolicyFlagCannotBorrowIntentName("Boolean?")
+
+    fun testBlindAliasedAndAnonymousRoleImplementations() {
+        appFiles(*dependencies, kotlin(root + "components/Contracts.kt", """
+            package io.github.anastaci1a.localica.ui.components
+            interface PopupState
+            interface PopupScope
+        """.trimIndent()), kotlin(root + "Screen.kt", """
+            package io.github.anastaci1a.localica.ui
+            import io.github.anastaci1a.localica.ui.components.PopupState as State
+            import io.github.anastaci1a.localica.ui.components.PopupScope as Scope
+            class Innocent : State
+            val alternate = object : Scope {}
+        """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(2)
+    }
+
+    fun testBlindForeignModuleCannotBorrowOwnerPath() {
+        lint().projects(project().name("foreign").files(*dependencies.filter { it !== homeApi }.toTypedArray(),
+            kotlin(root + "GlassPopupHome.kt", homeSource + "\nfun steal() { glassPopupProjection() }")))
+            .issues(LocalicaIssueRegistry().issues.single { it.id == "ScreenPopupHome" })
+            .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
+    }
+
+    fun testBlindExtendedNativePresenters() {
+        appFiles(*dependencies,
+            kotlin("src/main/java/android/widget/Windows.kt", "package android.widget\nclass PopupMenu\nclass ListPopupWindow"),
+            kotlin("src/main/java/androidx/appcompat/app/AlertDialog.kt", "package androidx.appcompat.app\nclass AlertDialog { class Builder }"),
+            kotlin("src/main/java/androidx/compose/material3/Presenters.kt", """
+                package androidx.compose.material3
+                fun DatePickerDialog() {}
+                fun TooltipBox() {}
+                fun ExposedDropdownMenu() {}
+                fun SearchBar() {}
+            """.trimIndent()), kotlin(root + "Screen.kt", """
+                package io.github.anastaci1a.localica.ui
+                import android.widget.PopupMenu
+                import android.widget.ListPopupWindow
+                import androidx.appcompat.app.AlertDialog
+                import androidx.compose.material3.*
+                fun screen() { PopupMenu(); ListPopupWindow(); AlertDialog.Builder(); DatePickerDialog(); TooltipBox(); ExposedDropdownMenu(); SearchBar() }
+            """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(7)
+    }
+
+    fun testBlindPinnedHostCannotRestoreDeletedUtilityHome() {
+        appFiles(*dependencies, kotlin(root + "LocalicaScreen.kt", """
+            package io.github.anastaci1a.localica.ui
+            import io.github.anastaci1a.localica.ui.rememberGlassPopupHome as home
+            fun screen() {
+                val browse = home()
+                val player = home()
+                val queue = home()
+                GlassPopupHome(browse) {}
+                val utility = home()
+                GlassPopupHome(utility) {}
+            }
+        """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(2)
+    }
+
+    fun testProtectedConstructorReferencesAreIndependentlyGuarded() {
+        appFiles(*dependencies, kotlin(root + "Screen.kt", """
+            package io.github.anastaci1a.localica.ui
+            import io.github.anastaci1a.localica.ui.GlassAnchor as Anchor
+            import io.github.anastaci1a.localica.ui.GlassPopupFlight as Flight
+            fun screen() { val makeAnchor = ::Anchor; val makeFlight = ::Flight }
+        """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(2)
+    }
+
 }

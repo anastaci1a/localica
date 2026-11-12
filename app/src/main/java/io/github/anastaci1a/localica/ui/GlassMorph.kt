@@ -126,7 +126,7 @@ internal class GlassAnchor {
     fun bindRole(role: TriggerRole<*, *>) { triggerRole = role }
     val quiet get() = contextual || triggerRole == TriggerRole.PlainIcon
     val chromeTrigger get() = triggerRole == TriggerRole.Navigation
-    var contextual = false
+    var contextual by mutableStateOf(false)
     var bottomClearance = 0f
     var bottomLimit = Float.NaN
     var ink by mutableStateOf(Color.Unspecified)
@@ -146,7 +146,7 @@ internal fun rememberGlassAnchor(deferContextPlacement: Boolean = false,
     role: TriggerRole<Nothing, Nothing> = TriggerRole.Surface, clearance: androidx.compose.ui.unit.Dp? = null): GlassAnchor {
     val ink = LocalContentColor.current
     val home = LocalGlassPopupHome.current
-    val anchor = remember { GlassAnchor().also { it.ink = ink; it.contextPlacementTracked = !deferContextPlacement; it.popupHome = home; it.bindRole(role) } }
+    val anchor = remember { GlassAnchor().also { it.ink = ink; it.contextPlacementTracked = !deferContextPlacement; it.popupHome = home } }
     if (role == TriggerRole.Contextual) {
         val contextClearance = with(LocalDensity.current) { (clearance ?: LocalBrowseObscuredInset.current).toPx() }
         SideEffect { anchor.contextual = true; anchor.bottomClearance = contextClearance }
@@ -282,7 +282,7 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor?, source: FrostedBackdrop?
         if (role is TriggerRole.LyricsHeader) remember(role) { { height: Float -> role.presentation(height) } } else null
     val marker = GlassDepthMarker(anchor, originPresentation, source, role)
     val presented = if (role is TriggerRole.LyricsHeader) drawWithContent {
-        translate(left = if (role.separated) role.presentation(size.height).horizontalShift else 0f) { this@drawWithContent.drawContent() }
+        translate(left = if (role.separated) role.presentation(CompactControlSize.toPx()).horizontalShift else 0f) { this@drawWithContent.drawContent() }
     } else this
     if (anchor == null) return if (role !is TriggerRole.LyricsHeader) this else presented.then(marker)
     originPresentation?.let { presentation ->
@@ -669,7 +669,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         ?: ambientSource?.takeUnless(::retired)
         ?: anchor.source?.takeUnless(::retired)
     SideEffect { if (source !== currentSource) source = currentSource }
-    val departingSource = popupHome?.backdrop.takeIf { returningInline || popupFlight.wasProjected }?.takeUnless(::retired)
+    val departingSource = (if (anchor.chromeTrigger) anchor.source else popupHome?.backdrop)
+        .takeIf { returningInline || popupFlight.wasProjected }?.takeUnless(::retired)
     // Navigation keeps the native window in place until this scene is ready.
     // Ordinary popup input must not continuously capture the full-screen
     // backdrop: that readback can starve drag cleanup and fresh fling admission.
@@ -687,7 +688,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             popupFlight.layer = null; popupFlight.prepared = false; popupFlight.handedOff = false; popupFlight.wasProjected = false
         }
     }
-    SideEffect { if (!returningInline) popupFlight.handedOff = false }
+    SideEffect { if (!returningInline) { popupFlight.prepared = false; popupFlight.handedOff = false } }
     // The full-scene recording can span pages with different ink. Its material
     // metadata must not override an explicit trigger. Detached menus instead
     // follow current ambient ink, rather than their anchor's remembered seed.
@@ -794,7 +795,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     flightLayer.record { this@drawWithContent.drawContent() }
                     androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
                         popupFlight.revision++
-                        popupFlight.prepared = returningInline && homeSampleReady && samplingSource === popupHome.backdrop
+                        popupFlight.prepared = returningInline && homeSampleReady && samplingSource === departingSource
                         if (!returningInline) popupFlight.handedOff = false
                     }
                     if (!returningInline || !popupFlight.handedOff) drawLayer(flightLayer)
@@ -1159,15 +1160,15 @@ internal fun glassMorphPixelBounds(rect: Rect): MotionPixelRect =
 @Composable
 internal fun PopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop? = LocalFrostedBackdrop.current,
     modifier: Modifier = Modifier, noneAtlasInput: NoneAtlasInput? = null,
-    chromeVisibility: Float = 1f, playerExpansion: io.github.anastaci1a.localica.ui.engine.ExpansionView? = null,
+    chromeVisibility: () -> Float = { 1f }, playerExpansion: io.github.anastaci1a.localica.ui.engine.ExpansionView? = null,
     leadingIcon: AppIcon = AppIcon.ActionSearch, trailingIcon: AppIcon = AppIcon.ActionEllipsis,
     leadingLabel: String = "Search library", trailingLabel: String = "More", tag: String = "utility-pill",
     role: TriggerRole<Nothing, Nothing>, menuVisible: Boolean = false, onMenuDismiss: () -> Unit = {},
     menuContent: (@Composable ColumnScope.() -> Unit)? = null,
     onSearch: () -> Unit, onMore: () -> Unit) {
     val raised = role == TriggerRole.Navigation
-    val effectiveShadow: () -> Float = if (playerExpansion == null) ({ chromeVisibility })
-        else ({ chromeVisibility * (1f - playerExpansion.phase.value()) })
+    val effectiveShadow: () -> Float = if (playerExpansion == null) chromeVisibility
+        else ({ chromeVisibility() * (1f - playerExpansion.phase.value()) })
     val iconSize = if (raised) io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Panel)
         else io.github.anastaci1a.localica.ui.spec.StockUiSpec.control.getValue(io.github.anastaci1a.localica.ui.spec.ControlSize.SettingsIcon)
     val face: @Composable () -> Unit = {

@@ -2131,7 +2131,7 @@
         errorLine2="                                                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="827"
+            line="828"
             column="64"/>
     </issue>
 
@@ -2142,7 +2142,7 @@
         errorLine2="                                                                                                            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="858"
+            line="859"
             column="109"/>
     </issue>
 
@@ -2153,7 +2153,7 @@
         errorLine2="                                                                                                                                                                          ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="858"
+            line="859"
             column="171"/>
     </issue>
 
@@ -2164,7 +2164,7 @@
         errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="981"
+            line="982"
             column="42"/>
     </issue>
 
@@ -2175,7 +2175,7 @@
         errorLine2="                                                                                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="1108"
+            line="1109"
             column="107"/>
     </issue>
 
@@ -2186,7 +2186,7 @@
         errorLine2="                                                                                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="1147"
+            line="1148"
             column="118"/>
     </issue>
 
@@ -7301,7 +7301,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="788"
+            line="789"
             column="9"/>
     </issue>
 
@@ -7312,7 +7312,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="915"
+            line="916"
             column="17"/>
     </issue>
 
@@ -7323,7 +7323,7 @@
         errorLine2="                                      ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="1013"
+            line="1014"
             column="39"/>
     </issue>
 
@@ -10557,7 +10557,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="1132"
+            line="1133"
             column="40"/>
     </issue>
 
@@ -13285,7 +13285,7 @@
         errorLine2="                                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="817"
+            line="818"
             column="85"/>
     </issue>
 
@@ -16244,7 +16244,7 @@
         errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="681"
+            line="682"
             column="23"/>
     </issue>
 
@@ -16255,7 +16255,7 @@
         errorLine2="                                                                    ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="800"
+            line="801"
             column="69"/>
     </issue>
 

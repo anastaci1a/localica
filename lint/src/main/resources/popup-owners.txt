@@ -64,3 +64,5 @@ PopupVariant.Sheet=app/src/main/java/io/github/anastaci1a/localica/ui/components
 PopupVariant.Page=app/src/main/java/io/github/anastaci1a/localica/ui/components/Popup.kt
 PopupVariant.Search=app/src/main/java/io/github/anastaci1a/localica/ui/components/Popup.kt
 ShadowRegistration=app/src/main/java/io/github/anastaci1a/localica/ui/GlassShadow.kt
+PopupProjection=app/src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt
+PopupProjection=app/src/main/java/io/github/anastaci1a/localica/ui/engine/PopupProjection.kt

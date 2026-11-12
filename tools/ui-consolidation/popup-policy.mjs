@@ -3,7 +3,7 @@ import fs from 'node:fs';
 export const popupRules = ['ScreenPopupHome', 'ScreenPopupMotion', 'ScreenPopupTrigger', 'ScreenPopupDrawPath', 'DuplicatePopupRole'];
 const ownership = fs.readFileSync(new URL('../../lint/src/main/resources/popup-owners.txt',import.meta.url),'utf8').trim().split('\n').map(row=>row.split('='));
 export const popupOwners = [...new Set(ownership.map(([,path])=>path))];
-const popupHosts = new Set(fs.readFileSync(new URL('../../lint/src/main/resources/popup-hosts.txt',import.meta.url),'utf8').trim().split('\n'));
+const popupHosts = new Map(fs.readFileSync(new URL('../../lint/src/main/resources/popup-hosts.txt',import.meta.url),'utf8').trim().split('\n').map(row=>{const [path,counts]=row.split('=');return [path,counts.split(',').map(Number)];}));
 const popupRoles = new Set(fs.readFileSync(new URL('../../lint/src/main/resources/popup-roles.txt',import.meta.url),'utf8').trim().split('\n'));
 export function ownsPopups(file, rule) { return ownership.some(([r,path])=>path===file && (!rule || r===rule)); }
 // Tokenize Kotlin so comments, ordinary/raw strings and whitespace cannot hide or fabricate a call.
@@ -23,7 +23,28 @@ export function kotlinTokens(source) {
     }
     return tokens;
 }
-export function checkPopupSource(file, source) {
+function declaredFunctions(file, source) {
+    const tokens=kotlinTokens(source), declarations=[];
+    const packageAt=tokens.findIndex(t=>t.text==='package');let pkg='';
+    for(let i=packageAt+1;packageAt>=0 && i<tokens.length;i++) {
+        if(i>packageAt+1 && source.slice(tokens[i-1].start,tokens[i].start).includes('\n'))break;
+        if(tokens[i].text===';')break;pkg+=tokens[i].text;
+    }
+    for(let i=0;i<tokens.length;i++)if(tokens[i].text==='fun') {
+        let start=i+1;while(start<tokens.length && !['(','{','='].includes(tokens[start].text))start++;
+        if(tokens[start]?.text!=='(')continue;
+        const name=tokens[start-1].text, booleans=new Set();let j=start+1,depth=1;
+        while(j<tokens.length && depth) {
+            if(tokens[j].text==='(')depth++;
+            if(tokens[j].text===')')depth--;
+            if(depth===1 && tokens[j].text===':' && tokens[j+1]?.text==='Boolean')booleans.add(tokens[j-1].text);
+            j++;
+        }
+        declarations.push({file,name,qualified:pkg?pkg+'.'+name:name,booleans});
+    }
+    return declarations;
+}
+export function checkPopupSource(file, source, declarations = []) {
     if(!file.startsWith('app/src/main/') || !file.endsWith('.kt') )return [];
     const tokens=kotlinTokens(source), aliases=new Map(), imports=new Map(), anchors=new Set(), importTokens=new Set();
     for(let i=0;i<tokens.length;i++)if(tokens[i].text==='import') {
@@ -35,7 +56,36 @@ export function checkPopupSource(file, source) {
         for(let k=i;k<j+(tokens[j]?.text==='as'?2:0);k++)importTokens.add(k);
         imports.set(local,qualified);if(local!==last)aliases.set(local,last);
     }
+    // Follow type aliases and local subclass identities before classifying calls/references.
+    const nativeTypes=new Set(['Dialog','PopupWindow','PopupMenu','ListPopupWindow','AlertDialog','Builder']);
+    const protectedTypes=new Set(['io.github.anastaci1a.localica.ui.GlassAnchor','io.github.anastaci1a.localica.ui.GlassPopupHome',
+        'io.github.anastaci1a.localica.ui.components.HomeRef','io.github.anastaci1a.localica.ui.components.PopupState','io.github.anastaci1a.localica.ui.components.PopupScope']);
+    const typeIdentity=new Map(imports);
+    const packageMatch=source.match(/^\s*package\s+([\w.]+)/m)?.[1] || file.slice(file.indexOf('/java/')+6,file.lastIndexOf('/')).replaceAll('/','.');
+    for(const identity of protectedTypes)if(packageMatch===identity.slice(0,identity.lastIndexOf('.')))typeIdentity.set(identity.split('.').at(-1),identity);
+    for(let pass=0;pass<tokens.length;pass++) {
+        let changed=false;
+        for(let i=0;i<tokens.length;i++) {
+            const isAlias=tokens[i].text==='typealias' && tokens[i+2]?.text==='=';
+            const isClass=tokens[i].text==='class' && tokens[i+2]?.text===':';
+            if(!isAlias && !isClass)continue;
+            const target=tokens[i+3]?.text, identity=typeIdentity.get(target)||target;
+            if(typeIdentity.get(tokens[i+1].text)!==identity){typeIdentity.set(tokens[i+1].text,identity);changed=true;}
+        }
+        if(!changed)break;
+    }
     const name=i=>aliases.get(tokens[i]?.text)||tokens[i]?.text;
+    const localDeclarations=declaredFunctions(file,source);
+    const localFunctions=new Set(localDeclarations.map(d=>d.name));
+    const booleanValues=new Set(tokens.flatMap((t,i)=>tokens[i+1]?.text===':' && tokens[i+2]?.text==='Boolean'?[t.text]:[]));
+    const stockFiles={rememberPresence:'components/Presence.kt',rememberFaceExpansion:'components/MorphFaces.kt',PopupActionPill:'GlassMorph.kt',ActionIcon:'InterfaceComponents.kt'};
+    const intentFormals={rememberPresence:new Set(['shown']),rememberFaceExpansion:new Set(['expanded']),PopupActionPill:new Set(['menuVisible']),ActionIcon:new Set(['enabled','glass','quietInputEnabled'])};
+    const stockOwners={rememberPresence:'io.github.anastaci1a.localica.ui.components.rememberPresence',rememberFaceExpansion:'io.github.anastaci1a.localica.ui.components.rememberFaceExpansion',PopupActionPill:'io.github.anastaci1a.localica.ui.PopupActionPill',ActionIcon:'io.github.anastaci1a.localica.ui.ActionIcon'};
+    function stockIntent(call, formal) {
+        const resolved=declarations.filter(d=>d.qualified===stockOwners[call]);
+        return !localFunctions.has(call) && (!resolved.length || resolved.length===1 && resolved[0].file==='app/src/main/java/io/github/anastaci1a/localica/ui/'+stockFiles[call]) && intentFormals[call]?.has(formal) &&
+            (![...imports].some(([local,q])=>name(tokens.findIndex(t=>t.text===local))===call && q!==stockOwners[call]));
+    }
     for(let i=0;i<tokens.length;i++) {
         if(tokens[i+1]?.text===':' && name(i+2)==='GlassAnchor') anchors.add(tokens[i].text);
         if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=' && ['rememberGlassAnchor','GlassAnchor'].includes(name(i+3))) anchors.add(tokens[i+1].text);
@@ -80,11 +130,11 @@ export function checkPopupSource(file, source) {
         let end=close+1;depth=1;while(end<tokens.length && depth){if(tokens[end].text==='{')depth++;if(tokens[end].text==='}')depth--;end++;}
         if(rule)lambdaHandles.push({start:close,end,name:null,rule});
     }
-    const incidents=[],seen=new Set();
+    const incidents=[],seen=new Set(),hostCalls=new Map();
     function emit(rule,i,note){if(ownsPopups(file,rule))return;const offset=tokens[i].start,key=rule+':'+offset;if(seen.has(key))return;seen.add(key);incidents.push({rule,path:file,line:source.slice(0,offset).split('\n').length,note});}
     const home=/^Local\w*Popup\w*Home\w*$/;
     const anchorCalls=new Set(['NavigationUtilityPill']);
-    const privateCalls=new Set(['Popup','PopupWindow','Dialog','AlertDialog','BasicAlertDialog','DropdownMenu','ModalBottomSheet']);
+    const privateCalls=new Set(['Popup','PopupWindow','Dialog','AlertDialog','BasicAlertDialog','DropdownMenu','ModalBottomSheet','PopupMenu','ListPopupWindow','DatePickerDialog','TooltipBox','ExposedDropdownMenu','SearchBar']);
     const rawHomeCalls=new Set(['glassPopupHome','glassPopupProjection']);
     const calls=[], scopes=[];let closedCall;
     for(let i=0;i<tokens.length;i++) {
@@ -103,15 +153,19 @@ export function checkPopupSource(file, source) {
         const assignment=next==='=' && tokens[i+2]?.text!=='=';
         if(home.test(n||''))emit('ScreenPopupHome',i,'A screen cannot provide a popup home');
         if(n==='LocalPopupBodyPresenter' && (imports.get(tokens[i].text)==='io.github.anastaci1a.localica.ui.components.LocalPopupBodyPresenter' || previous==='.' || !imports.has(tokens[i].text)))emit('ScreenPopupHome',i,'Only the stock presenter owner may provide its local');
-        if(['GlassPopupHome','rememberGlassPopupHome'].includes(n) && next==='(' && previous!=='fun' && !popupHosts.has(file))emit('ScreenPopupHome',i,'Only the pinned application shells host popup homes');
+        if(['GlassPopupHome','rememberGlassPopupHome'].includes(n) && next==='(' && previous!=='fun') {
+            const count=(hostCalls.get(n)||0)+1;hostCalls.set(n,count);
+            if(count>(popupHosts.get(file)?.[n==='rememberGlassPopupHome'?0:1]||0))emit('ScreenPopupHome',i,'Only the counted application shell homes may be hosted');
+        }
         if(rawHomeCalls.has(n) && next==='(')emit('ScreenPopupHome',i,'Use the shared component home scope');
         if(['motionKind','popupKind','popupLaw','motionLaw','quiet','originPresentation','contactPresentation'].includes(n) && assignment)emit('ScreenPopupMotion',i,'The popup component derives its motion');
-        if(assignment && ['(',','].includes(previous) && ['true','false'].includes(tokens[i+2]?.text) && !['visible','shown','expanded','menuVisible','enabled','glass','quietInputEnabled'].includes(n) && ['glassAnchor','rememberPresence','rememberFaceExpansion','PopupActionPill','ActionIcon'].includes(calls.at(-1)))emit('ScreenPopupMotion',i,'Only named roles may configure popup policy');
+        if(assignment && ['(',','].includes(previous) && (['true','false'].includes(tokens[i+2]?.text) || booleanValues.has(tokens[i+2]?.text) || [...localDeclarations,...declarations].some(d=>d.name===calls.at(-1) && d.booleans.has(n))) && !stockIntent(calls.at(-1), n) && ['glassAnchor','rememberPresence','rememberFaceExpansion','PopupActionPill','ActionIcon'].includes(calls.at(-1)))emit('ScreenPopupMotion',i,'Only named roles may configure popup policy');
         if(['plain','selection','lyrics'].includes(n) && assignment && calls.some(c=>['glassAnchor','rememberPresence','rememberFaceExpansion','PopupActionPill','ActionIcon'].includes(c)))emit('ScreenPopupMotion',i,'Use a named content role, never a raw flag');
         if(['PopupKind','PopupMotionKind'].includes(n) && next==='.')emit('ScreenPopupMotion',i,'Screens cannot select popup motion kinds');
         if(['shadowOpacity','opacity'].includes(n) && assignment && calls.some(c=>['PopupActionPill','GlassMenu','GlassMorphPopup','GlassDialog','Popup','glassAnchor'].includes(c)))emit('ScreenPopupTrigger',i,'Popup opacity and shadow wiring belong to the shared component');
         if(n==='law' && assignment)emit('ScreenPopupMotion',i,'Screens cannot override a motion law');
-        if(['rememberPopupMotion','rememberPopupWindowMotion','rememberExpandCollapse'].includes(n) && next==='(')emit('ScreenPopupMotion',i,'Popup motion owners are internal to the shared system');
+        if(['rememberPopupMotion','rememberPopupWindowMotion','rememberExpandCollapse'].includes(n) && (next==='(' || (previous===':' && tokens[i-2]?.text===':')))emit('ScreenPopupMotion',i,'Popup motion owners are internal to the shared system');
+        if(n==='drawPopupProjection' && (next==='(' || (previous===':' && tokens[i-2]?.text===':')) && !ownsPopups(file,'PopupProjection'))emit('ScreenPopupDrawPath',i,'Projection belongs to its pinned shared implementation');
         if(['rememberFaceExpansion','rememberPresence'].includes(n) && next==='(') {
             let j=i+1,depth=0;do{if(tokens[j]?.text==='(')depth++;if(tokens[j]?.text===')')depth--;j++;}while(j<tokens.length && depth);
             if(tokens[j]?.text==='{')emit('ScreenPopupMotion',i,'Use a named component capability, without a screen law lambda');
@@ -131,16 +185,36 @@ export function checkPopupSource(file, source) {
         if(fieldWrite && anchors.has(receiver))emit('ScreenPopupTrigger',i,'Only the shared component writes anchor fields');
         if(anchors.has(prefixReceiver) && ['+','-'].includes(previous) && tokens[i-2]?.text===previous)emit('ScreenPopupTrigger',i,'Only the shared component writes anchor fields');
         if(['face','quiet','popupHome','originPresentation'].includes(n) && assignment && (previous==='.' || [...calls,...scopes].some(c=>['apply','with'].includes(c))))emit('ScreenPopupTrigger',i,'Screens cannot configure popup anchor internals');
-        if(privateCalls.has(n) && previous!=='fun' && (next==='(' || next==='{')) {
+        if((privateCalls.has(n) || nativeTypes.has((typeIdentity.get(tokens[i].text)||'').split('.').at(-1))) && !importTokens.has(i) && previous!=='fun' && (next==='(' || next==='{' || (previous===':' && tokens[i-2]?.text===':'))) {
             // ui.components.Popup is the standard public API; native and unresolved names fail closed.
             let begin=i;while(begin>=2 && tokens[begin-1].text==='.')begin-=2;
             const qualified=tokens.slice(begin,i+1).map(t=>t.text).join('');
             const resolved=qualified.includes('.')?qualified:imports.get(tokens[i].text);
             if(resolved!=='io.github.anastaci1a.localica.ui.components.Popup')emit('ScreenPopupDrawPath',i,'Use the shared popup presenter');
         }
-        if(['class','interface','object','typealias'].includes(n)) {
+        if(['class','interface','object','typealias'].includes(n) && !(previous===':' && tokens[i-2]?.text===':')) {
             const declared=name(i+1)||'';
-            if((/Popup.*(Home|Anchor|Trigger)|(?:Home|Anchor|Trigger).*Popup|^(GlassAnchor|HomeRef)$/.test(declared)) && !popupRoles.has(file+':'+declared))emit('DuplicatePopupRole',i+1,'Only system owners may implement a popup home or trigger role');
+            let j=i+1, depth=0;
+            while(j<tokens.length && j<i+80) {
+                if(tokens[j].text==='(')depth++;
+                if(tokens[j].text===')')depth--;
+                if(depth===0 && ['{','=',';'].includes(tokens[j].text))break;
+                if(depth===0 && tokens[j].text===':') {
+                    let k=j+1;
+                    while(k<tokens.length && !['{',';','='].includes(tokens[k].text)) {
+                        if(k>j+1 && source.slice(tokens[k-1].start,tokens[k].start).includes('\n'))break;
+                        let end=k;while(tokens[end+1]?.text==='.')end+=2;
+                        const qualified=tokens.slice(k,end+1).map(t=>t.text).join('');
+                        const identity=typeIdentity.get(tokens[k].text)||qualified;
+                        if(protectedTypes.has(identity) && !popupRoles.has(file+':'+declared))emit('DuplicatePopupRole',i,'Only the canonical system implementation may implement this resolved role');
+                        k++;
+                    }
+                    break;
+                }
+                if(j>i+1 && depth===0 && source.slice(tokens[j-1].start,tokens[j].start).includes('\n'))break;
+                j++;
+            }
+            if(protectedTypes.has(packageMatch+'.'+declared) && !['PopupState','PopupScope'].includes(declared) && !popupRoles.has(file+':'+declared))emit('DuplicatePopupRole',i+1,'Only system owners may implement a popup home or trigger role');
         }
         if(['staticCompositionLocalOf','compositionLocalOf'].includes(n) && next==='<') {
             const type=tokens.slice(i+2,i+10).map(t=>t.text).join('');
@@ -156,4 +230,4 @@ export function checkPopupSource(file, source) {
     }
     return incidents;
 }
-export function checkPopupTree(files) {return files.flatMap(({path,source})=>checkPopupSource(path,source));}
+export function checkPopupTree(files) {const declarations=files.flatMap(({path,source})=>declaredFunctions(path,source));return files.flatMap(({path,source})=>checkPopupSource(path,source,declarations));}

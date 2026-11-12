@@ -25,3 +25,5 @@ Escape validation fails closed without exact declarations and frozen expiry inpu
 Rollback the complete activation before adopting production callers. Never disable an individual rule to conceal a violation.
 
 Popup conformity is a zero-finding release gate. Screen popup homes, motion overrides, private triggers, private draw paths and duplicate popup roles cannot enter the baseline. The exact shared owners are pinned in `src/main/resources/popup-owners.txt`, including the existing components, engine and three legacy popup files. New neighboring files receive no ownership automatically. `popup-roles.txt` pins the existing home and trigger declarations; adding a second implementation fails even inside an existing owner.
+
+Shell hosts have exact factory and presenter counts in `popup-hosts.txt`. LocalicaScreen retains three shared homes; PlayerSurface and QueueSurface each retain one fallback. Theme presents the root without creating another home. Reintroducing a utility home exceeds the gate. Foreign modules never inherit application owner paths.

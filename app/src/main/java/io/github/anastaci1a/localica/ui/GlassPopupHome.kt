@@ -112,8 +112,8 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: B
         if (aboveChrome != null && aboveChrome != (!flight.chromeTrigger || flight.phase() > ChromeReturnDepthHandoff)) return@forEach
         flight.revision
         val layer = flight.layer
-        // prepared is published only after the native presenter has selected this
-        // home's clean sampling source, including a chrome trigger's own close.
+        // prepared is published only after the native presenter selected the
+        // return source: the clean page for chrome, the complete home otherwise.
         if (flight.prepared && layer != null && !layer.isReleased) {
             if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
             drawPopupProjection(layer, flight.origin - flight.homeOrigin)
@@ -132,7 +132,7 @@ internal fun GlassPopupHome(departing: Boolean = false, content: @Composable () 
 // Only retained pages had this policy at base. Shell homes remain accessible
 // while collapsed and preserve their original unclipped drawing extent.
 private fun Modifier.popupPage(home: GlassPopupHome): Modifier {
-    val containing = home.flights.isNotEmpty() && (home.departing || home.flights.any { it.prepared || it.handedOff })
+    val containing = home.flights.isNotEmpty() && (home.departing || home.flights.any { it.handedOff })
     return then(if (containing) Modifier.clipToBounds() else Modifier)
         .then(if (home.departing) Modifier.clearAndSetSemantics { } else Modifier)
 }
@@ -148,10 +148,10 @@ internal fun GlassPopupHome(home: GlassPopupHome, chrome: (@Composable () -> Uni
         container {
             if (chrome == null) Box(host.glassPopupHome(home)) { content() }
             else io.github.anastaci1a.localica.ui.layout.PopupViewportSlot(
-                // Both projections surround the clean content recording. In
-                // particular the below-chrome flight must never sample itself.
-                modifier = host.drawWithContent { drawContent(); projectFlights(home, aboveChrome = true) },
-                contentModifier = Modifier.glassPopupHome(home, aboveChrome = false),
+                // As at base, ordinary flights sample the complete scene with
+                // chrome. The chrome trigger samples its own clean page source.
+                modifier = host.glassPopupHome(home, aboveChrome = true),
+                contentModifier = Modifier.drawWithContent { drawContent(); projectFlights(home, aboveChrome = false) },
                 chrome = chrome, content = content)
         }
     }
