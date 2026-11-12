@@ -47,6 +47,7 @@ import io.github.anastaci1a.localica.ui.components.PlayerReveal
 import io.github.anastaci1a.localica.ui.components.rememberPresence
 import io.github.anastaci1a.localica.ui.components.rememberProfileValue
 import io.github.anastaci1a.localica.ui.engine.ExpansionBasis
+import io.github.anastaci1a.localica.ui.engine.boundedProgress
 import io.github.anastaci1a.localica.ui.engine.collapsedPhase
 import io.github.anastaci1a.localica.ui.layout.PlayerHandleBand
 import io.github.anastaci1a.localica.ui.spec.MotionProfile
@@ -92,7 +93,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val p = sheet.expansion.phase.value()
-    val boundedProgress = sheet.expansion.boundedProgress()
+    val boundedProgress = boundedProgress(p)
     // A paused skip can buffer without requesting playback. Only show Pause
     // while playing or buffering with an explicit play-when-ready intent.
     val showPause = sampled.isPlaying || (sampled.isBuffering && sampled.playWhenReady)
@@ -121,7 +122,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // U10.03: the lyrics layout is one expand/collapse owner on the #608 law over the title's travel (basis bound below).
     val lyricsPresence = rememberPresence("player-lyrics", lyricsOpen) { it.lyricsExpansion }
     val lyricVisibility = lyricsPresence.view.phase.value()
-    val boundedLyricVisibility = lyricsPresence.view.boundedProgress()
+    val boundedLyricVisibility = boundedProgress(lyricVisibility)
     val lyricsRest by rememberExpansionRest(lyricsPresence.view)
     val lyricsSettled = lyricsRest == if (lyricsOpen) ExpansionRest.Open else ExpansionRest.Closed
     // A light/dark foreground change during the lyrics animation (or artwork blend, #578) follows that shared phase (U08.02a).
