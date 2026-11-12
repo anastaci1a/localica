@@ -8,7 +8,7 @@ import java.io.File
 
 /** Inspect hardware snapshots without changing the saved native recording or its pixels. */
 internal fun r1InspectionBitmap(original: Bitmap, output: File, name: String): Bitmap {
-    val png = File(output, "$name.png")
+    val png = File(output, if (original.config == Bitmap.Config.HARDWARE) "$name-native.png" else "$name.png")
     png.outputStream().use { assertTrue(original.compress(Bitmap.CompressFormat.PNG, 100, it)) }
     if (original.config != Bitmap.Config.HARDWARE) return original
     var inspection: Bitmap? = null

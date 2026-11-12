@@ -33,6 +33,8 @@ internal fun verifyR1ReferenceClass(preOpen: Bitmap, reference: Bitmap, tabs: Re
     val expected: Map<Int, Int>? = null // Measure both independent-source profiles before pinning.
     File(output, "reference-class.json").writeText(JSONObject().put("api", api).put("densityDpi", densityDpi)
         .put("width", reference.width).put("height", reference.height).put("selected", selected)
+        .put("tabBounds", tabs.toString()).put("hostScreenX", hostAt[0]).put("hostScreenY", hostAt[1])
+        .put("homeOriginX", homeOrigin.x).put("homeOriginY", homeOrigin.y)
         .put("changed", histogram.values.sum() + otherChanged).put("otherChanged", otherChanged)
         .put("grayscaleHistogram", JSONObject(histogram.mapKeys { it.key.toString() }))
         .put("cycleFixtureApi26Histogram", JSONObject(mapOf("1" to 16619, "2" to 5)))

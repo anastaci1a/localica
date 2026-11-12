@@ -67,25 +67,31 @@ class PopupR1DepthBaseTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
-        val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
+        val outputRoot = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
             "${mode.name}/non-chrome-menu").apply { mkdirs() }
+        var output = File(outputRoot, "offset-0").apply { mkdirs() }
+        var trial by mutableIntStateOf(0)
+        lateinit var clock: io.github.anastaci1a.localica.ui.engine.UiClock
+        val qualifiedPhases = mutableSetOf<Int>()
+        val trials = JSONArray()
         lateinit var host: View
         lateinit var home: GlassPopupHome
         var popup: Window? = null
         var popupPhase = 0f
         lateinit var fixtureAnchor: GlassAnchor
         lateinit var fixtureBackdrop: FrostedBackdrop
-        val phaseControl = JSONArray()
+        var phaseControl = JSONArray()
         lateinit var baseScene: androidx.compose.ui.graphics.layer.GraphicsLayer
         var baseScenePixels: Bitmap? = null
         var open by mutableStateOf(false)
         var leaving by mutableStateOf(false)
         var leaveClicked = false
         val cycleFixture = InstrumentationRegistry.getArguments().getString("r1BackdropCycleMutant") == "ancestor"
-        val receipts = JSONArray()
+        var receipts = JSONArray()
         try {
             preferences.write(InterfaceSettings(glass = GlassAppearance(renderer = mode)))
-            compose.setContent { LocalicaTheme {
+            compose.setContent { LocalicaTheme { key(trial) {
+                clock = io.github.anastaci1a.localica.ui.engine.LocalUiClock.current
                 host = LocalView.current
                 home = rememberGlassPopupHome(leaving)
                 val page = rememberFrostedBackdrop(home, dark = false).also { fixtureBackdrop = it }
@@ -124,7 +130,18 @@ class PopupR1DepthBaseTest {
                     }
                     }
                 }
-            } }
+            } } }
+            for (offsetMs in listOf(0L, 4L, 8L, 12L)) {
+                if (offsetMs != 0L) {
+                    baseScenePixels?.recycle(); baseScenePixels = null
+                    compose.mainClock.autoAdvance = true
+                    compose.runOnUiThread {
+                        open = false; leaving = false; leaveClicked = false
+                        popup = null; popupPhase = 0f; trial++
+                    }
+                    output = File(outputRoot, "offset-$offsetMs").apply { mkdirs() }
+                    phaseControl = JSONArray(); receipts = JSONArray()
+                }
             compose.waitForIdle()
             val activity = compose.runOnUiThread {
                 var owner = host.context
@@ -186,15 +203,23 @@ class PopupR1DepthBaseTest {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 flight.handedOff && flight.wasProjected
             }
-            compose.runOnUiThread { leaving = false }
-            val qualifiedPhases = mutableSetOf<Int>()
+            val releaseBefore = compose.runOnUiThread { clock.stamp.nanos }
+            if (offsetMs > 0) compose.mainClock.advanceTimeBy(offsetMs, ignoreFrameDuration = true)
+            val intent = compose.runOnUiThread {
+                JSONObject().put("requestedOffsetMs", offsetMs).put("virtualClockMs", compose.mainClock.currentTime)
+                    .put("presentedBeforeOffsetNanos", releaseBefore).put("presentedNanos", clock.stamp.nanos)
+                    .put("intentNanos", clock.stampNow.nanos)
+                    .put("actualIntentOffsetNanos", clock.stampNow.nanos - clock.stamp.nanos)
+                    .also { leaving = false }
+            }
+            File(output, "start-offset.json").writeText(intent.toString(2))
             for (frame in 0 until 96) {
                 // Resolve the short opaque crossing at 4 ms virtual intervals; keep the same phase window.
                 compose.mainClock.advanceTimeBy(4, ignoreFrameDuration = true); compose.waitForIdle()
                 val attached = window.decorView.isAttachedToWindow
                 val candidatePhase = r1CandidateFlightPhase(flight)
                 phaseControl.put(JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
-                    .put("stepMs", 4).put("geometryPhase", popupPhase)
+                    .put("stepMs", 4).put("presentedNanos", compose.runOnUiThread { clock.stamp.nanos }).put("geometryPhase", popupPhase)
                     .put("flightPhase", candidatePhase ?: JSONObject.NULL).put("prepared", flight.prepared)
                     .put("attached", attached).put("triggerHidden", fixtureAnchor.hidden)
                     .put("geometrySelected", attached && flight.prepared && popupPhase in .1f.. .8f)
@@ -253,7 +278,12 @@ class PopupR1DepthBaseTest {
             }
             File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
                 .put("renderer", mode.name).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
-            assertTrue("Non-chrome menu overlaps tabs at three distinct presented return phases: $receipts", qualifiedPhases.size >= 3)
+            trials.put(JSONObject().put("requestedOffsetMs", offsetMs).put("intent", intent).put("samples", receipts))
+            File(outputRoot, "offset-matrix.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
+                .put("renderer", mode.name).put("trials", trials).put("distinctQualifiedPhaseBits", JSONArray(qualifiedPhases.toList()))
+                .put("distinctQualifiedPhases", qualifiedPhases.size).toString(2))
+            }
+            assertTrue("Non-chrome menu overlaps tabs at three distinct presented return phases across independent returns: $trials", qualifiedPhases.size >= 3)
         } finally { baseScenePixels?.recycle(); compose.mainClock.autoAdvance = true; preferences.write(previous) }
     }
 
