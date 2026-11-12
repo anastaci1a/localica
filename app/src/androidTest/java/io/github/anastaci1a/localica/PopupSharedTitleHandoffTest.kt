@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
 import android.graphics.Color as NativeColor
+import android.view.View
+import android.view.ViewTreeObserver
 import android.view.Window
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -19,6 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.IntOffset
@@ -33,6 +37,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import java.util.IdentityHashMap
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -49,6 +54,34 @@ class PopupSharedTitleHandoffTest {
         var window: Window? = null
         var open by mutableStateOf(false)
         var control = Rect.Zero
+        val draws = IdentityHashMap<View, Int>()
+        val firstRecording = IdentityHashMap<View, Int>()
+        val firstAdmittedDraw = IdentityHashMap<View, Int>()
+        val listeners = IdentityHashMap<View, ViewTreeObserver.OnDrawListener>()
+        val admissionFailures = mutableListOf<String>()
+        val admissionReceipts = mutableListOf<String>()
+        var observing = true
+        fun observe(native: Window) {
+            val root = native.decorView.rootView
+            if (listeners.containsKey(root)) return
+            val listener = ViewTreeObserver.OnDrawListener {
+                val draw = (draws[root] ?: 0) + 1
+                draws[root] = draw
+                if (anchor.hidden && anchor.modalPresent && !firstAdmittedDraw.containsKey(root)) {
+                    firstAdmittedDraw[root] = draw
+                    root.post {
+                        if (observing) {
+                            val recorded = firstRecording[root]
+                            val receipt = "window=${System.identityHashCode(root)} firstAdmittedDraw=$draw firstTitleRecording=$recorded"
+                            admissionReceipts += receipt
+                            if (recorded == null || recorded > draw) admissionFailures += receipt
+                        }
+                    }
+                }
+            }
+            listeners[root] = listener
+            root.viewTreeObserver.addOnDrawListener(listener)
+        }
         val label = "|".repeat(24)
         compose.setContent { EngineTheme(clear = true) {
             val spec = LocalUiSpec.current.spec
@@ -56,13 +89,24 @@ class PopupSharedTitleHandoffTest {
             SideEffect { harness = owned }
             DisposableEffect(owned) { onDispose { owned.close() } }
             CompositionLocalProvider(LocalClockOwner provides owned.clock, LocalUiClock provides owned.clock,
-                LocalGlassMorphWorkObserver provides { kind, native, _ -> if (kind == "dialog") window = native }) {
+                LocalGlassMorphWorkObserver provides { kind, native, _ ->
+                    if (kind == "dialog" && native != null) { window = native; observe(native) }
+                }) {
                 anchor = rememberGlassAnchor()
+                val sourceDensity = LocalDensity.current
                 val shared = rememberPopupSharedContent(anchor) {
                     // Equal endpoint typography isolates the flight and body scale from font interpolation.
                     CompositionLocalProvider(LocalContentColor provides Color.Blue) {
+                        val titleRoot = LocalView.current.rootView
+                        Box(Modifier.drawWithContent {
+                            drawContent()
+                            // This observes actual recording, not composition/semantics. A later
+                            // draw cannot satisfy an earlier native draw's admission receipt.
+                            if (!firstRecording.containsKey(titleRoot)) firstRecording[titleRoot] = draws[titleRoot] ?: 0
+                        }) {
                         MorphText(label, androidx.compose.ui.text.TextStyle(fontSize = 18.sp),
                             androidx.compose.ui.text.TextStyle(fontSize = 18.sp))
+                        }
                     }
                 }
                 val source = rememberFrostedBackdrop(Unit)
@@ -78,6 +122,10 @@ class PopupSharedTitleHandoffTest {
                         }
                         GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center,
                             darkOverride = false, sharedContent = shared) {
+                            val actualDensity = LocalDensity.current
+                            check(actualDensity.density == sourceDensity.density && actualDensity.fontScale == sourceDensity.fontScale) {
+                                "Native popup density/font scale must match the measured endpoint profile"
+                            }
                             CompositionLocalProvider(LocalContentColor provides Color.Blue) {
                                 Box(Modifier.fillMaxWidth().height(160.dp).padding(24.dp),
                                     contentAlignment = Alignment.CenterStart) { shared.Expanded(Modifier.fillMaxWidth()) }
@@ -182,14 +230,14 @@ class PopupSharedTitleHandoffTest {
             assertEdges("Source title returns to its measured native bounds", source, restored, 1f)
 
             compose.onNodeWithTag("title-trigger").performTouchInput { down(center) }
-            repeat(4) {
+            repeat(4) { frame ->
                 step()
-                val actual = sample("held-$it")
+                val actual = sample("held-$frame")
                 val shape = compose.runOnUiThread { anchor.contact.body.value }
                 val expected = transformed(source, anchor.bounds.center,
                     shape.scaleX(anchor.contact.vertical), shape.scaleY(anchor.contact.vertical))
-                if (actual == null) failures += "held-$it: title ink missing"
-                else edgeFailure(expected, actual, 2f)?.let { failures += "held-$it: $it" }
+                if (actual == null) failures += "held-$frame: title ink missing"
+                else edgeFailure(expected, actual, 2f)?.let { failures += "held-$frame: $it" }
             }
             compose.onNodeWithTag("title-trigger").performTouchInput { up() }
             var complete = false
@@ -214,8 +262,18 @@ class PopupSharedTitleHandoffTest {
             }
             assertTrue("Native admission must be sampled", admitted)
             assertTrue("Opening must reach expanded rest", complete)
+            val firstDrawFailures = compose.runOnUiThread { admissionFailures.toList() }
+            assertTrue("The first admitted native draw must already own a title recording: $firstDrawFailures", firstDrawFailures.isEmpty())
+            assertTrue("Both calibration and probe openings need first-draw receipts",
+                compose.runOnUiThread { admissionReceipts.size } >= 2)
             assertTrue("Title ink must exist and follow its shared flight/body scale in every frame: $failures", failures.isEmpty())
         } finally {
+            val receipts = compose.runOnUiThread {
+                observing = false
+                listeners.forEach { (root, listener) -> if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnDrawListener(listener) }
+                admissionReceipts.toList()
+            }
+            log.append("first-admitted-draw receipts=$receipts\n")
             File(output, "frames.txt").writeText(log.toString())
             compose.runOnUiThread { open = false }
             compose.mainClock.autoAdvance = true

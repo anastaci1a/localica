@@ -532,3 +532,4 @@ io.github.anastaci1a.localica.ScrollbarReducedRootTest
 
 # Shared-title native handoff and body projection (#887).
 io.github.anastaci1a.localica.PopupSharedTitleHandoffTest
+io.github.anastaci1a.localica.QueueHeaderSummaryTest
