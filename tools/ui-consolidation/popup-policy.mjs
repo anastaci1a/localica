@@ -114,7 +114,7 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
         const first=typeIdentity.get(tokens[begin]?.text)||tokens[begin]?.text;
         return first+tokens.slice(begin+1,i+1).map(t=>t.text).join('');
     }
-    const motionNames = new Map([['LocalMotionSpeed','io.github.anastaci1a.localica.ui.LocalMotionSpeed'],['LocalReducedMotion','io.github.anastaci1a.localica.ui.LocalReducedMotion'],['LocalUiSpec','io.github.anastaci1a.localica.ui.spec.LocalUiSpec'],['LocalEngineContext','io.github.anastaci1a.localica.ui.engine.LocalEngineContext'],['LocalUiClock','io.github.anastaci1a.localica.ui.engine.LocalUiClock'],['LocalClockOwner','io.github.anastaci1a.localica.ui.engine.LocalClockOwner']]);
+    const motionNames = new Map([['LocalMotionSpeed','io.github.anastaci1a.localica.ui.LocalMotionSpeed'],['LocalReducedMotion','io.github.anastaci1a.localica.ui.LocalReducedMotion'],['LocalUiSpec','io.github.anastaci1a.localica.ui.spec.LocalUiSpec'],['LocalEngineContext','io.github.anastaci1a.localica.ui.engine.LocalEngineContext'],['LocalUiClock','io.github.anastaci1a.localica.ui.engine.LocalUiClock'],['LocalClockOwner','io.github.anastaci1a.localica.ui.engine.LocalClockOwner'],['LocalPopupKind','io.github.anastaci1a.localica.ui.engine.LocalPopupKind'],['LocalRespectSystemAnimationScale','io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale']]);
     const providerAliases = new Map();
     function motionLocal(i) {
         const n=name(i), canonical=motionNames.get(n);
@@ -343,7 +343,9 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
         if(['motionKind','popupKind','popupLaw','motionLaw','quiet','originPresentation','contactPresentation'].includes(n) && assignment)emit('ScreenPopupMotion',i,'The popup component derives its motion');
         if(assignment && ['(',','].includes(previous) && (['true','false'].includes(tokens[i+2]?.text) || booleanValues.has(tokens[i+2]?.text) || [...localDeclarations,...declarations].some(d=>d.name===calls.at(-1) && d.booleans.has(n))) && !stockIntent(calls.at(-1), n) && ['glassAnchor','rememberPresence','rememberFaceExpansion','PopupActionPill','ActionIcon'].includes(calls.at(-1)))emit('ScreenPopupMotion',i,'Only named roles may configure popup policy');
         if(['plain','selection','lyrics'].includes(n) && assignment && calls.some(c=>['glassAnchor','rememberPresence','rememberFaceExpansion','PopupActionPill','ActionIcon'].includes(c)))emit('ScreenPopupMotion',i,'Use a named content role, never a raw flag');
-        if(['PopupKind','PopupMotionKind'].includes(n) && next==='.')emit('ScreenPopupMotion',i,'Screens cannot select popup motion kinds');
+        // #854: only the motion owners and the spec that declares the kinds name them. Members, imports (star and member imports too),
+        // aliases, typealias targets, callable references and type arguments all count.
+        if(['PopupKind','PopupMotionKind'].includes(n) && !ownsPopups(file,'PopupKindModel'))emit('ScreenPopupMotion',i,'Screens cannot select popup motion kinds');
         if(['shadowOpacity','opacity'].includes(n) && assignment && calls.some(c=>['PopupActionPill','GlassMenu','GlassMorphPopup','GlassDialog','Popup','glassAnchor'].includes(c)))emit('ScreenPopupTrigger',i,'Popup opacity and shadow wiring belong to the shared component');
         if(n==='law' && assignment)emit('ScreenPopupMotion',i,'Screens cannot override a motion law');
         if(['rememberPopupMotion','rememberPopupWindowMotion','rememberExpandCollapse'].includes(n) && (next==='(' || (previous===':' && tokens[i-2]?.text===':')))emit('ScreenPopupMotion',i,'Popup motion owners are internal to the shared system');

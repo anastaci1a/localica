@@ -17,6 +17,8 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
     private val popupRoles by lazy {
         requireNotNull(javaClass.getResourceAsStream("/popup-roles.txt")).bufferedReader().use { it.readLines().toSet() }
     }
+    // #854: the popup motion kinds. Only the motion owners and the spec that declares them (PopupKindModel) may name them.
+    private val popupKinds = setOf("PopupKind", "PopupMotionKind")
     // Explicit rule-11 debt: exact provider expression and maximum occurrence count.
     // Adoption is tracked separately; these are not lint baselines or owner grants.
     private val popupRatchet by lazy {
@@ -233,7 +235,9 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                         "io.github.anastaci1a.localica.ui.LocalReducedMotion", "io.github.anastaci1a.localica.ui.spec.LocalUiSpec",
                         "io.github.anastaci1a.localica.ui.engine.LocalEngineContext",
                         "io.github.anastaci1a.localica.ui.engine.LocalUiClock",
-                        "io.github.anastaci1a.localica.ui.engine.LocalClockOwner")) return fqn
+                        "io.github.anastaci1a.localica.ui.engine.LocalClockOwner",
+                        // #854/#862: the popup kind a surface publishes to its faces and the respected platform scale.
+                        "io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale")) return fqn
                 val initializer = (symbol as? com.intellij.psi.PsiVariable)?.toUElementOfType<UVariable>()?.uastInitializer
                     ?: property?.initializer?.toUElementOfType<UExpression>()
                 return motionLocal((initializer as? UResolvable)?.resolve(), seen)
@@ -274,7 +278,10 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                     (resolved as? PsiMember)?.containingClass?.qualifiedName == "io.github.anastaci1a.localica.ui.GlassAnchor")
                     report(UiRuleId.ScreenPopupTrigger, node)
                 val owner = (resolved as? PsiMember)?.containingClass?.name.orEmpty()
-                if (owner in setOf("PopupKind", "PopupMotionKind")) report(UiRuleId.ScreenPopupMotion, node)
+                // #854: the motion spec declares the kinds and the stock model's kind table; only it names kinds besides the motion owners.
+                // A member, or the class itself as a callable-reference receiver, both name a kind.
+                if ((owner in popupKinds || (resolved as? com.intellij.psi.PsiClass)?.name in popupKinds) &&
+                    relative !in popupOwnerPaths["PopupKindModel"].orEmpty()) report(UiRuleId.ScreenPopupMotion, node)
             }
 
             override fun visitCallExpression(node: UCallExpression) {
@@ -284,6 +291,9 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 privateEntry(method, node)
                 argumentPins(method, node)
                 if (scopedWindowManager(method, node)) report(UiRuleId.ScreenPopupDrawPath, node)
+                // #854: a type argument names a kind too (enumValueOf<PopupKind>, emptyList<PopupKind>).
+                if (node.typeArguments.any { (it as? com.intellij.psi.PsiClassType)?.className in popupKinds } &&
+                    relative !in popupOwnerPaths["PopupKindModel"].orEmpty()) report(UiRuleId.ScreenPopupMotion, node)
                 val owner = method.containingClass?.qualifiedName.orEmpty()
                 if (name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !method.isConstructor) hostCall(name, node)
                 if (name in setOf("glassPopupHome", "glassPopupProjection")) report(UiRuleId.ScreenPopupHome, node)

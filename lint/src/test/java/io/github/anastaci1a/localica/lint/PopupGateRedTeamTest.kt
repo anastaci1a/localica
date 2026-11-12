@@ -6,8 +6,7 @@ import com.android.tools.lint.detector.api.Detector
 class PopupGateRedTeamTest : LintDetectorTest() {
  override fun getDetector(): Detector = PopupPolicyDetector()
  override fun getIssues() = LocalicaIssueRegistry().issues.filter { it.implementation.detectorClass == PopupPolicyDetector::class.java }
- private val stubs = listOf(
-  kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt", """package io.github.anastaci1a.localica.ui
+ private val glassMorphStub = """package io.github.anastaci1a.localica.ui
 open class GlassAnchor { var face: (() -> Unit)? = null; val triggerRole: Any? = null; val contact = GlassContact(); val popupHome: GlassPopupHome? = GlassPopupHome() }
 class GlassContact { var modal=false; val state=GlassBodyState(); val expansion=GlassExpansion() }
 class GlassBodyState { var impulseScale=1f; val output=MutableOutput(); val momentum=GlassMomentum() }
@@ -25,7 +24,9 @@ class PopupSharedContent
 class GlassOriginPreparation
 fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit, content: () -> Unit) {}
 fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit, placement: Int = 0, darkOverride: Boolean? = null, fitContent: Boolean = false, originPreparation: GlassOriginPreparation? = null, searchDismissOnImeBack: Boolean = false, sharedContent: PopupSharedContent? = null, content: () -> Unit) { content() }
-""").indented(),
+"""
+ private val stubs = listOf(
+  kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt", glassMorphStub).indented(),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt", """package io.github.anastaci1a.localica.ui
 class GlassPopupHome { var mounted=true; val flights=mutableListOf<GlassPopupFlight>(); val children=mutableListOf<GlassPopupHome>() }
 class GlassPopupFlight { var phase: () -> Float = { 0f } }
@@ -71,7 +72,8 @@ open class ViewGroup : ViewManager { override fun addView(view: View, params: Wi
 public class Toast { public Toast() {} public android.view.View getView() { return null; } public void setView(android.view.View v) {} public void show() {} }"""),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/InterfaceMotion.kt", """package io.github.anastaci1a.localica.ui
 val LocalMotionSpeed = androidx.compose.runtime.ProvidableCompositionLocal<Float>()
-val LocalReducedMotion = androidx.compose.runtime.ProvidableCompositionLocal<Boolean>()"""),
+val LocalReducedMotion = androidx.compose.runtime.ProvidableCompositionLocal<Boolean>()
+val LocalRespectSystemAnimationScale = androidx.compose.runtime.ProvidableCompositionLocal<Boolean>()"""),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/LyricsPanel.kt", """package io.github.anastaci1a.localica.ui
 fun LyricsPanel(track: Any? = null, positionMs: Long = 0, reducedMotion: Boolean = false, onSeek: (Long) -> Unit = {}, modifier: Any? = null, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null, sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null, contentHeight: Any? = null, contentOffset: Any? = null, result: Any? = null, sourcesVisible: Boolean? = null, onSourcesDismiss: (() -> Unit)? = null, originPreparation: GlassOriginPreparation? = null, contentAlpha: () -> Float = { 1f }) {}"""),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/LyricsBackdrop.kt", """package io.github.anastaci1a.localica.ui
@@ -79,7 +81,8 @@ fun LyricsBackdrop(key: Any?, modifier: Any? = null, contentAlpha: () -> Float =
   kotlin("src/main/java/androidx/appcompat/app/AlertDialog.kt", """package androidx.appcompat.app
 class AlertDialog : android.app.Dialog() { class Builder }"""),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/spec/UiSpec.kt", """package io.github.anastaci1a.localica.ui.spec
-val LocalUiSpec = androidx.compose.runtime.ProvidableCompositionLocal<Int>()"""),
+val LocalUiSpec = androidx.compose.runtime.ProvidableCompositionLocal<Int>()
+enum class PopupKind { Menu, BottomMenu, Dialog, Legacy }"""),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt", """package io.github.anastaci1a.localica.ui
 class LocalicaUiRootState(settings: io.github.anastaci1a.localica.navigation.InterfaceSettings)
 fun LocalicaUiRoot(state: LocalicaUiRootState? = null, content: () -> Unit) {}"""),
@@ -92,7 +95,8 @@ data class EngineContext(val durationScale: Float = 1f)
 class UiClock
 val LocalEngineContext = androidx.compose.runtime.ProvidableCompositionLocal<EngineContext>()
 val LocalUiClock = androidx.compose.runtime.ProvidableCompositionLocal<UiClock>()
-val LocalClockOwner = androidx.compose.runtime.ProvidableCompositionLocal<UiClock?>()""")
+val LocalClockOwner = androidx.compose.runtime.ProvidableCompositionLocal<UiClock?>()
+val LocalPopupKind = androidx.compose.runtime.ProvidableCompositionLocal<Int>()""")
  )
  private fun check(body: String, imports: String = "", name: String = "Subject") {
   val source="package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n".replace("\\n", "\n") + imports + "\n".replace("\\n", "\n") + body
@@ -221,6 +225,26 @@ fun LiquidGlassSurface(modifier: SurfaceModifier) { modifier.glassSurfaceAnchor(
   lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.take(4) + file).toTypedArray()))
    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
  }
+ /** #854: the spec that declares the kinds may name them (PopupKindModel), and stays a non-owner for every other motion check. */
+ private fun withSpec(body: String, vararg files: com.android.tools.lint.checks.infrastructure.TestFile) = lint().projects(project().name("app").files(*(stubs +
+  wrapperStubs.filterNot { it.targetRelativePath.endsWith("spec/UiSpec.kt") } + kotlin("src/main/java/io/github/anastaci1a/localica/ui/spec/UiSpec.kt",
+  "package io.github.anastaci1a.localica.ui.spec\nval LocalUiSpec = androidx.compose.runtime.ProvidableCompositionLocal<Int>()\nenum class PopupKind { Menu, BottomMenu, Dialog, Legacy }\n" + body) +
+  files).toTypedArray())).issues(*getIssues().toTypedArray()).allowMissingSdk().testModes(TestMode.DEFAULT).run()
+ fun testSanctionedKindModel() = withSpec("val stock=mapOf(PopupKind.Menu to 0, PopupKind.BottomMenu to 1)\nval all=PopupKind.values()\nval named=PopupKind::valueOf").expectClean()
+ fun testKindModelCannotProvideTheKind() = withSpec("fun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalPopupKind provides 1) {} }")
+  .expectMatches("(?s).*UiSpec[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*")
+ fun testKindModelCannotProvideTheRespectedScale() = withSpec("fun f() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale provides false) {} }")
+  .expectMatches("(?s).*UiSpec[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*")
+ // Each sanctioned provider is its own clean run: expectMatches finds, so a lookahead could never prove an absence.
+ fun testSanctionedRespectProvider() = withSpec("",
+  kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt", "package io.github.anastaci1a.localica.ui\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalRespectSystemAnimationScale provides false) {} }"))
+  .expectClean()
+ fun testKindProviderOutsideItsOwner() = withSpec("",
+  kotlin("src/main/java/io/github/anastaci1a/localica/ui/Popups.kt", "package io.github.anastaci1a.localica.ui\nfun g() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalPopupKind provides 1) {} }"))
+  .expectMatches("(?s).*Popups[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*")
+ fun testSanctionedKindProviderInTheSurfaceOwner() = lint().projects(project().name("app").files(*(listOf(kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt",
+  glassMorphStub + "\nfun provideKind() { androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalPopupKind provides 1) {} }").indented()) +
+  stubs.drop(1) + wrapperStubs).toTypedArray())).issues(*getIssues().toTypedArray()).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
  fun testSanctionedSpeedProvider() {
   val file=kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt", """package io.github.anastaci1a.localica.ui
 fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed provides 2f) {} }
@@ -282,6 +306,55 @@ fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed pro
  fun testC_provider_LocalUiSpec_providesComputed_dot_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalUiSpec.providesComputed({ 1 })) {} }", "import io.github.anastaci1a.localica.ui.spec.LocalUiSpec", "Subject")
  fun testC_provider_LocalUiSpec_providesComputed_dot_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ 1 })) {} }", "import io.github.anastaci1a.localica.ui.spec.LocalUiSpec as Policy", "Subject")
  fun testC_provider_LocalUiSpec_providesComputed_dot_local() = check("fun f() { val Policy=LocalUiSpec; androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ 1 })) {} }", "import io.github.anastaci1a.localica.ui.spec.LocalUiSpec", "Subject")
+ fun testC_provider_LocalPopupKind_provides_infix_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalPopupKind provides 1) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_provides_infix_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides 1) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind as Policy", "Subject")
+ fun testC_provider_LocalPopupKind_provides_infix_local() = check("fun f() { val Policy=LocalPopupKind; androidx.compose.runtime.CompositionLocalProvider(Policy provides 1) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_provides_dot_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalPopupKind.provides(1)) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_provides_dot_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.provides(1)) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind as Policy", "Subject")
+ fun testC_provider_LocalPopupKind_provides_dot_local() = check("fun f() { val Policy=LocalPopupKind; androidx.compose.runtime.CompositionLocalProvider(Policy.provides(1)) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_providesDefault_infix_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalPopupKind providesDefault 1) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_providesDefault_infix_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy providesDefault 1) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind as Policy", "Subject")
+ fun testC_provider_LocalPopupKind_providesDefault_infix_local() = check("fun f() { val Policy=LocalPopupKind; androidx.compose.runtime.CompositionLocalProvider(Policy providesDefault 1) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_providesDefault_dot_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalPopupKind.providesDefault(1)) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_providesDefault_dot_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesDefault(1)) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind as Policy", "Subject")
+ fun testC_provider_LocalPopupKind_providesDefault_dot_local() = check("fun f() { val Policy=LocalPopupKind; androidx.compose.runtime.CompositionLocalProvider(Policy.providesDefault(1)) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_providesComputed_infix_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalPopupKind providesComputed { 1 }) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_providesComputed_infix_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy providesComputed { 1 }) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind as Policy", "Subject")
+ fun testC_provider_LocalPopupKind_providesComputed_infix_local() = check("fun f() { val Policy=LocalPopupKind; androidx.compose.runtime.CompositionLocalProvider(Policy providesComputed { 1 }) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_providesComputed_dot_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalPopupKind.providesComputed({ 1 })) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalPopupKind_providesComputed_dot_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ 1 })) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind as Policy", "Subject")
+ fun testC_provider_LocalPopupKind_providesComputed_dot_local() = check("fun f() { val Policy=LocalPopupKind; androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ 1 })) {} }", "import io.github.anastaci1a.localica.ui.engine.LocalPopupKind", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_provides_infix_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalRespectSystemAnimationScale provides true) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_provides_infix_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides true) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale as Policy", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_provides_infix_local() = check("fun f() { val Policy=LocalRespectSystemAnimationScale; androidx.compose.runtime.CompositionLocalProvider(Policy provides true) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_provides_dot_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalRespectSystemAnimationScale.provides(true)) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_provides_dot_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.provides(true)) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale as Policy", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_provides_dot_local() = check("fun f() { val Policy=LocalRespectSystemAnimationScale; androidx.compose.runtime.CompositionLocalProvider(Policy.provides(true)) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesDefault_infix_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalRespectSystemAnimationScale providesDefault true) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesDefault_infix_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy providesDefault true) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale as Policy", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesDefault_infix_local() = check("fun f() { val Policy=LocalRespectSystemAnimationScale; androidx.compose.runtime.CompositionLocalProvider(Policy providesDefault true) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesDefault_dot_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalRespectSystemAnimationScale.providesDefault(true)) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesDefault_dot_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesDefault(true)) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale as Policy", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesDefault_dot_local() = check("fun f() { val Policy=LocalRespectSystemAnimationScale; androidx.compose.runtime.CompositionLocalProvider(Policy.providesDefault(true)) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesComputed_infix_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalRespectSystemAnimationScale providesComputed { true }) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesComputed_infix_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy providesComputed { true }) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale as Policy", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesComputed_infix_local() = check("fun f() { val Policy=LocalRespectSystemAnimationScale; androidx.compose.runtime.CompositionLocalProvider(Policy providesComputed { true }) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesComputed_dot_direct() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalRespectSystemAnimationScale.providesComputed({ true })) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesComputed_dot_import() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ true })) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale as Policy", "Subject")
+ fun testC_provider_LocalRespectSystemAnimationScale_providesComputed_dot_local() = check("fun f() { val Policy=LocalRespectSystemAnimationScale; androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ true })) {} }", "import io.github.anastaci1a.localica.ui.LocalRespectSystemAnimationScale", "Subject")
+ fun testD_kind_member() = check("val k=PopupKind.BottomMenu", "import io.github.anastaci1a.localica.ui.spec.PopupKind")
+ fun testD_kind_import_alias() = check("val k=Kind.BottomMenu", "import io.github.anastaci1a.localica.ui.spec.PopupKind as Kind")
+ fun testD_kind_qualified() = check("val k=io.github.anastaci1a.localica.ui.spec.PopupKind.BottomMenu")
+ fun testD_kind_star_import() = check("val k=BottomMenu", "import io.github.anastaci1a.localica.ui.spec.PopupKind.*")
+ fun testD_kind_member_import() = check("val k=BottomMenu", "import io.github.anastaci1a.localica.ui.spec.PopupKind.BottomMenu")
+ fun testD_kind_typealias() = check("typealias Kind = io.github.anastaci1a.localica.ui.spec.PopupKind\nval k=Kind.BottomMenu")
+ fun testD_kind_callable_reference() = check("val k=io.github.anastaci1a.localica.ui.spec.PopupKind::valueOf")
+ fun testD_kind_type_argument() = check("fun <T> pick(): T? = null\nval k=pick<io.github.anastaci1a.localica.ui.spec.PopupKind>()")
+ fun testD_kind_executable_template() = check("val k=\"\${io.github.anastaci1a.localica.ui.spec.PopupKind.BottomMenu}\"")
+ fun testD_kind_shell() = check("val k=io.github.anastaci1a.localica.ui.spec.PopupKind.BottomMenu", "", "LocalicaScreen")
+ fun testD_kind_selection_panel() = check("val k=io.github.anastaci1a.localica.ui.spec.PopupKind.Legacy", "", "FloatingSelectionPanel")
+ fun testD_kind_queue() = check("val k=io.github.anastaci1a.localica.ui.spec.PopupKind.Dialog", "", "QueueScreen")
+ fun testD_kind_browser() = check("val k=io.github.anastaci1a.localica.ui.spec.PopupKind.Menu", "", "BrowserScreen")
  fun testC_pill_chromeVisibility_named() = check("fun f(anchor: GlassAnchor) { PopupActionPill(anchor, chromeVisibility={ 0f }) }", "", "Subject")
  fun testC_pill_chromeVisibility_positional() = check("fun f(anchor: GlassAnchor) { PopupActionPill(anchor, null, null, null, { 0f }) }", "", "Subject")
  fun testC_pill_chromeVisibility_alias() = check("fun f(anchor: GlassAnchor) { Pill(anchor, chromeVisibility={ 0f }) }", "import io.github.anastaci1a.localica.ui.PopupActionPill as Pill", "Subject")
