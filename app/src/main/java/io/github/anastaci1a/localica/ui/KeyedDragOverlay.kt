@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.KeyedDragContent
+import io.github.anastaci1a.localica.ui.components.actionDragBubble
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -31,7 +33,16 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     countDescription: (Int) -> String, cancelBottomMargin: Dp = 20.dp,
     liftInk: (P) -> androidx.compose.ui.graphics.Color = { androidx.compose.ui.graphics.Color.Unspecified },
     content: @Composable BoxScope.(T, P) -> Unit) {
+    BindKeyedDragState(state)
     val drag = state.drag ?: return
+    if (state.contentRole == KeyedDragContent.ActionSlots) {
+        val item = drag.moving.single()
+        GlassDragBubble(Modifier.actionDragBubble({ state.viewportOrigin }, { drag.pointer })
+            .then(state.slots?.overlayTag?.let { Modifier.testTag(it) } ?: Modifier), landing = { drag.handoff.value }) {
+            content(item, drag.presentation)
+        }
+        return
+    }
     // The overlay may be hosted outside its source's theming (#553). The lift glow or shadow follows
     // the ink captured with the presentation, so drag start continues the selection's lift.
     val liftStyle = rememberLiftShadow(liftInk(drag.presentation))

@@ -1,10 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.foundation.gestures.scrollBy
+import io.github.anastaci1a.localica.ui.components.*
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.*
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -22,7 +20,8 @@ internal class KeyedDrag<T : Any, P>(val original: List<T>, val moving: List<T>,
     val keyOf: (T) -> String,
     val initialBounds: Map<String, Rect>, val grab: Offset, point: Offset, val cardSize: androidx.compose.ui.geometry.Size, val presentation: P,
     /** Each item's hover lift when the drag began (#533), in its own coordinates. */
-    val lifts: Map<String, HoverGeometry> = emptyMap()) {
+    val lifts: Map<String, HoverGeometry> = emptyMap(),
+    motion: BrowsePinchProgressOwner = BrowsePinchProgressOwner()) {
     val keys = moving.map { keyOf(it) }.toSet()
     val remaining = original.filterNot { keyOf(it) in keys }
     val remainingPositions = remaining.withIndex().associate { keyOf(it.value) to it.index }
@@ -34,8 +33,8 @@ internal class KeyedDrag<T : Any, P>(val original: List<T>, val moving: List<T>,
     var dropItems by mutableStateOf<List<T>?>(null)
     var destinations by mutableStateOf<Map<String, Rect>?>(null)
     var returnFrom by mutableStateOf<Map<String, Rect>?>(null)
-    val landing = Animatable(0f)
-    val handoff = Animatable(0f)
+    val landing = motion.create(0f)
+    val handoff = motion.create(0f)
     /** The drop was saved: the items deselect and ease out of hover while handing off. */
     var committed by mutableStateOf(false)
     fun ordered() = remaining.take(insertion) + moving + remaining.drop(insertion)
@@ -44,25 +43,31 @@ internal class KeyedDrag<T : Any, P>(val original: List<T>, val moving: List<T>,
 /** Shared transaction for stable, unique String keys; null rendered slots are the insertion gap.
  * Presentation is captured once at lift; adapters own activation and content rendering. */
 @Stable
-internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, private val scope: CoroutineScope,
-    val keyOf: (T) -> String, private val optimisticCommit: Boolean = true) {
+internal open class KeyedDragState<T : Any, P>(val grid: LazyGridState, private val scope: CoroutineScope,
+    val keyOf: (T) -> String, private val optimisticCommit: Boolean = true,
+    val contentRole: KeyedDragContent = KeyedDragContent.ListItems,
+    private val presentation: (() -> P)? = null,
+    val slots: KeyedDragSlots<T, P>? = null) {
+    internal val motion = BrowsePinchProgressOwner()
     var items: List<T> = emptyList()
     /** The selection host's last drawn lift for an item key, so cards start from it. */
     var hoverLift: (String) -> HoverGeometry? = { null }
     /** The backdrop behind the list (not the list itself) that cards carry as their cutout. */
     var hoverBacking: FrostedBackdrop? = null
-    protected abstract fun capturePresentation(): P
+    protected open fun capturePresentation(): P = checkNotNull(presentation) { "Supply the keyed drag presentation slot" }.invoke()
+    internal fun destinationBounds(drag: KeyedDrag<T, P>) = slots?.destinations?.invoke(drag) ?: visualBounds()
     /** Publish an external drawing owner in the same event that removes the source rows. */
     var onDragStarted: () -> Unit = {}
     var viewportCoordinates: LayoutCoordinates? = null
     val itemCoordinates = mutableMapOf<String, LayoutCoordinates>()
-    fun visualBounds() = bounds() + itemCoordinates.filterValues { it.isAttached }.mapValues { (_, coordinates) ->
+    fun visualBounds() = slots?.sourceBounds?.invoke() ?: (bounds() + itemCoordinates.filterValues { it.isAttached }.mapValues { (_, coordinates) ->
         viewportCoordinates?.takeIf { it.isAttached }?.localBoundingBoxOf(coordinates, clipBounds = false)
             ?: run {
                 val at = coordinates.positionInRoot() - viewportOrigin
                 Rect(at, androidx.compose.ui.geometry.Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
             }
     }
+    )
     var drag by mutableStateOf<KeyedDrag<T, P>?>(null)
         private set
     /** The item under a recognized hold until its finger lifts (#735). Owners lift it in place like a
@@ -117,22 +122,29 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
     }
     fun bounds() = grid.layoutInfo.visibleItemsInfo.associate { item -> item.key.toString() to
         Rect(item.offset.x.toFloat(), item.offset.y.toFloat(), (item.offset.x + item.size.width).toFloat(), (item.offset.y + item.size.height).toFloat()) }
-    fun hit(point: Offset) = grid.layoutInfo.visibleItemsInfo.firstOrNull {
+    fun hit(point: Offset): T? {
+        if (contentRole == KeyedDragContent.ActionSlots) {
+            val key = visualBounds().entries.firstOrNull { it.value.contains(point) }?.key ?: return null
+            return items.firstOrNull { keyOf(it) == key }
+        }
+        return grid.layoutInfo.visibleItemsInfo.firstOrNull {
         point.x >= it.offset.x && point.x < it.offset.x + it.size.width && point.y >= it.offset.y && point.y < it.offset.y + it.size.height
     }?.key?.toString()?.let { key -> items.firstOrNull { keyOf(it) == key } }
+    }
     fun begin(item: T, selected: Set<String>, point: Offset): Boolean {
         val rects = visualBounds()
         val held = rects[keyOf(item)] ?: return false
         val moving = items.filter { keyOf(it) in selected }
         if (moving.isEmpty()) return false
         drag = KeyedDrag(items, moving, keyOf, rects.filterKeys { it in selected }, point - held.topLeft, point, held.size, capturePresentation(),
-            moving.mapNotNull { item -> keyOf(item).let { key -> hoverLift(key)?.let { key to it } } }.toMap())
+            moving.mapNotNull { item -> keyOf(item).let { key -> hoverLift(key)?.let { key to it } } }.toMap(), motion)
         onDragStarted()
         return true
     }
     fun move(point: Offset) { drag?.takeUnless { it.dropping }?.let { it.pointer = point
         refreshCancelHover()
-        if (!it.overCancel) updateInsertion(it) } }
+        slots?.onMove?.invoke(it)
+        if (contentRole == KeyedDragContent.ListItems && !it.overCancel) updateInsertion(it) } }
     private fun updateInsertion(d: KeyedDrag<T, P>) {
         val visible = grid.layoutInfo.visibleItemsInfo
         val gap = visible.firstOrNull { it.key == DropGapKey }
@@ -157,6 +169,15 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
         }
     }
     suspend fun autoScroll(edge: Float) {
+        val viewport = slots?.edgeViewport
+        if (viewport != null) {
+            val d = drag?.takeUnless { it.dropping } ?: return
+            motion.scrollDragEdge(contentRole, active = { !d.dropping && drag === d },
+                speed = { viewport.speed(d.pointer, edge) }, edge = { edge }, scroll = viewport.scroll,
+                afterScroll = { slots?.onMove?.invoke(d) },
+                awaitMotion = { snapshotFlow { d.dropping || viewport.speed(d.pointer, edge) != 0f }.first { it } })
+            return
+        }
         // State-only adapters can scroll before an overlay has supplied host dimensions.
         fun visibleHeight() = (viewportHeight.takeIf { it > 0 } ?: grid.layoutInfo.viewportSize.height) - obscuredBottom
         fun effectiveEdge() = minOf(edge, visibleHeight().coerceAtLeast(0f) / 2f)
@@ -169,70 +190,69 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
                 else -> 0f
             }
         }
-        var previousFrame = withFrameNanos { it }
-        while (currentCoroutineContext().isActive) {
-            val d = drag?.takeUnless { it.dropping } ?: return
-            if (speed(d) == 0f) {
-                snapshotFlow { d.dropping || speed(d) != 0f }.first { it }
-                previousFrame = withFrameNanos { it }
-            }
-            val frame = withFrameNanos { it }
-            val seconds = ((frame - previousFrame) / 1_000_000_000f).coerceIn(0f, 0.032f)
-            previousFrame = frame
-            if (d.dropping || drag !== d) return
-            val velocity = speed(d)
-            if (velocity != 0f) {
-                val consumed = grid.scrollBy(velocity * effectiveEdge() * 12f * seconds)
-                updateInsertion(d)
-                if (consumed == 0f) {
-                    val resting = d.pointer
-                    snapshotFlow { d.dropping || d.pointer != resting }.first { it }
-                    previousFrame = withFrameNanos { it }
-                }
-            }
-        }
+        val d = drag?.takeUnless { it.dropping } ?: return
+        motion.scrollDragEdge(contentRole, active = { !d.dropping && drag === d }, speed = { speed(d) },
+            edge = { effectiveEdge() }, scroll = { grid.consumeDragScroll(it) }, afterScroll = { updateInsertion(d) },
+            awaitMotion = { snapshotFlow { d.dropping || speed(d) != 0f }.first { it } },
+            awaitUnblocked = { val resting = d.pointer; snapshotFlow { d.dropping || d.pointer != resting }.first { it } })
     }
+
     fun finish(cancel: Boolean, reducedMotion: Boolean, onMoved: () -> Unit = {}, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit) {
         val d = drag?.takeUnless { it.dropping } ?: return
         d.dropping = true
-        val expected = if (cancel) items else d.ordered()
-        grid.requestScrollToItem(grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset)
+        val cancelled = cancel || slots?.canDrop?.invoke(d) == false
+        val expected = if (cancelled || contentRole == KeyedDragContent.ActionSlots) items else d.ordered()
+        if (contentRole == KeyedDragContent.ListItems) grid.requestScrollToItem(grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset)
         d.dropItems = expected
         scope.launch {
+            fun refreshDestination() { if (slots != null) d.destinations = destinationBounds(d) }
+            fun actionDestination() = d.destinations?.get(keyOf(d.moving.single()))?.center ?: d.pointer
+            suspend fun land() {
+                val release = d.pointer
+                motion.landDrag(d.landing, reducedMotion, contentRole) {
+                    refreshDestination()
+                    if (contentRole == KeyedDragContent.ActionSlots)
+                        d.pointer = actionDragPosition(release, actionDestination(), d.landing.value)
+                }
+            }
             val result = CompletableDeferred<Boolean>()
-            if (cancel) result.complete(false)
+            if (cancelled) result.complete(false)
             else commit(d.keys, d.remaining.getOrNull(d.insertion)?.let(keyOf)) { result.complete(it) }
-            withFrameNanos { }; withFrameNanos { }
-            d.destinations = visualBounds()
-            d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
-            val saved = if (cancel) false else withTimeoutOrNull(5000) { result.await() } == true
-            if (!saved && !cancel) {
+            motion.warmDragDestination()
+            slots?.prepareDestination?.invoke(d)
+            d.destinations = destinationBounds(d)
+            land()
+            val saved = if (cancelled) false else withTimeoutOrNull(5000) { result.await() } == true
+            if (!saved && !cancelled) {
                 d.returnFrom = d.destinations
                 d.landing.snapTo(0f)
                 d.dropItems = items
-                withFrameNanos { }; withFrameNanos { }
-                d.destinations = visualBounds()
-                d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
+                motion.warmDragDestination()
+                d.destinations = destinationBounds(d)
+                land()
             }
             if (saved && !optimisticCommit) {
                 // Publish-before-acknowledgement controllers are authoritative. Never hide new
                 // identities (or resurrect removed ones) behind the pointer's original snapshot.
-                withFrameNanos { }; withFrameNanos { }
+                motion.warmDragDestination()
                 if (items.map { keyOf(it) } != expected.map { keyOf(it) }) {
                     d.returnFrom = d.destinations
                     d.landing.snapTo(0f)
                     d.dropItems = items
-                    withFrameNanos { }; withFrameNanos { }
-                    d.destinations = visualBounds()
-                    d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
+                    motion.warmDragDestination()
+                    d.destinations = destinationBounds(d)
+                    land()
                 } else d.dropItems = items
             }
-            if (saved && optimisticCommit && items.map { keyOf(it) } != expected.map { keyOf(it) }) {
+            if (saved && optimisticCommit && contentRole == KeyedDragContent.ListItems && items.map { keyOf(it) } != expected.map { keyOf(it) }) {
                 optimisticBase = items.map { keyOf(it) }
                 optimistic = expected
             }
             if (saved) { d.committed = true; onMoved() }
-            d.handoff.animateTo(1f, tween(if (reducedMotion) 0 else 220))
+            motion.handoffDrag(d.handoff, reducedMotion, contentRole) {
+                refreshDestination()
+                if (contentRole == KeyedDragContent.ActionSlots) d.pointer = actionDestination()
+            }
             if (drag === d) drag = null
         }
     }
@@ -251,3 +271,16 @@ internal fun Modifier.keyedDragItem(state: KeyedDragState<*, *>, key: String, sc
         if (scene.regions.values.any { it.itemKey == key && (it.selected || it.visibility() > 0f) }) scene.placement++
     }
 }
+
+/** Model and measured destination slots extend the existing transaction without another drag controller. */
+internal class KeyedDragSlots<T : Any, P>(
+    val destinations: (KeyedDrag<T, P>) -> Map<String, Rect>,
+    val prepareDestination: suspend (KeyedDrag<T, P>) -> Unit = {},
+    val sourceBounds: (() -> Map<String, Rect>)? = null,
+    val edgeViewport: KeyedDragEdgeViewport? = null,
+    val onMove: (KeyedDrag<T, P>) -> Unit = {},
+    val canDrop: (KeyedDrag<T, P>) -> Boolean = { true },
+    val overlayTag: String? = null,
+)
+
+@Composable internal fun BindKeyedDragState(state: KeyedDragState<*, *>) = BindBrowsePinchProgress(state.motion)

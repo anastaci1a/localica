@@ -27,9 +27,33 @@ internal fun quickInsetAnimationSpec(spec: UiSpec, reduced: Boolean, speed: Floa
 @Composable
 internal fun rememberQuickInsetProgress(spec: UiSpec, visible: Boolean, measured: Boolean, reduced: Boolean, speed: Float): State<Float> {
     val animation = remember(spec, reduced, speed) { quickInsetAnimationSpec(spec, reduced, speed) }
-    return animateFloatAsState(if (visible && measured) 1f else 0f, animation, label = "Selection panel occupancy")
+    return rememberTweenState(if (visible && measured) 1f else 0f, animation, label = "Selection panel occupancy")
 }
 
 /** A measured occupancy destination is applied only within its owner's Foundation mutation. */
 internal fun ScrollScope.consumeInsetDestination(destination: Float, admitted: Float, consumed: Float): Float =
     scrollBy(minOf(destination, admitted) - consumed)
+
+/** The existing Compose-backed scalar evaluator is also the exact compatibility path for semantic scene tweens. */
+@Composable private fun rememberTweenState(target: Float, animation: AnimationSpec<Float>, label: String): State<Float> =
+    animateFloatAsState(target, animation, label = label)
+
+internal fun sceneMotionDuration(spec: UiSpec, profile: MotionProfile, reduced: Boolean, faster: Boolean): Int {
+    val normal = (spec.motion.getValue(profile) as MotionProfileSpec).durationMs
+    if (reduced) return 0
+    return when (profile) {
+        MotionProfile.NavigationChrome, MotionProfile.MiniPlayerInk, MotionProfile.PlayerAspect, MotionProfile.NavigationRoute ->
+            if (faster) normal / 2 else normal * 3 / 4
+        MotionProfile.Heading -> if (faster) normal * 2 / 3 else normal
+        else -> normal
+    }
+}
+internal fun <T> sceneTween(spec: UiSpec, profile: MotionProfile, reduced: Boolean, faster: Boolean): androidx.compose.animation.core.TweenSpec<T> {
+    val easing = (spec.motion.getValue(profile) as MotionProfileSpec).easing
+    return tween(sceneMotionDuration(spec, profile, reduced, faster),
+        easing = CubicBezierEasing(easing.x1, easing.y1, easing.x2, easing.y2))
+}
+@Composable internal fun rememberSceneFloat(target: Float, profile: MotionProfile, reduced: Boolean, faster: Boolean): State<Float> {
+    val spec = io.github.anastaci1a.localica.ui.spec.LocalUiSpec.current.spec
+    return rememberTweenState(target, sceneTween(spec, profile, reduced, faster), "Shared scene value")
+}

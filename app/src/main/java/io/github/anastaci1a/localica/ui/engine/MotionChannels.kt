@@ -52,3 +52,10 @@ private fun requireColorCapacity(values: List<ClosedFloatingPointRange<Double>>)
 }
 @Composable fun rememberMotionRect(key: Any,initial: Rect,ranges: EdgeRanges): MotionRect { val clock=ownerClock(); val value=remember(clock,key) { MotionRect(clock,initial,ranges,key) }; require(value.ranges==ranges) { "Owner ranges are immutable" }; DisposableEffect(value) { onDispose { value.dispose() } }; return value }
 @Composable fun rememberMotionColor(key: Any,initial: Color): MotionColor { val clock=ownerClock(); val value=remember(clock,key) { MotionColor(clock,initial,key) }; DisposableEffect(value) { onDispose { value.dispose() } }; return value }
+
+/** Exact color-state compatibility for the semantic scene catalog, including Compose's original converter and clamps. */
+@Composable internal fun rememberSceneColor(target: Color, profile: MotionProfile, reduced: Boolean, faster: Boolean): State<Color> {
+    val spec = LocalUiSpec.current.spec
+    return androidx.compose.animation.animateColorAsState(target, sceneTween(spec, profile, reduced, faster),
+        label = "Shared scene ink")
+}

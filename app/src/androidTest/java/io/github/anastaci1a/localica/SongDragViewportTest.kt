@@ -30,6 +30,7 @@ class SongDragViewportTest {
             val scope = rememberCoroutineScope()
             dragScope = scope
             reorder = remember { SongDragState(grid, scope).also { it.items = songs } }
+            BindKeyedDragState(reorder)
             LazyVerticalGrid(columns = GridCells.Fixed(1), state = grid, modifier = Modifier.height(480.dp)) {
                 items(reorder.rendered(songs), key = { it?.key ?: DropGapKey }) {
                     Box(Modifier.fillMaxWidth().height(64.dp))

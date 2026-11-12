@@ -31,3 +31,37 @@ import io.github.anastaci1a.localica.ui.spec.MotionProfile
     val motion = rememberProfileValue(key, target, profile)
     return remember(motion, start, end) { ColorProducer { lerp(start, end, motion.value()) } }
 }
+
+/** Semantic facades select their own catalog entry; callers supply intent and effective accessibility policy. */
+@Composable internal fun rememberNavigationChrome(insideCollection: Boolean, reduced: Boolean, faster: Boolean): State<Float> =
+    rememberSceneFloat(if (insideCollection) 0f else 1f, MotionProfile.NavigationChrome, reduced, faster)
+
+@Composable internal fun rememberArtworkAspect(target: Float, reduced: Boolean, faster: Boolean): State<Float> =
+    rememberSceneFloat(target, MotionProfile.PlayerAspect, reduced, faster)
+
+@Composable internal fun rememberMiniPlayerInk(target: Color, reduced: Boolean, faster: Boolean): ColorProducer {
+    val state = rememberSceneColor(target, MotionProfile.MiniPlayerInk, reduced, faster)
+    return remember(state) { ColorProducer { state.value } }
+}
+
+@Composable internal fun HeadingContent(title: String, reduced: Boolean, faster: Boolean,
+    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier, content: @Composable (String) -> Unit) =
+    RetainedContentSwap(title, MotionProfile.Heading, reduced, faster, modifier, false) { shown, _ -> content(shown) }
+
+@Composable internal fun <T> LyricsContent(target: T, reduced: Boolean,
+    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier, content: @Composable (T, () -> Float) -> Unit) =
+    RetainedContentSwap(target, MotionProfile.LyricsSwap, reduced, false, modifier, true, content)
+
+@Composable internal fun LyricsFollowPresence(visible: Boolean, reduced: Boolean,
+    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier, content: @Composable () -> Unit) =
+    FollowPresence(visible, reduced, modifier, content)
+
+@Composable internal fun OptionsPages(selected: Int, reduced: Boolean,
+    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier, content: @Composable (Int) -> Unit) =
+    OptionsPagePlacement(selected, reduced, modifier, content)
+
+@Composable internal fun rememberPlayerBackground(target: Float): MotionValue =
+    rememberProfileValue("player-background", target, MotionProfile.ArtworkLayout)
+
+@Composable internal fun rememberPlayerCropRetention(target: Float): MotionValue =
+    rememberProfileValue("player-crop", target, MotionProfile.CropRetention)

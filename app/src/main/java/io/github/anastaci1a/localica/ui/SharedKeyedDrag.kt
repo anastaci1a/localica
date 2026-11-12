@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.KeyedDragContent
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.*
@@ -18,6 +19,8 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
     itemAt: (Offset) -> T?,
     onHold: (T) -> Unit = {}, keysFor: (T) -> Set<String>? = { setOf(state.keyOf(it)) },
     onCommitted: () -> Unit = {}, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier {
+    BindKeyedDragState(state)
+    fun eventPoint(point: Offset) = if (state.contentRole == KeyedDragContent.ActionSlots) state.viewportOrigin + point else point
     val currentAcquisitionReady by rememberUpdatedState(acquisitionReady)
     val currentItemAt by rememberUpdatedState(itemAt)
     val currentOnHold by rememberUpdatedState(onHold)
@@ -35,13 +38,15 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             if (!enabled || !currentAcquisitionReady) return@awaitEachGesture
             if (state.drag != null) return@awaitEachGesture
-            val item = currentItemAt(down.position) ?: return@awaitEachGesture
+            val item = currentItemAt(eventPoint(down.position)) ?: return@awaitEachGesture
+            var heldPoint = down.position
             val held = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     if (event.changes.count { it.pressed } > 1) return@withTimeoutOrNull false
                     val change = event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull false
                     if (!change.pressed || change.isConsumed || (change.position - down.position).getDistance() > viewConfiguration.touchSlop) return@withTimeoutOrNull false
+                    heldPoint = change.position
                 }
                 @Suppress("UNREACHABLE_CODE") false
             }
@@ -53,6 +58,9 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
             var moving = false
             var gestureCommit = currentCommit
             try {
+                if (state.contentRole == KeyedDragContent.ActionSlots) {
+                    currentKeysFor(item)?.let { moving = state.begin(item, it, eventPoint(heldPoint)) }
+                }
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -62,7 +70,7 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
                         val canceled = change.isConsumed
                         change.consume()
                         if (moving) {
-                            if (!canceled) { state.move(change.position); haptics.dragReleased() }
+                            if (!canceled) { state.move(eventPoint(change.position)); haptics.dragReleased() }
                             state.finish(canceled || state.drag?.overCancel == true, reducedMotion, currentOnCommitted, gestureCommit)
                         }
                         break
@@ -76,7 +84,7 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
                             if (moving) gestureCommit = currentCommit
                         }
                     }
-                    if (moving) state.move(change.position)
+                    if (moving) state.move(eventPoint(change.position))
                 }
             } finally {
                 if (state.held == heldKey) state.held = null
