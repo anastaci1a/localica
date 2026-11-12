@@ -5,7 +5,7 @@ import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 
-/** #854: the surface kind of the enclosing popup; retained faces and presences inside it inherit its motion. */
+/** #854: the surface kind of the enclosing popup; retained faces inside it (rememberFaceExpansion) inherit its motion. */
 internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
 
 /** The native presenter owns one expansion and one measured rectangle. A native
