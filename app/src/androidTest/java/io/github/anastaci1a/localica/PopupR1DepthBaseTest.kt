@@ -197,6 +197,11 @@ class PopupR1DepthBaseTest {
                 verifyR1ReferenceClass(preOpenPixels, requireNotNull(baseScenePixels), tabBounds,
                     hostAt, home.currentOrigin, context.resources.displayMetrics.densityDpi, output)
             } finally { preOpenPixels.recycle() }
+            if (fullReturnDiagnostic) {
+                // Resolve every reflected field before the first moving return phase.
+                File(output, "motion-law-setup-self-check.json").writeText(
+                    compose.runOnUiThread { fullReturnLawSnapshot(fixtureAnchor) }.toString(2))
+            }
             compose.onNodeWithText("Leave page").performClick()
             // A mounted departing page deliberately holds its menu at full size.
             // Cancel that page transition only after its inline draw is admitted;
@@ -241,7 +246,9 @@ class PopupR1DepthBaseTest {
                     if (fullReturnDiagnostic) {
                         val diagnostic = JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
                             .put("presentedNanos", compose.runOnUiThread { clock.stamp.nanos }).put("phase", phase)
+                            .put("phaseBits", phase.toRawBits()).put("prepared", flight.prepared)
                             .put("originX", flight.origin.x).put("originY", flight.origin.y)
+                            .put("layerWidth", layer.width).put("layerHeight", layer.height)
                             .put("anchorBounds", fixtureAnchor.presentedBounds.toString())
                             .put("handedOff", flight.handedOff).put("originalWindow", originalWindow)
                             .put("law", compose.runOnUiThread { fullReturnLawSnapshot(fixtureAnchor) })
@@ -303,8 +310,14 @@ class PopupR1DepthBaseTest {
 
     /** Read-only diagnostic of the existing owner: no new clock, target or observer writes. */
     private fun fullReturnLawSnapshot(anchor: GlassAnchor): JSONObject {
-        fun field(owner: Any, name: String): Any? = owner.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(owner)
-        val owner = (field(anchor.contact.expansion, "owner\$delegate") as State<*>).value
+        val resolved = JSONArray()
+        fun field(owner: Any, name: String): Any? {
+            val field = owner.javaClass.getDeclaredField(name).apply { isAccessible = true }
+            resolved.put(JSONObject().put("class", owner.javaClass.name).put("field", name).put("type", field.type.name))
+            return field.get(owner)
+        }
+        val borrowedPhase = requireNotNull(field(anchor.contact.expansion, "phase"))
+        val owner = (field(borrowedPhase, "owner\$delegate") as State<*>).value
             as io.github.anastaci1a.localica.ui.engine.ExpandCollapse
         val basis = (field(owner, "basis\$delegate") as State<*>).value
             as io.github.anastaci1a.localica.ui.engine.ExpansionBasis
@@ -316,7 +329,7 @@ class PopupR1DepthBaseTest {
         val shape = anchor.contact.state.output.value
         fun rect(r: Rect) = JSONArray(listOf(r.left, r.top, r.right, r.bottom))
         val pixels = glassMorphPixelBounds(actual)
-        return JSONObject().put("phase", phase).put("phaseVelocity", owner.phase.velocity())
+        return JSONObject().put("resolvedFields", resolved).put("phase", phase).put("phaseVelocity", owner.phase.velocity())
             .put("geometry", curve.at(phase)).put("basisStart", rect(basis.startBounds)).put("basisEnd", rect(basis.endBounds))
             .put("basisPrediction", rect(predicted)).put("physicalBounds", rect(actual))
             .put("pixelBounds", JSONArray(listOf(pixels.left, pixels.top, pixels.right, pixels.bottom)))
