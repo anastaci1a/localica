@@ -117,7 +117,7 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: B
         if (flight.prepared && layer != null && !layer.isReleased) {
             if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
             drawPopupProjection(layer, flight.origin - flight.homeOrigin)
-            flight.handedOff = true
+            // Diagnostic control: suppress the handoff flag only.
             flight.wasProjected = true
         }
     }
