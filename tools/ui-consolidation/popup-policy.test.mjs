@@ -1,7 +1,7 @@
 import test from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import {checkPopupSource, ownsPopups, popupRules, popupOwners, auditPopupTree, popupRatchet} from './popup-policy.mjs';
+import {checkPopupSource, ownsPopups, popupRules, popupOwners, auditPopupTree, popupRatchet, kotlinTokens} from './popup-policy.mjs';
 const screen='app/src/main/java/io/github/anastaci1a/localica/ui/Screen.kt';
 const rules=source=>new Set(checkPopupSource(screen,source).map(x=>x.rule));
 test('calibration note 6: named roles are pinned to their actual callers',()=>{
@@ -281,3 +281,34 @@ test('only the exact sanctioned hosts invoke motion ingress',()=>{
 });
 
 test('ordinary Object member names cannot become motion ingress',()=>{assert.equal(rules('fun f(value: Any) { value.toString(); value.hashCode() }').size,0);});
+
+test('shared Navigation pill keeps its page shadow on the anchor-bearing modifier',()=>{
+ const source=fs.readFileSync(new URL('../../app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt',import.meta.url),'utf8');
+ const body=kotlinTokens(source.slice(source.indexOf('internal fun PopupActionPill(')));
+ const calls=body.flatMap((t,i)=>t.text==='pageGlassCaster'?[i]:[]);
+ assert.equal(calls.length,1,'the shared pill has one page-shadow binding');
+ const at=calls[0];
+ assert.equal(body[at-1].text,'.');
+ const receiver=body[at-2].text;
+ assert.notEqual(receiver,'Modifier','a fresh Modifier has no anchor marker for pageGlassCaster to resolve');
+ const declaration=body.findIndex((t,i)=>t.text==='val' && body[i+1]?.text===receiver && body[i+2]?.text==='=');
+ assert.ok(declaration>=0,'the page-shadow receiver has a bound modifier declaration');
+ assert.deepEqual(body.slice(declaration+3,declaration+9).map(t=>t.text),['modifier','.','glassAnchor','(','anchor',','],
+  'the page-shadow receiver retains the modifier that installs this anchor');
+});
+
+test('popup return reference binds the captured home to native presenters',()=>{
+ const source=fs.readFileSync(new URL('../../app/src/androidTest/java/io/github/anastaci1a/localica/PopupBrowseReturnReferenceHost.kt',import.meta.url),'utf8');
+ const requireHome=body=>{
+  const words=kotlinTokens(body).map(t=>t.text);
+  const shared=words.some((word,i)=>word==='GlassPopupHome' && words[i+1]==='(' && words[i+2]==='home');
+  const provided=words.some((word,i)=>word==='CompositionLocalProvider' && words[i+1]==='(' &&
+   words[i+2]==='LocalGlassPopupHome' && words[i+3]==='provides' && words[i+4]==='home');
+  assert.ok(shared || provided,'the captured home must be provided to its popup');
+ };
+ requireHome(source);
+ const missing=source.replace('GlassPopupHome(home, chrome = chrome, content = content)',
+  'Box(Modifier.fillMaxSize().glassPopupHome(home)) { content(); chrome() }');
+ assert.notEqual(missing,source);
+ assert.throws(()=>requireHome(missing),/captured home must be provided/);
+});

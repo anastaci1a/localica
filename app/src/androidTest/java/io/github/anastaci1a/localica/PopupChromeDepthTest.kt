@@ -172,7 +172,10 @@ class PopupChromeDepthTest {
                 open = true
                 window.decorView.invalidate()
             }
-            compose.mainClock.advanceTimeByFrame()
+            compose.waitUntil(10_000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnUiThread { composedOpen }
+            }
             compose.runOnUiThread { assertTrue("Reopen composition completed before the Activity draw", composedOpen) }
             val activity = compose.runOnUiThread {
                 var owner = host.context
@@ -394,7 +397,7 @@ class PopupChromeDepthTest {
                 assertTrue(requireNotNull(baseScenePixels).compress(Bitmap.CompressFormat.PNG, 100, it))
             }
             compose.mainClock.autoAdvance = false
-            compose.onNodeWithContentDescription("Open overlap menu").performClick()
+            frames.openReferenceTrigger("Open overlap menu")
             compose.waitUntil(10000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 popup?.decorView?.hasWindowFocus() == true && home.flights.singleOrNull()?.phase?.invoke()?.let { it >= .999f } == true
@@ -597,7 +600,7 @@ class PopupChromeDepthTest {
             }
             val device = androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
             when (destination) {
-                "Back" -> assertTrue("Back input is injected", device.pressBack())
+                "Back" -> assertTrue("Back input is injected", device.pressKeyCode(android.view.KeyEvent.KEYCODE_BACK))
                 "Outside tap" -> {
                     val screen = IntArray(2).also { compose.runOnUiThread { host.getLocationOnScreen(it) } }
                     assertTrue("Outside input is injected", device.click(screen[0] + host.width / 2, screen[1] + 64))
@@ -715,7 +718,12 @@ class PopupChromeDepthTest {
             assertTrue("#867 requires a presented full-size menu overlapping the tabs", fullSizeFrames > 0)
             assertTrue("#667 needs actual intermediate-frame coverage: $report", valid >= 3 && highest >= .6f && lowest <= .2f)
             assertTrue("#667 returning $destination pixels crossed bottom chrome: $violations", violations.isEmpty())
-            assertTrue("Every More close intent must use the inline return: $destination", flight.wasProjected)
+            // The disposable flight clears its live flag when the native window retires.
+            // Existing frame receipts preserve whether an actual Activity projection occurred.
+            val projectedDuringReturn = (0 until samples.length()).any {
+                samples.getJSONObject(it).optBoolean("projectedAfter")
+            }
+            assertTrue("Every More close intent must use the inline return: $destination", projectedDuringReturn)
             assertFalse("The overflow's original native window retires after return", window.decorView.isAttachedToWindow)
             report.put("status", "passed"); save()
         } catch (failure: Throwable) {

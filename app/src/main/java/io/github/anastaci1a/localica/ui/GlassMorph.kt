@@ -1176,8 +1176,9 @@ internal fun PopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop? = Loc
             icon = { Icon(appIconPainter(leadingIcon), null, it) },
             label = { Icon(appIconPainter(trailingIcon), null, it) })
     }
-    LiquidGlassSurface(modifier.glassAnchor(anchor, source, role = role, face = face).testTag(tag)
-        .then(if (raised) Modifier.pageGlassCaster(opacity = effectiveShadow) else Modifier), source = source, shadow = !raised,
+    val surfaceModifier = modifier.glassAnchor(anchor, source, role = role, face = face).testTag(tag)
+    LiquidGlassSurface(if (raised) surfaceModifier.pageGlassCaster(opacity = effectiveShadow) else surfaceModifier,
+        source = source, shadow = !raised,
         contactAdmission = { raised || !anchor.hidden },
         depthScale = if (raised) RaisedGlassDepthScale else anchor.depthScale, noneAtlasInput = noneAtlasInput) {
         anchor.captureInk()
