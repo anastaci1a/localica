@@ -264,6 +264,22 @@ class PopupSharedTitleHandoffTest {
                 log.append("frame=$frame phase=$p hidden=$hidden center=${receipt.center} scale=${receipt.scaleX},${receipt.scaleY} actual=$actual\n")
                 if (p == 1f && hidden && anchor.contact.state.momentum.settled) { complete = true; break }
             }
+            val measuredDestination = sample("destination-calibration")
+            // Lead-requested observation for a possible separate return defect. Keep it
+            // before opening assertions so their failure cannot discard the close cycle.
+            // Neither return settlement nor post-return title presence is asserted here.
+            compose.runOnUiThread { open = false }
+            var returned = false
+            for (frame in 0 until 300) {
+                step()
+                returned = compose.runOnUiThread {
+                    anchor.contact.expansion.value == 0f && anchor.contact.state.momentum.settled
+                        && !anchor.hidden && !anchor.modalPresent && window?.decorView?.isAttachedToWindow != true
+                }
+                if (returned) break
+            }
+            val afterReturn = sample("post-return-observation")
+            log.append("post-return observation settled=$returned titlePresent=${afterReturn != null} title=$afterReturn source=$source\n")
             assertTrue("Native admission must be sampled", admitted)
             assertTrue("Opening must reach expanded rest", complete)
             compose.waitUntil(5000) { compose.runOnUiThread { firstCopies.isNotEmpty() && firstCopies.all { it.result != -1 } } }
@@ -280,7 +296,7 @@ class PopupSharedTitleHandoffTest {
             }
             assertEquals("The first opening needs exactly one first-draw receipt",
                 1, compose.runOnUiThread { admissionReceipts.size })
-            val destination = requireNotNull(sample("destination-calibration")) { "Expanded title must draw" }
+            val destination = requireNotNull(measuredDestination) { "Expanded title must draw" }
             assertEquals("Equal font endpoints retain the same glyph height", source.height, destination.height, 1f)
             assertEquals("Endpoint slots do not clip the controlled title", source.width, destination.width, 1f)
             openingFrames.forEach { receipt ->
