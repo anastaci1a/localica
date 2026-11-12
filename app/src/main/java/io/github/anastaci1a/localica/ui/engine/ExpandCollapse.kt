@@ -84,12 +84,27 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     }
     /** Native readiness is an intent barrier, never an elapsed-frame cutoff. The #608 trajectory rests at the seam before admission. */
     internal fun nativeGate(at: Float) { clock.checkMutation(); require(at.isFinite() && at in 0f..1f); check(nativeBoundary==null && !motion.presented || nativeBoundary==at); nativeBoundary=at }
-    /** [begin] (#854 F-I5-2): the opening's begin stamp, its first admitted frame's presentation; it never precedes earlier intent. */
+    /** [begin] (#854 F-I5-2 (a)): an opening held at its native gate begins at its first admitted frame's presentation. Every channel
+     * rested unchanged across [begin, now], so the frames presented in between all showed the same rest value and none is rewritten;
+     * the first acknowledged frame catches up. A reversal, a moving channel or a begin before earlier intent begins now instead. */
     internal fun acknowledgeNativeGate(generation: Long,begin: FrameStamp?=null): Boolean {
         clock.checkMutation(); if(disposed || generation!=nativeGeneration || !awaitingNativeGate) return false
+        val heldBegin=heldOpeningBegin(begin)
         // A canceled, unadmitted opening returns without ever taking native ownership.
         if(pendingNative!=true || logical) nativeSide=requireNotNull(pendingNative)
-        pendingNative=null; identity=null; target(logical,at=begin?.takeIf { it.nanos>=lastStamp.nanos && it.nanos>=clock.presentedStamp.nanos }?:clock.stampNow); return true
+        pendingNative=null; identity=null; if(heldBegin!=null) target(logical,at=heldBegin,heldOpening=true) else target(logical); return true
+    }
+    /** The held opening's begin, or null to begin now. Its catch-up is at most min(3 display intervals, 25 ms of law time): the
+     * law runs at durationScale x [timeScale] real seconds per second, so a faster speed or animator scale shortens the real cap and
+     * an instant scale makes it zero, keeping the first acknowledged step within the same bound at every scale. */
+    internal fun heldOpeningBegin(begin: FrameStamp?): FrameStamp? {
+        if(begin==null || pendingNative!=true || !logical || held || touching) return null
+        // acknowledgeNativeGate admits only at physicalRest, so restSince is never null here; the null refusal is defence in depth.
+        val rested=(listOfNotNull(motion,cross)+(bound?.channels?.toList()?:emptyList())).map { it.restSince?:return null }.maxOf { it.nanos }
+        val now=clock.stampNow; val ctx=context()
+        val cap=(minOf(3.0*ctx.displayIntervalSeconds,.025*ctx.durationScale*timeScale())*1e9).toLong()
+        if(begin.nanos<lastStamp.nanos || begin.nanos<rested || begin.nanos>now.nanos) return null
+        return FrameStamp(maxOf(begin.nanos,now.nanos-cap),begin.sequence)
     }
     private fun notifyLifecycle(intent: Boolean=false) { lifecycle.toList().forEach { it(intent) } }
     private fun basisEdges(value: ExpansionBasis,p: Double)=value.at(boundCurve?.at(p.toFloat())?.toDouble()?:p)
@@ -110,7 +125,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         } catch(failure: Throwable) { localTimeScale=old; throw failure }
     }
     private fun context()=requireNotNull(clock.context) { "Publish real EngineContext through U11.00 before expansion intents" }
-    private fun guard(stamp: FrameStamp) { clock.checkMutation(); check(!disposed); require(stamp.nanos>=lastStamp.nanos && stamp.nanos>=clock.presentedStamp.nanos) { "Stale expansion input" } }
+    /** Intents never rewrite presented frames; the one exception is a held opening's begin ([heldOpeningBegin]), which rewrites none. */
+    private fun guard(stamp: FrameStamp,heldOpening: Boolean=false) { clock.checkMutation(); check(!disposed); require(stamp.nanos>=lastStamp.nanos && (heldOpening || stamp.nanos>=clock.presentedStamp.nanos)) { "Stale expansion input" } }
     private fun endpointSame(old: ExpansionBasis,new: ExpansionBasis)=old.at(if(logical) 1.0 else 0.0).contentEquals(new.at(if(logical) 1.0 else 0.0))
     private fun applyPendingNoop() { val next=pendingBasis; val old=basis; if(!held && !touching && bound==null && motion.settled && next!=null && old!=null && endpointSame(old,next)) { basis=next; pendingBasis=null; identity=null } }
     private fun classify(next: ExpansionBasis,stamp: FrameStamp): BasisChange {
@@ -220,7 +236,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     }
     private fun apply(value: Prepared,q: Boolean,stamp: FrameStamp) { value.sigma?.let { flightSigma=it }; if(pendingNative!=value.gate && value.gate!=null) nativeGeneration++; pendingNative=value.gate; logical=q; flightSpec=value.spec; lastStamp=stamp; identity=listOf(q,spec,basis,context(),timeScale()); commitAtomic(value.entries); notifyLifecycle(true) }
     fun target(expanded: Boolean,reason: ExpansionReason=ExpansionReason.Programmatic)=target(expanded,reason,clock.stampNow)
-    internal fun target(expanded: Boolean,reason: ExpansionReason=ExpansionReason.Programmatic,at: FrameStamp) { val stamp=at; guard(stamp); if(held) { logical=expanded; identity=null; lastStamp=stamp; return }; if(touching) { pendingTarget=expanded; lastStamp=stamp; return }; val current=requireNotNull(basis) { "Measure an expansion basis before target" }; if(identity==listOf(expanded,spec,current,context(),timeScale()) && pendingBasis==null) return; val initialize=reason==ExpansionReason.Restore && !motion.presented && bound?.channels?.any { it.presented }!=true; val prepared=prepare(expanded,stamp,current,bound,initialize=initialize); apply(prepared,expanded,stamp) }
+    internal fun target(expanded: Boolean,reason: ExpansionReason=ExpansionReason.Programmatic,at: FrameStamp,heldOpening: Boolean=false) { val stamp=at; guard(stamp,heldOpening); if(held) { logical=expanded; identity=null; lastStamp=stamp; return }; if(touching) { pendingTarget=expanded; lastStamp=stamp; return }; val current=requireNotNull(basis) { "Measure an expansion basis before target" }; if(identity==listOf(expanded,spec,current,context(),timeScale()) && pendingBasis==null) return; val initialize=reason==ExpansionReason.Restore && !motion.presented && bound?.channels?.any { it.presented }!=true; val prepared=prepare(expanded,stamp,current,bound,initialize=initialize); apply(prepared,expanded,stamp) }
     /** The departing home owns presentation until disposal. Preserve the same phase and edges. */
     internal fun hold() {
         val stamp=clock.stampNow; guard(stamp); check(!touching) { "Contact and departing-home ownership cannot overlap" }

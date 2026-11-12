@@ -34,11 +34,10 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     internal val presentedStamp: FrameStamp get()=last
     internal val isObserving: Boolean get()=observing
     internal suspend fun awaitPresented(window: android.view.Window)=source.awaitPresented(window)
-    /** #854 F-I5-2: an opening begins when its first admitted frame was presented, not when the receipt was delivered, clamped so it is
-     * never before [admitted] or this clock's last presented frame and never after now; the first acknowledged frame's catch-up is then
-     * at most the frames the engine already stepped while waiting. */
+    /** #854 F-I5-2 (a): an opening held at its native gate begins at its first admitted frame's completion [presentedNanos], never before
+     * [admitted] and never after now. ExpandCollapse accepts it only while the opening rested unchanged, and caps its catch-up. */
     internal fun beginStamp(presentedNanos: Long,admitted: FrameStamp): FrameStamp { val now=stampNow
-        return FrameStamp(presentedNanos.coerceIn(maxOf(admitted.nanos,last.nanos),now.nanos),now.sequence) }
+        return FrameStamp(maxOf(presentedNanos,admitted.nanos).coerceAtMost(now.nanos),now.sequence) }
     internal fun checkMutation() { checkOwner(); check(!observing) { "An observer cannot drive presentation" } }
     internal fun allocateId(): Long { checkMutation(); return ++nextId }
     internal fun register(motion: ActiveMotion) { checkMutation(); if(active.add(motion)) wake.trySend(Unit) }
