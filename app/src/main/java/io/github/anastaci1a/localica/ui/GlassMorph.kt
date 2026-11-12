@@ -266,8 +266,8 @@ private fun GlassAnchor?.registerGlassSurface(plane: ShadowPlane, material: Bool
 private fun Modifier.bindGlassSurface(anchor: GlassAnchor?, source: FrostedBackdrop?, cornerRadius: androidx.compose.ui.unit.Dp?): Modifier {
     val binding = foldIn<GlassDepthMarker?>(null) { found, element -> if (element is GlassDepthMarker) element else found }
     SideEffect { if (anchor != null) {
-        anchor.source = binding?.source ?: source
-        anchor.cornerRadius = if (binding?.role == TriggerRole.PlainIcon) null else cornerRadius
+        anchor.source = source
+        anchor.cornerRadius = cornerRadius
     } }
     return this
 }
@@ -294,8 +294,8 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor?, source: FrostedBackdrop?
     val home = LocalGlassPopupHome.current
     SideEffect {
         anchor.popupHome = home
-        if (source != null) anchor.source = source
-        if (face != null) anchor.face = face
+        anchor.source = source
+        anchor.face = face
         anchor.bindRole(role)
         if (role == TriggerRole.PlainIcon) anchor.cornerRadius = null
     }
