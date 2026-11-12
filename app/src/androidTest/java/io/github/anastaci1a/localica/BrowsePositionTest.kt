@@ -23,7 +23,7 @@ class BrowsePositionTest {
         val tracks = (0..99).map { Track("reselect:$it", "Song ${it.toString().padStart(3, '0')}", fileName = "$it.mp3", relativePath = "$it.mp3") }
         var route by mutableStateOf(BrowseRoute(MainTab.Library, filter = MediaKind.Song))
         var request by mutableIntStateOf(0)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
                 PlaylistState(loading = false), route, { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false,
                 scrollToTopRequest = request, reducedMotion = true, queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)

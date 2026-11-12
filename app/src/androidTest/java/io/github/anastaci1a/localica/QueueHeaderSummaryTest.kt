@@ -19,7 +19,7 @@ class QueueHeaderSummaryTest {
         val queue = ListeningQueue(id = "summary", name = "Summary", entries = entries, currentEntryId = "three")
         val state = mutableStateOf(QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false))
         compose.setContent {
-            LocalicaTheme {
+            EngineTheme(reduced = true) {
                 QueueScreen(state.value, null,
                     library = LibraryUiState(LibrarySnapshot(tracks = listOf(first, second)), loading = false),
                     reducedMotion = true)

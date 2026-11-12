@@ -55,7 +55,7 @@ class CollectionControlsBackdropTest {
         val route = BrowseRoute(tab, MediaRef(kind, group.id), group.title)
         var library by mutableStateOf(LibraryUiState(initial, loading = false))
         var scene: BrowseBackdropScene? = null
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalBrowseBackdropObserver provides { value, mounted -> if (mounted) scene = value }) {
                 Box(Modifier.size(360.dp, 640.dp)) {
                     BrowserScreen(library, PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null,

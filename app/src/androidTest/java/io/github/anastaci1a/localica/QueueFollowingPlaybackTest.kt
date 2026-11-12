@@ -91,7 +91,7 @@ class QueueFollowingPlaybackTest {
             }
             val library = LibraryUiState(LibrarySnapshot(tracks = listOf(track)), loading = false)
             val playlists = PlaylistState(loading = false)
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = reducedMotion) {
                 val state by controller.state.collectAsState()
                 if (mounted) QueueScreen(state, controller, library, playlists, reducedMotion = reducedMotion)
             } }

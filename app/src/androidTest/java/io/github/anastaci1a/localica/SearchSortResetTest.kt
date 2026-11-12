@@ -71,7 +71,7 @@ class SearchSortResetTest {
                 }
                 sorting = rememberSaveable { mutableStateOf(false) }
                 val route = navigation.value.route
-                LocalicaTheme {
+                EngineTheme(reduced = true) {
                     key(route.key) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), route,
                             { record("route sort=${it.querySort} ascending=${it.queryAscending}"); navigation.value = navigation.value.update(it) },

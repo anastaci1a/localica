@@ -47,7 +47,7 @@ class PinnedHomePreparationTest {
         var opened: BrowserItem? = null
         var openedRows: List<SongRow> = emptyList()
         compose.setContent {
-            LocalicaTheme {
+            EngineTheme(reduced = true) {
                 CompositionLocalProvider(LocalBrowsePresentationCache provides cache,
                     LocalBrowseSortSnapshot provides BrowseSortSnapshot.Default) {
                     PinnedHome(LibraryUiState(snapshot, loading = false), playlists, pins,

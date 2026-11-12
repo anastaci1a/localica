@@ -272,7 +272,7 @@ class ArtistAlbumSortOrderTest {
         val session = SessionSelection()
         init {
             preferences.write(baseRoute, style.copy(albumGrouping = true), true)
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = reduced) {
                 CompositionLocalProvider(LocalSessionSelection provides session) {
                     Box(Modifier.fillMaxSize()) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route,

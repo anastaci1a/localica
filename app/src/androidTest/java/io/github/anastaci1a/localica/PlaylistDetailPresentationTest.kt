@@ -68,7 +68,7 @@ class PlaylistDetailPresentationTest {
         queues: QueueController? = null): Fixture {
         val f = Fixture(initial, tracks)
         BrowsePreferences(context).write(f.route, BrowseStyle(quickSearch = true), true)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             val playlists = controller?.state?.collectAsState()?.value ?: f.playlists
             val queueState = queues?.state?.collectAsState()?.value ?: QueueUiState(loading = false)
             CompositionLocalProvider(LocalBrowseArtwork provides f.artwork, LocalSessionSelection provides f.selection) {

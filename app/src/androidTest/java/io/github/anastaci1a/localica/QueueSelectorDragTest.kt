@@ -123,7 +123,7 @@ class QueueSelectorDragTest {
                 QueueController(db.queues(), preferences, (context.applicationContext as LocalicaApplication).library, scope)
             }
             runBlocking { withTimeout(5000) { controller.state.first { !it.loading } } }
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = reducedMotion) {
                 val state by controller.state.collectAsState()
                 val density = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(density.density * densityScale, fontScale),

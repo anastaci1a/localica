@@ -28,7 +28,7 @@ class KeyedDragTest {
 
     private fun fixture(optimisticCommit: Boolean = true, reducedMotion: Boolean = true, startDrag: Boolean = true,
         haptics: ControlHaptics? = null) {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reducedMotion) {
             val grid = rememberLazyGridState()
             val scope = rememberCoroutineScope()
             reorder = remember {

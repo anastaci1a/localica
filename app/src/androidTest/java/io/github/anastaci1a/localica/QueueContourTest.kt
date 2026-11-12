@@ -32,7 +32,7 @@ class QueueContourTest {
         var landscape by mutableStateOf(false)
         var reduced by mutableStateOf(false)
         var radius = 0f
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             radius = with(LocalDensity.current) { 28.dp.toPx() }
             BoxWithConstraints(Modifier
                 .size(if (landscape) 320.dp else 280.dp, if (landscape) 240.dp else 360.dp)

@@ -31,7 +31,7 @@ class ListBackTest {
         val tracks = (0..99).map { Track("back:$it", "Song ${it.toString().padStart(3, '0')}", fileName = "$it.mp3", relativePath = "$it.mp3") }
         var route by mutableStateOf(BrowseRoute(MainTab.Library, filter = MediaKind.Song))
         var ordinaryBack by mutableIntStateOf(0)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             BackHandler { ordinaryBack++ }
             BrowserScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaylistState(loading = false), route,
                 { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false,
@@ -103,7 +103,7 @@ class ListBackTest {
     @Test fun authoritativeEmptyFilterCanClearWithoutWaitingForRows() {
         var route by mutableStateOf(BrowseRoute(MainTab.Library, filter = MediaKind.Album))
         var ordinaryBack by mutableIntStateOf(0)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             BackHandler { ordinaryBack++ }
             BrowserScreen(LibraryUiState(LibrarySnapshot(), loading = false), PlaylistState(loading = false), route,
                 { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false,
@@ -124,7 +124,7 @@ class ListBackTest {
         val route = BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id), playlist.name)
         val selection = SessionSelection()
         var ordinaryBack by mutableIntStateOf(0)
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalSessionSelection provides selection) {
+        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(LocalSessionSelection provides selection) {
             BackHandler { ordinaryBack++ }
             BrowserScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaylistState(listOf(playlist), false), route,
                 {}, {}, {}, { _, _, _ -> }, null, null, true, false,

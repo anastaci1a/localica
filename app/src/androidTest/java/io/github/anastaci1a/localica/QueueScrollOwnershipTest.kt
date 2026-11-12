@@ -27,7 +27,7 @@ class QueueScrollOwnershipTest {
     private var viewportFraction by mutableFloatStateOf(1f)
 
     private fun showQueue(initialIndex: Int = 0, onPinchRelease: ((Boolean) -> Unit)? = null, onSettled: (Boolean) -> Unit = {}) {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             list = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
             BoxWithConstraints(Modifier.fillMaxWidth().fillMaxHeight(viewportFraction)) {
                 QueueSurface(progress, InterfaceSettings(reducedMotion = true), onSettled) {

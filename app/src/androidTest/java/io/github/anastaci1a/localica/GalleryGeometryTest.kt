@@ -35,7 +35,7 @@ class GalleryGeometryTest {
         var density = 1f
         try {
             prefs.write(route, BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 1), false)
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = true) {
                 density = LocalDensity.current.density
                 Box(Modifier.width(300.dp)) {
                     BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),

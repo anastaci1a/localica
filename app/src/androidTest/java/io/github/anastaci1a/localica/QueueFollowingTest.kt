@@ -168,7 +168,7 @@ class QueueFollowingTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         BrowsePreferences(context).write(route, style.copy(quickSearch = false), true)
         // Stable source identities matter: incidental fixture recomposition must not fabricate queries.
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reducedMotion) {
             val holder = rememberSaveableStateHolder()
             val view = LocalView.current
             // Match the draw witness to the composition that admitted its children.

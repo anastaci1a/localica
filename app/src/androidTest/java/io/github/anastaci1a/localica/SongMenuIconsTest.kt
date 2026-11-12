@@ -35,7 +35,7 @@ class SongMenuIconsTest {
 
     @Test fun songMenuShowsRefreshedIcons() {
         val tracks = (0..2).map { Track("menu:$it", "Song $it", artist = "Artist", fileName = "$it.mp3", relativePath = "$it.mp3") }
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             BrowserScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaylistState(),
                 BrowseRoute(MainTab.Songs, null, null), {}, {}, {}, { _, _, _ -> },
                 null, null, true, false, reducedMotion = true, queryDispatcher = Dispatchers.Unconfined)
@@ -52,7 +52,7 @@ class SongMenuIconsTest {
 
     @Test fun playlistMenuShowsRefreshedIcons() {
         val playlist = ManualPlaylist(id = "p", name = "Mix")
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             BrowserScreen(LibraryUiState(LibrarySnapshot(), loading = false), PlaylistState(listOf(playlist), loading = false),
                 BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, "p"), "Mix"), {}, {}, {}, { _, _, _ -> },
                 null, null, true, false, reducedMotion = true, queryDispatcher = Dispatchers.Unconfined)
