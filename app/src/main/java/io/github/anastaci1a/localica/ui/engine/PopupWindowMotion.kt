@@ -76,11 +76,29 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     fun dispose() = expansion.dispose()
 }
 
+/** #854: a popup's kind follows its placement and its trigger's role, which bind after the first composition, but it changes only
+ * while the popup is not present. One owner then serves a whole presentation: its native gate coroutine, window attachment and faces
+ * never hold a disposed owner, and a kind that settles while open (a menu first composed visible before its trigger is measured)
+ * applies from the next presentation. */
+internal class PopupKindLatch(private var committed: PopupKind) {
+    fun settle(derived: PopupKind, present: Boolean): PopupKind = if (present) committed else derived
+    fun commit(kind: PopupKind) { committed = kind }
+}
+
+/** The kind of [key]'s popup this composition: [derived] while not [present], else the kind its present owner was built with.
+ * The latch commits only applied compositions. */
+@Composable internal fun settledPopupKind(key: Any, derived: PopupKind, present: Boolean): PopupKind {
+    val latch = remember(key) { PopupKindLatch(derived) }
+    val kind = latch.settle(derived, present)
+    SideEffect { latch.commit(kind) }
+    return kind
+}
+
 /** The Engine owns construction, spec updates and disposal; hosts borrow its view. */
 @Composable internal fun rememberPopupWindowMotion(key: Any, prepared: Boolean, quiet: Boolean, kind: PopupKind = PopupKind.Legacy): PopupWindowMotion {
     val clock = ownerClock()
     val spec = io.github.anastaci1a.localica.ui.spec.LocalUiSpec.current.spec.expansion
-    // A kind follows its trigger's role, which binds after the first composition; a changed kind is a new owner, never a retarget.
+    // [kind] is settled (settledPopupKind): it changes only at closed rest, and a changed kind is a new owner, never a retarget.
     val motion = remember(clock, key, kind) { PopupWindowMotion(clock, spec, key, prepared, quiet, kind) }
     SideEffect { motion.updateSpec(spec) }
     DisposableEffect(motion) { onDispose { motion.dispose() } }

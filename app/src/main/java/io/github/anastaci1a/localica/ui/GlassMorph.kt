@@ -364,19 +364,22 @@ private fun android.view.Window.glassInput(enabled: Boolean) {
     if (enabled) clearFlags(flags) else addFlags(flags)
 }
 
-@Composable
 /** #854 §2: the one place a popup surface's motion kind is chosen, from its placement and its trigger's role, never by a screen (#884).
- * A menu from the navigation chrome is the bottom menu; Search, Pages and popup sheets stay Legacy. */
+ * A menu from the navigation chrome is the bottom menu; Search, Pages and popup sheets stay Legacy. It reads snapshot state only,
+ * so the popup recomposes when a role binds; [settledPopupKind] applies a change only while the popup is not present. */
 internal fun GlassPlacement.popupKind(anchor: GlassAnchor): PopupKind = when (this) {
     GlassPlacement.Menu -> if (anchor.contextual) PopupKind.RowMenu else if (anchor.chromeTrigger) PopupKind.BottomMenu else PopupKind.Menu
     GlassPlacement.Center -> PopupKind.Dialog
     GlassPlacement.Search, GlassPlacement.Page, GlassPlacement.Sheet -> PopupKind.Legacy
 }
 
+/** A menu whose trigger has not been measured yet is centred (a detached dialog) until its first placement. */
+internal fun GlassAnchor.menuPlacement(): GlassPlacement = if (bounds == Rect.Zero) GlassPlacement.Center else GlassPlacement.Menu
+
 @Composable
 internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit,
     originPreparation: GlassOriginPreparation? = null, content: @Composable ColumnScope.() -> Unit) {
-    GlassMorphPopup(visible, anchor, onDismiss, if (anchor.bounds == Rect.Zero) GlassPlacement.Center else GlassPlacement.Menu,
+    GlassMorphPopup(visible, anchor, onDismiss, anchor.menuPlacement(),
         originPreparation = originPreparation) {
         GlassMenuContent(Modifier.fillMaxWidth(), content)
     }
@@ -400,7 +403,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     heightSizing: GlassDialogHeight = GlassDialogHeight.Content,
     content: @Composable () -> Unit) {
     require(heightSizing == GlassDialogHeight.Content || placement == GlassPlacement.Sheet)
-    val popupKind = placement.popupKind(anchor)
+    var present by remember { mutableStateOf(false) }
+    val popupKind = settledPopupKind(anchor, placement.popupKind(anchor), present)
     require(sharedContent == null || sharedContent.motion.kind == popupKind) { "Shared content runs its popup's motion kind" }
     @Suppress("NAME_SHADOWING")
     val content: @Composable () -> Unit = remember(content, popupKind) { { CompositionLocalProvider(LocalPopupKind provides popupKind, content = content) } }
@@ -444,7 +448,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val body = rememberGlassBody({ anchor.contact.travel + progress.value },
         contact = { if (anchor.contact.pressed) 1f else 0f }, state = anchor.contact.state,
         active = { anchor.contact.modal })
-    var present by remember { mutableStateOf(false) }
     var nativePlane by remember { mutableStateOf<ShadowPlane?>(null) }
     var nativeNode by remember { mutableStateOf<SurfaceView?>(null) }
     var leasedNode: SurfaceView? by remember { mutableStateOf(null) }
@@ -537,8 +540,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     // window here, in the same apply pass and before this frame draws (#858).
     SideEffect { if (visible) reclaimOpening() }
     // Native admission and return use real placement/draw receipts. Canceling this
-    // adapter does not replace the expansion or its physical rectangle.
-    LaunchedEffect(visible, reduced, speed, dismissalAttempt) {
+    // adapter does not replace the expansion or its physical rectangle. The owner changes only while not present
+    // (settledPopupKind); keying on it anyway means this adapter can never drive a disposed owner (#854 review).
+    LaunchedEffect(motion, visible, reduced, speed, dismissalAttempt) {
         transitionJob[0] = currentCoroutineContext().job
         if (!visible && !present) return@LaunchedEffect
         if (visible && !present) {
@@ -735,8 +739,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 if (modalWindow === window && searchOpeningGeneration == generation) searchFocusRequest = requested
             }
         }
-        DisposableEffect(window) {
+        // Attachment follows the current owner, never one captured with an earlier window (#854 review).
+        DisposableEffect(window, motion) {
             window?.let { motion.attached(it, windowPlane) }
+            onDispose { }
+        }
+        DisposableEffect(window) {
             modalWindow = window
             if (continuousOrigin != null && (!originAdmitted || readyWindow !== window)) {
                 window?.glassInput(false)
