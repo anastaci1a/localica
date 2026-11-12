@@ -222,7 +222,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     var rasterizations = 0; private set
     fun DrawScope.draw(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float,
         receiver: GlassShadowReceiver? = null, exclusion: GlassShadowExclusion? = null, color: Color = Color.Black) {
-        if (bodies.isEmpty() || strength <= 0f) return
+        if (bodies.isEmpty() || strength <= 0f || exclusion != null) return
         // Software textures change the nonlinear popup/home receiver response.
         // Keep it native and in the caller's coordinates: normalizing a fractional
         // origin also changes legacy clip coverage around an offscreen layer.
