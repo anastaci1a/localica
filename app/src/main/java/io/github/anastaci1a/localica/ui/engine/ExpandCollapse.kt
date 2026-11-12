@@ -84,11 +84,12 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     }
     /** Native readiness is an intent barrier, never an elapsed-frame cutoff. The #608 trajectory rests at the seam before admission. */
     internal fun nativeGate(at: Float) { clock.checkMutation(); require(at.isFinite() && at in 0f..1f); check(nativeBoundary==null && !motion.presented || nativeBoundary==at); nativeBoundary=at }
-    internal fun acknowledgeNativeGate(generation: Long): Boolean {
+    /** [begin] (#854 F-I5-2): the opening's begin stamp, its first admitted frame's presentation; it never precedes earlier intent. */
+    internal fun acknowledgeNativeGate(generation: Long,begin: FrameStamp?=null): Boolean {
         clock.checkMutation(); if(disposed || generation!=nativeGeneration || !awaitingNativeGate) return false
         // A canceled, unadmitted opening returns without ever taking native ownership.
         if(pendingNative!=true || logical) nativeSide=requireNotNull(pendingNative)
-        pendingNative=null; identity=null; target(logical); return true
+        pendingNative=null; identity=null; target(logical,at=begin?.takeIf { it.nanos>=lastStamp.nanos && it.nanos>=clock.presentedStamp.nanos }?:clock.stampNow); return true
     }
     private fun notifyLifecycle(intent: Boolean=false) { lifecycle.toList().forEach { it(intent) } }
     private fun basisEdges(value: ExpansionBasis,p: Double)=value.at(boundCurve?.at(p.toFloat())?.toDouble()?:p)
@@ -218,7 +219,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         if(rect!=null) { val physical=if(instant || rest) rect.channels.mapIndexed { i,m -> m.prepareSegment(Rest(basisEdges(next,target)[i]),basisEdges(next,target)[i].toFloat(),stamp,plan,policy) } else if(boundCurve!=null) rect.prepareMapped(next,requireNotNull(boundCurve),segment,target,plan,this) else rect.prepare(next.rect(target),plan,this,edgeV); intents.addAll(rect.entries(physical)) }; return Prepared(intents,plan,if(instant || rest) 0.0 else T,min(sigma/120,T/4),law,waiting)
     }
     private fun apply(value: Prepared,q: Boolean,stamp: FrameStamp) { value.sigma?.let { flightSigma=it }; if(pendingNative!=value.gate && value.gate!=null) nativeGeneration++; pendingNative=value.gate; logical=q; flightSpec=value.spec; lastStamp=stamp; identity=listOf(q,spec,basis,context(),timeScale()); commitAtomic(value.entries); notifyLifecycle(true) }
-    fun target(expanded: Boolean,reason: ExpansionReason=ExpansionReason.Programmatic) { val stamp=clock.stampNow; guard(stamp); if(held) { logical=expanded; identity=null; lastStamp=stamp; return }; if(touching) { pendingTarget=expanded; lastStamp=stamp; return }; val current=requireNotNull(basis) { "Measure an expansion basis before target" }; if(identity==listOf(expanded,spec,current,context(),timeScale()) && pendingBasis==null) return; val initialize=reason==ExpansionReason.Restore && !motion.presented && bound?.channels?.any { it.presented }!=true; val prepared=prepare(expanded,stamp,current,bound,initialize=initialize); apply(prepared,expanded,stamp) }
+    fun target(expanded: Boolean,reason: ExpansionReason=ExpansionReason.Programmatic)=target(expanded,reason,clock.stampNow)
+    internal fun target(expanded: Boolean,reason: ExpansionReason=ExpansionReason.Programmatic,at: FrameStamp) { val stamp=at; guard(stamp); if(held) { logical=expanded; identity=null; lastStamp=stamp; return }; if(touching) { pendingTarget=expanded; lastStamp=stamp; return }; val current=requireNotNull(basis) { "Measure an expansion basis before target" }; if(identity==listOf(expanded,spec,current,context(),timeScale()) && pendingBasis==null) return; val initialize=reason==ExpansionReason.Restore && !motion.presented && bound?.channels?.any { it.presented }!=true; val prepared=prepare(expanded,stamp,current,bound,initialize=initialize); apply(prepared,expanded,stamp) }
     /** The departing home owns presentation until disposal. Preserve the same phase and edges. */
     internal fun hold() {
         val stamp=clock.stampNow; guard(stamp); check(!touching) { "Contact and departing-home ownership cannot overlap" }
