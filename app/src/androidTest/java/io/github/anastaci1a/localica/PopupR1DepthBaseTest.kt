@@ -87,6 +87,10 @@ class PopupR1DepthBaseTest {
         var baseScenePixels: Bitmap? = null
         var activityWindow: Window? = null
         var originalNavigationContrast: Boolean? = null
+        val enforcedContrast = InstrumentationRegistry.getArguments().getString("r1NavigationContrastMutant") == "enforced"
+        var navigationInsetTop = Int.MIN_VALUE
+        val contrastFailures = JSONArray()
+        var matchingContrastFrame = false
         var open by mutableStateOf(false)
         var leaving by mutableStateOf(false)
         val cycleFixture = InstrumentationRegistry.getArguments().getString("r1BackdropCycleMutant") == "ancestor"
@@ -149,8 +153,7 @@ class PopupR1DepthBaseTest {
                 compose.runOnUiThread {
                     activityWindow = activity
                     if (originalNavigationContrast == null) originalNavigationContrast = activity.isNavigationBarContrastEnforced
-                    activity.isNavigationBarContrastEnforced = InstrumentationRegistry.getArguments()
-                        .getString("r1NavigationContrastMutant") == "enforced"
+                    activity.isNavigationBarContrastEnforced = enforcedContrast
                 }
                 compose.waitForIdle()
                 val tabsAfter = compose.onNodeWithTag("overlap-tabs").fetchSemanticsNode().boundsInRoot
@@ -165,6 +168,7 @@ class PopupR1DepthBaseTest {
                         .put("navigationInsetBottom", bottom)
                         .put("navigationInsetTopScene", rootAt[1] + decor.height - bottom - home.currentOrigin.y)
                 }
+                navigationInsetTop = navigation.getDouble("navigationInsetTopScene").toInt()
                 navigation.put("hostBefore", JSONArray(hostBefore.toList())).put("hostAfter", JSONArray(hostAfter.toList()))
                     .put("tabBoundsBefore", tabsBefore.toString()).put("tabBoundsAfter", tabsAfter.toString())
                 File(output, "navigation-contrast.json").writeText(navigation.toString(2))
@@ -313,7 +317,17 @@ class PopupR1DepthBaseTest {
                             qualifiedBounds.add(bounds)
                             if (phase in .1f.. .8f) originalWindowCount++
                         }
-                        assertTrue("Non-chrome departing menu stays above actual tabs: $bad/$sampled", bad <= max(4, sampled / 1000))
+                        if (enforcedContrast) {
+                            assertTrue("Every enforced-contrast changed pixel is inside the navigation inset: $badRows",
+                                badRows.all { it >= navigationInsetTop })
+                            if (bad > max(4, sampled / 1000)) contrastFailures.put(JSONObject()
+                                .put("phase", phase).put("changed", bad).put("pixels", sampled).put("badRows", JSONArray(badRows.toList())))
+                            if (phase.toRawBits() == .73084176f.toRawBits()) {
+                                assertEquals("Enforced contrast keeps the matching selected class", 2594, sampled)
+                                assertEquals("Enforced contrast reproduces the matching changed class", 942, bad)
+                                matchingContrastFrame = true
+                            }
+                        } else assertTrue("Non-chrome departing menu stays above actual tabs: $bad/$sampled", bad <= max(4, sampled / 1000))
                     }
                 } finally { modal.recycle(); root.recycle(); layer.recycle(); source.recycle() }
             }
@@ -324,6 +338,14 @@ class PopupR1DepthBaseTest {
                 .put("renderer", mode.name).put("trials", trials).put("distinctQualifiedPhaseBits", JSONArray(qualifiedPhases.toList()))
                 .put("distinctQualifiedPhases", qualifiedPhases.size).put("originalWindowCount", originalWindowCount)
                 .put("distinctQualifiedBounds", JSONArray(qualifiedBounds.map { JSONArray(it) })).toString(2))
+            if (enforcedContrast) {
+                File(output, "enforced-contrast-result.json").writeText(JSONObject()
+                    .put("insetTop", navigationInsetTop).put("failures", contrastFailures)
+                    .put("matchingFrameVerified", matchingContrastFrame).toString(2))
+                assertTrue("Enforced contrast reaches the original .7308 matching frame", matchingContrastFrame)
+                assertTrue("Enforced contrast must reproduce an above-tabs failure", contrastFailures.length() > 0)
+                fail("Non-chrome departing menu stays above actual tabs: enforced navigation contrast reproduced " + contrastFailures.length() + " failing captures")
+            }
             assertTrue("At least one counted return phase remains in the original .1-.8 window", originalWindowCount >= 1)
             assertTrue("Non-chrome menu overlaps tabs at three distinct presented return phases: $trials", qualifiedPhases.size >= 3)
         } finally {
