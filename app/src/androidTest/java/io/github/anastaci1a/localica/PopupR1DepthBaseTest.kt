@@ -72,23 +72,25 @@ class PopupR1DepthBaseTest {
         var output = File(outputRoot, "offset-0").apply { mkdirs() }
         var trial by mutableIntStateOf(0)
         lateinit var clock: io.github.anastaci1a.localica.ui.engine.UiClock
-        val fullReturnDiagnostic = InstrumentationRegistry.getArguments().getString("r1FullReturnDiagnostic") == "true"
-        val diagnosticPhases = mutableSetOf<Int>()
         val qualifiedPhases = mutableSetOf<Int>()
+        val qualifiedBounds = mutableSetOf<List<Int>>()
+        var originalWindowCount = 0
         val trials = JSONArray()
         lateinit var host: View
         lateinit var home: GlassPopupHome
         var popup: Window? = null
-        var popupPhase = 0f
+        var geometryProgress = 0f
         lateinit var fixtureAnchor: GlassAnchor
         lateinit var fixtureBackdrop: FrostedBackdrop
-        var phaseControl = JSONArray()
+        var leaveClicked = false
         lateinit var baseScene: androidx.compose.ui.graphics.layer.GraphicsLayer
         var baseScenePixels: Bitmap? = null
+        var activityWindow: Window? = null
+        var originalNavigationContrast: Boolean? = null
         var open by mutableStateOf(false)
         var leaving by mutableStateOf(false)
-        var leaveClicked = false
         val cycleFixture = InstrumentationRegistry.getArguments().getString("r1BackdropCycleMutant") == "ancestor"
+        var phaseControl = JSONArray()
         var receipts = JSONArray()
         try {
             preferences.write(InterfaceSettings(glass = GlassAppearance(renderer = mode)))
@@ -101,7 +103,7 @@ class PopupR1DepthBaseTest {
                 BackdropLease(home.backdrop)
                 CompositionLocalProvider(LocalGlassMorphWorkObserver provides { kind, window, phase ->
                     if (kind == "dialog" && window != null && popup == null) popup = window
-                    if (kind == "geometry" && window === popup && phase != null) popupPhase = phase
+                    if (kind == "geometry" && window === popup && phase != null) geometryProgress = phase
                 }) {
                     // Base's home recorded this complete scene: page plus chrome,
                     // before any non-chrome flight was drawn above the home.
@@ -123,7 +125,8 @@ class PopupR1DepthBaseTest {
                             if (!cycleFixture) Box(Modifier.fillMaxSize().recordFrostedBackdrop(page)
                                 .background(androidx.compose.ui.graphics.Color.White))
                             R1BasePopupActionPill(rememberGlassAnchor().also { fixtureAnchor = it }, source = page,
-                                modifier = Modifier.size(104.dp, 64.dp), trailingLabel = "Open overlap menu", menuVisible = open, onMenuDismiss = { open = false },
+                                modifier = Modifier.size(104.dp, 64.dp),
+                                trailingLabel = "Open overlap menu", menuVisible = open, onMenuDismiss = { open = false },
                                 menuContent = {
                                     ActionMenuItem("Leave page", icon = AppIcon.TabFolders, onClick = { leaveClicked = true; open = false; leaving = true })
                                     Box(Modifier.fillMaxWidth().height(240.dp).background(androidx.compose.ui.graphics.Color.Green))
@@ -133,22 +136,42 @@ class PopupR1DepthBaseTest {
                     }
                 }
             } } }
-            for (offsetMs in if (fullReturnDiagnostic) listOf(0L) else listOf(0L, 4L, 8L, 12L)) {
-                if (offsetMs != 0L) {
-                    baseScenePixels?.recycle(); baseScenePixels = null
-                    compose.mainClock.autoAdvance = true
-                    compose.runOnUiThread {
-                        open = false; leaving = false; leaveClicked = false
-                        popup = null; popupPhase = 0f; trial++
-                    }
-                    output = File(outputRoot, "offset-$offsetMs").apply { mkdirs() }
-                    phaseControl = JSONArray(); receipts = JSONArray()
-                }
+            val offsetMs = 0L
             compose.waitForIdle()
             val activity = compose.runOnUiThread {
                 var owner = host.context
                 while (owner is ContextWrapper && owner !is Activity) owner = owner.baseContext
                 (owner as Activity).window
+            }
+            if (Build.VERSION.SDK_INT >= 29) {
+                val tabsBefore = compose.onNodeWithTag("overlap-tabs").fetchSemanticsNode().boundsInRoot
+                val hostBefore = IntArray(2).also { compose.runOnUiThread { host.getLocationOnScreen(it) } }
+                compose.runOnUiThread {
+                    activityWindow = activity
+                    if (originalNavigationContrast == null) originalNavigationContrast = activity.isNavigationBarContrastEnforced
+                    activity.isNavigationBarContrastEnforced = InstrumentationRegistry.getArguments()
+                        .getString("r1NavigationContrastMutant") == "enforced"
+                }
+                compose.waitForIdle()
+                val tabsAfter = compose.onNodeWithTag("overlap-tabs").fetchSemanticsNode().boundsInRoot
+                val hostAfter = IntArray(2).also { compose.runOnUiThread { host.getLocationOnScreen(it) } }
+                val navigation = compose.runOnUiThread {
+                    val decor = activity.decorView
+                    val rootAt = IntArray(2).also { decor.getLocationOnScreen(it) }
+                    val bottom = requireNotNull(androidx.core.view.ViewCompat.getRootWindowInsets(decor))
+                        .getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars()).bottom
+                    JSONObject().put("originalEnforced", originalNavigationContrast)
+                        .put("enforcedForCapture", activity.isNavigationBarContrastEnforced)
+                        .put("navigationInsetBottom", bottom)
+                        .put("navigationInsetTopScene", rootAt[1] + decor.height - bottom - home.currentOrigin.y)
+                }
+                navigation.put("hostBefore", JSONArray(hostBefore.toList())).put("hostAfter", JSONArray(hostAfter.toList()))
+                    .put("tabBoundsBefore", tabsBefore.toString()).put("tabBoundsAfter", tabsAfter.toString())
+                File(output, "navigation-contrast.json").writeText(navigation.toString(2))
+                assertArrayEquals("Navigation contrast keeps host location", hostBefore, hostAfter)
+                assertEquals("Navigation contrast keeps tab bounds", tabsBefore, tabsAfter)
+                if (Build.VERSION.SDK_INT == 36) assertEquals("API 36 navigation inset top", 1196f,
+                    navigation.getDouble("navigationInsetTopScene").toFloat(), 0f)
             }
             original(activity, output, "base-complete-root").recycle()
             compose.runOnUiThread { assertR1BackdropIndependent(fixtureBackdrop, fixtureAnchor, output) }
@@ -164,17 +187,17 @@ class PopupR1DepthBaseTest {
             frames.openReferenceTrigger("Open overlap menu")
             compose.waitUntil(10000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-                popup?.decorView?.hasWindowFocus() == true && home.flights.size == 1 && popupPhase >= .999f
+                popup?.decorView?.hasWindowFocus() == true && home.flights.size == 1 && geometryProgress >= .999f
             }
             val window = requireNotNull(popup)
             val flight = compose.runOnUiThread { home.flights.single() }
-            // Published base has no chromeTrigger field: its ordinary flights all project above chrome.
+            // Published base has one ordinary projection path, above chrome.
             val tabBounds = compose.onNodeWithTag("overlap-tabs").fetchSemanticsNode().boundsInRoot
             // The pre-open scene remains evidence of the retiring trigger field.
             // Freeze the independent complete-home record at the same hidden-trigger state as return.
             original(activity, output, "reference-ready-root").recycle()
             val referenceState = compose.runOnUiThread {
-                JSONObject().put("phase", popupPhase).put("flightPhase", r1CandidateFlightPhase(flight) ?: JSONObject.NULL).put("popupFocused", window.decorView.hasWindowFocus())
+                JSONObject().put("phase", geometryProgress).put("candidateFlightPhase", r1CandidateFlightPhase(flight) ?: JSONObject.NULL).put("popupFocused", window.decorView.hasWindowFocus())
                     .put("triggerHidden", fixtureAnchor.hidden).put("handedOff", flight.handedOff)
                     .put("wasProjected", flight.wasProjected).put("homeDeparting", home.departing)
                     .put("leavePageClicked", leaveClicked)
@@ -197,11 +220,6 @@ class PopupR1DepthBaseTest {
                 verifyR1ReferenceClass(preOpenPixels, requireNotNull(baseScenePixels), tabBounds,
                     hostAt, home.currentOrigin, context.resources.displayMetrics.densityDpi, output)
             } finally { preOpenPixels.recycle() }
-            if (fullReturnDiagnostic) {
-                // Resolve every reflected field before the first moving return phase.
-                File(output, "motion-law-setup-self-check.json").writeText(
-                    compose.runOnUiThread { fullReturnLawSnapshot(fixtureAnchor) }.toString(2))
-            }
             compose.onNodeWithText("Leave page").performClick()
             // A mounted departing page deliberately holds its menu at full size.
             // Cancel that page transition only after its inline draw is admitted;
@@ -210,6 +228,14 @@ class PopupR1DepthBaseTest {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 flight.handedOff && flight.wasProjected
             }
+            // The trigger's retained SurfaceView follows the popup's physical MotionRect.
+            // Read that existing bound, never the fixed full-screen recording extent.
+            fun panelBounds(): List<Int> = compose.runOnUiThread {
+                val node = requireNotNull(fixtureAnchor.returningNode ?: fixtureAnchor.surfaceNode)
+                val pixels = glassMorphPixelBounds(node.transform.value())
+                listOf(pixels.left, pixels.top, pixels.right, pixels.bottom)
+            }
+            val holdBounds = panelBounds()
             val releaseBefore = compose.runOnUiThread { clock.stamp.nanos }
             if (offsetMs > 0) compose.mainClock.advanceTimeBy(offsetMs, ignoreFrameDuration = true)
             val intent = compose.runOnUiThread {
@@ -220,42 +246,28 @@ class PopupR1DepthBaseTest {
                     .also { leaving = false }
             }
             File(output, "start-offset.json").writeText(intent.toString(2))
-            for (frame in 0 until if (fullReturnDiagnostic) 512 else 96) {
-                // Resolve the short opaque crossing at 4 ms virtual intervals; keep the same phase window.
+            for (frame in 0 until 96) {
+                // Add projected sub-full frames above .8; retain the .1 lower bound and 96-step budget.
                 compose.mainClock.advanceTimeBy(4, ignoreFrameDuration = true); compose.waitForIdle()
                 val attached = window.decorView.isAttachedToWindow
+                val phase = geometryProgress
                 val candidatePhase = r1CandidateFlightPhase(flight)
+                if (attached && flight.prepared && candidatePhase != null) assertEquals("Candidate observer matches flight phase", candidatePhase, phase, 0f)
                 phaseControl.put(JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
-                    .put("stepMs", 4).put("presentedNanos", compose.runOnUiThread { clock.stamp.nanos }).put("geometryPhase", popupPhase)
-                    .put("flightPhase", candidatePhase ?: JSONObject.NULL).put("prepared", flight.prepared)
-                    .put("attached", attached).put("triggerHidden", fixtureAnchor.hidden)
-                    .put("geometrySelected", attached && flight.prepared && popupPhase in .1f.. .8f)
-                    .put("flightSelected", candidatePhase?.let { attached && flight.prepared && it in .1f.. .8f } ?: JSONObject.NULL))
+                    .put("presentedNanos", compose.runOnUiThread { clock.stamp.nanos }).put("flightPhase", phase).put("phaseBits", phase.toRawBits()).put("geometryPhase", geometryProgress)
+                    .put("attached", attached).put("prepared", flight.prepared).put("triggerHidden", fixtureAnchor.hidden))
                 File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
-                    .put("renderer", mode.name).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
+                    .put("renderer", mode.name).put("stepMs", 4).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
                 if (!attached) break
-                val phase = popupPhase
-                val originalWindow = phase in .1f.. .8f
-                if ((!originalWindow && !(fullReturnDiagnostic && phase > 0f && phase < 1f)) || !flight.prepared) continue
-                if (fullReturnDiagnostic && !diagnosticPhases.add(phase.toRawBits())) continue
+                if (phase < .1f || phase >= 1f || !flight.prepared || !flight.handedOff || leaving || home.departing) continue
+                val bounds = panelBounds()
+                val moving = bounds != holdBounds
                 val modal = original(window, output, "return-$frame-popup")
                 val root = original(activity, output, "return-$frame-root")
                 val layer = r1InspectionBitmap(runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap(), output, "return-$frame-flight-layer")
                 val source = r1InspectionBitmap(runBlocking { requireNotNull(home.backdrop).layer.toImageBitmap() }.asAndroidBitmap(), output, "return-$frame-sampled-scene")
                 try {
-                    if (fullReturnDiagnostic) {
-                        val diagnostic = JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
-                            .put("presentedNanos", compose.runOnUiThread { clock.stamp.nanos }).put("phase", phase)
-                            .put("phaseBits", phase.toRawBits()).put("prepared", flight.prepared)
-                            .put("originX", flight.origin.x).put("originY", flight.origin.y)
-                            .put("layerWidth", layer.width).put("layerHeight", layer.height)
-                            .put("anchorBounds", fixtureAnchor.presentedBounds.toString())
-                            .put("handedOff", flight.handedOff).put("originalWindow", originalWindow)
-                            .put("law", compose.runOnUiThread { fullReturnLawSnapshot(fixtureAnchor) })
-                        File(output, "return-$frame-motion.json").writeText(diagnostic.toString(2))
-                        File(output, "return-$frame-flight-layer.png").outputStream().use { assertTrue(layer.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-                    }
-                    if (!originalWindow || !flight.handedOff) continue
+                    if (!flight.handedOff) continue
                     val hostAt = IntArray(2); val rootAt = IntArray(2)
                     compose.runOnUiThread { host.getLocationOnScreen(hostAt); activity.decorView.getLocationOnScreen(rootAt) }
                     File(output, "return-$frame-flight-layer.png").outputStream().use { assertTrue(layer.compress(Bitmap.CompressFormat.PNG, 100, it)) }
@@ -275,6 +287,7 @@ class PopupR1DepthBaseTest {
                     assertTrue("The base recording contains real tab ink", chromePixels > 100)
                     assertEquals("R1: a departing non-chrome menu samples the base scene including tabs", 0, sourceChanged)
                     var sampled = 0; var bad = 0
+                    val badRows = sortedSetOf<Int>()
                     for (y in tabBounds.top.toInt() until tabBounds.bottom.toInt() step 2)
                         for (x in tabBounds.left.toInt() until tabBounds.right.toInt() step 2) {
                             val lx = x + hostAt[0] - flight.origin.x.toInt()
@@ -283,58 +296,42 @@ class PopupR1DepthBaseTest {
                             val expected = layer.getPixel(lx, ly)
                             if (Color.alpha(expected) < 254 || Color.green(expected) < 200 || Color.red(expected) > 40 || Color.blue(expected) > 40) continue
                             val actual = root.getPixel(x + hostAt[0] - rootAt[0], y + hostAt[1] - rootAt[1])
-                            if (channels.maxOf { abs(it(expected) - it(actual)) } > 14) bad++
+                            if (channels.maxOf { abs(it(expected) - it(actual)) } > 14) { bad++; badRows.add(y) }
                             sampled++
                         }
                     receipts.put(JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
                         .put("phase", phase).put("phaseBits", phase.toRawBits()).put("pixels", sampled).put("changed", bad)
-                        .put("baseSourcePixels", sourcePixels).put("baseSourceChanged", sourceChanged))
+                        .put("baseSourcePixels", sourcePixels).put("baseSourceChanged", sourceChanged)
+                        .put("panelPixelBounds", JSONArray(bounds)).put("holdPixelBounds", JSONArray(holdBounds))
+                        .put("moving", moving).put("prepared", flight.prepared).put("handedOff", flight.handedOff)
+                        .put("leaving", leaving).put("homeDeparting", home.departing).put("badRows", JSONArray(badRows.toList())))
                     File(output, "frames.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
                         .put("renderer", mode.name).put("samples", receipts).toString(2))
                     if (sampled > 10) {
-                        qualifiedPhases.add(phase.toRawBits())
+                        if (moving && phase.toRawBits() !in qualifiedPhases && bounds !in qualifiedBounds) {
+                            qualifiedPhases.add(phase.toRawBits())
+                            qualifiedBounds.add(bounds)
+                            if (phase in .1f.. .8f) originalWindowCount++
+                        }
                         assertTrue("Non-chrome departing menu stays above actual tabs: $bad/$sampled", bad <= max(4, sampled / 1000))
                     }
                 } finally { modal.recycle(); root.recycle(); layer.recycle(); source.recycle() }
             }
             File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
-                .put("renderer", mode.name).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
+                .put("renderer", mode.name).put("stepMs", 4).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
             trials.put(JSONObject().put("requestedOffsetMs", offsetMs).put("intent", intent).put("samples", receipts))
             File(outputRoot, "offset-matrix.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
                 .put("renderer", mode.name).put("trials", trials).put("distinctQualifiedPhaseBits", JSONArray(qualifiedPhases.toList()))
-                .put("distinctQualifiedPhases", qualifiedPhases.size).toString(2))
+                .put("distinctQualifiedPhases", qualifiedPhases.size).put("originalWindowCount", originalWindowCount)
+                .put("distinctQualifiedBounds", JSONArray(qualifiedBounds.map { JSONArray(it) })).toString(2))
+            assertTrue("At least one counted return phase remains in the original .1-.8 window", originalWindowCount >= 1)
+            assertTrue("Non-chrome menu overlaps tabs at three distinct presented return phases: $trials", qualifiedPhases.size >= 3)
+        } finally {
+            if (Build.VERSION.SDK_INT >= 29) originalNavigationContrast?.let { restore ->
+                compose.runOnUiThread { activityWindow?.isNavigationBarContrastEnforced = restore }
             }
-            assertTrue("Non-chrome menu overlaps tabs at three distinct presented return phases across independent returns: $trials", qualifiedPhases.size >= 3)
-        } finally { baseScenePixels?.recycle(); compose.mainClock.autoAdvance = true; preferences.write(previous) }
-    }
-
-    /** Read-only diagnostic of the existing owner: no new clock, target or observer writes. */
-    private fun fullReturnLawSnapshot(anchor: GlassAnchor): JSONObject {
-        val resolved = JSONArray()
-        fun field(owner: Any, name: String): Any? {
-            val field = owner.javaClass.getDeclaredField(name).apply { isAccessible = true }
-            resolved.put(JSONObject().put("class", owner.javaClass.name).put("field", name).put("type", field.type.name))
-            return field.get(owner)
+            baseScenePixels?.recycle(); compose.mainClock.autoAdvance = true; preferences.write(previous)
         }
-        val borrowedPhase = requireNotNull(field(anchor.contact.expansion, "phase"))
-        val owner = (field(borrowedPhase, "owner\$delegate") as State<*>).value
-            as io.github.anastaci1a.localica.ui.engine.ExpandCollapse
-        val basis = (field(owner, "basis\$delegate") as State<*>).value
-            as io.github.anastaci1a.localica.ui.engine.ExpansionBasis
-        val bounds = field(owner, "bound") as io.github.anastaci1a.localica.ui.engine.MotionRect
-        val curve = field(owner, "boundCurve") as io.github.anastaci1a.localica.ui.engine.Curve
-        val phase = owner.phase.value()
-        val predicted = basis.rect(curve.at(phase).toDouble())
-        val actual = bounds.value()
-        val shape = anchor.contact.state.output.value
-        fun rect(r: Rect) = JSONArray(listOf(r.left, r.top, r.right, r.bottom))
-        val pixels = glassMorphPixelBounds(actual)
-        return JSONObject().put("resolvedFields", resolved).put("phase", phase).put("phaseVelocity", owner.phase.velocity())
-            .put("geometry", curve.at(phase)).put("basisStart", rect(basis.startBounds)).put("basisEnd", rect(basis.endBounds))
-            .put("basisPrediction", rect(predicted)).put("physicalBounds", rect(actual))
-            .put("pixelBounds", JSONArray(listOf(pixels.left, pixels.top, pixels.right, pixels.bottom)))
-            .put("strain", shape.strain).put("depth", shape.depth).put("vertical", anchor.contact.vertical)
-            .put("scaleY", shape.scaleY(anchor.contact.vertical))
     }
 
     private fun original(window: Window, output: File, name: String): Bitmap = frames.capture(window, output, name)
