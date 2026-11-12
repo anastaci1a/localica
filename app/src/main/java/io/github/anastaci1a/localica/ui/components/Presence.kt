@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui.components
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.graphics.lerp
@@ -45,19 +46,19 @@ import io.github.anastaci1a.localica.ui.spec.MotionProfile
 }
 
 @Composable internal fun HeadingContent(title: String, reduced: Boolean, faster: Boolean,
-    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier, content: @Composable (String) -> Unit) =
+    modifier: Modifier = Modifier, content: @Composable (String) -> Unit) =
     RetainedContentSwap(title, MotionProfile.Heading, reduced, faster, modifier, false) { shown, _ -> content(shown) }
 
 @Composable internal fun <T> LyricsContent(target: T, reduced: Boolean,
-    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier, content: @Composable (T, () -> Float) -> Unit) =
+    modifier: Modifier = Modifier, content: @Composable (T, () -> Float) -> Unit) =
     RetainedContentSwap(target, MotionProfile.LyricsSwap, reduced, false, modifier, true, content)
 
 @Composable internal fun LyricsFollowPresence(visible: Boolean, reduced: Boolean,
-    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier, content: @Composable () -> Unit) =
+    modifier: Modifier = Modifier, content: @Composable () -> Unit) =
     FollowPresence(visible, reduced, modifier, content)
 
 @Composable internal fun OptionsPages(selected: Int, reduced: Boolean,
-    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier, content: @Composable (Int) -> Unit) =
+    modifier: Modifier = Modifier, content: @Composable (Int) -> Unit) =
     OptionsPagePlacement(selected, reduced, modifier, content)
 
 @Composable internal fun rememberPlayerBackground(target: Float): MotionValue =

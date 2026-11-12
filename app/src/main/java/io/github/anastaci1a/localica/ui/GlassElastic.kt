@@ -1,13 +1,13 @@
 package io.github.anastaci1a.localica.ui
 
-import io.github.anastaci1a.localica.ui.engine.previewContactLayer
+import io.github.anastaci1a.localica.ui.components.previewContactBinding
 import androidx.compose.runtime.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.*
 
 /** Bounded pressure from travel beyond an edge: more pull always adds less compression. */
-internal fun glassEdgePressure(excess: Float) = io.github.anastaci1a.localica.ui.engine.glassContactPressure(excess)
+internal fun glassEdgePressure(excess: Float) = io.github.anastaci1a.localica.ui.components.previewEdgePressure(excess)
 
 /** Continuous strong wells, shared by direct dragging and page-driven selectors. */
 internal fun magneticChoicePosition(raw: Float): Float {
@@ -17,7 +17,7 @@ internal fun magneticChoicePosition(raw: Float): Float {
 }
 
 /** Deliberately slower than transport/page motion, even in Faster animations mode. */
-internal fun glassMorphSpring(speed: Float) = io.github.anastaci1a.localica.ui.engine.glassMorphAnimationSpec(speed)
+internal fun glassMorphSpring(speed: Float) = io.github.anastaci1a.localica.ui.components.previewGlassSpring(speed)
 
 /** One interruptible shape clock; live tuning preserves its current displacement and velocity. */
 @Stable internal class GlassBodyState {
@@ -74,7 +74,7 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
 
 /** Contact/travel composes with the existing glass body; it never changes the frozen solver or optics. */
 @Stable internal class GlassPreviewContact internal constructor(
-    internal val contact: io.github.anastaci1a.localica.ui.engine.PreviewContact,
+    internal val contact: io.github.anastaci1a.localica.ui.components.PreviewContactHandle,
     internal val body: State<GlassShape>,
 ) {
     fun pressed(value: Boolean) = contact.contact(value)
@@ -84,10 +84,10 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
 }
 
 @Composable internal fun rememberGlassPreviewContact(limit: () -> Float, reduced: Boolean): GlassPreviewContact {
-    val contact = io.github.anastaci1a.localica.ui.engine.rememberPreviewContactOwner(limit, reduced)
+    val contact = io.github.anastaci1a.localica.ui.components.rememberPreviewContactHandle(limit, reduced)
     val body = rememberGlassBody({ contact.position }, pressure = { contact.pressure }, contact = { if (contact.pressed) 1f else 0f })
     return remember(contact, body) { GlassPreviewContact(contact, body) }
 }
 
 internal fun androidx.compose.ui.Modifier.glassPreview(contact: GlassPreviewContact): androidx.compose.ui.Modifier =
-    previewContactLayer(contact.contact, { contact.body.value.scaleX() }, { contact.body.value.scaleY() })
+    previewContactBinding(contact.contact, { contact.body.value.scaleX() }, { contact.body.value.scaleY() })

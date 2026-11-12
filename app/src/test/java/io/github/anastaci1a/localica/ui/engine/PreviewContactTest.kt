@@ -39,4 +39,38 @@ class PreviewContactTest {
             assertEquals(0, h.clock.activeCount); scope.cancel()
         }
     }
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun dragDeltasKeepTheExistingOwnerDispatchBoundary() {
+        EngineHarness().use { h ->
+            val owner = BrowsePinchProgressOwner().also { it.bind(h.clock, Dispatchers.Unconfined) }
+            val queued = kotlinx.coroutines.test.StandardTestDispatcher()
+            val scope = CoroutineScope(queued + SupervisorJob())
+            var boundary = 100f
+            var reduced = false
+            val contact = PreviewContact(owner, scope, { boundary }, { reduced })
+            try {
+                contact.start(); contact.dragBy(10f)
+                assertEquals("The original preview publishes travel from its owner job", 0f, contact.travel, 0f)
+                queued.scheduler.runCurrent()
+                assertEquals(10f, contact.travel, 0f)
+                contact.dragBy(20f); contact.dragBy(30f)
+                assertEquals(10f, contact.travel, 0f)
+                queued.scheduler.runCurrent()
+                assertEquals(60f, contact.travel, 0f)
+                contact.start(); contact.dragBy(150f)
+                boundary = 200f
+                queued.scheduler.runCurrent()
+                assertEquals("Queued travel keeps the geometry sampled by its input event", 100f, contact.travel, 0f)
+                contact.release()
+                reduced = true
+                queued.scheduler.runCurrent()
+                assertEquals("Release keeps the reduction policy sampled by its input event", 1, h.clock.activeCount)
+                assertEquals(100f, contact.travel, 0f)
+            } finally {
+                scope.cancel(); queued.scheduler.runCurrent()
+                assertEquals(0, h.clock.activeCount)
+            }
+        }
+    }
+
 }

@@ -27,12 +27,18 @@ internal fun glassContactPressure(excess: Float) = -.22f * (1f - exp(-abs(excess
     val pressure get() = glassContactPressure((raw - raw.coerceIn(-limit(), limit())) / limit())
     fun contact(value: Boolean) { pressed = value }
     fun start() { settling?.cancel(); raw = travel }
-    fun dragBy(delta: Float) { raw += delta; travel = raw.coerceIn(-limit(), limit()) }
+    fun dragBy(delta: Float) {
+        raw += delta
+        val boundary = limit()
+        scope.launch { travel = raw.coerceIn(-boundary, boundary) }
+    }
     fun release() {
         settling?.cancel()
-        raw = raw.coerceIn(-limit(), limit())
+        val boundary = limit()
+        val reduceAtRelease = reduced()
+        raw = raw.coerceIn(-boundary, boundary)
         settling = scope.launch {
-            if (reduced()) travel = 0f else owner.animate(travel, 0f, glassMorphAnimationSpec(1f), budgeted = false) { travel = it }
+            if (reduceAtRelease) travel = 0f else owner.animate(travel, 0f, glassMorphAnimationSpec(1f), budgeted = false) { travel = it }
             raw = 0f
         }
     }
