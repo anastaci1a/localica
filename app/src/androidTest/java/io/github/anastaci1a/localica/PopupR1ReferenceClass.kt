@@ -30,16 +30,18 @@ internal fun verifyR1ReferenceClass(preOpen: Bitmap, reference: Bitmap, tabs: Re
             else histogram[delta] = histogram.getOrDefault(delta, 0) + 1
         }
     val api = Build.VERSION.SDK_INT
-    val expected: Map<Int, Int>? = null // Measure both independent-source profiles before pinning.
+    val expected = when {
+        api == 26 && densityDpi == 420 && reference.width == 1080 && reference.height == 1731 -> mapOf(1 to 557)
+        api == 36 && densityDpi == 280 && reference.width == 720 && reference.height == 1280 -> mapOf(-1 to 294)
+        else -> error("R1 reference class must be pinned for API $api, density $densityDpi, ${reference.width}x${reference.height}")
+    }
     File(output, "reference-class.json").writeText(JSONObject().put("api", api).put("densityDpi", densityDpi)
         .put("width", reference.width).put("height", reference.height).put("selected", selected)
         .put("tabBounds", tabs.toString()).put("hostScreenX", hostAt[0]).put("hostScreenY", hostAt[1])
         .put("homeOriginX", homeOrigin.x).put("homeOriginY", homeOrigin.y)
         .put("changed", histogram.values.sum() + otherChanged).put("otherChanged", otherChanged)
         .put("grayscaleHistogram", JSONObject(histogram.mapKeys { it.key.toString() }))
-        .put("cycleFixtureApi26Histogram", JSONObject(mapOf("1" to 16619, "2" to 5)))
-        .put("measurementOnly", expected == null)
-        .put("expectedHistogram", expected?.let { JSONObject(it.mapKeys { entry -> entry.key.toString() }) } ?: JSONObject.NULL).toString(2))
+        .put("expectedHistogram", JSONObject(expected.mapKeys { it.key.toString() })).toString(2))
     assertEquals("R1 reference correction has no other changed pixel", 0, otherChanged)
-    if (expected != null) assertEquals("R1 reference correction matches the exact published trigger-shadow class", expected, histogram)
+    assertEquals("R1 reference correction matches the exact published trigger-shadow class", expected, histogram)
 }
