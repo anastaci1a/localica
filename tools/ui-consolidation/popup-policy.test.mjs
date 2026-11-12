@@ -196,3 +196,25 @@ test('ordinary view insertion and public content layout remain allowed',()=>{
  assert.equal(rules('fun f(group: android.view.ViewGroup, view: android.view.View, params: android.view.WindowManager.LayoutParams) { group.addView(view, params) }').size,0);
  assert.equal(rules('fun f() { HoverDrag(contentAlpha={ 1f }) {} }').size,0);
 });
+test('semantic and Node red-team fixture bodies remain identical',()=>{
+ const semantic=fs.readFileSync(new URL('../../lint/src/test/java/io/github/anastaci1a/localica/lint/PopupGateRedTeamTest.kt',import.meta.url),'utf8');
+ const decode=s=>JSON.parse(s.replace(/\\\$/g,'$'));
+ const mirrored=[];
+ for(const line of semantic.split('\n')) {
+  const match=line.match(/fun (test\w+)\(\) = check\(("(?:\\.|[^"\\])*")(.*)\)/);
+  if(!match)continue;
+  const [,id,body,tail]=match;
+  const strings=[...tail.matchAll(/"(?:\\.|[^"\\])*"/g)].map(m=>decode(m[0]));
+  const named=/name\s*=/.test(tail), imports=named?'':strings[0]||'', name=named?strings.at(-1):strings[1]||'Subject';
+  mirrored.push({id,path:'app/src/main/java/io/github/anastaci1a/localica/ui/'+name+'.kt',source:'package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n'+imports+'\n'+decode(body)});
+ }
+ assert.deepEqual(redTeamFixtures,mirrored);
+});
+test('unrelated generic mutable state and implicit view-group insertion remain allowed',()=>{
+ assert.equal(rules('fun f(output: androidx.compose.runtime.MutableState<Float>) { output.value=2f }').size,0);
+ assert.equal(rules('fun f(group: android.view.ViewGroup, view: android.view.View, params: android.view.WindowManager.LayoutParams) { with(group) { addView(view, params) }; group.apply { addView(view, params) } }').size,0);
+});
+test('a foreign module cannot borrow an owner path',()=>{
+ const path='foreign/src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt';
+ assert.ok(checkPopupSource(path,'fun steal() { glassPopupProjection() }').some(i=>i.rule==='ScreenPopupHome'));
+});

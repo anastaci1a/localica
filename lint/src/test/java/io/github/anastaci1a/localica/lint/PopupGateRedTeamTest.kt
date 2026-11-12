@@ -12,6 +12,7 @@ open class GlassAnchor { var face: (() -> Unit)? = null; val triggerRole: Any? =
 class GlassContact { var modal=false; val state=GlassBodyState(); val expansion=GlassExpansion() }
 class GlassBodyState { var impulseScale=1f; val output=MutableOutput(); val momentum=GlassMomentum() }
 class MutableOutput { var value=1f }
+class GlassShape
 class GlassExpansion { fun bind() {} }
 class GlassMomentum { var damping=1f; fun reset() {} }
 
@@ -29,9 +30,10 @@ fun GlassPopupHome(home: GlassPopupHome, modifier: Any? = null, container: (() -
 sealed interface TriggerRole { data object Selection: TriggerRole }
 """).indented(),
   kotlin("src/main/java/androidx/compose/runtime/Remember.kt", """package androidx.compose.runtime
+interface MutableState<T> { var value: T }
 fun <T> remember(calculation: () -> T): T = calculation()""").indented(),
   kotlin("src/main/java/android/app/Windows.kt", """package android.app
-open class Dialog 
+open class Dialog
 open class DialogFragment { fun show() {}; fun showNow() {} }
 open class AlertDialog : android.app.Dialog() { class Builder }""").indented(),
   kotlin("src/main/java/androidx/activity/Windows.kt", """package androidx.activity
@@ -39,8 +41,8 @@ open class ComponentDialog """).indented(),
   kotlin("src/main/java/androidx/fragment/app/Windows.kt", """package androidx.fragment.app
 open class DialogFragment { fun show() {}; fun showNow() {} } """).indented(),
   kotlin("src/main/java/android/widget/Windows.kt", """package android.widget
-open class PopupWindow 
-open class ListPopupWindow 
+open class PopupWindow
+open class ListPopupWindow
 open class PopupMenu """).indented(),
   kotlin("src/main/java/androidx/compose/material3/Windows.kt", """package androidx.compose.material3
 fun AlertDialog() {}
@@ -142,6 +144,17 @@ class AlertDialog : android.app.Dialog() { class Builder }""")
  fun testG_native_framework_builder() = check("fun f() { android.app.AlertDialog.Builder() }")
  fun testG_native_appcompat_builder() = check("fun f() { androidx.appcompat.app.AlertDialog.Builder() }")
  fun testG_native_appcompat_dialog() = check("fun f() { androidx.appcompat.app.AlertDialog() }")
+
+ fun testG1_qualified_contact() = check("fun f(contact: io.github.anastaci1a.localica.ui.GlassContact) { contact.modal=true }")
+ fun testG1_typealias_contact() = check("typealias Contact = GlassContact\nfun f(contact: Contact) { contact.modal=true }")
+ fun testG1_generic_shape_state() = check("fun f(output: androidx.compose.runtime.MutableState<GlassShape>, shape: GlassShape) { output.value=shape }")
+ fun testG3_morph_reference() = check("val borrowed=::GlassMorphPopup")
+ fun testG3_lyrics_reference() = check("val borrowed=::LyricsPanel")
+ fun testG3_backdrop_reference() = check("val borrowed=::LyricsBackdrop")
+ fun testG3_qualified_with_local() = check("fun GlassMorphPopup() {}\nfun f(anchor: GlassAnchor, shared: PopupSharedContent) { io.github.anastaci1a.localica.ui.GlassMorphPopup(true, anchor, {}, sharedContent=shared) {} }")
+ fun testG6_with_receiver() = check("fun f(wm: android.view.WindowManager, view: android.view.View, params: android.view.WindowManager.LayoutParams) { with(wm) { addView(view, params) } }")
+ fun testG6_apply_receiver() = check("fun f(wm: android.view.WindowManager, view: android.view.View, params: android.view.WindowManager.LayoutParams) { wm.apply { addView(view, params) } }")
+ fun testG6_unbound_reference() = check("val borrowed=android.view.WindowManager::addView")
 
  fun testSanctionedWrappersAndOrdinaryViewInsertion() {
   val file=kotlin("src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt", """package io.github.anastaci1a.localica.ui

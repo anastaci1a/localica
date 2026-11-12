@@ -70,7 +70,7 @@ function declaredFunctions(file, source) {
     return declarations;
 }
 export function checkPopupSource(file, source, declarations = []) {
-    if(!file.startsWith('app/src/main/') || !file.endsWith('.kt') )return [];
+    if(!file.includes('/src/main/') || !file.endsWith('.kt') )return [];
     const tokens=kotlinTokens(source), aliases=new Map(), imports=new Map(), anchors=new Set(), importTokens=new Set();
     for(let i=0;i<tokens.length;i++)if(tokens[i].text==='import') {
         let j=i+1,last='', qualified='';while(j<tokens.length && !['as',';','import','package'].includes(tokens[j].text)) {
@@ -132,7 +132,13 @@ export function checkPopupSource(file, source, declarations = []) {
     const contactTypes=new Set(['GlassContact','GlassExpansion','GlassBodyState','GlassMomentum']);
     const handles=new Map([...anchors].map(a=>[a,'ScreenPopupTrigger']));
     for(let pass=0;pass<3;pass++)for(let i=0;i<tokens.length;i++) {
-        if(tokens[i+1]?.text===':' && contactTypes.has(name(i+2)))handles.set(tokens[i].text,'GlassContactMutation');
+        if(tokens[i+1]?.text===':') {
+            let end=i+2;while(tokens[end+1]?.text==='.')end+=2;
+            const type=identityAt(end).split('.').at(-1);
+            let genericEnd=end+2;while(tokens[genericEnd+1]?.text==='.')genericEnd+=2;
+            const shape=identityAt(genericEnd).split('.').at(-1);
+            if(contactTypes.has(type) || type==='MutableState' && tokens[end+1]?.text==='<' && shape==='GlassShape')handles.set(tokens[i].text,'GlassContactMutation');
+        }
         if(tokens[i+1]?.text===':' && ['GlassPopupHome','GlassPopupFlight'].includes(name(i+2)))handles.set(tokens[i].text,'ScreenPopupHome');
         if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=') {
             const start=i+3;let end=start,depth=0;
@@ -181,7 +187,7 @@ export function checkPopupSource(file, source, declarations = []) {
         let end=close+1;depth=1;while(end<tokens.length && depth){if(tokens[end].text==='{')depth++;if(tokens[end].text==='}')depth--;end++;}
         if(rule)lambdaHandles.push({start:close,end,name:null,rule});
     }
-    const windowHandles=new Set(), nativeHandles=new Set();
+    const windowHandles=new Set(), nativeHandles=new Set(), windowScopes=[];
     for(let pass=0;pass<3;pass++)for(let i=0;i<tokens.length;i++) {
         if(tokens[i+1]?.text===':') {
             let end=i+2;while(tokens[end+1]?.text==='.')end+=2;
@@ -192,6 +198,19 @@ export function checkPopupSource(file, source, declarations = []) {
         if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=') {
             if(windowHandles.has(tokens[i+3]?.text))windowHandles.add(tokens[i+1].text);
             if(nativeHandles.has(tokens[i+3]?.text))nativeHandles.add(tokens[i+1].text);
+        }
+    }
+    // Track implicit scope receivers independently from ordinary view groups.
+    for(let i=0;i<tokens.length;i++) {
+        let start, receiver;
+        if(['apply','run'].includes(name(i)) && tokens[i-1]?.text==='.' && tokens[i+1]?.text==='{') {start=i+1;receiver=tokens[i-2]?.text;}
+        if(name(i)==='with' && tokens[i+1]?.text==='(') {
+            let close=i+2, depth=1;while(close<tokens.length && depth){if(tokens[close].text==='(')depth++;if(tokens[close].text===')')depth--;close++;}
+            if(tokens[close]?.text==='{'){start=close;receiver=tokens[i+2]?.text;}
+        }
+        if(start!==undefined && windowHandles.has(receiver)) {
+            let end=start+1,depth=1;while(end<tokens.length && depth){if(tokens[end].text==='{')depth++;if(tokens[end].text==='}')depth--;end++;}
+            windowScopes.push({start,end});
         }
     }
     const incidents=[],seen=new Set(),hostCalls=new Map();
@@ -214,7 +233,8 @@ export function checkPopupSource(file, source, declarations = []) {
         const imported=imports.get(tokens[i].text);
         if(imported && imported!==identity)return;
         const canonical='app/src/main/java/io/github/anastaci1a/localica/ui/'+spec.owner+'.kt';
-        if(localDeclarations.some(d=>d.name===api && d.file!==canonical))return;
+        if(tokens[i-1]?.text!=='.' && !imported && localDeclarations.some(d=>d.name===api && d.file!==canonical))return;
+        if(tokens[i-1]?.text==='.' && identityAt(i)!==identity)return;
         const formals=declarations.filter(d=>d.qualified===identity && d.file===canonical);
         let depth=0, start=i+2, ordinal=0;
         for(let j=start;j<tokens.length;j++) {
@@ -250,7 +270,7 @@ export function checkPopupSource(file, source, declarations = []) {
             if(key && !ownsPopups(file,key))emit('ScreenPopupMotion',i,'Named popup roles are restricted to their pinned callers');
         }
         if(n==='triggerRole' && receiverRule(i))emit('ScreenPopupTrigger',i,'Only the anchor owner can read its role');
-        if(n==='addView' && (previous==='.' && windowHandles.has(tokens[i-2]?.text) || previous===':' && tokens[i-2]?.text===':' && windowHandles.has(tokens[i-3]?.text)))emit('ScreenPopupDrawPath',i,'A screen cannot create a private window');
+        if(n==='addView' && (previous==='.' && windowHandles.has(tokens[i-2]?.text) || previous===':' && tokens[i-2]?.text===':' && (windowHandles.has(tokens[i-3]?.text) || identityAt(i-3)==='android.view.WindowManager') || next==='(' && previous!=='.' && windowScopes.some(s=>s.start<i && i<s.end)))emit('ScreenPopupDrawPath',i,'A screen cannot create a private window');
         if(['show','showNow','showAsDropDown','showAtLocation'].includes(n) && previous==='.' && nativeHandles.has(tokens[i-2]?.text))emit('ScreenPopupDrawPath',i,'A native presenter cannot bypass the shared owner');
         const classHandle=next===':' && tokens[i+2]?.text===':' && tokens[i+3]?.text==='class';
         if(classHandle && !importTokens.has(i)) {
@@ -288,6 +308,7 @@ export function checkPopupSource(file, source, declarations = []) {
         if(fieldWrite && protectedRule && (previous==='.' || lambdaHandles.some(x=>x.start<i && i<x.end && x.name===null)))emit(protectedRule,i,'Only the shared owner mutates popup handles');
         if(next==='(' && ['add','addAll','clear','remove','removeAll','removeAt','removeIf','retainAll','set','put','putAll','replace','replaceAll','sort','sortWith','sortBy','sortDescending','reverse','shuffle','fill','bind','unbind','reset','advance','blendFrom'].includes(n) && protectedRule)emit(protectedRule,i,'Only the shared owner mutates popup collections');
         if(previous===':' && tokens[i-2]?.text===':') {
+            if(pinnedApis[n])emit('ScreenPopupMotion',i,'A callable reference cannot transfer gated popup arguments');
             const rule=n==='GlassAnchor'?'ScreenPopupTrigger':['GlassPopupHome','GlassPopupFlight','rememberGlassPopupHome','glassPopupHome','glassPopupProjection'].includes(n)?'ScreenPopupHome':receiverRule(i-3);
             if(rule)emit(rule,i,'A callable reference cannot transfer popup ownership');
         }

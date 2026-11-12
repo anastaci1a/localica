@@ -343,5 +343,55 @@
     "id": "testG_native_appcompat_dialog",
     "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
     "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.appcompat.app.AlertDialog() }"
+  },
+  {
+    "id": "testG1_qualified_contact",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(contact: io.github.anastaci1a.localica.ui.GlassContact) { contact.modal=true }"
+  },
+  {
+    "id": "testG1_typealias_contact",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\ntypealias Contact = GlassContact\nfun f(contact: Contact) { contact.modal=true }"
+  },
+  {
+    "id": "testG1_generic_shape_state",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(output: androidx.compose.runtime.MutableState<GlassShape>, shape: GlassShape) { output.value=shape }"
+  },
+  {
+    "id": "testG3_morph_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval borrowed=::GlassMorphPopup"
+  },
+  {
+    "id": "testG3_lyrics_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval borrowed=::LyricsPanel"
+  },
+  {
+    "id": "testG3_backdrop_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval borrowed=::LyricsBackdrop"
+  },
+  {
+    "id": "testG3_qualified_with_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun GlassMorphPopup() {}\nfun f(anchor: GlassAnchor, shared: PopupSharedContent) { io.github.anastaci1a.localica.ui.GlassMorphPopup(true, anchor, {}, sharedContent=shared) {} }"
+  },
+  {
+    "id": "testG6_with_receiver",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(wm: android.view.WindowManager, view: android.view.View, params: android.view.WindowManager.LayoutParams) { with(wm) { addView(view, params) } }"
+  },
+  {
+    "id": "testG6_apply_receiver",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(wm: android.view.WindowManager, view: android.view.View, params: android.view.WindowManager.LayoutParams) { wm.apply { addView(view, params) } }"
+  },
+  {
+    "id": "testG6_unbound_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval borrowed=android.view.WindowManager::addView"
   }
 ]

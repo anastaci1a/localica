@@ -56,6 +56,10 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
             // owner; spelling a local 'home' or 'flights' is not authority.
             private fun ownedReceiver(expression: UExpression?, seen: MutableSet<UElement> = mutableSetOf()): Ownership? {
                 if (expression == null || !seen.add(expression)) return null
+                val type = expression.getExpressionType() as? com.intellij.psi.PsiClassType
+                if (type?.resolve()?.qualifiedName == "androidx.compose.runtime.MutableState" &&
+                    type.parameters.singleOrNull()?.canonicalText == "io.github.anastaci1a.localica.ui.GlassShape")
+                    return Ownership(UiRuleId.ScreenPopupTrigger, "GlassContactMutation")
                 memberRule((expression.getExpressionType() as? com.intellij.psi.PsiClassType)?.resolve())?.let { return it }
                 val reference = when (expression) {
                     is UQualifiedReferenceExpression -> expression.selector
@@ -104,11 +108,31 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
             private fun windowManager(method: com.intellij.psi.PsiMethod, receiver: UExpression?): Boolean {
                 if (method.name != "addView") return false
                 val type = (receiver?.getExpressionType() as? com.intellij.psi.PsiClassType)?.resolve()
+                    ?: (receiver as? UResolvable)?.resolve() as? com.intellij.psi.PsiClass
                 val owner = method.containingClass
                 return listOfNotNull(type, owner).any { it.qualifiedName == "android.view.WindowManager" ||
                     context.evaluator.extendsClass(it, "android.view.WindowManager", false) ||
                     context.evaluator.implementsInterface(it, "android.view.WindowManager", false) }
             }
+
+            private fun pinnedApi(method: com.intellij.psi.PsiMethod): Boolean = when (method.containingClass?.qualifiedName) {
+                "io.github.anastaci1a.localica.ui.GlassMorphKt" -> method.name in setOf("GlassMorphPopup", "GlassMenu")
+                "io.github.anastaci1a.localica.ui.LyricsPanelKt" -> method.name == "LyricsPanel"
+                "io.github.anastaci1a.localica.ui.LyricsBackdropKt" -> method.name == "LyricsBackdrop"
+                "io.github.anastaci1a.localica.ui.GlassPopupHomeKt" -> method.name == "GlassPopupHome"
+                else -> false
+            }
+
+            private fun scopedWindowManager(method: com.intellij.psi.PsiMethod, node: UCallExpression): Boolean =
+                windowManager(method, node.receiver) || node.receiver == null && generateSequence(node.uastParent) { it.uastParent }
+                    .filterIsInstance<UCallExpression>().any { scope ->
+                        val receiver = when (scope.resolve()?.name) {
+                            "with" -> scope.valueArguments.firstOrNull()
+                            "apply", "run" -> scope.receiver
+                            else -> null
+                        }
+                        windowManager(method, receiver)
+                    }
 
             private fun argumentPins(method: com.intellij.psi.PsiMethod, node: UCallExpression) {
                 val owner = method.containingClass?.qualifiedName
@@ -169,6 +193,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 (node.resolve() as? com.intellij.psi.PsiClass)?.takeIf(::nativeClass)?.let { report(UiRuleId.ScreenPopupDrawPath, node) }
                 (node.resolve() as? com.intellij.psi.PsiMethod)?.let {
                     reportRegistration(it, node)
+                    if (pinnedApi(it)) report(UiRuleId.ScreenPopupMotion, node)
                     privateEntry(it, node)
                     if (windowManager(it, node.qualifierExpression)) report(UiRuleId.ScreenPopupDrawPath, node)
                     if (it.name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !it.isConstructor) report(UiRuleId.ScreenPopupHome, node)
@@ -197,7 +222,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 reportRegistration(method, node)
                 privateEntry(method, node)
                 argumentPins(method, node)
-                if (windowManager(method, node.receiver)) report(UiRuleId.ScreenPopupDrawPath, node)
+                if (scopedWindowManager(method, node)) report(UiRuleId.ScreenPopupDrawPath, node)
                 val owner = method.containingClass?.qualifiedName.orEmpty()
                 if (name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !method.isConstructor) hostCall(name, node)
                 if (name in setOf("glassPopupHome", "glassPopupProjection")) report(UiRuleId.ScreenPopupHome, node)
