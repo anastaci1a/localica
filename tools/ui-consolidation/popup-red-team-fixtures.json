@@ -453,5 +453,325 @@
     "id": "testB4_toast_qualified_local",
     "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
     "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(view: android.view.View) { val toast=android.widget.Toast(); toast.view=view; toast.show() }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_provides_infix_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed provides 2f) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_provides_infix_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides 2f) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_provides_infix_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { val Policy=LocalMotionSpeed; androidx.compose.runtime.CompositionLocalProvider(Policy provides 2f) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_provides_dot_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed.provides(2f)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_provides_dot_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.provides(2f)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_provides_dot_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { val Policy=LocalMotionSpeed; androidx.compose.runtime.CompositionLocalProvider(Policy.provides(2f)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesDefault_infix_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed providesDefault 2f) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesDefault_infix_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy providesDefault 2f) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesDefault_infix_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { val Policy=LocalMotionSpeed; androidx.compose.runtime.CompositionLocalProvider(Policy providesDefault 2f) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesDefault_dot_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed.providesDefault(2f)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesDefault_dot_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesDefault(2f)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesDefault_dot_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { val Policy=LocalMotionSpeed; androidx.compose.runtime.CompositionLocalProvider(Policy.providesDefault(2f)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesComputed_infix_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed providesComputed { 2f }) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesComputed_infix_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy providesComputed { 2f }) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesComputed_infix_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { val Policy=LocalMotionSpeed; androidx.compose.runtime.CompositionLocalProvider(Policy providesComputed { 2f }) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesComputed_dot_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed.providesComputed({ 2f })) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesComputed_dot_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ 2f })) {} }"
+  },
+  {
+    "id": "testC_provider_LocalMotionSpeed_providesComputed_dot_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed\nfun f() { val Policy=LocalMotionSpeed; androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ 2f })) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_provides_infix_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalReducedMotion provides true) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_provides_infix_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides true) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_provides_infix_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { val Policy=LocalReducedMotion; androidx.compose.runtime.CompositionLocalProvider(Policy provides true) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_provides_dot_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalReducedMotion.provides(true)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_provides_dot_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.provides(true)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_provides_dot_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { val Policy=LocalReducedMotion; androidx.compose.runtime.CompositionLocalProvider(Policy.provides(true)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesDefault_infix_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalReducedMotion providesDefault true) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesDefault_infix_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy providesDefault true) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesDefault_infix_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { val Policy=LocalReducedMotion; androidx.compose.runtime.CompositionLocalProvider(Policy providesDefault true) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesDefault_dot_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalReducedMotion.providesDefault(true)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesDefault_dot_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesDefault(true)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesDefault_dot_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { val Policy=LocalReducedMotion; androidx.compose.runtime.CompositionLocalProvider(Policy.providesDefault(true)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesComputed_infix_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalReducedMotion providesComputed { true }) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesComputed_infix_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy providesComputed { true }) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesComputed_infix_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { val Policy=LocalReducedMotion; androidx.compose.runtime.CompositionLocalProvider(Policy providesComputed { true }) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesComputed_dot_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalReducedMotion.providesComputed({ true })) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesComputed_dot_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ true })) {} }"
+  },
+  {
+    "id": "testC_provider_LocalReducedMotion_providesComputed_dot_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalReducedMotion\nfun f() { val Policy=LocalReducedMotion; androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ true })) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_provides_infix_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalUiSpec provides 1) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_provides_infix_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides 1) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_provides_infix_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { val Policy=LocalUiSpec; androidx.compose.runtime.CompositionLocalProvider(Policy provides 1) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_provides_dot_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalUiSpec.provides(1)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_provides_dot_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.provides(1)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_provides_dot_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { val Policy=LocalUiSpec; androidx.compose.runtime.CompositionLocalProvider(Policy.provides(1)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesDefault_infix_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalUiSpec providesDefault 1) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesDefault_infix_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy providesDefault 1) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesDefault_infix_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { val Policy=LocalUiSpec; androidx.compose.runtime.CompositionLocalProvider(Policy providesDefault 1) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesDefault_dot_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalUiSpec.providesDefault(1)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesDefault_dot_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesDefault(1)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesDefault_dot_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { val Policy=LocalUiSpec; androidx.compose.runtime.CompositionLocalProvider(Policy.providesDefault(1)) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesComputed_infix_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalUiSpec providesComputed { 1 }) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesComputed_infix_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy providesComputed { 1 }) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesComputed_infix_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { val Policy=LocalUiSpec; androidx.compose.runtime.CompositionLocalProvider(Policy providesComputed { 1 }) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesComputed_dot_direct",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalUiSpec.providesComputed({ 1 })) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesComputed_dot_import",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec as Policy\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ 1 })) {} }"
+  },
+  {
+    "id": "testC_provider_LocalUiSpec_providesComputed_dot_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.spec.LocalUiSpec\nfun f() { val Policy=LocalUiSpec; androidx.compose.runtime.CompositionLocalProvider(Policy.providesComputed({ 1 })) {} }"
+  },
+  {
+    "id": "testC_pill_chromeVisibility_named",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor) { PopupActionPill(anchor, chromeVisibility={ 0f }) }"
+  },
+  {
+    "id": "testC_pill_chromeVisibility_positional",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor) { PopupActionPill(anchor, null, null, null, { 0f }) }"
+  },
+  {
+    "id": "testC_pill_chromeVisibility_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.PopupActionPill as Pill\nfun f(anchor: GlassAnchor) { Pill(anchor, chromeVisibility={ 0f }) }"
+  },
+  {
+    "id": "testC_pill_playerExpansion_named",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor) { PopupActionPill(anchor, playerExpansion=Any()) }"
+  },
+  {
+    "id": "testC_pill_playerExpansion_positional",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor) { PopupActionPill(anchor, null, null, null, { 1f }, Any()) }"
+  },
+  {
+    "id": "testC_pill_playerExpansion_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.PopupActionPill as Pill\nfun f(anchor: GlassAnchor) { Pill(anchor, playerExpansion=Any()) }"
+  },
+  {
+    "id": "testC_ratchet_growth",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(loadingReducedMotion: Boolean) { androidx.compose.runtime.CompositionLocalProvider(LocalReducedMotion provides loadingReducedMotion, LocalReducedMotion provides loadingReducedMotion) {} }"
+  },
+  {
+    "id": "testC_ratchet_expression",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalReducedMotion provides true) {} }"
+  },
+  {
+    "id": "testC_ratchet_operator",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(loadingReducedMotion: Boolean) { androidx.compose.runtime.CompositionLocalProvider(LocalReducedMotion providesDefault loadingReducedMotion) {} }"
+  },
+  {
+    "id": "testC_ratchet_other_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed provides 2f) {} }"
   }
 ]

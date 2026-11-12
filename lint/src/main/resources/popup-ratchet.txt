@@ -1,0 +1,1 @@
+ScreenPopupMotion|app/src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt|io.github.anastaci1a.localica.ui.LocalReducedMotion|LocalReducedMotion provides loadingReducedMotion|1|895

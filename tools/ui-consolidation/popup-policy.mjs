@@ -2,6 +2,7 @@ import fs from 'node:fs';
 /** Hard rule 11: popup implementation belongs to these owners, never to a screen. */
 export const popupRules = ['ScreenPopupHome', 'ScreenPopupMotion', 'ScreenPopupTrigger', 'ScreenPopupDrawPath', 'DuplicatePopupRole'];
 const ownership = fs.readFileSync(new URL('../../lint/src/main/resources/popup-owners.txt',import.meta.url),'utf8').trim().split('\n').map(row=>row.split('='));
+export const popupRatchet = fs.readFileSync(new URL('../../lint/src/main/resources/popup-ratchet.txt',import.meta.url),'utf8').trim().split('\n').map(row=>{const [rule,path,local,expression,limit,issue]=row.split('|');return {rule,path,local,expression,limit:+limit,issue:+issue};});
 export const popupOwners = [...new Set(ownership.map(([,path])=>path))];
 const popupHosts = new Map(fs.readFileSync(new URL('../../lint/src/main/resources/popup-hosts.txt',import.meta.url),'utf8').trim().split('\n').map(row=>{const [path,counts]=row.split('=');return [path,counts.split(',').map(Number)];}));
 const popupRoles = new Set(fs.readFileSync(new URL('../../lint/src/main/resources/popup-roles.txt',import.meta.url),'utf8').trim().split('\n'));
@@ -69,7 +70,7 @@ function declaredFunctions(file, source) {
     }
     return declarations;
 }
-export function checkPopupSource(file, source, declarations = []) {
+export function checkPopupSource(file, source, declarations = [], ratchetIncidents = []) {
     if(!file.includes('/src/main/') || !file.endsWith('.kt') )return [];
     const tokens=kotlinTokens(source), aliases=new Map(), imports=new Map(), anchors=new Set(), importTokens=new Set();
     for(let i=0;i<tokens.length;i++)if(tokens[i].text==='import') {
@@ -113,6 +114,26 @@ export function checkPopupSource(file, source, declarations = []) {
         const first=typeIdentity.get(tokens[begin]?.text)||tokens[begin]?.text;
         return first+tokens.slice(begin+1,i+1).map(t=>t.text).join('');
     }
+    const motionNames = new Map([['LocalMotionSpeed','io.github.anastaci1a.localica.ui.LocalMotionSpeed'],['LocalReducedMotion','io.github.anastaci1a.localica.ui.LocalReducedMotion'],['LocalUiSpec','io.github.anastaci1a.localica.ui.spec.LocalUiSpec']]);
+    const providerAliases = new Map();
+    function motionLocal(i) {
+        const n=name(i), canonical=motionNames.get(n);
+        if(providerAliases.has(tokens[i]?.text))return providerAliases.get(tokens[i].text);
+        if(!canonical)return null;
+        const imported=imports.get(tokens[i]?.text);
+        if(imported)return imported===canonical?canonical:null;
+        if(tokens[i-1]?.text==='.')return identityAt(i)===canonical?canonical:null;
+        return canonical;
+    }
+    for(let pass=0;pass<tokens.length;pass++) {
+        let changed=false;
+        for(let i=0;i<tokens.length;i++)if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=') {
+            const local=motionLocal(i+3);
+            if(local && providerAliases.get(tokens[i+1].text)!==local){providerAliases.set(tokens[i+1].text,local);changed=true;}
+        }
+        if(!changed)break;
+    }
+    const ratchetCounts=new Map();
     const nativeBuilder=i=>['android.app.AlertDialog.Builder','androidx.appcompat.app.AlertDialog.Builder'].includes(identityAt(i));
     const localDeclarations=declaredFunctions(file,source);
     const localFunctions=new Set(localDeclarations.map(d=>d.name));
@@ -227,6 +248,7 @@ export function checkPopupSource(file, source, declarations = []) {
     const rawHomeCalls=new Set(['glassPopupHome','glassPopupProjection']);
     const calls=[], scopes=[];let closedCall;
     const pinnedApis={
+        PopupActionPill:{owner:'GlassMorph',key:'PillArgument.',parameters:['anchor','source','modifier','noneAtlasInput','chromeVisibility','playerExpansion','leadingIcon','trailingIcon','leadingLabel','trailingLabel','tag','role','menuVisible','onMenuDismiss','menuContent','onSearch','onMore']},
         GlassMenu:{owner:'GlassMorph',key:'PopupArgument.',parameters:['visible','anchor','onDismiss','originPreparation','content']},
         GlassMorphPopup:{owner:'GlassMorph',key:'PopupArgument.',parameters:['visible','anchor','onDismiss','placement','darkOverride','fitContent','originPreparation','searchDismissOnImeBack','sharedContent','heightSizing','content']},
         GlassPopupHome:{owner:'GlassPopupHome',key:'HomeArgument.',parameters:['home','chrome','container','modifier','content']},
@@ -249,7 +271,7 @@ export function checkPopupSource(file, source, declarations = []) {
                 if(j>start) {
                     const named=tokens[start+1]?.text==='=';
                     const parameter=named?tokens[start].text:(formals.length===1?formals[0].parameters:spec.parameters)?.[ordinal];
-                    const motion=spec.key==='HomeArgument.'?['modifier','container','chrome']:spec.key==='PopupArgument.'?['originPreparation','sharedContent']:['originPreparation','contentAlpha'];
+                    const motion=spec.key==='PillArgument.'?['chromeVisibility','playerExpansion']:spec.key==='HomeArgument.'?['modifier','container','chrome']:spec.key==='PopupArgument.'?['originPreparation','sharedContent']:['originPreparation','contentAlpha'];
                     if(motion.includes(parameter) && !ownsPopups(file,spec.key+parameter))emit('ScreenPopupMotion',start,'Popup argument '+parameter+' is restricted to its pinned callers');
                     ordinal++;
                 }
@@ -270,7 +292,15 @@ export function checkPopupSource(file, source, declarations = []) {
             const writing=tokens[i+2]?.text!==')';
             if(writing && !ownsPopups(file,'SurfaceAnchorWriter'))emit('ScreenPopupTrigger',i,'Only the material owner binds surface anchors');
         }
-        if(n==='LocalMotionSpeed' && (['provides','providesDefault'].includes(tokens[i+1]?.text) || tokens[i+1]?.text==='.' && ['provides','providesDefault'].includes(tokens[i+2]?.text)) && !ownsPopups(file,'MotionSpeedProvider'))emit('ScreenPopupMotion',i,'Only the application shell provides motion speed');
+        const local=motionLocal(i), operations=['provides','providesDefault','providesComputed'];
+        if(local && (operations.includes(next) || next==='.' && operations.includes(tokens[i+2]?.text))) {
+            const debt=popupRatchet.find(row=>row.path===file && row.local===local &&
+                tokens.slice(i,i+3).map(t=>t.text).join(' ')===row.expression && [',',')',';','}'].includes(tokens[i+3]?.text));
+            const count=debt?(ratchetCounts.get(debt)||0)+1:0;
+            if(debt)ratchetCounts.set(debt,count);
+            if(debt && count<=debt.limit)ratchetIncidents.push({...debt,line:source.slice(0,tokens[i].start).split('\n').length});
+            else if(!ownsPopups(file,'MotionProvider.'+local.split('.').at(-1)))emit('ScreenPopupMotion',i,'Motion providers belong to their pinned shared ingress');
+        }
         if(['view','setView'].includes(n) && (n==='setView'?next==='(':next==='=') &&
             (previous==='.' && toastHandles.has(tokens[i-2]?.text) || toastScopes.some(s=>s.start<i && i<s.end)))emit('ScreenPopupDrawPath',i,'Custom-view Toasts create private windows');
         if(!importTokens.has(i)) {
@@ -373,4 +403,5 @@ export function checkPopupSource(file, source, declarations = []) {
     }
     return incidents;
 }
-export function checkPopupTree(files) {const declarations=files.flatMap(({path,source})=>declaredFunctions(path,source));return files.flatMap(({path,source})=>checkPopupSource(path,source,declarations));}
+export function auditPopupTree(files) {const declarations=files.flatMap(({path,source})=>declaredFunctions(path,source)),ratchetIncidents=[];const incidents=files.flatMap(({path,source})=>checkPopupSource(path,source,declarations,ratchetIncidents));return {incidents,ratchetIncidents};}
+export function checkPopupTree(files) {return auditPopupTree(files).incidents;}

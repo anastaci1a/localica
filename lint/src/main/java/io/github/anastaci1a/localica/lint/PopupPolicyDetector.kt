@@ -17,6 +17,11 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
     private val popupRoles by lazy {
         requireNotNull(javaClass.getResourceAsStream("/popup-roles.txt")).bufferedReader().use { it.readLines().toSet() }
     }
+    // Explicit rule-11 debt: exact provider expression and maximum occurrence count.
+    // Adoption is tracked separately; these are not lint baselines or owner grants.
+    private val popupRatchet by lazy {
+        requireNotNull(javaClass.getResourceAsStream("/popup-ratchet.txt")).bufferedReader().use { it.readLines().map { row -> row.split("|") } }
+    }
     override fun getApplicableUastTypes() = listOf(UCallExpression::class.java,
         USimpleNameReferenceExpression::class.java, UBinaryExpression::class.java, UPrefixExpression::class.java,
         UPostfixExpression::class.java, UCallableReferenceExpression::class.java, UClassLiteralExpression::class.java, UClass::class.java, UVariable::class.java)
@@ -26,6 +31,8 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
         // A matching package path in another Gradle module is never an owner.
         val relative = if (context.project.name == "app") "app/src/main/java/" + path.substringAfterLast("/src/main/java/", missingDelimiterValue = path) else path
         return object : UElementHandler() {
+            private val providerSites = mutableSetOf<com.intellij.psi.PsiElement>()
+            private val ratchetSites = mutableMapOf<List<String>, MutableSet<com.intellij.psi.PsiElement>>()
             private val hostCalls = mutableMapOf<String, Int>()
             private fun hostCall(name: String, node: UElement) {
                 val index = if (name == "rememberGlassPopupHome") 0 else 1
@@ -124,7 +131,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
             }
 
             private fun pinnedApi(method: com.intellij.psi.PsiMethod): Boolean = when (method.containingClass?.qualifiedName) {
-                "io.github.anastaci1a.localica.ui.GlassMorphKt" -> method.name in setOf("GlassMorphPopup", "GlassMenu")
+                "io.github.anastaci1a.localica.ui.GlassMorphKt" -> method.name in setOf("GlassMorphPopup", "GlassMenu", "PopupActionPill")
                 "io.github.anastaci1a.localica.ui.LyricsPanelKt" -> method.name == "LyricsPanel"
                 "io.github.anastaci1a.localica.ui.LyricsBackdropKt" -> method.name == "LyricsBackdrop"
                 "io.github.anastaci1a.localica.ui.GlassPopupHomeKt" -> method.name == "GlassPopupHome"
@@ -146,13 +153,14 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 val owner = method.containingClass?.qualifiedName
                 val api = when {
                     owner == "io.github.anastaci1a.localica.ui.GlassMorphKt" && method.name in setOf("GlassMenu", "GlassMorphPopup") -> "PopupArgument."
+                    owner == "io.github.anastaci1a.localica.ui.GlassMorphKt" && method.name == "PopupActionPill" -> "PillArgument."
                     owner == "io.github.anastaci1a.localica.ui.LyricsPanelKt" && method.name == "LyricsPanel" -> "LyricsArgument."
                     owner == "io.github.anastaci1a.localica.ui.LyricsBackdropKt" && method.name == "LyricsBackdrop" -> "LyricsBackdropArgument."
                     owner == "io.github.anastaci1a.localica.ui.GlassPopupHomeKt" && method.name == "GlassPopupHome" -> "HomeArgument."
                     else -> return
                 }
                 method.parameterList.parameters.forEachIndexed { index, formal ->
-                    if (formal.name in (if (api == "HomeArgument.") setOf("modifier", "container", "chrome") else setOf("sharedContent", "originPreparation", "contentAlpha")) &&
+                    if (formal.name in (if (api == "HomeArgument.") setOf("modifier", "container", "chrome") else if (api == "PillArgument.") setOf("chromeVisibility", "playerExpansion") else setOf("sharedContent", "originPreparation", "contentAlpha")) &&
                         node.getArgumentForParameter(index) != null && relative !in popupOwnerPaths[api + formal.name].orEmpty())
                         context.report(UiRuleId.ScreenPopupMotion.issue, node, context.getLocation(node), "Popup argument "+formal.name+" is restricted to its pinned callers")
                 }
@@ -211,26 +219,43 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 (memberRule(node.resolve() as? PsiMember) ?: ownedReceiver(node.qualifierExpression))?.let { report(it, node) }
             }
 
+            private fun motionLocal(symbol: com.intellij.psi.PsiElement?, seen: MutableSet<com.intellij.psi.PsiElement> = mutableSetOf()): String? {
+                if (symbol == null || !seen.add(symbol)) return null
+                val property = symbol.navigationElement as? org.jetbrains.kotlin.psi.KtProperty
+                val fqn = property?.fqName?.asString()
+                if (fqn in setOf("io.github.anastaci1a.localica.ui.LocalMotionSpeed",
+                        "io.github.anastaci1a.localica.ui.LocalReducedMotion", "io.github.anastaci1a.localica.ui.spec.LocalUiSpec")) return fqn
+                val initializer = (symbol as? com.intellij.psi.PsiVariable)?.toUElementOfType<UVariable>()?.uastInitializer
+                    ?: property?.initializer?.toUElementOfType<UExpression>()
+                return motionLocal((initializer as? UResolvable)?.resolve(), seen)
+            }
+
             override fun visitSimpleNameReferenceExpression(node: USimpleNameReferenceExpression) {
                 val resolved = node.resolve()
                 reportRole(resolved, node)
-                // Kotlin infix providers expose the local reference even when UAST
-                // models the infix expression without a call receiver.
-                val property = resolved?.navigationElement as? org.jetbrains.kotlin.psi.KtProperty
-                if (property?.fqName?.asString() == "io.github.anastaci1a.localica.ui.LocalMotionSpeed") {
+                // Resolve the declaration, including imported and local aliases. Infix
+                // provider expressions do not consistently expose a UAST call receiver.
+                val local = motionLocal(resolved)
+                if (local != null) {
+                    val operations = setOf("provides", "providesDefault", "providesComputed")
                     val provider = generateSequence(node.sourcePsi?.parent) { it.parent }
                         .takeWhile { it !is org.jetbrains.kotlin.psi.KtDeclaration }
                         .firstOrNull {
                             val receiver = when (it) {
                                 is org.jetbrains.kotlin.psi.KtBinaryExpression -> it.left.takeIf { _ ->
-                                    it.operationReference.getReferencedName() in setOf("provides", "providesDefault") }
+                                    it.operationReference.getReferencedName() in operations }
                                 is org.jetbrains.kotlin.psi.KtDotQualifiedExpression -> it.receiverExpression.takeIf { _ ->
-                                    (it.selectorExpression as? org.jetbrains.kotlin.psi.KtCallExpression)?.calleeExpression?.text in setOf("provides", "providesDefault") }
+                                    (it.selectorExpression as? org.jetbrains.kotlin.psi.KtCallExpression)?.calleeExpression?.text in operations }
                                 else -> null
                             }
                             receiver?.textRange?.contains(node.sourcePsi?.textRange ?: return@firstOrNull false) == true
                         }
-                    if (provider != null) report(Ownership(UiRuleId.ScreenPopupMotion, "MotionSpeedProvider"), node)
+                    if (provider != null && providerSites.add(provider)) {
+                        val debt = popupRatchet.singleOrNull { it[1] == relative && it[2] == local &&
+                            it[3] == provider.text.replace(Regex("\\s+"), " ").trim() }
+                        val admitted = debt != null && ratchetSites.getOrPut(debt) { mutableSetOf() }.apply { add(provider) }.size <= debt[4].toInt()
+                        if (!admitted) report(Ownership(UiRuleId.ScreenPopupMotion, "MotionProvider." + local.substringAfterLast('.')), node)
+                    }
                 }
                 val name = resolved?.let { (it as? com.intellij.psi.PsiNamedElement)?.name } ?: node.identifier
                 if (Regex("(?:get)?Local.*Popup.*Home.*").matches(name)) report(UiRuleId.ScreenPopupHome, node)

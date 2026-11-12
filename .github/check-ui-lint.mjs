@@ -1,4 +1,4 @@
-import {checkPopupTree, popupRules} from '../tools/ui-consolidation/popup-policy.mjs';
+import {auditPopupTree, popupRules} from '../tools/ui-consolidation/popup-policy.mjs';
 import {strictJson} from '../tools/ui-consolidation/strict-json.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -227,9 +227,9 @@ export function run(argv) {
     const manifestText = blob(head, o['--escapes']);
     const escapes = manifest(manifestText, meta, known.knownSteps);
     const sourceFiles = git('ls-tree','-r','--name-only',head,'app/src/main').trim().split('\n').filter(f => f.endsWith('.kt'));
-    const popupIncidents = checkPopupTree(sourceFiles.map(path => ({path, source: blob(head,path)})));
+    const {incidents:popupIncidents,ratchetIncidents} = auditPopupTree(sourceFiles.map(path => ({path, source: blob(head,path)})));
     fs.mkdirSync(o['--out'], {recursive:true});
-    fs.writeFileSync(path.join(o['--out'],'popup-policy.json'), JSON.stringify({sourceSha:head, rules:popupRules, incidents:popupIncidents, accepted:popupIncidents.length===0},null,2)+'\n');
+    fs.writeFileSync(path.join(o['--out'],'popup-policy.json'), JSON.stringify({sourceSha:head, rules:popupRules, incidents:popupIncidents, ratchetIncidents, accepted:popupIncidents.length===0},null,2)+'\n');
     requireThat(popupIncidents.length===0, 'Popup conformity gate failed: '+JSON.stringify(popupIncidents));
     for (const e of escapes) {
         const [fqn,line] = e.symbol.split(':');

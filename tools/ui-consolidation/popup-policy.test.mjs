@@ -1,7 +1,7 @@
 import test from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import {checkPopupSource, ownsPopups, popupRules, popupOwners} from './popup-policy.mjs';
+import {checkPopupSource, ownsPopups, popupRules, popupOwners, auditPopupTree, popupRatchet} from './popup-policy.mjs';
 const screen='app/src/main/java/io/github/anastaci1a/localica/ui/Screen.kt';
 const rules=source=>new Set(checkPopupSource(screen,source).map(x=>x.rule));
 test('calibration note 6: named roles are pinned to their actual callers',()=>{
@@ -49,7 +49,7 @@ test('comments, literals and backticks do not bypass policy',()=>{
  assert.ok(rules('fun f() { `GlassAnchor`(/*nested /*comment*/ */ ) }').has('ScreenPopupTrigger'));
 });
 test('private graphics-layer popup fails',()=>assert.ok(rules('fun CustomPopup() { Box(Modifier.graphicsLayer { alpha = x }) {} }').has('ScreenPopupDrawPath')));
-test('component entry points and ordinary drawing pass',()=>assert.equal(rules('fun Screen() { Box(Modifier.glassAnchor(anchor, face = { Text(label) })) {}; PopupActionPill(anchor, playerExpansion = sheet.expansion) {}; Box(Modifier.graphicsLayer { alpha = x }) {} }').size,0));
+test('component entry points and ordinary drawing pass',()=>assert.equal(rules('fun Screen() { Box(Modifier.glassAnchor(anchor, face = { Text(label) })) {}; PopupActionPill(anchor) {}; Box(Modifier.graphicsLayer { alpha = x }) {} }').size,0));
 test('native Popup cannot masquerade as the component through an alias',()=>assert.ok(rules('import androidx.compose.ui.window.Popup as Native\nfun f(){ Native {} }').has('ScreenPopupDrawPath')));
 test('ownership is pinned per rule, never per package or whole file',()=>{
  const path=screen.replace('Screen.kt','GlassPopupHome.kt');
@@ -237,4 +237,36 @@ test('obsolete argument permissions cannot widen callers',()=>{
  assert.equal(ownsPopups(screen.replace('Screen.kt','PlayerSurface.kt'),'PopupArgument.originPreparation'),false);
  assert.equal(ownsPopups(screen.replace('Screen.kt','GlassMorph.kt'),'PopupArgument.sharedContent'),false);
  for(const name of ['GlassMorph','PlayerSurface'])assert.equal(ownsPopups(screen.replace('Screen.kt',name+'.kt'),'PopupArgument.contentAlpha'),false);
+});
+
+test('motion providers permit every operator only at the exact shared ingress',()=>{
+ for(const [local,owner] of [['LocalUiSpec','LocalicaUiRoot'],['LocalReducedMotion','LocalicaScreen'],['LocalMotionSpeed','LocalicaScreen']]) {
+  for(const op of ['provides','providesDefault','providesComputed'])for(const dot of [false,true]) {
+   const expression=dot?local+'.'+op+'(value)':local+' '+op+' value';
+   const source='fun f() { CompositionLocalProvider('+expression+') {} }';
+   assert.deepEqual(checkPopupSource(screen.replace('Screen.kt',owner+'.kt'),source),[]);
+   assert.ok(rules(source).has('ScreenPopupMotion'));
+   assert.equal(rules('fun f() { println('+local+'.current) }').size,0);
+  }
+ }
+});
+test('the explicit Browser provider debt is counted, bounded and removable',()=>{
+ const path=screen.replace('Screen.kt','BrowserScreen.kt');
+ const expression='LocalReducedMotion provides loadingReducedMotion';
+ const source='fun f() { CompositionLocalProvider('+expression+') {} }';
+ const audit=auditPopupTree([{path,source}]);
+ assert.deepEqual(audit.incidents,[]);
+ assert.equal(audit.ratchetIncidents.length,1);
+ assert.equal(audit.ratchetIncidents[0].rule,'ScreenPopupMotion');
+ assert.equal(audit.ratchetIncidents[0].issue,895);
+ assert.equal(popupRatchet.length,1);
+ assert.equal(popupRatchet[0].limit,1);
+ assert.equal(auditPopupTree([{path,source:'fun f() {}'}]).ratchetIncidents.length,0);
+ assert.equal(checkPopupSource(path,'fun f() { CompositionLocalProvider('+expression+', '+expression+') {} }').length,1);
+ assert.ok(checkPopupSource(path,source.replace('loadingReducedMotion','true')).length);
+});
+test('Navigation alone supplies pill shadow inputs',()=>{
+ const source='fun f(anchor: GlassAnchor) { PopupActionPill(anchor, chromeVisibility={ 1f }, playerExpansion=sheet.expansion) }';
+ assert.deepEqual(checkPopupSource(screen.replace('Screen.kt','LocalicaScreen.kt'),source),[]);
+ assert.ok(rules(source).has('ScreenPopupMotion'));
 });
