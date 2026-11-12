@@ -1,0 +1,4 @@
+app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt
+app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt
+app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt
+app/src/main/java/io/github/anastaci1a/localica/ui/Theme.kt

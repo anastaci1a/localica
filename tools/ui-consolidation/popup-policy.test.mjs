@@ -22,7 +22,7 @@ test('comments, literals and backticks do not bypass policy',()=>{
  assert.ok(rules('fun f() { `GlassAnchor`(/*nested /*comment*/ */ ) }').has('ScreenPopupTrigger'));
 });
 test('private graphics-layer popup fails',()=>assert.ok(rules('fun CustomPopup() { Box(Modifier.graphicsLayer { alpha = x }) {} }').has('ScreenPopupDrawPath')));
-test('component entry points and ordinary drawing pass',()=>assert.equal(rules('fun Screen() { GlassPopupHome(home) { Box(Modifier.glassAnchor(anchor, face = { Text(label) })) {} }; PopupActionPill(anchor, playerExpansion = sheet.expansion) {}; Box(Modifier.graphicsLayer { alpha = x }) {} }').size,0));
+test('component entry points and ordinary drawing pass',()=>assert.equal(rules('fun Screen() { Box(Modifier.glassAnchor(anchor, face = { Text(label) })) {}; PopupActionPill(anchor, playerExpansion = sheet.expansion) {}; Box(Modifier.graphicsLayer { alpha = x }) {} }').size,0));
 test('native Popup cannot masquerade as the component through an alias',()=>assert.ok(rules('import androidx.compose.ui.window.Popup as Native\nfun f(){ Native {} }').has('ScreenPopupDrawPath')));
 test('ownership is pinned per rule, never per package or whole file',()=>{
  const path=screen.replace('Screen.kt','GlassPopupHome.kt');
@@ -79,4 +79,15 @@ test('raw renamed boolean motion selectors fail',()=>{
 test('an arbitrarily renamed raw Boolean flag fails; intent callbacks and nested content pass',()=>{
  assert.ok(rules('fun f(){ glassAnchor(anchor, magicMotionSwitch = true) }').has('ScreenPopupMotion'));
  assert.equal(rules('fun f(){ PopupActionPill(anchor, onMore = { menu = true }); glassAnchor(anchor, face = { CheckBox(checked = true) }); rememberPresence(key, shown = true, role = TriggerRole.Lyrics) }').size,0);
+});
+
+test('only the pinned shell hosts may create shared homes',()=>{
+ const source='fun f(){ GlassPopupHome(rememberGlassPopupHome(false)) {} }';
+ assert.ok(rules(source).has('ScreenPopupHome'));
+ for(const host of ['LocalicaScreen','PlayerSurface','QueueSurface','Theme']) assert.equal(checkPopupSource(screen.replace('Screen',host),source).length,0);
+ assert.ok(checkPopupSource(screen.replace('ui/Screen.kt','ui/components/NewHost.kt'),source).some(x=>x.rule==='ScreenPopupHome'));
+});
+test('compound and prefix/postfix anchor mutations are rejected',()=>{
+ for(const expression of ['anchor.futureField += 1','anchor.futureField -= 1','anchor.futureField *= 2','anchor.futureField /= 2','anchor.futureField %= 2','anchor.futureField++','++anchor.futureField','anchor.futureField--','--anchor.futureField']) assert.ok(rules('fun f(anchor: GlassAnchor) { '+expression+' }').has('ScreenPopupTrigger'),expression);
+ assert.equal(rules('fun f(){ var value=0; value++; value+=2 }').size,0);
 });

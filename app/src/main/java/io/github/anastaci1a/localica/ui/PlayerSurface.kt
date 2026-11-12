@@ -419,6 +419,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     PrewarmPlayerBackdrop(polarity, artwork, prewarmGeometry, settings.glass.contrast > 0f)
     val baseColors = MaterialTheme.colorScheme
 
+    GlassPopupHome(popupHome, container = { popupContent ->
     GlassPanelTheme(lightMix) {
     val playerColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = playerColors.copy(onSurface = foreground,
@@ -436,7 +437,24 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
         shape = surfaceFrame.shape, color = Color.Transparent, contentColor = foreground) {
-        GlassPopupHome(popupHome) {
+        popupContent()
+    }
+    }
+    // The complete player composite (artwork, wash, controls, text) as recorded by the Surface above.
+    // This target must stay outside that Surface's content: inside it, the Surface records the X into
+    // the very layer the X's lens draws, a RenderNode cycle that overflows the API 33+ RenderThread (#583).
+    CompositionLocalProvider(LocalFrostedBackdrop provides seekCancelBackdrop(frostedBackdrop, lyricBackdrop, p),
+        LocalContentColor provides foreground) {
+        SeekCancelTarget(scrubCancel, scrubOverCancel,
+            navigationInset + CollapsedQueueHeight + 20.dp, settings.reducedMotion)
+    }
+    }
+    if (viewing && sampled.trackUri != null) ArtworkViewer(sampled.trackUri) { viewing = false }
+    if (configureTap) GlassAlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
+        text = { Column { ArtworkAction.entries.forEach { value -> ActionTextButton(onClick = {
+            onSettings(settings.copy(artworkTap = value)); configureTap = false
+        }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } })
+    }) {
         if (workObserver != null) SideEffect { workObserver("surface-content", null) }
         if (inkObserver != null) {
             // Read inside Surface's actual provider, including when the actions row is absent.
@@ -638,21 +656,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         }
     }
     }
-    }
-    // The complete player composite (artwork, wash, controls, text) as recorded by the Surface above.
-    // This target must stay outside that Surface's content: inside it, the Surface records the X into
-    // the very layer the X's lens draws, a RenderNode cycle that overflows the API 33+ RenderThread (#583).
-    CompositionLocalProvider(LocalFrostedBackdrop provides seekCancelBackdrop(frostedBackdrop, lyricBackdrop, p),
-        LocalContentColor provides foreground) {
-        SeekCancelTarget(scrubCancel, scrubOverCancel,
-            navigationInset + CollapsedQueueHeight + 20.dp, settings.reducedMotion)
-    }
-    }
-    if (viewing && sampled.trackUri != null) ArtworkViewer(sampled.trackUri) { viewing = false }
-    if (configureTap) GlassAlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
-        text = { Column { ArtworkAction.entries.forEach { value -> ActionTextButton(onClick = {
-            onSettings(settings.copy(artworkTap = value)); configureTap = false
-        }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } })
 }
 
 }

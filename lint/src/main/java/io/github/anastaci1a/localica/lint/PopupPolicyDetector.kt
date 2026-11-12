@@ -10,11 +10,15 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
     private val popupOwnerPaths by lazy {
         requireNotNull(javaClass.getResourceAsStream("/popup-owners.txt")).bufferedReader().use { it.readLines().map { row -> row.split("=", limit = 2) }.groupBy({ it[0] }, { it[1] }) }
     }
+    private val popupHosts by lazy {
+        requireNotNull(javaClass.getResourceAsStream("/popup-hosts.txt")).bufferedReader().use { it.readLines().toSet() }
+    }
     private val popupRoles by lazy {
         requireNotNull(javaClass.getResourceAsStream("/popup-roles.txt")).bufferedReader().use { it.readLines().toSet() }
     }
     override fun getApplicableUastTypes() = listOf(UCallExpression::class.java,
-        USimpleNameReferenceExpression::class.java, UBinaryExpression::class.java, UClass::class.java, UVariable::class.java)
+        USimpleNameReferenceExpression::class.java, UBinaryExpression::class.java, UPrefixExpression::class.java,
+        UPostfixExpression::class.java, UClass::class.java, UVariable::class.java)
 
     override fun createUastHandler(context: JavaContext): UElementHandler? {
         val path = context.file.invariantSeparatorsPath
@@ -36,6 +40,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 val method = node.resolve() ?: return
                 val name = method.name
                 val owner = method.containingClass?.qualifiedName.orEmpty()
+                if (name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !method.isConstructor && relative !in popupHosts) report(UiRuleId.ScreenPopupHome, node)
                 if (name in setOf("glassPopupHome", "glassPopupProjection")) report(UiRuleId.ScreenPopupHome, node)
                 val motionParameters = setOf("motionKind", "popupKind", "popupLaw", "motionLaw", "law", "quiet", "originPresentation", "contactPresentation")
                 if (method.parameterList.parameters.withIndex().any { (i, p) ->
@@ -55,8 +60,20 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
             }
 
             override fun visitBinaryExpression(node: UBinaryExpression) {
-                if (node.operator.text != "=") return
-                val left = (node.leftOperand as? UQualifiedReferenceExpression)?.selector ?: node.leftOperand
+                if (node.operator.text !in setOf("=", "+=", "-=", "*=", "/=", "%=")) return
+                reportAnchorWrite(node.leftOperand, node)
+            }
+
+            override fun visitPrefixExpression(node: UPrefixExpression) {
+                if (node.operator.text in setOf("++", "--")) reportAnchorWrite(node.operand, node)
+            }
+
+            override fun visitPostfixExpression(node: UPostfixExpression) {
+                if (node.operator.text in setOf("++", "--")) reportAnchorWrite(node.operand, node)
+            }
+
+            private fun reportAnchorWrite(operand: UExpression, node: UElement) {
+                val left = (operand as? UQualifiedReferenceExpression)?.selector ?: operand
                 val symbol = (left as? UReferenceExpression)?.resolve() as? PsiMember ?: return
                 if (symbol.containingClass?.name == "GlassAnchor") {
                     report(UiRuleId.ScreenPopupTrigger, node)

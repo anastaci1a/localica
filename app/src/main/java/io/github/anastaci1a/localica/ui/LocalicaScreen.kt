@@ -352,6 +352,18 @@ fun LocalicaScreen(
                 ActionMenuItem("Settings", icon = AppIcon.ActionSettings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
             })
         }
+        // The pill is a standard Liquid Glass pill over the page: it samples the browse backdrop and takes the
+        // page's ink for its material, icons and menu, like the mini-player and utility pill (#552).
+        CompositionLocalProvider(LocalFrostedBackdrop provides browseBackdrop) {
+        GlassPanelTheme(browseInk == androidx.compose.ui.graphics.Color.White) {
+        FloatingSelectionPanel(selectionPanel, Modifier.align(Alignment.BottomCenter)
+            .padding(horizontal = 8.dp).padding(bottom = browseBottomChrome)
+            .fillMaxWidth().heightIn(max = screenScope.maxHeight / 2)) {
+            Column(Modifier.controlVerticalScroll(rememberScrollState())) {
+                SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
+            }
+        }
+        } }
         }) {
         Column(Modifier.fillMaxSize()
             // The opaque full player covers this entire scene. Keep its composition,
@@ -427,18 +439,7 @@ fun LocalicaScreen(
             }
             }
         }
-        // The pill is a standard Liquid Glass pill over the page: it samples the browse backdrop and takes the
-        // page's ink for its material, icons and menu, like the mini-player and utility pill (#552).
-        CompositionLocalProvider(LocalFrostedBackdrop provides browseBackdrop) {
-        GlassPanelTheme(browseInk == androidx.compose.ui.graphics.Color.White) {
-        FloatingSelectionPanel(selectionPanel, Modifier.align(Alignment.BottomCenter)
-            .padding(horizontal = 8.dp).padding(bottom = browseBottomChrome)
-            .fillMaxWidth().heightIn(max = screenScope.maxHeight / 2)) {
-            Column(Modifier.controlVerticalScroll(rememberScrollState())) {
-                SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
-            }
-        }
-        } }
+
         }
         Sheet(sheet) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
