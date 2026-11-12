@@ -231,16 +231,20 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor?, role: TriggerRole.Select
     return this
 }
 
-/** One node-registration implementation for material and retained trigger surfaces. */
+/** Material and retained roles expose only their valid registration cases. */
 @Composable
-internal fun GlassAnchor?.glassAnchor(role: TriggerRole<ShadowPlane, Nothing>): ((SurfaceView, Boolean) -> Unit)? {
+internal fun GlassAnchor?.glassAnchor(role: TriggerRole.MaterialSurface<ShadowPlane>): ((SurfaceView, Boolean) -> Unit)? =
+    registerGlassSurface(role.plane, material = true)
+
+@Composable
+internal fun GlassAnchor?.glassAnchor(role: TriggerRole.RetainedSurface<ShadowPlane>): ((SurfaceView, Boolean) -> Unit)? =
+    registerGlassSurface(role.plane, material = false)
+
+/** One node-registration implementation for both existing surface lifetimes. */
+@Composable
+private fun GlassAnchor?.registerGlassSurface(plane: ShadowPlane, material: Boolean): ((SurfaceView, Boolean) -> Unit)? {
     val anchor = this ?: return null
-    val plane = when (role) {
-        is TriggerRole.MaterialSurface -> role.plane
-        is TriggerRole.RetainedSurface -> role.plane
-        else -> error("A shadow surface supplies its material or retained role")
-    }
-    if (role is TriggerRole.MaterialSurface) DisposableEffect(plane, anchor) {
+    if (material) DisposableEffect(plane, anchor) {
         anchor.shadowPlane = plane
         onDispose { if (anchor.shadowPlane === plane) anchor.shadowPlane = null }
     }
@@ -248,7 +252,7 @@ internal fun GlassAnchor?.glassAnchor(role: TriggerRole<ShadowPlane, Nothing>): 
         if (bound) {
             anchor.surfaceNode = node
             anchor.returningNode = node
-            if (role is TriggerRole.RetainedSurface) anchor.shadowPlane = plane
+            if (!material) anchor.shadowPlane = plane
         } else if (anchor.surfaceNode === node) {
             anchor.surfaceNode = null
             if (node.windowRetained().not()) anchor.returningNode = null
@@ -1160,10 +1164,11 @@ internal fun PopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop? = Loc
     val raised = role == TriggerRole.Navigation
     val effectiveShadow: () -> Float = if (playerExpansion == null) ({ chromeVisibility })
         else ({ chromeVisibility * (1f - playerExpansion.phase.value()) })
-    val iconSize = io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Panel)
+    val iconSize = if (raised) io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Panel)
+        else io.github.anastaci1a.localica.ui.spec.StockUiSpec.control.getValue(io.github.anastaci1a.localica.ui.spec.ControlSize.SettingsIcon)
     val face: @Composable () -> Unit = {
         io.github.anastaci1a.localica.ui.layout.ActionButtonFaceSlot(Modifier, iconOnly = false,
-            divider = { GlassPillDivider() }, retainedFace = true,
+            divider = { GlassPillDivider() }, retainedFace = true, iconSize = iconSize,
             icon = { Icon(appIconPainter(leadingIcon), null, it) },
             label = { Icon(appIconPainter(trailingIcon), null, it) })
     }

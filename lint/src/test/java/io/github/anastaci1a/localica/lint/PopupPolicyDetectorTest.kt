@@ -33,6 +33,8 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
         fun glassPopupProjection() {}
         fun menu(motionKind: Int) {}
         fun rememberGlassAnchor() = GlassAnchor()
+        fun rememberGlassPopupHome() = Unit
+        fun GlassPopupHome(home: Unit, content: () -> Unit) {}
         fun Modifier.glassAnchor(anchor: GlassAnchor, role: TriggerRole = TriggerRole.Surface, face: (() -> Unit)? = null) = this
         fun GlassAnchor.captureInk() {}
     """).indented()
@@ -111,6 +113,35 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
                 anchor.futureBindingField = true
             }
         """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(3)
+    }
+
+    fun testOnlyPinnedShellsCanHostHomes() {
+        val source = "fun screen() { GlassPopupHome(rememberGlassPopupHome()) {} }"
+        for (file in listOf("Screen.kt", "components/ControlProgress.kt")) {
+            lint().files(*dependencies, kotlin(root + file, "package io.github.anastaci1a.localica.ui\n" + source))
+                .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(2)
+        }
+        for (file in listOf("LocalicaScreen.kt", "PlayerSurface.kt", "QueueSurface.kt", "Theme.kt")) {
+            lint().files(*dependencies, kotlin(root + file, "package io.github.anastaci1a.localica.ui\n" + source))
+                .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
+        }
+    }
+
+    fun testCompoundAndUnaryAnchorWritesFail() {
+        lint().files(*dependencies, kotlin(root + "Screen.kt", """
+            package io.github.anastaci1a.localica.ui
+            fun mutate(anchor: GlassAnchor) {
+                anchor.depthScale += 1f
+                anchor.depthScale -= 1f
+                anchor.depthScale *= 2f
+                anchor.depthScale /= 2f
+                anchor.depthScale %= 2f
+                anchor.depthScale++
+                ++anchor.depthScale
+                anchor.depthScale--
+                --anchor.depthScale
+            }
+        """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(9)
     }
 
     fun testRenamingABooleanMotionSwitchCannotBypassTheGate() {

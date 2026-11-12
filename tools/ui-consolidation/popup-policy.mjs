@@ -3,6 +3,7 @@ import fs from 'node:fs';
 export const popupRules = ['ScreenPopupHome', 'ScreenPopupMotion', 'ScreenPopupTrigger', 'ScreenPopupDrawPath', 'DuplicatePopupRole'];
 const ownership = fs.readFileSync(new URL('../../lint/src/main/resources/popup-owners.txt',import.meta.url),'utf8').trim().split('\n').map(row=>row.split('='));
 export const popupOwners = [...new Set(ownership.map(([,path])=>path))];
+const popupHosts = new Set(fs.readFileSync(new URL('../../lint/src/main/resources/popup-hosts.txt',import.meta.url),'utf8').trim().split('\n'));
 const popupRoles = new Set(fs.readFileSync(new URL('../../lint/src/main/resources/popup-roles.txt',import.meta.url),'utf8').trim().split('\n'));
 export function ownsPopups(file, rule) { return ownership.some(([r,path])=>path===file && (!rule || r===rule)); }
 // Tokenize Kotlin so comments, ordinary/raw strings and whitespace cannot hide or fabricate a call.
@@ -24,7 +25,7 @@ export function kotlinTokens(source) {
 }
 export function checkPopupSource(file, source) {
     if(!file.startsWith('app/src/main/') || !file.endsWith('.kt') )return [];
-    const tokens=kotlinTokens(source), aliases=new Map(), imports=new Map();
+    const tokens=kotlinTokens(source), aliases=new Map(), imports=new Map(), anchors=new Set();
     for(let i=0;i<tokens.length;i++)if(tokens[i].text==='import') {
         let j=i+1,last='', qualified='';while(j<tokens.length && !['as',';','import','package'].includes(tokens[j].text)) {
             if(j>i+1 && source.slice(tokens[j-1].start,tokens[j].start).includes('\n'))break;
@@ -34,6 +35,10 @@ export function checkPopupSource(file, source) {
         imports.set(local,qualified);if(local!==last)aliases.set(local,last);
     }
     const name=i=>aliases.get(tokens[i]?.text)||tokens[i]?.text;
+    for(let i=0;i<tokens.length;i++) {
+        if(tokens[i+1]?.text===':' && name(i+2)==='GlassAnchor') anchors.add(tokens[i].text);
+        if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=' && ['rememberGlassAnchor','GlassAnchor'].includes(name(i+3))) anchors.add(tokens[i+1].text);
+    }
     const incidents=[],seen=new Set();
     function emit(rule,i,note){if(ownsPopups(file,rule))return;const offset=tokens[i].start,key=rule+':'+offset;if(seen.has(key))return;seen.add(key);incidents.push({rule,path:file,line:source.slice(0,offset).split('\n').length,note});}
     const home=/^Local\w*Popup\w*Home\w*$/;
@@ -49,6 +54,7 @@ export function checkPopupSource(file, source) {
         const n=name(i),next=tokens[i+1]?.text,previous=tokens[i-1]?.text;
         const assignment=next==='=' && tokens[i+2]?.text!=='=';
         if(home.test(n||''))emit('ScreenPopupHome',i,'A screen cannot provide a popup home');
+        if(['GlassPopupHome','rememberGlassPopupHome'].includes(n) && next==='(' && previous!=='fun' && !popupHosts.has(file))emit('ScreenPopupHome',i,'Only the pinned application shells host popup homes');
         if(rawHomeCalls.has(n) && next==='(')emit('ScreenPopupHome',i,'Use the shared component home scope');
         if(['motionKind','popupKind','popupLaw','motionLaw','quiet','originPresentation','contactPresentation'].includes(n) && assignment)emit('ScreenPopupMotion',i,'The popup component derives its motion');
         if(assignment && ['(',','].includes(previous) && ['true','false'].includes(tokens[i+2]?.text) && !['visible','shown','expanded','menuVisible','enabled','glass','quietInputEnabled'].includes(n) && ['glassAnchor','rememberPresence','rememberFaceExpansion','PopupActionPill','ActionIcon'].includes(calls.at(-1)))emit('ScreenPopupMotion',i,'Only named roles may configure popup policy');
@@ -62,6 +68,11 @@ export function checkPopupSource(file, source) {
             if(tokens[j]?.text==='{')emit('ScreenPopupMotion',i,'Use a named component capability, without a screen law lambda');
         }
         if((anchorCalls.has(n) || n==='GlassAnchor') && next==='(')emit('ScreenPopupTrigger',i,'Use the component anchor binding');
+        const fieldWrite=(assignment || (['+','-','*','/','%'].includes(next) && tokens[i+2]?.text==='=') || (['+','-'].includes(next) && tokens[i+2]?.text===next) || (['+','-'].includes(previous) && tokens[i-2]?.text===previous));
+        const receiver = previous==='.' ? tokens[i-2]?.text : undefined;
+        const prefixReceiver = tokens[i+1]?.text==='.' ? tokens[i].text : undefined;
+        if(fieldWrite && anchors.has(receiver))emit('ScreenPopupTrigger',i,'Only the shared component writes anchor fields');
+        if(anchors.has(prefixReceiver) && ['+','-'].includes(previous) && tokens[i-2]?.text===previous)emit('ScreenPopupTrigger',i,'Only the shared component writes anchor fields');
         if(['face','quiet','popupHome','originPresentation'].includes(n) && assignment && (previous==='.' || [...calls,...scopes].some(c=>['apply','with'].includes(c))))emit('ScreenPopupTrigger',i,'Screens cannot configure popup anchor internals');
         if(privateCalls.has(n) && previous!=='fun' && (next==='(' || next==='{')) {
             // ui.components.Popup is the standard public API; native and unresolved names fail closed.

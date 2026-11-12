@@ -109,7 +109,7 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: B
     home.flights.forEach { flight ->
         // A full-size chrome menu stays above chrome at the start of close (#867).
         // Its converging chip returns underneath the same chrome (#667).
-        if (aboveChrome != null && aboveChrome != (flight.chromeTrigger && flight.phase() > ChromeReturnDepthHandoff)) return@forEach
+        if (aboveChrome != null && aboveChrome != (!flight.chromeTrigger || flight.phase() > ChromeReturnDepthHandoff)) return@forEach
         flight.revision
         val layer = flight.layer
         if ((home.departing || flight.handedOff) && flight.prepared && layer != null && !layer.isReleased) {
@@ -128,21 +128,24 @@ internal fun GlassPopupHome(departing: Boolean = false, content: @Composable () 
 }
 
 @Composable
-internal fun GlassPopupHome(home: GlassPopupHome, chrome: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
+internal fun GlassPopupHome(home: GlassPopupHome, chrome: (@Composable () -> Unit)? = null,
+    container: @Composable (@Composable () -> Unit) -> Unit = { it() }, content: @Composable () -> Unit) {
     // An idle home adds no layer: native draw observers and backdrop producers
     // keep their existing ordering until a popup actually needs containment.
     val containing = home.flights.isNotEmpty() && (home.departing || home.flights.any { it.handedOff })
     val host = Modifier.fillMaxSize().then(if (containing) Modifier.clipToBounds() else Modifier)
         .then(if (home.departing) Modifier.clearAndSetSemantics { } else Modifier)
-    if (chrome == null) Box(host.glassPopupHome(home)) {
-        CompositionLocalProvider(LocalGlassPopupHome provides home, content = content)
-    } else io.github.anastaci1a.localica.ui.layout.PopupViewportSlot(
-        io.github.anastaci1a.localica.ui.spec.GlassDialogHeight.Content,
-        io.github.anastaci1a.localica.ui.spec.PopupViewportInsets.None,
-        modifier = host.drawWithContent { drawContent(); projectFlights(home, aboveChrome = true) },
-        contentModifier = Modifier.glassPopupHome(home, aboveChrome = false),
-        chrome = { CompositionLocalProvider(LocalGlassPopupHome provides home) { chrome() } }) {
-        CompositionLocalProvider(LocalGlassPopupHome provides home, content = content)
+    CompositionLocalProvider(LocalGlassPopupHome provides home) {
+        container {
+            if (chrome == null) Box(host.glassPopupHome(home)) { content() }
+            else Box(host.glassPopupHome(home, aboveChrome = true)) {
+                Box(Modifier.fillMaxSize().drawWithContent {
+                    drawContent()
+                    projectFlights(home, aboveChrome = false)
+                }) { content() }
+                chrome()
+            }
+        }
     }
 }
 

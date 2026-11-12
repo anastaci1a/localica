@@ -10,20 +10,21 @@ import io.github.anastaci1a.localica.ui.spec.*
 @Composable
 internal fun ActionButtonFaceSlot(modifier: Modifier, iconOnly: Boolean,
     icon: @Composable (Modifier) -> Unit, label: @Composable (Modifier) -> Unit,
-    divider: (@Composable () -> Unit)? = null, retainedFace: Boolean = false) {
+    divider: (@Composable () -> Unit)? = null, retainedFace: Boolean = false,
+    iconSize: androidx.compose.ui.unit.Dp = StockUiSpec.control.getValue(ControlSize.SettingsIcon)) {
     val spaces = StockUiSpec.space
-    val iconSize = StockUiSpec.control.getValue(ControlSize.SettingsIcon)
+    val faceExtent = StockUiSpec.control.getValue(ControlSize.SettingsIcon) * 2
     val dual = divider != null
     val inset = if (dual) modifier else modifier.padding(
         horizontal = spaces.getValue(Space.Comfortable) + spaces.getValue(Space.Tight) / 2,
         vertical = spaces.getValue(Space.Base))
     Row(inset, verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (dual) Arrangement.Center else Arrangement.spacedBy(spaces.getValue(Space.Base))) {
-        if (dual && retainedFace) Box(Modifier.size(iconSize * 2), contentAlignment = Alignment.Center) { icon(Modifier.size(iconSize)) }
+        if (dual && retainedFace) Box(Modifier.size(faceExtent), contentAlignment = Alignment.Center) { icon(Modifier.size(iconSize)) }
         else icon(if (dual) Modifier else Modifier.size(iconSize))
         divider?.invoke()
         if (!iconOnly) {
-            if (dual && retainedFace) Box(Modifier.size(iconSize * 2), contentAlignment = Alignment.Center) { label(Modifier.size(iconSize)) }
+            if (dual && retainedFace) Box(Modifier.size(faceExtent), contentAlignment = Alignment.Center) { label(Modifier.size(iconSize)) }
             else label(if (dual) Modifier else Modifier.width(IntrinsicSize.Max))
         }
     }
