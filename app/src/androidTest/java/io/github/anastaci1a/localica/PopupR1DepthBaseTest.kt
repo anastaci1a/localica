@@ -244,6 +244,7 @@ class PopupR1DepthBaseTest {
                             .put("originX", flight.origin.x).put("originY", flight.origin.y)
                             .put("anchorBounds", fixtureAnchor.presentedBounds.toString())
                             .put("handedOff", flight.handedOff).put("originalWindow", originalWindow)
+                            .put("law", compose.runOnUiThread { fullReturnLawSnapshot(fixtureAnchor) })
                         File(output, "return-$frame-motion.json").writeText(diagnostic.toString(2))
                         File(output, "return-$frame-flight-layer.png").outputStream().use { assertTrue(layer.compress(Bitmap.CompressFormat.PNG, 100, it)) }
                     }
@@ -298,6 +299,29 @@ class PopupR1DepthBaseTest {
             }
             assertTrue("Non-chrome menu overlaps tabs at three distinct presented return phases across independent returns: $trials", qualifiedPhases.size >= 3)
         } finally { baseScenePixels?.recycle(); compose.mainClock.autoAdvance = true; preferences.write(previous) }
+    }
+
+    /** Read-only diagnostic of the existing owner: no new clock, target or observer writes. */
+    private fun fullReturnLawSnapshot(anchor: GlassAnchor): JSONObject {
+        fun field(owner: Any, name: String): Any? = owner.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(owner)
+        val owner = (field(anchor.contact.expansion, "owner\$delegate") as State<*>).value
+            as io.github.anastaci1a.localica.ui.engine.ExpandCollapse
+        val basis = (field(owner, "basis\$delegate") as State<*>).value
+            as io.github.anastaci1a.localica.ui.engine.ExpansionBasis
+        val bounds = field(owner, "bound") as io.github.anastaci1a.localica.ui.engine.MotionRect
+        val curve = field(owner, "boundCurve") as io.github.anastaci1a.localica.ui.engine.Curve
+        val phase = owner.phase.value()
+        val predicted = basis.rect(curve.at(phase).toDouble())
+        val actual = bounds.value()
+        val shape = anchor.contact.state.output.value
+        fun rect(r: Rect) = JSONArray(listOf(r.left, r.top, r.right, r.bottom))
+        val pixels = glassMorphPixelBounds(actual)
+        return JSONObject().put("phase", phase).put("phaseVelocity", owner.phase.velocity())
+            .put("geometry", curve.at(phase)).put("basisStart", rect(basis.startBounds)).put("basisEnd", rect(basis.endBounds))
+            .put("basisPrediction", rect(predicted)).put("physicalBounds", rect(actual))
+            .put("pixelBounds", JSONArray(listOf(pixels.left, pixels.top, pixels.right, pixels.bottom)))
+            .put("strain", shape.strain).put("depth", shape.depth).put("vertical", anchor.contact.vertical)
+            .put("scaleY", shape.scaleY(anchor.contact.vertical))
     }
 
     private fun original(window: Window, output: File, name: String): Bitmap = frames.capture(window, output, name)
