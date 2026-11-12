@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.components.*
@@ -44,6 +45,7 @@ import org.junit.Test
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -54,12 +56,18 @@ import kotlin.math.roundToInt
 class PopupSharedTitleHandoffTest {
     @get:Rule val compose = localicaComposeRule()
 
-    @Test fun titleInkSurvivesAndFollowsTheBodyInEveryOpeningFrame() {
+    @Test fun titleInkSurvivesAndFollowsTheBodyInEveryOpeningFrame() = verify(false)
+
+    @Test fun titleInkSurvivesWhileTheFirstAdmittedNativeDrawIsDeferred() = verify(true)
+
+    private fun verify(deferFirstNativeDraw: Boolean) {
         lateinit var harness: EngineHarness
         lateinit var anchor: GlassAnchor
         var window: Window? = null
         var open by mutableStateOf(false)
         var control = Rect.Zero
+        val deferred = if (deferFirstNativeDraw) AdmissionDrawHold(
+            { anchor.hidden && anchor.modalPresent }, { harness.clock.stampNow.sequence }) else null
         val label = "|".repeat(24)
         compose.setContent { EngineTheme(clear = true) {
             val spec = LocalUiSpec.current.spec
@@ -68,7 +76,10 @@ class PopupSharedTitleHandoffTest {
             DisposableEffect(owned) { onDispose { owned.close() } }
             CompositionLocalProvider(LocalClockOwner provides owned.clock, LocalUiClock provides owned.clock,
                 LocalGlassMorphWorkObserver provides { kind, native, _ ->
-                    if (kind == "dialog" && native != null) window = native
+                    if (kind == "dialog" && native != null) {
+                        window = native
+                        deferred?.observe(native)
+                    }
                 }) {
                 anchor = rememberGlassAnchor()
                 val sourceDensity = LocalDensity.current
@@ -125,28 +136,40 @@ class PopupSharedTitleHandoffTest {
         } }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
-        val output = nativeEvidenceDirectory("popup-title-handoff",
+        val output = nativeEvidenceDirectory(if (deferFirstNativeDraw) "popup-title-handoff-deferred" else "popup-title-handoff",
             InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
         val log = StringBuilder("Engine cadence=120; native display cadence not claimed\n")
         val failures = mutableListOf<String>()
         var sequence = 0
+        data class Scene(val view: View, val bounds: Rect, val main: Window, val origin: IntOffset)
+        var cachedScene: Scene? = null
 
         fun step() {
             compose.runOnUiThread { harness.advance(1.0 / 120) }
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
         }
-        fun sample(name: String): Rect? {
-            val scene = compose.onNodeWithTag("title-scene").fetchSemanticsNode()
-            val view = (scene.root as androidx.compose.ui.platform.ViewRootForTest).view
-            val origin = IntArray(2).also { compose.runOnUiThread { view.getLocationOnScreen(it) } }
-            val bounds = scene.boundsInRoot.translate(Offset(origin[0].toFloat(), origin[1].toFloat()))
+        fun sample(name: String, reuseScene: Boolean = false): Rect? {
+            // fetchSemanticsNode waits for idle. During the intentional draw deferral,
+            // reuse the already-calibrated scene and validate its real View origin.
+            val measured = if (reuseScene) requireNotNull(cachedScene) else {
+                val node = compose.onNodeWithTag("title-scene").fetchSemanticsNode()
+                val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
+                val origin = IntArray(2).also { compose.runOnUiThread { view.getLocationOnScreen(it) } }
+                val main = generateSequence(view.context) { (it as? ContextWrapper)?.baseContext }
+                    .filterIsInstance<Activity>().first().window
+                Scene(view, node.boundsInRoot.translate(Offset(origin[0].toFloat(), origin[1].toFloat())),
+                    main, IntOffset(origin[0], origin[1])).also { cachedScene = it }
+            }
+            val view = measured.view
+            val bounds = measured.bounds
+            val currentOrigin = IntArray(2).also { compose.runOnUiThread { view.getLocationOnScreen(it) } }
+            assertEquals("Calibrated scene origin stays fixed", measured.origin, IntOffset(currentOrigin[0], currentOrigin[1]))
             // Declared diagnostic gutter, outside the whole source/destination title flight.
             // Its opaque green tokens cannot be mistaken for title ink. Endpoint checks
             // below also reject a title that is clipped by this measured field.
             val field = Rect(bounds.left + 32f, bounds.top + 16f, bounds.right, control.top - 8f)
-            val main = generateSequence(view.context) { (it as? ContextWrapper)?.baseContext }
-                .filterIsInstance<Activity>().first().window
+            val main = measured.main
             val stamp = compose.runOnUiThread { harness.clock.stampNow.sequence }
             val native = compose.runOnUiThread { window?.takeIf { it.decorView.isAttachedToWindow } }
             val originals = listOf(main) + listOfNotNull(native)
@@ -165,8 +188,10 @@ class PopupSharedTitleHandoffTest {
                 val canvas = Canvas(bitmap)
                 originals.forEachIndexed { index, ownedWindow ->
                     val token = sequence * 2 + index + 1
-                    val image = original(ownedWindow, token, File(output,
-                        "${sequence.toString().padStart(3, '0')}-$name-window-$index.png"), log)
+                    val file = File(output, "${sequence.toString().padStart(3, '0')}-$name-window-$index.png")
+                    val image = if (deferred?.isHolding(ownedWindow) == true)
+                        previousNative(ownedWindow, deferred, file, log)
+                    else original(ownedWindow, token, file, log)
                     try {
                         val point = IntArray(2).also { compose.runOnUiThread { ownedWindow.decorView.getLocationOnScreen(it) } }
                         val localField = field.translate(Offset(-point[0].toFloat(), -point[1].toFloat()))
@@ -209,7 +234,26 @@ class PopupSharedTitleHandoffTest {
                 if (actual == null) failures += "held-$frame: title ink missing"
                 else edgeFailure(expected, actual, 2f)?.let { failures += "held-$frame: $it" }
             }
+            deferred?.enableRendering()
             compose.onNodeWithTag("title-trigger").performTouchInput { up() }
+            var deferredTitlePresent: Boolean? = null
+            if (deferred != null) {
+                try {
+                    // No idle wait until the deliberately deferred draw is released.
+                    // Clock steps flush composition; native traversals run independently.
+                    for (frame in 0 until 180) {
+                        if (deferred.reached.count == 0L) break
+                        compose.runOnUiThread { harness.advance(1.0 / 120) }
+                        compose.mainClock.advanceTimeByFrame()
+                        if (deferred.reached.await(20, TimeUnit.MILLISECONDS)) break
+                    }
+                    assertTrue("The first admitted native draw must be deferred", deferred.reached.count == 0L)
+                    val pending = sample("admission-pending", reuseScene = true)
+                    deferredTitlePresent = pending != null
+                    log.append("admission-pending titlePresent=$deferredTitlePresent title=$pending\n")
+                } finally { compose.runOnUiThread { deferred.release() } }
+                compose.waitForIdle()
+            }
             // Calibrate the destination at the end of this same first opening. A warm-up
             // return would introduce another ownership transfer before the guarded event.
             data class OpeningFrame(val frame: Int, val phase: Float, val hidden: Boolean,
@@ -252,6 +296,8 @@ class PopupSharedTitleHandoffTest {
             log.append("post-return observation settled=$returned titlePresent=${afterReturn != null} title=$afterReturn source=$source\n")
             assertTrue("Native admission must be sampled", admitted)
             assertTrue("Opening must reach expanded rest", complete)
+            if (deferred != null) assertTrue(
+                "Title ink must survive while the first admitted native draw is pending", deferredTitlePresent == true)
             val destination = requireNotNull(measuredDestination) { "Expanded title must draw" }
             assertEquals("Equal font endpoints retain the same glyph height", source.height, destination.height, 1f)
             assertEquals("Endpoint slots do not clip the controlled title", source.width, destination.width, 1f)
@@ -264,9 +310,103 @@ class PopupSharedTitleHandoffTest {
             }
             assertTrue("Title ink must exist and follow its shared flight/body scale in every frame: $failures", failures.isEmpty())
         } finally {
+            compose.runOnUiThread { deferred?.close() }
             File(output, "frames.txt").writeText(log.toString())
             compose.runOnUiThread { open = false }
             compose.mainClock.autoAdvance = true
+        }
+    }
+
+    /** A native scheduling adversary, not another rendering or motion implementation.
+     * Preparatory buffers may draw. Once the source is hidden, the next native draw waits
+     * for the instrumentation thread to copy the existing buffers and release it. */
+    private class AdmissionDrawHold(private val admitted: () -> Boolean, private val stamp: () -> Long) {
+        val reached = CountDownLatch(1)
+        private val released = AtomicBoolean(false)
+        private var window: Window? = null
+        private var tree: ViewTreeObserver? = null
+        private var marker: FrameMarker? = null
+        private var listener: ViewTreeObserver.OnPreDrawListener? = null
+        private var renderingWasEnabled: Boolean? = null
+        @Volatile var token = 0
+            private set
+        @Volatile var lastDrewAdmitted = false
+            private set
+        @Volatile var lastSequence = -1L
+            private set
+        @Volatile var attempts = 0
+            private set
+
+        fun enableRendering() {
+            if (renderingWasEnabled == null) {
+                renderingWasEnabled = androidx.test.platform.graphics.HardwareRendererCompat.isDrawingEnabled()
+                androidx.test.platform.graphics.HardwareRendererCompat.setDrawingEnabled(true)
+            }
+        }
+        fun observe(native: Window) {
+            if (window === native) return
+            check(window == null) { "The first opening must keep its native Window" }
+            window = native
+            val root = native.decorView
+            marker = FrameMarker {
+                token++
+                check(token <= 65535) { "Never wrap the native admission token" }
+                lastDrewAdmitted = admitted()
+                lastSequence = stamp()
+                NativeColor.rgb(token ushr 8, token and 255, 0)
+            }.also { it.setBounds(2, 120, 18, 136); root.overlay.add(it) }
+            val watch = ViewTreeObserver.OnPreDrawListener {
+                if (!released.get() && admitted()) {
+                    attempts++
+                    reached.countDown()
+                    false
+                } else true
+            }
+            listener = watch
+            tree = root.viewTreeObserver.also { it.addOnPreDrawListener(watch) }
+        }
+        fun isHolding(native: Window) = window === native && reached.count == 0L && !released.get()
+        fun release() { released.set(true); window?.decorView?.postInvalidateOnAnimation() }
+        fun close() {
+            release()
+            tree?.takeIf { it.isAlive }?.let { observer -> listener?.let(observer::removeOnPreDrawListener) }
+            marker?.let { window?.decorView?.overlay?.remove(it) }
+            renderingWasEnabled?.let { androidx.test.platform.graphics.HardwareRendererCompat.setDrawingEnabled(it) }
+        }
+    }
+
+    private fun previousNative(window: Window, hold: AdmissionDrawHold, output: File, log: StringBuilder): Bitmap {
+        val receipt = compose.runOnUiThread {
+            check(hold.isHolding(window)) { "The old native buffer must be held during its copy" }
+            check(hold.token > 0 && !hold.lastDrewAdmitted) { "A preparatory native buffer must precede the deferred admitted draw" }
+            Triple(hold.token, hold.lastSequence, windowCrop(window.decorView))
+        }
+        val image = copyNativeWindowOnce(window,
+            Bitmap.createBitmap(window.decorView.width, window.decorView.height, Bitmap.Config.ARGB_8888),
+            "Previous native buffer copy timed out", sourceBounds = receipt.third,
+            failureMessage = { "Previous native buffer copy failed: $it; no retry" })
+        try {
+            output.outputStream().use { check(image.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            val expected = NativeColor.rgb(receipt.first ushr 8, receipt.first and 255, 0)
+            log.append("previous-native token=${receipt.first} sequence=${receipt.second} crop=${receipt.third} attempts=${hold.attempts} actual=${image.getPixel(10, 128)}\n")
+            assertEquals("Previous native buffer contains its preparatory draw token", expected, image.getPixel(10, 128))
+            compose.runOnUiThread {
+                check(hold.isHolding(window) && hold.token == receipt.first && hold.lastSequence == receipt.second) {
+                    "The deferred native Window must not redraw during buffer copies"
+                }
+            }
+            return image
+        } catch (failure: Throwable) { image.recycle(); throw failure }
+    }
+
+    /** Window crop coordinates are passed directly to the padded Surface before API 28. */
+    private fun windowCrop(view: View): android.graphics.Rect = android.graphics.Rect(0, 0, view.width, view.height).also { rect ->
+        if (Build.VERSION.SDK_INT < 28) {
+            val root = View::class.java.getDeclaredMethod("getViewRootImpl").apply { isAccessible = true }.invoke(view)
+            val attributes = root.javaClass.getDeclaredField("mWindowAttributes").apply { isAccessible = true }.get(root)
+            val insets = android.view.WindowManager.LayoutParams::class.java.getField("surfaceInsets")
+                .get(attributes) as android.graphics.Rect
+            rect.offset(insets.left, insets.top)
         }
     }
 
@@ -276,7 +416,7 @@ class PopupSharedTitleHandoffTest {
         val view = window.decorView
         val ready = CountDownLatch(1)
         val color = NativeColor.rgb(token ushr 8, token and 255, 0)
-        val marker = FrameMarker(color).also { it.setBounds(2, 96, 18, 112) }
+        val marker = FrameMarker { color }.also { it.setBounds(2, 96, 18, 112) }
         var draws = 0
         lateinit var tree: ViewTreeObserver
         val listener = ViewTreeObserver.OnDrawListener {
@@ -291,15 +431,7 @@ class PopupSharedTitleHandoffTest {
             tree.addOnDrawListener(listener)
             view.overlay.add(marker)
             marker.invalidateSelf(); view.invalidate()
-            android.graphics.Rect(0, 0, view.width, view.height).also { rect ->
-                if (Build.VERSION.SDK_INT < 28) {
-                    val root = View::class.java.getDeclaredMethod("getViewRootImpl").apply { isAccessible = true }.invoke(view)
-                    val attributes = root.javaClass.getDeclaredField("mWindowAttributes").apply { isAccessible = true }.get(root)
-                    val insets = android.view.WindowManager.LayoutParams::class.java.getField("surfaceInsets")
-                        .get(attributes) as android.graphics.Rect
-                    rect.offset(insets.left, insets.top)
-                }
-            }
+            windowCrop(view)
         }
         try {
             assertTrue("Native window submits the requested fixed-state draw", ready.await(5, TimeUnit.SECONDS))
@@ -322,9 +454,9 @@ class PopupSharedTitleHandoffTest {
         }
     }
 
-    private class FrameMarker(private val color: Int) : Drawable() {
+    private class FrameMarker(private val color: () -> Int) : Drawable() {
         private val paint = Paint()
-        override fun draw(canvas: Canvas) { paint.color = color; canvas.drawRect(bounds, paint) }
+        override fun draw(canvas: Canvas) { paint.color = color(); canvas.drawRect(bounds, paint) }
         override fun setAlpha(alpha: Int) { paint.alpha = alpha }
         override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter }
         @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.OPAQUE
@@ -357,14 +489,16 @@ class PopupSharedTitleHandoffTest {
     // Distinguishes absent title ink from a low-opacity title below the half-coverage
     // bounds detector. A missing-title cause needs zero contrast, not just a null bound.
     private fun blueContrast(bitmap: Bitmap, region: Rect): Int {
-        var maximum = 0
-        for (y in region.top.toInt().coerceAtLeast(0) until region.bottom.toInt().coerceAtMost(bitmap.height)) {
-            for (x in region.left.toInt().coerceAtLeast(0) until region.right.toInt().coerceAtMost(bitmap.width)) {
-                val color = bitmap.getPixel(x, y)
-                maximum = maxOf(maximum, NativeColor.blue(color) - maxOf(NativeColor.red(color), NativeColor.green(color)))
-            }
+        val left = region.left.toInt().coerceAtLeast(0)
+        val top = region.top.toInt().coerceAtLeast(0)
+        val right = region.right.toInt().coerceAtMost(bitmap.width)
+        val bottom = region.bottom.toInt().coerceAtMost(bitmap.height)
+        if (right <= left || bottom <= top) return 0
+        val pixels = IntArray((right - left) * (bottom - top))
+        bitmap.getPixels(pixels, 0, right - left, left, top, right - left, bottom - top)
+        return pixels.fold(0) { maximum, color ->
+            maxOf(maximum, NativeColor.blue(color) - maxOf(NativeColor.red(color), NativeColor.green(color)))
         }
-        return maximum
     }
 
     private fun coloredBounds(bitmap: Bitmap, blue: Boolean, region: Rect): Rect? {
