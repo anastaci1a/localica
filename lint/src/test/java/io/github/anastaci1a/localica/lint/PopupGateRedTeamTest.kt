@@ -12,6 +12,9 @@ open class GlassAnchor { var face: (() -> Unit)? = null; val triggerRole: Any? =
 class GlassContact { var modal=false; val state=GlassBodyState(); val expansion=GlassExpansion() }
 class GlassBodyState { var impulseScale=1f; val output=MutableOutput(); val momentum=GlassMomentum() }
 class MutableOutput { var value=1f }
+class SurfaceModifier
+fun SurfaceModifier.glassSurfaceAnchor(source: Any?, cornerRadius: Any?): GlassAnchor? = null
+fun SurfaceModifier.glassSurfaceAnchor(): GlassAnchor? = null
 class GlassShape
 class GlassExpansion { fun bind() {} }
 class GlassMomentum { var damping=1f; fun reset() {} }
@@ -24,12 +27,15 @@ fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt", """package io.github.anastaci1a.localica.ui
 class GlassPopupHome { var mounted=true; val flights=mutableListOf<GlassPopupFlight>(); val children=mutableListOf<GlassPopupHome>() }
 class GlassPopupFlight { var phase: () -> Float = { 0f } }
-fun GlassPopupHome(home: GlassPopupHome, modifier: Any? = null, container: (() -> Unit) -> Unit = { it() }, content: () -> Unit) {}
+fun GlassPopupHome(home: GlassPopupHome, chrome: (() -> Unit)? = null, container: (() -> Unit) -> Unit = { it() }, modifier: Any? = null, content: () -> Unit) {}
 """).indented(),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/components/TriggerRole.kt", """package io.github.anastaci1a.localica.ui.components
 sealed interface TriggerRole { data object Selection: TriggerRole }
 """).indented(),
   kotlin("src/main/java/androidx/compose/runtime/Remember.kt", """package androidx.compose.runtime
+class ProvidedValue<T>
+open class ProvidableCompositionLocal<T> { infix fun provides(value: T) = ProvidedValue<T>() }
+fun CompositionLocalProvider(vararg values: ProvidedValue<*>, content: () -> Unit) { content() }
 interface MutableState<T> { var value: T }
 fun <T> remember(calculation: () -> T): T = calculation()""").indented(),
   kotlin("src/main/java/android/app/Windows.kt", """package android.app
@@ -59,6 +65,10 @@ interface WindowManager : ViewManager { class LayoutParams }
 open class ViewGroup : ViewManager { override fun addView(view: View, params: WindowManager.LayoutParams) {} }""").indented()
  )
  private val wrapperStubs = listOf(
+  java("src/main/java/android/widget/Toast.java", """package android.widget;
+public class Toast { public Toast() {} public android.view.View getView() { return null; } public void setView(android.view.View v) {} public void show() {} }"""),
+  kotlin("src/main/java/io/github/anastaci1a/localica/ui/InterfaceMotion.kt", """package io.github.anastaci1a.localica.ui
+val LocalMotionSpeed = androidx.compose.runtime.ProvidableCompositionLocal<Float>()"""),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/LyricsPanel.kt", """package io.github.anastaci1a.localica.ui
 fun LyricsPanel(track: Any? = null, positionMs: Long = 0, reducedMotion: Boolean = false, onSeek: (Long) -> Unit = {}, modifier: Any? = null, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null, sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null, contentHeight: Any? = null, contentOffset: Any? = null, result: Any? = null, sourcesVisible: Boolean? = null, onSourcesDismiss: (() -> Unit)? = null, originPreparation: GlassOriginPreparation? = null, contentAlpha: () -> Float = { 1f }) {}"""),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/LyricsBackdrop.kt", """package io.github.anastaci1a.localica.ui
@@ -163,14 +173,41 @@ fun f(preparation: GlassOriginPreparation, group: android.view.ViewGroup, view: 
  group.addView(view, params)
 }
 """)
-  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.take(2) + file).toTypedArray()))
+  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.take(4) + file).toTypedArray()))
    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
  }
  fun testSanctionedContactWriter() {
   val file=kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassSplitContact.kt", """package io.github.anastaci1a.localica.ui
 fun f(contact: GlassContact) { contact.modal=true; contact.state.impulseScale=2f; contact.state.momentum.reset() }
 """)
-  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.take(2) + file).toTypedArray()))
+  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.take(4) + file).toTypedArray()))
+   .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
+ }
+
+ fun testB1_surface_writer() = check("fun f(modifier: SurfaceModifier) { modifier.glassSurfaceAnchor(null, null) }", "", "Subject")
+ fun testB1_surface_alias() = check("fun f(modifier: SurfaceModifier) { modifier.bindSurface(null, null) }", "import io.github.anastaci1a.localica.ui.glassSurfaceAnchor as bindSurface", "Subject")
+ fun testB2_speed_provider() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed provides 2f) {} }", "", "Subject")
+ fun testB2_speed_alias() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(Speed provides 2f) {} }", "import io.github.anastaci1a.localica.ui.LocalMotionSpeed as Speed", "Subject")
+ fun testB3_positional_chrome() = check("fun f(home: GlassPopupHome) { GlassPopupHome(home, {}) {} }", "", "QueueSurface")
+ fun testB3_named_chrome() = check("fun f(home: GlassPopupHome) { GlassPopupHome(home, chrome={}) {} }", "", "PlayerSurface")
+ fun testB4_toast_view() = check("fun f(view: android.view.View) { android.widget.Toast().apply { this.view = view }.show() }", "", "Subject")
+ fun testB4_toast_property() = check("fun f(toast: android.widget.Toast, view: android.view.View) { toast.view = view; toast.show() }", "", "Subject")
+ fun testB4_toast_setter() = check("fun f(toast: android.widget.Toast, view: android.view.View) { toast.setView(view); toast.show() }", "", "Subject")
+ fun testB5_player_origin() = check("fun f(anchor: GlassAnchor, preparation: GlassOriginPreparation) { GlassMorphPopup(true, anchor, {}, originPreparation=preparation) {} }", "", "PlayerSurface")
+ fun testB2_speed_dot() = check("fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed.provides(2f)) {} }")
+ fun testB4_toast_qualified_local() = check("fun f(view: android.view.View) { val toast=android.widget.Toast(); toast.view=view; toast.show() }")
+ fun testSanctionedSurfaceWriter() {
+  val file=kotlin("src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt", """package io.github.anastaci1a.localica.ui
+fun LiquidGlassSurface(modifier: SurfaceModifier) { modifier.glassSurfaceAnchor(null, null); modifier.glassSurfaceAnchor() }
+""")
+  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.take(4) + file).toTypedArray()))
+   .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
+ }
+ fun testSanctionedSpeedProvider() {
+  val file=kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt", """package io.github.anastaci1a.localica.ui
+fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed provides 2f) {} }
+""")
+  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.take(4) + file).toTypedArray()))
    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
  }
 }

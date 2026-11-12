@@ -93,10 +93,18 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 if (relative !in popupOwnerPaths[role].orEmpty()) context.report(UiRuleId.ScreenPopupMotion.issue, node, context.getLocation(node), "Named popup role $role is restricted to its pinned callers")
             }
 
+            private fun surfaceWriter(method: com.intellij.psi.PsiMethod) =
+                method.containingClass?.qualifiedName == "io.github.anastaci1a.localica.ui.GlassMorphKt" &&
+                    method.name == "glassSurfaceAnchor" && method.parameterList.parameters.any { it.name == "source" }
+
+            private fun toastView(symbol: PsiMember): Boolean =
+                symbol.name in setOf("view", "setView", "getView") && symbol.containingClass?.qualifiedName == "android.widget.Toast"
+
             private fun registration(method: com.intellij.psi.PsiMethod) = method.name == "glassAnchor" &&
                 method.parameterList.parameters.any { it.type.canonicalText.contains("TriggerRole.MaterialSurface") || it.type.canonicalText.contains("TriggerRole.RetainedSurface") }
 
             private fun reportRegistration(method: com.intellij.psi.PsiMethod, node: UElement) {
+                if (surfaceWriter(method)) report(Ownership(UiRuleId.ScreenPopupTrigger, "SurfaceAnchorWriter"), node)
                 if (registration(method) && relative !in popupOwnerPaths["ShadowRegistration"].orEmpty()) context.report(UiRuleId.ScreenPopupTrigger.issue, node, context.getLocation(node), "Only GlassShadow registers popup surface nodes")
             }
 
@@ -144,7 +152,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                     else -> return
                 }
                 method.parameterList.parameters.forEachIndexed { index, formal ->
-                    if (formal.name in (if (api == "HomeArgument.") setOf("modifier", "container") else setOf("sharedContent", "originPreparation", "contentAlpha")) &&
+                    if (formal.name in (if (api == "HomeArgument.") setOf("modifier", "container", "chrome") else setOf("sharedContent", "originPreparation", "contentAlpha")) &&
                         node.getArgumentForParameter(index) != null && relative !in popupOwnerPaths[api + formal.name].orEmpty())
                         context.report(UiRuleId.ScreenPopupMotion.issue, node, context.getLocation(node), "Popup argument "+formal.name+" is restricted to its pinned callers")
                 }
@@ -165,6 +173,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 val owner = method.containingClass?.qualifiedName.orEmpty()
                 if (name in setOf("rememberPopupMotion", "rememberPopupWindowMotion", "rememberExpandCollapse") && owner.startsWith("io.github.anastaci1a.localica.ui.engine.")) report(UiRuleId.ScreenPopupMotion, node)
                 if (name == "drawPopupProjection" && owner.startsWith("io.github.anastaci1a.localica.ui.engine.") && relative !in popupOwnerPaths["PopupProjection"].orEmpty()) report(UiRuleId.ScreenPopupDrawPath, node)
+                if (toastView(method) && name == "setView") report(UiRuleId.ScreenPopupDrawPath, node)
                 val klass = method.containingClass
                 val nativeConstructor = method.isConstructor && klass != null && nativeClass(klass)
                 val composeWindow = owner.startsWith("androidx.compose.ui.window.") && name in setOf("Popup", "Dialog")
@@ -205,6 +214,24 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
             override fun visitSimpleNameReferenceExpression(node: USimpleNameReferenceExpression) {
                 val resolved = node.resolve()
                 reportRole(resolved, node)
+                // Kotlin infix providers expose the local reference even when UAST
+                // models the infix expression without a call receiver.
+                val property = resolved?.navigationElement as? org.jetbrains.kotlin.psi.KtProperty
+                if (property?.fqName?.asString() == "io.github.anastaci1a.localica.ui.LocalMotionSpeed") {
+                    val provider = generateSequence(node.sourcePsi?.parent) { it.parent }
+                        .takeWhile { it !is org.jetbrains.kotlin.psi.KtDeclaration }
+                        .firstOrNull {
+                            val receiver = when (it) {
+                                is org.jetbrains.kotlin.psi.KtBinaryExpression -> it.left.takeIf { _ ->
+                                    it.operationReference.getReferencedName() in setOf("provides", "providesDefault") }
+                                is org.jetbrains.kotlin.psi.KtDotQualifiedExpression -> it.receiverExpression.takeIf { _ ->
+                                    (it.selectorExpression as? org.jetbrains.kotlin.psi.KtCallExpression)?.calleeExpression?.text in setOf("provides", "providesDefault") }
+                                else -> null
+                            }
+                            receiver?.textRange?.contains(node.sourcePsi?.textRange ?: return@firstOrNull false) == true
+                        }
+                    if (provider != null) report(Ownership(UiRuleId.ScreenPopupMotion, "MotionSpeedProvider"), node)
+                }
                 val name = resolved?.let { (it as? com.intellij.psi.PsiNamedElement)?.name } ?: node.identifier
                 if (Regex("(?:get)?Local.*Popup.*Home.*").matches(name)) report(UiRuleId.ScreenPopupHome, node)
                 if (name in setOf("LocalPopupBodyPresenter", "getLocalPopupBodyPresenter") &&

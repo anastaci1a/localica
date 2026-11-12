@@ -218,3 +218,23 @@ test('a foreign module cannot borrow an owner path',()=>{
  const path='foreign/src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt';
  assert.ok(checkPopupSource(path,'fun steal() { glassPopupProjection() }').some(i=>i.rule==='ScreenPopupHome'));
 });
+test('the material owner may bind a surface anchor and screens may read it',()=>{
+ const path=screen.replace('Screen.kt','LiquidGlass.kt');
+ assert.deepEqual(checkPopupSource(path,'fun LiquidGlassSurface(modifier: SurfaceModifier) { modifier.glassSurfaceAnchor(null, null) }'),[]);
+ assert.equal(rules('fun f(modifier: SurfaceModifier) { modifier.glassSurfaceAnchor() }').size,0);
+});
+test('only the shell may provide popup speed or supply home chrome',()=>{
+ const path=screen.replace('Screen.kt','LocalicaScreen.kt');
+ assert.deepEqual(checkPopupSource(path,'fun f() { CompositionLocalProvider(LocalMotionSpeed provides 2f) {} }'),[]);
+ assert.deepEqual(checkPopupSource(path,'fun f(home: GlassPopupHome) { GlassPopupHome(home, chrome={}) {} }'),[]);
+ assert.equal(rules('fun f() { println(LocalMotionSpeed.current) }').size,0);
+});
+test('ordinary Toast text and unrelated view properties remain allowed',()=>{
+ assert.equal(rules('fun f(ctx: Context) { android.widget.Toast.makeText(ctx, "Message", 0).show() }').size,0);
+ assert.equal(rules('fun f(model: Model, view: View) { model.view=view; model.setView(view) }').size,0);
+});
+test('obsolete argument permissions cannot widen callers',()=>{
+ assert.equal(ownsPopups(screen.replace('Screen.kt','PlayerSurface.kt'),'PopupArgument.originPreparation'),false);
+ assert.equal(ownsPopups(screen.replace('Screen.kt','GlassMorph.kt'),'PopupArgument.sharedContent'),false);
+ for(const name of ['GlassMorph','PlayerSurface'])assert.equal(ownsPopups(screen.replace('Screen.kt',name+'.kt'),'PopupArgument.contentAlpha'),false);
+});

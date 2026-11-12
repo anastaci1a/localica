@@ -393,5 +393,65 @@
     "id": "testG6_unbound_reference",
     "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
     "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval borrowed=android.view.WindowManager::addView"
+  },
+  {
+    "id": "testB1_surface_writer",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(modifier: SurfaceModifier) { modifier.glassSurfaceAnchor(null, null) }"
+  },
+  {
+    "id": "testB1_surface_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.glassSurfaceAnchor as bindSurface\nfun f(modifier: SurfaceModifier) { modifier.bindSurface(null, null) }"
+  },
+  {
+    "id": "testB2_speed_provider",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed provides 2f) {} }"
+  },
+  {
+    "id": "testB2_speed_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalMotionSpeed as Speed\nfun f() { androidx.compose.runtime.CompositionLocalProvider(Speed provides 2f) {} }"
+  },
+  {
+    "id": "testB3_positional_chrome",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(home: GlassPopupHome) { GlassPopupHome(home, {}) {} }"
+  },
+  {
+    "id": "testB3_named_chrome",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(home: GlassPopupHome) { GlassPopupHome(home, chrome={}) {} }"
+  },
+  {
+    "id": "testB4_toast_view",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(view: android.view.View) { android.widget.Toast().apply { this.view = view }.show() }"
+  },
+  {
+    "id": "testB4_toast_property",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(toast: android.widget.Toast, view: android.view.View) { toast.view = view; toast.show() }"
+  },
+  {
+    "id": "testB4_toast_setter",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(toast: android.widget.Toast, view: android.view.View) { toast.setView(view); toast.show() }"
+  },
+  {
+    "id": "testB5_player_origin",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(anchor: GlassAnchor, preparation: GlassOriginPreparation) { GlassMorphPopup(true, anchor, {}, originPreparation=preparation) {} }"
+  },
+  {
+    "id": "testB2_speed_dot",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed.provides(2f)) {} }"
+  },
+  {
+    "id": "testB4_toast_qualified_local",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(view: android.view.View) { val toast=android.widget.Toast(); toast.view=view; toast.show() }"
   }
 ]

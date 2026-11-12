@@ -129,12 +129,14 @@ export function checkPopupSource(file, source, declarations = []) {
         if(tokens[i+1]?.text===':' && name(i+2)==='GlassAnchor') anchors.add(tokens[i].text);
         if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=' && ['rememberGlassAnchor','GlassAnchor'].includes(name(i+3))) anchors.add(tokens[i+1].text);
     }
+    const toastHandles=new Set(), toastScopes=[];
     const contactTypes=new Set(['GlassContact','GlassExpansion','GlassBodyState','GlassMomentum']);
     const handles=new Map([...anchors].map(a=>[a,'ScreenPopupTrigger']));
     for(let pass=0;pass<3;pass++)for(let i=0;i<tokens.length;i++) {
         if(tokens[i+1]?.text===':') {
             let end=i+2;while(tokens[end+1]?.text==='.')end+=2;
             const type=identityAt(end).split('.').at(-1);
+            if(type==='Toast')toastHandles.add(tokens[i].text);
             let genericEnd=end+2;while(tokens[genericEnd+1]?.text==='.')genericEnd+=2;
             const shape=identityAt(genericEnd).split('.').at(-1);
             if(contactTypes.has(type) || type==='MutableState' && tokens[end+1]?.text==='<' && shape==='GlassShape')handles.set(tokens[i].text,'GlassContactMutation');
@@ -142,6 +144,8 @@ export function checkPopupSource(file, source, declarations = []) {
         if(tokens[i+1]?.text===':' && ['GlassPopupHome','GlassPopupFlight'].includes(name(i+2)))handles.set(tokens[i].text,'ScreenPopupHome');
         if(['val','var'].includes(tokens[i].text) && tokens[i+2]?.text==='=') {
             const start=i+3;let end=start,depth=0;
+            let constructor=start;while(tokens[constructor+1]?.text==='.')constructor+=2;
+            if(name(constructor)==='Toast' || toastHandles.has(tokens[start]?.text))toastHandles.add(tokens[i+1].text);
             while(end<tokens.length) {
                 const t=tokens[end].text;
                 if(depth===0 && (t===';' || end>start && source.slice(tokens[end-1].start,tokens[end].start).includes('\n')))break;
@@ -177,7 +181,9 @@ export function checkPopupSource(file, source, declarations = []) {
         if(tokens[i-2]?.text===')') {
             let begin=i-3,nesting=1;for(;begin>=0 && nesting;begin--){if(tokens[begin].text===')')nesting++;if(tokens[begin].text==='(')nesting--;}
             if(['rememberGlassAnchor','GlassAnchor'].includes(name(begin)))rule='ScreenPopupTrigger';
+            if(name(begin)==='Toast')toastScopes.push({start:i+1,end});
         }
+        if(toastHandles.has(tokens[i-2]?.text))toastScopes.push({start:i+1,end});
         if(rule)lambdaHandles.push({start:i+1,end,name:tokens[i+3]?.text==='-' && tokens[i+4]?.text==='>'?tokens[i+2].text:['apply','run'].includes(name(i))?null:'it',rule});
     }
     for(let i=0;i<tokens.length;i++)if(name(i)==='with' && tokens[i+1]?.text==='(') {
@@ -243,7 +249,7 @@ export function checkPopupSource(file, source, declarations = []) {
                 if(j>start) {
                     const named=tokens[start+1]?.text==='=';
                     const parameter=named?tokens[start].text:(formals.length===1?formals[0].parameters:spec.parameters)?.[ordinal];
-                    const motion=spec.key==='HomeArgument.'?['modifier','container']:spec.key==='PopupArgument.'?['originPreparation','sharedContent']:['originPreparation','contentAlpha'];
+                    const motion=spec.key==='HomeArgument.'?['modifier','container','chrome']:spec.key==='PopupArgument.'?['originPreparation','sharedContent']:['originPreparation','contentAlpha'];
                     if(motion.includes(parameter) && !ownsPopups(file,spec.key+parameter))emit('ScreenPopupMotion',start,'Popup argument '+parameter+' is restricted to its pinned callers');
                     ordinal++;
                 }
@@ -260,6 +266,13 @@ export function checkPopupSource(file, source, declarations = []) {
         if(tokens[i].text==='}')scopes.pop();
         const n=name(i),next=tokens[i+1]?.text,previous=tokens[i-1]?.text;
         checkArguments(i,n);
+        if(n==='glassSurfaceAnchor' && next==='(' && previous!=='fun') {
+            const writing=tokens[i+2]?.text!==')';
+            if(writing && !ownsPopups(file,'SurfaceAnchorWriter'))emit('ScreenPopupTrigger',i,'Only the material owner binds surface anchors');
+        }
+        if(n==='LocalMotionSpeed' && (['provides','providesDefault'].includes(tokens[i+1]?.text) || tokens[i+1]?.text==='.' && ['provides','providesDefault'].includes(tokens[i+2]?.text)) && !ownsPopups(file,'MotionSpeedProvider'))emit('ScreenPopupMotion',i,'Only the application shell provides motion speed');
+        if(['view','setView'].includes(n) && (n==='setView'?next==='(':next==='=') &&
+            (previous==='.' && toastHandles.has(tokens[i-2]?.text) || toastScopes.some(s=>s.start<i && i<s.end)))emit('ScreenPopupDrawPath',i,'Custom-view Toasts create private windows');
         if(!importTokens.has(i)) {
             const imported=imports.get(tokens[i].text);
             const starRoles=[...imports.values()].filter(q=>/\.(TriggerRole|HomeKind|PopupVariant)\.\*$/.test(q));
