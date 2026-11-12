@@ -99,3 +99,4 @@ MotionProvider.LocalPopupKind=app/src/main/java/io/github/anastaci1a/localica/ui
 MotionProvider.LocalRespectSystemAnimationScale=app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt
 MotionDurationScale=app/src/main/java/io/github/anastaci1a/localica/ui/InterfaceMotion.kt
 MotionIngress.installLocalicaWindowMotion=app/src/main/java/io/github/anastaci1a/localica/MainActivity.kt
+MotionIngress.bindRespectSystemAnimationScale=app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt

@@ -464,8 +464,20 @@ interface MotionDurationScale : kotlin.coroutines.CoroutineContext.Element {
    "package io.github.anastaci1a.localica.ui\nval LocalMotionSpeed = androidx.compose.runtime.ProvidableCompositionLocal<Float>()\n" +
    "val LocalReducedMotion = androidx.compose.runtime.ProvidableCompositionLocal<Boolean>()\nval LocalRespectSystemAnimationScale = androidx.compose.runtime.ProvidableCompositionLocal<Boolean>()\n" +
    "fun rememberEffectiveReducedMotion(appReducedMotion: Boolean" + reduced + "): Boolean = appReducedMotion\n" +
-   "fun androidx.activity.ComponentActivity.installLocalicaWindowMotion(respect: Boolean) {}\n" + motion) + scaleStub + subject).toTypedArray()))
+   "fun androidx.activity.ComponentActivity.installLocalicaWindowMotion(respect: Boolean) {}\n" +
+   "class WindowMotionScale(platform: Float, respect: Boolean) : androidx.compose.ui.MotionDurationScale { var platform = platform; var respect = respect; override val scaleFactor get() = if (respect) platform else 1f }\n" +
+   "fun kotlin.coroutines.CoroutineContext.bindRespectSystemAnimationScale(respect: Boolean) {}\n" + motion) + scaleStub + components + subject)
+   .filterNot { it !== subject && it.targetRelativePath == subject.targetRelativePath }.toTypedArray()))
    .issues(*getIssues().toTypedArray()).allowMissingSdk().testModes(TestMode.DEFAULT).run()
+ // The real shared factories (#854 round 2, G2): presence, face and shared content, each in its pinned file.
+ private val sharedStub = """package io.github.anastaci1a.localica.ui.components
+class PopupSharedContent(internal val motion: Any) { fun Compact() {}; fun Expanded() {}; fun CompactCopy() {}; fun ExpandedCopy() {} }
+fun rememberPopupSharedContent(key: Any, shared: () -> Unit): PopupSharedContent = PopupSharedContent(key)"""
+ private val presenceStub = "package io.github.anastaci1a.localica.ui.components\nfun rememberPresence(key: Any, shown: Boolean, role: Any? = null) {}"
+ private val faceStub = "package io.github.anastaci1a.localica.ui.components\nfun rememberFaceExpansion(expanded: Boolean, role: Any? = null) {}"
+ private var components = listOf(kotlin("src/main/java/io/github/anastaci1a/localica/ui/components/PopupSharedContent.kt", sharedStub),
+  kotlin("src/main/java/io/github/anastaci1a/localica/ui/components/Presence.kt", presenceStub), kotlin("src/main/java/io/github/anastaci1a/localica/ui/components/MorphFaces.kt", faceStub))
+ private fun evolved(path: String, source: String) = components.map { if (it.targetRelativePath.endsWith(path)) kotlin(it.targetRelativePath, source) else it }
  private fun subject(body: String) = kotlin("src/main/java/io/github/anastaci1a/localica/ui/Subject.kt", "package io.github.anastaci1a.localica.ui\n" + body)
  private val red = "(?s).*Subject[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*"
  private fun unpinned(formal: String, api: String) = "(?s).*Subject[.]kt:[0-9]+: Error: Argument $formal is not part of $api's pinned surface " + Regex.escape("[") + "ScreenPopupMotion.*"
@@ -489,8 +501,27 @@ interface MotionDurationScale : kotlin.coroutines.CoroutineContext.Element {
   "package io.github.anastaci1a.localica.ui\nval s = object : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 2f }"))
   .expectMatches("(?s).*LocalicaScreen[.]kt:[0-9]+: Error: .*" + Regex.escape("[") + "ScreenPopupMotion.*")
  fun testScale_read_stays_allowed() = surface(subject("import androidx.compose.ui.MotionDurationScale\nfun f(c: kotlin.coroutines.CoroutineContext) = c[MotionDurationScale]?.scaleFactor ?: 1f")).expectClean()
- fun testScale_owner_implements() = surface(subject("fun g() {}"), motion = "class WindowMotionScale : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 1f }").expectClean()
+ fun testScale_owner_implements() = surface(subject("fun g() {}"), motion = "class SecondScale : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 1f }").expectClean()
  fun testScale_installer_outside_main() = surface(subject("fun f(a: androidx.activity.ComponentActivity) { a.installLocalicaWindowMotion(false) }")).expectMatches(red)
  fun testScale_installer_in_main() = surface(kotlin("src/main/java/io/github/anastaci1a/localica/MainActivity.kt",
   "package io.github.anastaci1a.localica\nimport io.github.anastaci1a.localica.ui.installLocalicaWindowMotion\nclass Main : androidx.activity.ComponentActivity() { fun start() { installLocalicaWindowMotion(true) } }")).expectClean()
+ // #854 round 2 G1: the app's WindowMotionScale and the respect binder.
+ fun testG1_window_scale_constructed() = surface(subject("val s = WindowMotionScale(.5f, true)")).expectMatches(red)
+ fun testG1_window_scale_platform_write() = surface(subject("fun f(s: WindowMotionScale) { s.platform = 0f }")).expectMatches(red)
+ fun testG1_window_scale_respect_write_after_cast() = surface(subject("import androidx.compose.ui.MotionDurationScale\nfun f(c: kotlin.coroutines.CoroutineContext) { (c[MotionDurationScale] as WindowMotionScale).respect = false }")).expectMatches(red)
+ fun testG1_binder_from_a_screen() = surface(subject("fun f(c: kotlin.coroutines.CoroutineContext) { c.bindRespectSystemAnimationScale(false) }")).expectMatches(red)
+ fun testG1_binder_reference() = surface(subject("val bind = kotlin.coroutines.CoroutineContext::bindRespectSystemAnimationScale")).expectMatches(red)
+ fun testG1_binder_in_the_root() = surface(kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt",
+  "package io.github.anastaci1a.localica.ui\nfun root(c: kotlin.coroutines.CoroutineContext, respect: Boolean) { c.bindRespectSystemAnimationScale(respect) }")).expectClean()
+ // #854 round 2 G2: the blind recheck's variants, each on its real shared file, and the shared-content handle.
+ fun testG2_presence_timing_formal() { components = evolved("components/Presence.kt", presenceStub.replace("shown: Boolean,", "shown: Boolean, animationSpeed: Float = 1f,"))
+  surface(subject("fun f(k: Any) { io.github.anastaci1a.localica.ui.components.rememberPresence(k, true, animationSpeed = .5f) }")).expectMatches(unpinned("animationSpeed", "rememberPresence")) }
+ fun testG2_face_timing_formal() { components = evolved("components/MorphFaces.kt", faceStub.replace("expanded: Boolean,", "expanded: Boolean, animationSpeed: Float = 1f,"))
+  surface(subject("fun f() { io.github.anastaci1a.localica.ui.components.rememberFaceExpansion(true, animationSpeed = .5f) }")).expectMatches(unpinned("animationSpeed", "rememberFaceExpansion")) }
+ fun testG2_shared_content_timing_extension() { components = evolved("components/PopupSharedContent.kt", sharedStub + "\nfun PopupSharedContent.setAnimationSpeed(speed: Float) {}")
+  surface(subject("import io.github.anastaci1a.localica.ui.components.*\nfun f(k: Any) { val shared = rememberPopupSharedContent(k) {}; shared.setAnimationSpeed(.5f) }")).expectMatches(red) }
+ fun testG2_shared_content_motion_member() = surface(subject("fun f(shared: io.github.anastaci1a.localica.ui.components.PopupSharedContent) { println(shared.motion) }")).expectMatches(red)
+ fun testG2_shared_content_scope_function() { components = evolved("components/PopupSharedContent.kt", sharedStub + "\nfun PopupSharedContent.setAnimationSpeed(speed: Float) {}")
+  surface(subject("import io.github.anastaci1a.localica.ui.components.*\nfun f(shared: PopupSharedContent) { with(shared) { setAnimationSpeed(.5f) } }")).expectMatches(red) }
+ fun testG2_honest_slots_and_factories() = surface(subject("import io.github.anastaci1a.localica.ui.components.*\nfun f(k: Any, copy: Boolean, shared: PopupSharedContent?) { val nameMorph = rememberPopupSharedContent(k) {}; if (copy) nameMorph.CompactCopy() else nameMorph.Compact(); shared?.Expanded(); shared?.ExpandedCopy() }")).expectClean()
 }
