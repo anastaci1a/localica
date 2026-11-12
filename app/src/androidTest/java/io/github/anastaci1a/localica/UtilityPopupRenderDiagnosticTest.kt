@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -83,7 +82,7 @@ class UtilityPopupRenderDiagnosticTest {
     private val trace = JSONArray()
     private val endpointObservations = JSONArray()
     private val readbackProbeFrames = JSONArray()
-    private var readbackProbeActive by mutableStateOf(false)
+    @Volatile private var readbackProbeActive = false
     private lateinit var output: File
     private lateinit var report: JSONObject
     private var entryKeys = emptySet<Any>()
@@ -267,22 +266,6 @@ class UtilityPopupRenderDiagnosticTest {
                 val modal = rememberFrostedBackdrop(scene, dark = scene.dark)
                 browseSource = browse
                 modalSource = modal
-                LaunchedEffect(Unit) {
-                    snapshotFlow { readbackProbeActive }.collectLatest { active ->
-                        if (active) while (true) {
-                            withFrameNanos { frameNanos ->
-                                if (readbackProbeActive) readbackProbeFrames.put(JSONObject()
-                                    .put("frameNanos", frameNanos)
-                                    .put("consumers", modal.consumers)
-                                    .put("recordings", modal.recordings)
-                                    .put("revision", modal.revision)
-                                    .put("readbackRequest", modal.readbackRequest)
-                                    .put("snapshotReadbackRequest", modal.snapshotReadbackRequest)
-                                    .put("anchorHidden", anchor.hidden))
-                            }
-                        }
-                    }
-                }
                 group = rememberShadowPlane()
                 anchor = rememberGlassAnchor()
                 pageView = LocalView.current
@@ -368,10 +351,28 @@ class UtilityPopupRenderDiagnosticTest {
         }
     }
 
+    // Diagnostic-only: sample existing test iterations without requesting a frame.
+    private fun recordReadbackProbe(observation: String) {
+        if (!readbackProbeActive) return
+        val snapshot = compose.runOnUiThread {
+            JSONObject().put("observation", observation)
+                .put("clockMs", compose.mainClock.currentTime)
+                .put("consumers", modalSource.consumers)
+                .put("recordings", modalSource.recordings)
+                .put("revision", modalSource.revision)
+                .put("readbackRequest", modalSource.readbackRequest)
+                .put("snapshotReadbackRequest", modalSource.snapshotReadbackRequest)
+                .put("anchorHidden", anchor.hidden).toString()
+        }
+        readbackProbeFrames.put(JSONObject(snapshot))
+    }
+
     private fun advance(milliseconds: Long) {
+        recordReadbackProbe("advance-before")
         compose.runOnIdle { pageStage = pageStage % 30 + 1 }
         compose.mainClock.advanceTimeBy(milliseconds)
         compose.waitForIdle()
+        recordReadbackProbe("advance-after")
     }
 
     private fun rasterRefs(source: FrostedBackdrop): List<Any?> = listOf(
@@ -436,6 +437,7 @@ class UtilityPopupRenderDiagnosticTest {
         compose.mainClock.autoAdvance = true
         try {
             compose.waitUntil(10000) {
+                recordReadbackProbe("settle-poll")
                 val layout = endpointLayout()
                 val browse = if (thumbnail) rasterRefs(browseSource) else emptyList()
                 val modal = if (thumbnail && open) rasterRefs(modalSource) else emptyList()
