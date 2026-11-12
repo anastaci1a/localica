@@ -186,17 +186,6 @@ class PopupSharedTitleHandoffTest {
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
         }
-        fun settled(expanded: Boolean) {
-            repeat(300) {
-                step()
-                if (compose.runOnUiThread {
-                    anchor.contact.expansion.value == (if (expanded) 1f else 0f)
-                        && anchor.contact.state.momentum.settled && anchor.hidden == expanded
-                        && anchor.modalPresent == expanded && (expanded || window?.decorView?.isAttachedToWindow != true)
-                }) return
-            }
-            error("Title calibration did not settle: expanded=$expanded")
-        }
         fun image(): Bitmap {
             // Read the native root directly from the popup's semantics. No production seam.
             val node = compose.onAllNodesWithTag("glass-morph-surface", useUnmergedTree = true)
@@ -240,16 +229,6 @@ class PopupSharedTitleHandoffTest {
         }
         try {
             val source = requireNotNull(sample("source-calibration")) { "Source title must draw before opening" }
-            compose.runOnUiThread { open = true }
-            settled(true)
-            val destination = requireNotNull(sample("destination-calibration")) { "Expanded title must draw" }
-            assertEquals("Equal font endpoints retain the same glyph height", source.height, destination.height, 1f)
-            assertEquals("Endpoint slots do not clip the controlled title", source.width, destination.width, 1f)
-            compose.runOnUiThread { open = false }
-            settled(false)
-            val restored = requireNotNull(sample("restored-calibration"))
-            assertEdges("Source title returns to its measured native bounds", source, restored, 1f)
-
             compose.onNodeWithTag("title-trigger").performTouchInput { down(center) }
             repeat(4) { frame ->
                 step()
@@ -261,6 +240,11 @@ class PopupSharedTitleHandoffTest {
                 else edgeFailure(expected, actual, 2f)?.let { failures += "held-$frame: $it" }
             }
             compose.onNodeWithTag("title-trigger").performTouchInput { up() }
+            // Calibrate the destination at the end of this same first opening. A warm-up
+            // return would introduce another ownership transfer before the guarded event.
+            data class OpeningFrame(val frame: Int, val phase: Float, val hidden: Boolean,
+                val actual: Rect?, val center: Offset, val scaleX: Float, val scaleY: Float)
+            val openingFrames = mutableListOf<OpeningFrame>()
             var complete = false
             var admitted = false
             for (frame in 0 until 180) {
@@ -270,20 +254,19 @@ class PopupSharedTitleHandoffTest {
                 admitted = admitted || hidden
                 val actual = sample("opening-$frame")
                 val body = if (hidden) requireNotNull(sharedBodyBounds()) else null
-                val expected = compose.runOnUiThread {
+                val receipt = compose.runOnUiThread {
                     val center = body?.center ?: anchor.bounds.center
                     val shape = anchor.contact.body.value
-                    transformed(androidx.compose.ui.geometry.lerp(source, destination, p), center,
+                    OpeningFrame(frame, p, hidden, actual, center,
                         shape.scaleX(anchor.contact.vertical), shape.scaleY(anchor.contact.vertical))
                 }
-                log.append("frame=$frame phase=$p hidden=$hidden expected=$expected actual=$actual\n")
-                if (actual == null) failures += "opening-$frame phase=$p hidden=$hidden: title ink missing"
-                else edgeFailure(expected, actual, 2f)?.let { failures += "opening-$frame phase=$p: $it" }
+                openingFrames += receipt
+                log.append("frame=$frame phase=$p hidden=$hidden center=${receipt.center} scale=${receipt.scaleX},${receipt.scaleY} actual=$actual\n")
                 if (p == 1f && hidden && anchor.contact.state.momentum.settled) { complete = true; break }
             }
             assertTrue("Native admission must be sampled", admitted)
             assertTrue("Opening must reach expanded rest", complete)
-            compose.waitUntil(5000) { compose.runOnUiThread { firstCopies.size >= 2 && firstCopies.all { it.result != -1 } } }
+            compose.waitUntil(5000) { compose.runOnUiThread { firstCopies.isNotEmpty() && firstCopies.all { it.result != -1 } } }
             val nativeCopies = compose.runOnUiThread { firstCopies.toList() }
             nativeCopies.forEachIndexed { index, copy ->
                 assertEquals("First admitted native PixelCopy completes", PixelCopy.SUCCESS, copy.result)
@@ -295,8 +278,18 @@ class PopupSharedTitleHandoffTest {
                 val ink = coloredBounds(copy.bitmap, blue = true, Rect(0f, 0f, copy.bitmap.width.toFloat(), copy.bitmap.height.toFloat()))
                 assertNotNull("Title ink must be present in the first admitted native draw: opening=$index draw=${copy.draw}", ink)
             }
-            assertTrue("Both calibration and probe openings need first-draw receipts",
-                compose.runOnUiThread { admissionReceipts.size } >= 2)
+            assertEquals("The first opening needs exactly one first-draw receipt",
+                1, compose.runOnUiThread { admissionReceipts.size })
+            val destination = requireNotNull(sample("destination-calibration")) { "Expanded title must draw" }
+            assertEquals("Equal font endpoints retain the same glyph height", source.height, destination.height, 1f)
+            assertEquals("Endpoint slots do not clip the controlled title", source.width, destination.width, 1f)
+            openingFrames.forEach { receipt ->
+                val expected = transformed(androidx.compose.ui.geometry.lerp(source, destination, receipt.phase),
+                    receipt.center, receipt.scaleX, receipt.scaleY)
+                log.append("frame=${receipt.frame} expected=$expected actual=${receipt.actual}\n")
+                if (receipt.actual == null) failures += "opening-${receipt.frame} phase=${receipt.phase} hidden=${receipt.hidden}: title ink missing"
+                else edgeFailure(expected, receipt.actual, 2f)?.let { failures += "opening-${receipt.frame} phase=${receipt.phase}: $it" }
+            }
             assertTrue("Title ink must exist and follow its shared flight/body scale in every frame: $failures", failures.isEmpty())
         } finally {
             val receipts = compose.runOnUiThread {
@@ -308,6 +301,15 @@ class PopupSharedTitleHandoffTest {
                 admissionReceipts.toList()
             }
             log.append("first-admitted-draw receipts=$receipts\n")
+            // Retain completed original buffers even when a preceding calibration or
+            // geometry assertion fails. No failed run is repaired or credited here.
+            val completed = compose.runOnUiThread { firstCopies.filter { it.result != -1 }.toList() }
+            completed.forEachIndexed { index, copy ->
+                File(output, "first-admitted-$index.png").outputStream().use {
+                    check(copy.bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+                log.append("first-copy=$index draw=${copy.draw} result=${copy.result} marker=${copy.bitmap.getPixel(10, 104)}\n")
+            }
             File(output, "frames.txt").writeText(log.toString())
             compose.runOnUiThread { open = false }
             compose.mainClock.autoAdvance = true
