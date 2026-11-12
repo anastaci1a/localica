@@ -18,7 +18,7 @@ import org.junit.Test
  * lip drag, list pull and the expanded player's upward drag, with C1 joins, and a contact catches the moving drawer. */
 @OptIn(ExperimentalTestApi::class)
 class QueueOwnerContinuityTest {
-    private class Scene { var clock: UiClock? = null; val recorder = JoinRecorder("queue"); var closed = 0.0; var travel = 1.0
+    private class Scene { var clock: UiClock? = null; val recorder = JoinRecorder("queue"); var closed = 0.0; var travel = 1.0; var playerProgress = Float.NaN
         /** The drawer's own #608 object time: its edge travel against the full-player reference travel. */
         fun objectTime() = SheetLaw.objectTime(travel, clock!!.context!!.fullPlayerReferenceTravelPx.toDouble()) }
 
@@ -31,7 +31,8 @@ class QueueOwnerContinuityTest {
                 override suspend fun <R> awaitFrame(onFrame: (Long) -> R) = withFrameNanos(onFrame) }, { mainClock.currentTime * 1_000_000 }) }
             SideEffect { if (scene.clock == null) { clock.events = scene.recorder; scene.clock = clock } }
             LaunchedEffect(clock) { clock.run() }
-            CompositionLocalProvider(LocalClockOwner provides clock, LocalUiClock provides clock) { LocalicaTheme { LocalicaScreen(
+            CompositionLocalProvider(LocalClockOwner provides clock, LocalUiClock provides clock,
+                LocalPlayerWorkObserver provides { kind, p -> if (kind == "root" && p != null) scene.playerProgress = p }) { LocalicaTheme { LocalicaScreen(
                 LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false),
                 PlaybackState(connected = true, trackId = tracks[0].id, trackUri = tracks[0].uri, title = tracks[0].title),
                 {}, {}, {}, {}, {}, {}, queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)) } }
@@ -109,8 +110,7 @@ class QueueOwnerContinuityTest {
 
     @Test fun downwardSwipeOutsideReturningQueueMinimizesPlayer() = localicaRunComposeUiTest {
         val scene = Scene(); start(scene)
-        val player = onNodeWithTag("player-surface", useUnmergedTree = true)
-        val expandedTop = player.fetchSemanticsNode().positionInRoot.y
+        assertEquals("The player starts expanded", 1f, scene.playerProgress, .001f)
         click("Open queue"); repeat(60) { mainClock.advanceTimeByFrame() }
         back(); mainClock.advanceTimeByFrame()
         var frames = 0
@@ -127,10 +127,10 @@ class QueueOwnerContinuityTest {
         }
         mainClock.advanceTimeByFrame()
         assertTrue("The exposed player must follow the second downward swipe immediately",
-            player.fetchSemanticsNode().positionInRoot.y > expandedTop + bounds.height * .1f)
+            scene.playerProgress < .9f)
         root.performTouchInput { up() }
         repeat(60) { mainClock.advanceTimeByFrame() }
-        assertTrue("The player must settle minimized", player.fetchSemanticsNode().positionInRoot.y > bounds.height * .6f)
+        assertEquals("The player must settle minimized", 0f, scene.playerProgress, .001f)
     }
 
     /** No motion before slop: the queue must finish independently of this fresh parent contact. */
@@ -148,33 +148,30 @@ class QueueOwnerContinuityTest {
 
     @Test fun queueClosingBetweenDownAndSlopStillAllowsPlayerMinimize() = localicaRunComposeUiTest {
         val scene = Scene(); start(scene)
-        val player = onNodeWithTag("player-surface", useUnmergedTree = true)
-        val expandedTop = player.fetchSemanticsNode().positionInRoot.y
+        assertEquals("The player starts expanded", 1f, scene.playerProgress, .001f)
         holdOutsideUntilQueueCloses(scene)
-        assertEquals("A still contact must not move the player", expandedTop, player.fetchSemanticsNode().positionInRoot.y, 1f)
+        assertEquals("A still contact must not move the player", 1f, scene.playerProgress, .001f)
         val root = onRoot()
         val height = root.fetchSemanticsNode().boundsInRoot.height
         root.performTouchInput { repeat(6) { moveBy(Offset(0f, height * .07f), delayMillis = 16) } }
         mainClock.advanceTimeByFrame()
         assertTrue("The retained contact must drive the player after the queue closes",
-            player.fetchSemanticsNode().positionInRoot.y > expandedTop + height * .1f)
+            scene.playerProgress < .9f)
         root.performTouchInput { up() }
         repeat(60) { mainClock.advanceTimeByFrame() }
-        assertTrue("The player settles minimized", player.fetchSemanticsNode().positionInRoot.y > height * .6f)
+        assertEquals("The player settles minimized", 0f, scene.playerProgress, .001f)
     }
 
     @Test fun returningScrimReleasesTapHitTestingAfterUp() = localicaRunComposeUiTest {
         val scene = Scene(); start(scene)
-        val player = onNodeWithTag("player-surface", useUnmergedTree = true)
-        val expandedTop = player.fetchSemanticsNode().positionInRoot.y
+        assertEquals("The player starts expanded", 1f, scene.playerProgress, .001f)
         holdOutsideUntilQueueCloses(scene)
         onRoot().performTouchInput { up() }
         // Apply the contact-end state once; do not advance a settling delay.
         mainClock.advanceTimeByFrame()
-        assertEquals("UP without a swipe keeps the player open", expandedTop, player.fetchSemanticsNode().positionInRoot.y, 1f)
+        assertEquals("UP without a swipe keeps the player open", 1f, scene.playerProgress, .001f)
         onNodeWithContentDescription("Player handle", useUnmergedTree = true).performTouchInput { click() }
         repeat(60) { mainClock.advanceTimeByFrame() }
-        val height = onRoot().fetchSemanticsNode().boundsInRoot.height
-        assertTrue("The real tap must reach the underlying player handle", player.fetchSemanticsNode().positionInRoot.y > height * .6f)
+        assertEquals("The real tap must reach the underlying player handle", 0f, scene.playerProgress, .001f)
     }
 }
