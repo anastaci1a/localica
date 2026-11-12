@@ -76,6 +76,9 @@ class ShadowContinuityTest {
                     .put("systemBarsIgnoringVisibility", insets.getInsetsIgnoringVisibility(androidx.core.view.WindowInsetsCompat.Type.systemBars()).toString())
                     .put("statusBarsVisible", insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars()))
         }
+        // A submitted View draw may still be behind Launcher during Activity admission.
+        // Qualify the actual fixture window before the unchanged one-shot field capture.
+        compose.waitUntil(5000) { compose.runOnUiThread { view.isShown && view.hasWindowFocus() } }
         val included = ShadowNativeCapture(compose, scene) { clock.stampNow.sequence }.use { geometryCapture(it) }
         val includedInsets = insetsReceipt()
         compose.runOnIdle {
