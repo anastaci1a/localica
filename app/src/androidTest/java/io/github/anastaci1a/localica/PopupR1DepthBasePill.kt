@@ -44,3 +44,7 @@ internal fun R1BasePopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop?
     }
     GlassMenu(menuVisible, anchor, onMenuDismiss, content = menuContent)
 }
+
+/** Published base exposes its phase only through the existing geometry observer. */
+@Suppress("UNUSED_PARAMETER")
+internal fun r1CandidateFlightPhase(flight: GlassPopupFlight): Float? = null

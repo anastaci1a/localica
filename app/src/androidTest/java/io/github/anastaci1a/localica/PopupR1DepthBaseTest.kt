@@ -73,6 +73,8 @@ class PopupR1DepthBaseTest {
         lateinit var home: GlassPopupHome
         var popup: Window? = null
         var popupPhase = 0f
+        lateinit var fixtureAnchor: GlassAnchor
+        val phaseControl = JSONArray()
         lateinit var baseScene: androidx.compose.ui.graphics.layer.GraphicsLayer
         var baseScenePixels: Bitmap? = null
         var open by mutableStateOf(false)
@@ -104,7 +106,7 @@ class PopupR1DepthBaseTest {
                         }
                     }) {
                         Box(Modifier.fillMaxSize().recordFrostedBackdrop(page).background(androidx.compose.ui.graphics.Color.White), contentAlignment = Alignment.BottomEnd) {
-                            R1BasePopupActionPill(rememberGlassAnchor(), source = page,
+                            R1BasePopupActionPill(rememberGlassAnchor().also { fixtureAnchor = it }, source = page,
                                 modifier = Modifier.size(104.dp, 64.dp), trailingLabel = "Open overlap menu", menuVisible = open, onMenuDismiss = { open = false },
                                 menuContent = {
                                     ActionMenuItem("Leave page", icon = AppIcon.TabFolders, onClick = { open = false; leaving = true })
@@ -126,6 +128,10 @@ class PopupR1DepthBaseTest {
             File(output, "base-complete-scene.png").outputStream().use {
                 assertTrue(requireNotNull(baseScenePixels).compress(Bitmap.CompressFormat.PNG, 100, it))
             }
+            File(output, "trigger-pre-open.json").writeText(JSONObject()
+                .put("hidden", fixtureAnchor.hidden).put("quietPolicy", fixtureAnchor.quiet)
+                .put("surfaceShadowEnabled", true).put("bounds", fixtureAnchor.bounds.toString())
+                .put("scene", "base-complete-scene.png").toString(2))
             compose.mainClock.autoAdvance = false
             frames.openReferenceTrigger("Open overlap menu")
             compose.waitUntil(10000) {
@@ -148,7 +154,16 @@ class PopupR1DepthBaseTest {
             var qualified = 0
             for (frame in 0 until 96) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-                if (!window.decorView.isAttachedToWindow) break
+                val attached = window.decorView.isAttachedToWindow
+                val candidatePhase = r1CandidateFlightPhase(flight)
+                phaseControl.put(JSONObject().put("frame", frame).put("geometryPhase", popupPhase)
+                    .put("flightPhase", candidatePhase ?: JSONObject.NULL).put("prepared", flight.prepared)
+                    .put("attached", attached).put("triggerHidden", fixtureAnchor.hidden)
+                    .put("geometrySelected", attached && flight.prepared && popupPhase in .1f.. .8f)
+                    .put("flightSelected", candidatePhase?.let { attached && flight.prepared && it in .1f.. .8f } ?: JSONObject.NULL))
+                File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
+                    .put("renderer", mode.name).put("samples", phaseControl).put("qualifiedFrames", qualified).toString(2))
+                if (!attached) break
                 val phase = popupPhase
                 if (phase !in .1f.. .8f || !flight.prepared) continue
                 val modal = original(window, output, "return-$frame-popup")
@@ -197,6 +212,8 @@ class PopupR1DepthBaseTest {
                     }
                 } finally { modal.recycle(); root.recycle(); layer.recycle(); source.recycle() }
             }
+            File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
+                .put("renderer", mode.name).put("samples", phaseControl).put("qualifiedFrames", qualified).toString(2))
             assertTrue("Non-chrome menu overlaps tabs in at least three return frames: $receipts", qualified >= 3)
         } finally { baseScenePixels?.recycle(); compose.mainClock.autoAdvance = true; preferences.write(previous) }
     }
