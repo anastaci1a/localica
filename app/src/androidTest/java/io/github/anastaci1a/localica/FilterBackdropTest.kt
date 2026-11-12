@@ -41,7 +41,7 @@ class FilterBackdropTest {
         }
         var depth by mutableFloatStateOf(.7f)
         try {
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = true) {
                 CompositionLocalProvider(LocalBrowseArtwork provides art,
                     LocalGlassAppearance provides GlassAppearance(depth = depth, blur = 0f, whiteTint = 0f,
                         contrast = 0f, shadowStrength = 0f)) {

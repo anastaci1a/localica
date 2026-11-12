@@ -77,7 +77,7 @@ class LibraryScrollResetTest {
             val route = navigation.value.route
             fun back() { navigation.value.back(false)?.let { navigation.value = it } }
             BackHandler(navigation.value.stacks.getValue(MainTab.Library).size > 1) { back() }
-            LocalicaTheme { CompositionLocalProvider(LocalBrowsePresentationCache provides cache) {
+            EngineTheme(reduced = true) { CompositionLocalProvider(LocalBrowsePresentationCache provides cache) {
                 key(route.key) { holder.SaveableStateProvider(route.key) {
                     BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), route,
                         { navigation.value = navigation.value.update(it) },

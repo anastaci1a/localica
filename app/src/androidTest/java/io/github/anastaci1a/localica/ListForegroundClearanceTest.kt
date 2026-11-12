@@ -88,7 +88,7 @@ class ListForegroundClearanceTest {
         val album = LibraryViews.groups(snapshot, SongListView.Albums, LibraryQuery()).single()
         val route = BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, album.id), album.title)
         InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("browse-style", 0).edit().clear().commit()
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalBrowseObscuredInset provides 120.dp) {
                 Box(Modifier.fillMaxSize()) {
                     BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), route,

@@ -36,7 +36,7 @@ class HomeSelectionTest {
         var openedCollections = 0
         val album = BrowseQueries.evaluate(snapshot, emptyList(), BrowseRoute(MainTab.Albums)).items.first().ref
         val pins = tracks.map { MediaRef(MediaKind.Song, it.id) } + album
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalSessionSelection provides session) {
                 Column {
                     Box(Modifier.weight(1f)) {
@@ -150,7 +150,7 @@ class HomeSelectionTest {
         val pins = songs.map { MediaRef(MediaKind.Song, it.id) }
         val session = SessionSelection()
         var opened = 0
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalSessionSelection provides session, LocalBrowseObscuredInset provides 64.dp) {
                 Box(Modifier.size(320.dp, 260.dp).testTag("home-return-host")) {
                     PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), pins,
@@ -191,7 +191,7 @@ class HomeSelectionTest {
         val session = SessionSelection()
         var active by mutableStateOf(true)
         var playerOpen by mutableStateOf(false)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalSessionSelection provides session) {
                 Box(Modifier.size(320.dp, 240.dp)) {
                     PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), pins,

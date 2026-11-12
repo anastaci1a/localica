@@ -98,7 +98,7 @@ class CollectionLoadingRevealTest {
         BrowsePreferences(context).write(route, BrowseStyle(listSize = ListSize.Compact, extraInfo = ExtraInfo.None,
             quickSearch = false), false)
         ArtworkColors.publish(tracks.associate { it.uri to ArtworkColors.MISSING })
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalBrowsePresentationCache provides cache,
                 LocalDensity provides Density(fixtureDensity, context.resources.configuration.fontScale)) {
             if (mounted) {

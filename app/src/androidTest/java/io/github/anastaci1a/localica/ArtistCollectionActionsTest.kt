@@ -45,7 +45,7 @@ class ArtistCollectionActionsTest {
             compose.runOnUiThread { controller = QueueController(db.queues(), preferences,
                 (context.applicationContext as LocalicaApplication).library, scope) }
             compose.waitUntil(5000) { !controller.state.value.loading }
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = true) {
                 val queueState by controller.state.collectAsState()
                 CompositionLocalProvider(LocalSessionSelection provides session) {
                     BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(),

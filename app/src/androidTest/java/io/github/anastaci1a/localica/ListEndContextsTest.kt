@@ -46,7 +46,7 @@ class ListEndContextsTest {
         if (selection) session.select(null, listOf(SongRow(tracks.first().id, tracks.first())))
         val lowerChrome = if (scoped) 0.dp else 100.dp
         var panelHeight by mutableStateOf(100.dp)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             val panel = rememberFloatingSelectionPanel(selection, true)
             CompositionLocalProvider(LocalBrowseObscuredInset provides (lowerChrome + panel.clearance), LocalSessionSelection provides session) {
                 Box(Modifier.fillMaxSize()) {

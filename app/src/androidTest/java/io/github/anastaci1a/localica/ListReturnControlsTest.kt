@@ -68,7 +68,7 @@ class ListReturnControlsTest {
         foregroundDrag: Boolean = false): Fixture {
         val fixture = Fixture(route, playing, queues)
         val library = LibraryUiState(LibrarySnapshot(tracks = songs), loading = false)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reducedMotion) {
             if (listBackEnabled) BackHandler { fixture.ordinaryBack++ }
             fixture.insetPx = with(LocalDensity.current) { inset.toPx() }
             val dragHost = if (foregroundDrag) remember { SongDragHost() } else LocalSongDragHost.current

@@ -185,7 +185,7 @@ class BrowseLoadingRevealTest {
             quickSearch = false, extraInfo = ExtraInfo.None)
         BrowsePreferences(context).write(route, style, false)
         var library by mutableStateOf(LibraryUiState(snapshot, loading = true))
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             BrowserScreen(library, PlaylistState(loading = false), route,
                 {}, {}, {}, { _, _, _ -> }, null, null, true, false,
                 reducedMotion = true, queryDispatcher = queries)

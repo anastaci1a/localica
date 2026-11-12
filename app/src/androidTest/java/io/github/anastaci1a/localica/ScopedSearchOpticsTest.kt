@@ -76,7 +76,7 @@ class ScopedSearchOpticsTest {
         val route = BrowseRoute(if (queue) MainTab.Queues else MainTab.Playlists,
             MediaRef(if (queue) MediaKind.Queue else MediaKind.Playlist, if (queue) listening.id else playlist.id), "Optics")
         var depth by mutableFloatStateOf(.6f)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(depth = depth, blur = 0f,
                 whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
                 val backing = rememberFrostedBackdrop(Unit)

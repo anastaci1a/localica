@@ -96,7 +96,7 @@ class GalleryMenuInputTest {
         var density = 1f
         prefs.write(route, BrowseStyle(presentation = Presentation.Standard, itemsPerRow = columns), false)
         try {
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = true) {
                 density = LocalDensity.current.density
                 Box(Modifier.size(360.dp, 640.dp)) {
                     BrowserScreen(library, playlists, route, {}, {}, {}, { _, _, _ -> }, null, null,

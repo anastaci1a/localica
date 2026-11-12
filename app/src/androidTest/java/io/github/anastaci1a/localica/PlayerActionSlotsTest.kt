@@ -162,7 +162,7 @@ class PlayerActionSlotsTest {
         val sink = ControlHaptics { events += it.name }
         compose.setContent {
             CompositionLocalProvider(LocalControlHaptics provides sink) {
-                LocalicaTheme {
+                EngineTheme(reduced = true) {
                     PlayerActionCustomizer(value(), { events += "change"; onChange(it) }, {}, reducedMotion = true)
                 }
             }

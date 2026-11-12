@@ -61,7 +61,7 @@ class ItemOutlinePixelTest {
         prefs.write(route, styles.first(), overridden)
         val failures = mutableListOf<String>()
         try {
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = true) {
                 CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                     MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color.Magenta)) {
                         Box(Modifier.size(360.dp, 640.dp).testTag("outline-scene")) {

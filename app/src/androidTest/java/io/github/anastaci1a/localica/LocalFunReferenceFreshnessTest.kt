@@ -61,7 +61,7 @@ class LocalFunReferenceFreshnessTest {
         val first = mutableListOf<Boolean>()
         val second = mutableListOf<Boolean>()
         var handler by mutableStateOf<(Boolean) -> Unit>({ first += it })
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = true) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 QueueSurface(progress, InterfaceSettings(reducedMotion = true), handler) {
                     LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("settle-list")) {
