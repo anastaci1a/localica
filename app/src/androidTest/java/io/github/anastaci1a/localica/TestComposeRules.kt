@@ -28,11 +28,15 @@ private fun queuedEffects(context: CoroutineContext): CoroutineContext =
  * to their own UiClock. The theme clock would stamp an idle intent at its last presented frame instead. */
 internal object FixtureTime {
     @Volatile var nanos: (() -> Long)? = null
+    /** #854 F-I5-2: a test may hold the presentation receipt (FrameSource.awaitPresented) to model a slow first presented frame;
+     * once completed, the receipt arrives with the next virtual frame. Null: every presentation arrives with the next frame. */
+    @Volatile var presentation: kotlinx.coroutines.CompletableDeferred<Unit>? = null
     /** Stage2's harness clock, shared with the fixture root so every owner stamps idle intents in the same virtual time. */
     @Composable fun WithClock(content: @Composable () -> Unit) {
         val clock = remember { nanos?.let { now -> UiClock(object : FrameSource {
             override suspend fun awaitFrame() = withFrameNanos { it }
             override suspend fun <R> awaitFrame(onFrame: (Long) -> R) = withFrameNanos(onFrame)
+            override suspend fun awaitPresented(window: android.view.Window) { presentation?.await(); awaitFrame() }
         }, now) } }
         if (clock == null) { content(); return }
         LaunchedEffect(clock) { clock.run() }
