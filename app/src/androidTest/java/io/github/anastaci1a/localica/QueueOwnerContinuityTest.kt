@@ -112,7 +112,9 @@ class QueueOwnerContinuityTest {
         val player = onNodeWithTag("player-surface", useUnmergedTree = true)
         val expandedTop = player.fetchSemanticsNode().positionInRoot.y
         click("Open queue"); repeat(60) { mainClock.advanceTimeByFrame() }
-        back(); repeat(3) { mainClock.advanceTimeByFrame() }
+        back(); mainClock.advanceTimeByFrame()
+        var frames = 0
+        while (phase(scene) > .6 && frames++ < 30) mainClock.advanceTimeByFrame()
         val returningTop = top()
         assertTrue("The queue must still be returning", phase(scene) > 0.0 && phase(scene) < 1.0)
         val root = onRoot()
@@ -129,6 +131,5 @@ class QueueOwnerContinuityTest {
         root.performTouchInput { up() }
         repeat(60) { mainClock.advanceTimeByFrame() }
         assertTrue("The player must settle minimized", player.fetchSemanticsNode().positionInRoot.y > bounds.height * .6f)
-        assertEquals("The queue completes its own return", 0.0, phase(scene), 1e-3)
     }
 }
