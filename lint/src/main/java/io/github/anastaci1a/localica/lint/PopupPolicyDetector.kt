@@ -17,6 +17,17 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
     private val popupRoles by lazy {
         requireNotNull(javaClass.getResourceAsStream("/popup-roles.txt")).bufferedReader().use { it.readLines().toSet() }
     }
+    // #854 review: each shared popup/motion API's whole formal list and its motion-selecting formals, one table with the Node gate.
+    private class PinnedApi(val name: String, val owner: String, val key: String, val parameters: Set<String>, val motion: Set<String>)
+    private val popupApis by lazy {
+        requireNotNull(javaClass.getResourceAsStream("/popup-api.txt")).bufferedReader().use { it.readLines().filter(String::isNotBlank).map { row ->
+            val cells = row.split("|")
+            PinnedApi(cells[0], cells[1].substringBeforeLast('.') + "." + cells[2].substringAfterLast('/').removeSuffix(".kt") + "Kt", cells[3],
+                cells[4].split(",").toSet(), cells[5].split(",").filter(String::isNotEmpty).toSet())
+        } }
+    }
+    // #862: the window's one MotionDurationScale and its key; only InterfaceMotion.kt provides or names them, beyond an index read.
+    private val motionScaleTypes = setOf("androidx.compose.ui.MotionDurationScale", "androidx.compose.ui.MotionDurationScale.Key")
     // #854: the popup motion kinds. Only the motion owners and the spec that declares them (PopupKindModel) may name them.
     private val popupKinds = setOf("PopupKind", "PopupMotionKind")
     // Explicit rule-11 debt: exact provider expression and maximum occurrence count.
@@ -25,7 +36,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
         requireNotNull(javaClass.getResourceAsStream("/popup-ratchet.txt")).bufferedReader().use { it.readLines().map { row -> row.split("|") } }
     }
     override fun getApplicableUastTypes() = listOf(UCallExpression::class.java,
-        USimpleNameReferenceExpression::class.java, UBinaryExpression::class.java, UPrefixExpression::class.java,
+        USimpleNameReferenceExpression::class.java, UBinaryExpression::class.java, UPrefixExpression::class.java, UObjectLiteralExpression::class.java,
         UPostfixExpression::class.java, UCallableReferenceExpression::class.java, UClassLiteralExpression::class.java, UClass::class.java, UVariable::class.java)
 
     override fun createUastHandler(context: JavaContext): UElementHandler? {
@@ -132,12 +143,17 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                     context.evaluator.implementsInterface(it, "android.view.WindowManager", false) }
             }
 
-            private fun pinnedApi(method: com.intellij.psi.PsiMethod): Boolean = when (method.containingClass?.qualifiedName) {
-                "io.github.anastaci1a.localica.ui.GlassMorphKt" -> method.name in setOf("GlassMorphPopup", "GlassMenu", "PopupActionPill")
-                "io.github.anastaci1a.localica.ui.LyricsPanelKt" -> method.name == "LyricsPanel"
-                "io.github.anastaci1a.localica.ui.LyricsBackdropKt" -> method.name == "LyricsBackdrop"
-                "io.github.anastaci1a.localica.ui.GlassPopupHomeKt" -> method.name == "GlassPopupHome"
-                else -> false
+            private fun pinnedApi(method: com.intellij.psi.PsiMethod): PinnedApi? =
+                popupApis.firstOrNull { it.name == method.name && it.owner == method.containingClass?.qualifiedName }
+
+            // #862 / #854 review: the app's own sources may not provide a MotionDurationScale outside the window owner (InterfaceMotion.kt).
+            private fun reportScale(node: UElement) {
+                if (relative.startsWith("app/src/main/java/io/github/anastaci1a/")) report(Ownership(UiRuleId.ScreenPopupMotion, "MotionDurationScale"), node)
+            }
+
+            // An implementation or object of MotionDurationScale rescales every animation run in its context.
+            private fun motionScale(klass: UClass) {
+                if (klass.qualifiedName !in motionScaleTypes && context.evaluator.implementsInterface(klass.javaPsi, "androidx.compose.ui.MotionDurationScale", false)) reportScale(klass)
             }
 
             private fun scopedWindowManager(method: com.intellij.psi.PsiMethod, node: UCallExpression): Boolean =
@@ -152,18 +168,15 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                     }
 
             private fun argumentPins(method: com.intellij.psi.PsiMethod, node: UCallExpression) {
-                val owner = method.containingClass?.qualifiedName
-                val api = when {
-                    owner == "io.github.anastaci1a.localica.ui.GlassMorphKt" && method.name in setOf("GlassMenu", "GlassMorphPopup") -> "PopupArgument."
-                    owner == "io.github.anastaci1a.localica.ui.GlassMorphKt" && method.name == "PopupActionPill" -> "PillArgument."
-                    owner == "io.github.anastaci1a.localica.ui.LyricsPanelKt" && method.name == "LyricsPanel" -> "LyricsArgument."
-                    owner == "io.github.anastaci1a.localica.ui.LyricsBackdropKt" && method.name == "LyricsBackdrop" -> "LyricsBackdropArgument."
-                    owner == "io.github.anastaci1a.localica.ui.GlassPopupHomeKt" && method.name == "GlassPopupHome" -> "HomeArgument."
-                    else -> return
-                }
+                val api = pinnedApi(method) ?: return
                 method.parameterList.parameters.forEachIndexed { index, formal ->
-                    if (formal.name in (if (api == "HomeArgument.") setOf("modifier", "container", "chrome") else if (api == "PillArgument.") setOf("chromeVisibility", "playerExpansion") else setOf("sharedContent", "originPreparation", "contentAlpha")) &&
-                        node.getArgumentForParameter(index) != null && relative !in popupOwnerPaths[api + formal.name].orEmpty())
+                    if (node.getArgumentForParameter(index) == null) return@forEachIndexed
+                    // #854 review (Astra 1): an argument for a formal outside the pinned surface (a new timing input added to the shared
+                    // declaration) is red until popup-api.txt, and its review, admit it.
+                    if (formal.name !in api.parameters) {
+                        if (relative !in popupOwnerPaths[UiRuleId.ScreenPopupMotion.name].orEmpty())
+                            context.report(UiRuleId.ScreenPopupMotion.issue, node, context.getLocation(node), "Argument "+formal.name+" is not part of "+api.name+"'s pinned surface")
+                    } else if (formal.name in api.motion && relative !in popupOwnerPaths[api.key + formal.name].orEmpty())
                         context.report(UiRuleId.ScreenPopupMotion.issue, node, context.getLocation(node), "Popup argument "+formal.name+" is restricted to its pinned callers")
                 }
             }
@@ -184,6 +197,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 val ingress = when {
                     owner == "io.github.anastaci1a.localica.ui.LocalicaUiRootKt" && name == "LocalicaUiRoot" -> name
                     owner == "io.github.anastaci1a.localica.ui.layout.LocalicaEngineRootKt" && name == "ProvideLocalicaEngineContext" -> name
+                    owner == "io.github.anastaci1a.localica.ui.InterfaceMotionKt" && name == "installLocalicaWindowMotion" -> name
                     else -> null
                 }
                 if (ingress != null) report(Ownership(UiRuleId.ScreenPopupMotion, "MotionIngress." + ingress), node)
@@ -218,7 +232,8 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 (node.resolve() as? com.intellij.psi.PsiClass)?.takeIf(::nativeClass)?.let { report(UiRuleId.ScreenPopupDrawPath, node) }
                 (node.resolve() as? com.intellij.psi.PsiMethod)?.let {
                     reportRegistration(it, node)
-                    if (pinnedApi(it)) report(UiRuleId.ScreenPopupMotion, node)
+                    if (pinnedApi(it) != null) report(UiRuleId.ScreenPopupMotion, node)
+                    if (it.containingClass?.qualifiedName in motionScaleTypes) reportScale(node)
                     privateEntry(it, node)
                     if (windowManager(it, node.qualifierExpression)) report(UiRuleId.ScreenPopupDrawPath, node)
                     if (it.name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !it.isConstructor) report(UiRuleId.ScreenPopupHome, node)
@@ -270,6 +285,14 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                         if (!admitted) report(Ownership(UiRuleId.ScreenPopupMotion, "MotionProvider." + local.substringAfterLast('.')), node)
                     }
                 }
+                // #862: naming the scale type or its key is an override, except the index read context[MotionDurationScale] and imports.
+                val scaleSymbol = when (resolved) {
+                    is com.intellij.psi.PsiClass -> resolved.qualifiedName
+                    is com.intellij.psi.PsiField -> resolved.containingClass?.qualifiedName?.takeIf { resolved.name == "Key" }?.let { "$it.Key" }
+                    else -> null
+                }
+                if (scaleSymbol in motionScaleTypes && (node.uastParent as? UArrayAccessExpression)?.indices?.any { it.sourcePsi == node.sourcePsi } != true &&
+                    generateSequence(node.uastParent) { it.uastParent }.none { it is UImportStatement }) reportScale(node)
                 val name = resolved?.let { (it as? com.intellij.psi.PsiNamedElement)?.name } ?: node.identifier
                 if (Regex("(?:get)?Local.*Popup.*Home.*").matches(name)) report(UiRuleId.ScreenPopupHome, node)
                 if (name in setOf("LocalPopupBodyPresenter", "getLocalPopupBodyPresenter") &&
@@ -294,6 +317,7 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 // #854: a type argument names a kind too (enumValueOf<PopupKind>, emptyList<PopupKind>).
                 if (node.typeArguments.any { (it as? com.intellij.psi.PsiClassType)?.className in popupKinds } &&
                     relative !in popupOwnerPaths["PopupKindModel"].orEmpty()) report(UiRuleId.ScreenPopupMotion, node)
+                if (node.typeArguments.any { (it as? com.intellij.psi.PsiClassType)?.resolve()?.qualifiedName in motionScaleTypes }) reportScale(node)
                 val owner = method.containingClass?.qualifiedName.orEmpty()
                 if (name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !method.isConstructor) hostCall(name, node)
                 if (name in setOf("glassPopupHome", "glassPopupProjection")) report(UiRuleId.ScreenPopupHome, node)
@@ -356,8 +380,11 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 if (type.contains("CompositionLocal<") && listOf("GlassPopupHome", "HomeRef", "PopupBodyPresenter").any { type.contains(it) }) report(UiRuleId.ScreenPopupHome, node)
             }
 
+            override fun visitObjectLiteralExpression(node: UObjectLiteralExpression) = motionScale(node.declaration)
+
             override fun visitClass(node: UClass) {
                 if (context.file.extension == "kt" && node.sourcePsi !is org.jetbrains.kotlin.psi.KtClassOrObject) return
+                if (node !is UAnonymousClass) motionScale(node)
                 if ("$relative:" + node.name in popupRoles) return
                 if (node.qualifiedName in setOf("io.github.anastaci1a.localica.ui.GlassAnchor", "io.github.anastaci1a.localica.ui.GlassPopupHome", "io.github.anastaci1a.localica.ui.components.HomeRef") ||
                     setOf("io.github.anastaci1a.localica.ui.GlassAnchor", "io.github.anastaci1a.localica.ui.GlassPopupHome", "io.github.anastaci1a.localica.ui.components.HomeRef", "io.github.anastaci1a.localica.ui.components.PopupState", "io.github.anastaci1a.localica.ui.components.PopupScope").any { node.qualifiedName != it && (context.evaluator.extendsClass(node.javaPsi, it, false) || context.evaluator.implementsInterface(node.javaPsi, it, false)) }) report(UiRuleId.DuplicatePopupRole, node)
