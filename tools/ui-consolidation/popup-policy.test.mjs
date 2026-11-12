@@ -1,7 +1,7 @@
 import test from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import {checkPopupSource, ownsPopups, popupRules, popupOwners, auditPopupTree, popupRatchet, kotlinTokens} from './popup-policy.mjs';
+import {checkPopupSource, ownsPopups, popupRules, popupOwners, auditPopupTree, popupRatchet, kotlinTokens, popupApiSurface, declaredFunctions} from './popup-policy.mjs';
 const screen='app/src/main/java/io/github/anastaci1a/localica/ui/Screen.kt';
 const rules=source=>new Set(checkPopupSource(screen,source).map(x=>x.rule));
 test('calibration note 6: named roles are pinned to their actual callers',()=>{
@@ -432,4 +432,64 @@ test('#854/#862: the popup kind and respected-scale locals have one provider eac
   'fun f() { CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalPopupKind.provides(k)) {} }'])
   assert.ok(checkPopupSource(screen.replace('Screen.kt',caller+'.kt'),body).some(i=>i.rule==='ScreenPopupMotion'),caller+': '+body);
  assert.equal(rules('fun f() { println(LocalPopupKind.current); println(LocalRespectSystemAnimationScale.current) }').size,0);
+});
+test('#854 review F4: an argument outside a pinned shared API surface is red, with the extended declaration in the tree',()=>{
+ const glass=screen.replace('Screen.kt','GlassMorph.kt'),head='package io.github.anastaci1a.localica.ui\n';
+ // Astra's witness: a scalar timing input added to the real shared declaration and used instead of LocalMotionSpeed.
+ const shared=head+'internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit, placement: GlassPlacement = GlassPlacement.Menu, darkOverride: Boolean? = null, fitContent: Boolean = true, originPreparation: GlassOriginPreparation? = null, searchDismissOnImeBack: Boolean = false, sharedContent: PopupSharedContent? = null, heightSizing: GlassDialogHeight = GlassDialogHeight.Content, animationSpeed: Float? = null, content: @Composable () -> Unit) { val speed = animationSpeed ?: LocalMotionSpeed.current; motion.updateSpeed(speed) }';
+ for(const call of ['GlassMorphPopup(true, anchor, {}, animationSpeed = 0.5f) { }','GlassMorphPopup(true, anchor, {}, GlassPlacement.Menu, null, true, null, false, null, GlassDialogHeight.Content, 0.5f) { }',
+  'GlassMenu(true, anchor, {}, speed = 0.5f) { }','PopupActionPill(anchor, duration = 120) { }','GlassPopupHome(home, timeScale = 2f) { }']) {
+  const incidents=auditPopupTree([{path:glass,source:shared},{path:screen,source:head+'fun f(anchor: GlassAnchor, home: Any) { '+call+' }'}]).incidents;
+  assert.ok(incidents.some(i=>i.rule==='ScreenPopupMotion' && i.path===screen && /pinned surface/.test(i.note)),call+': '+JSON.stringify(incidents));
+ }
+ // Honest callers stay green against the extended and the real declaration, including a positional comparison (a == b).
+ const honest=head+'fun f(anchor: GlassAnchor, open: Int?, filter: Int) { GlassMorphPopup(true, anchor, {}, placement = GlassPlacement.Center, darkOverride = false) { }; GlassMenu(open == filter, anchor, { }) { } }';
+ assert.deepEqual(auditPopupTree([{path:glass,source:shared},{path:screen,source:honest}]).incidents,[]);
+ assert.deepEqual(checkPopupSource(screen,honest),[]);
+});
+test('#854 review F3: rememberEffectiveReducedMotion takes only the app setting; a re-added policy slot is red when a screen passes it',()=>{
+ const owner=screen.replace('Screen.kt','InterfaceMotion.kt'),head='package io.github.anastaci1a.localica.ui\n';
+ const readded=head+'@Composable internal fun rememberEffectiveReducedMotion(appReducedMotion: Boolean, respectSystemScale: Boolean = true): Boolean = appReducedMotion';
+ for(const call of ['rememberEffectiveReducedMotion(r, respectSystemScale = false)','rememberEffectiveReducedMotion(r, false)']) {
+  for(const tree of [[{path:owner,source:readded}],[]])
+   assert.ok(auditPopupTree([...tree,{path:screen,source:head+'@Composable fun f(r: Boolean) { val reduced = '+call+' }'}]).incidents.some(i=>i.rule==='ScreenPopupMotion' && i.path===screen && /pinned surface/.test(i.note)),call);
+ }
+ for(const caller of ['BrowserScreen','TransportButton','SeekCancelTarget','FloatingControlMotion','LocalicaScreen'])
+  assert.deepEqual(checkPopupSource(screen.replace('Screen.kt',caller+'.kt'),head+'@Composable fun f(reducedMotion: Boolean) { val reduced = rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current) }'),[],caller);
+});
+test('#854 review F4: every pinned shared API declaration equals its surface row',()=>{
+ for(const [api,spec] of popupApiSurface) {
+  const declared=declaredFunctions(spec.file,fs.readFileSync(new URL('../../'+spec.file,import.meta.url),'utf8')).filter(d=>d.qualified===spec.identity);
+  // Overloads (GlassPopupHome) together declare exactly the row; a single declaration also keeps its order (positional binding).
+  assert.ok(declared.length>=1,api);
+  assert.deepEqual([...new Set(declared.flatMap(d=>d.parameters))].sort(),[...spec.parameters].sort(),api+' changed its formals: review the new argument and update popup-api.txt');
+  if(declared.length===1)assert.deepEqual(declared[0].parameters,spec.parameters,api);
+  assert.ok(spec.motion.every(m=>spec.parameters.includes(m)),api);
+ }
+});
+test('#862 / #854 review F4: only the window motion scale owner provides a MotionDurationScale; reading it stays allowed',()=>{
+ const owner=screen.replace('Screen.kt','InterfaceMotion.kt');
+ for(const body of ['fun f() = object : MotionDurationScale { override val scaleFactor = 2f }',
+  'class Slow : androidx.compose.ui.MotionDurationScale { override val scaleFactor get() = 2f }',
+  'import androidx.compose.ui.MotionDurationScale as Scale\nval s = object : Scale { override val scaleFactor = 2f }',
+  'typealias Scale = androidx.compose.ui.MotionDurationScale\nval s = object : Scale { override val scaleFactor = 2f }',
+  'import androidx.compose.ui.*\nsuspend fun f() = withContext(object : MotionDurationScale { override val scaleFactor = 0f }) { }',
+  'val key = MotionDurationScale.Key','val read = MotionDurationScale::scaleFactor','val all = listOf<MotionDurationScale>()']) {
+  assert.ok(rules(body).has('ScreenPopupMotion'),body);
+  assert.deepEqual(checkPopupSource(owner,body),[],body);
+  // Owning other capabilities (providers, ingress, roles) grants nothing here.
+  for(const caller of ['LocalicaScreen','LocalicaUiRoot','QueueScreen','BrowserScreen'])
+   assert.ok(checkPopupSource(screen.replace('Screen.kt',caller+'.kt'),body).some(i=>i.rule==='ScreenPopupMotion'),caller+': '+body);
+ }
+ for(const body of ['import androidx.compose.ui.MotionDurationScale\nsuspend fun f() = currentCoroutineContext()[MotionDurationScale]?.scaleFactor ?: 1f',
+  'import androidx.compose.ui.MotionDurationScale as M\nfun f(c: CoroutineContext) = c[M]?.scaleFactor'])
+  assert.equal(rules(body).size,0,body);
+});
+test('#862: only MainActivity installs the window motion scale; its declaration is not an invocation',()=>{
+ const main='app/src/main/java/io/github/anastaci1a/localica/MainActivity.kt';
+ assert.deepEqual(checkPopupSource(main,'class A : ComponentActivity() { fun start() { installLocalicaWindowMotion(true) } }'),[]);
+ for(const body of ['fun f(activity: ComponentActivity) { activity.installLocalicaWindowMotion(false) }','fun ComponentActivity.f() { installLocalicaWindowMotion(false) }',
+  'import io.github.anastaci1a.localica.ui.installLocalicaWindowMotion as install\nfun ComponentActivity.f() { install(false) }','val ref = ComponentActivity::installLocalicaWindowMotion'])
+  assert.ok(rules(body).has('ScreenPopupMotion'),body);
+ assert.deepEqual(checkPopupSource(screen.replace('Screen.kt','InterfaceMotion.kt'),'internal fun ComponentActivity.installLocalicaWindowMotion(respect: Boolean): WindowMotionScale { TODO() }'),[]);
 });
