@@ -10,6 +10,7 @@ Each topic has one authoritative home. Product, Interface and Structure describe
 | [Library data](library-data.md) | Export/import file format, fields, versions and matching rules. |
 | [Roadmap](roadmap.md) | Proposed outcomes and deferred capabilities. |
 | [Build](build.md) | Verification, compatibility, signing, release preparation, previews and documentation publishing. |
+| [Continuity gate design](specs/continuity-gate-DESIGN.md) | Proposed engine proof, screen conformance, frame capture and release requirements. |
 | [Documentation standard](../DOCUMENTATION.md) | Public prose, ownership of facts, status labels and review criteria. |
 | [Working instructions](../agents/README.md) | Contributor workflow, issues, labels and commits. |
 | [Collaboration](../agents/collaboration.md) | Responsibility, integration and handoffs. |
