@@ -838,13 +838,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 var targetHeight by remember { mutableIntStateOf(0) }
                 var viewportTargetHeight by remember { mutableIntStateOf(0) }
                 val page = placement == GlassPlacement.Page
-                // #854 §1.7: an overshooting panel stays inside the window. Grow the margin only where the reachable
-                // overshoot of a full-extent panel would pass the side inset (a no-op in portrait phones).
-                val safeInsets = WindowInsets.safeDrawing
-                val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
-                val margin = with(density) { if (page) 0f else maxOf(io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Base).toPx(),
-                    motion.overshoot * constraints.maxWidth - minOf(safeInsets.getLeft(density, layoutDirection), safeInsets.getRight(density, layoutDirection)),
-                    motion.overshoot * constraints.maxHeight - minOf(safeInsets.getTop(density), safeInsets.getBottom(density))) }
+                val margin = density.popupMarginPx(page)
                 val availableWidth = constraints.maxWidth
                 val availableHeight = constraints.maxHeight
                 // Native inset/resize passes can temporarily consume either axis.
