@@ -23,16 +23,17 @@ private fun coordinates(r: Rect)=doubleArrayOf(r.left.toDouble(),r.top.toDouble(
 sealed interface BasisChange { data object Rescale: BasisChange; data object Rebase: BasisChange }
 enum class ExpansionReason { User,Programmatic,Restore,Cancel }
 @Immutable data class ReleaseDecision(val expanded: Boolean,val durationSeconds: Float,val handOffVelocity: Float)
+/** Bound an existing sample without reading or owning motion state. */
+fun boundedProgress(sample: Float, curve: Curve? = null): Float =
+    (curve?.at(sample) ?: sample).coerceIn(0f, 1f)
+
 @Stable interface ExpansionView {
     val phase: MotionValue
     val expanded: Boolean
     val inContact: Boolean
     val canContact: Boolean
     /** Bounded presentation values share the owner; geometry continues to read the raw phase. */
-    fun boundedProgress(curve: Curve? = null): Float {
-        val p = phase.value()
-        return (curve?.at(p) ?: p).coerceIn(0f, 1f)
-    }
+    fun boundedProgress(curve: Curve? = null): Float = boundedProgress(phase.value(), curve)
 }
 /** Whether a sampled expansion [phase] is the collapsed rest: exactly 0, with no tolerance. */
 internal fun collapsedPhase(phase: Float): Boolean = phase == 0f
