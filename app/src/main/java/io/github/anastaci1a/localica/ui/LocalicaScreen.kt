@@ -442,7 +442,7 @@ fun LocalicaScreen(
         }
 
         }
-        Sheet(sheet) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
+        Sheet(sheet, onSettled = { expanded = it }) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, noneAtlasInput = shellNoneAtlas, visual = playerVisual,
@@ -462,7 +462,7 @@ fun LocalicaScreen(
                 lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
                 onRepeatOptions = { playerDialogAppearance = actionAppearance; repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
-        } }
+        }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
         ObserveSheetContent("player-overlay")
         GlassPanelTheme(playerLightMix) {
@@ -484,6 +484,7 @@ fun LocalicaScreen(
             } } }
         }
         } } }
+        }
         }
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }

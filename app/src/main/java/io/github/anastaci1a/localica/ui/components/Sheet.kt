@@ -54,7 +54,10 @@ private class SheetHandle(override val expansion: ExpansionView, initial: Boolea
     }
     return handle
 }
-@Composable fun Sheet(state: SheetState, content: @Composable SheetScope.() -> Unit) {
+@Composable fun Sheet(state: SheetState, onSettled: ((Boolean) -> Unit)? = null, content: @Composable SheetScope.() -> Unit) {
     val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    content(object : SheetScope { override val expanded = state.expanded; override val navigationInset = inset })
+    val target = onSettled?.let { SheetDragTarget(state, it) } ?: LocalSheetDragTarget.current
+    CompositionLocalProvider(LocalSheetDragTarget provides target) {
+        content(object : SheetScope { override val expanded = state.expanded; override val navigationInset = inset })
+    }
 }

@@ -36,6 +36,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.components.SheetState
+import io.github.anastaci1a.localica.ui.components.verticalSurfaceDrag
 import io.github.anastaci1a.localica.ui.components.DrawerScrim
 import io.github.anastaci1a.localica.ui.components.rememberExpansionClosed
 
@@ -140,7 +141,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
         .graphicsLayer { alpha = ((playerProgress() - .4f) / .6f).coerceIn(0f, 1f) }
         .then(if (!interactive) Modifier.clearAndSetSemantics {} else Modifier)
         // Touch-down on a moving drawer catches it (#608 contact); a stationary drawer keeps its taps.
-        .playerVerticalDrag(onCatch = { !phase.settled && sheet.contact.onDragStart().also { directContact[1] = it
+        .verticalSurfaceDrag(onCatch = { !phase.settled && sheet.contact.onDragStart().also { directContact[1] = it
                 directContact[0] = true; delta = 0f } },
             onDelta = { dy ->
             currentTrace?.invoke("direct-delta dy=$dy delta=$delta progress=${phase.value()}")
