@@ -106,4 +106,29 @@ class QueueOwnerContinuityTest {
         verifyReleaseLaw(SheetLaw, "catch/reverse", frames, scene.recorder.joins, fallbackJoin(0, 0.0, 0.0, true), scene.objectTime())
         assertEquals("reversed release follows its downward velocity", 0.0, frames.last().p, 1e-3)
     }
+
+    @Test fun downwardSwipeOutsideReturningQueueMinimizesPlayer() = localicaRunComposeUiTest {
+        val scene = Scene(); start(scene)
+        val player = onNodeWithTag("player-surface", useUnmergedTree = true)
+        val expandedTop = player.fetchSemanticsNode().positionInRoot.y
+        click("Open queue"); repeat(60) { mainClock.advanceTimeByFrame() }
+        back(); repeat(3) { mainClock.advanceTimeByFrame() }
+        val returningTop = top()
+        assertTrue("The queue must still be returning", phase(scene) > 0.0 && phase(scene) < 1.0)
+        val root = onRoot()
+        val bounds = root.fetchSemanticsNode().boundsInRoot
+        val start = Offset(bounds.width * .75f, returningTop.toFloat() * .5f)
+        assertTrue("Second contact starts outside the moving queue hitbox", start.y < returningTop)
+        root.performTouchInput {
+            down(start)
+            repeat(6) { moveBy(Offset(0f, bounds.height * .07f), delayMillis = 16) }
+        }
+        mainClock.advanceTimeByFrame()
+        assertTrue("The exposed player must follow the second downward swipe immediately",
+            player.fetchSemanticsNode().positionInRoot.y > expandedTop + bounds.height * .1f)
+        root.performTouchInput { up() }
+        repeat(60) { mainClock.advanceTimeByFrame() }
+        assertTrue("The player must settle minimized", player.fetchSemanticsNode().positionInRoot.y > bounds.height * .6f)
+        assertEquals("The queue completes its own return", 0.0, phase(scene), 1e-3)
+    }
 }
