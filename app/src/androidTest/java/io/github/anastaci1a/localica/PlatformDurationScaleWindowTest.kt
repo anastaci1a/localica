@@ -47,7 +47,7 @@ class PlatformDurationScaleWindowTest {
     private var pinchValue by mutableFloatStateOf(0f)
     private val contentBounds = AtomicReference<Rect?>()
     private val profile = AtomicReference<String?>()
-    private data class Owners(val clock: UiClock, val engine: EngineContext, val systemScale: Float?, val effectiveScale: Float?,
+    private data class Owners(val clock: UiClock, val engine: EngineContext, val systemScale: Float?, val effectiveScale: Float?, val windowScale: Boolean,
         val scalar: MotionFloat, val spring: MotionFloat, val expansion: ExpandCollapse,
         val rect: MotionRect, val basis: ExpansionBasis, val scrollbar: ScrollbarMotion, val generation: Int,
         val pinch: BrowsePinchProgressOwner, val scope: CoroutineScope)
@@ -57,6 +57,7 @@ class PlatformDurationScaleWindowTest {
         // #862: the window's WindowMotionScale; Compose animations and coroutine readers see its effective scale.
         val systemScale = scope.coroutineContext.platformDurationScale
         val effectiveScale = scope.coroutineContext[MotionDurationScale]?.scaleFactor
+        val windowScale = scope.coroutineContext[MotionDurationScale] is WindowMotionScale
         LocalicaUiRoot(root) { LocalicaTheme {
             val engine = LocalEngineContext.current
             val clock = ownerClock()
@@ -82,7 +83,7 @@ class PlatformDurationScaleWindowTest {
             val bottom = insets.getBottom(density)
             SideEffect {
                 expansion.setBasis(basis); expansion.bind(rect)
-                published.set(Owners(clock, engine, systemScale, effectiveScale, scalar, spring, expansion, rect, basis, scrollbar, generation, pinch, scope))
+                published.set(Owners(clock, engine, systemScale, effectiveScale, windowScale, scalar, spring, expansion, rect, basis, scrollbar, generation, pinch, scope))
                 profile.set("window=$windowSize density=${density.density} fontScale=${density.fontScale} safeInsets=$left,$top,$right,$bottom")
             }
             Box(Modifier.fillMaxSize().background(Color.White).safeDrawingPadding()) {
@@ -311,6 +312,8 @@ class PlatformDurationScaleWindowTest {
             receipts.writeText("source\tsystem\trespect\troot\tclock\tcoroutine\taccess\n")
             fun record(respect: Boolean) = main { val o = checkNotNull(published.get())
                 receipts.appendText(listOf(BuildConfig.SOURCE_SHA, o.systemScale, respect, o.engine.durationScale, o.clock.context?.durationScale, o.effectiveScale, o.engine.access).joinToString("\t") + "\n") }
+            // Round 2 G3: the window's coroutine element is the app's WindowMotionScale, installed by MainActivity.
+            await("The window coroutine element is the WindowMotionScale") { it.windowScale }
             for (value in listOf(0f, .5f, 2f)) {
                 main { root.settings.value = root.settings.value.copy(respectSystemAnimationScale = true) }
                 scale(value)
