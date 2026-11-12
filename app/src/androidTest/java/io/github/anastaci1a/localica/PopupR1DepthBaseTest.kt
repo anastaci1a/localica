@@ -133,7 +133,7 @@ class PopupR1DepthBaseTest {
             }
             original(activity, output, "base-complete-root").recycle()
             compose.runOnUiThread { assertR1BackdropIndependent(fixtureBackdrop, fixtureAnchor, output) }
-            baseScenePixels = runBlocking { baseScene.toImageBitmap() }.asAndroidBitmap()
+            baseScenePixels = r1InspectionBitmap(runBlocking { baseScene.toImageBitmap() }.asAndroidBitmap(), output, "base-complete-scene")
             File(output, "base-complete-scene.png").outputStream().use {
                 assertTrue(requireNotNull(baseScenePixels).compress(Bitmap.CompressFormat.PNG, 100, it))
             }
@@ -169,7 +169,7 @@ class PopupR1DepthBaseTest {
             assertFalse("R1 reference precedes page departure", referenceState.getBoolean("homeDeparting"))
             assertFalse("R1 reference precedes Leave page input", referenceState.getBoolean("leavePageClicked"))
             val preOpenPixels = requireNotNull(baseScenePixels)
-            baseScenePixels = runBlocking { baseScene.toImageBitmap() }.asAndroidBitmap()
+            baseScenePixels = r1InspectionBitmap(runBlocking { baseScene.toImageBitmap() }.asAndroidBitmap(), output, "base-return-reference-scene")
             try {
                 File(output, "base-return-reference-scene.png").outputStream().use {
                     assertTrue(requireNotNull(baseScenePixels).compress(Bitmap.CompressFormat.PNG, 100, it))
@@ -187,7 +187,7 @@ class PopupR1DepthBaseTest {
                 flight.handedOff && flight.wasProjected
             }
             compose.runOnUiThread { leaving = false }
-            var qualified = 0
+            val qualifiedPhases = mutableSetOf<Int>()
             for (frame in 0 until 96) {
                 // Resolve the short opaque crossing at 4 ms virtual intervals; keep the same phase window.
                 compose.mainClock.advanceTimeBy(4, ignoreFrameDuration = true); compose.waitForIdle()
@@ -200,14 +200,14 @@ class PopupR1DepthBaseTest {
                     .put("geometrySelected", attached && flight.prepared && popupPhase in .1f.. .8f)
                     .put("flightSelected", candidatePhase?.let { attached && flight.prepared && it in .1f.. .8f } ?: JSONObject.NULL))
                 File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
-                    .put("renderer", mode.name).put("samples", phaseControl).put("qualifiedFrames", qualified).toString(2))
+                    .put("renderer", mode.name).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
                 if (!attached) break
                 val phase = popupPhase
                 if (phase !in .1f.. .8f || !flight.prepared) continue
                 val modal = original(window, output, "return-$frame-popup")
                 val root = original(activity, output, "return-$frame-root")
-                val layer = runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap()
-                val source = runBlocking { requireNotNull(home.backdrop).layer.toImageBitmap() }.asAndroidBitmap()
+                val layer = r1InspectionBitmap(runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap(), output, "return-$frame-flight-layer")
+                val source = r1InspectionBitmap(runBlocking { requireNotNull(home.backdrop).layer.toImageBitmap() }.asAndroidBitmap(), output, "return-$frame-sampled-scene")
                 try {
                     if (!flight.handedOff) continue
                     val hostAt = IntArray(2); val rootAt = IntArray(2)
@@ -246,14 +246,14 @@ class PopupR1DepthBaseTest {
                     File(output, "frames.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
                         .put("renderer", mode.name).put("samples", receipts).toString(2))
                     if (sampled > 10) {
-                        qualified++
+                        qualifiedPhases.add(phase.toRawBits())
                         assertTrue("Non-chrome departing menu stays above actual tabs: $bad/$sampled", bad <= max(4, sampled / 1000))
                     }
                 } finally { modal.recycle(); root.recycle(); layer.recycle(); source.recycle() }
             }
             File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
-                .put("renderer", mode.name).put("samples", phaseControl).put("qualifiedFrames", qualified).toString(2))
-            assertTrue("Non-chrome menu overlaps tabs in at least three return frames: $receipts", qualified >= 3)
+                .put("renderer", mode.name).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
+            assertTrue("Non-chrome menu overlaps tabs at three distinct presented return phases: $receipts", qualifiedPhases.size >= 3)
         } finally { baseScenePixels?.recycle(); compose.mainClock.autoAdvance = true; preferences.write(previous) }
     }
 
