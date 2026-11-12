@@ -397,3 +397,44 @@ test('#862: only MainActivity installs the window motion scale; its declaration 
   assert.ok(rules(body).has('ScreenPopupMotion'),body);
  assert.deepEqual(checkPopupSource(screen.replace('Screen.kt','InterfaceMotion.kt'),'internal fun ComponentActivity.installLocalicaWindowMotion(respect: Boolean): WindowMotionScale { TODO() }'),[]);
 });
+test('#854 round 2 G1: WindowMotionScale and the respect binder belong to InterfaceMotion.kt and the root',()=>{
+ const owner=screen.replace('Screen.kt','InterfaceMotion.kt'),root=screen.replace('Screen.kt','LocalicaUiRoot.kt');
+ for(const body of ['suspend fun f() = withContext(WindowMotionScale(0.5f, true)) { }','@Composable fun f() { val s = remember { WindowMotionScale(0.5f, true) } }',
+  'fun f(scale: WindowMotionScale) { scale.platform = 0f }','fun f(scale: WindowMotionScale) { scale.respect = false }',
+  'import androidx.compose.ui.MotionDurationScale\nfun f(c: CoroutineContext) { (c[MotionDurationScale] as WindowMotionScale).respect = false }',
+  'import io.github.anastaci1a.localica.ui.WindowMotionScale as S\nval s = S(2f, true)','val make = ::WindowMotionScale']) {
+  assert.ok(rules(body).has('ScreenPopupMotion'),body);
+  assert.deepEqual(checkPopupSource(owner,body),[],body);
+ }
+ for(const body of ['@Composable fun f() { val context = rememberCoroutineScope().coroutineContext; SideEffect { context.bindRespectSystemAnimationScale(false) } }',
+  'fun f(c: CoroutineContext) { c.bindRespectSystemAnimationScale(respect = false) }','suspend fun f() { currentCoroutineContext().bindRespectSystemAnimationScale(false) }',
+  'import io.github.anastaci1a.localica.ui.bindRespectSystemAnimationScale as bind\nfun f(c: CoroutineContext) { c.bind(false) }','val ref = CoroutineContext::bindRespectSystemAnimationScale'])
+  for(const caller of ['Screen','LocalicaScreen','BrowserScreen']) assert.ok(checkPopupSource(screen.replace('Screen.kt',caller+'.kt'),body).some(i=>i.rule==='ScreenPopupMotion'),caller+': '+body);
+ // The root binds; its declaration is not an invocation; the readers and the root's platform read stay green.
+ assert.deepEqual(checkPopupSource(root,'@Composable fun f(respect: Boolean) { val windowContext = rememberCoroutineScope().coroutineContext; val platformScale = windowContext.platformDurationScale; SideEffect { windowContext.bindRespectSystemAnimationScale(respect) } }'),[]);
+ assert.deepEqual(checkPopupSource(owner,'internal fun CoroutineContext.bindRespectSystemAnimationScale(respect: Boolean) { (this[MotionDurationScale] as? WindowMotionScale)?.respect = respect }'),[]);
+});
+test('#854 round 2 G2: presence, face and shared-content factories are pinned; a shared-content handle exposes only its slots',()=>{
+ const root='app/src/main/java/io/github/anastaci1a/localica/ui/',head='package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.*\nimport io.github.anastaci1a.localica.ui.components.*\n';
+ const live=p=>fs.readFileSync(new URL('../../'+root+p,import.meta.url),'utf8');
+ const change=(s,a,b)=>{assert.ok(s.includes(a),a);return s.replace(a,b);};
+ // The blind recheck's three realistic variants, each with its real shared file evolved in memory.
+ const variants=[
+  ['components/Presence.kt',s=>change(change(s,'shown: Boolean, role:','shown: Boolean, animationSpeed: Float = 1f, role:'),'val presence = remember(owner)','SideEffect { owner.updateSpeed(animationSpeed) }\n    val presence = remember(owner)'),
+   '@Composable fun Screen(key: Any, shown: Boolean) { rememberPresence(key, shown, animationSpeed = 0.5f) }'],
+  ['components/MorphFaces.kt',s=>change(change(s,'fun rememberFaceExpansion(expanded: Boolean, role:','fun rememberFaceExpansion(expanded: Boolean, animationSpeed: Float = 1f, role:'),'SideEffect { face.request(expanded) }','SideEffect { motion.expansion.updateSpeed(animationSpeed); face.request(expanded) }'),
+   '@Composable fun Screen(expanded: Boolean) { rememberFaceExpansion(expanded, animationSpeed = 0.5f) }'],
+  ['components/PopupSharedContent.kt',s=>s+'\ninternal fun PopupSharedContent.setAnimationSpeed(speed: Float) { motion.updateSpeed(speed) }\n',
+   '@Composable fun Screen(key: Any) { val shared = rememberPopupSharedContent(key) {}; SideEffect { shared.setAnimationSpeed(0.5f) } }']];
+ for(const [path,mutate,call] of variants) {
+  const incidents=auditPopupTree([{path:root+path,source:mutate(live(path))},{path:screen,source:head+call}]).incidents;
+  assert.ok(incidents.some(i=>i.rule==='ScreenPopupMotion' && i.path===screen),call+': '+JSON.stringify(incidents));
+ }
+ for(const body of ['fun f(shared: PopupSharedContent) { shared.motion.updateSpeed(0.5f) }','fun f(shared: PopupSharedContent?) { shared?.setAnimationSpeed(0.5f) }',
+  'fun f(shared: PopupSharedContent) { with(shared) { setAnimationSpeed(0.5f) } }','fun f(shared: PopupSharedContent) { shared.apply { setAnimationSpeed(0.5f) } }',
+  'internal val LocalShared = staticCompositionLocalOf<PopupSharedContent?> { null }\n@Composable fun f() { LocalShared.current?.setAnimationSpeed(0.5f) }'])
+  assert.ok(rules(head+body).has('ScreenPopupMotion'),body);
+ // Honest: the queue selector's slot use, through the remembered handle and a composition local.
+ assert.deepEqual(checkPopupSource(screen,head+'@Composable fun f(key: Any, copy: Boolean) { val nameMorph = rememberPopupSharedContent(key) {}; if (copy) nameMorph.CompactCopy() else nameMorph.Compact() }'),[]);
+ assert.deepEqual(checkPopupSource(screen,head+'internal val LocalShared = staticCompositionLocalOf<PopupSharedContent?> { null }\n@Composable fun g(live: Boolean) { val sharedName = LocalShared.current; if (sharedName != null) { if (live) sharedName.Expanded() else sharedName.ExpandedCopy() } }'),[]);
+});
