@@ -175,16 +175,25 @@ abstract class PopupPeakOvershootTest(private val landscape: Boolean) {
         compose.runOnIdle { open = false }; compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("trigger").performClick()
-        var frames = 0
-        while (compose.runOnIdle { anchor.contact.expansion.value } <= 0f && frames < 120) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); frames++ }
+        // Frames from the click to the first frame at or past each progress mark, and every presented step until half open.
+        val reached = IntArray(Marks.size) { -1 }; val progress = mutableListOf(0f); var frames = 0
+        while (reached.last() < 0 && frames < 120) {
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); frames++
+            val value = compose.runOnIdle { anchor.contact.expansion.value }; progress += value
+            Marks.forEachIndexed { i, mark -> if (reached[i] < 0 && value >= mark) reached[i] = frames }
+        }
         compose.mainClock.autoAdvance = true
-        Log.i("PopupPeakOvershoot", "warm-reopen framesToFirstMotion=$frames")
-        assertTrue("first motion within $ReopenBaselineFrames + 1 frames (was $frames)", frames <= ReopenBaselineFrames + 1)
+        val steps = progress.zipWithNext { x, y -> y - x }
+        Log.i("PopupPeakOvershoot", "warm-reopen framesToMarks=${Marks.toList()}:${reached.toList()} progress=$progress steps=$steps")
+        Marks.forEachIndexed { i, mark -> assertTrue("progress $mark within ${ReopenBaselineFrames[i]} + 1 frames (was ${reached[i]})", reached[i] in 0..ReopenBaselineFrames[i] + 1) }
+        assertTrue("a presented reopen step exceeds 0.35: $steps", steps.all { it <= .35f })
     }
 }
 
-/** Frames from the reopen click to the first non-zero expansion at 31046ed94, measured with this test on the A35 (both orientations: 3). */
-private const val ReopenBaselineFrames = 3
+/** The marks a warm reopen is timed to: first motion, 25% and 50% progress. */
+private val Marks = floatArrayOf(1e-6f, .25f, .5f)
+/** Frames from the reopen click to each of [Marks] at 31046ed94, before the receipt existed, measured with this test on the A35 (3 runs, both orientations: 3, 5, 6). */
+private val ReopenBaselineFrames = intArrayOf(3, 5, 6)
 
 class PopupPeakOvershootPortraitTest : PopupPeakOvershootTest(landscape = false)
 class PopupPeakOvershootLandscapeTest : PopupPeakOvershootTest(landscape = true)
