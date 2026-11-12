@@ -47,14 +47,16 @@ class PlatformDurationScaleWindowTest {
     private var pinchValue by mutableFloatStateOf(0f)
     private val contentBounds = AtomicReference<Rect?>()
     private val profile = AtomicReference<String?>()
-    private data class Owners(val clock: UiClock, val engine: EngineContext, val systemScale: Float?,
+    private data class Owners(val clock: UiClock, val engine: EngineContext, val systemScale: Float?, val effectiveScale: Float?,
         val scalar: MotionFloat, val spring: MotionFloat, val expansion: ExpandCollapse,
         val rect: MotionRect, val basis: ExpansionBasis, val scrollbar: ScrollbarMotion, val generation: Int,
         val pinch: BrowsePinchProgressOwner, val scope: CoroutineScope)
 
     @Composable private fun Scene() {
         val scope = rememberCoroutineScope()
-        val systemScale = scope.coroutineContext[MotionDurationScale]?.scaleFactor
+        // #862: the window's WindowMotionScale; Compose animations and coroutine readers see its effective scale.
+        val systemScale = scope.coroutineContext.platformDurationScale
+        val effectiveScale = scope.coroutineContext[MotionDurationScale]?.scaleFactor
         LocalicaUiRoot(root) { LocalicaTheme {
             val engine = LocalEngineContext.current
             val clock = ownerClock()
@@ -80,7 +82,7 @@ class PlatformDurationScaleWindowTest {
             val bottom = insets.getBottom(density)
             SideEffect {
                 expansion.setBasis(basis); expansion.bind(rect)
-                published.set(Owners(clock, engine, systemScale, scalar, spring, expansion, rect, basis, scrollbar, generation, pinch, scope))
+                published.set(Owners(clock, engine, systemScale, effectiveScale, scalar, spring, expansion, rect, basis, scrollbar, generation, pinch, scope))
                 profile.set("window=$windowSize density=${density.density} fontScale=${density.fontScale} safeInsets=$left,$top,$right,$bottom")
             }
             Box(Modifier.fillMaxSize().background(Color.White).safeDrawingPadding()) {
@@ -306,16 +308,17 @@ class PlatformDurationScaleWindowTest {
     @Test fun respectSystemAnimationScaleToggleGatesTheRootScaleAndReducedPriority() {
         withWindow("respect-toggle", null) { directory ->
             val receipts = File(directory, "respect.tsv")
-            receipts.writeText("source\tsystem\trespect\troot\tclock\taccess\n")
+            receipts.writeText("source\tsystem\trespect\troot\tclock\tcoroutine\taccess\n")
             fun record(respect: Boolean) = main { val o = checkNotNull(published.get())
-                receipts.appendText(listOf(BuildConfig.SOURCE_SHA, o.systemScale, respect, o.engine.durationScale, o.clock.context?.durationScale, o.engine.access).joinToString("\t") + "\n") }
+                receipts.appendText(listOf(BuildConfig.SOURCE_SHA, o.systemScale, respect, o.engine.durationScale, o.clock.context?.durationScale, o.effectiveScale, o.engine.access).joinToString("\t") + "\n") }
             for (value in listOf(0f, .5f, 2f)) {
                 main { root.settings.value = root.settings.value.copy(respectSystemAnimationScale = true) }
                 scale(value)
-                await("Respected $value") { it.engine.access == (if (value == 0f) MotionAccess.Reduced else MotionAccess.Standard) }
+                await("Respected $value") { it.engine.access == (if (value == 0f) MotionAccess.Reduced else MotionAccess.Standard) && it.effectiveScale == value }
                 record(true)
                 main { root.settings.value = root.settings.value.copy(respectSystemAnimationScale = false) }
-                await("Ignored $value") { it.systemScale == value && it.engine.durationScale == 1f && it.clock.context?.durationScale == 1f &&
+                // F2: off reaches every consumer: the engine and the coroutine scale Compose animations and the readers use.
+                await("Ignored $value") { it.systemScale == value && it.engine.durationScale == 1f && it.clock.context?.durationScale == 1f && it.effectiveScale == 1f &&
                     it.engine.access == MotionAccess.Standard }
                 record(false)
             }
