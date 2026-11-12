@@ -4,7 +4,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
 import io.github.anastaci1a.localica.ui.spec.PopupKind
-import io.github.anastaci1a.localica.ui.spec.springOvershoot
 
 /** #854: the surface kind of the enclosing popup; retained faces and presences inside it inherit its motion. */
 internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
@@ -22,9 +21,6 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     // #854 §1.5: prepared origins ramp C1 off the gate and pass the overshoot; quiet row menus leave the trigger at once.
     val geometryCurve = if (prepared) (if (spring) Curve.ramp(model.preparedRamp, model.rampBlend) else Curve.window(.25f, 1f))
         else if (quiet && !spring) Curve.window(.14f, 1f) else Curve.linear(0f, 1f)
-    /** The largest reachable edge overshoot as a fraction of edge travel (§1.7): the geometry at the phase peak 1 + κ, so a
-     * prepared ramp's gain is included. 0 for Legacy. */
-    val overshoot = if (spring) geometryCurve.at(1f + springOvershoot(model.open.zeta.toDouble()).toFloat()) - 1f else 0f
     val popupCurve = if (prepared) geometryCurve else Curve.linear(0f, 1f)
     val quietStrength=Curve.window(0f,.14f)
     val quietContent=Curve.window(0f,.25f)
