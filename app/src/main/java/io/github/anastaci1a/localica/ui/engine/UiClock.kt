@@ -10,9 +10,10 @@ import kotlinx.coroutines.channels.Channel
 @Immutable class FrameStamp internal constructor(val nanos: Long,val sequence: Long) { fun secondsSince(other: FrameStamp)=(nanos-other.nanos)/1e9f }
 /** [onFrame] runs inside the frame callback, so state it writes is read by that same frame's composition, layout and draw. */
 interface FrameSource { suspend fun awaitFrame(): Long; suspend fun <R> awaitFrame(onFrame: (Long)->R): R=onFrame(awaitFrame())
-    /** #854 F-I5-2: the presentation receipt of a frame of [window] drawn after this call. A virtual source (fixtures, FixtureTime)
-     * presents with its next frame; the production source waits for the window's frame metrics, delivered after RenderThread work. */
-    suspend fun awaitPresented(window: android.view.Window) { awaitFrame() } }
+    /** #854 F-I5-2: the presentation receipt of a frame of [window] drawn after this call, returning when that frame COMPLETED, in this
+     * source's time base. A virtual source (fixtures, FixtureTime) presents with its next frame, at that frame's time; the production
+     * source waits for the window's frame metrics, delivered after RenderThread work. */
+    suspend fun awaitPresented(window: android.view.Window): Long=awaitFrame() }
 internal interface ActiveMotion { val id: Long; val presented: Boolean; val settled: Boolean; val reducesWithAccess: Boolean get()=true; fun frame(stamp: FrameStamp) {}; fun endsAt(stamp: FrameStamp): Boolean; fun finish(stamp: FrameStamp); fun reduce(stamp: FrameStamp) }
 internal fun interface FrameObserver { fun onFrame(stamp: FrameStamp,active: List<ActiveMotion>) }
 /** [speed] is the #860 animation speed s: engine laws run with the time scale sigma = 1/s, springs with omega·s. */
@@ -33,6 +34,11 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     internal val presentedStamp: FrameStamp get()=last
     internal val isObserving: Boolean get()=observing
     internal suspend fun awaitPresented(window: android.view.Window)=source.awaitPresented(window)
+    /** #854 F-I5-2: an opening begins when its first admitted frame was presented, not when the receipt was delivered, clamped so it is
+     * never before [admitted] or this clock's last presented frame and never after now; the first acknowledged frame's catch-up is then
+     * at most the frames the engine already stepped while waiting. */
+    internal fun beginStamp(presentedNanos: Long,admitted: FrameStamp): FrameStamp { val now=stampNow
+        return FrameStamp(presentedNanos.coerceIn(maxOf(admitted.nanos,last.nanos),now.nanos),now.sequence) }
     internal fun checkMutation() { checkOwner(); check(!observing) { "An observer cannot drive presentation" } }
     internal fun allocateId(): Long { checkMutation(); return ++nextId }
     internal fun register(motion: ActiveMotion) { checkMutation(); if(active.add(motion)) wake.trySend(Unit) }
@@ -58,7 +64,8 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     val base=remember { FrameBase() }
     val clock=inherited?:remember { UiClock(object: FrameSource { override suspend fun awaitFrame()=awaitFrame { it }
         override suspend fun <R> awaitFrame(onFrame: (Long)->R)=withFrameNanos { base.frame(it); onFrame(it) }
-        override suspend fun awaitPresented(window: android.view.Window)=presentedFrame(window) },base::now) }
+        // A virtual frame clock (app-root tests without FixtureTime) has no System.nanoTime base: present at its own now instead.
+        override suspend fun awaitPresented(window: android.view.Window)=presentedFrame(window).let { if(base.realTime) it else base.now() } },base::now) }
     if(inherited==null) LaunchedEffect(clock) { withFrameNanos { base.frame(it) }; clock.run() }
     CompositionLocalProvider(LocalClockOwner provides clock,LocalUiClock provides clock,content=content)
 }
@@ -68,15 +75,17 @@ internal class ReceiptRelease(private val remove: ()->Unit) {
     var released=false; private set
     fun release() { if(released) return; released=true; runCatching(remove) }
 }
-/** One frame of [window] whose intended vsync follows this call has finished its RenderThread work (frame metrics, API 24+). */
-private suspend fun presentedFrame(window: android.view.Window)=kotlinx.coroutines.suspendCancellableCoroutine<Unit> { presented ->
+/** One frame of [window] whose intended vsync follows this call has finished its RenderThread work (frame metrics, API 24+); returns
+ * its completion in System.nanoTime: intended vsync plus total duration (FrameMetrics has no public completion stamp). */
+private suspend fun presentedFrame(window: android.view.Window)=kotlinx.coroutines.suspendCancellableCoroutine<Long> { presented ->
     val since=System.nanoTime(); val main=android.os.Handler(Looper.getMainLooper())
     lateinit var receipt: ReceiptRelease
     val listener=object: android.view.Window.OnFrameMetricsAvailableListener {
         override fun onFrameMetricsAvailable(source: android.view.Window,metrics: android.view.FrameMetrics,dropped: Int) {
             if(receipt.released || metrics.getMetric(android.view.FrameMetrics.INTENDED_VSYNC_TIMESTAMP)<since) return
             receipt.release()
-            if(presented.isActive) presented.resumeWith(Result.success(Unit))
+            val completed=metrics.getMetric(android.view.FrameMetrics.INTENDED_VSYNC_TIMESTAMP)+metrics.getMetric(android.view.FrameMetrics.TOTAL_DURATION)
+            if(presented.isActive) presented.resumeWith(Result.success(completed))
         }
     }
     receipt=ReceiptRelease { window.removeOnFrameMetricsAvailableListener(listener) }
@@ -91,4 +100,6 @@ private suspend fun presentedFrame(window: android.view.Window)=kotlinx.coroutin
  * intents at its last frame. Before the first frame nothing is presented, so no presented frame can precede the origin. */
 internal class FrameBase(private val system: ()->Long=System::nanoTime) { private var offset: Long?=null; private var frame=Long.MIN_VALUE/4; private var latest=Long.MIN_VALUE/4
     fun frame(nanos: Long) { frame=nanos; offset=nanos-system() }
+    /** Frames arrive on System.nanoTime (a real Choreographer), not a virtual test clock. */
+    val realTime: Boolean get()=offset?.let { kotlin.math.abs(it)<1_000_000_000L }==true
     fun now(): Long=maxOf(latest,offset?.let { if(kotlin.math.abs(it)<1_000_000_000L) system() else frame }?:latest).also { latest=it } }

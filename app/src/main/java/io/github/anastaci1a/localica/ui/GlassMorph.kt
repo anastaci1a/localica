@@ -577,6 +577,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             snapshotFlow { motion.expansion.awaitingNativeGate || motion.expansion.retirementReady }.first { it }
             if (motion.expansion.awaitingNativeGate) {
                 val generation = motion.expansion.nativeGeneration
+                var openingBegin: io.github.anastaci1a.localica.ui.engine.FrameStamp? = null
                 val opening = requireNotNull(motion.expansion.nativeOpening)
                 suspend fun gateCurrent() = motion.expansion.awaitNativeGate(generation, opening)
                 if (motion.expansion.nativeOpening == true && visible) {
@@ -614,11 +615,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     // #854 F-I5-2: the opening begins on the presentation receipt of the first admitted frame (phase 0, at the trigger),
                     // not when admission was recorded. Bounded: a stale gate (reversal) ends it at once; a window detached before the wait
                     // skips it; one that detaches during it presents no frame and is released by the six-frame allowance.
+                    // It begins at that frame's completion (clamped), so waiting for the receipt adds no latency of its own.
+                    val clock = motion.expansion.ownerClock
+                    val admittedAt = clock.stampNow
                     if (window.decorView.isAttachedToWindow) withinNativeDeadline {
                         coroutineScope {
-                            val presented = async { motion.expansion.ownerClock.awaitPresented(window) }
+                            val presented = async { clock.awaitPresented(window) }
                             val stale = async { snapshotFlow { !motion.expansion.nativeGateCurrent(generation, true) }.first { it } }
-                            select<Unit> { presented.onAwait { }; stale.onAwait { } }
+                            select<Unit> { presented.onAwait { openingBegin = clock.beginStamp(it, admittedAt) }; stale.onAwait { } }
                             presented.cancel(); stale.cancel()
                         }
                     }
@@ -671,7 +675,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     anchor.shadowInModal = false
                 }
                 if (!gateCurrent()) continue@gateLoop
-                motion.expansion.acknowledgeNativeGate(generation)
+                motion.expansion.acknowledgeNativeGate(generation, openingBegin)
             } else {
                 if (!visible) {
                     if (placement == GlassPlacement.Search) anchor.searchSlot.settle(searchSlotToken, 0f)

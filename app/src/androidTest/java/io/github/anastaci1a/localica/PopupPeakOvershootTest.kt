@@ -156,7 +156,35 @@ abstract class PopupPeakOvershootTest(private val landscape: Boolean) {
         assertTrue("a presented progress step exceeds 0.35: $steps", steps.all { it <= .35f })
         } finally { slowPresentation.complete(Unit); FixtureTime.presentation = null }
     }
+    /** #854 F-I5-2 (lead: reopen latency at most +1 frame): a warm reopen's first non-zero frame is at most one frame later than at
+     * 31046ed94, before the receipt existed. The spring begins at the presented frame's completion, not at the receipt's delivery. */
+    @Test fun aWarmReopenStartsWithinOneFrameOfTheUngatedOpening() {
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        compose.setContent { LocalicaTheme {
+            anchor = rememberGlassAnchor()
+            val view = LocalView.current; val density = LocalDensity.current
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.offset { IntOffset(view.width / 2 - 60, view.height - 220) }.size(with(density) { 120.toDp() }, with(density) { 64.toDp() })
+                    .testTag("trigger").glassAnchor(anchor).clickable { open = true })
+                GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center) { Box(Modifier.fillMaxWidth().height(400.dp)) }
+            }
+        } }
+        compose.waitForIdle()
+        compose.onNodeWithTag("trigger").performClick(); compose.waitForIdle()
+        compose.runOnIdle { open = false }; compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("trigger").performClick()
+        var frames = 0
+        while (compose.runOnIdle { anchor.contact.expansion.value } <= 0f && frames < 120) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); frames++ }
+        compose.mainClock.autoAdvance = true
+        Log.i("PopupPeakOvershoot", "warm-reopen framesToFirstMotion=$frames")
+        assertTrue("first motion within $ReopenBaselineFrames + 1 frames (was $frames)", frames <= ReopenBaselineFrames + 1)
+    }
 }
+
+/** Frames from the reopen click to the first non-zero expansion at 31046ed94, measured with this test on the A35 (both orientations: 3). */
+private const val ReopenBaselineFrames = 3
 
 class PopupPeakOvershootPortraitTest : PopupPeakOvershootTest(landscape = false)
 class PopupPeakOvershootLandscapeTest : PopupPeakOvershootTest(landscape = true)

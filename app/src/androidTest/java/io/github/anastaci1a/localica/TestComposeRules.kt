@@ -36,7 +36,7 @@ internal object FixtureTime {
         val clock = remember { nanos?.let { now -> UiClock(object : FrameSource {
             override suspend fun awaitFrame() = withFrameNanos { it }
             override suspend fun <R> awaitFrame(onFrame: (Long) -> R) = withFrameNanos(onFrame)
-            override suspend fun awaitPresented(window: android.view.Window) { presentation?.await(); awaitFrame() }
+            override suspend fun awaitPresented(window: android.view.Window): Long { presentation?.await(); return awaitFrame() }
         }, now) } }
         if (clock == null) { content(); return }
         LaunchedEffect(clock) { clock.run() }
