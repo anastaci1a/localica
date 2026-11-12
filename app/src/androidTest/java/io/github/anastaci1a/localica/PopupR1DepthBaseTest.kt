@@ -189,10 +189,12 @@ class PopupR1DepthBaseTest {
             compose.runOnUiThread { leaving = false }
             var qualified = 0
             for (frame in 0 until 96) {
-                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                // Resolve the short opaque crossing at 4 ms virtual intervals; keep the same phase window.
+                compose.mainClock.advanceTimeBy(4, ignoreFrameDuration = true); compose.waitForIdle()
                 val attached = window.decorView.isAttachedToWindow
                 val candidatePhase = r1CandidateFlightPhase(flight)
-                phaseControl.put(JSONObject().put("frame", frame).put("geometryPhase", popupPhase)
+                phaseControl.put(JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
+                    .put("stepMs", 4).put("geometryPhase", popupPhase)
                     .put("flightPhase", candidatePhase ?: JSONObject.NULL).put("prepared", flight.prepared)
                     .put("attached", attached).put("triggerHidden", fixtureAnchor.hidden)
                     .put("geometrySelected", attached && flight.prepared && popupPhase in .1f.. .8f)
@@ -238,7 +240,8 @@ class PopupR1DepthBaseTest {
                             if (channels.maxOf { abs(it(expected) - it(actual)) } > 14) bad++
                             sampled++
                         }
-                    receipts.put(JSONObject().put("frame", frame).put("phase", phase).put("pixels", sampled).put("changed", bad)
+                    receipts.put(JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
+                        .put("phase", phase).put("phaseBits", phase.toRawBits()).put("pixels", sampled).put("changed", bad)
                         .put("baseSourcePixels", sourcePixels).put("baseSourceChanged", sourceChanged))
                     File(output, "frames.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
                         .put("renderer", mode.name).put("samples", receipts).toString(2))
