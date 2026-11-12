@@ -240,7 +240,7 @@ test('obsolete argument permissions cannot widen callers',()=>{
 });
 
 test('motion providers permit every operator only at the exact shared ingress',()=>{
- for(const [local,owner] of [['LocalUiSpec','LocalicaUiRoot'],['LocalReducedMotion','LocalicaScreen'],['LocalMotionSpeed','LocalicaScreen'],['LocalEngineContext','layout/LocalicaEngineRoot'],['LocalUiClock','engine/UiClock'],['LocalClockOwner','engine/UiClock']]) {
+ for(const [local,owner] of [['LocalUiSpec','LocalicaUiRoot'],['LocalReducedMotion','LocalicaScreen'],['LocalMotionSpeed','LocalicaScreen'],['LocalEngineContext','layout/LocalicaEngineRoot'],['LocalUiClock','engine/UiClock'],['LocalClockOwner','engine/UiClock'],['LocalPopupKind','GlassMorph'],['LocalRespectSystemAnimationScale','LocalicaScreen']]) {
   for(const op of ['provides','providesDefault','providesComputed'])for(const dot of [false,true]) {
    const expression=dot?local+'.'+op+'(value)':local+' '+op+' value';
    const source='fun f() { CompositionLocalProvider('+expression+') {} }';
@@ -311,4 +311,29 @@ test('popup return reference binds the captured home to native presenters',()=>{
   'Box(Modifier.fillMaxSize().glassPopupHome(home)) { content(); chrome() }');
  assert.notEqual(missing,source);
  assert.throws(()=>requireHome(missing),/captured home must be provided/);
+});
+test('#854: only the motion spec and the motion owners name popup kinds',()=>{
+ const spec='app/src/main/java/io/github/anastaci1a/localica/ui/spec/UiSpec.kt';
+ for(const body of ['val m=mapOf(PopupKind.Menu to 1)','val all=PopupKind.entries','import io.github.anastaci1a.localica.ui.spec.PopupKind as K\nval k=K.BottomMenu','val k=io.github.anastaci1a.localica.ui.spec.PopupKind.Dialog']) {
+  assert.deepEqual(checkPopupSource(spec,body),[],body);
+  for(const caller of ['Screen','LocalicaScreen','QueueScreen','FloatingSelectionPanel','LocalicaUiRoot','InterfaceMotion','UiSpec','layout/UiSpec','engine/UiSpec','spec/UiSpecs'])
+   assert.ok(checkPopupSource(screen.replace('Screen.kt',caller+'.kt'),body).some(i=>i.rule==='ScreenPopupMotion'),caller+': '+body);
+ }
+ assert.ok(rules('import io.github.anastaci1a.localica.ui.spec.PopupKind\nfun f() {}').has('ScreenPopupMotion'));
+ // The pin admits kind names only: the spec stays a non-owner for every other motion check.
+ for(const body of ['fun f() { rememberPopupMotion(key) }','fun f() { GlassMenu(open, anchor, {}, motionKind = k) {} }','fun f() { rememberFaceExpansion(open, law = { it.expansion }) }',
+  'fun f() { CompositionLocalProvider(LocalPopupKind provides k) {} }','fun f() { CompositionLocalProvider(LocalRespectSystemAnimationScale provides false) {} }'])
+  assert.ok(checkPopupSource(spec,body).some(i=>i.rule==='ScreenPopupMotion'),body);
+});
+test('#854/#862: the popup kind and respected-scale locals have one provider each',()=>{
+ const glass=screen.replace('Screen.kt','GlassMorph.kt'),root=screen.replace('Screen.kt','LocalicaScreen.kt');
+ const kind='fun f() { CompositionLocalProvider(LocalPopupKind provides k) {} }',respect='fun f() { CompositionLocalProvider(LocalRespectSystemAnimationScale provides false) {} }';
+ assert.deepEqual(checkPopupSource(glass,kind),[]);assert.deepEqual(checkPopupSource(root,respect),[]);
+ assert.ok(checkPopupSource(root,kind).some(i=>i.rule==='ScreenPopupMotion'));
+ for(const caller of ['Screen','QueueScreen','BrowserScreen','PlayerSurface']) for(const body of [kind,respect,
+  'import io.github.anastaci1a.localica.ui.engine.LocalPopupKind as Kind\nfun f() { CompositionLocalProvider(Kind provides k) {} }',
+  'fun f() { val local=LocalRespectSystemAnimationScale; CompositionLocalProvider(local provides false) {} }',
+  'fun f() { CompositionLocalProvider(io.github.anastaci1a.localica.ui.engine.LocalPopupKind.provides(k)) {} }'])
+  assert.ok(checkPopupSource(screen.replace('Screen.kt',caller+'.kt'),body).some(i=>i.rule==='ScreenPopupMotion'),caller+': '+body);
+ assert.equal(rules('fun f() { println(LocalPopupKind.current); println(LocalRespectSystemAnimationScale.current) }').size,0);
 });
