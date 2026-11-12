@@ -83,4 +83,4 @@ internal class CompositorRecording(private val graphics: GraphicsContext) {
     }.then(contentModifier), content = content)
 }
 
-internal fun retainedFaceProgress(expansion: ExpansionView) = expansion.phase.value().coerceIn(0f, 1f)
+internal fun retainedFaceProgress(expansion: ExpansionView) = expansion.boundedProgress()

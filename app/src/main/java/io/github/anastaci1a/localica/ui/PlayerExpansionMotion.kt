@@ -17,8 +17,28 @@ internal fun playerLyricsMotion(expansion: Float, modeVisibility: Float): Player
     return PlayerLyricsMotion(mode * p, mode * PlayerReveal.Lyrics.at(p), 1f - mode * p)
 }
 
+internal data class PlayerTitleInputBand(val top: Int, val height: Int)
+
 internal data class PlayerRowMotion(val seekOffset: Float, val actionsOffset: Float,
-    val seekAlpha: Float, val actionsAlpha: Float)
+    val seekAlpha: Float, val actionsAlpha: Float) {
+    /** Metadata and transport always share ink; the optional rows join only while visible. */
+    val controlNames: List<String> get() = buildList {
+        add("title")
+        add("artist")
+        if (seekAlpha > 0f) add("seek")
+        if (actionsAlpha > 0f) add("actions")
+        add("transport")
+    }
+}
+
+/** Project the measured title band between the header and seek controls in player pixels. */
+internal fun playerTitleInputBand(titleTop: Int, seekTop: Int, headerBottom: Int, height: Int,
+    padding: Int): PlayerTitleInputBand {
+    val origin = titleTop - padding
+    val top = (headerBottom - origin).coerceIn(0, height)
+    val bottom = minOf(height, seekTop - padding - origin).coerceAtLeast(top)
+    return PlayerTitleInputBand(top, bottom - top)
+}
 
 /** Follow distinct mixtures of the unchanged title/transport displacement from their targets.
  * The common surface translation cancels out; neither reference path is redesigned.
