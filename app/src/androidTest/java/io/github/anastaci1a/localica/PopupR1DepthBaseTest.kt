@@ -72,6 +72,8 @@ class PopupR1DepthBaseTest {
         var output = File(outputRoot, "offset-0").apply { mkdirs() }
         var trial by mutableIntStateOf(0)
         lateinit var clock: io.github.anastaci1a.localica.ui.engine.UiClock
+        val fullReturnDiagnostic = InstrumentationRegistry.getArguments().getString("r1FullReturnDiagnostic") == "true"
+        val diagnosticPhases = mutableSetOf<Int>()
         val qualifiedPhases = mutableSetOf<Int>()
         val trials = JSONArray()
         lateinit var host: View
@@ -131,7 +133,7 @@ class PopupR1DepthBaseTest {
                     }
                 }
             } } }
-            for (offsetMs in listOf(0L, 4L, 8L, 12L)) {
+            for (offsetMs in if (fullReturnDiagnostic) listOf(0L) else listOf(0L, 4L, 8L, 12L)) {
                 if (offsetMs != 0L) {
                     baseScenePixels?.recycle(); baseScenePixels = null
                     compose.mainClock.autoAdvance = true
@@ -213,7 +215,7 @@ class PopupR1DepthBaseTest {
                     .also { leaving = false }
             }
             File(output, "start-offset.json").writeText(intent.toString(2))
-            for (frame in 0 until 96) {
+            for (frame in 0 until if (fullReturnDiagnostic) 512 else 96) {
                 // Resolve the short opaque crossing at 4 ms virtual intervals; keep the same phase window.
                 compose.mainClock.advanceTimeBy(4, ignoreFrameDuration = true); compose.waitForIdle()
                 val attached = window.decorView.isAttachedToWindow
@@ -228,13 +230,24 @@ class PopupR1DepthBaseTest {
                     .put("renderer", mode.name).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
                 if (!attached) break
                 val phase = popupPhase
-                if (phase !in .1f.. .8f || !flight.prepared) continue
+                val originalWindow = phase in .1f.. .8f
+                if ((!originalWindow && !(fullReturnDiagnostic && phase > 0f && phase < 1f)) || !flight.prepared) continue
+                if (fullReturnDiagnostic && !diagnosticPhases.add(phase.toRawBits())) continue
                 val modal = original(window, output, "return-$frame-popup")
                 val root = original(activity, output, "return-$frame-root")
                 val layer = r1InspectionBitmap(runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap(), output, "return-$frame-flight-layer")
                 val source = r1InspectionBitmap(runBlocking { requireNotNull(home.backdrop).layer.toImageBitmap() }.asAndroidBitmap(), output, "return-$frame-sampled-scene")
                 try {
-                    if (!flight.handedOff) continue
+                    if (fullReturnDiagnostic) {
+                        val diagnostic = JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
+                            .put("presentedNanos", compose.runOnUiThread { clock.stamp.nanos }).put("phase", phase)
+                            .put("originX", flight.origin.x).put("originY", flight.origin.y)
+                            .put("anchorBounds", fixtureAnchor.presentedBounds.toString())
+                            .put("handedOff", flight.handedOff).put("originalWindow", originalWindow)
+                        File(output, "return-$frame-motion.json").writeText(diagnostic.toString(2))
+                        File(output, "return-$frame-flight-layer.png").outputStream().use { assertTrue(layer.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+                    }
+                    if (!originalWindow || !flight.handedOff) continue
                     val hostAt = IntArray(2); val rootAt = IntArray(2)
                     compose.runOnUiThread { host.getLocationOnScreen(hostAt); activity.decorView.getLocationOnScreen(rootAt) }
                     File(output, "return-$frame-flight-layer.png").outputStream().use { assertTrue(layer.compress(Bitmap.CompressFormat.PNG, 100, it)) }
