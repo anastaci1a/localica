@@ -15,7 +15,7 @@ import kotlin.math.*
 class SpringReachabilityPropertyTest {
     private val chains = System.getenv("LOCALICA_T5_CHAINS")?.toIntOrNull() ?: DefaultChains
     private val kinds = listOf(PopupKind.Menu, PopupKind.RowMenu, PopupKind.BottomMenu, PopupKind.Dialog, PopupKind.SelectionPill)
-    private val autoModel = StockPopupMotion.copy(variants = StockPopupMotion.variants + (PopupKind.Menu to PopupVariant.Auto))
+    private val autoModel = StockPopupMotion.copy(variants = StockPopupMotion.variants + (PopupKind.Menu to PopupMotionVariant.Auto))
     private val kappa = springOvershoot(StockPopupMotion.open.zeta.toDouble())
     private val span = 4000f
 

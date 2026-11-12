@@ -11,7 +11,7 @@ private val IdentityCurve=Curve.linear(0f,1f)
 /** #854: a covered owner's spring model, its surface kind and the variant that kind selects. */
 /** #854 review S2: release builds record an unproven spring extremum here instead of throwing (U05 "validate, never clamp"). */
 internal object SpringBandTelemetry { @Volatile var violations=0L; @Volatile var last: String?=null; @Volatile var strict: Boolean=BuildConfig.DEBUG }
-internal data class ResolvedPopupLaw(val model: PopupMotionModel,val kind: PopupKind,val variant: PopupVariant)
+internal data class ResolvedPopupLaw(val model: PopupMotionModel,val kind: PopupKind,val variant: PopupMotionVariant)
 private fun coordinates(r: Rect)=doubleArrayOf(r.left.toDouble(),r.top.toDouble(),r.right.toDouble(),r.bottom.toDouble())
 @Immutable data class ExpansionBasis(val startBounds: Rect,val endBounds: Rect,val density: Float,val durationTravelPx: Float?=null) {
     private val start=coordinates(startBounds); private val end=coordinates(endBounds); private val deltas=DoubleArray(4) { end[it]-start[it] }; val edgeIndex: Int; val edgeTravelPx: Float
@@ -60,8 +60,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     private var flightSigma=1.0
     internal fun usePopupLaw(model: PopupMotionModel,kind: PopupKind) {
         clock.checkMutation(); check(!disposed); val variant=model.variant(kind)
-        popupLaw=if(variant==PopupVariant.Legacy) null else ResolvedPopupLaw(model,kind,variant)
-        if(cross==null && variant in setOf(PopupVariant.CrossAxisSnap,PopupVariant.Auto)) cross=MotionFloat(clock,motion.rawValue(clock.stampNow).toFloat(),1f,key=key to "cross").also { it.onRest={ notifyLifecycle() } }
+        popupLaw=if(variant==PopupMotionVariant.Legacy) null else ResolvedPopupLaw(model,kind,variant)
+        if(cross==null && variant in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto)) cross=MotionFloat(clock,motion.rawValue(clock.stampNow).toFloat(),1f,key=key to "cross").also { it.onRest={ notifyLifecycle() } }
     }
     private fun timeScale()=contact?.let { it.timeScale?:rootTimeScale() }?:localTimeScale?:rootTimeScale()
     private var held by mutableStateOf(false)
@@ -169,8 +169,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     /** #854 §1.6: the cross-axis edges that follow the snap phase for [b], by the declared variant or the aspect rule; none without cross travel. */
     private fun snapEdges(law: ResolvedPopupLaw,b: ExpansionBasis): BooleanArray {
         if(cross==null) return BooleanArray(4); val mainX=b.edgeIndex%2==0; val crossEdges=if(mainX) intArrayOf(1,3) else intArrayOf(0,2)
-        val snaps=crossEdges.any { b.delta(it)!=0.0 } && when(law.variant) { PopupVariant.CrossAxisSnap -> true
-            PopupVariant.Auto -> { val main=if(mainX) b.endBounds.width else b.endBounds.height; val other=if(mainX) b.endBounds.height else b.endBounds.width; main>0f && other/main>law.model.snapAspect }
+        val snaps=crossEdges.any { b.delta(it)!=0.0 } && when(law.variant) { PopupMotionVariant.CrossAxisSnap -> true
+            PopupMotionVariant.Auto -> { val main=if(mainX) b.endBounds.width else b.endBounds.height; val other=if(mainX) b.endBounds.height else b.endBounds.width; main>0f && other/main>law.model.snapAspect }
             else -> false }
         return BooleanArray(4) { snaps && it in crossEdges }
     }

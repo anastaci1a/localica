@@ -21,7 +21,7 @@ class SelectionPillSpringTest {
             val motion = PopupMotion(h.clock, spec.expansion, "pill-$hz-$s", initial = true, kind = PopupKind.SelectionPill)
             motion.place(basis)
             val e = motion.expansion; val rect = requireNotNull(motion.bounds)
-            assertEquals(PopupVariant.Base, e.popupLaw?.variant)
+            assertEquals(PopupMotionVariant.Base, e.popupLaw?.variant)
             assertEquals(PopupKind.SelectionPill, e.popupLaw?.kind)
             val start = edgesOf(minimised); val end = edgesOf(expandedPanel)
             fun fly(name: String, x: Double, q: Double, law: SpringLaw) {
@@ -43,7 +43,7 @@ class SelectionPillSpringTest {
             motion.show(false); fly("minimise", 1.0, 0.0, model.law(PopupKind.SelectionPill, PopupDirection.Close, false))
             // Restore: 0 toward 1 on the open law.
             motion.show(true); fly("restore", 0.0, 1.0, model.law(PopupKind.SelectionPill, PopupDirection.Open, false))
-            assertEquals("The pill keeps its basis table kind", model.variant(PopupKind.SelectionPill), PopupVariant.Base)
+            assertEquals("The pill keeps its basis table kind", model.variant(PopupKind.SelectionPill), PopupMotionVariant.Base)
             e.dispose()
         }
     }
