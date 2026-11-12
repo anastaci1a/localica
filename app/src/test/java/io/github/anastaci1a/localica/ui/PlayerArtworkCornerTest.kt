@@ -1,5 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.PlayerArtworkTrajectorySample
+import io.github.anastaci1a.localica.ui.components.PlayerArtworkGrowthCurve
+import io.github.anastaci1a.localica.ui.components.playerArtworkGrowthCurve
+import io.github.anastaci1a.localica.ui.components.playerArtworkSizeProgress
 import org.junit.Assert.*
 import org.junit.Test
 

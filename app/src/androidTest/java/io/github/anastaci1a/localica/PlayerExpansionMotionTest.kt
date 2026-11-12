@@ -22,6 +22,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
+import io.github.anastaci1a.localica.ui.components.PlayerArtworkGrowthPresentation
+import io.github.anastaci1a.localica.ui.components.LocalPlayerArtworkGrowthObserver
+import io.github.anastaci1a.localica.ui.components.playerArtworkSizeProgress
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart

@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.playerArtworkClearance
+import io.github.anastaci1a.localica.ui.components.playerArtworkContentScale
 import android.graphics.Bitmap
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset

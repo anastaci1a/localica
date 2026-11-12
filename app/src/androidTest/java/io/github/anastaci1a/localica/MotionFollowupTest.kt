@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.PlayerArtworkGrowthPresentation
+import io.github.anastaci1a.localica.ui.components.LocalPlayerArtworkGrowthObserver
+import io.github.anastaci1a.localica.ui.components.playerArtworkSizeProgress
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*

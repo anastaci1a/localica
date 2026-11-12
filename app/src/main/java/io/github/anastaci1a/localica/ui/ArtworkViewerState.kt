@@ -1,5 +1,12 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.ArtworkMaximumZoom
+import io.github.anastaci1a.localica.ui.components.ArtworkTransform
+import io.github.anastaci1a.localica.ui.components.fittedArtworkSize
+import io.github.anastaci1a.localica.ui.components.artworkPanBounds
+import io.github.anastaci1a.localica.ui.components.transformArtwork
+import io.github.anastaci1a.localica.ui.components.ArtworkPanMotion
+import io.github.anastaci1a.localica.ui.components.advanceArtworkPan
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable

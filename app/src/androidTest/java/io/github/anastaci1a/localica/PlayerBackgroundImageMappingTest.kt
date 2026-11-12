@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.playerArtworkContentScale
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background

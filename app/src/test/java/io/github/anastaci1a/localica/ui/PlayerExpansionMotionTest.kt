@@ -1,5 +1,16 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.playerLyricsMotion
+import io.github.anastaci1a.localica.ui.components.PlayerRowMotion
+import io.github.anastaci1a.localica.ui.components.playerRowMotion
+import io.github.anastaci1a.localica.ui.components.PlayerLyricsViewport
+import io.github.anastaci1a.localica.ui.components.playerLyricsViewport
+import io.github.anastaci1a.localica.ui.components.playerArtworkClearance
+import io.github.anastaci1a.localica.ui.components.PlayerArtworkTrajectorySample
+import io.github.anastaci1a.localica.ui.components.PlayerArtworkGrowthCurve
+import io.github.anastaci1a.localica.ui.components.playerArtworkGrowthCurve
+import io.github.anastaci1a.localica.ui.components.playerArtworkSizeProgress
+import io.github.anastaci1a.localica.ui.components.playerArtworkContentScale
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import org.junit.Assert.*

@@ -1,5 +1,12 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.ArtworkTransform
+import io.github.anastaci1a.localica.ui.components.fittedArtworkSize
+import io.github.anastaci1a.localica.ui.components.ArtworkPanBounds
+import io.github.anastaci1a.localica.ui.components.artworkPanBounds
+import io.github.anastaci1a.localica.ui.components.transformArtwork
+import io.github.anastaci1a.localica.ui.components.ArtworkPanMotion
+import io.github.anastaci1a.localica.ui.components.advanceArtworkPan
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import org.junit.Assert.*

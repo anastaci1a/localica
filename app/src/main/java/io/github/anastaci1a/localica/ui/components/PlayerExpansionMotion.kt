@@ -1,4 +1,4 @@
-package io.github.anastaci1a.localica.ui
+package io.github.anastaci1a.localica.ui.components
 
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale

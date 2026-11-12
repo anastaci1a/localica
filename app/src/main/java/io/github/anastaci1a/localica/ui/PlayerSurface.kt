@@ -1,5 +1,15 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.playerLyricsMotion
+import io.github.anastaci1a.localica.ui.components.playerRowMotion
+import io.github.anastaci1a.localica.ui.components.playerLyricsViewport
+import io.github.anastaci1a.localica.ui.components.playerArtworkClearance
+import io.github.anastaci1a.localica.ui.components.PlayerArtworkTrajectorySample
+import io.github.anastaci1a.localica.ui.components.PlayerArtworkGrowthPresentation
+import io.github.anastaci1a.localica.ui.components.LocalPlayerArtworkGrowthObserver
+import io.github.anastaci1a.localica.ui.components.playerArtworkGrowthCurve
+import io.github.anastaci1a.localica.ui.components.playerArtworkSizeProgress
+import io.github.anastaci1a.localica.ui.components.playerArtworkContentScale
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 
 import androidx.compose.animation.core.tween

@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
 import java.io.File
+import io.github.anastaci1a.localica.ui.components.ArtworkTransform
+import io.github.anastaci1a.localica.ui.components.artworkPanBounds
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule

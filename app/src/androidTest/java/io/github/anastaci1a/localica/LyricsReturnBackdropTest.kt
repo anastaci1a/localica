@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.components.playerLyricsViewport
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.SystemClock

@@ -13,6 +13,7 @@ import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.lyrics.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
+import io.github.anastaci1a.localica.ui.components.playerLyricsViewport
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.launch
 import org.junit.Assert.*
