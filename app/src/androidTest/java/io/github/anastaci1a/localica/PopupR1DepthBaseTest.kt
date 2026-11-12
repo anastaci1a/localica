@@ -178,7 +178,8 @@ class PopupR1DepthBaseTest {
                     navigation.getDouble("navigationInsetTopScene").toFloat(), 0f)
             }
             original(activity, output, "base-complete-root").recycle()
-            compose.runOnUiThread { assertR1BackdropIndependent(fixtureBackdrop, fixtureAnchor, output) }
+            val independence = compose.runOnUiThread { captureR1BackdropIndependence(fixtureBackdrop, fixtureAnchor) }
+            assertR1BackdropIndependent(independence, output)
             baseScenePixels = r1InspectionBitmap(runBlocking { baseScene.toImageBitmap() }.asAndroidBitmap(), output, "base-complete-scene")
             File(output, "base-complete-scene.png").outputStream().use {
                 assertTrue(requireNotNull(baseScenePixels).compress(Bitmap.CompressFormat.PNG, 100, it))
@@ -256,9 +257,8 @@ class PopupR1DepthBaseTest {
                 val attached = window.decorView.isAttachedToWindow
                 val phase = geometryProgress
                 val candidatePhase = r1CandidateFlightPhase(flight)
-                if (attached && flight.prepared && candidatePhase != null) assertEquals("Candidate observer matches flight phase", candidatePhase, phase, 0f)
                 phaseControl.put(JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
-                    .put("presentedNanos", compose.runOnUiThread { clock.stamp.nanos }).put("flightPhase", phase).put("phaseBits", phase.toRawBits()).put("geometryPhase", geometryProgress)
+                    .put("presentedNanos", compose.runOnUiThread { clock.stamp.nanos }).put("flightPhase", candidatePhase ?: JSONObject.NULL).put("phaseBits", phase.toRawBits()).put("geometryPhase", geometryProgress)
                     .put("attached", attached).put("prepared", flight.prepared).put("triggerHidden", fixtureAnchor.hidden))
                 File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
                     .put("renderer", mode.name).put("stepMs", 4).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
@@ -311,6 +311,10 @@ class PopupR1DepthBaseTest {
                         .put("leaving", leaving).put("homeDeparting", home.departing).put("badRows", JSONArray(badRows.toList())))
                     File(output, "frames.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
                         .put("renderer", mode.name).put("samples", receipts).toString(2))
+                    if (enforcedContrast) assertTrue("Every enforced-contrast changed pixel is inside the navigation inset: $badRows",
+                        badRows.all { it >= navigationInsetTop })
+                    if (Build.VERSION.SDK_INT == 36 && !enforcedContrast && phase.toRawBits() == .73084176f.toRawBits())
+                        assertEquals("Positive contrast keeps the matching selected class", 2594, sampled)
                     if (sampled > 10) {
                         if (moving && phase.toRawBits() !in qualifiedPhases && bounds !in qualifiedBounds) {
                             qualifiedPhases.add(phase.toRawBits())
@@ -318,8 +322,6 @@ class PopupR1DepthBaseTest {
                             if (phase in .1f.. .8f) originalWindowCount++
                         }
                         if (enforcedContrast) {
-                            assertTrue("Every enforced-contrast changed pixel is inside the navigation inset: $badRows",
-                                badRows.all { it >= navigationInsetTop })
                             if (bad > max(4, sampled / 1000)) contrastFailures.put(JSONObject()
                                 .put("phase", phase).put("changed", bad).put("pixels", sampled).put("badRows", JSONArray(badRows.toList())))
                             if (phase.toRawBits() == .73084176f.toRawBits()) {

@@ -8,12 +8,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import java.io.File
 
-/** Check the real placed source/consumer relationship, not a declared source label. */
-internal fun assertR1BackdropIndependent(backdrop: FrostedBackdrop, consumer: GlassAnchor, output: File) {
+internal data class R1BackdropIndependence(val containsConsumer: Boolean, val parents: Int,
+    val sourceAttached: Boolean, val consumerAttached: Boolean)
+
+/** Read the actual placed ancestry on Main; return immutable evidence without file I/O. */
+internal fun captureR1BackdropIndependence(backdrop: FrostedBackdrop, consumer: GlassAnchor): R1BackdropIndependence {
     val source = requireNotNull(backdrop.location.coordinates)
     val target = requireNotNull(consumer.samplingLocation.coordinates)
-    assertTrue("R1 backdrop source is attached", source.isAttached)
-    assertTrue("R1 backdrop consumer is attached", target.isAttached)
     var cursor: LayoutCoordinates? = target
     var containsConsumer = false
     var parents = 0
@@ -22,8 +23,15 @@ internal fun assertR1BackdropIndependent(backdrop: FrostedBackdrop, consumer: Gl
         parents++
         cursor = cursor.parentCoordinates
     }
+    return R1BackdropIndependence(containsConsumer, parents, source.isAttached, target.isAttached)
+}
+
+/** Serialize and assert on the instrumentation thread, after the Main snapshot returns. */
+internal fun assertR1BackdropIndependent(evidence: R1BackdropIndependence, output: File) {
+    assertTrue("R1 backdrop source is attached", evidence.sourceAttached)
+    assertTrue("R1 backdrop consumer is attached", evidence.consumerAttached)
     File(output, "backdrop-independence.json").writeText(JSONObject()
-        .put("backdropContainsConsumer", containsConsumer).put("parentCoordinatesVisited", parents)
-        .put("sourceAttached", source.isAttached).put("consumerAttached", target.isAttached).toString(2))
-    assertFalse("R1 backdrop recording must not contain its glass consumer", containsConsumer)
+        .put("backdropContainsConsumer", evidence.containsConsumer).put("parentCoordinatesVisited", evidence.parents)
+        .put("sourceAttached", evidence.sourceAttached).put("consumerAttached", evidence.consumerAttached).toString(2))
+    assertFalse("R1 backdrop recording must not contain its glass consumer", evidence.containsConsumer)
 }
