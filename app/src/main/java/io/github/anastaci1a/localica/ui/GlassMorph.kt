@@ -55,7 +55,10 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.job
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
@@ -607,6 +610,18 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     if (continuousOrigin == null) {
                         window.glassInput(true); gestures.activate()
                     }
+                    // #854 F-I5-2: the opening begins on the presentation receipt of the first admitted frame (phase 0, at the trigger),
+                    // not when admission was recorded. Bounded: a stale gate (reversal) ends it at once; a window detached before the wait
+                    // skips it; one that detaches during it presents no frame and is released by the six-frame allowance.
+                    if (window.decorView.isAttachedToWindow) withinNativeDeadline {
+                        coroutineScope {
+                            val presented = async { motion.expansion.ownerClock.awaitPresented(window) }
+                            val stale = async { snapshotFlow { !motion.expansion.nativeGateCurrent(generation, true) }.first { it } }
+                            select<Unit> { presented.onAwait { }; stale.onAwait { } }
+                            presented.cancel(); stale.cancel()
+                        }
+                    }
+                    if (!gateCurrent()) continue@gateLoop
                 } else if (motion.expansion.nativeOpening == false && visible && continuousOrigin == null &&
                     anchor.hidden && anchor.modalPresent && modalWindow != null && modalWindow === readyWindow) {
                     // A reopen reclaimed this window at its return gate (#858). Pass the gate
