@@ -130,14 +130,17 @@ class PopupBrowseReturnReferenceTest {
                     rows.put(JSONObject().put("frame", frame).put("phase", progress)
                         .put("phaseBits", progress.toRawBits()).put("layer", name)
                         .put("originX", flight.origin.x).put("originY", flight.origin.y)
-                        .put("width", image.width).put("height", image.height).put("projected", flight.wasProjected))
+                        .put("width", image.width).put("height", image.height)
+                        .put("handedOff", flight.handedOff).put("projected", flight.wasProjected))
                     save()
                     count++; highest = maxOf(highest, progress); lowest = minOf(lowest, progress)
                 } finally { image.recycle() }
             }
             report.put("highestPhase", highest).put("lowestPhase", lowest).put("status", "captured"); save()
             assertTrue("R1 reference covers the non-chrome departure", count >= 3 && highest >= .6f && lowest <= .2f)
-            assertTrue("R1 reference captures an actual projected return", flight.wasProjected)
+            assertTrue("R1 reference captures an actual projected return", (0 until rows.length()).any { index ->
+                rows.getJSONObject(index).getBoolean("handedOff") && rows.getJSONObject(index).getBoolean("projected")
+            })
         } finally { compose.mainClock.autoAdvance = true; preferences.write(previous) }
     }
 }
