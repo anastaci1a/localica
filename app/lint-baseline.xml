@@ -7330,12 +7330,12 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="    if (chrome == null) Box(host.glassPopupHome(home)) {"
-        errorLine2="                        ~~~">
+        errorLine1="            if (chrome == null) Box(host.glassPopupHome(home)) { content() }"
+        errorLine2="                                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="NaN"
-            column="25"/>
+            line="140"
+            column="33"/>
     </issue>
 
     <issue
