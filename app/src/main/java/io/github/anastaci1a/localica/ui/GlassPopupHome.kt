@@ -103,7 +103,7 @@ internal fun Modifier.glassPopupHome(home: GlassPopupHome, aboveChrome: Boolean?
     }.then(recording)
 }
 
-private const val ChromeReturnDepthHandoff = .9f
+private const val ChromeReturnDepthHandoff = 1f
 
 private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: Boolean? = null) {
     home.flights.forEach { flight ->
