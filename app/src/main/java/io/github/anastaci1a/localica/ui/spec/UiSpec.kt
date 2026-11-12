@@ -164,21 +164,23 @@ internal fun popupMotionAdmission(m: PopupMotionModel): List<String> {
     if(PopupKind.entries.any { it !in m.variants } || m.variants[PopupKind.Legacy]!=PopupMotionVariant.Legacy || m.variants.any { (k,v) -> k!=PopupKind.Legacy && v==PopupMotionVariant.Legacy }) errors+="variants"
     return errors
 }
-/** The analytic state of a damped spring from (x, v) toward q after t seconds. */
-internal fun springState(x: Double,v: Double,q: Double,w: Double,z: Double,t: Double): Pair<Double,Double> {
-    val o=x-q; val a=z*w
-    return when { z<1 -> { val wd=w*sqrt(1-z*z); val c=(v+a*o)/wd; val e=exp(-a*t); q+e*(o*cos(wd*t)+c*sin(wd*t)) to e*(v*cos(wd*t)-(a*c+o*wd)*sin(wd*t)) }
-        z==1.0 -> { val e=exp(-w*t); q+e*(o+(v+w*o)*t) to e*(v-w*(v+w*o)*t) }
-        else -> { val r=sqrt(z*z-1); val s=w*(z-r); val f=w*(z+r); val b=-(v+s*o)/(f-s); val A=o-b; q+A*exp(-s*t)+b*exp(-f*t) to -s*A*exp(-s*t)-f*b*exp(-f*t) } }
+/** #854 (rule 12): the one closed-form damped spring. The engine's Damped flies it and the admission below composes it (the spec
+ * layer cannot depend on the engine). Overdamped laws use expm1, so near-critical laws keep their precision. */
+internal class SpringKernel(private val omega: Double,private val zeta: Double) {
+    private val a=zeta*omega; private val wd=omega*sqrt(abs(1-zeta*zeta)); internal val slow=if(zeta>1) omega/(zeta+sqrt(zeta*zeta-1)) else a; private val fast=if(zeta>1) omega*(zeta+sqrt(zeta*zeta-1)) else omega
+    /** The offset from the target ([d] false) or the velocity ([d] true) [t] seconds after offset [offset] and velocity [v]. */
+    fun response(offset: Double,v: Double,t: Double,d: Boolean): Double = when { zeta<1 -> { val c=(v+a*offset)/wd; exp(-a*t)*(if(d) v*cos(wd*t)-(a*c+offset*wd)*sin(wd*t) else offset*cos(wd*t)+c*sin(wd*t)) }; zeta==1.0 -> exp(-omega*t)*(if(d) v-omega*(v+omega*offset)*t else offset+(v+omega*offset)*t); else -> { val difference=fast-slow; val b=-(v+slow*offset)/difference; val extra=expm1(-difference*t); exp(-slow*t)*(if(d) -slow*offset+b*(-slow*extra-difference*exp(-difference*t)) else offset+b*extra) } }
+    /** The first velocity zeros, possibly negative (later underdamped extrema shrink by the overshoot factor each half period). */
+    fun velocityZeros(offset: Double,v: Double): List<Double> = when { zeta<1 -> { val c=(v+a*offset)/wd; val first=(atan2(v,a*c+offset*wd)%PI+PI)%PI; (0..2).map { (first+it*PI)/wd } }
+        zeta==1.0 -> { val d=omega*(v+omega*offset); if(d!=0.0) listOf(v/d) else emptyList() }
+        else -> { val b=-(v+slow*offset)/(fast-slow); val ratio=-fast*b/(slow*(offset-b)); if(ratio>0) listOf(ln(ratio)/(fast-slow)) else emptyList() } }
 }
-/** Exact value extrema of a damped spring from (x, v) toward q over all t >= 0: the start, the target and the first velocity zeros
- * (later underdamped extrema shrink by the overshoot factor each half period). */
+/** The analytic state of a damped spring from (x, v) toward q after t seconds. */
+internal fun springState(x: Double,v: Double,q: Double,w: Double,z: Double,t: Double): Pair<Double,Double> =
+    SpringKernel(w,z).let { q+it.response(x-q,v,t,false) to it.response(x-q,v,t,true) }
+/** Exact value extrema of a damped spring from (x, v) toward q over all t >= 0: the start, the target and the first velocity zeros. */
 internal fun springExtrema(x: Double,v: Double,q: Double,w: Double,z: Double): ClosedFloatingPointRange<Double> {
-    val o=x-q; val a=z*w; val times=mutableListOf<Double>()
-    when { z<1 -> { val wd=w*sqrt(1-z*z); val c=(v+a*o)/wd; val first=(atan2(v,a*c+o*wd)%PI+PI)%PI; for(k in 0..2) times+=(first+k*PI)/wd }
-        z==1.0 -> { val d=w*(v+w*o); if(d!=0.0) times+=v/d }
-        else -> { val r=sqrt(z*z-1); val s=w*(z-r); val f=w*(z+r); val b=-(v+s*o)/(f-s); val ratio=-f*b/(s*(o-b)); if(ratio>0) times+=ln(ratio)/(f-s) } }
-    val values=listOf(x,q)+times.filter { it>0 }.map { springState(x,v,q,w,z,it).first }
+    val kernel=SpringKernel(w,z); val values=listOf(x,q)+kernel.velocityZeros(x-q,v).filter { it>0 }.map { q+kernel.response(x-q,v,it,false) }
     return values.min()..values.max()
 }
 /** #854 review S1: the reachable phase of every single reversal at one speed (a uniform omega scale is a pure time scale, so speed 1
