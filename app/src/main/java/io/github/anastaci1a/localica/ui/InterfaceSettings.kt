@@ -43,7 +43,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
                     valueRange = .5f..1.5f, steps = 9, low = "Slower", high = "Faster",
                     description = if (value.reducedMotion) "Reduce motion is on." else "1.0× is normal. Higher values make every animation shorter.")
                 BooleanPreference("Respect system animation scale", value.respectSystemAnimationScale) { onChange(value.copy(respectSystemAnimationScale = it)) }
-                Text(if (value.reducedMotion) "Reduce motion is on." else "Off: ignore the Developer options animator duration scale and use only this speed.",
+                Text(if (value.reducedMotion) "Reduce motion is on." else "Off: every animation in the app ignores the Developer options animator duration scale, including 0 (animations off). System animations, such as the keyboard, still follow it.",
                     style = MaterialTheme.typography.bodySmall)
             }
             ChoicePreference("Long scroll animation", value.longScroll, LongScrollStyle.entries, { it.label }) { onChange(value.copy(longScroll = it)) }
