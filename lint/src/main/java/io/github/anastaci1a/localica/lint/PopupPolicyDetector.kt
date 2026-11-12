@@ -337,6 +337,11 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 if (method.containingClass?.qualifiedName == windowScale) reportScale(node)
                 // Round 2 (G2): members, extensions and scope functions on a shared-content handle, except its slots.
                 if (node.receiverType?.canonicalText?.removeSuffix("?") == sharedContent && name !in sharedSlots) report(UiRuleId.ScreenPopupMotion, node)
+                // Round 4 (F8-3): an implicit receiver (with(shared) { x() }, shared.run { x() }) still resolves to the handle's own
+                // member or extension, whatever UAST reports as the call's receiver type.
+                if (name !in sharedSlots && !method.isConstructor && (method.containingClass?.qualifiedName == sharedContent ||
+                        method.parameterList.parameters.firstOrNull()?.let { (it.name.startsWith("$") || it.name.startsWith("<")) && it.type.canonicalText == sharedContent } == true))
+                    report(UiRuleId.ScreenPopupMotion, node)
                 val owner = method.containingClass?.qualifiedName.orEmpty()
                 if (name in setOf("GlassPopupHome", "rememberGlassPopupHome") && !method.isConstructor) hostCall(name, node)
                 if (name in setOf("glassPopupHome", "glassPopupProjection")) report(UiRuleId.ScreenPopupHome, node)
