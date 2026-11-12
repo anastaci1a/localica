@@ -116,7 +116,10 @@ class NoneShadowParityTest {
             owners.clear()
             fun visit(table: CompositionData) {
                 for (group in table.compositionGroups) {
-                    for (value in group.data) if (value is RetainedGlassShadow && owners.none { it === value }) owners += value
+                    for (value in group.data) {
+                        NoneShadowLeakReceipt.track(value)
+                        if (value is RetainedGlassShadow && owners.none { it === value }) owners += value
+                    }
                     visit(group)
                 }
             }
