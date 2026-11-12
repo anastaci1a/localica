@@ -95,11 +95,25 @@ class PopupBrowseReturnReferenceTest {
                 }
             } }
             compose.mainClock.autoAdvance = false
+            report.put("frozenInitialClockMs", compose.mainClock.currentTime)
+            val openingRequestClockMs = compose.mainClock.currentTime
+            var openingFrames = 0
             frames.openReferenceTrigger("Open reference menu")
             try {
             compose.waitUntil(10000) {
+                openingFrames++
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-                popup?.decorView?.hasWindowFocus() == true && progress >= .999f && home.flights.size == 1
+                val productReady = progress >= .999f
+                val focusReady = popup?.decorView?.hasWindowFocus() == true
+                val flightReady = home.flights.size == 1
+                val observedClock = compose.mainClock.currentTime
+                if (productReady && !report.has("firstProductReadyPoll"))
+                    report.put("firstProductReadyPoll", openingFrames).put("firstProductReadyClockMs", observedClock)
+                if (focusReady && !report.has("firstFocusReadyPoll"))
+                    report.put("firstFocusReadyPoll", openingFrames).put("firstFocusReadyClockMs", observedClock)
+                if (flightReady && !report.has("firstFlightReadyPoll"))
+                    report.put("firstFlightReadyPoll", openingFrames).put("firstFlightReadyClockMs", observedClock)
+                focusReady && productReady && flightReady
             }
             } catch (failure: Throwable) {
                 report.put("openingFailure", JSONObject().put("windowAttached", popup?.decorView?.isAttachedToWindow)
@@ -108,15 +122,21 @@ class PopupBrowseReturnReferenceTest {
                 save()
                 throw failure
             }
+            report.put("openingRequestClockMs", openingRequestClockMs)
+                .put("openingCompleteClockMs", compose.mainClock.currentTime).put("openingFrameCount", openingFrames)
             val window = requireNotNull(popup)
             val flight = compose.runOnUiThread { home.flights.single() }
+            report.put("closeRequestClockMs", compose.mainClock.currentTime)
             compose.runOnUiThread { open = false; departing = true }
+            var handoffFrames = 0
             // Match the ordinary held-page lifecycle on both revisions, then
             // cancel the page departure while the dismissed menu keeps returning.
             compose.waitUntil(10000) {
+                handoffFrames++
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 flight.handedOff && flight.wasProjected
             }
+            report.put("handoffCompleteClockMs", compose.mainClock.currentTime).put("handoffFrameCount", handoffFrames)
             compose.runOnUiThread { departing = false }
             var highest = 0f
             var lowest = 1f
