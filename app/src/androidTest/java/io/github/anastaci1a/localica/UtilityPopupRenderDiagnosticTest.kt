@@ -487,7 +487,7 @@ class UtilityPopupRenderDiagnosticTest {
         val p = anchor.contact.expansion.value.coerceIn(0f, 1f)
         val utility = geometry(anchor.bounds, anchor.bounds.height / 2)
         val popup = if (anchor.modalPresent) {
-            val bounds = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
+            val bounds = compose.popupGeometryNodes(anchor, open, output, report.getString("scene") + "-" + name, 1).single().boundsInRoot
             val origin = IntArray(2)
             compose.runOnIdle { requireNotNull(popupView).getLocationOnScreen(origin) }
             geometry(bounds.translate(Offset(origin[0].toFloat(), origin[1].toFloat())),
