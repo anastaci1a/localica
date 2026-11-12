@@ -30,14 +30,12 @@ internal fun verifyR1ReferenceClass(preOpen: Bitmap, reference: Bitmap, tabs: Re
             else histogram[delta] = histogram.getOrDefault(delta, 0) + 1
         }
     val api = Build.VERSION.SDK_INT
-    val expected = when {
-        api == 26 && densityDpi == 420 && reference.width == 1080 && reference.height == 1731 -> mapOf(1 to 16619, 2 to 5)
-        else -> null // Published-base measurement only; the final candidate must pin this profile.
-    }
+    val expected: Map<Int, Int>? = null // Measure both independent-source profiles before pinning.
     File(output, "reference-class.json").writeText(JSONObject().put("api", api).put("densityDpi", densityDpi)
         .put("width", reference.width).put("height", reference.height).put("selected", selected)
         .put("changed", histogram.values.sum() + otherChanged).put("otherChanged", otherChanged)
         .put("grayscaleHistogram", JSONObject(histogram.mapKeys { it.key.toString() }))
+        .put("cycleFixtureApi26Histogram", JSONObject(mapOf("1" to 16619, "2" to 5)))
         .put("measurementOnly", expected == null)
         .put("expectedHistogram", expected?.let { JSONObject(it.mapKeys { entry -> entry.key.toString() }) } ?: JSONObject.NULL).toString(2))
     assertEquals("R1 reference correction has no other changed pixel", 0, otherChanged)

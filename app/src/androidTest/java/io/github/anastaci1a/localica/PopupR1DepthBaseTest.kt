@@ -80,6 +80,7 @@ class PopupR1DepthBaseTest {
         var open by mutableStateOf(false)
         var leaving by mutableStateOf(false)
         var leaveClicked = false
+        val cycleFixture = InstrumentationRegistry.getArguments().getString("r1BackdropCycleMutant") == "ancestor"
         val receipts = JSONArray()
         try {
             preferences.write(InterfaceSettings(glass = GlassAppearance(renderer = mode)))
@@ -106,7 +107,12 @@ class PopupR1DepthBaseTest {
                             }
                         }
                     }) {
-                        Box(Modifier.fillMaxSize().recordFrostedBackdrop(page).background(androidx.compose.ui.graphics.Color.White), contentAlignment = Alignment.BottomEnd) {
+                        Box(Modifier.fillMaxSize()
+                            .then(if (cycleFixture) Modifier.recordFrostedBackdrop(page) else Modifier)
+                            .background(androidx.compose.ui.graphics.Color.White), contentAlignment = Alignment.BottomEnd) {
+                            // The sampled page is a sibling: recording the pill inside its own source is a RenderNode cycle.
+                            if (!cycleFixture) Box(Modifier.fillMaxSize().recordFrostedBackdrop(page)
+                                .background(androidx.compose.ui.graphics.Color.White))
                             R1BasePopupActionPill(rememberGlassAnchor().also { fixtureAnchor = it }, source = page,
                                 modifier = Modifier.size(104.dp, 64.dp), trailingLabel = "Open overlap menu", menuVisible = open, onMenuDismiss = { open = false },
                                 menuContent = {
@@ -125,6 +131,7 @@ class PopupR1DepthBaseTest {
                 (owner as Activity).window
             }
             original(activity, output, "base-complete-root").recycle()
+            compose.runOnUiThread { assertR1BackdropIndependent(page, fixtureAnchor, output) }
             baseScenePixels = runBlocking { baseScene.toImageBitmap() }.asAndroidBitmap()
             File(output, "base-complete-scene.png").outputStream().use {
                 assertTrue(requireNotNull(baseScenePixels).compress(Bitmap.CompressFormat.PNG, 100, it))
