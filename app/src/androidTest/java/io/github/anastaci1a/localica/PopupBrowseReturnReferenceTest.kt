@@ -46,6 +46,7 @@ class PopupBrowseReturnReferenceTest {
         fun save() = File(output, "frames.json").writeText(report.toString(2))
         var popup: Window? = null
         var progress = 0f
+        var menuMaterial: FrostedBackdrop? = null
         lateinit var home: GlassPopupHome
         var open by mutableStateOf(false)
         var departing by mutableStateOf(false)
@@ -82,6 +83,8 @@ class PopupBrowseReturnReferenceTest {
                                 ActionIcon(AppIcon.ActionSort, "Open reference menu", anchor = anchor) { open = true }
                             }
                             GlassMenu(open, anchor, { open = false }) {
+                                val material = LocalFrostedBackdrop.current
+                                SideEffect { menuMaterial = material }
                                 Column(Modifier.fillMaxWidth().height(240.dp)) {
                                     Text("Departure reference")
                                     Text("Identical glass and chrome on both source revisions")
@@ -122,6 +125,45 @@ class PopupBrowseReturnReferenceTest {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 if (!window.decorView.isAttachedToWindow) break
                 if (progress !in .04f.. .95f || !flight.prepared) continue
+                // Hold the existing virtual phase while the asynchronous source publication settles.
+                // No frame requests, source writes, retries or pixel-dependent decisions.
+                val entryClockMs = compose.mainClock.currentTime
+                val readback = JSONObject().put("frame", frame).put("phaseBits", progress.toRawBits())
+                    .put("entryClockMs", entryClockMs)
+                if (mode == GlassRendererMode.SingleToneBlur && android.os.Build.VERSION.SDK_INT < 33) {
+                    val source = compose.runOnUiThread {
+                        requireNotNull(requireNotNull(menuMaterial).parent).also {
+                            check(!it.isRetired) { "The actual sampling parent must be live" }
+                        }
+                    }
+                    var previousRequest = -1
+                    var stableSince = android.os.SystemClock.uptimeMillis()
+                    var stableSamples = 0
+                    try {
+                        compose.waitUntil(10000) {
+                            val state = compose.runOnUiThread {
+                                check(menuMaterial?.parent === source) { "Sampling parent changed at a held phase" }
+                                Triple(source.readbackRequest, source.snapshotReadbackRequest, source.snapshot != null)
+                            }
+                            val now = android.os.SystemClock.uptimeMillis()
+                            val ready = state.third && state.first == state.second && state.second >= 0
+                            if (!ready || state.second != previousRequest) {
+                                stableSince = now; stableSamples = 0
+                            }
+                            previousRequest = state.second
+                            stableSamples++
+                            readback.put("requested", state.first).put("published", state.second)
+                                .put("snapshotPresent", state.third).put("stableSamples", stableSamples)
+                                .put("stableWallMs", now - stableSince)
+                            ready && stableSamples >= 4 && now - stableSince >= 100
+                        }
+                    } finally {
+                        readback.put("heldClockMs", compose.mainClock.currentTime)
+                            .put("clockUnchanged", compose.mainClock.currentTime == entryClockMs)
+                        File(output, "return-$frame-readback.json").writeText(readback.toString(2))
+                        assertEquals("Publication wait holds the virtual phase", entryClockMs, compose.mainClock.currentTime)
+                    }
+                }
                 frames.capture(window, output, "return-$frame-window").recycle()
                 val image = runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap()
                 try {
