@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntOffset
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.anastaci1a.localica.ui.playerVerticalDrag
+import io.github.anastaci1a.localica.ui.components.verticalSurfaceDrag
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -36,7 +36,7 @@ class PlayerDragVelocityTest {
         var release = Float.NaN
         compose.setContent {
             view = LocalView.current
-            Box(Modifier.fillMaxSize().offset { IntOffset(0, translation) }.playerVerticalDrag(
+            Box(Modifier.fillMaxSize().offset { IntOffset(0, translation) }.verticalSurfaceDrag(
                 onStart = { starts++ }, onDelta = { displacement += it },
                 onStop = { release = it; stops++ }, onCancel = { cancellations++ }))
         }
