@@ -118,7 +118,7 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: B
             if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
             drawPopupProjection(layer, flight.origin - flight.homeOrigin)
             flight.handedOff = true
-            // Negative control: suppress the projection history publication.
+            flight.wasProjected = home.departing
         }
     }
 }
