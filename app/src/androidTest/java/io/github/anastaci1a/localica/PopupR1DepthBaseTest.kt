@@ -82,6 +82,8 @@ class PopupR1DepthBaseTest {
         var geometryProgress = 0f
         lateinit var fixtureAnchor: GlassAnchor
         lateinit var fixtureBackdrop: FrostedBackdrop
+        var menuMaterial: Pair<GlassPopupFlight, FrostedBackdrop?>? = null
+        val cleanPageMutant = InstrumentationRegistry.getArguments().getString("r1CleanPageMutant") == "true"
         var leaveClicked = false
         lateinit var baseScene: androidx.compose.ui.graphics.layer.GraphicsLayer
         var baseScenePixels: Bitmap? = null
@@ -132,6 +134,8 @@ class PopupR1DepthBaseTest {
                                 modifier = Modifier.size(104.dp, 64.dp),
                                 trailingLabel = "Open overlap menu", menuVisible = open, onMenuDismiss = { open = false },
                                 menuContent = {
+                                    val material = LocalFrostedBackdrop.current
+                                    SideEffect { menuMaterial = home.flights.singleOrNull()?.let { it to material } }
                                     ActionMenuItem("Leave page", icon = AppIcon.TabFolders, onClick = { leaveClicked = true; open = false; leaving = true })
                                     Box(Modifier.fillMaxWidth().height(240.dp).background(androidx.compose.ui.graphics.Color.Green))
                                 }, onSearch = {}, onMore = { open = true })
@@ -269,7 +273,15 @@ class PopupR1DepthBaseTest {
                 val modal = original(window, output, "return-$frame-popup")
                 val root = original(activity, output, "return-$frame-root")
                 val layer = r1InspectionBitmap(runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap(), output, "return-$frame-flight-layer")
-                val source = r1InspectionBitmap(runBlocking { requireNotNull(home.backdrop).layer.toImageBitmap() }.asAndroidBitmap(), output, "return-$frame-sampled-scene")
+                val sourceSelection = compose.runOnUiThread {
+                    val captured = requireNotNull(menuMaterial) { "R1 menu material belongs to one flight" }
+                    assertSame("R1 material belongs to the flight under test", flight, captured.first)
+                    val parent = requireNotNull(requireNotNull(captured.second).parent) { "R1 sampling parent must not be null" }
+                    assertFalse("R1 sampling parent must not be retired", parent.isRetired)
+                    Triple(parent, requireNotNull(home.backdrop), parent === home.backdrop)
+                }
+                val source = r1InspectionBitmap(runBlocking { sourceSelection.first.layer.toImageBitmap() }.asAndroidBitmap(), output, "return-$frame-sampled-scene")
+                val oldSource = if (cleanPageMutant) r1InspectionBitmap(runBlocking { sourceSelection.second.layer.toImageBitmap() }.asAndroidBitmap(), output, "return-$frame-old-home-scene") else null
                 try {
                     if (!flight.handedOff) continue
                     val hostAt = IntArray(2); val rootAt = IntArray(2)
@@ -277,6 +289,7 @@ class PopupR1DepthBaseTest {
                     File(output, "return-$frame-flight-layer.png").outputStream().use { assertTrue(layer.compress(Bitmap.CompressFormat.PNG, 100, it)) }
                     File(output, "return-$frame-sampled-scene.png").outputStream().use { assertTrue(source.compress(Bitmap.CompressFormat.PNG, 100, it)) }
                     var sourcePixels = 0; var sourceChanged = 0; var chromePixels = 0
+                    var oldSourceChanged = 0
                     // The independent base scene was frozen before opening. The
                     // left tabs stay still; exclude the trigger at the right.
                     for (y in tabBounds.top.toInt() until tabBounds.bottom.toInt())
@@ -286,9 +299,16 @@ class PopupR1DepthBaseTest {
                             val expected = requireNotNull(baseScenePixels).getPixel(sx, sy)
                             if (expected != Color.WHITE) chromePixels++
                             if (source.getPixel(sx, sy) != expected) sourceChanged++
+                            if (oldSource != null && oldSource.getPixel(sx, sy) != expected) oldSourceChanged++
                             sourcePixels++
                         }
                     assertTrue("The base recording contains real tab ink", chromePixels > 100)
+                    File(output, "return-$frame-sampling-parent.json").writeText(JSONObject()
+                        .put("phase", phase).put("phaseBits", phase.toRawBits())
+                        .put("parentIsHomeBackdrop", sourceSelection.third).put("cleanPageMutant", cleanPageMutant)
+                        .put("actualReadChanged", sourceChanged).put("actualReadWouldPass", sourceChanged == 0)
+                        .put("oldReadChanged", if (cleanPageMutant) oldSourceChanged else JSONObject.NULL)
+                        .put("oldReadWouldPass", if (cleanPageMutant) oldSourceChanged == 0 else JSONObject.NULL).toString(2))
                     assertEquals("R1: a departing non-chrome menu samples the base scene including tabs", 0, sourceChanged)
                     var sampled = 0; var bad = 0
                     val badRows = sortedSetOf<Int>()
@@ -331,7 +351,7 @@ class PopupR1DepthBaseTest {
                             }
                         } else assertTrue("Non-chrome departing menu stays above actual tabs: $bad/$sampled", bad <= max(4, sampled / 1000))
                     }
-                } finally { modal.recycle(); root.recycle(); layer.recycle(); source.recycle() }
+                } finally { modal.recycle(); root.recycle(); layer.recycle(); source.recycle(); oldSource?.recycle() }
             }
             File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
                 .put("renderer", mode.name).put("stepMs", 4).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
