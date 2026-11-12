@@ -270,3 +270,14 @@ test('Navigation alone supplies pill shadow inputs',()=>{
  assert.deepEqual(checkPopupSource(screen.replace('Screen.kt','LocalicaScreen.kt'),source),[]);
  assert.ok(rules(source).has('ScreenPopupMotion'));
 });
+
+test('only the exact sanctioned hosts invoke motion ingress',()=>{
+ for(const owner of ['app/src/main/java/io/github/anastaci1a/localica/MainActivity.kt',screen.replace('Screen.kt','LocalicaScreen.kt')]) {
+  assert.deepEqual(checkPopupSource(owner,'fun f() { io.github.anastaci1a.localica.ui.LocalicaUiRoot {} }'),[]);
+  assert.deepEqual(checkPopupSource(owner,'import io.github.anastaci1a.localica.ui.LocalicaUiRoot as Root\nfun f() { Root {} }'),[]);
+ }
+ assert.deepEqual(checkPopupSource(screen.replace('Screen.kt','LocalicaUiRoot.kt'),'fun f() { io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext(120f, 100f, spec, 1f) {} }'),[]);
+ assert.equal(rules('import other.LocalicaUiRoot\nfun f() { LocalicaUiRoot {} }').size,0);
+});
+
+test('ordinary Object member names cannot become motion ingress',()=>{assert.equal(rules('fun f(value: Any) { value.toString(); value.hashCode() }').size,0);});

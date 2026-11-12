@@ -247,6 +247,10 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
     const privateCalls=new Set(['Popup','PopupWindow','Dialog','AlertDialog','BasicAlertDialog','DropdownMenu','ModalBottomSheet','PopupMenu','ListPopupWindow','DatePickerDialog','TooltipBox','ExposedDropdownMenu','ExposedDropdownMenuBox','SearchBar']);
     const rawHomeCalls=new Set(['glassPopupHome','glassPopupProjection']);
     const calls=[], scopes=[];let closedCall;
+    const motionIngress={
+        LocalicaUiRoot:{identity:'io.github.anastaci1a.localica.ui.LocalicaUiRoot',owner:'app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt'},
+        ProvideLocalicaEngineContext:{identity:'io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext',owner:'app/src/main/java/io/github/anastaci1a/localica/ui/layout/LocalicaEngineRoot.kt'},
+    };
     const pinnedApis={
         PopupActionPill:{owner:'GlassMorph',key:'PillArgument.',parameters:['anchor','source','modifier','noneAtlasInput','chromeVisibility','playerExpansion','leadingIcon','trailingIcon','leadingLabel','trailingLabel','tag','role','menuVisible','onMenuDismiss','menuContent','onSearch','onMore']},
         GlassMenu:{owner:'GlassMorph',key:'PopupArgument.',parameters:['visible','anchor','onDismiss','originPreparation','content']},
@@ -288,6 +292,12 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
         if(tokens[i].text==='}')scopes.pop();
         const n=name(i),next=tokens[i+1]?.text,previous=tokens[i-1]?.text;
         checkArguments(i,n);
+        const ingress=Object.hasOwn(motionIngress,n)?motionIngress[n]:null, importedIngress=imports.get(tokens[i].text);
+        if(ingress && !importTokens.has(i) && previous!=='fun' &&
+            (next==='(' || next==='{' || previous===':' && tokens[i-2]?.text===':') &&
+            (!importedIngress || importedIngress===ingress.identity) &&
+            (previous==='.'?identityAt(i)===ingress.identity:!localDeclarations.some(d=>d.name===n && d.file!==ingress.owner)) &&
+            !ownsPopups(file,'MotionIngress.'+n))emit('ScreenPopupMotion',i,'Only the sanctioned hosts may invoke shared motion ingress');
         if(n==='glassSurfaceAnchor' && next==='(' && previous!=='fun') {
             const writing=tokens[i+2]?.text!==')';
             if(writing && !ownsPopups(file,'SurfaceAnchorWriter'))emit('ScreenPopupTrigger',i,'Only the material owner binds surface anchors');

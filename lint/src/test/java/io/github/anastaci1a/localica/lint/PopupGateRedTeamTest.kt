@@ -23,6 +23,7 @@ class GlassMomentum { var damping=1f; fun reset() {} }
 fun rememberGlassPopupHome(visible: Boolean = false) = GlassPopupHome()
 class PopupSharedContent
 class GlassOriginPreparation
+fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit, content: () -> Unit) {}
 fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit, placement: Int = 0, darkOverride: Boolean? = null, fitContent: Boolean = false, originPreparation: GlassOriginPreparation? = null, searchDismissOnImeBack: Boolean = false, sharedContent: PopupSharedContent? = null, content: () -> Unit) { content() }
 """).indented(),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt", """package io.github.anastaci1a.localica.ui
@@ -78,7 +79,14 @@ fun LyricsBackdrop(key: Any?, modifier: Any? = null, contentAlpha: () -> Float =
   kotlin("src/main/java/androidx/appcompat/app/AlertDialog.kt", """package androidx.appcompat.app
 class AlertDialog : android.app.Dialog() { class Builder }"""),
   kotlin("src/main/java/io/github/anastaci1a/localica/ui/spec/UiSpec.kt", """package io.github.anastaci1a.localica.ui.spec
-val LocalUiSpec = androidx.compose.runtime.ProvidableCompositionLocal<Int>()""")
+val LocalUiSpec = androidx.compose.runtime.ProvidableCompositionLocal<Int>()"""),
+  kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt", """package io.github.anastaci1a.localica.ui
+class LocalicaUiRootState(settings: io.github.anastaci1a.localica.navigation.InterfaceSettings)
+fun LocalicaUiRoot(state: LocalicaUiRootState? = null, content: () -> Unit) {}"""),
+  kotlin("src/main/java/io/github/anastaci1a/localica/ui/layout/LocalicaEngineRoot.kt", """package io.github.anastaci1a.localica.ui.layout
+fun ProvideLocalicaEngineContext(refreshHz: Float, referenceTravel: Float, resolvedSpec: Any?, durationScale: Float, content: () -> Unit) {}"""),
+  kotlin("src/main/java/io/github/anastaci1a/localica/navigation/InterfaceSettings.kt", """package io.github.anastaci1a.localica.navigation
+data class InterfaceSettings(val reducedMotion: Boolean = false)""")
  )
  private fun check(body: String, imports: String = "", name: String = "Subject") {
   val source="package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n".replace("\\n", "\n") + imports + "\n".replace("\\n", "\n") + body
@@ -284,7 +292,7 @@ fun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed pro
 import io.github.anastaci1a.localica.ui.LocalMotionSpeed as Policy
 fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides 2f, Policy.provides(2f), Policy providesDefault 2f, Policy.providesDefault(2f), Policy providesComputed { 2f }, Policy.providesComputed({ 2f })) {} }
 """)
-  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs + file).toTypedArray()))
+  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.filterIndexed { index, _ -> index != 6 } + file).toTypedArray()))
    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
  }
 
@@ -293,7 +301,7 @@ fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides 2f, 
 import io.github.anastaci1a.localica.ui.LocalReducedMotion as Policy
 fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides true, Policy.provides(true), Policy providesDefault true, Policy.providesDefault(true), Policy providesComputed { true }, Policy.providesComputed({ true })) {} }
 """)
-  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs + file).toTypedArray()))
+  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.filterIndexed { index, _ -> index != 6 } + file).toTypedArray()))
    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
  }
 
@@ -302,7 +310,7 @@ fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides true
 import io.github.anastaci1a.localica.ui.spec.LocalUiSpec as Policy
 fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides 1, Policy.provides(1), Policy providesDefault 1, Policy.providesDefault(1), Policy providesComputed { 1 }, Policy.providesComputed({ 1 })) {} }
 """)
-  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs + file).toTypedArray()))
+  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.filterIndexed { index, _ -> index != 6 } + file).toTypedArray()))
    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
  }
 
@@ -310,14 +318,36 @@ fun f() { androidx.compose.runtime.CompositionLocalProvider(Policy provides 1, P
   val file=kotlin("src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt", """package io.github.anastaci1a.localica.ui
 fun f(loadingReducedMotion: Boolean) { androidx.compose.runtime.CompositionLocalProvider(LocalReducedMotion provides loadingReducedMotion) {} }
 """)
-  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs + file).toTypedArray()))
+  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.filterIndexed { index, _ -> index != 6 } + file).toTypedArray()))
    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
  }
  fun testSanctionedNavigationPillArguments() {
   val file=kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt", """package io.github.anastaci1a.localica.ui
 fun f(anchor: GlassAnchor) { PopupActionPill(anchor, chromeVisibility={ 1f }, playerExpansion=Any()); PopupActionPill(anchor, null, null, null, { 1f }, Any()) }
 """)
-  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs + file).toTypedArray()))
+  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.filterIndexed { index, _ -> index != 6 } + file).toTypedArray()))
+   .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
+ }
+ fun testD_root_wrapper() = check("fun f(settings: io.github.anastaci1a.localica.navigation.InterfaceSettings, anchor: GlassAnchor) { LocalicaUiRoot(LocalicaUiRootState(settings.copy(reducedMotion = true))) { GlassMenu(true, anchor, {}) {} } }", "")
+ fun testD_root_default() = check("fun f() { LocalicaUiRoot {} }", "")
+ fun testD_root_alias() = check("fun f() { Root {} }", "import io.github.anastaci1a.localica.ui.LocalicaUiRoot as Root")
+ fun testD_root_qualified() = check("fun f() { io.github.anastaci1a.localica.ui.LocalicaUiRoot {} }", "")
+ fun testD_root_reference() = check("val borrowed=::LocalicaUiRoot", "")
+ fun testD_engine_call() = check("fun f() { io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext(120f, 100f, null, 0f) {} }", "")
+ fun testD_engine_alias() = check("fun f() { Engine(120f, 100f, null, 0f) {} }", "import io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext as Engine")
+ fun testD_engine_reference() = check("val borrowed=::ProvideLocalicaEngineContext", "import io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext")
+ fun testSanctionedIngressHosts() {
+  for (path in listOf("io/github/anastaci1a/localica/MainActivity.kt", "io/github/anastaci1a/localica/ui/LocalicaScreen.kt")) {
+   val file=kotlin("src/main/java/" + path, """package io.github.anastaci1a.localica.ui
+fun f() { LocalicaUiRoot {} }
+""")
+   lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs + file).toTypedArray()))
+    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
+  }
+  val file=kotlin("src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt", """package io.github.anastaci1a.localica.ui
+fun f() { io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext(120f, 100f, null, 1f) {} }
+""")
+  lint().projects(project().name("app").files(*(stubs.take(4) + stubs.takeLast(1) + wrapperStubs.filterIndexed { index, _ -> index != 6 } + file).toTypedArray()))
    .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
  }
 }

@@ -88,3 +88,6 @@ MotionProvider.LocalReducedMotion=app/src/main/java/io/github/anastaci1a/localic
 MotionProvider.LocalUiSpec=app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt
 PillArgument.chromeVisibility=app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt
 PillArgument.playerExpansion=app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt
+MotionIngress.LocalicaUiRoot=app/src/main/java/io/github/anastaci1a/localica/MainActivity.kt
+MotionIngress.LocalicaUiRoot=app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt
+MotionIngress.ProvideLocalicaEngineContext=app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaUiRoot.kt

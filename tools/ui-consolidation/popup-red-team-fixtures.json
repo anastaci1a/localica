@@ -773,5 +773,45 @@
     "id": "testC_ratchet_other_local",
     "path": "app/src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt",
     "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { androidx.compose.runtime.CompositionLocalProvider(LocalMotionSpeed provides 2f) {} }"
+  },
+  {
+    "id": "testD_root_wrapper",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f(settings: io.github.anastaci1a.localica.navigation.InterfaceSettings, anchor: GlassAnchor) { LocalicaUiRoot(LocalicaUiRootState(settings.copy(reducedMotion = true))) { GlassMenu(true, anchor, {}) {} } }"
+  },
+  {
+    "id": "testD_root_default",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { LocalicaUiRoot {} }"
+  },
+  {
+    "id": "testD_root_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.LocalicaUiRoot as Root\nfun f() { Root {} }"
+  },
+  {
+    "id": "testD_root_qualified",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { io.github.anastaci1a.localica.ui.LocalicaUiRoot {} }"
+  },
+  {
+    "id": "testD_root_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nval borrowed=::LocalicaUiRoot"
+  },
+  {
+    "id": "testD_engine_call",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\n\nfun f() { io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext(120f, 100f, null, 0f) {} }"
+  },
+  {
+    "id": "testD_engine_alias",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext as Engine\nfun f() { Engine(120f, 100f, null, 0f) {} }"
+  },
+  {
+    "id": "testD_engine_reference",
+    "path": "app/src/main/java/io/github/anastaci1a/localica/ui/Subject.kt",
+    "source": "package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.remember\nimport io.github.anastaci1a.localica.ui.components.TriggerRole\nimport io.github.anastaci1a.localica.ui.layout.ProvideLocalicaEngineContext\nval borrowed=::ProvideLocalicaEngineContext"
   }
 ]

@@ -179,6 +179,12 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
             private fun privateEntry(method: com.intellij.psi.PsiMethod, node: UElement) {
                 val name = method.name
                 val owner = method.containingClass?.qualifiedName.orEmpty()
+                val ingress = when {
+                    owner == "io.github.anastaci1a.localica.ui.LocalicaUiRootKt" && name == "LocalicaUiRoot" -> name
+                    owner == "io.github.anastaci1a.localica.ui.layout.LocalicaEngineRootKt" && name == "ProvideLocalicaEngineContext" -> name
+                    else -> null
+                }
+                if (ingress != null) report(Ownership(UiRuleId.ScreenPopupMotion, "MotionIngress." + ingress), node)
                 if (name in setOf("rememberPopupMotion", "rememberPopupWindowMotion", "rememberExpandCollapse") && owner.startsWith("io.github.anastaci1a.localica.ui.engine.")) report(UiRuleId.ScreenPopupMotion, node)
                 if (name == "drawPopupProjection" && owner.startsWith("io.github.anastaci1a.localica.ui.engine.") && relative !in popupOwnerPaths["PopupProjection"].orEmpty()) report(UiRuleId.ScreenPopupDrawPath, node)
                 if (toastView(method) && name == "setView") report(UiRuleId.ScreenPopupDrawPath, node)
