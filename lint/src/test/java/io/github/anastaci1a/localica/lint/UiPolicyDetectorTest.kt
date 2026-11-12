@@ -372,6 +372,57 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         """, 0)
     }
 
+    fun testCyclicScreenMappingsAreIndependentOfQueryOrder() {
+        for (reverse in listOf(false, true)) {
+            val queries = listOf(
+                "val firstBound = first(view).coerceIn(0f, 1f)",
+                "val secondBound = second(view).coerceIn(0f, 1f)",
+                "val thirdBound = third(view).coerceIn(0f, 1f)",
+            ).let { if (reverse) it.reversed() else it }.joinToString("\n")
+            check(UiRuleId.RawMotionMap, """
+                import io.github.anastaci1a.localica.ui.engine.MotionValue
+                fun first(view: MotionValue): Float = second(view) + view.value()
+                fun second(view: MotionValue): Float = third(view)
+                fun third(view: MotionValue): Float = first(view)
+                fun cleanFirst(): Float = cleanSecond()
+                fun cleanSecond(): Float = cleanFirst()
+                fun screen(view: MotionValue) {
+                    val logical = cleanFirst().coerceIn(0f, 1f)
+                    $queries
+                }
+            """, 3, "screens")
+        }
+    }
+
+    fun testPlayerSurfacePhaseClampsAndTitleInputBand() {
+        for (reverse in listOf(false, true)) {
+            val mappings = listOf(
+                "val boundedProgress = p.coerceIn(0f, 1f)",
+                "val boundedLyricVisibility = lyricVisibility.coerceIn(0f, 1f)",
+                "val opacity = { 1f - sheet.expansion.phase.value().coerceIn(0f, 1f) }",
+                "val inputTop = (statusInset + 48 - origin).coerceIn(0, height)",
+                "val inputBottom = minOf(height, seekY - padding - origin).coerceAtLeast(0)",
+            ).let { if (reverse) it.reversed() else it }.joinToString("\n")
+            check(UiRuleId.RawMotionMap, """
+                import io.github.anastaci1a.localica.ui.engine.*
+                class Sheet(val expansion: ExpansionView)
+                class Presence(val view: ExpansionView)
+                data class RowMotion(val seekY: Int)
+                fun rowMotion(p: Float) = RowMotion((p * 100).toInt())
+                fun screen(sheet: Sheet, lyricsPresence: Presence, statusInset: Int, height: Int, padding: Int) {
+                    val logical = sheet.expansion.expanded
+                    val p = sheet.expansion.phase.value()
+                    val lyricVisibility = lyricsPresence.view.phase.value()
+                    val titleY = (p * 200).toInt()
+                    val origin = titleY - padding
+                    val row = rowMotion(p)
+                    val seekY = row.seekY
+                    $mappings
+                }
+            """, 6, "screens")
+        }
+    }
+
     fun testSpacingAliasesAndValidatedSpecData() {
         val body = """
             import androidx.compose.ui.unit.*
