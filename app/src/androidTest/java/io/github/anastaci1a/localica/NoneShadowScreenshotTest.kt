@@ -13,6 +13,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import java.lang.ref.WeakReference
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
@@ -38,9 +42,16 @@ class NoneShadowScreenshotTest {
         File(root, "none-shadow-compare-api${Build.VERSION.SDK_INT}").also { it.mkdirs() }
     }
 
+    private var pageCoordinates: WeakReference<LayoutCoordinates>? = null
+    private var pageHostView: WeakReference<android.view.View>? = null
+
     /** A page with artwork tiles and text rows, like a library list. */
     @Composable private fun Page(source: FrostedBackdrop) {
-        Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+        val hostView = LocalView.current
+        Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source).onGloballyPositioned {
+            pageCoordinates = WeakReference(it)
+            pageHostView = WeakReference(hostView)
+        }) {
             drawRect(Color(0xFFF4F1EC))
             val colors = listOf(Color(0xFFB0413E), Color(0xFF2E5E8C), Color(0xFFE0A030), Color(0xFF3F7F4F), Color(0xFF6B4B8A))
             var y = 24f; var i = 0
@@ -53,9 +64,19 @@ class NoneShadowScreenshotTest {
         }
     }
 
-    private fun screenshot(): Bitmap {
+    private fun screenshot(receiptName: String? = null): Bitmap {
         compose.waitForIdle(); Thread.sleep(500); compose.waitForIdle()
-        return InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        var layoutReceipt = ""
+        if (receiptName != null) compose.runOnUiThread {
+            layoutReceipt = NoneShadowLeakReceipt.pageSnapshot(pageCoordinates?.get(), pageHostView?.get())
+        }
+        val requested = android.os.SystemClock.uptimeMillis()
+        val image = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        val completed = android.os.SystemClock.uptimeMillis()
+        if (receiptName != null) File(output, "$receiptName-layout.json").writeText(
+            org.json.JSONObject(layoutReceipt).put("captureRequestedUptimeMillis", requested)
+                .put("captureCompletedUptimeMillis", completed).toString(2))
+        return image
     }
 
     private fun sideBySide(name: String, normal: Bitmap, none: Bitmap) {
@@ -75,9 +96,9 @@ class NoneShadowScreenshotTest {
         // API 26-32 average materials draw nothing until the first scene readback lands; never compare that frame.
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         compose.runOnIdle { runtime.request(GlassRendererMode.Normal) }
-        val normal = screenshot()
+        val normal = screenshot(if (name == "pill-row") "$name-normal" else null)
         compose.runOnIdle { runtime.request(GlassRendererMode.SingleToneBlur) }
-        val none = screenshot()
+        val none = screenshot(if (name == "pill-row") "$name-none" else null)
         sideBySide(name, normal, none)
         return normal to none
     }

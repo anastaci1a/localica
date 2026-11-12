@@ -6,6 +6,8 @@ import io.github.anastaci1a.localica.ui.engine.ShadowPlane
 import io.github.anastaci1a.localica.ui.engine.SurfaceNode
 import io.github.anastaci1a.localica.ui.engine.SurfaceView
 import io.github.anastaci1a.localica.ui.engine.windowRetained
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.boundsInWindow
 import java.lang.ref.WeakReference
 import org.json.JSONArray
 import org.json.JSONObject
@@ -61,5 +63,46 @@ internal object NoneShadowLeakReceipt {
                     .put("surfaceNode", node(anchor.surfaceNode)).put("returningNode", node(anchor.returningNode))
             }))
             .put("nodes", JSONArray(observedNodes.map { node(it) })).toString(2)
+    }
+
+    fun pageSnapshot(coordinates: androidx.compose.ui.layout.LayoutCoordinates?, host: android.view.View?): String {
+        val root = host?.rootView
+        var context = host?.context
+        while (context is android.content.ContextWrapper && context !is android.app.Activity) {
+            val base = context.baseContext
+            if (base === context) break
+            context = base
+        }
+        val activity = context as? android.app.Activity
+        val decor = activity?.window?.decorView ?: root
+        fun location(view: android.view.View?): Any = view?.let {
+            JSONArray(IntArray(2).also(it::getLocationOnScreen).toList())
+        } ?: JSONObject.NULL
+        val attached = coordinates?.takeIf { it.isAttached }
+        val position = attached?.let { it.positionInWindow() }
+        val bounds = attached?.let { it.boundsInWindow() }
+        val insets = host?.let { androidx.core.view.ViewCompat.getRootWindowInsets(it) }
+        fun inset(type: Int, ignoringVisibility: Boolean): Any {
+            val value = if (ignoringVisibility) insets?.getInsetsIgnoringVisibility(type) else insets?.getInsets(type)
+            return value?.let { JSONArray(listOf(it.left, it.top, it.right, it.bottom)) } ?: JSONObject.NULL
+        }
+        return JSONObject().put("sampleUptimeMillis", android.os.SystemClock.uptimeMillis())
+            .put("pagePositionInWindow", position?.let { JSONArray(listOf(it.x, it.y)) } ?: JSONObject.NULL)
+            .put("pageBoundsInWindow", bounds?.let { JSONArray(listOf(it.left, it.top, it.right, it.bottom)) } ?: JSONObject.NULL)
+            .put("pageCoordinatesAttached", attached != null)
+            .put("rootLocationOnScreen", location(root)).put("hostLocationOnScreen", location(host))
+            .put("rootIdentity", identity(root)).put("rootClass", root?.javaClass?.name ?: JSONObject.NULL)
+            .put("decorIdentity", identity(decor)).put("decorResolvedFromActivity", activity != null)
+            .put("decorScrollY", decor?.scrollY ?: JSONObject.NULL)
+            .put("decorTranslationY", decor?.translationY ?: JSONObject.NULL)
+            .put("decorTop", decor?.top ?: JSONObject.NULL)
+            .put("statusInsets", inset(androidx.core.view.WindowInsetsCompat.Type.statusBars(), false))
+            .put("statusInsetsIgnoringVisibility", inset(androidx.core.view.WindowInsetsCompat.Type.statusBars(), true))
+            .put("navigationInsets", inset(androidx.core.view.WindowInsetsCompat.Type.navigationBars(), false))
+            .put("navigationInsetsIgnoringVisibility", inset(androidx.core.view.WindowInsetsCompat.Type.navigationBars(), true))
+            .put("hostViewTop", host?.top ?: JSONObject.NULL)
+            .put("hostViewTranslationY", host?.translationY ?: JSONObject.NULL)
+            .put("hostWindowTokenIdentity", identity(host?.windowToken))
+            .put("hostAttached", host?.isAttachedToWindow == true).toString(2)
     }
 }
