@@ -1,7 +1,7 @@
 import test from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import {checkPopupSource, ownsPopups, popupRules, popupOwners, auditPopupTree, popupRatchet, kotlinTokens, popupApiSurface, declaredFunctions} from './popup-policy.mjs';
+import {checkPopupSource, ownsPopups, popupRules, popupOwners, auditPopupTree, popupRatchet, kotlinTokens, popupApiSurface, declaredFunctions, popupApiExclusions, sharedEntryPoints, sharedPopupFile} from './popup-policy.mjs';
 const screen='app/src/main/java/io/github/anastaci1a/localica/ui/Screen.kt';
 const rules=source=>new Set(checkPopupSource(screen,source).map(x=>x.rule));
 test('calibration note 6: named roles are pinned to their actual callers',()=>{
@@ -533,4 +533,40 @@ test('#854 round 2 G2: presence, face and shared-content factories are pinned; a
  // Honest: the queue selector's slot use, through the remembered handle and a composition local.
  assert.deepEqual(checkPopupSource(screen,head+'@Composable fun f(key: Any, copy: Boolean) { val nameMorph = rememberPopupSharedContent(key) {}; if (copy) nameMorph.CompactCopy() else nameMorph.Compact() }'),[]);
  assert.deepEqual(checkPopupSource(screen,head+'internal val LocalShared = staticCompositionLocalOf<PopupSharedContent?> { null }\n@Composable fun g(live: Boolean) { val sharedName = LocalShared.current; if (sharedName != null) { if (live) sharedName.Expanded() else sharedName.ExpandedCopy() } }'),[]);
+});
+test('#854 round 3 R2-1: X1-X4, a timing formal on rememberGlassAnchor, GlassDialog, ActionIcon or Modifier.glassAnchor, is red',()=>{
+ const root='app/src/main/java/io/github/anastaci1a/localica/ui/',head='package io.github.anastaci1a.localica.ui\nimport androidx.compose.runtime.*\nimport androidx.compose.ui.Modifier\n';
+ const live=p=>fs.readFileSync(new URL('../../'+root+p,import.meta.url),'utf8');
+ const change=(s,a,b)=>{assert.ok(s.includes(a),a);return s.replace(a,b);};
+ for(const [label,path,mutate,call] of [
+  ['X1 rememberGlassAnchor','GlassMorph.kt',s=>change(s,'clearance: androidx.compose.ui.unit.Dp? = null): GlassAnchor {','clearance: androidx.compose.ui.unit.Dp? = null, animationSpeed: Float = 1f): GlassAnchor {'),'@Composable fun Screen() { val anchor = rememberGlassAnchor(animationSpeed = 0.5f) }'],
+  ['X2 GlassDialog','GlassDialogs.kt',s=>change(s,'heightSizing: GlassDialogHeight = GlassDialogHeight.Content, content: @Composable () -> Unit) {','heightSizing: GlassDialogHeight = GlassDialogHeight.Content, animationSpeed: Float = 1f, content: @Composable () -> Unit) {'),'@Composable fun Screen() { GlassDialog({}, animationSpeed = 0.5f) {} }'],
+  ['X3 ActionIcon','InterfaceComponents.kt',s=>change(s,'glyph: (@Composable (Modifier) -> Unit)? = null,','glyph: (@Composable (Modifier) -> Unit)? = null, animationSpeed: Float = 1f,'),'@Composable fun Screen(icon: AppIcon) { ActionIcon(icon, "Play", animationSpeed = 0.5f) {} }'],
+  ['X4 Modifier.glassAnchor','GlassMorph.kt',s=>change(s,'    face: (@Composable () -> Unit)? = null): Modifier {','    face: (@Composable () -> Unit)? = null, animationSpeed: Float = 1f): Modifier {'),'@Composable fun Screen(anchor: GlassAnchor) { Box(Modifier.fillMaxSize().glassAnchor(anchor, animationSpeed = 0.5f)) }']]) {
+  const incidents=auditPopupTree([{path:root+path,source:mutate(live(path))},{path:screen,source:head+call}]).incidents;
+  assert.ok(incidents.some(i=>i.rule==='ScreenPopupMotion' && i.path===screen && /pinned surface/.test(i.note)),label+': '+JSON.stringify(incidents));
+ }
+ // Honest twins on the real declarations.
+ assert.deepEqual(checkPopupSource(screen,head+'@Composable fun Screen(icon: AppIcon) { val anchor = rememberGlassAnchor(role = TriggerRole.Surface); GlassDialog({}, placement = GlassPlacement.Center) {}; ActionIcon(icon, "Play", anchor = anchor) {}; Box(Modifier.glassAnchor(anchor, face = null)) }').filter(i=>/pinned surface/.test(i.note)),[]);
+});
+test('#854 round 3 R2-1: every shared entry point other files call has a popup-api.txt row or an exclusion with a reason',()=>{
+ const top=new URL('../..',import.meta.url).pathname;
+ const listed=fs.readdirSync(top+'app/src/main/java',{recursive:true}).map(p=>'app/src/main/java/'+p).filter(p=>p.endsWith('.kt'));
+ const files=listed.map(path=>({path,source:fs.readFileSync(new URL('../../'+path,import.meta.url),'utf8')}));
+ const entries=files.filter(f=>sharedPopupFile(f.path)).flatMap(f=>sharedEntryPoints(f.path,f.source));
+ const declared=new Set(entries.map(e=>e.name+'|'+e.file));
+ const rows=new Set([...popupApiSurface].map(([api,spec])=>api+'|'+spec.file));
+ for(const e of popupApiExclusions) {
+  assert.ok(declared.has(e.name+'|'+e.file),'stale exclusion '+e.name+' '+e.file);
+  assert.ok(e.reason && e.reason.length>10,'exclusion needs a reason: '+e.name);
+  assert.ok(!rows.has(e.name+'|'+e.file),'both a row and an exclusion: '+e.name);
+ }
+ assert.deepEqual(auditPopupTree(files).incidents.filter(i=>/Unclassified/.test(i.note)),[]);
+ // A new shared entry point fails until it is classified; its declaration and owner-side calls do not.
+ const component='app/src/main/java/io/github/anastaci1a/localica/ui/components/PopupTiming.kt';
+ const added=[{path:component,source:'package io.github.anastaci1a.localica.ui.components\n@Composable fun rememberPopupTiming(speed: Float): Float = speed\ninternal fun Modifier.popupSpeed(speed: Float) = this\nprivate fun hidden() = 1\nfun inside() { rememberPopupTiming(1f) }'},
+  {path:screen,source:'package io.github.anastaci1a.localica.ui\nimport io.github.anastaci1a.localica.ui.components.*\n@Composable fun Screen() { val s = rememberPopupTiming(0.5f); Box(Modifier.popupSpeed(0.5f)); val r = ::rememberPopupTiming }'}];
+ const red=auditPopupTree(added).incidents.filter(i=>/Unclassified/.test(i.note));
+ assert.equal(red.length,3,JSON.stringify(red));assert.ok(red.every(i=>i.path===screen));
+ assert.deepEqual(sharedEntryPoints(component,added[0].source).map(e=>e.name+(e.extension?'+':'')),['rememberPopupTiming','popupSpeed+','inside']);
 });

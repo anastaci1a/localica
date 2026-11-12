@@ -8,7 +8,56 @@ const popupHosts = new Map(fs.readFileSync(new URL('../../lint/src/main/resource
 const popupRoles = new Set(fs.readFileSync(new URL('../../lint/src/main/resources/popup-roles.txt',import.meta.url),'utf8').trim().split('\n'));
 /** #854 review: each shared popup/motion API's whole formal list and its motion-selecting formals, one table for both gates. */
 export const popupApiSurface = new Map(fs.readFileSync(new URL('../../lint/src/main/resources/popup-api.txt',import.meta.url),'utf8').trim().split('\n').map(row=>{
-    const [api,identity,file,key,parameters,motion]=row.split('|');return [api,{identity,file,key,parameters:parameters.split(','),motion:motion?motion.split(','):[]}];}));
+    const [api,identity,file,key,parameters,motion,form]=row.split('|');return [api,{identity,file,key,parameters:parameters.split(','),motion:motion?motion.split(','):[],extension:form==='extension'}];}));
+/** #854 round 3 (R2-1): shared entry points that are not popup/motion APIs, each with a one-line reason. Together with popupApiSurface
+ * this classifies every non-private top-level function of the rule-11 owner files, ui/components and ui/engine that other files call. */
+export const popupApiExclusions = fs.readFileSync(new URL('../../lint/src/main/resources/popup-api-exclusions.txt',import.meta.url),'utf8').trim().split('\n').map(row=>{
+    const [name,file,reason]=row.split('|');return {name,file,reason};});
+const ruleOwnerFiles=new Set(ownership.filter(([rule])=>['ScreenPopupHome','ScreenPopupMotion','ScreenPopupTrigger','ScreenPopupDrawPath'].includes(rule)).map(([,path])=>path));
+export function sharedPopupFile(file) { return ruleOwnerFiles.has(file) || /\/localica\/ui\/(components|engine)\//.test(file); }
+const declarationModifiers=new Set(['private','internal','public','protected','inline','suspend','operator','infix','tailrec','external','override','open','abstract','final','actual','expect']);
+/** The non-private top-level functions (extensions included) a shared file declares. */
+export function sharedEntryPoints(file, source) {
+    const tokens=kotlinTokens(source), entries=[];let depth=0;
+    for(let i=0;i<tokens.length;i++) {
+        if(tokens[i].text==='{')depth++;if(tokens[i].text==='}')depth--;
+        if(tokens[i].text!=='fun' || depth!==0)continue;
+        let j=i-1, hidden=false;
+        while(j>=0) {
+            if(declarationModifiers.has(tokens[j].text)){if(tokens[j].text==='private')hidden=true;j--;continue;}
+            if(tokens[j].text===')'){let d=1,k=j-1;while(k>=0 && d){if(tokens[k].text===')')d++;if(tokens[k].text==='(')d--;k--;}if(tokens[k-1]?.text==='@'){j=k-2;continue;}if(tokens[k-1]?.text==='.'){let m=k;while(tokens[m-1]?.text==='.')m-=2;if(tokens[m-1]?.text==='@'){j=m-2;continue;}}break;}
+            if(/^[A-Za-z_]/.test(tokens[j].text)){let m=j;while(tokens[m-1]?.text==='.')m-=2;if(tokens[m-1]?.text==='@'){j=m-2;continue;}}
+            break;
+        }
+        let k=i+1;if(tokens[k]?.text==='<'){let d=0;do{if(tokens[k].text==='<')d++;if(tokens[k].text==='>')d--;k++;}while(d>0 && k<tokens.length);}
+        let extension=false;while(tokens[k+1]?.text==='.' || tokens[k+1]?.text==='?' && tokens[k+2]?.text==='.'){k+=tokens[k+1].text==='?'?3:2;extension=true;}
+        if(tokens[k+1]?.text!=='(' || hidden)continue;
+        entries.push({name:tokens[k].text,file,extension});
+    }
+    return entries;
+}
+/** Calls from non-shared files to shared entry points that have neither a popup-api.txt row nor an exclusion. */
+export function unclassifiedEntryPointCalls(files) {
+    const classified=new Set([...[...popupApiSurface].map(([api,spec])=>api+'|'+spec.file),...popupApiExclusions.map(e=>e.name+'|'+e.file)]);
+    const open=files.filter(f=>f.path.includes('/src/main/') && sharedPopupFile(f.path)).flatMap(f=>sharedEntryPoints(f.path,f.source)).filter(e=>!classified.has(e.name+'|'+e.file));
+    const byName=new Map();for(const e of open){if(!byName.has(e.name))byName.set(e.name,[]);byName.get(e.name).push(e);}
+    const incidents=[];
+    for(const {path,source} of files) {
+        if(!path.includes('/src/main/') || !path.endsWith('.kt') || sharedPopupFile(path))continue;
+        const tokens=kotlinTokens(source);
+        const local=new Set(declaredFunctions(path,source).map(d=>d.name));
+        for(let i=0;i<tokens.length;i++) {
+            const candidates=byName.get(tokens[i].text);if(!candidates || local.has(tokens[i].text))continue;
+            const previous=tokens[i-1]?.text,next=tokens[i+1]?.text;
+            const reference=previous===':' && tokens[i-2]?.text===':';
+            if(previous==='fun' || !(next==='(' || next==='{' || reference))continue;
+            const entry=candidates.find(e=>e.extension || previous!=='.' || reference);if(!entry)continue;
+            incidents.push({rule:'ScreenPopupMotion',path,line:source.slice(0,tokens[i].start).split('\n').length,
+                note:'Unclassified shared popup entry point '+entry.name+' ('+entry.file+'): add a popup-api.txt row or a popup-api-exclusions.txt reason'});
+        }
+    }
+    return incidents;
+}
 export function ownsPopups(file, rule) { return ownership.some(([r,path])=>path===file && (!rule || r===rule)); }
 // Tokenize Kotlin so comments, ordinary/raw strings and whitespace cannot hide or fabricate a call.
 // Offsets are retained for exact source receipts. Import aliases and qualified calls resolve to the same spelling.
@@ -280,7 +329,7 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
         if(imported && imported!==identity)return;
         const canonical=spec.file;
         if(tokens[i-1]?.text!=='.' && !imported && localDeclarations.some(d=>d.name===api && d.file!==canonical))return;
-        if(tokens[i-1]?.text==='.' && identityAt(i)!==identity)return;
+        if(tokens[i-1]?.text==='.' && !spec.extension && identityAt(i)!==identity)return;
         const formals=declarations.filter(d=>d.qualified===identity && d.file===canonical);
         let depth=0, start=i+2, ordinal=0;
         for(let j=start;j<tokens.length;j++) {
@@ -441,5 +490,5 @@ export function checkPopupSource(file, source, declarations = [], ratchetInciden
     }
     return incidents;
 }
-export function auditPopupTree(files) {const declarations=files.flatMap(({path,source})=>declaredFunctions(path,source)),ratchetIncidents=[];const incidents=files.flatMap(({path,source})=>checkPopupSource(path,source,declarations,ratchetIncidents));return {incidents,ratchetIncidents};}
+export function auditPopupTree(files) {const declarations=files.flatMap(({path,source})=>declaredFunctions(path,source)),ratchetIncidents=[];const incidents=[...files.flatMap(({path,source})=>checkPopupSource(path,source,declarations,ratchetIncidents)),...unclassifiedEntryPointCalls(files)];return {incidents,ratchetIncidents};}
 export function checkPopupTree(files) {return auditPopupTree(files).incidents;}

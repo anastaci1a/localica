@@ -26,6 +26,12 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 cells[4].split(",").toSet(), cells[5].split(",").filter(String::isNotEmpty).toSet())
         } }
     }
+    // #854 round 3 (R2-1): shared entry points classified as not popup/motion APIs (name|file|reason).
+    private val popupExclusions by lazy {
+        requireNotNull(javaClass.getResourceAsStream("/popup-api-exclusions.txt")).bufferedReader().use { it.readLines().filter(String::isNotBlank).map { row -> row.substringBefore('|') }.toSet() }
+    }
+    private val ruleOwnerFiles by lazy { listOf("ScreenPopupHome", "ScreenPopupMotion", "ScreenPopupTrigger", "ScreenPopupDrawPath").flatMap { popupOwnerPaths[it].orEmpty() }.toSet() }
+    private fun sharedPopupFile(path: String) = path in ruleOwnerFiles || Regex("/localica/ui/(components|engine)/").containsMatchIn(path)
     // #862: the window's one MotionDurationScale, its key and the app's WindowMotionScale (#854 round 2, G1); only InterfaceMotion.kt
     // provides or names them, beyond an index read.
     private val windowScale = "io.github.anastaci1a.localica.ui.WindowMotionScale"
@@ -175,7 +181,8 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
             private fun argumentPins(method: com.intellij.psi.PsiMethod, node: UCallExpression) {
                 val api = pinnedApi(method) ?: return
                 method.parameterList.parameters.forEachIndexed { index, formal ->
-                    if (node.getArgumentForParameter(index) == null) return@forEachIndexed
+                    // An extension's receiver is not an argument ($this$… / <this> in light classes).
+                    if (formal.name.startsWith("$") || formal.name.startsWith("<") || node.getArgumentForParameter(index) == null) return@forEachIndexed
                     // #854 review (Astra 1): an argument for a formal outside the pinned surface (a new timing input added to the shared
                     // declaration) is red until popup-api.txt, and its review, admit it.
                     if (formal.name !in api.parameters) {
@@ -355,6 +362,14 @@ internal class PopupPolicyDetector : Detector(), SourceCodeScanner {
                 if (name in setOf("PopupActionPill", "GlassMenu", "GlassMorphPopup", "GlassDialog", "Popup", "glassAnchor") &&
                     method.parameterList.parameters.withIndex().any { (i, p) -> p.name in setOf("shadowOpacity", "opacity") && node.getArgumentForParameter(i) != null }) report(UiRuleId.ScreenPopupTrigger, node)
                 if (name == "NavigationUtilityPill") report(UiRuleId.ScreenPopupTrigger, node)
+                // Round 3 (R2-1): a composable shared entry point with neither a popup-api.txt row nor an exclusion. One incident per
+                // call: a call another popup rule already reported is not reported again.
+                val declaration = method.navigationElement as? org.jetbrains.kotlin.psi.KtNamedFunction
+                val declared = declaration?.containingKtFile?.virtualFilePath?.let { "app/src/main/java/" + it.substringAfterLast("/src/main/java/") }
+                if (declaration != null && declaration.isTopLevel && declared != null && sharedPopupFile(declared) && !sharedPopupFile(relative) &&
+                    method.hasAnnotation("androidx.compose.runtime.Composable") && popupApis.none { it.name == name } && name !in popupExclusions &&
+                    reported.none { it.second === node } && relative !in popupOwnerPaths[UiRuleId.ScreenPopupMotion.name].orEmpty())
+                    context.report(UiRuleId.ScreenPopupMotion.issue, node, context.getLocation(node), "Unclassified shared popup entry point $name: add a popup-api.txt row or a popup-api-exclusions.txt reason")
 
             }
 
