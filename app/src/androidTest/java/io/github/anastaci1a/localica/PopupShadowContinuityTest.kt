@@ -50,6 +50,7 @@ class PopupShadowContinuityTest {
     private lateinit var pageView: View
     private var pageMarker: FrameMarker? = null
     private var stage = 0
+    private var geometryWindowCount = 0
     private lateinit var output: File
     private var neighboringBody by mutableStateOf(Rect.Zero)
     private var referenceOrigin by mutableStateOf(Offset.Zero)
@@ -536,7 +537,8 @@ class PopupShadowContinuityTest {
 
     private fun verifyField(name: String, popup: Boolean = true) {
         // This is the highest (tested) native window, including for a nested menu.
-        val nodes = if (popup) compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes() else emptyList()
+        val nodes = if (popup) compose.popupGeometryNodes(anchor, open, output, name, geometryWindowCount) else emptyList()
+        if (popup && name == "first-open") geometryWindowCount = nodes.size
         val bounds = if (popup) nodes.minBy { it.boundsInRoot.width * it.boundsInRoot.height }.boundsInRoot else anchor.bounds
         val origin = IntArray(2)
         if (popup) compose.runOnIdle { requireNotNull(popupView).getLocationOnScreen(origin) }
