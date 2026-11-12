@@ -266,8 +266,8 @@ private fun GlassAnchor?.registerGlassSurface(plane: ShadowPlane, material: Bool
 private fun Modifier.bindGlassSurface(anchor: GlassAnchor?, source: FrostedBackdrop?, cornerRadius: androidx.compose.ui.unit.Dp?): Modifier {
     val binding = foldIn<GlassDepthMarker?>(null) { found, element -> if (element is GlassDepthMarker) element else found }
     SideEffect { if (anchor != null) {
-        anchor.source = binding?.source ?: source
-        anchor.cornerRadius = if (binding?.role == TriggerRole.PlainIcon) null else cornerRadius
+        anchor.source = source
+        anchor.cornerRadius = cornerRadius
     } }
     return this
 }
@@ -294,8 +294,8 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor?, source: FrostedBackdrop?
     val home = LocalGlassPopupHome.current
     SideEffect {
         anchor.popupHome = home
-        if (source != null) anchor.source = source
-        if (face != null) anchor.face = face
+        anchor.source = source
+        anchor.face = face
         anchor.bindRole(role)
         if (role == TriggerRole.PlainIcon) anchor.cornerRadius = null
     }
@@ -672,7 +672,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val departingSource = if (anchor.chromeTrigger) {
         anchor.source.takeIf { returningInline }?.takeUnless(::retired)
     } else {
-        popupHome?.backdrop.takeIf { returningInline || popupFlight.wasProjected }?.takeUnless(::retired)
+        anchor.source.takeIf { returningInline || popupFlight.wasProjected }?.takeUnless(::retired)
     }
     // Navigation keeps the native window in place until this scene is ready.
     // Ordinary popup input must not continuously capture the full-screen
@@ -691,7 +691,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             popupFlight.layer = null; popupFlight.prepared = false; popupFlight.handedOff = false; popupFlight.wasProjected = false
         }
     }
-    SideEffect { if (!returningInline) { popupFlight.prepared = false; popupFlight.handedOff = false } }
+    SideEffect { if (!returningInline) { popupFlight.handedOff = false } }
     // The full-scene recording can span pages with different ink. Its material
     // metadata must not override an explicit trigger. Detached menus instead
     // follow current ambient ink, rather than their anchor's remembered seed.

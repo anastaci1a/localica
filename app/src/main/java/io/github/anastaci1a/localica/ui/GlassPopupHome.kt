@@ -109,7 +109,7 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: B
     home.flights.forEach { flight ->
         // A full-size chrome menu stays above chrome at the start of close (#867).
         // Its converging chip returns underneath the same chrome (#667).
-        if (aboveChrome != null && aboveChrome != (!flight.chromeTrigger || flight.phase() > ChromeReturnDepthHandoff)) return@forEach
+        if (aboveChrome != null && aboveChrome != true) return@forEach
         flight.revision
         val layer = flight.layer
         // prepared is published only after the native presenter selected the
