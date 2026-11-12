@@ -33,6 +33,8 @@ internal fun ComposeTestRule.popupGeometryNodes(anchor: GlassAnchor, requestedVi
             .put("flights", flights)
     }
     File(output, "geometry-$name.json").writeText(receipt.toString(2))
+    File(output, "geometry-receipts.jsonl").appendText(
+        JSONObject(receipt.toString()).put("uptimeMs", android.os.SystemClock.uptimeMillis()).toString() + "\n")
     if (merged.isNotEmpty()) return merged
     val flights = receipt.getJSONArray("flights")
     org.junit.Assert.assertTrue("A merged geometry miss requires real handoffs: $receipt",
