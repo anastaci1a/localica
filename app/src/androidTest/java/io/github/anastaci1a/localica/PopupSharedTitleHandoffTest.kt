@@ -1,7 +1,15 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.drawable.Drawable
 import android.graphics.Color as NativeColor
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.Window
@@ -58,25 +66,38 @@ class PopupSharedTitleHandoffTest {
         val firstRecording = IdentityHashMap<View, Int>()
         val firstAdmittedDraw = IdentityHashMap<View, Int>()
         val listeners = IdentityHashMap<View, ViewTreeObserver.OnDrawListener>()
-        val admissionFailures = mutableListOf<String>()
+        val markers = IdentityHashMap<View, FirstDrawMarker>()
+        data class FirstCopy(val draw: Int, val bitmap: Bitmap, var result: Int = -1)
+        val firstCopies = mutableListOf<FirstCopy>()
         val admissionReceipts = mutableListOf<String>()
         var observing = true
         fun observe(native: Window) {
             val root = native.decorView.rootView
             if (listeners.containsKey(root)) return
+            val marker = FirstDrawMarker().also { it.setBounds(2, 96, 18, 112) }
+            markers[root] = marker
+            root.overlay.add(marker)
             val listener = ViewTreeObserver.OnDrawListener {
                 val draw = (draws[root] ?: 0) + 1
                 draws[root] = draw
                 if (anchor.hidden && anchor.modalPresent && !firstAdmittedDraw.containsKey(root)) {
                     firstAdmittedDraw[root] = draw
+                    marker.color = FirstDrawMarker.FIRST
+                    marker.invalidateSelf()
                     root.post {
                         if (observing) {
                             val recorded = firstRecording[root]
                             val receipt = "window=${System.identityHashCode(root)} firstAdmittedDraw=$draw firstTitleRecording=$recorded"
                             admissionReceipts += receipt
-                            if (recorded == null || recorded > draw) admissionFailures += receipt
+                            val copy = FirstCopy(draw, Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888))
+                            firstCopies += copy
+                            PixelCopy.request(native, copy.bitmap, { result -> copy.result = result }, Handler(Looper.getMainLooper()))
                         }
                     }
+                } else if (firstAdmittedDraw[root]?.let { draw == it + 1 } == true) {
+                    // A later buffer cannot be accepted as the first admitted draw.
+                    marker.color = FirstDrawMarker.LATER
+                    marker.invalidateSelf()
                 }
             }
             listeners[root] = listener
@@ -262,21 +283,49 @@ class PopupSharedTitleHandoffTest {
             }
             assertTrue("Native admission must be sampled", admitted)
             assertTrue("Opening must reach expanded rest", complete)
-            val firstDrawFailures = compose.runOnUiThread { admissionFailures.toList() }
-            assertTrue("The first admitted native draw must already own a title recording: $firstDrawFailures", firstDrawFailures.isEmpty())
+            compose.waitUntil(5000) { compose.runOnUiThread { firstCopies.size >= 2 && firstCopies.all { it.result != -1 } } }
+            val nativeCopies = compose.runOnUiThread { firstCopies.toList() }
+            nativeCopies.forEachIndexed { index, copy ->
+                assertEquals("First admitted native PixelCopy completes", PixelCopy.SUCCESS, copy.result)
+                File(output, "first-admitted-$index.png").outputStream().use {
+                    check(copy.bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+                assertEquals("First admitted capture must not substitute a later native draw",
+                    FirstDrawMarker.FIRST, copy.bitmap.getPixel(10, 104))
+                val ink = coloredBounds(copy.bitmap, blue = true, Rect(0f, 0f, copy.bitmap.width.toFloat(), copy.bitmap.height.toFloat()))
+                assertNotNull("Title ink must be present in the first admitted native draw: opening=$index draw=${copy.draw}", ink)
+            }
             assertTrue("Both calibration and probe openings need first-draw receipts",
                 compose.runOnUiThread { admissionReceipts.size } >= 2)
             assertTrue("Title ink must exist and follow its shared flight/body scale in every frame: $failures", failures.isEmpty())
         } finally {
             val receipts = compose.runOnUiThread {
                 observing = false
-                listeners.forEach { (root, listener) -> if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnDrawListener(listener) }
+                listeners.forEach { (root, listener) ->
+                    if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnDrawListener(listener)
+                    markers[root]?.let { root.overlay.remove(it) }
+                }
                 admissionReceipts.toList()
             }
             log.append("first-admitted-draw receipts=$receipts\n")
             File(output, "frames.txt").writeText(log.toString())
             compose.runOnUiThread { open = false }
             compose.mainClock.autoAdvance = true
+            // Completed requests own their bitmaps. An outstanding callback retains its image.
+            compose.runOnUiThread { firstCopies.filter { it.result != -1 }.forEach { it.bitmap.recycle() } }
+        }
+    }
+
+    private class FirstDrawMarker : Drawable() {
+        var color = NativeColor.BLACK
+        private val paint = Paint()
+        override fun draw(canvas: Canvas) { paint.color = color; canvas.drawRect(bounds, paint) }
+        override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+        override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter }
+        @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.OPAQUE
+        companion object {
+            val FIRST = NativeColor.rgb(190, 20, 0)
+            val LATER = NativeColor.rgb(220, 20, 0)
         }
     }
 
