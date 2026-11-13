@@ -49,7 +49,10 @@ class ArtistDataStorageTest {
             assertEquals(42L, migrated.addedAt); assertEquals(99L, migrated.modifiedAt)
             assertEquals("uri", migrated.uri); assertEquals(1, migrated.locations.size)
             assertNull(migrated.releaseType); assertNull(migrated.compilation)
-            val expected = instrumentation.context.assets.open("io.github.anastaci1a.localica.library.LibraryDatabase/10.json")
+            // The migrated database must match the newest exported schema, whatever version that is.
+            val schemas = "io.github.anastaci1a.localica.library.LibraryDatabase"
+            val latest = instrumentation.context.assets.list(schemas)!!.maxOf { it.removeSuffix(".json").toInt() }
+            val expected = instrumentation.context.assets.open("$schemas/$latest.json")
                 .bufferedReader().use { JSONObject(it.readText()).getJSONObject("database").getString("identityHash") }
             db.openHelper.readableDatabase.query("SELECT identity_hash FROM room_master_table WHERE id = 42").use {
                 assertTrue(it.moveToFirst()); assertEquals(expected, it.getString(0))

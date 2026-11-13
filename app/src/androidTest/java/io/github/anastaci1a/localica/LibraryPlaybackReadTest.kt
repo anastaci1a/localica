@@ -89,7 +89,7 @@ class LibraryPlaybackReadTest {
             assertEquals(originalIds, ids)
             val track = selected.tracks.single { it.id == "shared" }
             assertEquals(listOf("root-a", "root-b", "root-z"), track.locations.map { it.folderUri })
-            assertEquals(shared.copy(uri = "content://a/shared", relativePath = "a.flac", addedAt = track.addedAt, firstSeenAt = track.firstSeenAt,
+            assertEquals(shared.copy(uri = "content://a/shared", relativePath = "a.flac", addedAt = track.addedAt, firstSeenAt = track.firstSeenAt, firstSeenModifiedAt = shared.modifiedAt,
                 locations = listOf(TrackLocation("root-a", "content://a/shared", "a.flac"),
                     TrackLocation("root-b", "content://b/shared", "b.flac"),
                     TrackLocation("root-z", shared.uri, shared.relativePath))), track)
