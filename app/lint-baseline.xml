@@ -1621,7 +1621,7 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = &quot;all-albums&quot;, outline = albumOutline).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })"
+        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = &quot;all-albums&quot;, outline = albumOutline).ownButtonDrag().toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })"
         errorLine2="                                      ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/CollectionHeader.kt"
@@ -1676,7 +1676,7 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).combinedClickable("
+        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).ownButtonDrag().combinedClickable("
         errorLine2="                                      ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/CollectionHeader.kt"
@@ -6901,7 +6901,7 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = &quot;all-albums&quot;, outline = albumOutline).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })"
+        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = &quot;all-albums&quot;, outline = albumOutline).ownButtonDrag().toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })"
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/CollectionHeader.kt"
@@ -6923,7 +6923,7 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).combinedClickable("
+        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).ownButtonDrag().combinedClickable("
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/CollectionHeader.kt"
