@@ -187,12 +187,12 @@ class QueueOwnerContinuityTest {
     }
 
     @Test fun queueFaceContactWhilePlayerAndQueueReturnCatchesTheQueue() = localicaRunComposeUiTest {
-        val scene = Scene(); start(scene); returnQueue(scene, .6)
+        val scene = Scene(); start(scene); returnQueue(scene, .95)
         val root = onRoot(); val bounds = root.fetchSemanticsNode().boundsInRoot
         // A short contact outside the face, held still before UP, springs the displaced player back toward expanded.
         root.performTouchInput { down(Offset(bounds.width * .75f, top().toFloat() * .5f))
-            repeat(4) { moveBy(Offset(0f, bounds.height * .03f), delayMillis = 16) }
-            moveBy(Offset.Zero, delayMillis = 200); up() }
+            repeat(4) { moveBy(Offset(0f, bounds.height * .03f), delayMillis = 8) }
+            moveBy(Offset.Zero, delayMillis = 45); up() }
         mainClock.advanceTimeByFrame()
         val player = scene.playerProgress
         assertTrue("Both sheets must still move", player < 1f && phase(scene) > 0.0 && phase(scene) < 1.0)
@@ -210,7 +210,7 @@ class QueueOwnerContinuityTest {
         val root = onRoot(); val bounds = root.fetchSemanticsNode().boundsInRoot
         // Both targets collapse together, as openCollection requests (LocalicaScreen.kt:215).
         root.performTouchInput { down(Offset(bounds.width * .75f, top().toFloat() * .5f))
-            repeat(6) { moveBy(Offset(0f, bounds.height * .07f), delayMillis = 16) }; up() }
+            repeat(6) { moveBy(Offset(0f, bounds.height * .07f), delayMillis = 8) }; up() }
         var frames = 0
         while (scene.playerProgress > .6f && frames++ < 30) mainClock.advanceTimeByFrame()
         val pressed = scene.playerProgress
