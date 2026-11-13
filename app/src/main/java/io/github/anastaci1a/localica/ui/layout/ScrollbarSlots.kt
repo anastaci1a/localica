@@ -34,7 +34,7 @@ import kotlin.math.roundToInt
  * ([dragBy]); the caller turns them into list movement. [claim] resolves a press over a shared button (#950).
  */
 @Composable
-internal fun ScrollbarSlots(state: Any, key: Any, movement: () -> Pair<Int, Int>,
+internal fun ScrollbarSlots(state: Any, movement: () -> Pair<Int, Int>,
     fraction: () -> Float, thumbSize: (Float, Float) -> Float, scrolling: () -> Boolean,
     active: () -> Boolean, onActive: (Boolean) -> Unit, claim: (Offset) -> ((Offset, Long) -> Boolean?)?,
     dragFraction: () -> Float, dragFrom: (Float) -> Unit, dragBy: (Float) -> Unit,
@@ -99,7 +99,7 @@ internal fun ScrollbarSlots(state: Any, key: Any, movement: () -> Pair<Int, Int>
                 progressBarRangeInfo = ProgressBarRangeInfo(fraction(), 0f..1f)
                 setProgress { request(it.coerceIn(0f, 1f)) }
             }
-            .scrollbarInput(key, { hitNow(it) }, { claimNow(it) }, { activateNow(it) }, { moveNow(it) })) {
+            .scrollbarInput(state, { hitNow(it) }, { claimNow(it) }, { activateNow(it) }, { moveNow(it) })) {
             Box(Modifier.align(Alignment.TopEnd).offset(x = -ScrollbarSpec.edgeInset)
                 .scrollbarPresentation(motion, ::position)
                 .layout { measurable, _ ->

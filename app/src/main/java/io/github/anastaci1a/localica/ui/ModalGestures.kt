@@ -71,9 +71,7 @@ internal class ModalGestureScope(
     /** Shared buttons mounted in this window. Sibling hit paths share no other channel, so a scrollbar
      * asks here at touch-down whether a button lies under the finger (#950); geometry is read only then. */
     val buttons = mutableSetOf<DelegatableNode>()
-    fun buttonAt(root: Offset) = buttons.any { button ->
-        button.node.isAttached && button.requireLayoutCoordinates().let { it.isAttached && it.boundsInRoot().contains(root) }
-    }
+    fun buttonAt(root: Offset) = buttons.any { it.requireLayoutCoordinates().boundsInRoot().contains(root) }
 
     val root get() = parent == null
     fun activate() = coordinator.activate(this)
