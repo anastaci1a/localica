@@ -4771,7 +4771,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="642"
+            line="641"
             column="35"/>
     </issue>
 
@@ -4782,7 +4782,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="642"
+            line="641"
             column="43"/>
     </issue>
 
@@ -4793,7 +4793,7 @@
         errorLine2="                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="642"
+            line="641"
             column="51"/>
     </issue>
 
@@ -4848,7 +4848,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="648"
+            line="647"
             column="35"/>
     </issue>
 
@@ -4859,7 +4859,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="648"
+            line="647"
             column="43"/>
     </issue>
 
@@ -4870,7 +4870,7 @@
         errorLine2="                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="648"
+            line="647"
             column="51"/>
     </issue>
 
@@ -10361,28 +10361,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
             line="84"
             column="83"/>
-    </issue>
-
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="        if (none > 0f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer {"
-        errorLine2="                                                                  ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="87"
-            column="67"/>
-    </issue>
-
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="            alpha = none"
-        errorLine2="            ~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="88"
-            column="13"/>
     </issue>
 
     <issue
@@ -15921,50 +15899,6 @@
     <issue
         id="UnownedSurfaceLifetime"
         message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                    output.record(size = IntSize(1, 1)) { drawLayer(result) }"
-        errorLine2="                                                          ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="241"
-            column="59"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                if (blend &lt; 1f) drawLayer(averageSource)"
-        errorLine2="                                ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="294"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                if (blend > 0f &amp;&amp; averageHome != null) drawLayer(averageHome)"
-        errorLine2="                                                       ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="295"
-            column="56"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="            scale(size.width, size.height, Offset.Zero) { drawLayer(layer) }"
-        errorLine2="                                                          ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="297"
-            column="59"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
         errorLine1="                    withBackdropRegistration(registration) { drawLayer(backing.layer) }"
         errorLine2="                                                             ~~~~~~~~~">
         <location
@@ -15980,7 +15914,7 @@
         errorLine2="                                                                          ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="323"
+            line="148"
             column="75"/>
     </issue>
 
@@ -15991,7 +15925,7 @@
         errorLine2="                                                                                              ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="323"
+            line="148"
             column="95"/>
     </issue>
 
@@ -16024,7 +15958,7 @@
         errorLine2="                                                                      ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="368"
+            line="193"
             column="71"/>
     </issue>
 
@@ -16035,7 +15969,7 @@
         errorLine2="                                                                                          ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="368"
+            line="193"
             column="91"/>
     </issue>
 
