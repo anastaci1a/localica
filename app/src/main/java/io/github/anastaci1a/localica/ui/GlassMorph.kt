@@ -802,10 +802,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val admittedDraw = continuousOrigin == null || originAdmitted && readyWindow === window
-        var foregroundReady by remember { mutableStateOf(false) }
         var panelReady by remember { mutableStateOf(false) }
         LaunchedEffect(motion) {
-            snapshotFlow { progress.value }.collect { p -> foregroundReady=p>=.85f; panelReady=p>=.9f }
+            snapshotFlow { progress.value }.collect { panelReady=it>=.9f }
         }
         // A dragged slider rises the whole window body clear of its cancel target (#539).
         val sliderCancel = rememberSliderCancelHost()
@@ -1066,7 +1065,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         SurfaceLayer(Modifier.presentedAlpha { if (page) 1f else motion.foreground.at(phase()) }
                             .onPlaced { sharedContent?.destination(it) }
                             .then(contentModifier)
-                            .then(if (!visible || !foregroundReady) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
+                            .then(if (!visible) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
                                 awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
                             } else Modifier)) {
                             CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides if (dark) Color.White else Color(0xFF202124),
