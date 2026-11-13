@@ -43,7 +43,7 @@ private class PopupPeakOvershootFixture(private val landscape: Boolean) {
     }).around(compose)
 
     private fun drawn(c: LayoutCoordinates): Rect {
-        val s = c.size; val pts = listOf(Offset.Zero, Offset(s.width.toFloat(), 0f), Offset(0f, s.height.toFloat()), Offset(s.width.toFloat(), s.height.toFloat())).map { c.localToWindow(it) }
+        val s = c.size; val pts = listOf(Offset.Zero, Offset(s.width.toFloat(), 0f), Offset(0f, s.height.toFloat()), Offset(s.width.toFloat(), s.height.toFloat())).map { c.localToScreen(it) }
         return Rect(pts.minOf { it.x }, pts.minOf { it.y }, pts.maxOf { it.x }, pts.maxOf { it.y })
     }
 
