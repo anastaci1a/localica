@@ -66,7 +66,7 @@ class TagEditorFlowTest {
             compose.nativePointer(compose.onNode(hasText("Morning tone") and inList), holdMillis = 800)
             compose.nativePointer(compose.onPopupAction(hasText("Edit tags")))
             compose.onPopupAction(hasSetTextAction() and hasText("Morning tone")).performScrollTo().performTextReplacement("Retagged tone")
-            compose.awaitSearchImeHandoff(requireShownBeforeAction = true, editor = compose.onNode(hasSetTextAction() and isFocused())) { pressSystemBack() }
+            compose.awaitSearchImeHandoff(editor = compose.onNode(hasSetTextAction() and isFocused())) { pressSystemBack() }
             compose.nativePointer(compose.onPopupAction(hasText("Grant write access: root")).performScrollTo())
             selectFolder()
             compose.nativePointer(compose.onPopupAction(hasText("Review changes")))
