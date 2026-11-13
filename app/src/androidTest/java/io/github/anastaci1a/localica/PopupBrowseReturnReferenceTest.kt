@@ -32,7 +32,6 @@ class PopupBrowseReturnReferenceTest {
     private val frames by lazy { PopupWindowEvidence(compose) }
     @org.junit.After fun removeMarkers() = frames.dispose()
     @Test fun normalDepartingMenuLayerReference() = capture(GlassRendererMode.Normal)
-    @Test fun singleToneDepartingMenuLayerReference() = capture(GlassRendererMode.SingleToneBlur)
 
     private fun capture(mode: GlassRendererMode) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

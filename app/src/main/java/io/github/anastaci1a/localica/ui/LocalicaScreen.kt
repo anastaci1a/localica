@@ -288,7 +288,6 @@ fun LocalicaScreen(
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White)
     // This input records the browse Column only. Shell chrome is a sibling; modal capture may
     // record that chrome, but modalBackdrop is never issued an atlas capability.
-    val shellNoneAtlas = rememberNoneAtlasInput(browseBackdrop)
     val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual, settings.glass),
         dark = if (expanded) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White,
         lightMix = if (expanded) playerLightMix else null)
@@ -327,7 +326,7 @@ fun LocalicaScreen(
                 SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, activity = tabActivity, shadowOpacity = { sheet.collapsedOpacity(chromeVisibility) }, onReselect = { tab ->
                     navigation = navigation.resetTab(tab, clearLibraryFilter = false)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
-                }, noneAtlasInput = shellNoneAtlas) { tab ->
+                }) { tab ->
                     keyboard?.hide(); focusManager.clearFocus()
                     requestedTab = tab
                     navigationScope.launch {
@@ -346,7 +345,6 @@ fun LocalicaScreen(
                 Modifier.width(104.dp).fillMaxHeight(),
                 role = TriggerRole.Navigation,
                 chromeVisibility = { chromeVisibility }, playerExpansion = sheet.expansion,
-                noneAtlasInput = shellNoneAtlas,
                 onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
                 onMore = { moreOpen = true }, menuVisible = moreOpen, onMenuDismiss = { moreOpen = false }, menuContent = {
                 ActionMenuItem("Scan music", icon = AppIcon.TabFolders, onClick = { moreOpen = false; scannerOpen = true })
@@ -445,7 +443,7 @@ fun LocalicaScreen(
         if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
-            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, noneAtlasInput = shellNoneAtlas, visual = playerVisual,
+            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             onSeekRequest = onSeekRequest, sampleState = playerSample, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             providedPopupHome = playerPopupHome, openingPopupHome = browsePopupHome,
             bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {

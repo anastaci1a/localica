@@ -20,7 +20,7 @@ enum class MotionProfile { Control, ControlOff, Selection, Hover, Reveal, Resolu
 enum class SpringProfile { GlassMorph, Page, GlassMode, Strain }
 enum class MaterialRole { Glass, Panel, Selection, DragPane, Page, Scrim }
 enum class MotionAccess { Standard, Reduced }
-enum class GlassMode { Normal, SingleToneBlur, FlatNone }
+enum class GlassMode { Normal, FlatNone }
 /** A unit motion curve from 0 to 1 over u in [0,1]: a cubic Bezier [EasingSpec] or a [SpringCurveSpec]. */
 @Immutable sealed interface UnitCurveSpec { val maxSlope: Float }
 @Immutable data class EasingSpec(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : UnitCurveSpec { override val maxSlope: Float by lazy { slopeBound(this) } }

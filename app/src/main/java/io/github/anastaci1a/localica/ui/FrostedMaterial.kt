@@ -302,23 +302,19 @@ internal class BackdropRecordingScope(val source: FrostedBackdrop) {
         parent?.source?.recordedLayoutChildren?.remove(source)
         parent = value
         value?.source?.recordedLayoutChildren?.add(source)
-        BackdropRecordingAncestry.assertInputs()
     }
 }
 internal val ModifierLocalBackdropRecording = modifierLocalOf<BackdropRecordingScope?> { null }
 
 internal object BackdropRecordingAncestry {
-    val inputs = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<NoneAtlasInput, Boolean>())
-    fun assertInputs() { if (io.github.anastaci1a.localica.BuildConfig.DEBUG) inputs.forEach { it.assertInput() } }
     private val active = ArrayList<FrostedBackdrop>()
     fun containers(): List<FrostedBackdrop> = active.toList()
     fun reference(source: FrostedBackdrop) {
         if (!io.github.anastaci1a.localica.BuildConfig.DEBUG) return
         active.lastOrNull()?.takeUnless { it === source }?.recordedChildren?.add(source)
-        assertInputs()
     }
     fun begin(source: FrostedBackdrop) { source.recordedChildren.clear(); active.add(source) }
-    fun end(source: FrostedBackdrop) { check(active.removeAt(active.lastIndex) === source); assertInputs() }
+    fun end(source: FrostedBackdrop) { check(active.removeAt(active.lastIndex) === source) }
     fun contains(source: FrostedBackdrop, containers: List<FrostedBackdrop>): Boolean {
         val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<FrostedBackdrop, Boolean>())
         fun visit(node: FrostedBackdrop): Boolean = seen.add(node) &&
@@ -420,7 +416,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: RoundedCornerS
     val renderer = currentGlassRendererGeneration()
     val flat = renderer.backend == GlassBackend.FlatNone
     val flatColor = flatGlassColor()
-    if (renderer.backend == GlassBackend.SingleToneBlur) BackdropLease(source)
+    if (renderer.backend == GlassBackend.AverageFallback) BackdropLease(source)
     val location = remember { BackdropLocation() }
     val lightMix = source?.lightMix ?: 0f
     val dark = lightMix >= .5f
@@ -451,7 +447,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: RoundedCornerS
         Canvas(Modifier.matchParentSize()) {
             if (flat) { drawRect(flatColor); return@Canvas }
             if (source == null) drawRect(fallbackColor)
-            if (renderer.backend == GlassBackend.SingleToneBlur) drawRect(tone.color(tint))
+            if (renderer.backend == GlassBackend.AverageFallback) drawRect(tone.color(tint))
             else drawFrostCoating(lightMix, tone.color(tint), 1f, compact)
         }
         }

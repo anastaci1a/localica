@@ -174,8 +174,8 @@ class FullPartitionTest(unittest.TestCase):
         older = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
         newer = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
         prefix = 'io.github.anastaci1a.localica.FlatNoneRendererPopupTest#'
-        gated = {prefix+'rendererPopupCanLeaveFlatNoneForSingleToneAndNormal',
-                 prefix+'rendererPopupAccessibilityCanLeaveFlatNoneForSingleToneAndNormal'}
+        gated = {prefix+'rendererPopupCanLeaveFlatNoneForNormal',
+                 prefix+'rendererPopupAccessibilityCanLeaveFlatNoneForNormal'}
         self.assertEqual(gated, {row['id'] for row in older['sdk_omissions']})
         self.assertTrue(all(row['reason'] == 'Reviewed minSdkVersion=33 annotation'
                             for row in older['sdk_omissions']))

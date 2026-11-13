@@ -6,9 +6,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class GlassModesContractTest {
-    @Test fun threeModesHaveDistinctStableNames() {
-        assertEquals(listOf("Normal", "SingleToneBlur", "FlatNone"), GlassRendererMode.entries.map { it.name })
-        assertEquals(listOf("Normal", "Single-Tone Blur", "None"), GlassRendererMode.entries.map { it.label })
+    @Test fun twoModesHaveDistinctStableNames() {
+        assertEquals(listOf("Normal", "FlatNone"), GlassRendererMode.entries.map { it.name })
+        assertEquals(listOf("Normal", "None"), GlassRendererMode.entries.map { it.label })
+    }
+    @Test fun retiredSamplingModesRestoreNormal() {
+        for (stored in listOf("SingleToneBlur", "None"))
+            assertEquals(GlassRendererMode.Normal, GlassRendererMode.fromStored(stored))
     }
     @Test fun normalIsTheDefault() {
         assertEquals("Normal", GlassAppearance().renderer.name)

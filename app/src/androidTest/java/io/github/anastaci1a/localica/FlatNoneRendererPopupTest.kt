@@ -23,10 +23,10 @@ class FlatNoneRendererPopupTest {
     }
 
     @SdkSuppress(minSdkVersion = 33)
-    @Test fun rendererPopupCanLeaveFlatNoneForSingleToneAndNormal() = switchFromPopup(false)
+    @Test fun rendererPopupCanLeaveFlatNoneForNormal() = switchFromPopup(false)
 
     @SdkSuppress(minSdkVersion = 33)
-    @Test fun rendererPopupAccessibilityCanLeaveFlatNoneForSingleToneAndNormal() = switchFromPopup(true)
+    @Test fun rendererPopupAccessibilityCanLeaveFlatNoneForNormal() = switchFromPopup(true)
 
     private fun switchFromPopup(accessibility: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -81,8 +81,8 @@ class FlatNoneRendererPopupTest {
                 activate(By.text("Settings"))
                 activate(By.text("Interface"))
                 activate(By.text("Glass"))
-                for ((index, target) in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.FlatNone,
-                    GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.SingleToneBlur).withIndex()) {
+                for ((index, target) in listOf(GlassRendererMode.Normal, GlassRendererMode.FlatNone,
+                    GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.Normal).withIndex()) {
                     step = "$index-${target.name}"
                     activate(By.text("Glass renderer"))
                     activate(By.text(target.label))

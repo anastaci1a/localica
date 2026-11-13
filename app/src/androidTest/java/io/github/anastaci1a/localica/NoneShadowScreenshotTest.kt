@@ -76,7 +76,7 @@ class NoneShadowScreenshotTest {
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         compose.runOnIdle { runtime.request(GlassRendererMode.Normal) }
         val normal = screenshot()
-        compose.runOnIdle { runtime.request(GlassRendererMode.SingleToneBlur) }
+        compose.runOnIdle { runtime.request(GlassRendererMode.FlatNone) }
         val none = screenshot()
         sideBySide(name, normal, none)
         return normal to none

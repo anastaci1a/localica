@@ -71,7 +71,7 @@ class NoneShadowParityTest {
             // The frame-by-frame reference is taken under the same paused clock as the switch frames.
             compose.mainClock.advanceTimeByFrame()
             val normal = compose.onNodeWithTag("stage").captureToImage().toPixelMap()
-            compose.runOnIdle { runtime.request(GlassRendererMode.SingleToneBlur) }
+            compose.runOnIdle { runtime.request(GlassRendererMode.FlatNone) }
             // Every frame of the blend: no shadow blip while the fill crossfades.
             repeat(24) { frame ->
                 compose.mainClock.advanceTimeByFrame()
@@ -91,14 +91,14 @@ class NoneShadowParityTest {
         var lift: LiftShadow? = null
         compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
             LocalGlassAppearance provides appearance) { LocalicaTheme { lift = rememberLiftShadow() } } }
-        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.SingleToneBlur)) {
+        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.FlatNone)) {
             compose.runOnIdle { runtime.request(mode) }
             compose.waitForIdle()
             seen[mode] = requireNotNull(lift)
         }
-        assertEquals(seen[GlassRendererMode.Normal], seen[GlassRendererMode.SingleToneBlur])
-        assertEquals(appearance.shadowStrength * appearance.liftShadowStrength, seen.getValue(GlassRendererMode.SingleToneBlur).strength, 1e-6f)
-        assertEquals(appearance.shadowSpread, seen.getValue(GlassRendererMode.SingleToneBlur).spread, 1e-6f)
+        assertEquals(seen[GlassRendererMode.Normal], seen[GlassRendererMode.FlatNone])
+        assertEquals(appearance.shadowStrength * appearance.liftShadowStrength, seen.getValue(GlassRendererMode.FlatNone).strength, 1e-6f)
+        assertEquals(appearance.shadowSpread, seen.getValue(GlassRendererMode.FlatNone).spread, 1e-6f)
     }
     /** #852: the settled comparison must hold the same shadow branch in both captures. A
      * [RetainedGlassShadow] draws live rings until its raster is prepared off Main (after a
@@ -171,7 +171,7 @@ class NoneShadowParityTest {
         }
         val normal = settled()
         val top = compose.onNodeWithTag("queue-surface").fetchSemanticsNode().boundsInRoot.top
-        compose.runOnIdle { runtime.request(GlassRendererMode.SingleToneBlur) }
+        compose.runOnIdle { runtime.request(GlassRendererMode.FlatNone) }
         val none = settled()
         assertEquals("The drawer edge must not move with the renderer", top,
             compose.onNodeWithTag("queue-surface").fetchSemanticsNode().boundsInRoot.top)

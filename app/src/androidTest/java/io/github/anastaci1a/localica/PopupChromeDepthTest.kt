@@ -68,17 +68,9 @@ class PopupChromeDepthTest {
     @Test fun overflowBackReturnsInlineBehindChrome() { overflow("Back") }
     @Test fun overflowOutsideTapReturnsInlineBehindChrome() { overflow("Outside tap") }
     @Test fun overflowTriggerTapReturnsInlineBehindChrome() { overflow("Trigger") }
-    @Test fun singleToneSettingsReturnsInlineBehindChrome() { overflow("Settings", GlassRendererMode.SingleToneBlur) }
-    @Test fun singleToneScanReturnsInlineBehindChrome() { overflow("Scan music", GlassRendererMode.SingleToneBlur) }
-    @Test fun singleToneBackReturnsInlineBehindChrome() { overflow("Back", GlassRendererMode.SingleToneBlur) }
-    @Test fun singleToneOutsideTapReturnsInlineBehindChrome() { overflow("Outside tap", GlassRendererMode.SingleToneBlur) }
-    @Test fun singleToneTriggerTapReturnsInlineBehindChrome() { overflow("Trigger", GlassRendererMode.SingleToneBlur) }
     @Test fun normalBelowChromeProjectionIsOutsideItsSampledBackdrop() { cleanBackdrop(GlassRendererMode.Normal) }
-    @Test fun singleToneBelowChromeProjectionIsOutsideItsSampledBackdrop() { cleanBackdrop(GlassRendererMode.SingleToneBlur) }
     @Test fun normalDepartingBrowseMenuStaysAboveTabs() { nonChromeMenu(GlassRendererMode.Normal) }
-    @Test fun singleToneDepartingBrowseMenuStaysAboveTabs() { nonChromeMenu(GlassRendererMode.SingleToneBlur) }
     @Test fun normalSelectionPillKeepsItsShellDepth() { selectionPill(GlassRendererMode.Normal) }
-    @Test fun singleToneSelectionPillKeepsItsShellDepth() { selectionPill(GlassRendererMode.SingleToneBlur) }
     @Test fun collapsedShellControlsRemainAccessible() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
@@ -226,7 +218,6 @@ class PopupChromeDepthTest {
     }
 
     @Test fun normalSelectionPillPixelsCoverOverlappingTabs() = selectionOverlap(GlassRendererMode.Normal)
-    @Test fun singleToneSelectionPillPixelsCoverOverlappingTabs() = selectionOverlap(GlassRendererMode.SingleToneBlur)
 
     private fun selectionOverlap(mode: GlassRendererMode) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

@@ -54,8 +54,8 @@ class GlassModeFrameTimingTest {
         } } }
         val phases = JSONArray()
         // Alternate order so a cold first phase does not always penalize Normal.
-        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.SingleToneBlur,
-            GlassRendererMode.SingleToneBlur, GlassRendererMode.Normal)) {
+        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.FlatNone,
+            GlassRendererMode.FlatNone, GlassRendererMode.Normal)) {
             compose.runOnIdle { runtime.request(mode) }
             repeat(20) { compose.runOnIdle { frame++ }; compose.waitForIdle() }
             NavigationFrameMetricsRecorder.open(compose.activity.window, capacity = 1024).use { recorder ->

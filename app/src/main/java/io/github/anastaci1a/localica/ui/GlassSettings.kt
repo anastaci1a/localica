@@ -158,7 +158,6 @@ internal fun GlassRendererPreference(value: GlassRendererMode, onChange: (GlassR
     val explanation = if (value == GlassRendererMode.Normal && android.os.Build.VERSION.SDK_INT < 33)
         "Normal uses solid average colour on this Android version. Refraction requires Android 13 or later."
     else when (value) {
-        GlassRendererMode.SingleToneBlur -> "Single-Tone Blur is a testing mode that averages the scene beneath each surface."
         GlassRendererMode.FlatNone -> "Opaque theme fills without glass effects."
         else -> "Using " + value.label + " on this device."
     }

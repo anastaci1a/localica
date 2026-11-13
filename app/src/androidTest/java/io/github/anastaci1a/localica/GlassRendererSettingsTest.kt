@@ -20,7 +20,6 @@ class GlassRendererSettingsTest {
     private fun explanation(mode: GlassRendererMode) = if (mode == GlassRendererMode.Normal && Build.VERSION.SDK_INT < 33)
         "Normal uses solid average colour on this Android version. Refraction requires Android 13 or later."
         else when (mode) {
-            GlassRendererMode.SingleToneBlur -> "Single-Tone Blur is a testing mode that averages the scene beneath each surface."
             GlassRendererMode.FlatNone -> "Opaque theme fills without glass effects."
             else -> "Using " + mode.label + " on this device."
         }
@@ -38,7 +37,7 @@ class GlassRendererSettingsTest {
                 Column { GlassRendererPreference(mode) { mode = it; changes++ } }
             }
         } }
-        val supported = listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.FlatNone, GlassRendererMode.Normal)
+        val supported = listOf(GlassRendererMode.FlatNone, GlassRendererMode.Normal)
         for ((index, next) in supported.withIndex()) {
             val before = mode
             compose.onNodeWithText("Glass renderer").performClick()
@@ -67,13 +66,13 @@ class GlassRendererSettingsTest {
         compose.onNodeWithText(message).assertIsDisplayed()
         compose.onNodeWithText("Glass renderer").performClick()
         choice(GlassRendererMode.Normal).assertIsSelected()
-        choice(GlassRendererMode.SingleToneBlur).performClick()
+        choice(GlassRendererMode.FlatNone).performClick()
         compose.onNodeWithText("Cancel", substring = false).performClick()
         compose.onNodeWithText(message).assertIsDisplayed()
     }
 
     @Test fun actualGlassSettingsResetRestoresNormalWithTheOtherDefaults() {
-        var value by mutableStateOf(GlassAppearance(blur = .7f, depth = .9f, renderer = GlassRendererMode.SingleToneBlur))
+        var value by mutableStateOf(GlassAppearance(blur = .7f, depth = .9f, renderer = GlassRendererMode.FlatNone))
         var changes = 0
         compose.setContent { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalReducedMotion provides true) {
@@ -81,7 +80,7 @@ class GlassRendererSettingsTest {
                     interfaceContent = { section -> GlassSettingsControls(value, section) { value = it; changes++ } })
             }
         } }
-        compose.onNodeWithText(explanation(GlassRendererMode.SingleToneBlur)).assertIsDisplayed()
+        compose.onNodeWithText(explanation(GlassRendererMode.FlatNone)).assertIsDisplayed()
         compose.onNodeWithText("Glass advanced").assertIsNotEnabled()
         compose.onNodeWithText("Glass renderer").performClick()
         choice(GlassRendererMode.Normal).performClick()

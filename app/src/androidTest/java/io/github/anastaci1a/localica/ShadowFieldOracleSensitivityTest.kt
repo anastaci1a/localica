@@ -199,9 +199,6 @@ class ShadowFieldOracleSensitivityTest {
     @Test fun nativeDestinationCutoutMatchesTheBareControlAtBothFractionalOrigins() = verifyNativeDestinationCutoutReference(compose)
 
     @Test fun realShadowCallersHaveCompleteNativeFieldsInNormal() = verifyNativeShadowCallers(compose, GlassRendererMode.Normal)
-    @Test fun realShadowCallersHaveCompleteNativeFieldsInNone() = verifyNativeShadowCallers(compose, GlassRendererMode.SingleToneBlur)
     @Test fun projectedReferenceMatchesActualPressAndReboundInNormal() =
         verifyNativeShadowCallers(compose, GlassRendererMode.Normal, projectedReference = true)
-    @Test fun projectedReferenceMatchesActualPressAndReboundInNone() =
-        verifyNativeShadowCallers(compose, GlassRendererMode.SingleToneBlur, projectedReference = true)
 }
