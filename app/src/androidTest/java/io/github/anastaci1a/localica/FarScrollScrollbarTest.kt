@@ -84,13 +84,14 @@ class FarScrollScrollbarTest {
         } finally { context.getSharedPreferences("interface", 0).edit().remove("long-scroll").commit() }
     }
 
-    private fun host(state: LazyGridState, transit: ArtworkTransit, content: @Composable () -> Unit = {}) = compose.setContent { LocalicaTheme {
+    private fun host(state: LazyGridState, transit: ArtworkTransit, rows: List<BrowserItem> = items,
+        content: @Composable () -> Unit = {}) = compose.setContent { LocalicaTheme {
         CompositionLocalProvider(LocalArtworkTransit provides transit) {
             Box(Modifier.height(500.dp).width(300.dp)) {
                 LazyVerticalGrid(GridCells.Fixed(1), Modifier.fillMaxSize(), state = state) {
-                    items(items.size + 1) { Text("Row $it", Modifier.height(100.dp)) }
+                    items(rows.size + 1) { Text("Row $it", Modifier.height(100.dp)) }
                 }
-                BrowseScrollbar(state, items, TrackSort.Title, Modifier.align(androidx.compose.ui.Alignment.CenterEnd))
+                BrowseScrollbar(state, rows, TrackSort.Title, Modifier.align(androidx.compose.ui.Alignment.CenterEnd))
                 content()
             }
         }
@@ -126,7 +127,7 @@ class FarScrollScrollbarTest {
     @Test fun scrollbarRequestsWithinOneFrameCollapseToOneJump() {
         lateinit var state: LazyGridState
         val seen = mutableListOf<Int>()
-        host(LazyGridState().also { state = it }, ArtworkTransit()) {
+        host(LazyGridState().also { state = it }, ArtworkTransit(), items) {
             LaunchedEffect(Unit) { snapshotFlow { state.firstVisibleItemIndex }.collect { seen += it } }
         }
         compose.waitForIdle()
@@ -139,7 +140,7 @@ class FarScrollScrollbarTest {
     @Test fun thumbPositionAndProgressSemanticsTrackTheList() {
         lateinit var state: LazyGridState
         lateinit var scope: CoroutineScope
-        host(LazyGridState().also { state = it }, ArtworkTransit()) { scope = rememberCoroutineScope() }
+        host(LazyGridState().also { state = it }, ArtworkTransit(), items) { scope = rememberCoroutineScope() }
         fun range(): ProgressBarRangeInfo = compose.onNodeWithTag("browse-scrollbar").fetchSemanticsNode()
             .config[SemanticsProperties.ProgressBarRangeInfo]
         fun thumbTop() = compose.onNodeWithTag("browse-scrollbar-thumb").fetchSemanticsNode().boundsInRoot.top
@@ -155,5 +156,40 @@ class FarScrollScrollbarTest {
         assertEquals(1f, range().current, .001f)
         assertTrue(thumbTop() > middle)
         assertEquals(0f..1f, range().range)
+    }
+
+    /** #774 at operator scale (13.4k and 50k rows): fast full-length thumb drags never crash, end exactly at both
+     * ends, and leave no size-dependent heap. Heap and GC are written to logcat as Scrollbar774. */
+    @Test fun fastDragsOver13400RowsEndExactlyWithBoundedHeap() = fastFullLengthDrags(13_400)
+    @Test fun fastDragsOver50000RowsEndExactlyWithBoundedHeap() = fastFullLengthDrags(50_000)
+
+    private fun fastFullLengthDrags(size: Int) {
+        val rows = List(size) { BrowserItem(MediaRef(MediaKind.Album, "a$it"), "T$it", null, emptyList()) }
+        lateinit var state: LazyGridState
+        host(LazyGridState().also { state = it }, ArtworkTransit(), rows)
+        val bar = compose.onNodeWithTag("browse-scrollbar")
+        fun heap() = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
+        fun gcs() = android.os.Debug.getRuntimeStat("art.gc.gc-count")
+        compose.revealScrollbar(state)
+        Runtime.getRuntime().gc()
+        val before = heap(); val gcBefore = gcs()
+        repeat(4) {
+            val grab = compose.thumbGrabY()
+            bar.performTouchInput { down(Offset(centerX, grab)); moveTo(Offset(centerX, height - 1f), delayMillis = 40); moveTo(Offset(centerX, 1f), delayMillis = 40); moveTo(Offset(centerX, height - 1f), delayMillis = 40); up() }
+            compose.mainClock.advanceTimeBy(500)
+            compose.waitForIdle()
+            compose.runOnIdle { assertFalse("$size rows: a full-length drag ends exactly at the end", state.canScrollForward) }
+            compose.revealScrollbar(state)
+        }
+        val grab = compose.thumbGrabY()
+        bar.performTouchInput { down(Offset(centerX, grab)); moveTo(Offset(centerX, 1f), delayMillis = 40); up() }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals("$size rows: dragging to the top ends exactly", 0, state.firstVisibleItemIndex) }
+        Runtime.getRuntime().gc()
+        val growth = heap() - before
+        android.util.Log.i("Scrollbar774", "rows=$size heapBefore=$before heapAfter=${heap()} growth=$growth gc=${gcBefore}->${gcs()}")
+        assertTrue("$size rows: heap growth $growth B after drags", growth < 8L shl 20)
+        compose.mainClock.autoAdvance = true
     }
 }
