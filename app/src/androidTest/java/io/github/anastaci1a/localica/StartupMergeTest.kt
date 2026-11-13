@@ -21,8 +21,10 @@ class StartupMergeTest {
             store.replaceRoot(ScanResult(root, listOf(original), 1, setOf(original.id)))
             val saved = store.current().tracks.single()
             store.updateMetadata(saved.copy(title = "Fresh edit", album = "Edited album"))
-            store.mergeRoot(ScanResult(other, listOf(original.copy(uri = "alternate", relativePath = "nested/song.mp3")), 0))
-            store.mergeRoot(ScanResult(root, listOf(original, original.copy(uri = "new", id = "new", title = "New")), 0))
+            // Quick discovery scans with the saved tracks as its cache, under the lock tag edits share (#930).
+            val cached = store.current().tracks.single()
+            store.mergeRoot(ScanResult(other, listOf(cached.copy(uri = "alternate", relativePath = "nested/song.mp3")), 0))
+            store.mergeRoot(ScanResult(root, listOf(cached, original.copy(uri = "new", id = "new", title = "New")), 0))
             val snapshot = store.current()
             val current = snapshot.tracks.single { it.id == saved.id }
             assertEquals("Fresh edit", current.title)
@@ -32,7 +34,7 @@ class StartupMergeTest {
             assertEquals(listOf(MetadataFailure(saved.id, "root", "song.mp3")), snapshot.metadataFailures)
             assertNotNull(snapshot.tracks.single { it.id == "new" }.addedAt)
             val beforeRetry = store.current()
-            store.mergeRoot(ScanResult(root, listOf(original), 0))
+            store.mergeRoot(ScanResult(root, listOf(cached), 0))
             assertEquals(beforeRetry, store.current())
             // Full refresh alone may replace tags and remove missing membership.
             store.replaceRoot(ScanResult(root, emptyList(), 0))

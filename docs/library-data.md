@@ -1,6 +1,6 @@
 # Library data files
 
-Localica exports and imports its own library data as one versioned JSON file. Tools outside the app can read an export, change supported fields and give the file back to Localica. Version 1.0 imports only the date each song was added.
+Localica exports and imports its own library data as one versioned JSON file. Tools outside the app can read an export, change supported fields and give the file back to Localica. Version 1.x imports only the date each song was added.
 
 **Settings → Library and tags → Library data** owns **Export library data** and **Import library data**. Both use the system file picker. Status: implemented in [#720](https://github.com/anastaci1a/localica/issues/720).
 
@@ -11,7 +11,7 @@ Export writes plain UTF-8 JSON. Import also accepts the same JSON compressed wit
 ```json
 {
   "format": "localica-library-data",
-  "version": "1.0",
+  "version": "1.1",
   "exportedAt": 1762650000000,
   "app": "Localica 0.33.16",
   "tracks": [
@@ -22,7 +22,7 @@ Export writes plain UTF-8 JSON. Import also accepts the same JSON compressed wit
       "sizeBytes": 31457280, "durationMs": 245300,
       "title": "Song", "artist": "Artist", "album": "Album", "albumArtist": "Artist",
       "trackNumber": 1, "discNumber": 1,
-      "addedAt": 1700000000000
+      "addedAt": 1700000000000, "firstSeenAt": 1762000000000
     }
   ]
 }
@@ -31,7 +31,7 @@ Export writes plain UTF-8 JSON. Import also accepts the same JSON compressed wit
 | Field | Type and unit | Meaning |
 | --- | --- | --- |
 | `format` | String | Always `localica-library-data`. Other values are refused. |
-| `version` | String `major.minor` | Format version. This release writes `1.0`. |
+| `version` | String `major.minor` | Format version. This release writes `1.1` (adds `firstSeenAt`); `1.0` files still import. |
 | `exportedAt` | Integer, epoch milliseconds (UTC) | When the export was written. Informational. |
 | `app` | String | Exporting app version. Informational. |
 | `tracks` | Array of objects | One record per indexed song. Entries that are not objects are skipped and counted. |
@@ -54,12 +54,14 @@ Export writes every field below for every song, using `null` when Localica has n
 | `title`, `artist`, `album` | String | Indexed tags. Metadata keys. |
 | `albumArtist`, `trackNumber`, `discNumber` | String, integer, integer | Indexed tags. Identity only; never matched. |
 | `addedAt` | Integer, epoch milliseconds (UTC) | Date added. Imported. Must be a positive whole number. |
+| `firstSeenAt` | Integer, epoch milliseconds (UTC) | When Localica first indexed the song. Since 1.1. Exported only; import never changes it. |
 
 ## Included fields
 
 | Data | Decision | Reason |
 | --- | --- | --- |
 | Date added | Exported and imported. | Localica owns it; audio files do not store it. Sort by date added uses it. |
+| First seen | Exported, never imported. | A historical fact: once overwritten it cannot be rebuilt. Date added starts equal to it, so an import that replaces date added can be undone by importing first seen as date added. |
 | Identity keys | Exported, used only for matching. | Tags and locations come from files and scans; import never rewrites them. |
 | Play counts and history | Not included in 1.0. | Counts derive from individual qualified plays in a separate database. A number cannot recreate those plays, and one transaction cannot cover both databases. |
 | Playlists | Not included in 1.0. | Playlists have their own M3U import and export. Entries keep saved song snapshots rather than one value per song. |
@@ -87,7 +89,7 @@ A stage with several candidates makes the record ambiguous. Several records that
 3. **Apply** plans again under the scan lock and writes every change in one database transaction.
 4. The result shows the applied counts.
 
-Nothing changes when the file is refused or the confirmation is cancelled. Later Quick Scans, Full scans and tag edits keep imported dates. Removing a song and indexing it again starts a new date, as described in [Product](product.md#dates-and-listening-statistics).
+Nothing changes when the file is refused or the confirmation is cancelled. Later Quick Scans, Full scans and tag edits keep imported dates. Removing a song or its folder and indexing it again keeps both dates, as described in [Product](product.md#dates-and-listening-statistics).
 
 ## Versions
 

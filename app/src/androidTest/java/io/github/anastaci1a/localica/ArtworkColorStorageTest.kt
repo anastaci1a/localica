@@ -54,12 +54,13 @@ class ArtworkColorStorageTest {
                 dao.observeArtworkColors().first().associate { it.uri to it.color })
             // A tag edit or rescan that changes modifiedAt makes the colour stale.
             val track = snapshot.tracks.first()
-            dao.updateMetadata(TrackRecord(track.id, track.title, null, null, null, track.fileName, null, null, null, null, null, null, modifiedAt = 200))
+            dao.updateMetadataBatch(listOf(TrackRecord(track.id, track.title, null, null, null, track.fileName, null, null, null, null, null, null, modifiedAt = 200)))
             assertEquals(setOf("id0", "id2"), store.pending(10).map { it.trackId }.toSet())
-            // Removing the root cascades its colours away.
+            // Removing the root hides its colours; the retained tracks keep them for rediscovery (#930).
             dao.removeRoot(root)
             assertTrue(dao.observeArtworkColors().first().isEmpty())
-            assertEquals(0, database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM track_artwork").use { it.moveToFirst(); it.getInt(0) })
+            assertTrue(store.pending(10).isEmpty())
+            assertEquals(2, database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM track_artwork").use { it.moveToFirst(); it.getInt(0) })
         } finally { database.close(); context.deleteDatabase(name) }
     }
 
