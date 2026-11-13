@@ -1,6 +1,6 @@
-<!-- Release: v0.34.2 -->
+<!-- Release: v0.34.3 -->
 
-# Release v0.34.2
+# Release v0.34.3
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,51 +8,33 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
-- Adopt the measured Apple popup motion model with shared spring flight, retained origins and bounded geometry.
-- Prevent crashes when More is reopened during its return animation.
-- Close popup width and height together while preserving the opening motion.
-- Add an Animation speed slider and a Respect system animation scale toggle.
-- Enforce shared popup ownership and prevent new screen-owned popup overrides through release gates.
-- Improve native keyboard isolation, Reduced motion fixtures and prototype verification policy.
-- App Kotlin/Java source: 53,977 lines versus 53,469 in v0.34.1, an increase of 508 lines.
-- Reduce inherited UI debt from 1,487 to 1,480: RawMotionMap 46 → 40 and NonPresetScreenLayout 283 → 282.
+- Let a swipe-down outside the Queue minimize the player while the Queue popup is still minimizing, and route Queue sheet contacts through the shared sheet drag.
+- Keep each song's date added for the life of its track record, so rescans no longer reset it and date sorting stops collapsing to A–Z ties.
+- Remove the Single-Tone glass renderer. The glass renderer setting now offers Normal and None, and Normal is unchanged.
+- Record the process exit reason when a native CI shard loses its app process.
+- App Kotlin/Java source: 53,357 lines versus 53,977 in v0.34.2, a reduction of 620 lines.
+- Reduce inherited UI debt from 1,480 to 1,474: RawPresentationTransform 136 → 134 and UnownedSurfaceLifetime 58 → 54. No new overrides.
 
 ## Resolved issues
 
-- [#854](https://github.com/anastaci1a/localica/issues/854): Adopt the accepted Apple popup motion model across shared popup presentations.
-- [#855](https://github.com/anastaci1a/localica/issues/855): Deliver the measured popup model adopted through #854.
-- [#860](https://github.com/anastaci1a/localica/issues/860): Replace Faster animations with the Animation speed slider.
-- [#862](https://github.com/anastaci1a/localica/issues/862): Add the Respect system animation scale toggle.
-- [#868](https://github.com/anastaci1a/localica/issues/868): Share complete-lane deferrals and diagnostic skip policy with prototype verification.
-- [#871](https://github.com/anastaci1a/localica/issues/871): Refresh shard scheduling durations from the complete v0.34.1 producer.
-- [#872](https://github.com/anastaci1a/localica/issues/872): Cover four retained Settings popup origins at Standard speed with law-bounded waits.
-- [#874](https://github.com/anastaci1a/localica/issues/874): Restore native keyboard policy and retire keyboard state between test owners.
-- [#878](https://github.com/anastaci1a/localica/issues/878): Prevent negative corner radii and bound spring projections used by player geometry and text.
-- [#879](https://github.com/anastaci1a/localica/issues/879): Bind Reduced motion test fixtures to matching Engine records.
-- [#884](https://github.com/anastaci1a/localica/issues/884): Enforce shared popup ownership, API boundaries and duplicate-role checks.
-
-- [#903](https://github.com/anastaci1a/localica/issues/903): Correct selection stacking fixtures and inspect only discriminating opaque pixels.
-- [#921](https://github.com/anastaci1a/localica/issues/921): Inspect popup-depth hardware bitmaps through exact software copies.
-- [#924](https://github.com/anastaci1a/localica/issues/924): Observe merged browser readiness before scrolling the tag editor flow.
-- [#925](https://github.com/anastaci1a/localica/issues/925): Retain safe popup sampling until the home stops projecting the closing flight.
-- [#926](https://github.com/anastaci1a/localica/issues/926): Remove the separate cross-axis close law so popup width and height shrink together.
-
-- [#933](https://github.com/anastaci1a/localica/issues/933): Observe popup readiness and dismissal in picker, artwork and tag recovery tests.
-- [#935](https://github.com/anastaci1a/localica/issues/935): Suppress system crash dialogs during emulator boot so DocumentsUI failures cannot occlude later tests.
+- [#885](https://github.com/anastaci1a/localica/issues/885): Minimize the player with a swipe-down outside the Queue hitbox while the Queue popup is minimizing.
+- [#919](https://github.com/anastaci1a/localica/issues/919): Remove the Single-Tone glass rendering mode, keeping Normal and None.
+- [#930](https://github.com/anastaci1a/localica/issues/930): Preserve date added across rescans so it is never reset or shared by the whole library.
+- [#931](https://github.com/anastaci1a/localica/issues/931): Fold the Queue's direct sheet-contact routing into the shared sheet drag.
 
 ## Known issues and follow-ups
 
-- [#887](https://github.com/anastaci1a/localica/issues/887): The queue selector title fix is excluded from this release.
 - [#895](https://github.com/anastaci1a/localica/issues/895): Existing UI architecture findings remain under a ratchet; new overrides are forbidden and inherited counts may only decrease.
-- [#904](https://github.com/anastaci1a/localica/issues/904): API 26 shadow fixtures can capture Launcher before foreground admission.
-- [#915](https://github.com/anastaci1a/localica/issues/915): Single-Tone reference captures are not deterministic; removal of that rendering mode is planned in [#919](https://github.com/anastaci1a/localica/issues/919).
-- [#917](https://github.com/anastaci1a/localica/issues/917): A pre-existing timing-dependent page offset can appear after the Queue drawer test.
+- [#938](https://github.com/anastaci1a/localica/issues/938): An API 36 CI shard can lose its shared app/instrumentation process; this release adds exit-reason capture while the cause is investigated.
+- [#787](https://github.com/anastaci1a/localica/issues/787): LastFmGroupListTest can fail to scroll at the largest font in RTL in full runs.
+- [#936](https://github.com/anastaci1a/localica/issues/936): Tapping the current tab can sometimes take the select path and swallow the next tap.
+- [#940](https://github.com/anastaci1a/localica/issues/940): Re-tapping Sort or View while its popup is closing is ignored instead of reopening it.
 - [#920](https://github.com/anastaci1a/localica/issues/920): Reversing the bottom popup during opening can exceed its cross-axis band; reversal work remains deferred.
-- [#936](https://github.com/anastaci1a/localica/issues/936): API 36 folder scan readiness can intermittently miss the first song-list observation.
+- [#937](https://github.com/anastaci1a/localica/issues/937): Glass sampling scaffolding left unused by the Single-Tone removal is scheduled for deletion.
 - The 8.3 ms whole-frame performance objective remains unmet and unchanged. Functional acceptance does not qualify frame timing.
 
 ## Install
 
-1. Download `localica-v0.34.2-pre-release.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.34.3-pre-release.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
