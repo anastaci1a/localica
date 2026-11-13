@@ -43,23 +43,22 @@ enum class PopupMotionVariant { Base, CrossAxisSnap, Auto, Legacy }
 enum class PopupDirection { Open, Close, Gate }
 /** #854/#855 measured Apple popup motion. Every popup trajectory, test reference and admission bound derives from this.
  * Laws are read only through [law], so a revision can make them per kind without touching callers. */
-@Immutable data class PopupMotionModel(val revision: String, val open: SpringLaw, val close: SpringLaw, val crossOpen: SpringLaw, val crossClose: SpringLaw, val gate: SpringLaw,
+@Immutable data class PopupMotionModel(val revision: String, val open: SpringLaw, val close: SpringLaw, val crossOpen: SpringLaw, val gate: SpringLaw,
     val snapAspect: Float, val preparedRamp: Float, val rampBlend: Float, val variants: Map<PopupKind,PopupMotionVariant>,
     /** The phase band [-band, 1 + band] every spring channel must stay in; admission and the engine's extremum proofs both read it. */
     val band: Float = StockPopupExpansionBand) {
     fun variant(kind: PopupKind): PopupMotionVariant = variants[kind] ?: PopupMotionVariant.Base
-    /** One channel's law: the main axis by [direction]; [cross] channels use the snap laws (a cross-axis gate approach uses the cross close law). */
+    /** One channel's law: the main axis by [direction]; only a [cross] open uses the snap law; close and gate run the main law on every edge. */
     @Suppress("UNUSED_PARAMETER") fun law(kind: PopupKind, direction: PopupDirection, cross: Boolean): SpringLaw =
-        if(cross) { if(direction==PopupDirection.Open) crossOpen else crossClose } else when(direction) { PopupDirection.Open -> open; PopupDirection.Close -> close; PopupDirection.Gate -> gate }
+        if(cross && direction==PopupDirection.Open) crossOpen else when(direction) { PopupDirection.Open -> open; PopupDirection.Close -> close; PopupDirection.Gate -> gate }
 }
 /** Provenance of [StockPopupMotion]: revision 855-ios262-60fps-interim (feedback/issues/855-apple-popup-motion/pass2/INTERIM-MODEL.md,
- * lead swap 2026-11-11): iOS 26.2 60 fps menu fits open (28, .78), close (20, 1) with the gate = close; cross (120, 1) unchanged from
- * pass 1 (not yet measured in 26.2); dialogs use the open law. The 10–13 % bar-button far-edge bounce is deliberately not reproduced
+ * lead swap 2026-11-11), -r926: iOS 26.2 60 fps menu fits open (28, .78), close (20, 1) with the gate = close; open cross snap (120, 1) unchanged from
+ * pass 1 (not yet measured in 26.2); close and gate have no cross law (#926); dialogs use the open law. The 10–13 % bar-button far-edge bounce is deliberately not reproduced
  * (it would leave the .05 band). Supersedes 855-wwdc25-30fps and the lead close-omega-24 ruling. T1 pins the model to this record. */
-internal val StockPopupMotionRecord: Map<String,List<Float>> = mapOf("open" to listOf(28f,.78f), "close" to listOf(20f,1f), "crossOpen" to listOf(120f,1f),
-    "crossClose" to listOf(120f,1f), "gate" to listOf(20f,1f), "snapAspect" to listOf(1.4f), "preparedRamp" to listOf(.25f,.05f))
-internal const val StockPopupMotionRevision = "855-ios262-60fps-interim"
-internal val StockPopupMotion = PopupMotionModel(StockPopupMotionRevision, SpringLaw(28f,.78f), SpringLaw(20f,1f), SpringLaw(120f,1f), SpringLaw(120f,1f), SpringLaw(20f,1f), 1.4f, .25f, .05f,
+internal val StockPopupMotionRecord: Map<String,List<Float>> = mapOf("open" to listOf(28f,.78f), "close" to listOf(20f,1f), "crossOpen" to listOf(120f,1f), "gate" to listOf(20f,1f), "snapAspect" to listOf(1.4f), "preparedRamp" to listOf(.25f,.05f))
+internal const val StockPopupMotionRevision = "855-ios262-60fps-interim-r926"
+internal val StockPopupMotion = PopupMotionModel(StockPopupMotionRevision, SpringLaw(28f,.78f), SpringLaw(20f,1f), SpringLaw(120f,1f), SpringLaw(20f,1f), 1.4f, .25f, .05f,
     mapOf(PopupKind.Menu to PopupMotionVariant.Base, PopupKind.RowMenu to PopupMotionVariant.Base, PopupKind.BottomMenu to PopupMotionVariant.CrossAxisSnap, PopupKind.Dialog to PopupMotionVariant.Base,
         PopupKind.SelectionPill to PopupMotionVariant.Base, PopupKind.Legacy to PopupMotionVariant.Legacy))
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
@@ -152,7 +151,7 @@ internal fun springOvershoot(zeta: Double): Double = if(zeta>=1) 0.0 else exp(-P
 internal fun popupMotionAdmission(m: PopupMotionModel): List<String> {
     val errors=mutableListOf<String>(); val band=m.band
     if(!(band.isFinite() && band>0f && band<=.1f)) return listOf("band")
-    for((key,law) in listOf("open" to m.open,"close" to m.close,"crossOpen" to m.crossOpen,"crossClose" to m.crossClose,"gate" to m.gate)) {
+    for((key,law) in listOf("open" to m.open,"close" to m.close,"crossOpen" to m.crossOpen,"gate" to m.gate)) {
         if(!(law.omega.isFinite() && law.zeta.isFinite() && law.omega in 1f..400f && law.zeta in .5f..4f)) { errors+=key; continue }
         if(key!="open" && law.zeta<1f) errors+="$key.overshoot"
         if(key=="open" && springOvershoot(law.zeta.toDouble())>band) errors+="open.overshoot"
@@ -193,8 +192,7 @@ internal fun popupReversalReach(m: PopupMotionModel): Map<String,ClosedFloatingP
         return springExtrema(from,0.0,to,w1,z1).let { min(lo,it.start)..max(hi,it.endInclusive) }
     }
     return mapOf("openClose" to reach(m.open,0.0,1.0,m.close,0.0),"closeOpen" to reach(m.close,1.0,0.0,m.open,1.0),
-        "openGate" to reach(m.open,0.0,1.0,m.gate,m.preparedRamp.toDouble()),"gateOpen" to reach(m.gate,0.0,m.preparedRamp.toDouble(),m.open,1.0),
-        "crossOpenClose" to reach(m.crossOpen,0.0,1.0,m.crossClose,0.0),"crossCloseOpen" to reach(m.crossClose,1.0,0.0,m.crossOpen,1.0))
+        "openGate" to reach(m.open,0.0,1.0,m.gate,m.preparedRamp.toDouble()),"gateOpen" to reach(m.gate,0.0,m.preparedRamp.toDouble(),m.open,1.0))
 }
 /** The settle horizon of [spring] at [speed] from its worst admitted state, |x0| <= 1.05 and |v0| <= 1.1 omega_eff (A2.2). The parameter is not
  * named law: #884 reserves that name for motion-selecting arguments, and this is the spec's own admission math. */

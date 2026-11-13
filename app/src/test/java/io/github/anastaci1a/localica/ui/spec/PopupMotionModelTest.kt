@@ -10,9 +10,9 @@ import kotlin.math.*
 /** #854 T1: the stock model is its provenance record, its derived times and overshoot follow the closed forms, and admission rejects every section 3.4 violation. */
 class PopupMotionModelTest {
     private val m = StockPopupMotion
-    private fun laws(model: PopupMotionModel) = mapOf("open" to model.open, "close" to model.close, "crossOpen" to model.crossOpen, "crossClose" to model.crossClose, "gate" to model.gate)
+    private fun laws(model: PopupMotionModel) = mapOf("open" to model.open, "close" to model.close, "crossOpen" to model.crossOpen, "gate" to model.gate)
     private fun with(key: String, law: SpringLaw) = when (key) {
-        "open" -> m.copy(open = law); "close" -> m.copy(close = law); "crossOpen" -> m.copy(crossOpen = law); "crossClose" -> m.copy(crossClose = law); else -> m.copy(gate = law)
+        "open" -> m.copy(open = law); "close" -> m.copy(close = law); "crossOpen" -> m.copy(crossOpen = law); else -> m.copy(gate = law)
     }
     private fun rejects(reason: String, model: PopupMotionModel) {
         assertTrue("$reason in ${popupMotionAdmission(model)}", reason in popupMotionAdmission(model))
@@ -22,7 +22,7 @@ class PopupMotionModelTest {
 
     @Test fun stockModelEqualsItsProvenanceRecord() {
         assertEquals(StockPopupMotionRevision, m.revision)
-        assertEquals(setOf("open", "close", "crossOpen", "crossClose", "gate", "snapAspect", "preparedRamp"), StockPopupMotionRecord.keys)
+        assertEquals(setOf("open", "close", "crossOpen", "gate", "snapAspect", "preparedRamp"), StockPopupMotionRecord.keys)
         for ((key, law) in laws(m)) assertEquals(key, StockPopupMotionRecord.getValue(key), listOf(law.omega, law.zeta))
         assertEquals(StockPopupMotionRecord.getValue("snapAspect"), listOf(m.snapAspect))
         assertEquals(StockPopupMotionRecord.getValue("preparedRamp"), listOf(m.preparedRamp, m.rampBlend))
@@ -30,15 +30,14 @@ class PopupMotionModelTest {
         assertEquals(PopupKind.entries.toSet(), m.variants.keys)
         // 855-ios262-60fps-interim: the 26.2 open is the livelier spring (about twice as fast as the WWDC25 captures) and the close is slower than it by t90.
         for (f in listOf(.5, .9)) assertTrue("open t$f", SpringOracle.crossing(f, m.open.omega.toDouble(), m.open.zeta.toDouble()) < SpringOracle.crossing(f, m.close.omega.toDouble(), m.close.zeta.toDouble()))
-        assertEquals("855-ios262-60fps-interim", m.revision)
-        assertEquals(m.crossOpen, m.crossClose)
+        assertEquals("855-ios262-60fps-interim-r926", m.revision)
         assertTrue("The cross axis reaches 90 % within one 30 fps frame", SpringOracle.crossing(.9, m.crossOpen.omega.toDouble(), m.crossOpen.zeta.toDouble()) <= 1.0 / 30)
     }
 
     @Test fun lawLookupReadsOnlyThroughTheModel() {
         for (kind in PopupKind.entries) {
             assertEquals(m.open, m.law(kind, PopupDirection.Open, false)); assertEquals(m.close, m.law(kind, PopupDirection.Close, false)); assertEquals(m.gate, m.law(kind, PopupDirection.Gate, false))
-            assertEquals(m.crossOpen, m.law(kind, PopupDirection.Open, true)); assertEquals(m.crossClose, m.law(kind, PopupDirection.Close, true)); assertEquals(m.crossClose, m.law(kind, PopupDirection.Gate, true))
+            assertEquals(m.crossOpen, m.law(kind, PopupDirection.Open, true)); assertEquals(m.close, m.law(kind, PopupDirection.Close, true)); assertEquals(m.gate, m.law(kind, PopupDirection.Gate, true))
         }
     }
 
@@ -86,8 +85,8 @@ class PopupMotionModelTest {
         rejects("open.overshoot", m.copy(open = SpringLaw(m.open.omega, (edge - .01).toFloat())))
         assertFalse("open.overshoot" in popupMotionAdmission(m.copy(open = SpringLaw(m.open.omega, (edge + .01).toFloat()))))
         rejects("open.overshoot", m.copy(open = SpringLaw(m.open.omega, .5f)))
-        for (key in listOf("close", "crossOpen", "crossClose", "gate")) for (zeta in listOf(.5f, .9f, .999f)) rejects("$key.overshoot", with(key, SpringLaw(laws(m).getValue(key).omega, zeta)))
-        for (key in listOf("close", "crossOpen", "crossClose", "gate")) assertFalse(popupMotionAdmission(with(key, SpringLaw(laws(m).getValue(key).omega, 2f))).any { it.endsWith("overshoot") })
+        for (key in listOf("close", "crossOpen", "gate")) for (zeta in listOf(.5f, .9f, .999f)) rejects("$key.overshoot", with(key, SpringLaw(laws(m).getValue(key).omega, zeta)))
+        for (key in listOf("close", "crossOpen", "gate")) assertFalse(popupMotionAdmission(with(key, SpringLaw(laws(m).getValue(key).omega, 2f))).any { it.endsWith("overshoot") })
     }
 
     @Test fun admissionPinsTheSettleHorizonAtTheSlowestSpeed() {

@@ -9,7 +9,7 @@ import kotlin.math.abs
 /** #854 T7: the cross-axis snap variant, its kind table (section 2) and the Auto aspect rule (section 1.6). */
 class CrossAxisSnapTest {
     private val model = StockPopupMotion
-    private val crossOpen = model.law(PopupKind.BottomMenu, PopupDirection.Open, true); private val crossClose = model.law(PopupKind.BottomMenu, PopupDirection.Close, true)
+    private val crossOpen = model.law(PopupKind.BottomMenu, PopupDirection.Open, true)
     private val open = model.open; private val close = model.close
     private val autoModel = model.copy(variants = model.variants + (PopupKind.Menu to PopupMotionVariant.Auto))
     private fun z(l: SpringLaw) = l.zeta.toDouble(); private fun w(l: SpringLaw) = l.omega.toDouble()
@@ -57,14 +57,14 @@ class CrossAxisSnapTest {
         }
     }
 
-    @Test fun theCrossAxisStaysFastOnClose() = EngineHarness().use { h ->
+    @Test fun widthAndHeightCloseTogether() = EngineHarness().use { h ->
         h.setContext(120)
         val rig = PopupRig(h, menu, PopupKind.BottomMenu, expanded = true); val main = rig.basis.edgeIndex; val cross = crossEdges(rig)
         assertTrue(cross.isNotEmpty())
         rig.owner.target(false); val start = h.clock.stampNow
         for (k in 1..30) {
             val t = k * .004; val s = stampAt(start, t)
-            for (i in cross) assertEquals("cross edge $i t=$t", SpringOracle.at(1.0, 0.0, 0.0, w(crossClose), z(crossClose), t).first, fraction(rig, i, s), 1e-5)
+            for (i in cross) assertEquals("cross edge $i t=$t", SpringOracle.at(1.0, 0.0, 0.0, w(close), z(close), t).first, fraction(rig, i, s), 1e-5)
             assertEquals("main edge t=$t", SpringOracle.at(1.0, 0.0, 0.0, w(close), z(close), t).first, fraction(rig, main, s), 1e-5)
         }
         rig.owner.dispose()
