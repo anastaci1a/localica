@@ -63,8 +63,8 @@ internal fun disposeSearchImeObserver(observer: View) {
 }
 
 /** Observe the editor's native window handoff without replacing application callbacks. */
-internal fun ComposeContentTestRule.awaitSearchImeHandoff(requireShownBeforeAction: Boolean = false, action: () -> Unit) {
-    val editor = onNode(hasSetTextAction())
+internal fun ComposeContentTestRule.awaitSearchImeHandoff(requireShownBeforeAction: Boolean = false,
+    editor: SemanticsNodeInteraction = onNode(hasSetTextAction()), action: () -> Unit) {
     val view = (editor.fetchSemanticsNode().root as ViewRootForTest).view
     val decor = view.rootView as ViewGroup
     lateinit var observer: View
