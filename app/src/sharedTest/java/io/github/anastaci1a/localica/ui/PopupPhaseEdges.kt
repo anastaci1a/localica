@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.ui.PopupPresenter.*
-import io.github.anastaci1a.localica.ui.PopupTakeover.*
+import io.github.anastaci1a.localica.ui.engine.PopupTakeover.*
 
 /** #920 step 1: the transition table (DESIGN.md 3.3 as amended by ADDENDUM-TAIL.md 1.2), takeover and presenter together. */
 internal fun legalPopupEdge(from: PopupPhase, to: PopupPhase): Boolean {

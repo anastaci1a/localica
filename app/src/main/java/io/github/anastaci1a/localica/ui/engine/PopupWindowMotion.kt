@@ -5,6 +5,11 @@ import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 
+/** #920: a popup's one stored takeover phase (SPEC.md section 2); every takeover flag is a view of it. */
+internal enum class PopupTakeover { Closed, Admitting, InWindow, Restoring }
+/** The trigger's anchor stores the phase, so it outlives an owner rebuilt for a new kind; shared content reads it here. */
+internal interface PopupTakeoverOwner { val takeover: PopupTakeover }
+
 /** #854: the surface kind of the enclosing popup; retained faces inside it (rememberFaceExpansion) inherit its motion. */
 internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
 

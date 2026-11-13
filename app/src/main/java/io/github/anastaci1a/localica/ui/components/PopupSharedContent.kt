@@ -21,17 +21,19 @@ import io.github.anastaci1a.localica.ui.spec.PopupKind
 @Stable internal class PopupSharedContent internal constructor(
     internal val motion: PopupWindowMotion,
     private val host: MorphHost,
+    private val owner: PopupTakeoverOwner,
 ) {
     private val key = Any()
-    private var nativeDrawing by mutableStateOf(false)
-    private var sourceDrawing by mutableStateOf(true)
+    // Views of the popup's takeover (#920): the native surface replays this instance until the restored source is acknowledged.
+    private val expanded get() = owner.takeover == PopupTakeover.InWindow
+    private val nativeDrawing get() = owner.takeover >= PopupTakeover.InWindow
 
     @Composable fun Compact(modifier: Modifier = Modifier) {
-        Box(modifier.then(host.slots.externalHost { sourceDrawing })) {
-            host.Slot(key, 0, Modifier.fillMaxWidth())
+        Box(modifier.then(host.slots.externalHost { !expanded })) {
+            host.Slot(key, 0, Modifier.fillMaxWidth(), expanded)
         }
     }
-    @Composable fun Expanded(modifier: Modifier = Modifier) = host.Slot(key, 1, modifier)
+    @Composable fun Expanded(modifier: Modifier = Modifier) = host.Slot(key, 1, modifier, expanded)
     @Composable fun CompactCopy(modifier: Modifier = Modifier) = MeasureCopy(0, modifier)
     @Composable fun ExpandedCopy(modifier: Modifier = Modifier) = MeasureCopy(1, modifier)
     @Composable private fun MeasureCopy(face: Int, modifier: Modifier) {
@@ -41,11 +43,6 @@ import io.github.anastaci1a.localica.ui.spec.PopupKind
         }
     }
 
-    internal fun admitNative() { host.expanded = true; sourceDrawing = false; nativeDrawing = true }
-    // The source restoration receipt must include the shared recording. The existing native
-    // surface keeps replaying that same instance until the real source draw is acknowledged.
-    internal fun restoreInstance() { host.expanded = false; sourceDrawing = true }
-    internal fun releaseNative() { nativeDrawing = false }
     internal fun destination(coordinates: LayoutCoordinates?) = host.slots.destinationLayout(coordinates)
     internal fun destinationOrigin(origin: Offset) = host.slots.destinationOrigin(origin)
     internal fun drawNative(scope: DrawScope, coordinates: LayoutCoordinates, view: android.view.View) {
@@ -57,13 +54,13 @@ import io.github.anastaci1a.localica.ui.spec.PopupKind
  * matches its own placement's kind (#884: callers never pass a kind; PopupKindOwnerTest pins Center as the only placement that does). */
 internal val SharedContentKind = PopupKind.Dialog
 
-@Composable internal fun rememberPopupSharedContent(key: Any,
+@Composable internal fun rememberPopupSharedContent(key: PopupTakeoverOwner,
     shared: @Composable SharedScope.() -> Unit): PopupSharedContent {
     val motion = rememberPopupWindowMotion(key, prepared = false, quiet = false, kind = SharedContentKind)
     val slots = rememberMorphSlots(motion.expansion) { motion.bounds }
     val host = remember(slots) { MorphHost(slots) }
     host.shared = { shared() }
-    return remember(motion, host) { PopupSharedContent(motion, host) }
+    return remember(motion, host) { PopupSharedContent(motion, host, key) }
 }
 
 /** One semantic/container identity survives the endpoint-specific text renderers. The caller

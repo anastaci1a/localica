@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.engine.PopupTakeover
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.material3.Text
@@ -76,12 +77,11 @@ class GlassReturnCheckTest {
                 if (returning) {
                     val start = withFrameNanos { it }
                     while (withFrameNanos { it } - start < 4_800_000_000L) { }
-                    anchor.hidden = false
-                    anchor.modalPresent = false
+                    anchor.advance(PopupTakeover.Closed)
                 }
             }
         } }
-        compose.runOnIdle { anchor.hidden = true; anchor.modalPresent = true }
+        compose.runOnIdle { anchor.advance(PopupTakeover.InWindow) }
         compose.mainClock.autoAdvance = false
         var nativeTurns = 0
         val pumpRule = object : ComposeContentTestRule by compose {
@@ -111,7 +111,7 @@ class GlassReturnCheckTest {
     @Test fun unresolvedReturnStillFailsAtTheOriginalAnimationTimeBound() {
         lateinit var anchor: GlassAnchor
         compose.setContent { LocalicaTheme { anchor = rememberGlassAnchor() } }
-        compose.runOnIdle { anchor.hidden = true; anchor.modalPresent = true }
+        compose.runOnIdle { anchor.advance(PopupTakeover.InWindow) }
         val start = compose.mainClock.currentTime
         var diagnostics = 0
         var failure: ComposeTimeoutException? = null

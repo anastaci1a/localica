@@ -1,7 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.ui.PopupPresenter.*
-import io.github.anastaci1a.localica.ui.PopupTakeover.*
+import io.github.anastaci1a.localica.ui.engine.PopupTakeover
+import io.github.anastaci1a.localica.ui.engine.PopupTakeover.*
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

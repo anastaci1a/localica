@@ -13,7 +13,7 @@ import io.github.anastaci1a.localica.ui.GlassPopupFlight
 import io.github.anastaci1a.localica.ui.IllegalPopupState
 import io.github.anastaci1a.localica.ui.PopupFlags
 import io.github.anastaci1a.localica.ui.PopupPhase
-import io.github.anastaci1a.localica.ui.PopupTakeover
+import io.github.anastaci1a.localica.ui.engine.PopupTakeover
 import io.github.anastaci1a.localica.ui.popupPhaseOf
 import io.github.anastaci1a.localica.ui.popupPhaseProbe
 import io.github.anastaci1a.localica.ui.legalPopupEdge

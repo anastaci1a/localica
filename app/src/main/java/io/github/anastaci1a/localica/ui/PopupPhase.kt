@@ -1,7 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.engine.PopupTakeover
+
 /** #920 step 1: the lifecycle model (DESIGN.md, ADDENDUM-TAIL.md), derived from today's flags. Only tests read it. */
-internal enum class PopupTakeover { Closed, Admitting, InWindow, Restoring }
 internal enum class PopupPresenter { Window, Offered, Taken, Releasing }
 
 internal sealed interface DerivedPopupPhase
