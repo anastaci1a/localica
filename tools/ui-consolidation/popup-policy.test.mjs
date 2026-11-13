@@ -382,22 +382,25 @@ function actualPopupDeparture(source, chromeTrigger, returningInline, wasProject
 
 const popupDepartureSource=()=>fs.readFileSync(new URL('../../app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt',import.meta.url),'utf8');
 
-test('chrome reopen releases the projected browse departure lease',()=>{
+test('chrome reopen holds the browse departure lease until the home stops projecting',()=>{
  const source=popupDepartureSource();
- for(const projected of [false,true]) {
-  assert.equal(actualPopupDeparture(source,true,false,projected).departure,null,
-   'an open chrome popup must release its browse departure lease even after projection');
+ for(const inline of [false,true]) for(const projected of [false,true]) {
+  assert.equal(actualPopupDeparture(source,true,inline,projected).departure?.name??null,
+   inline||projected?'browse':null,'a projecting home must keep sampling outside itself');
  }
- assert.equal(actualPopupDeparture(source,true,true,true).departure.name,'browse');
- assert.equal(actualPopupDeparture(source,true,true,false).departure.name,'browse');
+ assert.equal(actualPopupDeparture(source,true,true,true,true).departure,null);
 });
 
-test('chrome reopen samples the current modal after an interrupted projected return',()=>{
+test('chrome reopen resumes modal sampling only after the home clears projection',()=>{
  const source=popupDepartureSource();
  assert.match(source,/SideEffect \{ if \(!returningInline\) \{ popupFlight.prepared = false; popupFlight.handedOff = false \} \}/);
- assert.equal(actualPopupDeparture(source,true,false,true).sampling.name,'modal',
-  'the reopened modal must regain its sampling consumer after the handoff resets');
- assert.equal(actualPopupDeparture(source,true,true,true,true).departure,null);
+ assert.equal(actualPopupDeparture(source,true,false,true).sampling.name,'browse',
+  'resetting the handoff cannot release the source while the home still projects it');
+ const home=fs.readFileSync(new URL('../../app/src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt',import.meta.url),'utf8');
+ assert.match(home,/if \(!flight.prepared\) flight.wasProjected = false[\s\S]*?if \(aboveChrome/,
+  'the home releases projection before filtering its next draw pass');
+ assert.equal(actualPopupDeparture(source,true,false,false).sampling.name,'modal',
+  'modal sampling resumes after the home commits a frame without the flight');
 });
 
 test('ordinary popup departure retains the published source latch byte for byte',()=>{
