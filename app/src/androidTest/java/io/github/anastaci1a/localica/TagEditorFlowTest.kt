@@ -60,8 +60,7 @@ class TagEditorFlowTest {
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
         val inList = hasAnyAncestor(hasTestTag("browser-list"))
-        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Morning tone"))
-        compose.waitUntil(15000) { compose.onAllNodes(hasText("Morning tone") and inList).fetchSemanticsNodes().isNotEmpty() }
+        compose.onPopupAction(hasTestTag("browser-list")).performScrollToNode(hasText("Morning tone"))
         val original = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
         try {
             compose.nativePointer(compose.onNode(hasText("Morning tone") and inList), holdMillis = 800)
