@@ -119,3 +119,7 @@ VerticalSurfaceDragArgument.onCancel=app/src/main/java/io/github/anastaci1a/loca
 VerticalSurfaceDragArgument.canStart=app/src/main/java/io/github/anastaci1a/localica/ui/components/SheetDrag.kt
 VerticalSurfaceDragArgument.onCatch=app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt
 VerticalSurfaceDragArgument.onCatch=app/src/main/java/io/github/anastaci1a/localica/ui/components/SheetDrag.kt
+SheetDragArgument.target=app/src/main/java/io/github/anastaci1a/localica/ui/components/SheetDrag.kt
+SheetDragArgument.openingChild=app/src/main/java/io/github/anastaci1a/localica/ui/components/SheetDrag.kt
+SheetDragArgument.canStart=app/src/main/java/io/github/anastaci1a/localica/ui/components/SheetDrag.kt
+SheetDragArgument.onDraggingChanged=app/src/main/java/io/github/anastaci1a/localica/ui/components/SheetDrag.kt
