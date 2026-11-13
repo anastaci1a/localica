@@ -80,7 +80,7 @@ export function build(base=root,destination=path.join(base,'build/docs-site/docs
    if(/^(?:https?:|mailto:)/.test(href))return href;
    const {target,hash}=localTarget(file,href);let dest;
    if(files.includes(target))dest=outputPath(target);
-   else if(target.startsWith('docs/images/')){dest=target.replace('docs/','');assets.add(target);}
+   else if(target.startsWith('docs/assets/')){dest=target.replace('docs/','');assets.add(target);}
    else return `${repository}/blob/main/${target}${hash?'#'+hash:''}`;
    return relative(dest)+(hash?'#'+hash:'');
   };
