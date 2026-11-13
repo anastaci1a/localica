@@ -1,8 +1,6 @@
 package io.github.anastaci1a.localica
 
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isDisplayed
 import io.github.anastaci1a.localica.applicationRootAndroidComposeRule as createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -31,18 +29,18 @@ class TagEditorRootContextTest {
             assertFalse("The root regression must not interrupt a tag write", controller.state.value.busy)
             controller.open(listOf(Track("root-context:missing", "Root context song", fileName = "root.mp3", relativePath = "root.mp3")))
         }
-        compose.waitUntil(5000) { compose.onPopupAction(hasText("Edit 1 song")).isDisplayed() }
+        compose.awaitPopupShown(hasText("Edit 1 song"))
         compose.onNodeWithText("Close editor").performClick()
         compose.runOnIdle { controller.showJobs() }
-        compose.onNodeWithText("Tag editing jobs").assertIsDisplayed()
+        compose.awaitPopupShown(hasText("Tag editing jobs"))
         compose.onNodeWithText("Close").performClick()
         compose.activityRule.scenario.recreate()
         compose.runOnIdle { controller.showJobs() }
-        compose.onNodeWithText("Tag editing jobs").assertIsDisplayed()
+        compose.awaitPopupShown(hasText("Tag editing jobs"))
         compose.onNodeWithText("Close").performClick()
         compose.runOnIdle { controller.open(listOf(Track("root-context:missing", "Root context song",
             fileName = "root.mp3", relativePath = "root.mp3"))) }
-        compose.waitUntil(5000) { compose.onPopupAction(hasText("Edit 1 song")).isDisplayed() }
+        compose.awaitPopupShown(hasText("Edit 1 song"))
         compose.onNodeWithText("Close editor").performClick()
     }
 }

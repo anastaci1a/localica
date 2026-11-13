@@ -7,6 +7,7 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -30,6 +31,10 @@ internal fun ComposeContentTestRule.onPopupAction(matcher: SemanticsMatcher): Se
     waitUntil(5000) { onAllNodes(matcher).fetchSemanticsNodes().size == 1 }
     return onNode(matcher)
 }
+
+/** An opening popup is displayed only once its native window shows, which idling cannot see (#933). */
+internal fun ComposeContentTestRule.awaitPopupShown(matcher: SemanticsMatcher) =
+    waitUntil(5000) { onAllNodes(matcher).fetchSemanticsNodes().size == 1 && onNode(matcher).isDisplayed() }
 
 /** A dismissed popup leaves the tree one composition handoff after its close; idling cannot see that handoff (#933). */
 internal fun ComposeContentTestRule.awaitPopupGone(matcher: SemanticsMatcher) =
