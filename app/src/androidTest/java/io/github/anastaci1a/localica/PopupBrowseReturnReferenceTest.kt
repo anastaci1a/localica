@@ -47,14 +47,16 @@ class PopupBrowseReturnReferenceTest {
         var popup: Window? = null
         var progress = 0f
         lateinit var home: GlassPopupHome
+        lateinit var fixtureBackdrop: FrostedBackdrop
+        lateinit var fixtureAnchor: GlassAnchor
         var open by mutableStateOf(false)
         var departing by mutableStateOf(false)
         try {
             preferences.write(InterfaceSettings(reducedMotion = false, animationSpeedTenths = 10, glass = GlassAppearance(renderer = mode)))
             compose.setContent { LocalicaTheme {
                 home = rememberGlassPopupHome(departing)
-                val page = rememberFrostedBackdrop(home, dark = false)
-                val anchor = rememberGlassAnchor()
+                val page = rememberFrostedBackdrop(home, dark = false).also { fixtureBackdrop = it }
+                val anchor = rememberGlassAnchor().also { fixtureAnchor = it }
                 CompositionLocalProvider(LocalFrostedBackdrop provides page,
                     LocalGlassMorphWorkObserver provides { kind, window, phase ->
                         if (kind == "dialog" && window != null && popup == null) popup = window
@@ -67,8 +69,8 @@ class PopupBrowseReturnReferenceTest {
                             }
                         }
                     }) {
-                        Box(Modifier.fillMaxSize().recordFrostedBackdrop(page)) {
-                            Canvas(Modifier.fillMaxSize()) {
+                        Box(Modifier.fillMaxSize()) {
+                            Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(page)) {
                                 drawRect(Color.White)
                                 val stripe = 24.dp.toPx()
                                 var y = 0f
@@ -91,6 +93,8 @@ class PopupBrowseReturnReferenceTest {
                     }
                 }
             } }
+            compose.waitForIdle()
+            assertR1BackdropIndependent(compose.runOnUiThread { captureR1BackdropIndependence(fixtureBackdrop, fixtureAnchor) }, output)
             compose.mainClock.autoAdvance = false
             frames.openReferenceTrigger("Open reference menu")
             try {
