@@ -11,7 +11,7 @@ Export writes plain UTF-8 JSON. Import also accepts the same JSON compressed wit
 ```json
 {
   "format": "localica-library-data",
-  "version": "1.1",
+  "version": "1.2",
   "exportedAt": 1762650000000,
   "app": "Localica 0.33.16",
   "tracks": [
@@ -22,7 +22,8 @@ Export writes plain UTF-8 JSON. Import also accepts the same JSON compressed wit
       "sizeBytes": 31457280, "durationMs": 245300,
       "title": "Song", "artist": "Artist", "album": "Album", "albumArtist": "Artist",
       "trackNumber": 1, "discNumber": 1,
-      "addedAt": 1700000000000, "firstSeenAt": 1762000000000
+      "addedAt": 1700000000000, "firstSeenAt": 1762000000000,
+      "modifiedAt": 1762500000000, "firstSeenModifiedAt": 1761900000000
     }
   ]
 }
@@ -31,7 +32,7 @@ Export writes plain UTF-8 JSON. Import also accepts the same JSON compressed wit
 | Field | Type and unit | Meaning |
 | --- | --- | --- |
 | `format` | String | Always `localica-library-data`. Other values are refused. |
-| `version` | String `major.minor` | Format version. This release writes `1.1` (adds `firstSeenAt`); `1.0` files still import. |
+| `version` | String `major.minor` | Format version. This release writes `1.2` (adds modification evidence); `1.0` and `1.1` files still import. |
 | `exportedAt` | Integer, epoch milliseconds (UTC) | When the export was written. Informational. |
 | `app` | String | Exporting app version. Informational. |
 | `tracks` | Array of objects | One record per indexed song. Entries that are not objects are skipped and counted. |
@@ -55,6 +56,10 @@ Export writes every field below for every song, using `null` when Localica has n
 | `albumArtist`, `trackNumber`, `discNumber` | String, integer, integer | Indexed tags. Identity only; never matched. |
 | `addedAt` | Integer, epoch milliseconds (UTC) | Date added. Imported. Must be a positive whole number. |
 | `firstSeenAt` | Integer, epoch milliseconds (UTC) | When Localica first indexed the song. Since 1.1. Exported only; import never changes it. |
+| `modifiedAt` | Integer, epoch milliseconds (UTC) | Latest indexed file modification time. Since 1.2. Exported only; import ignores it. |
+| `firstSeenModifiedAt` | Integer, epoch milliseconds (UTC) | File modification time observed at first insert, including unknown. Since 1.2. Immutable; import ignores it. |
+
+For tracks indexed before database version 11, `firstSeenModifiedAt` copies the stored `modifiedAt` during upgrade: **captured late**, not the original first-sight observation. Exports do not distinguish these rows; recovery tools must allow for that uncertainty. Neither modification field is a creation date or date added.
 
 ## Included fields
 
@@ -62,6 +67,7 @@ Export writes every field below for every song, using `null` when Localica has n
 | --- | --- | --- |
 | Date added | Exported and imported. | Localica owns it; audio files do not store it. Sort by date added uses it. |
 | First seen | Exported, never imported. | A historical fact: once overwritten it cannot be rebuilt. Date added starts equal to it, so an import that replaces date added can be undone by importing first seen as date added. |
+| File modification evidence | Exported, never imported. | Keeps the latest indexed timestamp and a fixed observation for possible recovery. It never changes date added automatically. |
 | Identity keys | Exported, used only for matching. | Tags and locations come from files and scans; import never rewrites them. |
 | Play counts and history | Not included in 1.0. | Counts derive from individual qualified plays in a separate database. A number cannot recreate those plays, and one transaction cannot cover both databases. |
 | Playlists | Not included in 1.0. | Playlists have their own M3U import and export. Entries keep saved song snapshots rather than one value per song. |
