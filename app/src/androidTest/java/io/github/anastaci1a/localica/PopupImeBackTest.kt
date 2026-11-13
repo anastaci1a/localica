@@ -16,7 +16,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
@@ -35,7 +34,6 @@ import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
 import java.io.File
-import kotlin.math.roundToInt
 
 /** Real search IME -> native hide/search retirement -> new popup -> one native Back.
  * API36 additionally uses a physical edge swipe in verified gesture navigation.
@@ -113,16 +111,6 @@ class PopupImeBackTest {
     @Test fun systemBackAfterHiddenSearchImeDismissesBothPopupTypes() = exercise(edgeGesture = false)
     @Test fun edgeBackAfterHiddenSearchImeDismissesBothPopupTypes() = exercise(edgeGesture = true)
 
-    private fun nativeTap(node: SemanticsNodeInteraction) {
-        compose.awaitExpectedWindowFocus(node)
-        val semantic = node.fetchSemanticsNode()
-        val view = (semantic.root as ViewRootForTest).view
-        val origin = IntArray(2)
-        compose.runOnUiThread { view.getLocationOnScreen(origin) }
-        assertTrue(device.click(origin[0] + semantic.boundsInRoot.center.x.roundToInt(),
-            origin[1] + semantic.boundsInRoot.center.y.roundToInt()))
-        compose.waitForIdle()
-    }
 
     private fun awaitIme(shown: Boolean) {
         compose.waitUntil(20_000) {
@@ -201,7 +189,7 @@ class PopupImeBackTest {
             for (asDialog in listOf(false, true)) {
                 compose.runOnIdle { dialog = asDialog }
                 val label = "${if (asDialog) "dialog" else "menu"}-${if (edgeGesture) "edge" else "system"}"
-                nativeTap(compose.onNodeWithTag("list-search-pill"))
+                compose.nativePointer(compose.onNodeWithTag("list-search-pill"))
                 awaitIme(true)
                 compose.waitUntil(5000) { compose.runOnUiThread { keyboardSettled } }
                 compose.waitForIdle()
@@ -212,7 +200,7 @@ class PopupImeBackTest {
                 // Drain queued editing/return effects as well as advancing animation frames.
                 compose.waitUntil(5000) { compose.runOnIdle { !searchOpen && !searchAnchor.modalPresent } }
                 compose.awaitExpectedWindowFocus(compose.onNodeWithTag("ime-back-popup-trigger"))
-                nativeTap(compose.onNodeWithTag("ime-back-popup-trigger"))
+                compose.nativePointer(compose.onNodeWithTag("ime-back-popup-trigger"))
                 val body = compose.onNodeWithTag("ime-back-popup-body").assertIsDisplayed()
                 compose.awaitExpectedWindowFocus(body)
                 compose.runOnIdle {

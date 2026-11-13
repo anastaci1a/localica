@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -138,7 +137,7 @@ class GlassMenuViewportTouchTest {
             assertEquals(initial, surface().fetchSemanticsNode().boundsInRoot)
             capture("end", topFaded = true, bottomFaded = false)
 
-            nativeTap(compose.onNodeWithText("Action 24").assertIsDisplayed())
+            compose.nativePointer(compose.onNodeWithText("Action 24").assertIsDisplayed())
             awaitClosed()
             compose.runOnIdle { assertEquals(listOf(23), activated) }
             openByNativeTap()
@@ -157,7 +156,7 @@ class GlassMenuViewportTouchTest {
                 origin[1] + bounds.center.y.roundToInt()))
             awaitClosed()
             openByNativeTap()
-            nativeTap(compose.onNodeWithText("Action 1").assertIsDisplayed())
+            compose.nativePointer(compose.onNodeWithText("Action 1").assertIsDisplayed())
             awaitClosed()
             compose.runOnIdle { assertEquals("One activation per native tap, none from drags/dismissals", listOf(23, 0), activated) }
         } catch (failure: Throwable) {
@@ -223,19 +222,9 @@ class GlassMenuViewportTouchTest {
         compose.waitForIdle()
     }
 
-    private fun nativeTap(node: SemanticsNodeInteraction) {
-        compose.awaitExpectedWindowFocus(node)
-        val semantic = node.fetchSemanticsNode()
-        val view = (semantic.root as ViewRootForTest).view
-        val origin = IntArray(2)
-        compose.runOnUiThread { view.getLocationOnScreen(origin) }
-        val center = semantic.boundsInRoot.center
-        assertTrue(UiDevice.getInstance(instrumentation).click(origin[0] + center.x.roundToInt(), origin[1] + center.y.roundToInt()))
-        compose.waitForIdle()
-    }
 
     private fun openByNativeTap() {
-        nativeTap(compose.onNodeWithTag("long-menu-trigger").assertIsDisplayed())
+        compose.nativePointer(compose.onNodeWithTag("long-menu-trigger").assertIsDisplayed())
         surface().assertIsDisplayed()
         compose.awaitExpectedWindowFocus(surface())
     }

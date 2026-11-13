@@ -16,8 +16,7 @@ import java.util.regex.Pattern
 
 class TagEditorFlowTest {
     private val compose = createAndroidComposeRule<MainActivity>()
-    // The flow navigates the real app's default tab bar (Library) and Songs list; earlier tests in
-    // the same process may persist other tabs or browse filters (#722).
+    // Isolate the real app's default tabs and browse filters (#722).
     @get:Rule val rules: RuleChain = RuleChain.outerRule(BrowsePreferenceIsolation(
         listOf("interface", "browse-style", "library-query", "library-filters"))).around(compose)
     @Test fun editThroughPickerVerifiesFileAndRefreshesLibrary() {
@@ -36,50 +35,49 @@ class TagEditorFlowTest {
         fun receipt() = app.tagEditing.state.value.run {
             "phase=$phase busy=$busy batch=$batchId saved=$saved interrupted=$interruptedBatch error=$error space=$spaceProblem results=$results"
         }
-        // A timeout names the controller outcome instead of only the elapsed wait.
         fun awaitEditing(timeout: Long, condition: (io.github.anastaci1a.localica.editing.TagEditorState) -> Boolean) = try {
             compose.waitUntil(timeout) { condition(app.tagEditing.state.value) }
         } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
             throw AssertionError("Tag editing did not settle: ${receipt()}", failure)
         }
-        compose.onNodeWithContentDescription("More").performClick()
-        compose.onPopupAction(hasText("Settings")).performClick()
-        compose.onPopupAction(hasText("Library and tags")).performClick()
-        compose.onPopupAction(hasText("Folders to scan")).performClick()
-        compose.onPopupAction(hasText("Choose folder") or hasText("Add folder")).performScrollTo().performClick()
+        compose.nativePointer(compose.onNodeWithContentDescription("More"))
+        compose.nativePointer(compose.onPopupAction(hasText("Settings")))
+        compose.nativePointer(compose.onPopupAction(hasText("Library and tags")))
+        compose.nativePointer(compose.onPopupAction(hasText("Folders to scan")))
+        compose.nativePointer(compose.onPopupAction(hasText("Choose folder") or hasText("Add folder")).performScrollTo())
         selectFolder()
         compose.waitUntil(15000) { app.library.hasAccess(io.github.anastaci1a.localica.library.FolderSelection(tree, "Test")) }
         device.wait(Until.hasObject(By.pkg(context.packageName)), 10000)
         device.waitForIdle()
         compose.waitForIdle()
-        compose.onPopupAction(hasContentDescription("Close settings")).performClick()
-        compose.onNodeWithContentDescription("More").performClick()
-        compose.onPopupAction(hasText("Scan music")).performClick()
-        compose.onPopupAction(hasText("Full scan")).assertIsEnabled().performClick()
+        compose.nativePointer(compose.onPopupAction(hasContentDescription("Close settings")))
+        compose.nativePointer(compose.onNodeWithContentDescription("More"))
+        compose.nativePointer(compose.onPopupAction(hasText("Scan music")))
+        compose.nativePointer(compose.onPopupAction(hasText("Full scan")).assertIsEnabled())
         compose.waitUntil(15000) { compose.onAllNodesWithText("Scan complete.").fetchSemanticsNodes().isNotEmpty() }
-        compose.onPopupAction(hasText("Close")).performClick()
+        compose.nativePointer(compose.onPopupAction(hasText("Close")))
         compose.waitUntil(10000) { compose.onAllNodesWithText("Retrace tab history").fetchSemanticsNodes().isEmpty() }
-        compose.onNodeWithContentDescription("Library").performClick()
-        compose.onNodeWithText("Songs").performClick()
+        compose.nativePointer(compose.onNodeWithContentDescription("Library"))
+        compose.nativePointer(compose.onNodeWithText("Songs"))
         val inList = hasAnyAncestor(hasTestTag("browser-list"))
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Morning tone"))
         compose.waitUntil(15000) { compose.onAllNodes(hasText("Morning tone") and inList).fetchSemanticsNodes().isNotEmpty() }
         val original = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
         try {
-            compose.onNode(hasText("Morning tone") and inList).performTouchInput { longClick() }
-            compose.onPopupAction(hasText("Edit tags")).performClick()
+            compose.nativePointer(compose.onNode(hasText("Morning tone") and inList), holdMillis = 800)
+            compose.nativePointer(compose.onPopupAction(hasText("Edit tags")))
             compose.onPopupAction(hasSetTextAction() and hasText("Morning tone")).performScrollTo().performTextReplacement("Retagged tone")
-            compose.onPopupAction(hasText("Grant write access: root")).performScrollTo().performClick()
+            compose.nativePointer(compose.onPopupAction(hasText("Grant write access: root")).performScrollTo())
             selectFolder()
-            compose.onPopupAction(hasText("Review changes")).performClick()
-            compose.onPopupAction(hasText("Save changes")).performClick()
+            compose.nativePointer(compose.onPopupAction(hasText("Review changes")))
+            compose.nativePointer(compose.onPopupAction(hasText("Save changes")))
             awaitEditing(30000) { !it.busy && it.results.isNotEmpty() }
             assertTrue(receipt(), app.tagEditing.state.value.results.single().saved)
             assertEquals(receipt(), "AwaitingDecision", app.tagEditing.state.value.phase)
             assertEquals("Retagged tone", runBlocking { AndroidDocuments(context).metadata(uri.toString()).title })
             // A finished foreground save waits on its progress popup (#700); Done commits it and closes the editor.
             val edited = app.tagEditing.state.value.tracks
-            compose.onPopupAction(hasText("Done") and hasClickAction()).performClick()
+            compose.nativePointer(compose.onPopupAction(hasText("Done") and hasClickAction()))
             awaitEditing(10000) { it.batchId == null && it.tracks.isEmpty() }
             assertEquals(receipt(), "Complete", app.tagEditing.state.value.jobs.first().status)
             // A second verified write remains alive with no resumed Activity.
