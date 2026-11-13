@@ -19,7 +19,7 @@ import kotlin.math.abs
 object LibraryDataFormat {
     const val NAME = "localica-library-data"
     const val MAJOR = 1
-    const val MINOR = 1
+    const val MINOR = 2
     const val VERSION = "$MAJOR.$MINOR"
     /** Metadata fallback tolerance: other tools often round durations to whole seconds. */
     const val DURATION_TOLERANCE_MS = 1_000L
@@ -47,8 +47,9 @@ data class LibraryDataRecord(
     val trackNumber: Int? = null,
     val discNumber: Int? = null,
     val addedAt: Long? = null,
-    /** Exported, never imported: only date added is Localica-owned import data (#930). */
     val firstSeenAt: Long? = null,
+    val modifiedAt: Long? = null,
+    val firstSeenModifiedAt: Long? = null,
     val invalid: Set<LibraryDataField> = emptySet(),
 )
 
@@ -62,7 +63,7 @@ object LibraryDataCodec {
             LibraryDataRecord(track.id, track.uri, places.map {
                 LibraryDataLocation(it.folderUri.ifEmpty { null }, names[it.folderUri], it.relativePath, it.uri)
             }, sizeOf(track), track.durationMs, track.title, track.artist, track.album, track.albumArtist,
-                track.trackNumber, track.discNumber, track.addedAt, track.firstSeenAt)
+                track.trackNumber, track.discNumber, track.addedAt, track.firstSeenAt, track.modifiedAt, track.firstSeenModifiedAt)
         }
     }
 
@@ -90,6 +91,7 @@ object LibraryDataCodec {
         field("title", record.title); field("artist", record.artist); field("album", record.album)
         field("albumArtist", record.albumArtist); field("trackNumber", record.trackNumber); field("discNumber", record.discNumber)
         field(LibraryDataField.AddedAt.key, record.addedAt); field("firstSeenAt", record.firstSeenAt)
+        field("modifiedAt", record.modifiedAt); field("firstSeenModifiedAt", record.firstSeenModifiedAt)
     }
 
     /** Plain or gzip JSON, detected by content rather than file name. */

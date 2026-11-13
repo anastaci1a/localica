@@ -27,6 +27,7 @@ data class Track(
     val compilation: Boolean? = null,
     val musicBrainzId: String? = null,
     val firstSeenAt: Long? = null,
+    val firstSeenModifiedAt: Long? = null,
 )
 
 data class TrackLocation(val folderUri: String, val uri: String, val relativePath: String)

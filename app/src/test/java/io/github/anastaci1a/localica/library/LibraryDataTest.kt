@@ -32,14 +32,21 @@ class LibraryDataTest {
         .put("format", "localica-library-data").put("version", version)
         .put("tracks", org.json.JSONArray().apply { records.forEach { put(it) } }).toString())
 
+    @Test fun exportCarriesIndexedModificationTimeAndNull() {
+        val indexed = library.copy(tracks = library.tracks.mapIndexed { i, track -> track.copy(modifiedAt = if (i == 0) 321L else null) })
+        val tracks = JSONObject(export(indexed).toString(Charsets.UTF_8)).getJSONArray("tracks")
+        assertEquals(321L, tracks.getJSONObject(0).getLong("modifiedAt"))
+        assertTrue(tracks.getJSONObject(1).isNull("modifiedAt"))
+    }
+
     @Test fun unchangedExportRoundTripsWithZeroChangesInPlainAndGzipForm() {
         val bytes = export(library)
         val text = bytes.toString(Charsets.UTF_8)
         val root = JSONObject(text)
         assertEquals("localica-library-data", root.getString("format"))
-        assertEquals("1.1", root.getString("version"))
+        assertEquals("1.2", root.getString("version"))
         val first = root.getJSONArray("tracks").getJSONObject(0)
-        for (key in listOf("id", "uri", "locations", "sizeBytes", "durationMs", "title", "artist", "album", "albumArtist", "trackNumber", "discNumber", "addedAt", "firstSeenAt"))
+        for (key in listOf("id", "uri", "locations", "sizeBytes", "durationMs", "title", "artist", "album", "albumArtist", "trackNumber", "discNumber", "addedAt", "firstSeenAt", "modifiedAt", "firstSeenModifiedAt"))
             assertTrue("missing $key", first.has(key))
         assertEquals("Music", first.getJSONArray("locations").getJSONObject(0).getString("rootName"))
         assertTrue(root.getJSONArray("tracks").getJSONObject(2).isNull("addedAt"))
@@ -55,14 +62,35 @@ class LibraryDataTest {
         }
     }
 
-    @Test fun firstSeenIsExportedButNeverImportedAndVersionOneZeroFilesStillImport() {
-        val seen = library.copy(tracks = library.tracks.map { it.copy(firstSeenAt = 500) })
-        assertEquals(500L, JSONObject(export(seen).toString(Charsets.UTF_8)).getJSONArray("tracks").getJSONObject(0).getLong("firstSeenAt"))
-        val old = document(JSONObject().put("id", "a").put("addedAt", 5).put("firstSeenAt", 7))
-        assertEquals("1.0", old.version)
-        val plan = LibraryDataImport.plan(old, seen)
-        assertEquals(mapOf("a" to 5L), plan.addedAtChanges)
-        assertEquals(listOf(LibraryDataField.AddedAt), plan.fields.map { it.field })
+    @Test fun modificationEvidenceAndFirstSeenExportButOnlyDateAddedImportsFromEveryVersion() {
+        val seen = library.copy(tracks = library.tracks.mapIndexed { i, track ->
+            track.copy(firstSeenAt = 500, modifiedAt = 1_700_123_456_789L, firstSeenModifiedAt = if (i == 0) 123L else null)
+        })
+        val bytes = export(seen)
+        val gzip = ByteArrayOutputStream().also { out -> GZIPOutputStream(out).use { it.write(bytes) } }.toByteArray()
+        for (input in listOf(bytes, gzip)) {
+            val parsed = LibraryDataCodec.read(input.inputStream())
+            assertEquals(0, LibraryDataImport.plan(parsed, seen).changes)
+        }
+        val tracks = JSONObject(bytes.toString(Charsets.UTF_8)).getJSONArray("tracks")
+        assertEquals(500L, tracks.getJSONObject(0).getLong("firstSeenAt"))
+        assertEquals(1_700_123_456_789L, tracks.getJSONObject(0).getLong("modifiedAt"))
+        assertEquals(123L, tracks.getJSONObject(0).getLong("firstSeenModifiedAt"))
+        assertTrue(tracks.getJSONObject(1).has("firstSeenModifiedAt") && tracks.getJSONObject(1).isNull("firstSeenModifiedAt"))
+        for (version in listOf("1.0", "1.1", "1.2")) {
+            val old = document(JSONObject().put("id", "a").put("addedAt", 5), version = version)
+            val plan = LibraryDataImport.plan(old, seen)
+            assertEquals(version, old.version)
+            assertEquals(mapOf("a" to 5L), plan.addedAtChanges)
+            assertEquals(listOf(LibraryDataField.AddedAt), plan.fields.map { it.field })
+            for (value in listOf<Any>(7L, "forged", JSONObject.NULL, JSONObject().put("bad", true))) {
+                val forged = document(JSONObject().put("id", "a").put("addedAt", 5).put("firstSeenAt", value)
+                    .put("modifiedAt", value).put("firstSeenModifiedAt", value), version = version)
+                assertEquals(plan, LibraryDataImport.plan(forged, seen))
+                assertNull(forged.records.single().modifiedAt)
+                assertNull(forged.records.single().firstSeenModifiedAt)
+            }
+        }
     }
 
     @Test fun matchingUsesIdThenLocationThenStrictMetadata() {
