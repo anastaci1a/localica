@@ -14,6 +14,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - Add an Animation speed slider and a Respect system animation scale toggle.
 - Enforce shared popup ownership and prevent new screen-owned popup overrides through release gates.
 - Improve native keyboard isolation, Reduced motion fixtures and prototype verification policy.
+- App Kotlin/Java source: 53,977 lines versus 53,469 in v0.34.1, an increase of 508 lines.
 - Reduce inherited UI debt from 1,487 to 1,480: RawMotionMap 46 → 40 and NonPresetScreenLayout 283 → 282.
 
 ## Resolved issues
@@ -36,6 +37,9 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#925](https://github.com/anastaci1a/localica/issues/925): Retain safe popup sampling until the home stops projecting the closing flight.
 - [#926](https://github.com/anastaci1a/localica/issues/926): Remove the separate cross-axis close law so popup width and height shrink together.
 
+- [#933](https://github.com/anastaci1a/localica/issues/933): Observe popup readiness and dismissal in picker, artwork and tag recovery tests.
+- [#935](https://github.com/anastaci1a/localica/issues/935): Suppress system crash dialogs during emulator boot so DocumentsUI failures cannot occlude later tests.
+
 ## Known issues and follow-ups
 
 - [#887](https://github.com/anastaci1a/localica/issues/887): The queue selector title fix is excluded from this release.
@@ -44,6 +48,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#915](https://github.com/anastaci1a/localica/issues/915): Single-Tone reference captures are not deterministic; removal of that rendering mode is planned in [#919](https://github.com/anastaci1a/localica/issues/919).
 - [#917](https://github.com/anastaci1a/localica/issues/917): A pre-existing timing-dependent page offset can appear after the Queue drawer test.
 - [#920](https://github.com/anastaci1a/localica/issues/920): Reversing the bottom popup during opening can exceed its cross-axis band; reversal work remains deferred.
+- [#936](https://github.com/anastaci1a/localica/issues/936): API 36 folder scan readiness can intermittently miss the first song-list observation.
 - The 8.3 ms whole-frame performance objective remains unmet and unchanged. Functional acceptance does not qualify frame timing.
 
 ## Install
