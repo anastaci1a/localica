@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui.components
 
+import io.github.anastaci1a.localica.ui.Step0Trace
+import io.github.anastaci1a.localica.ui.step0
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.*
@@ -22,9 +24,10 @@ import io.github.anastaci1a.localica.ui.spec.PopupKind
     internal val motion: PopupWindowMotion,
     private val host: MorphHost,
 ) {
+    init { Step0Trace.link(this, "host", host) }
     private val key = Any()
-    private var nativeDrawing by mutableStateOf(false)
-    private var sourceDrawing by mutableStateOf(true)
+    private var nativeDrawing by mutableStateOf(false).step0(this, "nativeDrawing")
+    private var sourceDrawing by mutableStateOf(true).step0(this, "sourceDrawing")
 
     @Composable fun Compact(modifier: Modifier = Modifier) {
         Box(modifier.then(host.slots.externalHost { sourceDrawing })) {

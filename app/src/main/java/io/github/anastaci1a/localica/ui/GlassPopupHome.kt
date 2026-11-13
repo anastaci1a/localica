@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.Step0Trace
+import io.github.anastaci1a.localica.ui.step0
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -23,27 +25,27 @@ import kotlinx.coroutines.flow.first
 /** A modal keeps its native input/composition; its departing screen owns its pixels. */
 internal class GlassPopupHome(private val leaving: State<Boolean>) {
     val departing get() = leaving.value
-    var mounted by mutableStateOf(true)
+    var mounted by mutableStateOf(true).step0(this, "mounted")
     var backdrop by mutableStateOf<FrostedBackdrop?>(null)
     val flights = mutableStateListOf<GlassPopupFlight>()
     val children = mutableStateListOf<GlassPopupHome>()
     val handedOff: Boolean get() = flights.all { it.handedOff } && children.all { it.handedOff }
-    var origin = Offset.Zero
+    var origin by Step0Trace.plain(this, "origin", Offset.Zero)
     var currentOrigin = Offset.Zero
-    var registration: BackdropRegistration? = null
+    var registration: BackdropRegistration? by Step0Trace.plain<BackdropRegistration?>(this, "registration", null)
     var liveRegistration: BackdropRegistration? = null
 }
 
 internal class GlassPopupFlight {
-    var chromeTrigger = false
+    var chromeTrigger by Step0Trace.plain(this, "chromeTrigger", false)
     var phase: () -> Float = { 0f }
     var layer by mutableStateOf<GraphicsLayer?>(null)
     var origin = Offset.Zero
-    var homeOrigin = Offset.Zero
-    var revision by mutableLongStateOf(0L)
-    var prepared by mutableStateOf(false)
-    var handedOff by mutableStateOf(false)
-    var wasProjected by mutableStateOf(false)
+    var homeOrigin by Step0Trace.plain(this, "homeOrigin", Offset.Zero)
+    var revision by mutableLongStateOf(0L).step0(this, "revision")
+    var prepared by mutableStateOf(false).step0(this, "prepared")
+    var handedOff by mutableStateOf(false).step0(this, "handedOff")
+    var wasProjected by mutableStateOf(false).step0(this, "wasProjected")
 }
 
 internal val LocalGlassPopupHome = staticCompositionLocalOf<GlassPopupHome?> { null }
@@ -52,6 +54,7 @@ internal val LocalGlassPopupHome = staticCompositionLocalOf<GlassPopupHome?> { n
 internal fun rememberGlassPopupHome(departing: Boolean, parent: GlassPopupHome? = LocalGlassPopupHome.current): GlassPopupHome {
     val leaving = rememberUpdatedState(departing || parent?.departing == true)
     val home = remember { GlassPopupHome(leaving) }
+    Step0Trace.put(home, "departing", leaving.value)
     DisposableEffect(home, parent) {
         parent?.children?.add(home)
         onDispose { home.mounted = false; parent?.children?.remove(home) }
@@ -107,6 +110,7 @@ private const val ChromeReturnDepthHandoff = .9f
 
 private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: Boolean? = null) {
     home.flights.forEach { flight ->
+        Step0Trace.frame(flight, "home-before", flight.phase())
         // wasProjected is this frame's receipt: only a frame without the flight releases its presenter's source latch.
         if (!flight.prepared) flight.wasProjected = false
         // A full-size chrome menu stays above chrome at the start of close (#867).
@@ -121,6 +125,7 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: B
             drawPopupProjection(layer, flight.origin - flight.homeOrigin)
             flight.handedOff = true
             flight.wasProjected = true
+            Step0Trace.frame(flight, "home-after", flight.phase())
         }
     }
 }

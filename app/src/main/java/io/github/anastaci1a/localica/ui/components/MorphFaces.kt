@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui.components
 
+import io.github.anastaci1a.localica.ui.Step0Trace
+import io.github.anastaci1a.localica.ui.step0
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -51,7 +53,7 @@ import io.github.anastaci1a.localica.ui.spec.PopupKind
 }
 internal class MorphHost(val slots: MorphSlots) {
     // Slots may skip composition with the same key/face. Observe the target so the live instance leaves the outgoing, semantics-cleared face.
-    var expanded by mutableStateOf(false)
+    var expanded by mutableStateOf(false).step0(this, "expanded")
     var shared: @Composable SharedScope.(Any) -> Unit by mutableStateOf({})
     private val live = object : SharedScope {
         override val progress = slots.progress

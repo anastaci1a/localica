@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui.engine
 
+import io.github.anastaci1a.localica.ui.Step0Trace
+import io.github.anastaci1a.localica.ui.step0
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.BuildConfig
@@ -64,8 +66,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         if(cross==null && variant in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto)) cross=MotionFloat(clock,motion.rawValue(clock.stampNow).toFloat(),1f,key=key to "cross").also { it.onRest={ notifyLifecycle() } }
     }
     private fun timeScale()=contact?.let { it.timeScale?:rootTimeScale() }?:localTimeScale?:rootTimeScale()
-    private var held by mutableStateOf(false)
-    private var basis by mutableStateOf<ExpansionBasis?>(null); override val canContact: Boolean get()=if(held || boundCurve!=null || popupLaw!=null) false else basis?.let { b -> clock.context?.let { ctx -> b.edgeTravelPx>=1f && finiteExpansionFinish(capturedSpec(),b.edgeTravelPx.toDouble()/ctx.fullPlayerReferenceTravelPx,ctx.displayIntervalSeconds.toDouble()) } }?:false; private var bound: MotionRect?=null; private var boundCurve: Curve?=null; private var nativeBoundary: Float?=null; private var nativeSide=false; private var pendingNative by mutableStateOf<Boolean?>(null); internal var nativeGeneration=0L; private set; internal var pendingBasis: ExpansionBasis?=null; private set; internal var pendingTarget: Boolean?=null; private set
+    private var held by mutableStateOf(false).step0(this, "held")
+    private var basis by mutableStateOf<ExpansionBasis?>(null); override val canContact: Boolean get()=if(held || boundCurve!=null || popupLaw!=null) false else basis?.let { b -> clock.context?.let { ctx -> b.edgeTravelPx>=1f && finiteExpansionFinish(capturedSpec(),b.edgeTravelPx.toDouble()/ctx.fullPlayerReferenceTravelPx,ctx.displayIntervalSeconds.toDouble()) } }?:false; private var bound: MotionRect?=null; private var boundCurve: Curve?=null; private var nativeBoundary: Float?=null; private var nativeSideby Step0Trace.plain(this, "nativeSide", false); private var pendingNative by mutableStateOf<Boolean?>(null).step0(this, "pendingNative"); internal var nativeGenerationby Step0Trace.plain(this, "nativeGeneration", 0L); private set; internal var pendingBasis: ExpansionBasis?=null; private set; internal var pendingTarget: Boolean?=null; private set
     private data class Contact(val basis: ExpansionBasis,val reference: Double,val p: Double,val edges: DoubleArray?,val previousTarget: Boolean,val spec: ExpansionSpec,val timeScale: Double?)
     internal val lifecycle=linkedSetOf<(Boolean)->Unit>(); internal fun owns(rect: MotionRectView)=bound===rect
     internal val ownerClock get()=clock

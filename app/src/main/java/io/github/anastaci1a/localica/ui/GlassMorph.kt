@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.Step0Trace
+import io.github.anastaci1a.localica.ui.step0
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 import io.github.anastaci1a.localica.ui.components.PopupSharedContent
 
@@ -83,8 +85,8 @@ internal data class GlassLift(val scale: Float, val pivot: Offset) {
 @Stable
 internal class GlassAnchor {
     var surfaceNode: SurfaceView? by mutableStateOf(null)
-    var returningNode: SurfaceView? = null
-    var popupHome: GlassPopupHome? = null
+    var returningNode: SurfaceView? by Step0Trace.plain<SurfaceView?>(this, "returningNode", null)
+    var popupHome: GlassPopupHome? by Step0Trace.plain<GlassPopupHome?>(this, "popupHome", null)
     /** Live presented transform of [bounds], supplied by whatever moves the trigger in draw rather
      * than layout (the selection lift). Null when it is drawn where it is laid out. */
     var presentation: (() -> GlassLift?)? = null
@@ -106,27 +108,27 @@ internal class GlassAnchor {
             samplingLocation.registrationToScreen())
     }
     /** Opening admission can reclaim a still-present returning window synchronously. */
-    var reclaimOpening: (() -> Unit)? = null
-    var triggerMounted by mutableStateOf(false)
-    var restoredDrawn = false
-    var restoredDrawRequest by mutableLongStateOf(0L)
-    var restoredDrawReceipt = -1L
-    var restoredPresentedReceipt by mutableLongStateOf(-1L)
+    var reclaimOpening: (() -> Unit)? by Step0Trace.plain<(() -> Unit)?>(this, "reclaimOpening", null)
+    var triggerMounted by mutableStateOf(false).step0(this, "triggerMounted")
+    var restoredDrawn by Step0Trace.plain(this, "restoredDrawn", false)
+    var restoredDrawRequest by mutableLongStateOf(0L).step0(this, "restoredDrawRequest")
+    var restoredDrawReceipt by Step0Trace.plain(this, "restoredDrawReceipt", -1L)
+    var restoredPresentedReceipt by mutableLongStateOf(-1L).step0(this, "restoredPresentedReceipt")
     var bounds by mutableStateOf(Rect.Zero)
-    var hidden by mutableStateOf(false)
-    var modalPresent by mutableStateOf(false)
-    var shadowInModal by mutableStateOf(false)
+    var hidden by mutableStateOf(false).step0(this, "hidden")
+    var modalPresent by mutableStateOf(false).step0(this, "modalPresent")
+    var shadowInModal by mutableStateOf(false).step0(this, "shadowInModal")
     // The shared shadow group its trigger casts into, if any.
     var shadowPlane: io.github.anastaci1a.localica.ui.engine.ShadowPlane? = null
     var source: FrostedBackdrop? = null
     var face by mutableStateOf<(@Composable () -> Unit)?>(null)
     var depthScale = RaisedGlassDepthScale
     var cornerRadius: androidx.compose.ui.unit.Dp? = null
-    private var triggerRole by mutableStateOf<TriggerRole<*, *>>(TriggerRole.Surface)
+    private var triggerRole by mutableStateOf<TriggerRole<*, *>>(TriggerRole.Surface).step0(this, "triggerRole")
     fun bindRole(role: TriggerRole<*, *>) { triggerRole = role }
     val quiet get() = contextual || triggerRole == TriggerRole.PlainIcon
     val chromeTrigger get() = triggerRole == TriggerRole.Navigation
-    var contextual by mutableStateOf(false)
+    var contextual by mutableStateOf(false).step0(this, "contextual")
     var bottomClearance = 0f
     var bottomLimit = Float.NaN
     var ink by mutableStateOf(Color.Unspecified)
@@ -403,7 +405,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     heightSizing: GlassDialogHeight = GlassDialogHeight.Content,
     content: @Composable () -> Unit) {
     require(heightSizing == GlassDialogHeight.Content || placement == GlassPlacement.Sheet)
-    var present by remember { mutableStateOf(false) }
+    var present by remember { mutableStateOf(false).step0(anchor, "instance.present") }
     val popupKind = settledPopupKind(anchor, placement.popupKind(anchor), present)
     require(sharedContent == null || sharedContent.motion.kind == popupKind) { "Shared content runs its popup's motion kind" }
     @Suppress("NAME_SHADOWING")
@@ -437,29 +439,40 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     SideEffect { popupFlight.chromeTrigger = anchor.chromeTrigger; popupFlight.phase = { progress.value } }
     val continuousOrigin = originPreparation.takeUnless { placement == GlassPlacement.Search }
     val motion = sharedContent?.motion ?: rememberPopupWindowMotion(anchor, continuousOrigin != null, anchor.quiet, popupKind)
+    Step0Trace.link(anchor, "contact", anchor.contact)
+    Step0Trace.link(anchor, "motion", motion)
+    Step0Trace.link(anchor, "home", popupHome)
+    Step0Trace.link(anchor, "flight", popupFlight)
+    Step0Trace.link(anchor, "shared", sharedContent)
+    Step0Trace.link(anchor, "preparation", continuousOrigin)
+    Step0Trace.put(anchor, "requestedVisible", requestedVisible)
+    Step0Trace.put(anchor, "visible", visible)
+    Step0Trace.put(anchor, "continuousOrigin", continuousOrigin != null)
+    Step0Trace.put(anchor, "chromeTrigger", anchor.chromeTrigger)
+    Step0Trace.put(anchor, "placement", placement.toString())
     DisposableEffect(motion, continuousOrigin) {
         progress.bind(motion.expansion, motion.popupCurve)
         continuousOrigin?.bind(motion.expansion.phase, motion.preparationCurve)
         onDispose { progress.unbind(motion.expansion); continuousOrigin?.reset() }
     }
-    var originAdmitted by remember { mutableStateOf(false) }
-    var measuredOriginWindow by remember { mutableStateOf<android.view.Window?>(null) }
+    var originAdmitted by remember { mutableStateOf(false).step0(anchor, "instance.originAdmitted") }
+    var measuredOriginWindow by remember { mutableStateOf<android.view.Window?>(null).step0(anchor, "instance.measuredOriginWindow") }
     val searchObserver = LocalSearchMorphObserver.current
     val body = rememberGlassBody({ anchor.contact.travel + progress.value },
         contact = { if (anchor.contact.pressed) 1f else 0f }, state = anchor.contact.state,
         active = { anchor.contact.modal })
-    var nativePlane by remember { mutableStateOf<ShadowPlane?>(null) }
-    var nativeNode by remember { mutableStateOf<SurfaceView?>(null) }
-    var leasedNode: SurfaceView? by remember { mutableStateOf(null) }
+    var nativePlane by remember { mutableStateOf<ShadowPlane?>(null).step0(anchor, "instance.nativePlane") }
+    var nativeNode by remember { mutableStateOf<SurfaceView?>(null).step0(anchor, "instance.nativeNode") }
+    var leasedNode: SurfaceView? by remember { mutableStateOf(null).step0(anchor, "instance.leasedNode") }
     val nativeLease = remember { arrayOfNulls<()->Unit>(1) }
     DisposableEffect(anchor) { onDispose { nativeLease[0]?.invoke(); nativeLease[0]=null } }
-    var readyWindow by remember { mutableStateOf<android.view.Window?>(null) }
-    var origin by remember { mutableStateOf(Rect.Zero) }
-    var originFootprint by remember { mutableStateOf<HomeBackdropFootprint?>(null) }
-    var measuredHome by remember { mutableStateOf(false) }
-    var source by remember { mutableStateOf<FrostedBackdrop?>(null) }
-    var modalWindow by remember { mutableStateOf<android.view.Window?>(null) }
-    var dismissalAttempt by remember { mutableIntStateOf(0) }
+    var readyWindow by remember { mutableStateOf<android.view.Window?>(null).step0(anchor, "instance.readyWindow") }
+    var origin by remember { mutableStateOf(Rect.Zero).step0(anchor, "instance.origin") }
+    var originFootprint by remember { mutableStateOf<HomeBackdropFootprint?>(null).step0(anchor, "instance.originFootprint") }
+    var measuredHome by remember { mutableStateOf(false).step0(anchor, "instance.measuredHome") }
+    var source by remember { mutableStateOf<FrostedBackdrop?>(null).step0(anchor, "instance.source") }
+    var modalWindow by remember { mutableStateOf<android.view.Window?>(null).step0(anchor, "instance.modalWindow") }
+    var dismissalAttempt by remember { mutableIntStateOf(0).step0(anchor, "instance.dismissalAttempt") }
     val gestures = rememberModalGestureScope()
     val originOwnsInput = continuousOrigin == null || originAdmitted && anchor.hidden
     DisposableEffect(gestures, visible, dismissalAttempt, originOwnsInput) {
@@ -802,8 +815,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val admittedDraw = continuousOrigin == null || originAdmitted && readyWindow === window
-        var foregroundReady by remember { mutableStateOf(false) }
-        var panelReady by remember { mutableStateOf(false) }
+        var foregroundReady by remember { mutableStateOf(false).step0(anchor, "instance.foregroundReady") }
+        var panelReady by remember { mutableStateOf(false).step0(anchor, "instance.panelReady") }
         LaunchedEffect(motion) {
             snapshotFlow { progress.value }.collect { p -> foregroundReady=p>=.85f; panelReady=p>=.9f }
         }
@@ -813,6 +826,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             .onGloballyPositioned { popupFlight.origin = it.backdropPosition(view) }
             .nativePlaneReceipt(windowPlane)
             .drawWithContent {
+                Step0Trace.frame(anchor, "window", progress.value)
+                Step0Trace.put(anchor, "samplingSource", samplingSource)
+                Step0Trace.put(anchor, "homeSource", if (departingSource != null && homeSampleReady) samplingSource else homeSource)
+                Step0Trace.put(anchor, "homeWeight", motion.homeWeight.at(progress.value))
+                Step0Trace.put(anchor, "homeBounds", if (visible && continuousOrigin == null) origin else returningHome ?: anchor.presentedBounds)
                 if (popupHome == null || !returningInline && !popupFlight.wasProjected) drawContent()
                 else {
                     flightLayer.record { this@drawWithContent.drawContent() }

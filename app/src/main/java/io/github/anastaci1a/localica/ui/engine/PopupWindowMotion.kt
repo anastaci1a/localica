@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui.engine
 
+import io.github.anastaci1a.localica.ui.Step0Trace
+import io.github.anastaci1a.localica.ui.step0
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
@@ -35,13 +37,13 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private val ranges = requireNotNull(clock.spec.geometry).maxViewportDiagonalPx.let { EdgeRanges(it, it, it, it) }
     private var rectangle by mutableStateOf<MotionRect?>(null)
     val bounds: MotionRectView? get() = rectangle
-    private var shown = false
-    private var holding = false
-    private var openingEnvelope: Rect? = null
-    private var nativeWindow: java.lang.ref.WeakReference<Any>? = null
-    private var firstNativeMeasurement = false
-    private var nativeHost: java.lang.ref.WeakReference<ShadowPlane>? = null
-    init { expansion.nativeGate(gate) }
+    private var shown by Step0Trace.plain(this, "shown", false)
+    private var holding by Step0Trace.plain(this, "holding", false)
+    private var openingEnvelope: Rect? by Step0Trace.plain<Rect?>(this, "openingEnvelope", null)
+    private var nativeWindow: java.lang.ref.WeakReference<Any>? by Step0Trace.plain<java.lang.ref.WeakReference<Any>?>(this, "nativeWindow", null)
+    private var firstNativeMeasurement by Step0Trace.plain(this, "firstNativeMeasurement", false)
+    private var nativeHost: java.lang.ref.WeakReference<ShadowPlane>? by Step0Trace.plain<java.lang.ref.WeakReference<ShadowPlane>?>(this, "nativeHost", null)
+    init { Step0Trace.link(this, "expansion", expansion); expansion.nativeGate(gate) }
     fun attached(window: Any, host: ShadowPlane) {
         nativeHost = java.lang.ref.WeakReference(host)
         if (nativeWindow?.get() !== window) {

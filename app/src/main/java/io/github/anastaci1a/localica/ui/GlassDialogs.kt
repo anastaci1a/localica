@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.Step0Trace
+import io.github.anastaci1a.localica.ui.step0
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
 
 import androidx.compose.foundation.layout.*
@@ -40,7 +42,8 @@ internal class GlassDialogs {
 internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLocalContext,
     dismiss: () -> Unit, dark: Boolean, val placement: GlassPlacement,
     val heightSizing: GlassDialogHeight, content: @Composable () -> Unit) {
-    var mounted by mutableStateOf(true)
+    init { Step0Trace.link(this, "anchor", anchor) }
+    var mounted by mutableStateOf(true).step0(this, "mounted")
     var locals by mutableStateOf(locals)
     var dismiss by mutableStateOf(dismiss)
     var dark by mutableStateOf(dark)

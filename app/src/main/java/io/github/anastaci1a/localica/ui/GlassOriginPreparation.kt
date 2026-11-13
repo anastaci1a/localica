@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.Step0Trace
+import io.github.anastaci1a.localica.ui.step0
 import androidx.compose.runtime.*
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Modifier
@@ -14,15 +16,15 @@ internal class GlassOriginPreparation(private val projection: io.github.anastaci
     val active: Boolean get()=projection.active
     fun captured(separated: Boolean)=projection.captured(separated)
     fun bind(value: io.github.anastaci1a.localica.ui.engine.MotionValue,mapping: io.github.anastaci1a.localica.ui.engine.Curve)=projection.bind(value,mapping)
-    private var placedProgress = Float.NaN
-    private var drawnProgress = Float.NaN
-    var originReceipt by mutableIntStateOf(0)
+    private var placedProgress by Step0Trace.plain(this, "placedProgress", Float.NaN)
+    private var drawnProgress by Step0Trace.plain(this, "drawnProgress", Float.NaN)
+    var originReceipt by mutableIntStateOf(0).step0(this, "originReceipt")
         private set
-    private var proofFlight: Long? = null
-    private var placedReceipt = -1
-    private var drawnReceipt = -1
-    private var presentedReceipt by mutableIntStateOf(-1)
-    private var presentedProgress = Float.NaN
+    private var proofFlight: Long? by Step0Trace.plain<Long?>(this, "proofFlight", null)
+    private var placedReceipt by Step0Trace.plain(this, "placedReceipt", -1)
+    private var drawnReceipt by Step0Trace.plain(this, "drawnReceipt", -1)
+    private var presentedReceipt by mutableIntStateOf(-1).step0(this, "presentedReceipt")
+    private var presentedProgress by Step0Trace.plain(this, "presentedProgress", Float.NaN)
 
     // Receipts describe the real origin at this gate generation, not an elapsed frame count.
     fun beginOriginProof(flight: Long) {

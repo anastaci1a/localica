@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.Step0Trace
+import io.github.anastaci1a.localica.ui.step0
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.*
@@ -104,7 +106,7 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
 @Stable internal class GlassContact {
     var pressed by mutableStateOf(false)
     var travel by mutableFloatStateOf(0f)
-    var modal by mutableStateOf(false)
+    var modal by mutableStateOf(false).step0(this, "modal")
     var active by mutableStateOf(true)
     private var verticalAxis by mutableStateOf(false)
     var vertical: Boolean
