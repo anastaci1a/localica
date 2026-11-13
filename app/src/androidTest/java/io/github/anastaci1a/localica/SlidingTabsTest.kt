@@ -111,22 +111,28 @@ class SlidingTabsTest {
         assertTrue("Fixture must contain a visible selected icon and label", ink > 100)
         assertTrue("Glass must not move or duplicate accent ink: $disagreement/$ink", disagreement < ink * .03f)
     }
-    @Test fun onlyTappingTheSettledCurrentTabRequestsReselection() {
+    @Test fun logicalCurrentTabRequestsReselectionRegardlessOfPageProgress() {
         val tabs = listOf(MainTab.Home, MainTab.Library)
         var active by mutableStateOf(MainTab.Home)
+        var page by mutableFloatStateOf(0f)
+        var pageDragging by mutableStateOf(false)
         val selections = mutableListOf<MainTab>()
         val reselections = mutableListOf<MainTab>()
         compose.setContent { LocalicaTheme { Box(Modifier.size(300.dp, 64.dp)) {
-            SlidingTabs(tabs, active, { tabs.indexOf(active).toFloat() }, onReselect = { reselections += it }) {
+            SlidingTabs(tabs, active, { page }, pageDragging = pageDragging, onReselect = { reselections += it }) {
                 active = it; selections += it
             }
         } } }
         compose.onNodeWithContentDescription("Library").performClick()
         compose.runOnIdle { assertEquals(listOf(MainTab.Library), selections); assertTrue(reselections.isEmpty()) }
+        compose.runOnIdle { page = .875f }
         compose.onNodeWithContentDescription("Library").performClick()
         compose.runOnIdle { assertEquals(listOf(MainTab.Library), reselections) }
+        compose.runOnIdle { page = 1f; pageDragging = true }
+        compose.onNodeWithContentDescription("Library").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        compose.runOnIdle { assertEquals(listOf(MainTab.Library, MainTab.Library), reselections) }
         compose.onNodeWithContentDescription("Home").performClick()
-        compose.runOnIdle { assertEquals(listOf(MainTab.Library, MainTab.Home), selections); assertEquals(1, reselections.size) }
+        compose.runOnIdle { assertEquals(listOf(MainTab.Library, MainTab.Home), selections); assertEquals(2, reselections.size) }
     }
     @Test fun draggingSwitchesOnlyAfterTheLensCrossesAndKeepsTheContainerFixed() {
         val tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs)

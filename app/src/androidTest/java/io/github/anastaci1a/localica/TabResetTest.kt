@@ -15,6 +15,24 @@ import org.junit.Test
 
 class TabResetTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun currentTabThenImmediateSongsTapAppliesTheFilter() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.getSharedPreferences("interface", 0).edit().clear().commit()
+        InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library)))
+        try {
+            compose.setContent { LocalicaTheme { LocalicaScreen(
+                LibraryUiState(LibrarySnapshot(tracks = listOf(Track("song:936", "Reselect song", album = "Reselect album",
+                    fileName = "936.mp3", relativePath = "936.mp3"))), loading = false),
+                PlaybackState(connected = true), {}, {}, {}, {}, {}, {}, playlist = PlaylistState(loading = false)) } }
+            compose.onNodeWithContentDescription("Library").performClick()
+            compose.waitForIdle()
+            val tab = compose.onNodeWithContentDescription("Library").fetchSemanticsNode().boundsInRoot.center
+            val songs = compose.onNodeWithTag("filter-Songs").fetchSemanticsNode().boundsInRoot.center
+            compose.onRoot().performTouchInput { click(tab); click(songs) }
+            compose.onNodeWithTag("filter-Songs").assertIsSelected()
+            compose.onNode(hasText("Reselect song") and hasAnyAncestor(hasTestTag("browser-list"))).assertIsDisplayed()
+        } finally { context.getSharedPreferences("interface", 0).edit().clear().commit() }
+    }
     private fun awaitFirstAlbum() {
         try {
             compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
