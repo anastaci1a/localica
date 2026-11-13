@@ -110,7 +110,9 @@ class GlassRenderModesTest {
                     val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("switch-frame"), token) { view }
                     val c = pixels[pixels.width / 3, pixels.height / 2]
                     assertTrue("Backing vanished during mode switch: $mode frame=$it color=$c", c.red > .35f && c.blue > .35f)
-                    assertTrue(compose.runOnIdle { source.recorded })
+                    // FlatNone composes a layer-less backdrop that never records; Normal records every frame.
+                    assertEquals("Recording follows the renderer: $mode frame=$it", mode == GlassRendererMode.Normal,
+                        compose.runOnIdle { source.recorded })
                 }
             }
             compose.runOnIdle { assertEquals("Mode changes retain the existing surface", 1, owners.size) }
