@@ -218,9 +218,9 @@ class QueueOwnerContinuityTest {
         // Browse above the shrinking player's top edge, outside the clipped Queue scrim.
         root.performTouchInput { down(Offset(bounds.width / 2, bounds.height * .03f)) }
         mainClock.advanceTimeByFrame(); val pressed = scene.playerProgress
-        mainClock.advanceTimeByFrame()
-        assertTrue("The browse contact must not catch the minimizing player", scene.playerProgress < pressed)
+        mainClock.advanceTimeByFrame(); val held = scene.playerProgress
         root.performTouchInput { up() }
+        assertTrue("The browse contact must not catch the minimizing player", held < pressed)
         repeat(60) { mainClock.advanceTimeByFrame() }
         assertEquals("The player settles minimized", 0f, scene.playerProgress, .001f)
     }
