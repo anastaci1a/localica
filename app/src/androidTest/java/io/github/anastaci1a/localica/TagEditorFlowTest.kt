@@ -43,6 +43,7 @@ class TagEditorFlowTest {
             throw AssertionError("Tag editing did not settle: ${receipt()}", failure)
         }
         compose.onNodeWithContentDescription("More").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Settings").fetchSemanticsNodes().size == 1 }
         compose.onNodeWithText("Settings").performClick()
         compose.onNodeWithText("Library and tags").performClick()
         compose.onNodeWithText("Folders to scan").performClick()
@@ -54,6 +55,7 @@ class TagEditorFlowTest {
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Close settings").performClick()
         compose.onNodeWithContentDescription("More").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Scan music").fetchSemanticsNodes().size == 1 }
         compose.onNodeWithText("Scan music").performClick()
         compose.onNodeWithText("Full scan").assertIsEnabled().performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithText("Scan complete.").fetchSemanticsNodes().isNotEmpty() }
