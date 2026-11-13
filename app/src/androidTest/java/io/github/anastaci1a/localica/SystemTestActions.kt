@@ -12,6 +12,8 @@ import org.junit.Assert.assertTrue
 import kotlin.math.roundToInt
 
 internal fun ComposeContentTestRule.nativePointer(node: SemanticsNodeInteraction, holdMillis: Int = 0) {
+    val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+    device.waitForIdle()
     awaitExpectedWindowFocus(node)
     val semantic = node.fetchSemanticsNode()
     val origin = IntArray(2)
@@ -19,7 +21,6 @@ internal fun ComposeContentTestRule.nativePointer(node: SemanticsNodeInteraction
     val center = semantic.boundsInRoot.center
     val x = origin[0] + center.x.roundToInt()
     val y = origin[1] + center.y.roundToInt()
-    val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     if (holdMillis == 0) assertTrue(device.click(x, y))
     else device.executeShellCommand("input swipe $x $y $x $y $holdMillis")
     waitForIdle()

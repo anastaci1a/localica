@@ -48,8 +48,6 @@ class TagEditorFlowTest {
         selectFolder()
         compose.waitUntil(15000) { app.library.hasAccess(io.github.anastaci1a.localica.library.FolderSelection(tree, "Test")) }
         device.wait(Until.hasObject(By.pkg(context.packageName)), 10000)
-        device.waitForIdle()
-        compose.waitForIdle()
         compose.nativePointer(compose.onPopupAction(hasContentDescription("Close settings")))
         compose.nativePointer(compose.onNodeWithContentDescription("More"))
         compose.nativePointer(compose.onPopupAction(hasText("Scan music")))
@@ -87,7 +85,6 @@ class TagEditorFlowTest {
                 app.tagEditing.save(io.github.anastaci1a.localica.editing.TagPatch(mapOf(
                     io.github.anastaci1a.localica.editing.EditField.Title to "Retagged tone")))
             }
-            // Background acceptance needs the admitted batch; it then commits without a Done decision.
             awaitEditing(30000) { it.batchId != null || (!it.busy && it.error != null) }
             compose.activityRule.scenario.onActivity { app.tagEditing.continueInBackground() }
             compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
