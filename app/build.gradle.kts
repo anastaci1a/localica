@@ -15,8 +15,8 @@ android {
         applicationId = "io.github.anastaci1a.localica"
         minSdk = 26
         targetSdk = 36
-        versionCode = 121
-        versionName = "0.34.3"
+        versionCode = 122
+        versionName = "0.34.4"
         val lastFmKey = providers.gradleProperty("lastfmApiKey").orElse(providers.environmentVariable("LASTFM_API_KEY")).orElse("").get().trim()
         require(lastFmKey.isEmpty() || lastFmKey.matches(Regex("[A-Fa-f0-9]{32}"))) { "Invalid Last.fm application key format" }
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmKey\"")
