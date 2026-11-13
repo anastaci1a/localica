@@ -11,6 +11,7 @@ class PopupStep0Listener : RunListener() {
     override fun testRunStarted(description: Description) {
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
             ?: InstrumentationRegistry.getInstrumentation().targetContext.filesDir.path
+        File(root).mkdirs()
         Step0Trace.sink = File(root, "popup-step0-" + android.os.Process.myPid() + ".jsonl").outputStream()
         Step0Trace.put(this, "run", "start", "run")
     }
