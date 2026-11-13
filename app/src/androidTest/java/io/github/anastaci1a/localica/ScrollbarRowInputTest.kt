@@ -294,8 +294,8 @@ class ScrollbarRowInputTest {
         repeat(3) { compose.mainClock.advanceTimeByFrame() }
         assertEquals(rest, thumbColour())
         bar().performTouchInput { up() }
+        assertTrue(row.fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.HorizontalScrollAxisRange].value() > position)
         compose.runOnIdle {
-            assertTrue(row.fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.HorizontalScrollAxisRange].value() > position)
             assertEquals(before, state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset)
             assertTrue(selections.isEmpty()); assertFalse(transit.active)
         }
