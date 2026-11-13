@@ -71,11 +71,11 @@ class ArtworkEditRestorationTest {
         compose.waitUntil(10000) {
             compose.onAllNodesWithContentDescription("Choose recent image").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.awaitExpectedWindowFocus(compose.onNodeWithText("Open gallery"))
-        compose.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasContentDescription("Choose recent image")))
+        compose.awaitExpectedWindowFocus(compose.onPopupAction(hasText("Open gallery")))
+        compose.onPopupAction(hasScrollToIndexAction() and hasAnyDescendant(hasContentDescription("Choose recent image")))
             .performScrollToIndex(fixtureIndex)
         compose.waitUntil(10000) { compose.onAllNodesWithTag(fixtureTag).fetchSemanticsNodes().size == 1 }
-        compose.onNodeWithTag(fixtureTag).performClick()
+        compose.onPopupAction(hasTestTag(fixtureTag)).performClick()
         awaitCrop()
     }
     private fun awaitCrop() {
@@ -116,10 +116,10 @@ class ArtworkEditRestorationTest {
             }
             throw failure
         }
-        compose.awaitExpectedWindowFocus(compose.onNodeWithTag("artwork-crop"))
+        compose.awaitExpectedWindowFocus(compose.onPopupAction(hasTestTag("artwork-crop")))
     }
     private fun assertRestoredChooserDisplayed() {
-        val gallery = compose.onNodeWithText("Open gallery")
+        val gallery = compose.onPopupAction(hasText("Open gallery"))
         try {
             gallery.assertIsDisplayed()
         } catch (failure: AssertionError) {
@@ -160,26 +160,26 @@ class ArtworkEditRestorationTest {
 
     private fun recreate() { compose.activityRule.scenario.recreate(); compose.waitForIdle() }
     private fun assertZoom(value: Float) {
-        assertEquals(value, compose.onNodeWithContentDescription("Crop zoom").fetchSemanticsNode()
+        assertEquals(value, compose.onPopupAction(hasContentDescription("Crop zoom")).fetchSemanticsNode()
             .config[SemanticsProperties.ProgressBarRangeInfo].current, .01f)
     }
 
     @Test fun normalEditorRestoresChooserAndAdjustedCropRepeatedlyWithTextDraft() = withImage {
         compose.runOnUiThread { controller.open(listOf(track())) }
-        compose.onNode(hasSetTextAction() and hasText("Restoration song"))
+        compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
             .performScrollTo().performTextReplacement("Unsaved title")
-        compose.onNodeWithContentDescription("Choose artwork").performScrollTo().performClick()
+        compose.onPopupAction(hasContentDescription("Choose artwork")).performScrollTo().performClick()
         repeat(2) {
             recreate()
             assertRestoredChooserDisplayed()
         }
         chooseRecent()
-        compose.onNodeWithContentDescription("Crop zoom").performSemanticsAction(SemanticsActions.SetProgress) { it(2f) }
-        compose.onNodeWithTag("artwork-crop").performTouchInput { swipe(center, center.copy(x = center.x + width / 8f)) }
+        compose.onPopupAction(hasContentDescription("Crop zoom")).performSemanticsAction(SemanticsActions.SetProgress) { it(2f) }
+        compose.onPopupAction(hasTestTag("artwork-crop")).performTouchInput { swipe(center, center.copy(x = center.x + width / 8f)) }
         repeat(2) { recreate(); awaitCrop(); assertZoom(2f) }
         val crops = File(context.cacheDir, "artwork-crops")
         val before = crops.listFiles()?.toSet().orEmpty()
-        compose.onNodeWithText("Use square crop").performClick()
+        compose.onPopupAction(hasText("Use square crop")).performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("New artwork preview").fetchSemanticsNodes().isNotEmpty() }
         val output = requireNotNull(crops.listFiles()).single { it !in before }
         val bitmap = requireNotNull(android.graphics.BitmapFactory.decodeFile(output.path))
@@ -192,12 +192,12 @@ class ArtworkEditRestorationTest {
             assertTrue("Restored pan must move the source center left", android.graphics.Color.red(pixel) in 112..123)
             assertTrue(android.graphics.Color.green(pixel) in 125..130)
         } finally { bitmap.recycle() }
-        compose.onNodeWithContentDescription("Choose artwork").performScrollTo().performClick()
+        compose.onPopupAction(hasContentDescription("Choose artwork")).performScrollTo().performClick()
         chooseRecent()
-        compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithText("Open gallery").assertIsDisplayed()
-        compose.onNodeWithText("Cancel").performClick()
-        compose.onNode(hasSetTextAction() and hasText("Unsaved title")).performScrollTo().assertIsDisplayed()
+        compose.onPopupAction(hasText("Cancel")).performClick()
+        compose.onPopupAction(hasText("Open gallery")).assertIsDisplayed()
+        compose.onPopupAction(hasText("Cancel")).performClick()
+        compose.onPopupAction(hasSetTextAction() and hasText("Unsaved title")).performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("artwork-crop").assertDoesNotExist()
         assertTrue(controller.state.value.results.isEmpty())
     }
@@ -205,27 +205,27 @@ class ArtworkEditRestorationTest {
     @Test fun artworkOnlyReturnsToReviewAfterRecreationAndCancelKeepsChosenImage() = withImage {
         compose.runOnUiThread { controller.openArtwork(track()) }
         chooseRecent()
-        compose.onNodeWithText("Use square crop").performClick()
+        compose.onPopupAction(hasText("Use square crop")).performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("New artwork preview").fetchSemanticsNodes().isNotEmpty() }
         repeat(2) {
             recreate()
-            compose.onNodeWithText("Change artwork").assertIsDisplayed()
+            compose.onPopupAction(hasText("Change artwork")).assertIsDisplayed()
             compose.onNodeWithText("Open gallery").assertDoesNotExist()
             compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("New artwork preview").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithContentDescription("New artwork preview").assertIsDisplayed()
-            compose.onNodeWithText("Review changes").assertIsEnabled()
+            compose.onPopupAction(hasContentDescription("New artwork preview")).assertIsDisplayed()
+            compose.onPopupAction(hasText("Review changes")).assertIsEnabled()
         }
-        compose.onNodeWithText("Review changes").performClick()
+        compose.onPopupAction(hasText("Review changes")).performClick()
         recreate()
-        compose.onNodeWithText("Save changes to 1 files?").assertIsDisplayed()
+        compose.onPopupAction(hasText("Save changes to 1 files?")).assertIsDisplayed()
         compose.waitUntil(10000) { compose.onAllNodes(hasText("Save changes") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Save changes").assertIsEnabled()
-        compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithContentDescription("New artwork preview").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Choose artwork").performClick()
-        compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithContentDescription("New artwork preview").assertIsDisplayed()
-        compose.onNodeWithText("Close editor").performClick()
+        compose.onPopupAction(hasText("Save changes")).assertIsEnabled()
+        compose.onPopupAction(hasText("Cancel")).performClick()
+        compose.onPopupAction(hasContentDescription("New artwork preview")).assertIsDisplayed()
+        compose.onPopupAction(hasContentDescription("Choose artwork")).performClick()
+        compose.onPopupAction(hasText("Cancel")).performClick()
+        compose.onPopupAction(hasContentDescription("New artwork preview")).assertIsDisplayed()
+        compose.onPopupAction(hasText("Close editor")).performClick()
         assertTrue(controller.state.value.tracks.isEmpty())
         assertTrue(controller.state.value.results.isEmpty())
     }
@@ -233,23 +233,23 @@ class ArtworkEditRestorationTest {
     @Test fun closingReopeningAndReplacingTargetDiscardPreviousSession() = withImage {
         compose.runOnUiThread { controller.open(listOf(track())) }
         val firstSession = controller.state.value.sessionId
-        compose.onNode(hasSetTextAction() and hasText("Restoration song"))
+        compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
             .performScrollTo().performTextReplacement("Discard this draft")
-        compose.onNodeWithContentDescription("Choose artwork").performScrollTo().performClick()
+        compose.onPopupAction(hasContentDescription("Choose artwork")).performScrollTo().performClick()
         chooseRecent()
         compose.runOnUiThread { controller.close(); controller.open(listOf(track())) }
         assertNotEquals(firstSession, controller.state.value.sessionId)
         compose.onNodeWithTag("artwork-crop").assertDoesNotExist()
-        compose.onNode(hasSetTextAction() and hasText("Restoration song")).performScrollTo().assertIsDisplayed()
+        compose.onPopupAction(hasSetTextAction() and hasText("Restoration song")).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Discard this draft").assertDoesNotExist()
-        compose.onNodeWithText("Review changes").assertIsNotEnabled()
+        compose.onPopupAction(hasText("Review changes")).assertIsNotEnabled()
         compose.runOnUiThread { controller.openArtwork(track()) }
         chooseRecent()
         compose.runOnUiThread { controller.openArtwork(track("Replacement song")) }
         compose.onNodeWithTag("artwork-crop").assertDoesNotExist()
         recreate()
-        compose.onNodeWithText("Open gallery").assertIsDisplayed()
-        compose.onNodeWithText("Cancel").performClick()
+        compose.onPopupAction(hasText("Open gallery")).assertIsDisplayed()
+        compose.onPopupAction(hasText("Cancel")).performClick()
         assertTrue(controller.state.value.tracks.isEmpty())
     }
 }
