@@ -31,6 +31,10 @@ internal fun ComposeContentTestRule.onPopupAction(matcher: SemanticsMatcher): Se
     return onNode(matcher)
 }
 
+/** A dismissed popup leaves the tree one composition handoff after its close; idling cannot see that handoff (#933). */
+internal fun ComposeContentTestRule.awaitPopupGone(matcher: SemanticsMatcher) =
+    waitUntil(5000) { onAllNodes(matcher).fetchSemanticsNodes().isEmpty() }
+
 /** The running test's virtual time, for Engine owners in fixture hosts (PlayerSurfaceHarness); real-app owner tests pass it
  * to their own UiClock. The theme clock would stamp an idle intent at its last presented frame instead. */
 internal object FixtureTime {

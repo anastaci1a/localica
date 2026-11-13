@@ -35,7 +35,7 @@ class TagRecoveryLaunchTest {
         compose.activityRule.scenario.recreate()
         compose.onNodeWithText("Interrupted tag edit").assertIsDisplayed()
         compose.onNodeWithText("Later").performClick()
-        compose.onNodeWithText("Interrupted tag edit").assertDoesNotExist()
+        compose.awaitPopupGone(hasText("Interrupted tag edit"))
         assertEquals("Dismissal must retain recovery", "root-recovery.mp3", app.tagEditing.state.value.recovery)
         compose.activityRule.scenario.recreate()
         compose.onNodeWithText("Interrupted tag edit").assertIsDisplayed()

@@ -239,14 +239,14 @@ class ArtworkEditRestorationTest {
         chooseRecent()
         compose.runOnUiThread { controller.close(); controller.open(listOf(track())) }
         assertNotEquals(firstSession, controller.state.value.sessionId)
-        compose.onNodeWithTag("artwork-crop").assertDoesNotExist()
+        compose.awaitPopupGone(hasTestTag("artwork-crop"))
         compose.onPopupAction(hasSetTextAction() and hasText("Restoration song")).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Discard this draft").assertDoesNotExist()
         compose.onPopupAction(hasText("Review changes")).assertIsNotEnabled()
         compose.runOnUiThread { controller.openArtwork(track()) }
         chooseRecent()
         compose.runOnUiThread { controller.openArtwork(track("Replacement song")) }
-        compose.onNodeWithTag("artwork-crop").assertDoesNotExist()
+        compose.awaitPopupGone(hasTestTag("artwork-crop"))
         recreate()
         compose.onPopupAction(hasText("Open gallery")).assertIsDisplayed()
         compose.onPopupAction(hasText("Cancel")).performClick()
