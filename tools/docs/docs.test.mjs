@@ -19,6 +19,17 @@ test('maintained pages allow 200 source lines, including blanks, but reject 201'
  assert.ok(proseErrors(page+'\n\n','docs/page.md').some(e=>e.includes('201 source lines')));
  assert.ok(proseErrors((page+'\n\n').replaceAll('\n','\r\n'),'README.md').some(e=>e.includes('201 source lines')));
 });
+test('model pages open with a paragraph before lists, tables or subsections',()=>{
+ for(const folder of ['architecture','interface','development']){
+  const file=`docs/${folder}/page.md`;
+  assert.deepEqual(proseErrors('# Title\n\nOverview.\n\n- Detail\n',file),[]);
+  for(const block of ['- Detail','## Detail','```sh\nnpm test\n```','| A | B |\n| --- | --- |\n| C | D |','']){
+   assert.ok(proseErrors('# Title\n\n'+block,file).some(e=>e.includes('overview paragraph')),`${file}: ${block}`);
+  }
+ }
+ assert.deepEqual(proseErrors('# Title\n\n- Historical checklist','docs/qa/page.md'),[]);
+ assert.deepEqual(proseErrors('# Title\n\n## Reference','docs/icon-packs.md'),[]);
+});
 test('display math renders fractions, labeled subscripts, gradients and matrices',()=>{
  const html=parser().parse('$$\n\\nabla h=\\frac{x_{\\mathrm{rim}}}{2},\\quad \\mathbf{v}=\\begin{bmatrix}1\\\\2\\end{bmatrix}\n$$\n');
  assert.match(html,/<math/);assert.match(html,/<mfrac>/);assert.match(html,/<msub>/);assert.match(html,/<mtable/);assert.doesNotMatch(html,/katex-error/);
