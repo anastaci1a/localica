@@ -112,8 +112,10 @@ class PopupChromeDepthTest {
 
     @Test fun earlyMoreReopenClearsProjectionBeforeDialogDraw() = reopenMore(.92f)
     @Test fun lateMoreReopenClearsProjectionBeforeDialogDraw() = reopenMore(.45f)
+    /** #925: the opposite native order. A cycle crashes the RenderThread on API 33+. */
+    @Test fun dialogFirstMoreReopenSamplesOutsideItsProjectingHome() = reopenMore(.45f, dialogFirst = true)
 
-    private fun reopenMore(target: Float) {
+    private fun reopenMore(target: Float, dialogFirst: Boolean = false) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
@@ -135,20 +137,22 @@ class PopupChromeDepthTest {
                 host = LocalView.current
                 home = rememberGlassPopupHome(false)
                 val page = rememberFrostedBackdrop(home, dark = false)
+                // As in LocalicaScreen, the ambient modal scene encloses the popup home.
+                val modal = rememberFrostedBackdrop(page, dark = false)
                 val anchor = rememberGlassAnchor()
-                CompositionLocalProvider(LocalGlassMorphWorkObserver provides { kind, window, _ ->
+                CompositionLocalProvider(LocalModalBackdrop provides modal, LocalGlassMorphWorkObserver provides { kind, window, _ ->
                     if (kind == "dialog" && window != null) popup = window
                 }) {
                     val observedOpen = open
                     SideEffect { composedOpen = observedOpen }
-                    GlassPopupHome(home, chrome = {
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal)) { GlassPopupHome(home, chrome = {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
                             PopupActionPill(anchor, page, role = TriggerRole.Navigation,
                                 menuVisible = open, onMenuDismiss = { open = false },
                                 menuContent = { ActionMenuItem("Close fixture", icon = AppIcon.ActionClose) { open = false } },
                                 onSearch = {}, onMore = { open = true })
                         }
-                    }) { Box(Modifier.fillMaxSize().recordFrostedBackdrop(page).background(androidx.compose.ui.graphics.Color.White)) }
+                    }) { Box(Modifier.fillMaxSize().recordFrostedBackdrop(page).background(androidx.compose.ui.graphics.Color.White)) } }
                 }
             } }
             compose.mainClock.autoAdvance = false
@@ -165,24 +169,35 @@ class PopupChromeDepthTest {
                 flight.prepared && flight.handedOff && flight.phase() <= target
             }
             assertTrue("Reopen starts from an actual prepared home projection", flight.wasProjected)
-            compose.runOnUiThread {
-                blockedTree = window.decorView.viewTreeObserver
-                blocker = ViewTreeObserver.OnPreDrawListener { blockedDraws++; false }
-                blockedTree!!.addOnPreDrawListener(blocker)
-                blockedTree!!.addOnDrawListener(nativeWatch)
-                open = true
-                window.decorView.invalidate()
-            }
-            compose.waitUntil(10_000) {
-                compose.mainClock.advanceTimeByFrame()
-                compose.runOnUiThread { composedOpen }
-            }
-            compose.runOnUiThread { assertTrue("Reopen composition completed before the Activity draw", composedOpen) }
             val activity = compose.runOnUiThread {
                 var owner = host.context
                 while (owner is ContextWrapper && owner !is Activity) owner = owner.baseContext
                 (owner as Activity).window
             }
+            compose.runOnUiThread {
+                blockedTree = (if (dialogFirst) activity else window).decorView.viewTreeObserver
+                blocker = ViewTreeObserver.OnPreDrawListener { blockedDraws++; false }
+                blockedTree!!.addOnPreDrawListener(blocker)
+                window.decorView.viewTreeObserver.addOnDrawListener(nativeWatch)
+                open = true
+                window.decorView.invalidate()
+            }
+            compose.waitUntil(10_000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnUiThread { composedOpen && (!dialogFirst || nativeDraws > 0) }
+            }
+            if (dialogFirst) {
+                // The Dialog drew its reopened layers while the Activity's committed frame still projects the flight.
+                assertTrue("Activity pre-draw was actually intercepted", blockedDraws > 0)
+                assertTrue("The latch holds until the home commits a frame without the flight", flight.wasProjected)
+                compose.runOnUiThread { blockedTree!!.removeOnPreDrawListener(blocker); activity.decorView.invalidate() }
+                compose.waitUntil(10_000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.runOnUiThread { !flight.wasProjected }
+                }
+                return
+            }
+            compose.runOnUiThread { assertTrue("Reopen composition completed before the Activity draw", composedOpen) }
             // A committed Activity frame with the Dialog pre-draw blocked forces
             // the ordering that exposed B1; no race between native windows.
             original(activity, output, "activity-first-reopen").recycle()
