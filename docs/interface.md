@@ -421,7 +421,9 @@ Its track runs from the bottom of the header controls to the top of the lowest b
 
 Movement fades the thumb in. It stays fully visible while a finger is on the scrollbar or the list is scrolling, including a still finger or a fling. It fades out 1.2 seconds after release and settle. Under Reduced Motion it appears instantly, and its fade-out is unchanged.
 
-Only the visible thumb takes touches, within at least 48 dp long about its centre. Once it fades below half opacity, and while it is hidden, touches reach the list and its rows. Every other edge touch reaches the list as well. A shared button under the thumb, such as a row’s ⋯, keeps plain taps and holds; the thumb takes that contact only when it becomes vertical travel before the 250 ms hold.
+Only the visible thumb takes touches, within at least 48 dp long about its centre. Once it fades below half opacity, and while it is hidden, touches reach the list and its rows. Every other edge touch reaches the list as well.
+
+A shared button under the thumb, such as a row’s ⋯, keeps plain taps and holds; the thumb takes that contact only when it becomes vertical travel before the 250 ms hold.
 
 The thumb has two states, active and inactive. A touch-down it owns activates it at once. It grows by a constant width and by a capped share of its length, and its colour eases to the selected colour on the same timeline. Under Reduced Motion it takes the selected size and colour at once.
 
