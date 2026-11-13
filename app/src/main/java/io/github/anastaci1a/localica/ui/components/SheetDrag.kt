@@ -19,8 +19,6 @@ internal data class SheetDragTarget(val state: SheetState, val onSettled: (Boole
     val currentTarget by rememberUpdatedState(target)
     val currentChild by rememberUpdatedState(openingChild)
     val draggingChanged by rememberUpdatedState(onDraggingChanged)
-    var startExpanded by remember { mutableStateOf(false) }
-    var startChildOpen by remember { mutableStateOf(false) }
     var owner by remember { mutableStateOf<SheetDragTarget?>(null) }
     var touching by remember { mutableStateOf(false) }
     var movement by remember { mutableFloatStateOf(0f) }
@@ -33,12 +31,11 @@ internal data class SheetDragTarget(val state: SheetState, val onSettled: (Boole
                 true
             } else false
         }, onStart = {
-            startExpanded = currentTarget.state.expanded; startChildOpen = currentChild?.state?.expanded == true
             owner = null; touching = false; movement = 0f
             draggingChanged(true)
         }, onDelta = { delta ->
             if (owner == null) {
-                owner = if (startExpanded && (delta < 0f || startChildOpen)) currentChild ?: currentTarget else currentTarget
+                owner = if (currentTarget.state.expanded && (delta < 0f || currentChild?.state?.expanded == true)) currentChild ?: currentTarget else currentTarget
                 touching = owner?.state?.contact?.onDragStart() == true
             }
             movement += delta

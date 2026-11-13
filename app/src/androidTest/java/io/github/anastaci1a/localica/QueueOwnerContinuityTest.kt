@@ -177,4 +177,46 @@ class QueueOwnerContinuityTest {
         repeat(60) { mainClock.advanceTimeByFrame() }
         onNodeWithTag("tab-option-1").assertIsSelected()
     }
+
+    /** Opens the Queue, then Back, and holds the clock while it returns above [phase]. */
+    private fun ComposeUiTest.returnQueue(scene: Scene, phase: Double) {
+        click("Open queue"); repeat(60) { mainClock.advanceTimeByFrame() }
+        back(); mainClock.advanceTimeByFrame()
+        var frames = 0
+        while (phase(scene) > phase && frames++ < 30) mainClock.advanceTimeByFrame()
+    }
+
+    @Test fun queueFaceContactWhilePlayerAndQueueReturnCatchesTheQueue() = localicaRunComposeUiTest {
+        val scene = Scene(); start(scene); returnQueue(scene, .6)
+        val root = onRoot(); val bounds = root.fetchSemanticsNode().boundsInRoot
+        // A short contact outside the face that ends where it began returns the player toward expanded.
+        root.performTouchInput { down(Offset(bounds.width * .75f, top().toFloat() * .5f))
+            repeat(4) { moveBy(Offset(0f, bounds.height * .03f), delayMillis = 16) }
+            repeat(4) { moveBy(Offset(0f, -bounds.height * .03f), delayMillis = 16) }; up() }
+        mainClock.advanceTimeByFrame()
+        val player = scene.playerProgress
+        assertTrue("Both sheets must still move", player < 1f && phase(scene) > 0.0 && phase(scene) < 1.0)
+        val caught = top()
+        root.performTouchInput { down(Offset(center(), caught.toFloat() + 24f)) }
+        mainClock.advanceTimeByFrame()
+        assertEquals("The Queue face must catch its own moving drawer", caught, top(), 3.0)
+        repeat(30) { mainClock.advanceTimeByFrame() }
+        assertEquals("The contact must not hold the player", 1f, scene.playerProgress, .001f)
+        root.performTouchInput { up() }
+    }
+
+    @Test fun browseTapWhilePlayerMinimizesAndQueueReturnsReachesBrowse() = localicaRunComposeUiTest {
+        val scene = Scene(); start(scene); returnQueue(scene, .95)
+        val root = onRoot(); val bounds = root.fetchSemanticsNode().boundsInRoot
+        // Both targets collapse together, as openCollection requests (LocalicaScreen.kt:215).
+        root.performTouchInput { down(Offset(bounds.width * .75f, top().toFloat() * .5f))
+            repeat(6) { moveBy(Offset(0f, bounds.height * .07f), delayMillis = 16) }; up() }
+        var frames = 0
+        while (scene.playerProgress > .2f && frames++ < 30) mainClock.advanceTimeByFrame()
+        assertTrue("Both sheets must still move", scene.playerProgress > 0f && phase(scene) > 0.0)
+        onNodeWithTag("tab-option-1").assertIsNotSelected().performTouchInput { click() }
+        repeat(60) { mainClock.advanceTimeByFrame() }
+        onNodeWithTag("tab-option-1").assertIsSelected()
+        assertEquals("The player settles minimized", 0f, scene.playerProgress, .001f)
+    }
 }

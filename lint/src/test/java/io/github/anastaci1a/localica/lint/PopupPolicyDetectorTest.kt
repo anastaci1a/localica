@@ -410,7 +410,7 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     fun test885SheetRoutingIsPinnedToItsExistingCallers() {
         val sheet = kotlin(root + "components/Sheet.kt", """
             package io.github.anastaci1a.localica.ui.components
-            fun Sheet(state: Any, onSettled: ((Boolean) -> Unit)? = null, returningChild: Any? = null, content: () -> Unit) {}
+            fun Sheet(state: Any, onSettled: (Boolean) -> Unit, returningChild: Any, content: () -> Unit) {}
         """.trimIndent())
         val drag = kotlin(root + "components/SheetDrag.kt", """
             package io.github.anastaci1a.localica.ui.components
