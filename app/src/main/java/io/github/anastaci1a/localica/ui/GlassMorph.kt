@@ -463,7 +463,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         active = { anchor.contact.modal })
     var nativePlane by remember { mutableStateOf<ShadowPlane?>(null).step0(anchor, "instance.nativePlane") }
     var nativeNode by remember { mutableStateOf<SurfaceView?>(null).step0(anchor, "instance.nativeNode") }
-    var leasedNode: SurfaceView? by remember { mutableStateOf(null).step0(anchor, "instance.leasedNode") }
+    var leasedNode: SurfaceView? by remember { mutableStateOf<SurfaceView?>(null).step0(anchor, "instance.leasedNode") }
     val nativeLease = remember { arrayOfNulls<()->Unit>(1) }
     DisposableEffect(anchor) { onDispose { nativeLease[0]?.invoke(); nativeLease[0]=null } }
     var readyWindow by remember { mutableStateOf<android.view.Window?>(null).step0(anchor, "instance.readyWindow") }
