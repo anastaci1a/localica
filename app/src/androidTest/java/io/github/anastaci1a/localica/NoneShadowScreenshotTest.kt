@@ -71,13 +71,14 @@ class NoneShadowScreenshotTest {
             File(output, "$name-$suffix.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    private fun capture(name: String, runtime: GlassRendererRuntime, source: FrostedBackdrop): Pair<Bitmap, Bitmap> {
-        // API 26-32 average materials draw nothing until the first scene readback lands; never compare that frame.
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
+    /** [source] is re-read because FlatNone composes a fresh layer-less backdrop that never records. */
+    private fun capture(name: String, runtime: GlassRendererRuntime, source: () -> FrostedBackdrop): Pair<Bitmap, Bitmap> {
         compose.runOnIdle { runtime.request(GlassRendererMode.Normal) }
+        // API 26-32 average materials draw nothing until the first scene readback lands; never compare that frame.
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source().snapshot != null }
         val normal = screenshot()
         compose.runOnIdle { runtime.request(GlassRendererMode.FlatNone) }
-        val none = screenshot()
+        val none = screenshot().also { assertFalse("None never records the scene", source().recorded) }
         sideBySide(name, normal, none)
         return normal to none
     }
@@ -108,7 +109,7 @@ class NoneShadowScreenshotTest {
                 }
             }
         } } }
-        val (normal, none) = capture("pill-row", runtime, source)
+        val (normal, none) = capture("pill-row", runtime) { source }
         // Selected-row lift: identical outside the lifted body in both renderers.
         val row = compose.onNodeWithTag("selected-row").fetchSemanticsNode().boundsInRoot // root-relative: boundsInWindow already includes the root offset
         val inWindow = IntArray(2).also { (compose.onRoot().fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view.getLocationOnScreen(it) }
@@ -127,7 +128,7 @@ class NoneShadowScreenshotTest {
                 if (delta > 2) { differing++; largest = maxOf(largest, delta); box.union(x, y) }
             }
         compose.runOnIdle { popup = true }
-        capture("popup", runtime, source)
+        capture("popup", runtime) { source }
         assertEquals("Selected-row lift shadow differs outside the lifted body $body (largest $largest/255 within $box)", 0, differing)
     }
 
@@ -149,6 +150,6 @@ class NoneShadowScreenshotTest {
                 }
             }
         } } }
-        capture("queue-edge", runtime, source)
+        capture("queue-edge", runtime) { source }
     }
 }

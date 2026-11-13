@@ -42,12 +42,14 @@ class SlidingTabsTest {
             }
         } } }
         val node = compose.onNodeWithTag("foreground-tabs")
-        compose.waitUntil(8000) { samples.get() > 0 }
+        val flat = mode == io.github.anastaci1a.localica.navigation.GlassRendererMode.FlatNone
+        if (!flat) compose.waitUntil(8000) { samples.get() > 0 }
         val before = node.captureToImage().toPixelMap()
         val previousSamples = samples.get()
         compose.runOnIdle { foreground = true }
-        // A completed sample, not composition idleness, owns thumbnail readiness.
-        compose.waitUntil(8000) { samples.get() > previousSamples }
+        // A completed sample, not composition idleness, owns thumbnail readiness. None never samples.
+        if (flat) compose.runOnIdle { assertEquals("None never samples", 0, samples.get()) }
+        else compose.waitUntil(8000) { samples.get() > previousSamples }
         var after = node.captureToImage().toPixelMap()
         if (normal) compose.waitUntil(8000) {
             after = node.captureToImage().toPixelMap()
