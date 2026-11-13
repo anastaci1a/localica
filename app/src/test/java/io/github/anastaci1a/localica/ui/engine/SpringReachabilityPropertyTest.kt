@@ -18,7 +18,6 @@ class SpringReachabilityPropertyTest {
     private val autoModel = StockPopupMotion.copy(variants = StockPopupMotion.variants + (PopupKind.Menu to PopupMotionVariant.Auto))
     private val kappa = springOvershoot(StockPopupMotion.open.zeta.toDouble())
     private val span = 4000f
-    private val reversals = popupReversalReach(StockPopupMotion).keys
 
     private fun randomBasis(r: Random): ExpansionBasis {
         fun rect(): Rect { val x = r.nextFloat() * 500; val y = r.nextFloat() * 900; return Rect(x, y, x + r.nextFloat() * 600, y + r.nextFloat() * 900) }
@@ -41,7 +40,7 @@ class SpringReachabilityPropertyTest {
         fun acknowledge() { if (owner.awaitingNativeGate) { note("ack"); owner.acknowledgeNativeGate(owner.nativeGeneration) } }
         repeat(4 + r.nextInt(9)) {
             when (r.nextInt(7)) {
-                0, 1 -> { val q = r.nextBoolean(); if (reversals.admitsCrossReversal(cross, owner.expanded, q)) { note("target $q"); owner.target(q) } }
+                0, 1 -> { val q = r.nextBoolean(); if (cross == null || owner.expanded == q || model.admitsCross(cross.settled, q)) { note("target $q"); owner.target(q) } }
                 2 -> repeat(1 + r.nextInt(40)) { frame(); if (gated && r.nextInt(3) == 0) acknowledge() }
                 3 -> { basis = when (r.nextInt(3)) { 0 -> randomBasis(r); 1 -> basis.copy(endBounds = basis.endBounds.copy(right = basis.endBounds.right + r.nextFloat() * 200)); else -> basis.copy(density = if (basis.density == 1f) 2f else 1f) }; note("basis"); owner.setBasis(basis) }
                 4 -> {

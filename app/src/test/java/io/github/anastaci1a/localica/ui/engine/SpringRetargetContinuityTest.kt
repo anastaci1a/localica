@@ -17,7 +17,6 @@ class SpringRetargetContinuityTest {
     private val home = Rect(40f, 50f, 88f, 98f)
     private val envelope = Rect(10f, 20f, 310f, 620f)
     private val range = 4000.0
-    private val reversals = popupReversalReach(spec.popupMotion).keys
     private class Case(val name: String, val prepared: Boolean, val quiet: Boolean, val kind: PopupKind)
     private val cases = listOf(Case("prepared menu", true, false, PopupKind.Menu), Case("row menu", false, true, PopupKind.RowMenu),
         Case("bottom menu", false, false, PopupKind.BottomMenu), Case("dialog", false, false, PopupKind.Dialog))
@@ -59,7 +58,7 @@ class SpringRetargetContinuityTest {
                 val stamp = h.clock.stampNow; val before = sample(stamp); op(); val after = sample(stamp)
                 for (i in before.indices) assertEquals("$label $name entry $i", before[i].first, after[i].first, before[i].second)
             }
-            fun show() { if (reversals.admitsCrossReversal(cross, shown, !shown)) intent("show") { shown = !shown; motion.show(shown) } }
+            fun show() { if (cross == null || spec.popupMotion.admitsCross(cross.settled, !shown)) intent("show") { shown = !shown; motion.show(shown) } }
             fun finishTogether(name: String) {
                 // Every channel of the last intent is on one plan: all settle on the same frame.
                 var frames = 0

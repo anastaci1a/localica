@@ -55,7 +55,3 @@ internal class PopupRig(h: EngineHarness, val basis: ExpansionBasis, kind: Popup
     val start = edgesOf(basis.startBounds); val end = edgesOf(basis.endBounds)
     fun edge(i: Int, stamp: FrameStamp) = requireNotNull(rect).channels[i].rawValue(stamp)
 }
-
-/** Random reversal chains exercise only the pairs covered by model admission. */
-internal fun Set<String>.admitsCrossReversal(cross: MotionFloat?, expanded: Boolean, target: Boolean) =
-    cross == null || cross.settled || expanded == target || "cross${if (expanded) "OpenClose" else "CloseOpen"}" in this

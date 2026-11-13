@@ -48,6 +48,7 @@ enum class PopupDirection { Open, Close, Gate }
     /** The phase band [-band, 1 + band] every spring channel must stay in; admission and the engine's extremum proofs both read it. */
     val band: Float = StockPopupExpansionBand) {
     fun variant(kind: PopupKind): PopupMotionVariant = variants[kind] ?: PopupMotionVariant.Base
+    internal val reversalReach by lazy { popupReversalReach(this) }
     /** One channel's law: the main axis by [direction]; only a [cross] open uses the snap law; close and gate run the main law on every edge. */
     @Suppress("UNUSED_PARAMETER") fun law(kind: PopupKind, direction: PopupDirection, cross: Boolean): SpringLaw =
         if(cross && direction==PopupDirection.Open) crossOpen else when(direction) { PopupDirection.Open -> open; PopupDirection.Close -> close; PopupDirection.Gate -> gate }
@@ -159,7 +160,7 @@ internal fun popupMotionAdmission(m: PopupMotionModel): List<String> {
     }
     if(!(m.snapAspect.isFinite() && m.snapAspect>1f)) errors+="snapAspect"
     if(!(m.preparedRamp.isFinite() && m.preparedRamp in 0f..(.5f) && m.rampBlend.isFinite() && m.rampBlend>0f && m.rampBlend<=.25f)) errors+="ramp"
-    if(errors.isEmpty()) for((pair,peak) in popupReversalReach(m)) if(peak.start< -band || peak.endInclusive>1+band) errors+="reversal.$pair"
+    if(errors.isEmpty()) for((pair,peak) in m.reversalReach) if(peak.start< -band || peak.endInclusive>1+band) errors+="reversal.$pair"
     if(PopupKind.entries.any { it !in m.variants } || m.variants[PopupKind.Legacy]!=PopupMotionVariant.Legacy || m.variants.any { (k,v) -> k!=PopupKind.Legacy && v==PopupMotionVariant.Legacy }) errors+="variants"
     return errors
 }
@@ -185,6 +186,7 @@ internal fun springExtrema(x: Double,v: Double,q: Double,w: Double,z: Double): C
 /** #854 review S1: the reachable phase of every single reversal at one speed (a uniform omega scale is a pure time scale, so speed 1
  * stands for all). An open from rest is reversed by a close (or a gate approach) at every switch time on a 1 ms grid over its settle,
  * and a close from the open rest by an open; the result is each pair's exact extremum range. */
+internal fun PopupMotionModel.admitsCross(settled: Boolean,target: Boolean) = settled || "cross${if(target) "CloseOpen" else "OpenClose"}" in reversalReach
 internal fun popupReversalReach(m: PopupMotionModel): Map<String,ClosedFloatingPointRange<Double>> {
     fun reach(first: SpringLaw,from: Double,to: Double,second: SpringLaw,back: Double): ClosedFloatingPointRange<Double> {
         val w1=first.omega.toDouble(); val z1=first.zeta.toDouble(); val horizon=popupLawHorizon(first,1.0); var lo=min(from,to); var hi=max(from,to)
