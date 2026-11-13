@@ -78,7 +78,7 @@ install_live_signals() {
   fi
 }
 capture_native_failure() {
-  local lane=$1 folder status serial
+  local lane=$1 folder status serial suffix package
   serial=${LOCALICA_GUARD_SERIAL:-${ANDROID_SERIAL:-}}
   [[ "$serial" =~ ^emulator-[0-9]+$ ]] || { echo 'Native failure context unavailable: no explicit emulator serial' >&2; return 0; }
   folder="$live_reports/$lane/android-state"
@@ -86,9 +86,26 @@ capture_native_failure() {
   # Read only, before emulator shutdown/owned package restoration. Never dismiss
   # another app's error window here (guard_error_dialogs does so beforehand) or infer that its crash caused the test failure.
   printf '%s\n' "$serial" > "$folder/device.txt"
+  timeout 10 adb -s "$serial" shell 'logcat -b all -d -v epoch -T "$(($(date +%s) - 120)).000" "*:V"' > "$folder/logcat-all.txt" 2>&1
+  status=$?
+  printf 'logcat-all=%s\n' "$status" > "$folder/status.txt"
+  timeout 10 adb -s "$serial" shell 'date +%s; cat /proc/uptime; dmesg' > "$folder/kernel.txt" 2>&1
+  status=$?
+  printf 'kernel=%s\n' "$status" >> "$folder/status.txt"
+  # ApplicationExitInfo is API 30+; retain unsupported/denied output on older images.
+  for suffix in '' '-debug'; do
+    package=io.github.anastaci1a.localica
+    [[ "$suffix" != '-debug' ]] || package+=.debug
+    timeout 10 adb -s "$serial" shell dumpsys -t 5 activity exit-info "$package" > "$folder/exit-info$suffix.txt" 2>&1
+    status=$?
+    printf 'exit-info%s=%s\n' "$suffix" "$status" >> "$folder/status.txt"
+  done
+  grep -Ei 'lmkd|lowmemorykiller|oom|out of memory|killed process|binder|fatal signal' "$folder/logcat-all.txt" "$folder/kernel.txt" > "$folder/lmkd-kernel.txt"
+  status=$?
+  printf 'lmkd-kernel=%s\n' "$status" >> "$folder/status.txt"
   timeout 10 adb -s "$serial" logcat -b crash -d -v threadtime > "$folder/crash-buffer.txt" 2>&1
   status=$?
-  printf 'crash-buffer=%s\n' "$status" > "$folder/status.txt"
+  printf 'crash-buffer=%s\n' "$status" >> "$folder/status.txt"
   timeout 10 adb -s "$serial" shell dumpsys -t 5 window windows > "$folder/windows.txt" 2>&1
   status=$?
   printf 'windows=%s\n' "$status" >> "$folder/status.txt"

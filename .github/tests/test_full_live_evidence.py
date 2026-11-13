@@ -51,7 +51,8 @@ for name in classes:ET.SubElement(suite,'testcase',classname=name,name='actualTe
 omit=(any('Arguments.class=' in a for a in sys.argv) and os.environ.get('MOCK_NO_PREFLIGHT_XML')=='true') or (any('Arguments.notClass=' in a for a in sys.argv) and os.environ.get('MOCK_NO_REMAINDER_XML')=='true')
 if not omit:ET.ElementTree(suite).write(root/'app/build/outputs/androidTest-results/TEST.xml')
 code=s['gradleExits'][min(s['gradle']-1,len(s['gradleExits'])-1)]
-if code or os.environ.get('MOCK_OBSERVED_FAILURE')=='true':print('io.github.anastaci1a.localica.SelectedTest > actualFailure[owned-device] FAILED',flush=True)
+if os.environ.get('MOCK_PROCESS_LOST')=='true':print('Expected 273 tests, received 272; Process crashed.',flush=True)
+elif code or os.environ.get('MOCK_OBSERVED_FAILURE')=='true':print('io.github.anastaci1a.localica.SelectedTest > actualFailure[owned-device] FAILED',flush=True)
 sys.exit(code)
 '''
 
@@ -98,7 +99,12 @@ if a[:2]!=['-s','emulator-5554']:""")
         if any((live/lane).exists() and not (live/lane/'supervision.json').exists() for lane in ('preflight','full')):done(98,'Restoration raced supervisor')
         s['restoreSawTerminal']=bool(manifests)
         if s['restoreExit']:done(s['restoreExit'])""")
-        adb = adb.replace("if a==['get-serialno']:", """if a==['logcat','-b','crash','-d','-v','threadtime']:done(out='Synthetic external process crash\\n')
+        adb = adb.replace("if a==['get-serialno']:", """if a[:6]==['shell','dumpsys','-t','5','activity','exit-info']:
+    done(int(os.environ.get('MOCK_EXIT_INFO_FAILURE','0')), 'Synthetic exit reason for '+a[6]+'\\n')
+if len(a)==2 and a[0]=='shell' and a[1].startswith('logcat -b all '):done(out='Synthetic lmkd killed PID 2862\\n')
+if a==['shell','date +%s; cat /proc/uptime; dmesg']:
+    done(int(os.environ.get('MOCK_KERNEL_FAILURE','0')), 'Synthetic binder target dead\\n')
+if a==['logcat','-b','crash','-d','-v','threadtime']:done(out='Synthetic external process crash\\n')
 if a==['shell','dumpsys','-t','5','window','windows']:done(out='Synthetic focused error window\\n')
 if a==['shell','dumpsys','-t','5','activity','activities']:done(out='Synthetic resumed activity\\n')
 if a==['get-serialno']:""")
@@ -161,12 +167,44 @@ if a==['get-serialno']:""")
         self.assertIn('Synthetic external process crash', (folder/'crash-buffer.txt').read_text())
         self.assertIn('Synthetic focused error window', (folder/'windows.txt').read_text())
         self.assertIn('Synthetic resumed activity', (folder/'activities.txt').read_text())
-        self.assertEqual('crash-buffer=0\nwindows=0\nactivities=0\n', (folder/'status.txt').read_text())
+        self.assertEqual('logcat-all=0\nkernel=0\nexit-info=0\nexit-info-debug=0\nlmkd-kernel=0\ncrash-buffer=0\nwindows=0\nactivities=0\n', (folder/'status.txt').read_text())
+        self.assert_exit_context(folder)
         self.assert_restored()
         self.assertTrue(self.state['restoreSawTerminal'])
 
+    def assert_exit_context(self, folder):
+        for suffix in ('', '-debug'):
+            package = 'io.github.anastaci1a.localica' + ('.debug' if suffix else '')
+            self.assertIn(package, (folder/('exit-info'+suffix+'.txt')).read_text())
+        self.assertIn('lmkd killed PID 2862', (folder/'logcat-all.txt').read_text())
+        self.assertIn('binder target dead', (folder/'kernel.txt').read_text())
+        highlights = (folder/'lmkd-kernel.txt').read_text()
+        self.assertIn('lmkd killed PID 2862', highlights)
+        self.assertIn('binder target dead', highlights)
+        calls = [json.loads(line) for line in (self.root/'commands.jsonl').read_text().splitlines()]
+        self.assertIn(['adb', '-s', 'emulator-5554', 'shell',
+                       'logcat -b all -d -v epoch -T "$(($(date +%s) - 120)).000" "*:V"'], calls)
+
+    def test_incomplete_instrumentation_captures_exit_context_on_api36(self):
+        self.state.update(api='36', gradleExits=[7])
+        self.run_runner(7, TEST_API='36', MOCK_PROCESS_LOST='true')
+        self.assert_exit_context(self.root/'native-live-evidence/full/android-state')
+        self.assertEqual(0, self.state['mutations'])
+
+    def test_capture_failures_keep_instrumentation_status_and_attempt_other_snapshots(self):
+        self.state['gradleExits'] = [7]
+        self.run_runner(7, RISK_CLASSES=SELECTED, MOCK_EXIT_INFO_FAILURE='1', MOCK_KERNEL_FAILURE='124')
+        folder = self.root/'native-live-evidence/preflight/android-state'
+        self.assert_exit_context(folder)
+        statuses = (folder/'status.txt').read_text()
+        self.assertIn('exit-info=1\nexit-info-debug=1\n', statuses)
+        self.assertIn('kernel=124\n', statuses)
+        self.assertIn('activities=0\n', statuses)
+        self.assert_restored()
+
     def test_full_is_unfiltered_and_monitoring_complete_before_restore(self):
         self.run_runner()
+        self.assertFalse((self.root/'native-live-evidence/full/android-state').exists())
         self.assertEqual([AOT_ARGS], self.state['gradleArgs'])
         self.assertEqual(AOT_ARGS, self.manifest()['argv'][1:])
         self.assertEqual('native', self.manifest()['lane'])
