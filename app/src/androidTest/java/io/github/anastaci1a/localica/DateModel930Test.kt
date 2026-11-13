@@ -36,7 +36,7 @@ class DateModel930Test {
         }
 
     /** 18,000 tracks with distinct imported dates, unknown (NULL) dates and first-seen values that differ from date added. */
-    private fun seeded(block: suspend (LibraryDatabase, RoomLibraryStore, Map<String, Triple<Long?, Long?, Long?>>) -> Unit) = runBlocking {
+    private fun seeded(block: suspend (LibraryDatabase, RoomLibraryStore, Map<String, Triple<Long?, Long?, Long?>>) -> Unit): Unit = runBlocking {
         val database = Room.inMemoryDatabaseBuilder(context, LibraryDatabase::class.java).build()
         try {
             val store = RoomLibraryStore(database.libraryDao())
