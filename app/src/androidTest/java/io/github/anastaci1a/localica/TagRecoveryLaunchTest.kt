@@ -31,14 +31,14 @@ class TagRecoveryLaunchTest {
         val app = compose.activity.application as LocalicaApplication
         assertEquals("root-recovery.mp3", app.tagEditing.state.value.recovery)
         assertTrue(app.tagEditing.state.value.tracks.isEmpty())
-        compose.awaitPopupShown(hasText("Interrupted tag edit"))
+        compose.onPopupAction(hasText("Interrupted tag edit"), shown = true)
         compose.activityRule.scenario.recreate()
-        compose.awaitPopupShown(hasText("Interrupted tag edit"))
+        compose.onPopupAction(hasText("Interrupted tag edit"), shown = true)
         compose.onNodeWithText("Later").performClick()
         compose.awaitPopupGone(hasText("Interrupted tag edit"))
         assertEquals("Dismissal must retain recovery", "root-recovery.mp3", app.tagEditing.state.value.recovery)
         compose.activityRule.scenario.recreate()
-        compose.awaitPopupShown(hasText("Interrupted tag edit"))
+        compose.onPopupAction(hasText("Interrupted tag edit"), shown = true)
         compose.onNodeWithText("Later").performClick()
     }
 }

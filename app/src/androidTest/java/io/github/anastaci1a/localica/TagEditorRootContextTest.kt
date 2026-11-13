@@ -29,18 +29,18 @@ class TagEditorRootContextTest {
             assertFalse("The root regression must not interrupt a tag write", controller.state.value.busy)
             controller.open(listOf(Track("root-context:missing", "Root context song", fileName = "root.mp3", relativePath = "root.mp3")))
         }
-        compose.awaitPopupShown(hasText("Edit 1 song"))
+        compose.onPopupAction(hasText("Edit 1 song"), shown = true)
         compose.onNodeWithText("Close editor").performClick()
         compose.runOnIdle { controller.showJobs() }
-        compose.awaitPopupShown(hasText("Tag editing jobs"))
+        compose.onPopupAction(hasText("Tag editing jobs"), shown = true)
         compose.onNodeWithText("Close").performClick()
         compose.activityRule.scenario.recreate()
         compose.runOnIdle { controller.showJobs() }
-        compose.awaitPopupShown(hasText("Tag editing jobs"))
+        compose.onPopupAction(hasText("Tag editing jobs"), shown = true)
         compose.onNodeWithText("Close").performClick()
         compose.runOnIdle { controller.open(listOf(Track("root-context:missing", "Root context song",
             fileName = "root.mp3", relativePath = "root.mp3"))) }
-        compose.awaitPopupShown(hasText("Edit 1 song"))
+        compose.onPopupAction(hasText("Edit 1 song"), shown = true)
         compose.onNodeWithText("Close editor").performClick()
     }
 }

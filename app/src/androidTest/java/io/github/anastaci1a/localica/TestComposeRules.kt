@@ -27,18 +27,16 @@ private fun queuedEffects(context: CoroutineContext): CoroutineContext =
     if (context[ContinuationInterceptor] != null) context
     else context + StandardTestDispatcher(context[TestCoroutineScheduler])
 
-internal fun ComposeContentTestRule.onPopupAction(matcher: SemanticsMatcher): SemanticsNodeInteraction {
-    waitUntil(5000) { onAllNodes(matcher).fetchSemanticsNodes().size == 1 }
+/** Popups open on a native window receipt and close through a composition handoff; idling sees neither (#933). */
+private fun ComposeContentTestRule.awaitPopup(matcher: SemanticsMatcher, count: Int, shown: Boolean = false) =
+    waitUntil(5000) { onAllNodes(matcher).fetchSemanticsNodes().size == count && (!shown || onNode(matcher).isDisplayed()) }
+
+internal fun ComposeContentTestRule.onPopupAction(matcher: SemanticsMatcher, shown: Boolean = false): SemanticsNodeInteraction {
+    awaitPopup(matcher, 1, shown)
     return onNode(matcher)
 }
 
-/** An opening popup is displayed only once its native window shows, which idling cannot see (#933). */
-internal fun ComposeContentTestRule.awaitPopupShown(matcher: SemanticsMatcher) =
-    waitUntil(5000) { onAllNodes(matcher).fetchSemanticsNodes().size == 1 && onNode(matcher).isDisplayed() }
-
-/** A dismissed popup leaves the tree one composition handoff after its close; idling cannot see that handoff (#933). */
-internal fun ComposeContentTestRule.awaitPopupGone(matcher: SemanticsMatcher) =
-    waitUntil(5000) { onAllNodes(matcher).fetchSemanticsNodes().isEmpty() }
+internal fun ComposeContentTestRule.awaitPopupGone(matcher: SemanticsMatcher) = awaitPopup(matcher, 0)
 
 /** The running test's virtual time, for Engine owners in fixture hosts (PlayerSurfaceHarness); real-app owner tests pass it
  * to their own UiClock. The theme clock would stamp an idle intent at its last presented frame instead. */

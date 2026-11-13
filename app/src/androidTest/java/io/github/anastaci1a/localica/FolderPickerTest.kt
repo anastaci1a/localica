@@ -130,7 +130,7 @@ class FolderPickerTest {
         // The library tap captures the displayed list, then automatically advances to its second song.
         compose.waitUntil(5000) {
             runCatching { compose.onNodeWithTag("player-title", useUnmergedTree = true)
-                .assertIsDisplayed().assert(hasAnyDescendant(hasText("Quiet interval"))) }.isSuccess
+                .assertIsDisplayed().assert(hasText("Quiet interval") or hasAnyDescendant(hasText("Quiet interval"))) }.isSuccess
         }
         compose.onPopupAction(hasContentDescription("Collapse player")).performClick()
         compose.onPopupAction(hasContentDescription("Library")).performClick()
