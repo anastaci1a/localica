@@ -34,10 +34,10 @@ import kotlin.math.max
  * each run in their own class, rotated before the activity starts.
  * Native round (item 3): the flight starts at a real laid-out trigger opened by a click, every frame is stepped with the clock held,
  * and each sample is the panel's UNCLIPPED drawn rectangle (its layout corners through localToWindow), so no frame is excluded. */
-abstract class PopupPeakOvershootTest(private val landscape: Boolean) {
+private class PopupPeakOvershootFixture(private val landscape: Boolean) {
     private val device get() = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     private val compose = createComposeRule()
-    @get:Rule val chain: RuleChain = RuleChain.outerRule(object : TestWatcher() {
+    val chain: RuleChain = RuleChain.outerRule(object : TestWatcher() {
         override fun starting(description: Description) { if (landscape) device.setOrientationLeft() else device.setOrientationNatural(); device.waitForIdle() }
         override fun finished(description: Description) { device.setOrientationNatural(); device.unfreezeRotation() }
     }).around(compose)
@@ -47,7 +47,7 @@ abstract class PopupPeakOvershootTest(private val landscape: Boolean) {
         return Rect(pts.minOf { it.x }, pts.minOf { it.y }, pts.maxOf { it.x }, pts.maxOf { it.y })
     }
 
-    @Test fun nearFullHeightDialogRestsAtItsMarginAndOnlyItsFlightPassesIt() {
+    fun nearFullHeightDialogRestsAtItsMarginAndOnlyItsFlightPassesIt() {
         val samples = mutableListOf<Rect>()
         var window = Rect.Zero
         var marginPx = 0f
@@ -105,5 +105,16 @@ abstract class PopupPeakOvershootTest(private val landscape: Boolean) {
     }
 }
 
-class PopupPeakOvershootPortraitTest : PopupPeakOvershootTest(landscape = false)
-class PopupPeakOvershootLandscapeTest : PopupPeakOvershootTest(landscape = true)
+class PopupPeakOvershootPortraitTest {
+    private val fixture = PopupPeakOvershootFixture(landscape = false)
+    @get:Rule val chain: RuleChain = fixture.chain
+    @Test fun nearFullHeightDialogRestsAtItsMarginAndOnlyItsFlightPassesIt() =
+        fixture.nearFullHeightDialogRestsAtItsMarginAndOnlyItsFlightPassesIt()
+}
+
+class PopupPeakOvershootLandscapeTest {
+    private val fixture = PopupPeakOvershootFixture(landscape = true)
+    @get:Rule val chain: RuleChain = fixture.chain
+    @Test fun nearFullHeightDialogRestsAtItsMarginAndOnlyItsFlightPassesIt() =
+        fixture.nearFullHeightDialogRestsAtItsMarginAndOnlyItsFlightPassesIt()
+}

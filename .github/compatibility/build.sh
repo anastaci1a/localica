@@ -8,7 +8,7 @@ expected=$(keytool -exportcert -alias androiddebugkey -keystore "$LOCALICA_DEBUG
 for phase in seed bridge verify; do
   tree="$root/$phase"
   mkdir -p "$root/apks/$phase"
-  (cd "$tree" && bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest "-PlocalicaSourceSha=$source_sha" --no-daemon --max-workers=2) 2>&1 | tee "$root/reports/$phase-build.log"
+  (cd "$tree" && bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest "-PlocalicaSourceSha=$source_sha" --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8') 2>&1 | tee "$root/reports/$phase-build.log"
   cp "$tree/app/build/outputs/apk/debug/app-debug.apk" "$root/apks/$phase/compatibility-$phase-app.apk"
   cp "$tree/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "$root/apks/$phase/compatibility-$phase-test.apk"
   code=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["variants"][sys.argv[2]]["version_code"])' "$root/reports/provenance.json" "$phase")
