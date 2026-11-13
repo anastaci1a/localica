@@ -10,9 +10,10 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 - Keep a bottom-bar popup (search/…) above the mini player and tab bar for its whole plain close. Only a page takeover, such as opening Settings, hands the popup to its page.
 - Export each song's latest file modification time and the modification time first seen when Localica indexed it (library data version 1.2). Neither is ever imported; 1.0 and 1.1 files still import. Songs indexed before this release record the first-seen value from their stored modification time during the upgrade.
+- Make the scrollbar thumb active the moment a touch lands on it, with only two states (active and inactive). A row button under it, such as ⋯, keeps its plain taps, and dragging in a submenu no longer jumps to the top and back.
 - Remove glass sampling code left unused by the Single-Tone removal. Glass output is unchanged.
 - Restructure the documentation into model-first architecture, interface and development pages.
-- App Kotlin/Java source: 53,160 lines versus 53,357 in v0.34.3, a reduction of 197 lines.
+- App Kotlin/Java source: 53,171 lines versus 53,357 in v0.34.3, a reduction of 186 lines.
 - Reduce inherited UI debt from 1,474 to 1,468: RawUiMotion 346 → 344, RawPresentationTransform 134 → 132, RawShadowOrZOrder 31 → 30 and NonPresetScreenLayout 282 → 281. No new overrides.
 
 ## Resolved issues
@@ -20,6 +21,9 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#926](https://github.com/anastaci1a/localica/issues/926): A bottom-bar popup's plain close no longer retracts behind the mini player and tab bar.
 - [#937](https://github.com/anastaci1a/localica/issues/937): Remove the glass sampling scaffolding left dead by the Single-Tone removal.
 - [#943](https://github.com/anastaci1a/localica/issues/943): Library export carries each file's modification time, and the first-seen record keeps the modification time at first sight.
+- [#950](https://github.com/anastaci1a/localica/issues/950): The scrollbar no longer steals plain taps on row buttons it overlaps.
+- [#951](https://github.com/anastaci1a/localica/issues/951): A scrollbar drag in a submenu no longer snaps to the top on drag start.
+- [#952](https://github.com/anastaci1a/localica/issues/952): The scrollbar activates immediately on press and has two states, active and inactive.
 - [#929](https://github.com/anastaci1a/localica/issues/929): Restructure the documentation into small model-first pages, with rules and architecture in the repository.
 
 ## Known issues and follow-ups
@@ -31,7 +35,6 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#787](https://github.com/anastaci1a/localica/issues/787): LastFmGroupListTest can fail to scroll at the largest font in RTL in full runs.
 - [#940](https://github.com/anastaci1a/localica/issues/940): Re-tapping Sort or View while its popup is closing is ignored instead of reopening it.
 - [#920](https://github.com/anastaci1a/localica/issues/920): Reversing the bottom popup during opening can exceed its cross-axis band; reversal work remains deferred.
-- [#952](https://github.com/anastaci1a/localica/issues/952): The scrollbar still waits for a hold before it activates; the two-state input model is not in this release.
 - The 8.3 ms whole-frame performance objective remains unmet and unchanged. Functional acceptance does not qualify frame timing.
 
 ## Install
