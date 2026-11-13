@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -31,32 +30,15 @@ internal fun glassLayerExtent(size: IntSize): IntSize {
     return IntSize(capacity(size.width), capacity(size.height))
 }
 
+/** Filter only a bounded low-resolution backing; sharp foregrounds never enter this pass. */
 @Composable
 internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
     resolution: Float, padding: Float = 0f, homeSource: FrostedBackdrop? = null,
     homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
-    resolutionReader: (() -> Float)? = null, averageReader: (() -> MaterialAverageStyle)? = null,
-    effect: (Size, Float, Float) -> RenderEffect?) {
+    resolutionReader: (() -> Float)? = null, averageReader: (() -> MaterialAverageStyle)? = null, effect: (Size, Float, Float) -> RenderEffect?) {
     if (flatGlass()) return
-    val none by glassAverageProgress()
-    val blending = none > 0f && none < 1f
-    Box(modifier.graphicsLayer { compositingStrategy = if (blending)
-        androidx.compose.ui.graphics.CompositingStrategy.Offscreen else androidx.compose.ui.graphics.CompositingStrategy.Auto }) {
-        if (none < 1f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer { alpha = 1f - none }, source, location, resolution,
-            padding, homeSource, homeWeight, average, homeBounds, homeFootprint, resolutionReader, averageReader, effect)
-    }
-}
-
-/** Filter only a bounded low-resolution backing; sharp foregrounds never enter this pass. */
-@Composable
-private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
-    resolution: Float, padding: Float = 0f, homeSource: FrostedBackdrop? = null,
-    homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
-    homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
-    homeFootprint: (() -> HomeBackdropFootprint?)? = null,
-    resolutionReader: (() -> Float)?, averageReader: (() -> MaterialAverageStyle)?, effect: (Size, Float, Float) -> RenderEffect?) {
     val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     val drawObserver = LocalBackdropSamplingObserver.current
@@ -197,21 +179,16 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     }
 }
 
-/** Structural commands retained by an atlas member. Layer pixel updates deliberately do not enter this key. */
-internal data class SampledSceneDependency(val scene: FrostedBackdrop, val recorded: Boolean,
-    val released: Boolean, val size: IntSize, val registration: BackdropRegistration?)
-
 /** The scene a lens samples: the backing inside its recorded box and, because refraction
  * and blur reach beyond a nested panel's box, its real parent chain outside it instead of
- * transparent edge bands. Modern's lens and None's full-bounds mean draw exactly this. */
+ * transparent edge bands. */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(backing: FrostedBackdrop,
-    backingToLocal: BackdropRegistration, parentToLocal: (FrostedBackdrop) -> BackdropRegistration?,
-    structure: List<SampledSceneDependency>? = null) {
-    val chain = structure?.map { it.scene } ?: mutableListOf<FrostedBackdrop>().also { chain ->
+    backingToLocal: BackdropRegistration, parentToLocal: (FrostedBackdrop) -> BackdropRegistration?) {
+    val chain = mutableListOf<FrostedBackdrop>().also { chain ->
         var item: FrostedBackdrop? = backing
         while (item != null && item !in chain && chain.size < 8) { chain += item; item = item.parent }
     }
-    val extent = structure?.firstOrNull()?.size ?: backing.size
+    val extent = backing.size
     val boundary = backingToLocal.corners(Rect(0f, 0f, extent.width.toFloat(), extent.height.toFloat()))
     val inside = Path().apply {
         moveTo(boundary[0].x, boundary[0].y)
@@ -219,11 +196,9 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(b
         close()
     }
     chain.asReversed().forEach { scene ->
-        val dependency = structure?.firstOrNull { it.scene === scene }
-        if (scene.hasGlassLayer && (dependency?.recorded ?: scene.recorded) && !scene.layer.isReleased) {
+        if (scene.hasGlassLayer && scene.recorded && !scene.layer.isReleased) {
             if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(scene)
-            val registration = if (structure != null) dependency?.registration
-                else if (scene === backing) backingToLocal else parentToLocal(scene)
+            val registration = if (scene === backing) backingToLocal else parentToLocal(scene)
             if (registration != null) {
                 if (scene === backing) withBackdropRegistration(registration) { drawLayer(scene.layer) }
                 else clipPath(inside, ClipOp.Difference) {
@@ -232,28 +207,4 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(b
             }
         }
     }
-}
-
-/** Bounds, in consumer coordinates, of everything [drawSampledScene] can draw. */
-internal fun sampledSceneBounds(backing: FrostedBackdrop, backingToLocal: BackdropRegistration,
-    parentToLocal: (FrostedBackdrop) -> BackdropRegistration?,
-    structure: MutableList<SampledSceneDependency>? = null): Rect? {
-    var bounds: Rect? = null
-    val visited = mutableListOf<FrostedBackdrop>()
-    var item: FrostedBackdrop? = backing
-    while (item != null && item !in visited && visited.size < 8) {
-        visited += item
-        val registration = if (item === backing) backingToLocal else parentToLocal(item)
-        val recorded = item.recorded
-        val released = !item.hasGlassLayer || item.layer.isReleased
-        val extent = item.size
-        structure?.add(SampledSceneDependency(item, recorded, released, extent, registration))
-        if (recorded && !released && registration != null) {
-            val corners = registration.corners(Rect(0f, 0f, extent.width.toFloat(), extent.height.toFloat()))
-            val box = Rect(corners.minOf { it.x }, corners.minOf { it.y }, corners.maxOf { it.x }, corners.maxOf { it.y })
-            bounds = bounds?.let { Rect(minOf(it.left, box.left), minOf(it.top, box.top), maxOf(it.right, box.right), maxOf(it.bottom, box.bottom)) } ?: box
-        }
-        item = item.parent
-    }
-    return bounds
 }

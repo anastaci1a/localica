@@ -286,8 +286,6 @@ fun LocalicaScreen(
     val browseBottomChrome = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
         if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White)
-    // This input records the browse Column only. Shell chrome is a sibling; modal capture may
-    // record that chrome, but modalBackdrop is never issued an atlas capability.
     val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual, settings.glass),
         dark = if (expanded) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White,
         lightMix = if (expanded) playerLightMix else null)

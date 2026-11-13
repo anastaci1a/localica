@@ -182,11 +182,8 @@ class FullPartitionTest(unittest.TestCase):
         self.assertTrue(gated.isdisjoint(older['expected']))
         self.assertTrue(gated.issubset(newer['expected']))
         self.assertEqual([], newer['sdk_omissions'])
-        self.assertIn(prefix+'layerlessParentContributesNoSampledSceneBounds', older['expected'])
         for changed in (original.replace('minSdkVersion = 33', 'minSdkVersion = 32'),
                         original.replace('fun rendererPopupCanLeave', 'fun renamedRendererPopupCanLeave'),
-                        original.replace('@Test fun layerlessParent',
-                                         '@SdkSuppress(minSdkVersion = 33) @Test fun layerlessParent'),
                         original.replace('import androidx.test.filters.SdkSuppress',
                                          'import example.SdkSuppress')):
             path.write_text(changed)
