@@ -31,11 +31,11 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.ui.components.SheetDragTarget
 import io.github.anastaci1a.localica.ui.components.SheetState
+import io.github.anastaci1a.localica.ui.components.sheetDrag
 import io.github.anastaci1a.localica.ui.components.DrawerScrim
 import io.github.anastaci1a.localica.ui.components.rememberExpansionClosed
 
@@ -44,7 +44,7 @@ internal val CollapsedQueueHeight = 64.dp
 @Composable
 internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
     onSettled: (Boolean) -> Unit, playerProgress: () -> Float = { 1f },
-    onDragTrace: ((String) -> Unit)? = null, onOpeningContact: (() -> Unit)? = null,
+    onOpeningContact: (() -> Unit)? = null,
     providedPopupHome: GlassPopupHome? = null,
     content: @Composable ColumnScope.() -> Unit) {
     // U10.02: the drawer's phase, contacts and settles belong to its root ExpandCollapse owner.
@@ -53,25 +53,18 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
     val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val top = maxHeight - inset - CollapsedQueueHeight
     val density = LocalDensity.current
-    var delta by remember { mutableFloatStateOf(0f) }
     val currentPlayerProgress by rememberUpdatedState(playerProgress)
     val interactive by remember { derivedStateOf { currentPlayerProgress() >= .99f } }
     val departing by remember { derivedStateOf { !sheet.expanded || !interactive } }
     val popupHome = providedPopupHome ?: rememberGlassPopupHome(departing)
-    // Optional test diagnostics observe existing callbacks without adding a pointer node.
-    // A stationary pointer observer would itself change Compose's hit-path dispatch.
-    val currentTrace by rememberUpdatedState(onDragTrace)
     val currentOpeningContact by rememberUpdatedState(onOpeningContact)
     val currentSettled by rememberUpdatedState(onSettled)
-    // Contact ownership is fixed by its first directed delta, not later reversal; [1] holds the owner's admission.
-    val directContact = remember { booleanArrayOf(false, false) }
     val scrollOwnership = remember { ScrollGestureOwnership() }
     val listPull = remember(sheet) {
         object : NestedScrollConnection {
             var pulling by mutableStateOf(false)
             var pulled = 0f
             fun cancelPull() {
-                currentTrace?.invoke("nested-cancel pulling=$pulling pulled=$pulled progress=${phase.value()}")
                 if (!pulling) return
                 pulling = false
                 pulled = 0f
@@ -82,11 +75,9 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
                 // must retrace excess travel, never leak into the child list.
                 pulled += dy
                 sheet.contact.onDrag(-pulled)
-                currentTrace?.invoke("nested-applied pulled=$pulled consumed=$dy progress=${phase.value()}")
                 return Offset(0f, dy)
             }
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                currentTrace?.invoke("nested-pre source=$source available=$available pulling=$pulling pulled=$pulled progress=${phase.value()}")
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
                 return if (pulling) move(available.y) else Offset(0f, scrollOwnership.consumeRetrace(available.y))
             }
@@ -96,7 +87,6 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
                 // Even a partial final list delta owns the rest of this contact. A fresh
                 // downward pull already at the top still starts the documented drawer drag.
                 scrollOwnership.recordScroll(consumed.y)
-                currentTrace?.invoke("nested-post consumed=$consumed available=$available pulling=$pulling contentOwned=${scrollOwnership.contentOwned} mayHandoff=${scrollOwnership.mayHandoff} progress=${phase.value()}")
                 if (scrollOwnership.contentOwned) {
                     scrollOwnership.recordBoundary(available.y)
                     return Offset(0f, available.y)
@@ -108,7 +98,6 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
                 return move(available.y)
             }
             override suspend fun onPreFling(available: Velocity): Velocity {
-                currentTrace?.invoke("nested-fling available=$available pulling=$pulling mayCommit=${scrollOwnership.mayCommitPull} progress=${phase.value()}")
                 if (!pulling) return Velocity.Zero
                 // Scrollable also dispatches a zero-velocity pre-fling on cancellation,
                 // potentially before our observer receives its synthetic cancel event.
@@ -139,30 +128,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
     FrostedSurface(Modifier.width(maxWidth).height(maxHeight - status)
         .graphicsLayer { alpha = ((playerProgress() - .4f) / .6f).coerceIn(0f, 1f) }
         .then(if (!interactive) Modifier.clearAndSetSemantics {} else Modifier)
-        // Touch-down on a moving drawer catches it (#608 contact); a stationary drawer keeps its taps.
-        .playerVerticalDrag(onCatch = { !phase.settled && sheet.contact.onDragStart().also { directContact[1] = it
-                directContact[0] = true; delta = 0f } },
-            onDelta = { dy ->
-            currentTrace?.invoke("direct-delta dy=$dy delta=$delta progress=${phase.value()}")
-            delta += dy
-            if (!directContact[0] && dy != 0f) {
-                directContact[0] = true
-                if (dy < 0f && !sheet.expanded) currentOpeningContact?.invoke()
-            }
-            if (directContact[1]) sheet.contact.onDrag(-delta)
-            currentTrace?.invoke("direct-applied delta=$delta progress=${phase.value()}")
-        }, onStart = {
-            currentTrace?.invoke("direct-start progress=${phase.value()}")
-            delta = 0f
-            directContact[0] = false
-            directContact[1] = sheet.contact.onDragStart()
-        }, onStop = { velocity ->
-            currentTrace?.invoke("direct-stop velocity=$velocity delta=$delta progress=${phase.value()}")
-            if (directContact[1]) { directContact[1] = false; currentSettled(sheet.contact.onRelease(-velocity).expanded) }
-        }, onCancel = { if (directContact[1]) { directContact[1] = false; sheet.contact.onDragCancel() } })
-        .then(if (onDragTrace == null) Modifier else Modifier.onGloballyPositioned {
-            currentTrace?.invoke("layout top=${it.positionInRoot().y} progress=${phase.value()}")
-        })
+        .sheetDrag(SheetDragTarget(sheet, onSettled, onOpening = { currentOpeningContact?.invoke() }))
         // Header and list controls yield the swipes this drawer can still travel.
         .controlScrollParent { when { !phase.settled || sheet.expansion.inContact -> ControlScrollDirection.Down or ControlScrollDirection.Up
             sheet.expansion.expanded -> ControlScrollDirection.Down; else -> ControlScrollDirection.Up } }

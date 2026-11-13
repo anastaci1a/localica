@@ -60,10 +60,10 @@ internal fun BoxWithConstraintsScope.rememberAnimatableQueueSheet(progress: Anim
 @Composable
 internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>, settings: InterfaceSettings,
     onSettled: (Boolean) -> Unit, playerProgress: () -> Float = { 1f },
-    onDragTrace: ((String) -> Unit)? = null, onOpeningContact: (() -> Unit)? = null,
+    onOpeningContact: (() -> Unit)? = null,
     providedPopupHome: GlassPopupHome? = null,
     content: @Composable ColumnScope.() -> Unit) {
     val sheet = rememberAnimatableQueueSheet(progress, settings)
     ProductionQueueSurface(sheet, { open -> onSettled(open); if (open) sheet.expand() else sheet.collapse() }, playerProgress,
-        onDragTrace, onOpeningContact, providedPopupHome, content)
+        onOpeningContact, providedPopupHome, content)
 }

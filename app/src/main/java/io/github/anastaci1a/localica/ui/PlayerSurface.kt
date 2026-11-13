@@ -7,9 +7,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -42,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.components.SheetState
+import io.github.anastaci1a.localica.ui.components.SheetDragTarget
+import io.github.anastaci1a.localica.ui.components.sheetDrag
 import io.github.anastaci1a.localica.ui.components.ExpansionRest
 import io.github.anastaci1a.localica.ui.components.rememberExpansionClosed
 import io.github.anastaci1a.localica.ui.components.rememberExpansionRest
@@ -56,7 +55,6 @@ import io.github.anastaci1a.localica.ui.spec.MotionProfile
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.playback.PlaybackState
-import kotlinx.coroutines.launch
 
 internal fun playerHandleColor(ink: Color): Color =
     ink.copy(alpha = .45f)
@@ -87,7 +85,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     actions: @Composable () -> Unit = {}) {
     val sampled = sampleState?.invoke() ?: state
     val windowWidth = maxWidth
-    val scope = rememberCoroutineScope()
     val popupHome = providedPopupHome ?: rememberGlassPopupHome(!expanded)
     val playerScroll = rememberScrollState()
     LaunchedEffect(expanded) { if (!expanded) playerScroll.scrollTo(0) }
@@ -154,11 +151,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val settledBackground = if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f
     val backgroundView = rememberProfileValue("player-background", settledBackground, MotionProfile.ArtworkLayout)
     val backgroundProgress = backgroundView.value()
-    var startExpanded by remember { mutableStateOf(expanded) }
-    var startQueueOpen by remember { mutableStateOf(false) }
-    var movement by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
-    var owner by remember { mutableStateOf(VerticalOwner.Undecided) }
     val seekPosition = rememberPlayerSeekPosition(sampled, artworkVisit)
     val scrubCancel = remember { SeekCancelTargetState() }
     val scrubDragging = scrubCancel.active
@@ -179,35 +172,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         ArtworkAction.Change -> track?.let { editArtwork?.invoke(it) }
         ArtworkAction.None -> Unit
     } }
-    var touching by remember { mutableStateOf(false) }
-    // The finger drives the owner its first delta selects: upward from the expanded player (or a moving drawer) is the Queue.
-    val contact = { if (owner == VerticalOwner.Queue) queue?.contact else sheet.contact }
-    val dragState = rememberDraggableState { delta ->
-        if (owner == VerticalOwner.Undecided) {
-            owner = if (startExpanded && (delta < 0f || startQueueOpen)) VerticalOwner.Queue else VerticalOwner.Player
-            touching = contact()?.onDragStart() == true
-        }
-        movement += delta
-        if (touching) contact()?.onDrag(-movement)
-    }
-    val drag = Modifier.playerVerticalDrag(canStart = { !scrubCancel.active }, onDelta = { dragState.dispatchRawDelta(it) },
-        // Touch-down catches a moving drawer, else a moving player; a stationary surface keeps its tap meaning.
-        onCatch = { val drawer = queue?.takeIf { !it.expansion.phase.settled }
-            (drawer ?: sheet.takeIf { !it.expansion.phase.settled })?.contact?.onDragStart() == true && run {
-                startExpanded = expanded; startQueueOpen = queue?.expanded == true; movement = 0f
-                owner = if (drawer != null) VerticalOwner.Queue else VerticalOwner.Player; touching = true; dragging = true; true } },
-        onStart = { startExpanded = expanded; startQueueOpen = queue?.expanded == true; movement = 0f
-            owner = VerticalOwner.Undecided; dragging = true },
-        onStop = { velocity ->
-            dragging = false
-            val open = if (touching) contact()?.onRelease(-velocity)?.expanded else null
-            touching = false
-            if (owner == VerticalOwner.Queue) { onExpanded(true); if (open == true) onQueue() } else if (open != null) onExpanded(open)
-        }, onCancel = {
-            dragging = false
-            // Cancellation restores the previous logical surface from the current kinematics.
-            if (touching) { touching = false; contact()?.onDragCancel() }
-        })
+    val drag = Modifier.sheetDrag(SheetDragTarget(sheet, onExpanded),
+        openingChild = queue?.let { SheetDragTarget(it, { open -> onExpanded(true); if (open) onQueue() }) },
+        canStart = { !scrubCancel.active }, onDraggingChanged = { dragging = it })
     // Finish the cover mask late, independently of the backing's color. Delaying the
     // color continuation too would reveal a dark average palette before light artwork.
     val coverBlend = backgroundProgress * PlayerReveal.Cover.at(p)
@@ -680,5 +647,3 @@ private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: Fr
  * falls back to the artwork-and-wash recording. */
 internal fun seekCancelBackdrop(scene: FrostedBackdrop?, artwork: FrostedBackdrop, progress: Float): FrostedBackdrop =
     scene?.takeIf { progress >= .99f } ?: artwork
-
-private enum class VerticalOwner { Undecided, Player, Queue }

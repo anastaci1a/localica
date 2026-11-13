@@ -406,4 +406,33 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
         """.trimIndent())).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(2)
     }
 
+
+    fun test885SheetRoutingIsPinnedToItsExistingCallers() {
+        val sheet = kotlin(root + "components/Sheet.kt", """
+            package io.github.anastaci1a.localica.ui.components
+            fun Sheet(state: Any, onSettled: (Boolean) -> Unit, returningChild: Any, content: () -> Unit) {}
+        """.trimIndent())
+        val drag = kotlin(root + "components/SheetDrag.kt", """
+            package io.github.anastaci1a.localica.ui.components
+            import androidx.compose.ui.Modifier
+            fun Modifier.sheetDrag(target: Any, openingChild: Any? = null, canStart: () -> Boolean = { true }, onDraggingChanged: (Boolean) -> Unit = {}) = this
+            fun Modifier.verticalSurfaceDrag(onDelta: (Float) -> Unit, onStart: suspend () -> Unit, onStop: suspend (Float) -> Unit, onCancel: suspend () -> Unit, canStart: () -> Boolean = { true }, onCatch: () -> Boolean = { false }) = this
+        """.trimIndent())
+        val cases = listOf(
+            "LocalicaScreen.kt" to "Sheet(Any(), onSettled = {}, returningChild = Any()) {}",
+            "PlayerSurface.kt" to "Modifier.sheetDrag(Any(), onDraggingChanged = {})",
+            "QueueSurface.kt" to "Modifier.sheetDrag(Any())")
+        val imports = "package io.github.anastaci1a.localica.ui\nimport androidx.compose.ui.Modifier\nimport io.github.anastaci1a.localica.ui.components.*\n"
+        // #931: QueueSurface reaches the recognizer only through sheetDrag.
+        appFiles(modifier, sheet, drag, kotlin(root + "QueueSurface.kt", imports + "fun f() { Modifier.verticalSurfaceDrag({}, {}, {}, {}) }"))
+            .allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(4)
+        for ((owner, call) in cases) {
+            appFiles(modifier, sheet, drag, kotlin(root + owner, imports + "fun f() { $call }")).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
+            for (form in 0..2) {
+                val name = if (owner == "LocalicaScreen.kt") "Sheet" else "sheetDrag"
+                val source = if (form == 1) imports + "import io.github.anastaci1a.localica.ui.components.$name as route\nfun f() { " + call.replace(name, "route") + " }" else imports + "fun f() { " + (if (form == 2) call.replace("Sheet(", "io.github.anastaci1a.localica.ui.components.Sheet(").replace("Modifier.", "androidx.compose.ui.Modifier.") else call) + " }"
+                appFiles(modifier, sheet, drag, kotlin(root + "Screen.kt", source)).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(if (owner == "QueueSurface.kt") 1 else 2)
+            }
+        }
+    }
 }

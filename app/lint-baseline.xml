@@ -4771,7 +4771,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="642"
+            line="609"
             column="35"/>
     </issue>
 
@@ -4782,7 +4782,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="642"
+            line="609"
             column="43"/>
     </issue>
 
@@ -4793,7 +4793,7 @@
         errorLine2="                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="642"
+            line="609"
             column="51"/>
     </issue>
 
@@ -4848,7 +4848,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="648"
+            line="615"
             column="35"/>
     </issue>
 
@@ -4859,7 +4859,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="648"
+            line="615"
             column="43"/>
     </issue>
 
@@ -4870,7 +4870,7 @@
         errorLine2="                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="648"
+            line="615"
             column="51"/>
     </issue>
 

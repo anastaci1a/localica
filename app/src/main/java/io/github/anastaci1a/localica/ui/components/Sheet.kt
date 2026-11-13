@@ -2,7 +2,7 @@ package io.github.anastaci1a.localica.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.Modifier
 import io.github.anastaci1a.localica.ui.engine.*
 import kotlinx.coroutines.flow.first
 
@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.first
     fun collapse()
     fun collapsedOpacity(visibility: Float = 1f): Float = visibility * (1f - expansion.boundedProgress())
 }
-@Stable interface SheetScope { val expanded: Boolean; val navigationInset: Dp }
 /** Optional lifecycle receipts for retained sheet content, independent of cleared semantics or drawing. */
 internal val LocalSheetContentObserver = staticCompositionLocalOf<((String, Boolean) -> Unit)?> { null }
 @Composable internal fun ObserveSheetContent(key: String) {
@@ -54,7 +53,7 @@ private class SheetHandle(override val expansion: ExpansionView, initial: Boolea
     }
     return handle
 }
-@Composable fun Sheet(state: SheetState, content: @Composable SheetScope.() -> Unit) {
-    val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    content(object : SheetScope { override val expanded = state.expanded; override val navigationInset = inset })
-}
+/** Holds contacts no face claims while a returning child exposes the resting player; resting, it never catches over a face. */
+@Composable fun Sheet(state: SheetState, onSettled: (Boolean) -> Unit, returningChild: SheetState, content: @Composable () -> Unit) =
+    Box(Modifier.fillMaxSize().sheetDrag(SheetDragTarget(state, onSettled), canStart = { state.expanded && state.expansion.phase.settled
+        && !returningChild.expanded && !returningChild.expansion.phase.settled })) { content() }

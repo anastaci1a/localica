@@ -551,6 +551,8 @@ Main tabs leave downward. Playback-starting song taps expand by default (configu
 
 Both remain interruptible during settling. Player collapse slows into its resting position. During collapse, artwork and its color continuation resolve together before detaching. No stretched backing cover or dark browse flash.
 
+During Queue return, a fresh downward swipe outside its presented hitbox immediately drags the player. That contact remains valid if the Queue closes before the finger begins moving. After release, the exposed player's controls accept taps.
+
 | Queue element | Behavior |
 | --- | --- |
 | Drawer | [Queue Drawer rules](#queue-drawer). |
