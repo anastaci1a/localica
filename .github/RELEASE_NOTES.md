@@ -9,6 +9,8 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 ## Changes
 
 - Adopt the measured Apple popup motion model with shared spring flight, retained origins and bounded geometry.
+- Prevent crashes when More is reopened during its return animation.
+- Close popup width and height together while preserving the opening motion.
 - Add an Animation speed slider and a Respect system animation scale toggle.
 - Enforce shared popup ownership and prevent new screen-owned popup overrides through release gates.
 - Improve native keyboard isolation, Reduced motion fixtures and prototype verification policy.
@@ -28,15 +30,20 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#879](https://github.com/anastaci1a/localica/issues/879): Bind Reduced motion test fixtures to matching Engine records.
 - [#884](https://github.com/anastaci1a/localica/issues/884): Enforce shared popup ownership, API boundaries and duplicate-role checks.
 
+- [#903](https://github.com/anastaci1a/localica/issues/903): Correct selection stacking fixtures and inspect only discriminating opaque pixels.
+- [#921](https://github.com/anastaci1a/localica/issues/921): Inspect popup-depth hardware bitmaps through exact software copies.
+- [#924](https://github.com/anastaci1a/localica/issues/924): Observe merged browser readiness before scrolling the tag editor flow.
+- [#925](https://github.com/anastaci1a/localica/issues/925): Retain safe popup sampling until the home stops projecting the closing flight.
+- [#926](https://github.com/anastaci1a/localica/issues/926): Remove the separate cross-axis close law so popup width and height shrink together.
+
 ## Known issues and follow-ups
 
 - [#887](https://github.com/anastaci1a/localica/issues/887): The queue selector title fix is excluded from this release.
 - [#895](https://github.com/anastaci1a/localica/issues/895): Existing UI architecture findings remain under a ratchet; new overrides are forbidden and inherited counts may only decrease.
-- [#903](https://github.com/anastaci1a/localica/issues/903): Selection stacking pixel assertions also fail on the published base.
 - [#904](https://github.com/anastaci1a/localica/issues/904): API 26 shadow fixtures can capture Launcher before foreground admission.
 - [#915](https://github.com/anastaci1a/localica/issues/915): Single-Tone reference captures are not deterministic; removal of that rendering mode is planned in [#919](https://github.com/anastaci1a/localica/issues/919).
 - [#917](https://github.com/anastaci1a/localica/issues/917): A pre-existing timing-dependent page offset can appear after the Queue drawer test.
-- [#921](https://github.com/anastaci1a/localica/issues/921): API 36 popup-depth fixtures attempt to read pixels from hardware bitmaps.
+- [#920](https://github.com/anastaci1a/localica/issues/920): Reversing the bottom popup during opening can exceed its cross-axis band; reversal work remains deferred.
 - The 8.3 ms whole-frame performance objective remains unmet and unchanged. Functional acceptance does not qualify frame timing.
 
 ## Install
