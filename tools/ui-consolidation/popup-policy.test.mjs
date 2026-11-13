@@ -577,3 +577,18 @@ test('#854 round 3 R2-1: every shared entry point other files call has a popup-a
  assert.equal(qualified.length,1,JSON.stringify(qualified));
  assert.deepEqual(sharedEntryPoints(component,added[0].source).map(e=>e.name+(e.extension?'+':'')),['rememberPopupTiming','popupSpeed+','inside']);
 });
+
+test('#885 shared sheet routing admits its owners and rejects other direct, aliased and qualified callers',()=>{
+ const root='app/src/main/java/io/github/anastaci1a/localica/ui/';
+ for(const [owner,api,call] of [
+  ['LocalicaScreen.kt','Sheet','Sheet(state, onSettled = {}, returningChild = child) {}'],
+  ['PlayerSurface.kt','sheetDrag','Modifier.sheetDrag(target, onDraggingChanged = {})'],
+  ['QueueSurface.kt','verticalSurfaceDrag','Modifier.verticalSurfaceDrag({}, {}, {}, {})']]) {
+  const head='package io.github.anastaci1a.localica.ui\nimport io.github.anastaci1a.localica.ui.components.'+api+'\n';
+  assert.deepEqual(checkPopupSource(root+owner,head+'fun f() { '+call+' }'),[]);
+  for(const [imports,body] of [[head,call],
+   [head+'import io.github.anastaci1a.localica.ui.components.'+api+' as route\n',call.replace(api,'route')],
+   [head,call.replace(api,api==='Sheet'?'io.github.anastaci1a.localica.ui.components.Sheet':api).replace('Modifier.','androidx.compose.ui.Modifier.')]])
+   assert.ok(checkPopupSource(screen,imports+'fun f() { '+body+' }').some(i=>i.rule==='ScreenPopupMotion' && /pinned callers/.test(i.note)),api+': '+body);
+ }
+});
