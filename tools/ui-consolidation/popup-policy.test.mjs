@@ -329,7 +329,7 @@ test('home-less chrome closes preserve the published native semantics policy',()
   [null,false,false,true,false,'a chrome trigger without a home remains in its native window'],
   [null,false,false,false,false,'an ordinary trigger without a home keeps native semantics'],
   [null,false,true,false,true,'an existing handoff retains the published return policy'],
-  [{departing:false},false,false,true,true,'a hosted chrome trigger keeps the #867 inline return'],
+  [{departing:false},false,false,true,false,'a plain chrome close stays in its window above the bars (#926)'],
   [{departing:false},true,false,true,false,'an open chrome popup remains native'],
   [{departing:true},true,false,false,true,'a departing page retains its ordinary popup'],
   [{departing:false},false,false,false,false,'an ordinary close waits for a real handoff'],
@@ -397,7 +397,7 @@ test('chrome reopen resumes modal sampling only after the home clears projection
  assert.equal(actualPopupDeparture(source,true,false,true).sampling.name,'browse',
   'resetting the handoff cannot release the source while the home still projects it');
  const home=fs.readFileSync(new URL('../../app/src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt',import.meta.url),'utf8');
- assert.match(home,/if \(!flight.prepared\) flight.wasProjected = false[\s\S]*?if \(aboveChrome/,
+ assert.match(home,/if \(!flight.prepared\) flight.wasProjected = false[\s\S]*?drawPopupProjection/,
   'the home releases projection before filtering its next draw pass');
  assert.equal(actualPopupDeparture(source,true,false,false).sampling.name,'modal',
   'modal sampling resumes after the home commits a frame without the flight');

@@ -18,12 +18,11 @@ internal fun ComposeTestRule.popupGeometryNodes(anchor: GlassAnchor, requestedVi
         val flights = JSONArray()
         fun collect(home: GlassPopupHome, path: String) {
             home.flights.forEachIndexed { index, flight ->
-                val returningSemantics = home.departing || flight.handedOff && !requestedVisible
                 flights.put(JSONObject().put("homePath", path).put("flightIndex", index)
                     .put("handedOff", flight.handedOff).put("wasProjected", flight.wasProjected)
                     .put("prepared", flight.prepared).put("homeDeparting", home.departing)
-                    .put("chromeTrigger", flight.chromeTrigger).put("requestedVisible", requestedVisible)
-                    .put("returningInline", returningSemantics || !requestedVisible && flight.chromeTrigger))
+                    .put("requestedVisible", requestedVisible)
+                    .put("returningInline", home.departing || flight.handedOff && !requestedVisible))
             }
             home.children.forEachIndexed { index, child -> collect(child, "$path/$index") }
         }
