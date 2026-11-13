@@ -67,7 +67,7 @@ class TagEditorFlowTest {
             compose.nativePointer(compose.onNode(hasText("Morning tone") and inList), holdMillis = 800)
             compose.nativePointer(compose.onPopupAction(hasText("Edit tags")))
             compose.onPopupAction(hasSetTextAction() and hasText("Morning tone")).performScrollTo().performTextReplacement("Retagged tone")
-            compose.nativePointer(compose.onPopupAction(hasText("Grant write access: root")).performScrollTo())
+            compose.onPopupAction(hasText("Grant write access: root")).performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
             selectFolder()
             compose.onPopupAction(hasText("Review changes")).performClick()
             compose.onPopupAction(hasText("Save changes")).performClick()
