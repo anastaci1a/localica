@@ -33,7 +33,7 @@ import kotlin.math.max
  * overshoot passes that margin by at most kappa x edge travel, clipped at the window edge, then settles back. Portrait and landscape
  * each run in their own class, rotated before the activity starts.
  * Native round (item 3): the flight starts at a real laid-out trigger opened by a click, every frame is stepped with the clock held,
- * and each sample is the panel's UNCLIPPED drawn rectangle (its layout corners through localToWindow), so no frame is excluded. */
+ * and each sample is the panel's UNCLIPPED drawn rectangle (its layout corners through localToScreen), so no frame is excluded. */
 private class PopupPeakOvershootFixture(private val landscape: Boolean) {
     private val device get() = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     private val compose = createComposeRule()
@@ -43,7 +43,7 @@ private class PopupPeakOvershootFixture(private val landscape: Boolean) {
     }).around(compose)
 
     private fun drawn(c: LayoutCoordinates): Rect {
-        val s = c.size; val pts = listOf(Offset.Zero, Offset(s.width.toFloat(), 0f), Offset(0f, s.height.toFloat()), Offset(s.width.toFloat(), s.height.toFloat())).map { c.localToWindow(it) }
+        val s = c.size; val pts = listOf(Offset.Zero, Offset(s.width.toFloat(), 0f), Offset(0f, s.height.toFloat()), Offset(s.width.toFloat(), s.height.toFloat())).map { c.localToScreen(it) }
         return Rect(pts.minOf { it.x }, pts.minOf { it.y }, pts.maxOf { it.x }, pts.maxOf { it.y })
     }
 
@@ -57,7 +57,11 @@ private class PopupPeakOvershootFixture(private val landscape: Boolean) {
             anchor = rememberGlassAnchor()
             val view = LocalView.current
             val density = LocalDensity.current
-            SideEffect { window = Rect(0f, 0f, view.width.toFloat(), view.height.toFloat()); marginPx = density.popupMarginPx(page = false) }
+            SideEffect {
+                val origin = IntArray(2).also(view::getLocationOnScreen)
+                window = Rect(origin[0].toFloat(), origin[1].toFloat(), (origin[0] + view.width).toFloat(), (origin[1] + view.height).toFloat())
+                marginPx = density.popupMarginPx(page = false)
+            }
             Box(Modifier.fillMaxSize()) {
                 // A real trigger near the bottom centre, as the queue selector's: laid out, anchored and clicked.
                 Box(Modifier.offset { IntOffset(view.width / 2 - 60, view.height - 220) }.size(with(density) { 120.toDp() }, with(density) { 64.toDp() })
@@ -68,7 +72,7 @@ private class PopupPeakOvershootFixture(private val landscape: Boolean) {
             }
         } }
         compose.waitForIdle()
-        val trigger = compose.onNodeWithTag("trigger").fetchSemanticsNode().boundsInWindow
+        val trigger = drawn(compose.onNodeWithTag("trigger").fetchSemanticsNode().layoutInfo.coordinates)
         // R2-2 and item 3: the clock is held from before the click, so every flight frame is stepped and sampled; the run ends after the
         // panel has been still for 60 frames (C-R3-2: a run that reaches the 1200-frame cap does not count).
         compose.mainClock.autoAdvance = false
