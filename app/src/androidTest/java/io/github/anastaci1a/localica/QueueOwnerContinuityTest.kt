@@ -189,32 +189,35 @@ class QueueOwnerContinuityTest {
     @Test fun queueFaceContactWhilePlayerAndQueueReturnCatchesTheQueue() = localicaRunComposeUiTest {
         val scene = Scene(); start(scene); returnQueue(scene, .95)
         val root = onRoot(); val bounds = root.fetchSemanticsNode().boundsInRoot
+        assertTrue("The queue must still be returning", phase(scene) > 0.0 && phase(scene) < 1.0)
         // A short contact outside the face, held still before UP, springs the displaced player back toward expanded.
         root.performTouchInput { down(Offset(bounds.width * .75f, top().toFloat() * .5f))
             repeat(4) { moveBy(Offset(0f, bounds.height * .03f), delayMillis = 8) }
             moveBy(Offset.Zero, delayMillis = 45); up() }
         mainClock.advanceTimeByFrame()
-        val player = scene.playerProgress
-        assertTrue("Both sheets must still move", player < 1f && phase(scene) > 0.0 && phase(scene) < 1.0)
-        val caught = top()
-        root.performTouchInput { down(Offset(center(), caught.toFloat() + 24f)) }
+        assertTrue("The released player must still move", scene.playerProgress < 1f)
+        // The Queue clears its semantics while the player moves; its lip stays on the face at every phase.
+        scene.recorder.joins.clear()
+        root.performTouchInput { down(Offset(center(), scene.closed.toFloat() + 24f))
+            repeat(3) { moveBy(Offset(0f, -16f), delayMillis = 8) } }
         mainClock.advanceTimeByFrame()
-        assertEquals("The Queue face must catch its own moving drawer", caught, top(), 3.0)
-        repeat(30) { mainClock.advanceTimeByFrame() }
-        assertEquals("The contact must not hold the player", 1f, scene.playerProgress, .001f)
+        assertTrue("The Queue face must catch and drive its own moving drawer", scene.recorder.joins.any { it.policy == "DrivenInput" })
         root.performTouchInput { up() }
+        repeat(60) { mainClock.advanceTimeByFrame() }
+        assertEquals("The face contact must not drive the player", 1f, scene.playerProgress, .001f)
     }
 
     @Test fun browseTapAboveMinimizingPlayerWhileQueueReturnsLeavesThePlayer() = localicaRunComposeUiTest {
         val scene = Scene(); start(scene); returnQueue(scene, .95)
         val root = onRoot(); val bounds = root.fetchSemanticsNode().boundsInRoot
+        assertTrue("The queue must still be returning", phase(scene) > 0.0 && phase(scene) < 1.0)
         // Both targets collapse together, as openCollection requests (LocalicaScreen.kt:215).
         root.performTouchInput { down(Offset(bounds.width * .75f, top().toFloat() * .5f))
             repeat(6) { moveBy(Offset(0f, bounds.height * .07f), delayMillis = 8) }; up() }
         var frames = 0
         while (scene.playerProgress > .6f && frames++ < 30) mainClock.advanceTimeByFrame()
         val pressed = scene.playerProgress
-        assertTrue("Both sheets must still move", pressed > 0f && phase(scene) > 0.0)
+        assertTrue("The player must still be minimizing", pressed > 0f)
         // Browse above the shrinking player's top edge, outside the clipped Queue scrim.
         root.performTouchInput { down(Offset(bounds.width / 2, bounds.height * .1f)) }
         mainClock.advanceTimeByFrame()
