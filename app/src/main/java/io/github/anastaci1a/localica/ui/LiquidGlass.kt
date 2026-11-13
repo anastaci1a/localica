@@ -202,7 +202,6 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     homeSource: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
-
     silhouette: GlassSilhouette? = null, sharedContact: GlassContact? = null,
     contactPresentation: (() -> GlassShape)? = null,
     contactAdmission: () -> Boolean = { true },

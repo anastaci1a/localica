@@ -291,12 +291,6 @@ internal class BackdropRecordingDebug {
 
 internal class BackdropRecordingScope(val source: FrostedBackdrop) {
     var parent: BackdropRecordingScope? = null
-    fun sources(): List<FrostedBackdrop> {
-        val result = ArrayList<FrostedBackdrop>()
-        var scope: BackdropRecordingScope? = this
-        while (scope != null && scope.source !in result) { result += scope.source; scope = scope.parent }
-        return result
-    }
     fun attach(value: BackdropRecordingScope?) {
         if (parent === value) return
         parent?.source?.recordedLayoutChildren?.remove(source)
@@ -308,19 +302,12 @@ internal val ModifierLocalBackdropRecording = modifierLocalOf<BackdropRecordingS
 
 internal object BackdropRecordingAncestry {
     private val active = ArrayList<FrostedBackdrop>()
-    fun containers(): List<FrostedBackdrop> = active.toList()
     fun reference(source: FrostedBackdrop) {
         if (!io.github.anastaci1a.localica.BuildConfig.DEBUG) return
         active.lastOrNull()?.takeUnless { it === source }?.recordedChildren?.add(source)
     }
     fun begin(source: FrostedBackdrop) { source.recordedChildren.clear(); active.add(source) }
     fun end(source: FrostedBackdrop) { check(active.removeAt(active.lastIndex) === source) }
-    fun contains(source: FrostedBackdrop, containers: List<FrostedBackdrop>): Boolean {
-        val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<FrostedBackdrop, Boolean>())
-        fun visit(node: FrostedBackdrop): Boolean = seen.add(node) &&
-            (containers.any { it === node } || node.recordedChildren.any(::visit) || node.recordedLayoutChildren.any(::visit))
-        return visit(source)
-    }
 }
 
 /** Lifetime of a sampling edge in the backdrop graph; no per-frame registration. */

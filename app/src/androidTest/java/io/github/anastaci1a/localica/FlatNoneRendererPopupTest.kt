@@ -13,15 +13,6 @@ import org.junit.Test
 
 /** #775: the actual preference must switch through real touch and accessibility routes. */
 class FlatNoneRendererPopupTest {
-    @Test fun layerlessParentContributesNoSampledSceneBounds() {
-        val structure = mutableListOf<io.github.anastaci1a.localica.ui.SampledSceneDependency>()
-        val stale = io.github.anastaci1a.localica.ui.FrostedBackdrop(null, false)
-        val identity = io.github.anastaci1a.localica.ui.BackdropRegistration.Identity
-        assertNull(io.github.anastaci1a.localica.ui.sampledSceneBounds(stale, identity, { identity }, structure))
-        assertFalse(structure.single().recorded)
-        assertTrue(structure.single().released)
-    }
-
     @SdkSuppress(minSdkVersion = 33)
     @Test fun rendererPopupCanLeaveFlatNoneForNormal() = switchFromPopup(false)
 

@@ -27,7 +27,6 @@ motionSnap|app/src/main/java/io/github/anastaci1a/localica/ui/engine/MotionPixel
 observeGlassContact|app/src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt|reads glass contact state; mutation is gated by GlassContactMutation
 originExpansion|app/src/main/java/io/github/anastaci1a/localica/ui/engine/OriginPhaseProjection.kt|read-only origin phase projection
 originGap|app/src/main/java/io/github/anastaci1a/localica/ui/engine/OriginPhaseProjection.kt|read-only origin phase projection
-placeRetainedLayer|app/src/main/java/io/github/anastaci1a/localica/ui/components/RetainedLayer.kt|placement of a retained draw layer, no motion input
 refreshSource|app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt|backdrop refresh request, no motion input
 rememberArtworkReveal|app/src/main/java/io/github/anastaci1a/localica/ui/components/ArtworkReveal.kt|artwork load reveal, not a popup (reviewer's example)
 rememberExpansionClosed|app/src/main/java/io/github/anastaci1a/localica/ui/components/Drawer.kt|reads whether an existing expansion rests closed
