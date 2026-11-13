@@ -642,15 +642,15 @@ class QueueFollowingTest {
         compose.mainClock.advanceTimeBy(500); compose.waitForIdle()
         val top = bar.fetchSemanticsNode().boundsInRoot.top
         val grab = compose.onNodeWithTag("browse-scrollbar-thumb").fetchSemanticsNode().boundsInRoot.center.y - top
+        val before = position()
         bar.performTouchInput {
-            down(Offset(centerX, grab))
-            moveTo(Offset(centerX, grab - height * .3f), delayMillis = 300)
-            up()
+            swipe(Offset(centerX, grab), Offset(centerX, grab - height * .3f), durationMillis = 300)
         }
         compose.mainClock.advanceTimeBy(500)
         compose.mainClock.autoAdvance = true
         currentReturn.assertIsDisplayed()
         val detached = position()
+        assertNotEquals("The scrollbar drag must move the Queue", before, detached)
         compose.runOnIdle { fixture.publish(5) }
         compose.waitForIdle()
         assertEquals(detached, position(), 0f)
