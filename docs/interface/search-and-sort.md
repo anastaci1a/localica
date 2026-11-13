@@ -1,6 +1,8 @@
 # Search and sort
 
-Search and Sort/View are both glass pills that expand into one frosted panel and return into the pill. Search is a draft until it is submitted. Sort and View share one draft until Save. A list can keep its own override, or follow the default for its type. Sorting a queue or playlist is different: it physically reorders the list.
+Search and Sort/View are both glass pills that expand into one frosted panel and return into the pill. Search is a draft until it is submitted. Sort and View share one draft until Save.
+
+A list can keep its own override, or follow the default for its type. Sorting a queue or playlist is different: it physically reorders the list.
 
 - Global search opens from the bottom Search control. Scoped search is optional per list.
 - Each completed search is a history step that Back retraces.
@@ -91,9 +93,26 @@ After an order change, the viewport moves once:
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Search | `ListSearchTest`, `SearchImeMotionTest`, `SearchDismissalLifecycleTest`, `SearchPendingReturnGeometryTest` |
-| History | `ScopedSearchHistoryTest`, `SearchHistoryTest` |
-| Sort/View | `BrowseOptionsFaceContractTest`, `InheritedInformationPreferencesTest`, `SearchSortResetTest` |
-| Ordering | `BrowseOrderViewportTest`, `QueueOrderActionAdmissionTest`, `LiveOrderDialogTest` |
+[ListSearchTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ListSearchTest.kt).
+
+[SearchImeMotionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SearchImeMotionTest.kt).
+
+[SearchDismissalLifecycleTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SearchDismissalLifecycleTest.kt).
+
+[SearchPendingReturnGeometryTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SearchPendingReturnGeometryTest.kt).
+
+[ScopedSearchHistoryTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ScopedSearchHistoryTest.kt).
+
+[SearchHistoryTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SearchHistoryTest.kt).
+
+[BrowseOptionsFaceContractTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/BrowseOptionsFaceContractTest.kt).
+
+[InheritedInformationPreferencesTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/InheritedInformationPreferencesTest.kt).
+
+[SearchSortResetTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SearchSortResetTest.kt).
+
+[BrowseOrderViewportTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/BrowseOrderViewportTest.kt).
+
+[QueueOrderActionAdmissionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueueOrderActionAdmissionTest.kt).
+
+[LiveOrderDialogTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LiveOrderDialogTest.kt).

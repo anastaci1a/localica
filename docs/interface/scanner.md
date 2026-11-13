@@ -32,4 +32,10 @@ The Library and tags page ends with **Export library data** and **Import library
 
 ## Tests
 
-`IncompleteScanTest`, `FolderPickerTest`, `FolderLabelsTest`, `LibraryDataExchangeTest`.
+[IncompleteScanTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/IncompleteScanTest.kt).
+
+[FolderPickerTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/FolderPickerTest.kt).
+
+[FolderLabelsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/FolderLabelsTest.kt).
+
+[LibraryDataExchangeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LibraryDataExchangeTest.kt).

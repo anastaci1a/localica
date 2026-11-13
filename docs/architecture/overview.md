@@ -47,13 +47,8 @@ Preferences are typed. A scoped preference keeps explicit inheritance: it is eit
 
 Selection stores source occurrence identities and clears only after its command completes. Home pins keep typed identity and manual order, independent of tabs. Pure ordering and move helpers are shared by every collection type.
 
-Tests: `EnumDecodingTest`, `QueuedSettingsTest`.
+Tests: [EnumDecodingTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/EnumDecodingTest.kt), [QueuedSettingsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueuedSettingsTest.kt).
 
 ## Where to go next
 
-| Question | Page |
-| --- | --- |
-| How is the interface built and policed? | [UI system](ui-system.md), [Popups](popups.md), [Motion](motion.md), [Glass](glass.md), [Rendering](rendering.md) |
-| How do edits stay safe? | [File editing](file-editing.md) |
-| Why does a track boundary sound right? | [Audio corrections](audio-corrections.md) |
-| What does the user see? | The [interface pages](../README.md#interface) |
+The [documentation map](../README.md#interface) links interface contracts. Architecture pages above explain shared UI, data, file safety and playback; development pages own verification and delivery.

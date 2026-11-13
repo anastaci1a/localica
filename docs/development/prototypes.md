@@ -1,6 +1,6 @@
 # Prototype runs
 
-A prototype run is a fast, focused, explicitly uncertified check. It builds a development APK and runs only the test classes you select, on API 26 and 36. Use it for proofs while iterating, for one-off diagnostics and for repeat runs of a flaky test. It never certifies a release: only the complete [Android workflow](ci.md) does.
+Prototype runs build development APKs and selected tests on API 26/36 for focused proofs, diagnostics and flake repeats. They remain uncertified; only the complete [Android workflow](ci.md) qualifies releases.
 
 - Dispatch `prototype.yml` manually, or call it as a reusable workflow.
 - Each run occupies at most two runners.
@@ -53,11 +53,10 @@ The summary records the recovery under `prototype-evidence/teardown-offline/`. A
 
 ### The emulator died
 
-API 36 jobs sample the emulator's process identity, boot ID, adb state and host memory. One fresh boot is allowed only when a healthy original guest is followed by two terminal loss samples, the failure XML is empty, observer evidence is complete, and there are no product assertions or crashes. Missing or malformed evidence blocks recovery. A recovered attempt stays visible in the delivery manifest, and cannot authorize another run.
+API 36 jobs sample the emulator's process identity, boot ID, adb state and host memory. One fresh boot is allowed only when a healthy original guest is followed by two terminal loss samples, the failure XML is empty, observer evidence is complete, and there are no product assertions or crashes.
 
-## What a prototype does not prove
+Missing or malformed evidence blocks recovery. A recovered attempt stays visible in the delivery manifest, and cannot authorize another run.
 
-- It does not run the complete suites, so it cannot qualify a release.
-- No automatic replay or replacement full run is started.
-- Passing host contracts do not prove live evidence delivery.
-- Emulator timing is not device timing. See [Performance](performance.md).
+## Limits
+
+No automatic replay or replacement full run follows. Host contracts do not establish live delivery; emulator timings do not establish [device performance](performance.md).

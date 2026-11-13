@@ -8,70 +8,59 @@ The mini-player and the full player are one surface. Tapping or swiping up expan
 - Swipe down or Back collapses and restores the browse state underneath.
 - Status: Implemented.
 
+
 ## Mini-player
 
-Artwork and title are inset together inside the leading curve. The body is one rounded tap target; transport is independent. The second line defaults to Album Artist with Artist as fallback, and Artist-first is a setting. Title and artist use 13 and 11 sp.
+The body expands the player while transport remains independent. Its second line defaults to Album Artist, falling back to Artist; Artist-first is configurable. Artwork/title share the leading inset. Text uses 13/11 sp.
 
 ## Transport icons
 
-- Previous, Play/Pause and Next are filled black icons. Pause shows only while playing, or buffering with playback requested. A paused skip keeps Play.
-- Play morphs into Pause. Skips scroll overlapping rounded triangles one step, with symmetric crossfades.
-- Repeated skip presses keep the presented position and velocity.
-- An imported icon pack shares the morph when its play icon is one shape and its pause icon is two. Other pack art crossfades.
+Previous, Play/Pause and Next retain presented motion across repeated presses. Pause represents playing or requested playback while buffering; paused skips retain Play. Built-in contours morph. Compatible imported one-shape play/two-shape pause artwork shares that morph; other packs crossfade.
 
 ## Expansion
 
-| Rule | Detail |
-| --- | --- |
-| One outline | Glass, artwork, text and transport share it. The expanded player follows device corner radii. |
-| Queue clipping | The Queue layer stays clipped inside the moving outline. Its lower edge appears only as the outline reaches it. |
-| Glass | Grows blurrier through expansion. The artwork's colour continuation blends in late and becomes opaque near full size. |
-| Timing of parts | Transport persists. Album metadata fades in. Seek and actions appear late; actions move and fade faster than seek. |
-| Artwork | Grows at once along one reversible curve derived from geometry. |
-| Handle | A 72 dp translucent handle appears late, below the safe top inset, in the page's ink. |
+One reversible outline carries glass, artwork, metadata and transport while clipping the Queue. Geometry determines the artwork curve; seek/actions appear late, and the artwork's colour continuation becomes opaque near full size. Device corner radii bound the expanded shape. Layout tests specify intermediate placement.
 
-Main tabs leave downward. A song tap that starts playback expands the player by default; add-next and append do not. The handle's tap target and the top-left glass down arrow both collapse the player.
-
-Thresholds: opening commits at 240 dp/s or about 22 dp of travel. Closing the player or the Queue commits at 300 dp/s or 72 dp. Otherwise progress decides. Both stay interruptible while settling. On collapse, artwork and its colour continuation resolve together before detaching, with no stretched backing and no dark flash.
+Song-tap playback expands by default; add-next/append do not. Main tabs leave downward. Handle and down-arrow collapse. Opening thresholds are 240 dp/s or about 22 dp travel; closing player/Queue uses 300 dp/s or 72 dp. Otherwise progress decides. Settlement remains interruptible, with artwork and backing resolved together before detaching.
 
 ## Layout
 
-Metadata, seek, actions and lyrics have 32 dp side insets. The expanded artwork is centred between the top controls and the title, with 8 dp of padding to each.
-
-| Artwork layout | On a short screen |
-| --- | --- |
-| Floating cover | Scales down to fit that band and never overlaps. |
-| Full-background cover | May overlap both. Softens at its perimeter and merges into the continuation. |
-
-Normal mode places metadata and controls below the cover, with balanced space above the Queue. Lyrics mode lowers them and centres transport between the seek track and the collapsed Queue shelf. See [Artwork and lyrics](artwork-and-lyrics.md).
+Metadata, seek, actions and lyrics use 32 dp side insets. Floating artwork fits between top controls and title with 8 dp clearance; full-background artwork may overlap and blends into its colour continuation. Lyrics mode lowers controls. [Artwork and lyrics](artwork-and-lyrics.md) owns that presentation.
 
 ## Seeking
 
-The seek track uses the shared slider touch model.
+Seeking is a draft under one input owner. Touch previews immediately; horizontal movement or hold acquires scrub, while initial vertical travel transfers to player motion. Release commits once and retains the visual target through asynchronous completion. X or cancellation discards without pausing. Obsolete media generations cannot commit.
 
-| Contact | Result |
-| --- | --- |
-| Touch-down | Registers at once: the track thickens and the shown position eases to the finger. |
-| Hold, or horizontal slide | Locks the scrub. Later vertical travel stays with the scrub. |
-| Vertical travel first | Eases back without seeking, and moves the player. |
-| Tap | Seeks to the tap point. |
-| Release | Commits the finger position. The visual target holds through the asynchronous seek. |
-| Release on X, or cancellation | Discards the preview. No seek and no pause. |
-
-While scrubbing, the same X cancel target as list dragging shows above the Queue shelf. Entering and leaving X ease between live playback and the finger position. Haptics follow the [shared rule](materials-and-controls.md#haptics): no ticks for continuous position. An obsolete media generation cannot commit a seek.
+The shared cancel target and [haptic rule](materials-and-controls.md#haptics) apply. Seek tests specify release, takeover, cancellation and handoff frames.
 
 ## Titles
 
-Title and artist use content-based text direction. During expansion and collapse they use long soft edge fades, never switching to an ellipsis mid-transition. A marquee pauses while the player moves and eases back to its start by the shortest path. After the player settles and the normal delay passes, it restarts. Each overflowing line keeps these phases on its own.
+Each overflowing line owns its marquee. Expansion pauses it and eases to its start by the shortest path, using soft fades throughout. It restarts only after settlement and delay. Text direction follows content.
 
 ## Failures
 
-Loading never shows a white backing, blanks the player or replaces artwork early. There is no routine loading or connection text. A genuine playback failure uses a rounded dismissible dialog with plain guidance and Retry or Skip.
+Loading retains the player and artwork. Genuine playback errors show a dismissible dialog with plain guidance and Retry/Skip. Routine buffering does not replace content with connection text.
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Layout and expansion | `PlayerLayoutTest`, `PlayerExpansionMotionTest`, `PlayerTransitionTest`, `PlayerArtworkSpacingTest`, `QueuePlayerClipTest` |
-| Gestures and seek | `PlayerGestureTest`, `SeekReleaseHandoffTest`, `SeekCancelExitTest`, `SeekCancelMotionTest`, `PlayerSeekHapticsTest` |
-| Icons | `IconPackPlayPauseMorphTest` |
+[PlayerLayoutTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerLayoutTest.kt).
+
+[PlayerExpansionMotionTest](../../app/src/test/java/io/github/anastaci1a/localica/ui/PlayerExpansionMotionTest.kt).
+
+[PlayerTransitionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerTransitionTest.kt).
+
+[PlayerArtworkSpacingTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerArtworkSpacingTest.kt).
+
+[QueuePlayerClipTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueuePlayerClipTest.kt).
+
+[PlayerGestureTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerGestureTest.kt).
+
+[SeekReleaseHandoffTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SeekReleaseHandoffTest.kt).
+
+[SeekCancelExitTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SeekCancelExitTest.kt).
+
+[SeekCancelMotionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SeekCancelMotionTest.kt).
+
+[PlayerSeekHapticsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerSeekHapticsTest.kt).
+
+[IconPackPlayPauseMorphTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/IconPackPlayPauseMorphTest.kt).

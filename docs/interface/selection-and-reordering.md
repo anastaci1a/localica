@@ -1,6 +1,8 @@
 # Selection and reordering
 
-Selecting an item lifts it: its outline grows, a shadow deepens, and its backdrop shows magnified with light frost. One outline shape serves selection, the current queue song and dragged cards. Selection is a set of occurrences that survives navigation. Actions on it come from one floating pill. In a manual list, a held selection can be dragged to a new place.
+Selecting an item lifts it: its outline grows, a shadow deepens, and its backdrop shows magnified with light frost. One outline shape serves selection, the current queue song and dragged cards. Selection is a set of occurrences that survives navigation.
+
+Actions on it come from one floating pill. In a manual list, a held selection can be dragged to a new place.
 
 - Neighbouring selections merge into one outline.
 - Library songs are selected by song. Playlist and queue entries are selected by entry, so repeats stay separate.
@@ -8,78 +10,69 @@ Selecting an item lifts it: its outline grows, a shadow deepens, and its backdro
 - Reordering works only in a complete, manual, unfiltered queue or playlist.
 - Status: Implemented.
 
+
 ## The outline
 
-Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's. Every item style uses one padding $d$ of 3.5 dp between content and outline:
-
-$$
-r_{\text{outline}} = r_{\text{artwork}} + d
-$$
-
-Artwork always stays inside, and the outline extends at most $d$ beyond its item. Rows without artwork use a 10 dp radius.
+Selection, current queue occurrence and dragged cards share one outline. Padding is 3.5 dp; the outline radius is artwork radius plus padding. Rows without artwork use 10 dp. Artwork stays inside its outline. The geometry and pixel tests specify merging and boundary cases.
 
 ## Lift
 
-- The lift is one 220 ms ease-out. Deselection reverses it, and interruptions continue from the current appearance.
-- One uniform scale keeps corner centres. Growth takes at most a quarter of the gap to each neighbour's content, capped at 4 dp per side, and leaves at least 1 dp clear.
-- Lifted items never overlap neighbours.
-- The lift shadow uses the Glass shadow spread and the Lift shadow strength setting.
-- A lifted item draws from its own retained recording, so no cover or label vanishes on select or deselect.
+One interruptible 220 ms ease raises the item through its retained recording. Growth is bounded by neighbour gaps and 4 dp per side, retaining at least 1 dp clearance. Glass shadow spread and Lift shadow strength control the shared shadow.
 
 ### Merging
 
-Side-adjacent selections share one outline. Lobes and rounded concave fillets connect or part continuously. Fillets are capped at 4 dp, with an 8 dp connection band. Frost and shadow follow the same path. Diagonal gallery neighbours and unselected holes stay separate.
+Side-adjacent selections connect through continuous lobes and concave fillets. Frost and shadow follow that path. Diagonal neighbours and unselected holes stay separate; fillets cap at 4 dp within an 8 dp band.
 
 ## What is selected
 
-| Source | Identity |
-| --- | --- |
-| Library songs | The song. Shared across albums, artists, folders, Songs, search and subviews. |
-| Playlist and queue entries | The container and the saved entry. Repeated songs are independent. |
-
-Library membership never selects playlist or queue entries, or the reverse. Selection survives routes, tabs, queries, sorting, rotation and backgrounding. Select-all appends in collection order; reselecting appends last. A fresh session starts empty. Files are deduplicated for editing.
+Library membership uses song identity across routes. Playlist/queue membership uses container plus occurrence identity; neither selects the other. Selection survives navigation, queries, sorting and recreation, but fresh sessions start empty. Actions retain selection order; editing deduplicates physical files.
 
 ## Entering and leaving
 
-- Holding a mutable playlist or queue song selects at once. Its pill waits for release, so moving into a drag never flashes it.
-- Other items use Select song or Select all songs in their menu.
-- While selection is active, a song tap toggles membership. Collection taps still navigate.
-- Close, [Back](navigation.md#back) or a successful action exits. Cancel, failure or an empty selection keeps the mode.
-- Accessible selection without a pointer shows the pill immediately.
+Mutable song holds select and defer the pill until release so the gesture may continue into a drag. Other items use menu selection. Song taps toggle active selection; collection taps navigate. Close, Back or successful actions exit; failures and cancellation preserve selection.
 
 ## The selection pill
 
-One compact glass pill floats above the mini-player: close, count, Play next, Add to playlist, More and a divided collapse. It follows the page's light or dark ink.
-
-- More morphs into a menu: Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range.
-- Collapse morphs the same surface into a minimized count pill. A tap morphs it back.
-- In the Queue the pill floats above the list without shortening it. The list end pads by the pill's occupancy.
-- When the pill would cover a selected item, the list scrolls by exactly its added inset. Touch interrupts that scroll.
-- Remove-from-source requires one editable source.
+One glass pill owns count and actions, including collapse to a minimized count. More supplies playback, queue, editing, removal and range commands. Its list inset prevents occlusion without shortening Queue content. Accessible selection shows it immediately. The selection tests specify actions, restoration and inset interruptions.
 
 ## Reordering
 
-Hold-drag moves the held occurrence, or all selected occurrences from that source, keeping their source order. Cross-source selections and filtered views cannot reorder.
+Reordering requires one complete, manual, unfiltered source. Held selected occurrences keep source order and move as one stack with an insertion gap. Edge scrolling, landing and the X cancel target share the same owner.
 
-| Stage | What happens |
-| --- | --- |
-| Pickup | Selected rows fly from their hover into a stack. The first song is on top, with at most two empty cards and a count badge. |
-| Drag | The stack tracks the finger. A one-row insertion gap opens, surrounding rows ease, and the list edge-scrolls. |
-| Drop | Rows land on rendered item bounds and crossfade into normal rows. Selection finishes after a successful landing. |
-| Cancel | Releasing on the X target cancels and restores the pill. |
-
-- While dragging, the pill minimizes and cannot expand. A glass X circle stays above the stack in the bottom control row.
-- Hovering X tints it red with one firm pulse. Every finger lift after a drag gives one strong pulse.
-- Queue playback highlighting fades at the pickup location. It does not travel with the stack.
-- A system interruption or failed save restores order, selection and the pill. Playback cursors are preserved.
-- A route change or a source order change cancels the drag. A commit rejects an intervening order change.
+A successful landing completes selection. Cancellation, interruption or failed saves restore order, selection and pill; playback cursors stay valid. Route or source-order changes cancel the drag, and a commit rejects intervening order changes. The drag tests cover pickup, motion, cancellation, refresh and handoff.
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Outline and merge | `SelectionMergeGeometryTest`, `SelectionMergeSequenceTest`, `ItemOutlinePixelTest`, `ConcaveFilletPathParityTest` |
-| Lift | `HoverSelectionTest`, `LiftShadowTest` |
-| Selection state | `CollectionSelectionTest`, `CrossViewSelectionTest` |
-| Pill | `SelectionPillTest`, `SelectionPanelRegressionTest`, `SelectionInsetScrollTest` |
-| Reordering | `DragReorderTest`, `KeyedDragTest`, `DragStackMaterialTest`, `DragHandoffArtworkTest`, `SongDragViewportTest`, `SharedKeyedDragRefreshTest` |
+[SelectionMergeGeometryTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SelectionMergeGeometryTest.kt).
+
+[SelectionMergeSequenceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SelectionMergeSequenceTest.kt).
+
+[ItemOutlinePixelTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ItemOutlinePixelTest.kt).
+
+[ConcaveFilletPathParityTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ConcaveFilletPathParityTest.kt).
+
+[HoverSelectionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/HoverSelectionTest.kt).
+
+[LiftShadowTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LiftShadowTest.kt).
+
+[CollectionSelectionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/CollectionSelectionTest.kt).
+
+[CrossViewSelectionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/CrossViewSelectionTest.kt).
+
+[SelectionPillTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SelectionPillTest.kt).
+
+[SelectionPanelRegressionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SelectionPanelRegressionTest.kt).
+
+[SelectionInsetScrollTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SelectionInsetScrollTest.kt).
+
+[DragReorderTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/DragReorderTest.kt).
+
+[KeyedDragTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/KeyedDragTest.kt).
+
+[DragStackMaterialTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/DragStackMaterialTest.kt).
+
+[DragHandoffArtworkTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/DragHandoffArtworkTest.kt).
+
+[SongDragViewportTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SongDragViewportTest.kt).
+
+[SharedKeyedDragRefreshTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SharedKeyedDragRefreshTest.kt).

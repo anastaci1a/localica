@@ -1,6 +1,6 @@
 # Performance
 
-Smoothness is judged against absolute budgets on a real phone, with a release-type build and a library as large as a real one. Work and memory must be bounded by what is visible or active, never by the size of the library. Emulators and debuggable builds find regressions; they do not qualify results.
+Smoothness is judged on real phones with representative libraries and release builds. Work and memory are bounded by visible or active content. Emulator and debug timings are diagnostic.
 
 - The frame budget at 120 Hz is 8.3 ms. It is never relaxed.
 - Timing counts only on plain non-debuggable release-type builds, with screen recording off.
@@ -10,11 +10,13 @@ Smoothness is judged against absolute budgets on a real phone, with a release-ty
 
 ## Rules
 
+A35 targets 8.3 ms per whole frame during list flings and player motion. Proposals identify main-thread, render-thread and GPU shares, measured baseline and expected gain. Qualified builds are speed-profile compiled, with aapt2 badging and dexopt receipts.
+
 | Rule | Why |
 | --- | --- |
 | Operator-scale data | Small fixtures hid an out-of-memory failure that a real library produced. |
 | Scale independence | A screen showing twenty rows should cost the same in a library of a thousand songs or fifty thousand. |
-| Exact before approximate | Try the exact computation first. An approximation needs a perceptual tolerance and a decision. |
+| Exact before approximate | Remove duplicate/offscreen work, share exact caches, reduce allocation and use exact cheaper paths first. Prove equality. Then judge approximations using perceptual tolerances, realistic/adversarial fixtures and A35 timing. |
 | Qualified builds only | Debuggable and profileable builds change timing. Profileable builds are for diagnosis. |
 | None mode as baseline | With glass off, what remains is the cost of the interface itself. See [Glass](../architecture/glass.md#renderers). |
 
@@ -22,7 +24,7 @@ Smoothness is judged against absolute budgets on a real phone, with a release-ty
 
 Selection outline benchmarks report geometry and path construction, including caching of unchanged input. On API 26, CI requires a median of at most 1 ms and a 95th percentile of at most 2 ms. API 36 reports timing without enforcing it.
 
-`ScrollPerformanceTest` only measures scrolling and is [opt-in](testing.md#opt-in-tests).
+[ScrollPerformanceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ScrollPerformanceTest.kt) only measures scrolling and is [opt-in](testing.md#opt-in-tests).
 
 ## The UI frame suite
 
@@ -62,4 +64,10 @@ The [startup controller](../../tools/startup-diagnostics/run.py) runs in the tes
 
 ## Tests
 
-`UiPerformanceTest`, `FrameStatsTest`, `ScrollPerformanceTest`, `StartupDiagnosticsSeedTest`.
+[UiPerformanceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/UiPerformanceTest.kt).
+
+[FrameStatsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/FrameStatsTest.kt).
+
+[ScrollPerformanceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ScrollPerformanceTest.kt).
+
+[StartupDiagnosticsSeedTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/StartupDiagnosticsSeedTest.kt).

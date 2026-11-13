@@ -8,83 +8,57 @@ Floating controls are Liquid Glass. Panels are frost. Content is plain. Each sur
 - Layouts stay usable in landscape, with large fonts and on short screens.
 - Status: Implemented.
 
+
 ## Which surface uses which material
 
-| Surface | Material |
-| --- | --- |
-| Floating pills, mini-player, filter and search bars, circular controls | Liquid Glass: curved refraction, illuminated edges, crisp foregrounds. |
-| Popups and menus | The same glass, continuous with their trigger, with inherited [ink polarity](../architecture/rendering.md#ink-polarity-and-adaptive-contrast). |
-| Queue drawer | One continuous, denser, textured neutral frost behind header and list. |
-| Selected items and held drag cards | The backdrop region magnified with slight frost, inside the [shared outline](selection-and-reordering.md#the-outline). |
-| System pickers and permission dialogs | Native. |
-
-How glass is drawn, and what None mode replaces it with, is in [Glass](../architecture/glass.md).
+Floating controls and their popups share Liquid Glass. The Queue is one continuous neutral frost. Selected items and drag cards magnify their backdrop with slight frost inside the [shared outline](selection-and-reordering.md#the-outline). System pickers stay native. Renderer details belong to [Glass](../architecture/glass.md).
 
 ## Shape
 
-| Token | Radius |
-| --- | --- |
-| Small artwork | 8 dp |
-| Cards | 16 dp |
-| Inputs and menus | 20 dp |
-| Large artwork | 24 dp |
-| Panels | 28 dp |
+Shape tokens are 8 dp for small artwork, 16 dp for cards, 20 dp for inputs and menus, 24 dp for large artwork and 28 dp for panels. Pills and circular transport controls keep at least 48 dp targets. Expanded players use device corner radii. Values live in `ui.spec`.
 
-Compact shelves and chips are pills. Transport controls are circles. The values live in `ui.spec`. The expanded player follows device-reported corner radii and stays square where none are reported.
-
-- Icons start at 24 dp. The icon, label and surface together give a target of at least 48 dp. Feedback is clipped to that shape.
-- Every two-button glass pill has a subtle vertical divider between its actions.
-- Controls that open menus use deeper glass. The tab bar is flatter because it keeps its shape.
-- Unavailable actions are omitted.
-- Disabled action text uses the surface foreground at 38% opacity.
-
-Icon style is defined in [Icon packs](../icon-packs.md#icon-style).
+Icons follow [Icon style](../icon-packs.md#icon-style). Two-action pills have a divider. Unavailable actions are omitted; disabled text uses 38% foreground opacity. Feedback and decorative outsets stay within the control's input bounds.
 
 ## Appearance
 
-Browsing and settings are light, with a pink accent for the selected tab, one neutral grey for secondary text and inactive icons, and red for errors and destructive actions. Text uses Inter with compact tracking. Apple's system font is not bundled.
-
-**Interface → Appearance** adjusts the grey, with a reset to the darker default. Broader themes are on the [roadmap](../roadmap.md).
+Browsing and settings use light surfaces, a pink selection accent, neutral secondary text and red destructive/error states. Inter is bundled; Apple's font is not. **Interface → Appearance** adjusts secondary grey and resets to its darker default. Broader themes are [planned](../roadmap.md).
 
 ## Controls
 
-Choices, sliders and switches are shared controls. Their settings-page behaviour is in [Settings](settings.md#controls).
-
-- Sort and settings choices share a moving clear lens, with tap and drag control.
-- Touching any option previews the lens there without committing.
-- Slider and switch thumbs are white at rest and morph into clear glass on contact.
-- Text fields are shared glass fields. They wrap labels and keep native editing. A plain trailing X fades in for nonempty text; clearing keeps focus and the keyboard.
-- Artwork taps and timed-lyric taps have no ripple.
+Choices preview under contact and commit through the shared input owner. Slider and switch thumbs morph from white to clear glass on contact. [Settings](settings.md#controls) explains their draft model. Shared text fields keep native editing; clearing text keeps focus and keyboard. Artwork and timed-lyric taps omit ripples.
 
 ## Haptics
 
-One rule: feedback confirms something the user did, once.
+Feedback confirms user input once: weak for activation and drag engagement, weak ticks for discrete changes, strong for owned release. Entering a cancel target gives a firm pulse; leaving gives a weak tick. Continuous sliders have no step ticks. Cancellation, disabled actions, programmatic changes and parent scrolling are silent. System haptic settings apply.
 
-| Event | Feedback |
-| --- | --- |
-| Successful tap, keyboard or accessible activation | One weak pulse at the input owner. |
-| Owned drag begins on a selector, slider or switch | One weak engagement pulse. |
-| Each distinct discrete step or Boolean transition during a drag | One weak tick. Continuous sliders have none. |
-| Genuine release of an owned drag | One strong pulse. |
-| Entering a cancel target (X) | One firm pulse; leaving gives a weak tick. |
-| Cancellation, disabled actions, programmatic or animated state changes, parent scrolling | Silent. |
-
-All feedback respects system haptic settings. Navigation has its own [selector rule](navigation.md#selector).
+The [navigation selector](navigation.md#selector) specializes the same input model. Haptic test classes below own its event matrix.
 
 ## Access
 
-- Keep focus stable, and keep a tap or accessible alternative for every gesture.
-- Adjacent glass actions keep natural label widths and logical order. Overflow offers explicit previous and next controls without shrinking text.
-- Decorative shadow and rebound outsets never enlarge a touch area into neighbouring actions.
-- Long titles pause, scroll and fade at their edges. Reduced motion uses an ellipsis.
-- An initial cross-axis movement alone never disables later movement along a control's axis.
-- Reduced motion is described in [Motion](../architecture/motion.md#speed-and-reduced-motion).
+Keep focus stable and provide tap or accessible alternatives for gestures. Adjacent actions retain label widths and logical order; overflow uses explicit previous/next controls. Long titles pause, scroll and fade; [Reduced motion](../architecture/motion.md#speed-and-reduced-motion) uses ellipses. Initial cross-axis travel does not disable later movement along a control's axis.
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Materials and shadows | `GlassAppearanceTest`, `GlassShadowTest`, `GlassActionRowTest`, `SplitPillContactTest` |
-| Shape | `PopupHomeShapeTest`, `DeviceCornersTest` |
-| Haptics | `ActivationHapticsTest`, `SliderSwitchHapticsTest`, `NavbarHapticsTest`, `DragReleaseHapticsTest` |
-| Text | `MarqueeTitleTest`, `RowTextScrollTest` |
+[GlassAppearanceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassAppearanceTest.kt).
+
+[GlassShadowTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassShadowTest.kt).
+
+[GlassActionRowTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassActionRowTest.kt).
+
+[SplitPillContactTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SplitPillContactTest.kt).
+
+[PopupHomeShapeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PopupHomeShapeTest.kt).
+
+[DeviceCornersTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/DeviceCornersTest.kt).
+
+[ActivationHapticsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ActivationHapticsTest.kt).
+
+[SliderSwitchHapticsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SliderSwitchHapticsTest.kt).
+
+[NavbarHapticsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/NavbarHapticsTest.kt).
+
+[DragReleaseHapticsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/DragReleaseHapticsTest.kt).
+
+[MarqueeTitleTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/MarqueeTitleTest.kt).
+
+[RowTextScrollTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/RowTextScrollTest.kt).

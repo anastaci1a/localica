@@ -8,69 +8,55 @@ Album, artist, Album Artist and playlist pages share one layout: a full-width ar
 - Back first returns to the page top, then leaves.
 - Status: Implemented.
 
+
 ## Header
 
-The artwork header begins below the status bar, with a blurred extension above and a feathered colour continuation behind the songs. Artwork travels at 65% of content speed. Reduced motion disables the parallax.
+Collection headers fade full-width artwork into songs, using cached covers/colours immediately and sharpening them together. Foreground polarity follows artwork brightness. Parallax moves at 65% of content speed and is disabled by Reduced motion. Tracks use the shared [loading reveal](browsing.md#loading).
 
-- Foregrounds are black or white, chosen from the artwork's brightness.
-- Back and collection overflow are glass controls.
-- The background uses the cached cover and its colours immediately. Higher-resolution artwork and colour crossfade together.
-- The header enters with the completed catalog. Tracks use the shared [loading reveal](browsing.md#loading).
-- An empty list shows a quiet centred icon.
-
-The floating return arrow aligns the Play/Shuffle pill's bottom with the Back button's bottom. System Back returns to the full page top in one ease; the next Back leaves.
+Back first returns to the complete header, then leaves. The return arrow aligns the Play/Shuffle pill with Back. Header geometry and density cases belong to the linked presentation tests.
 
 ## Play and Shuffle
 
-One combined glass pill acts on the displayed list. Shuffle randomizes the new queue's saved order. It does not enable the global Shuffle mode.
+Both actions use displayed songs in displayed order. Shuffle randomizes a new queue's saved order without enabling global Shuffle. Album Play follows the configured song-tap behavior.
 
 ## Albums
 
-- Default view is Tracklist, in ascending disc and track order. Sort/View and pinch offer the alternatives.
-- The header shows album and artist, and a large Play control that follows the configured song-tap behaviour.
-- Smallest, Small and Tracklist rows show muted track numbers. Larger views show covers without numbers.
-- The overflow shares playlist collection actions, without playlist-only edits.
+Albums default to Tracklist in disc/track order. Dense views show track numbers; larger views use covers. Sort/View and pinch select alternatives. Collection menus share actions while excluding playlist-only edits.
 
 ## Artists and Album Artists
 
-The header follows the first displayed song, including the album filter. Contents default to Year, ascending.
+The header follows the first displayed song, including the album filter. Default order is Year ascending. Artist and Album Artist remain distinct identities.
 
 ### Album filter
 
-Below the header, a horizontal album row filters the list. It is in the same order as the songs' album groups.
-
-| Input | Result |
-| --- | --- |
-| Short tap | Focuses only that album. |
-| Long press | Toggles that album, with one haptic and no trailing tap. |
-| All albums chosen, or the last one removed | Returns to All, which highlights All albums and every cover. |
-
-A short-tapped single album stays explicitly focused, even for a one-album artist. Membership is reconciled after library changes. When filtering shortens the list, only the excess scroll eases to the new range.
+The album row follows group order. Tap focuses one album; hold toggles membership without a trailing tap. Choosing all or removing the last selection restores All. Explicit single-album focus remains explicit. Library changes reconcile membership; shrinking content eases only excess scroll.
 
 ### Group by album
 
-**Group by album** sits below the sort controls. It is one shared artist-view preference, on by default.
+This shared artist preference defaults on. Grouped sorts order albums while songs retain disc/track order; ungrouped sorts order songs. Aggregates use earliest Year/Added, latest Modified and distinct-song duration/count sums. Unknowns sort last; ties use album title/ID.
 
-| Setting | Sort orders | Inside an album |
-| --- | --- | --- |
-| On | Albums only. | Disc and track, ascending. |
-| Off | Individual songs across all albums. | Not grouped. The album row keeps album order. |
-
-Album aggregates: Year and Added use the earliest known value, Modified the latest, Duration and play counts the sum over distinct tracks. Missing aggregates sort last. Ties use album title, then album ID.
-
-Sort, grouping, filter and library changes glide surviving rows with the shared keyed reorder. Reduced motion and nonblank search text reorder without it.
+Keyed reorders animate surviving rows unless Reduced motion or nonblank search disables motion.
 
 ## Playlists
 
-The header uses the manual cover or the canonical automatic cover, independent of displayed sort and filter. The bottom-right menu holds playlist edits: image, rename and delete. The image action sets a custom cover when absent and removes it when present. Scoped search is optional in View.
+Manual or canonical automatic covers are independent of displayed sort/filter. Playlist menus own image, rename and delete. Image sets a cover when absent and removes it when present. Scoped search is optional.
 
 ## Add to playlists
 
-The panel combines existing playlists, shown with covers, and an inline field for a new name. Add, or keyboard submit, applies every chosen destination at once. A duplicate name disables Add. Existing membership is marked accessibly, and duplicates are allowed. Naming rules are in [Queues](../architecture/queues.md#playlists).
+One draft combines existing destinations and an optional new name, then applies atomically. Duplicate names disable Add; existing membership is marked accessibly and song duplicates are allowed. [Queues](../architecture/queues.md#playlists) owns naming and storage rules.
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Pages and headers | `CollectionDetailTest`, `CollectionHeaderDensityContractTest`, `PlaylistDetailPresentationTest`, `PlaylistDestinationUiTest` |
-| Artist albums | `ArtistAlbumSelectionTest`, `ArtistAlbumSortOrderTest`, `ArtistAlbumFilterRangeTest` |
+[CollectionDetailTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/CollectionDetailTest.kt).
+
+[CollectionHeaderDensityContractTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/CollectionHeaderDensityContractTest.kt).
+
+[PlaylistDetailPresentationTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlaylistDetailPresentationTest.kt).
+
+[PlaylistDestinationUiTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlaylistDestinationUiTest.kt).
+
+[ArtistAlbumSelectionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtistAlbumSelectionTest.kt).
+
+[ArtistAlbumSortOrderTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtistAlbumSortOrderTest.kt).
+
+[ArtistAlbumFilterRangeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtistAlbumFilterRangeTest.kt).

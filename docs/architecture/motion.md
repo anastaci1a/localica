@@ -10,107 +10,62 @@ All popup and control motion comes from one engine. A surface's progress is a da
 
 ## The model
 
-Progress $x$ runs from 0 (closed, at the trigger) to 1 (open). It follows one damped spring toward its target $q$:
+Progress follows a damped spring toward its target:
 
 $$
 \ddot{x} + 2\zeta\omega\,\dot{x} + \omega^{2}(x-q) = 0
 $$
 
-Here $\omega$ is the natural frequency and $\zeta$ the damping ratio. A new target changes only $q$. Position and velocity carry over, so a tap during opening closes from exactly where the surface is.
-
-| Property | Why |
-| --- | --- |
-| Continues from current state | An interrupted motion never jumps or restarts. |
-| Size independent | A small menu and a large dialog take the same time, as on the measured reference. |
-| Anchored edges | The edge nearest the trigger stays attached, so the surface grows out of its source. |
-| One spec | Trajectories, test references and admission bounds all derive from `PopupMotionModel` in `ui.spec`. |
+Progress runs from closed (0) to open (1). Retargeting changes the target only, preserving position/velocity. Shared spec parameters make motion size-independent with trigger-anchored edges. PopupMotionModel supplies trajectories and admission bounds.
 
 ## Popup laws
 
-The stock model is revision `855-ios262-60fps-interim-r926`, fitted to 60 fps captures of iOS 26.2 menus.
-
-| Channel | $\omega$ (rad/s) | $\zeta$ | Character |
-| --- | --- | --- | --- |
-| Open | 28 | 0.78 | A slight overshoot inside the band. |
-| Close | 20 | 1 | Critically damped, no overshoot. |
-| Gate | 20 | 1 | Same as close. |
-| Cross-axis open (snap) | 120 | 1 | The short axis of a bottom menu arrives early. |
-
-Close and gate have no cross-axis law: every edge closes on the main law (#926). Dialogs use the open law. Popup kinds (menu, row menu, bottom menu, dialog, selection pill) are data. The model reads laws only through one function, so a later revision can vary them by kind without touching callers.
+Revision `855-ios262-60fps-interim-r926` fits iOS 26.2 60 fps captures. Open uses frequency 28 rad/s, damping 0.78; close/gate use 20 and 1. Cross-axis opening uses 120 and 1. Every closing edge uses the main law (#926). Kinds are data read through one function.
 
 ### Admission
 
-A parameter set is rejected before it can run unless all of this holds:
+Finite frequencies span 1–400 rad/s and damping 0.5–4. Open overshoot stays within a 0.05 band; close/gate/cross laws do not overshoot from rest. All settle within two seconds from worst admitted state at slowest speed. Named cross-axis opening exemption permits its snap. Tests own admitted-boundary cases.
 
-- Every law is finite, with $\omega$ from 1 to 400 and $\zeta$ from 0.5 to 4.
-- The open overshoot stays inside the phase band of 0.05 beyond either end.
-- Close, gate and cross laws never overshoot from rest.
-- Every law settles within 2 seconds from its worst admitted state at the slowest speed.
-
-The from-rest overshoot of an underdamped spring is:
+From-rest underdamped overshoot is:
 
 $$
 \exp\!\left(\frac{-\pi\zeta}{\sqrt{1-\zeta^{2}}}\right)
 $$
 
-The cross-axis open is exempt from the band by name, because its snap is intended. Exemptions are listed in the spec, never granted at a call site.
-
 ## Families
 
-| Family | Surfaces | Rule |
-| --- | --- | --- |
-| Popup | Menus, dialogs, the selection pill, search | The spring laws above. |
-| Finger-driven | Player, Queue drawer, sheets, pinch, selectors | Follow the finger exactly, then settle by release velocity and distance. Stay interruptible while settling. |
-| Control state | Active, enabled, hover, reveal, floating controls | Short fixed eases from the motion profiles. State and input change at once; only appearance eases. |
-
-Control-state profiles at normal speed:
-
-| Profile | Duration |
-| --- | --- |
-| Control on / off | 180 ms / 270 ms |
-| Selection, hover | 220 ms |
-| Reveal, floating, artwork layout | 300 ms |
-| Lyric emphasis | 350 ms |
-| Selection panel | 165 ms |
-
-A reversal continues from the visible appearance. Programmatic scrolling stops without overshoot, and touch cancels it. Long scroll styles are in [Browsing](../interface/browsing.md#long-scrolls).
+Popups use shared springs. Finger-driven player, Queue, sheets, pinch and selectors follow contact then settle by velocity/distance. Control-state eases change appearance while input/state update immediately. Spec profiles at normal speed are 180/270 ms on/off, 220 ms selection/hover, 300 ms reveal/floating/artwork layout, 350 ms lyric emphasis and 165 ms selection panel. Reversal starts from displayed values.
 
 ## Deformation
 
-Presses, morphs and selectors share one interruptible deformation driven by acceleration and held pressure. Position stops at the destination. Width, height and depth convey the impact at about constant volume. Idle elastic clocks stop.
-
-- Overdrag: navigation and choice tracks stretch along travel within a shared 4 dp limit, whatever their length. Contents deform and realign in proportion.
-- A held selector keeps its resting cross-axis extent. Its contact corners stay circular and concentric with the track.
-- Free-end corners flatten along travel as the contact gap closes, then return to round.
-- Release couples width and height in opposite phase, with bounded excursions.
-- Touching a moving selector eases from the displayed contour.
-
-The Shape damping and Resting depth settings feed this response. The same response drives footprint and lens depth.
+One interruptible response couples footprint/depth to acceleration and pressure. Shared overdrag caps at 4 dp; held selectors keep cross-axis extent and concentric contact corners. Free corners flatten near contact; release couples width/height oppositely. Shape damping and Resting depth feed this response. Selector and pressure tests specify contours/rebound.
 
 ## Speed and Reduced motion
 
-The Animation speed setting runs from 0.5× to 1.5×. Every engine duration divides by it and every spring frequency multiplies by it. It applies once. A change of speed or of measured extent keeps current position and velocity.
-
-Reduced motion is on when the app's setting is on or Android's animator duration scale is zero.
-
-- Springs and eases snap to their result. Shared deformation, edge pressure and rebound are removed.
-- Changes apply while a surface is open.
-- Restoring Android animations resumes motion only when the app option is off.
-- A snap still waits for required native ownership receipts, so no frame shows two owners.
-- Long titles use an ellipsis. Programmatic scrolls jump.
+Animation speed (0.5×–1.5×) divides durations and scales spring frequency once. Extent/speed changes retain position/velocity. App Reduce motion or zero Android animator scale snaps motion, suppresses deformation and uses ellipses/jump scrolling. Native ownership receipts remain required. Changes apply live; restoring system animations resumes only if the app option is off.
 
 ## Rules for callers
 
-- A screen names a role. It never passes a duration, easing, law or kind.
-- New timing goes into `ui.spec` as a profile, never into a call site.
-- Observe frame progress in the owning control or in the placement and draw phase, not in composition.
-- Gesture velocity is measured from integrated deltas when the target itself moves.
+Screens name roles, never timings/kinds/laws. New profiles belong in ui.spec. Owners observe frames in placement/drawing rather than broad composition. Moving-target gestures integrate deltas for velocity. [Browsing](../interface/browsing.md#long-scrolls) owns scroll presentation.
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Popup law and band | `PopupPeakOvershootTest`, `EffectiveMotionWindowTest` |
-| Reduced motion and system scale | `EffectiveReducedMotionTest`, `PlatformDurationScaleWindowTest` |
-| Control states | `ControlStateMotionTest`, `SettingsMotionTest` |
-| Deformation | `SelectorCrossMotionTest`, `SelectorFreeCornerPixelTest`, `SelectorReboundRecordingTest`, `GlassPressureTest` |
+[PopupPeakOvershootTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PopupPeakOvershootTest.kt).
+
+[EffectiveMotionWindowTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/EffectiveMotionWindowTest.kt).
+
+[EffectiveReducedMotionTest](../../app/src/test/java/io/github/anastaci1a/localica/ui/EffectiveReducedMotionTest.kt).
+
+[PlatformDurationScaleWindowTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlatformDurationScaleWindowTest.kt).
+
+[ControlStateMotionTest](../../app/src/test/java/io/github/anastaci1a/localica/ui/ControlStateMotionTest.kt).
+
+[SettingsMotionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SettingsMotionTest.kt).
+
+[SelectorCrossMotionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SelectorCrossMotionTest.kt).
+
+[SelectorFreeCornerPixelTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SelectorFreeCornerPixelTest.kt).
+
+[SelectorReboundRecordingTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SelectorReboundRecordingTest.kt).
+
+[GlassPressureTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassPressureTest.kt).

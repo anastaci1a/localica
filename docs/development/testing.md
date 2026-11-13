@@ -46,20 +46,20 @@ Final commands, run only after the candidate is frozen:
 
 ### The system keyboard
 
-The system keyboard is device state that survives app resets between classes. A class that shows it through real text entry starts with [`FreshSystemIme`](../../app/src/androidTest/java/io/github/anastaci1a/localica/SystemImeIsolation.kt), which restarts the keyboard process. A test that changes the default keyboard must restart the system keyboard in cleanup, as `FloatingImeLifecycleTest` does (#638).
+The system keyboard is device state that survives app resets between classes. A class that shows it through real text entry starts with [`FreshSystemIme`](../../app/src/androidTest/java/io/github/anastaci1a/localica/SystemImeIsolation.kt), which restarts the keyboard process. A test that changes the default keyboard must restart the system keyboard in cleanup, as [FloatingImeLifecycleTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/FloatingImeLifecycleTest.kt) does (#638).
 
 ### Test-package processes
 
-Components that run in the test package's own process cannot rely on the app's classloader. The test APK packages identical bytes of the app's Kotlin standard library, and `NavigationStandaloneRuntimeTest` checks that linkage.
+Components that run in the test package's own process cannot rely on the app's classloader. The test APK packages identical bytes of the app's Kotlin standard library, and [NavigationStandaloneRuntimeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/NavigationStandaloneRuntimeTest.kt) checks that linkage.
 
-On API 26 and 27 a framework null dereference can kill that process when an accessibility-state change reaches a just-detached window (#730). `TestPackageApplication` survives exactly that exception and rethrows every other. `TestProcessAccessibilityLaunchTest` reproduces it.
+On API 26 and 27 a framework null dereference can kill that process when an accessibility-state change reaches a just-detached window (#730). `TestPackageApplication` survives exactly that exception and rethrows every other. [TestProcessAccessibilityLaunchTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/TestProcessAccessibilityLaunchTest.kt) reproduces it.
 
 ## Opt-in tests
 
 | Test or output | Enable with |
 | --- | --- |
-| `ScrollPerformanceTest` | `scrollPerformance=true`, or the workflow input `scroll_performance`. |
-| `StartupDiagnosticsSeedTest` | `startupDiagnostics=disposable-emulator`. It prepares a fixture; it is not performance acceptance. |
+| [ScrollPerformanceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ScrollPerformanceTest.kt) | `scrollPerformance=true`, or the workflow input `scroll_performance`. |
+| [StartupDiagnosticsSeedTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/StartupDiagnosticsSeedTest.kt) | `startupDiagnostics=disposable-emulator`. It prepares a fixture; it is not performance acceptance. |
 | Repeated utility-popup optical recording | `utilityPopupOpticalDiagnostics=true`. |
 | Successful SwitchTap frame exports | `switchTapOpticsReview=true`. |
 | Local run without the outline timing gate | `selectionOutlineTimingGate=false`. CI leaves it unset. |
@@ -91,11 +91,7 @@ A rare freeze can be captured on any build, without adb.
 
 Export before closing the app. The trail is an in-memory ring of the last 500 lines (about 256 KB), lost when the process ends.
 
-| The trail holds | Detail |
-| --- | --- |
-| Stuck-pinch dumps | A pinch transaction, readback or zoom anchor outliving its gesture by 2 seconds, and its recovery. |
-| Phase changes | A compact trail of pinch, transaction and readback phases. |
-| Nothing, when idle | A healthy idle app records nothing. |
+The bounded trail records stuck-pinch and ownership transitions; a healthy idle app records nothing.
 
 Debuggable builds also mirror each line to logcat:
 

@@ -7,10 +7,6 @@ Every screen is built from one shared UI system. `ui.engine` owns motion, clocks
 - One input rule serves every control, the Queue drawer and the player.
 - Status: the four packages and the gate are Implemented. Adoption is Incomplete: most screen code still lives in the root `ui` package.
 
-## Why one system
-
-A menu must look right the first time it is built. If two screens each draw a popup, they drift apart, and every visual fix must be made twice. With one implementation per role, a visual inconsistency is a defect in the system. It is fixed once, for every screen.
-
 ## The four packages
 
 | Package | Owns | Examples |
@@ -24,14 +20,7 @@ A screen passes a role and content. `TriggerRole` is content identity only: the 
 
 ## Rules for screens
 
-| A screen may | A screen may not |
-| --- | --- |
-| Supply content, labels, icons and callbacks. | Provide its own popup home or popup window. |
-| Name a role or a spec token. | Pass a motion kind, law, duration or easing. |
-| Ask a shared state object to open, dismiss or select. | Build its own trigger or its own draw path for a shared role. |
-| Request a new parameter on the shared component. | Copy a component to change it. |
-
-"Extend" means composition, not inheritance. A new subclass or abstract layer needs a reviewer to agree the case truly requires one. When a duplicate is found, consolidate it.
+[Contributor rules](../../AGENTS.md) require composition through one owner per role. Screens supply content, callbacks and intent. Ownership and policy stay inside the shared system; reviewers approve any required inheritance.
 
 ## Roles and owners
 
@@ -48,56 +37,28 @@ These owners predate the four packages and still live in the root `ui` package. 
 
 ## Input ownership
 
-A control shows contact at once but defers ownership of movement. One rule decides who owns a contact.
+Before a 250 ms hold, travel toward an ancestor that can still move belongs to that ancestor. Otherwise the control owns the contact. Ownership lasts through reversal/edges until release; cancellation never commits. One gesture moves one surface level.
 
-| Contact | Owner |
-| --- | --- |
-| Travel before a 250 ms hold, toward a direction an ancestor can still move | The ancestor: a scrollable short of that edge, the open Queue drawer or the player. The control lets go with its normal release. |
-| Travel no ancestor can use: a menu that cannot scroll, a reached edge, a horizontal slide in a vertical list | The control, immediately. |
-| Contact held still for 250 ms | The control, for any later direction. |
-
-- The owner keeps the contact through reversals and edges until release. Switching needs a fresh gesture.
-- Cancellation never commits.
-- One gesture changes one surface level. Lyrics, reordering, carousels and overflow bars never swipe their parent once acquired.
-- Artwork has diagonal priority over clearly vertical parent gestures.
-
-Opening a modal cancels background contacts and flings, rolls back uncommitted pinch and reorder previews, and discards their later releases. Dismissal permits fresh gestures and never resumes old fingers. Only the top modal accepts input.
-
-Tests: `ButtonGestureTest`, `ModalGestureCancellationTest`, `ModalGestureTakeoverTest`, `QueueScrollOwnershipTest`.
+Opening a modal cancels lower contacts/flings and uncommitted pinch/reorder previews. Dismissal permits fresh gestures only. The top modal alone takes input. ButtonGestureTest and modal cancellation/takeover tests specify the event sequences.
 
 ## The lint gate
 
-The `lint` module supplies eighteen ERROR rules to the app through `lintChecks`. They come in two groups with different debt rules.
+Eighteen ERROR rules arrive through lintChecks. Five popup rules prohibit private homes, motion, triggers, drawing and duplicate roles. They have no baseline/escape; popup-ratchet.txt records existing counts. Thirteen general timing/transform/spacing rules retain existing findings in app/lint-baseline.xml. Both permit zero new incidents, including equal-count replacements. Counts only decrease; strengthened rules record their initial count on adoption.
 
-| Group | Debt rule |
-| --- | --- |
-| Five popup conformity rules: screen popup homes, motion overrides, private triggers, private draw paths, duplicate popup roles | No baseline and no escape. Old incidents are counted in `popup-ratchet.txt`. |
-| Thirteen general UI rules: raw timing, transforms and spacing outside the shared system | Old incidents are listed in the generated `app/lint-baseline.xml`. |
+Exact-path popup-owners.txt, popup-roles.txt and popup-hosts.txt pin owners, declarations and host counts. Neighbouring files gain no ownership. app/ui-escapes.yaml is empty; reviewed adapter exceptions need an issue, owner and expiry. Comparison uses immutable main. Never regenerate baselines or disable rules to hide findings.
 
-Both groups follow the ratchet:
-
-- A release passes with zero new incidents.
-- A recorded count may only go down. An equal-count replacement fails.
-- A strengthened rule records its count on the day it lands, then only goes down.
-- The baseline is never regenerated to accept new debt. A rule is never disabled to hide a finding.
-
-Popup ownership uses exact paths. `popup-owners.txt` pins the shared owner files, `popup-roles.txt` pins the home and trigger declarations, and `popup-hosts.txt` pins how many homes each shell host may create. A new file beside an owner gains no ownership.
-
-`app/ui-escapes.yaml` is empty. An adapter exception needs a tracking issue, an owner, a concrete expiry and a recorded review. The comparison runs against an immutable `main` commit. Commands are in [Testing](../development/testing.md#ui-policy-checks).
-
-Passing lint does not prove motion continuity or performance. Those have their own tests and [budgets](../development/performance.md).
-
-Tests: the `:lint` module tests, `ReleaseLintAdoptionTest`.
+[Testing](../development/testing.md#ui-policy-checks) owns commands. The lint module and [ReleaseLintAdoptionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ReleaseLintAdoptionTest.kt) assert enforcement; passing lint does not establish motion/performance.
 
 ## Design before patch
 
 A failing test is a question about the model, not a request for a guard. A change to shared UI code starts as a short design note, reviewed before code. The full flow is in the [contributor entry point](../../AGENTS.md#design-note-first).
 
-## Related pages
+## Tests
 
-| Topic | Page |
-| --- | --- |
-| Popup lifecycle and layers | [Popups](popups.md) |
-| Springs, families and Reduced motion | [Motion](motion.md) |
-| The material | [Glass](glass.md) |
-| Artwork, recordings and shadows | [Rendering](rendering.md) |
+[ButtonGestureTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ButtonGestureTest.kt).
+
+[ModalGestureCancellationTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ModalGestureCancellationTest.kt).
+
+[ModalGestureTakeoverTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ModalGestureTakeoverTest.kt).
+
+[QueueScrollOwnershipTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueueScrollOwnershipTest.kt).

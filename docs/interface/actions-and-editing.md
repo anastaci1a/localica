@@ -8,68 +8,55 @@ The player has a row of action slots the user arranges. Each action opens a shar
 - A draft survives Activity recreation for the same edit session.
 - Status: Implemented.
 
+
 ## Action slots
 
-Available actions: information, editing, artwork, lyrics, playlist, pin, collection links, shuffle, repeat, play count, ten-second seek and More. Default: Info and Add to playlist on the left, Repeat and Shuffle on the right.
+The user arranges information, editing, artwork, lyrics, playlist, pin, collection, playback-mode, count, seek and More actions. Defaults are Info/Add to playlist left, Repeat/Shuffle right. Hold opens customization; Settings provides another entry. Tap/accessibility alternatives preserve intentional gaps and hidden assignments across Centered, 2 rows and Compact layouts.
 
-- Customize by dragging from the available-action pool into slots, or back to the pool to remove. Settings also opens this editor.
-- Tap and accessible alternatives exist for every drag. There is no disabled duplicate of a placed action.
-- Layouts: Centered, 2 rows and Compact. Selected actions come first, in canonical order within each group.
-- Intentional gaps and hidden assignments are preserved.
-
-Mode icons show state without filled backgrounds: dim when off, full strength when active, a visible 1 for Repeat one, and distinct indicators for Stop, Next paused and Next queue.
+Mode icons express state without filled backgrounds. The action-slot and playback-mode tests specify assignments and indicators.
 
 ## Song information
 
-A bounded frosted popup with tappable artwork and divided sections: file and location, metadata, technical details, listening and dates. Whole Album, Artist, Album Artist and Location rows open their collections. The body scrolls with edge fades. Edit tags and Done stay together at the footer's trailing edge.
+One bounded popup groups file/location, metadata, technical details, listening and dates. Collection rows navigate. Edit and Done stay in its fixed footer; only the body scrolls.
 
 ## Tag editor
 
-A frosted sheet with a fixed header and footer. Only the fields scroll. Artwork is centred above the checked fields, with change and remove controls on the preview.
-
-| Step | What the user sees |
-| --- | --- |
-| Edit | Check the fields to change. Individual and bulk edits change only checked fields. |
-| Choose image | Rounded previews of readable previous choices, then Gallery and Files. Device-photo access is optional, with a short explanation. |
-| Crop | Required for every newly chosen image: square, with pan, pinch, zoom and reset. |
-| Review | A preview before anything is written. Write access is requested explicitly. |
-| Save | A glass progress popup over the editor, with verified Saved counts. |
-
-The player's artwork action edits only the current song. An album-wide change needs an explicit bulk selection. Limited or revoked photo grants are handled without asking for broad access.
+Editing is a checked-field draft with artwork preview. Every new image requires square cropping; Gallery/Files and limited photo grants remain optional. Review precedes explicit write permission and verified save. The player's artwork action targets only the current song; bulk editing requires selection.
 
 ### During and after a save
 
-| Situation | Offered |
-| --- | --- |
-| Saving | Cancel, which shows Restoring counts and returns to the same draft and scroll position. |
-| Saving without undo | Stop after current, in place of Cancel. |
-| Any time | Continue in background, which closes the editor while its service continues. |
-| Finished | Done, and Retry failed files. |
-| Interrupted | Resume or Restore. A recorded cancellation offers Restore only. |
+Cancel restores acquired writes and returns to the draft. Non-undo jobs offer Stop after current. Continue in background leaves the service running. Finished jobs offer Done/Retry; interrupted jobs offer Resume/Restore, with recorded cancellation restricted to Restore.
 
-**Settings → Library and tags → Tag jobs and recovery → Tag editing jobs** shows active progress and recent per-file outcomes. A recovery notice stays until dismissed, recovered, or playback moves elsewhere.
+**Library and tags → Tag jobs and recovery** retains progress and per-file outcomes. [File editing](../architecture/file-editing.md) owns recovery safety; the linked UI tests specify each displayed transition.
 
 ## Artwork viewer
 
-The viewer centres the fitted artwork across the full page. Close and Save controls overlay the image; Save writes the original file format to Downloads. Zoom is by pinch or the accessible Zoom actions. Pan bounds follow the fitted image, and released pans decelerate. Recreation preserves zoom and the visible centre.
+The full-page viewer fits artwork and saves its original format to Downloads. Pinch and accessible zoom actions share pan bounds. Recreation preserves zoom and centre; released pans decelerate.
 
 ## Repeat options
 
-Tap Repeat for the ordinary cycle. Hold it for Simple and Advanced options, in one compact popup sized for both modes.
-
-- Advanced has two buttons: **When a song ends** and **When a queue ends**. Each opens a non-scrolling child popup.
-- Select stages a child's changes. Cancel or Back discards that child's draft.
-- The parent's Apply saves the selected mode. The parent's Cancel discards both drafts.
-- Labels keep their full text, system font scaling and 48 dp targets.
-- Only when no complete arrangement fits, the popup asks the user to enlarge the window or reduce text size.
-
-What the options do is in [Queues](../architecture/queues.md#repeat).
+Tap cycles ordinary Repeat; hold opens Simple/Advanced options. Child drafts select song-end and queue-end choices. Parent Apply commits; Cancel/Back discard the relevant draft. Full labels, font scaling and 48 dp targets determine the envelope. [Queues](../architecture/queues.md#repeat) owns behavior; the envelope test covers non-fitting windows.
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Slots and modes | `PlayerActionSlotsTest`, `GlobalPlaybackModesTest`, `RepeatOptionsEnvelopeTest` |
-| Information | `SongInformationTest` |
-| Editing | `TagEditorFlowTest`, `TagSaveProgressPopupTest`, `ArtworkCropTest`, `ArtworkEditRestorationTest`, `ImageChooserTest` |
-| Viewer | `ArtworkViewerGestureTest`, `ArtworkSaveTest` |
+[PlayerActionSlotsTest](../../app/src/test/java/io/github/anastaci1a/localica/ui/PlayerActionSlotsTest.kt).
+
+[GlobalPlaybackModesTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlobalPlaybackModesTest.kt).
+
+[RepeatOptionsEnvelopeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/RepeatOptionsEnvelopeTest.kt).
+
+[SongInformationTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SongInformationTest.kt).
+
+[TagEditorFlowTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/TagEditorFlowTest.kt).
+
+[TagSaveProgressPopupTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/TagSaveProgressPopupTest.kt).
+
+[ArtworkCropTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtworkCropTest.kt).
+
+[ArtworkEditRestorationTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtworkEditRestorationTest.kt).
+
+[ImageChooserTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ImageChooserTest.kt).
+
+[ArtworkViewerGestureTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtworkViewerGestureTest.kt).
+
+[ArtworkSaveTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtworkSaveTest.kt).

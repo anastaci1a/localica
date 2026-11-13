@@ -1,6 +1,8 @@
 # Queues and playlists
 
-A queue or playlist is an ordered list of occurrences. An occurrence is one appearance of a song, with its own identity, so the same song can appear twice. A queue is a snapshot of a list at the moment of the tap. It does not change when its source list changes. Modes change how a queue is traversed, never its saved order.
+A queue or playlist is an ordered list of occurrences. An occurrence is one appearance of a song, with its own identity, so the same song can appear twice. A queue is a snapshot of a list at the moment of the tap.
+
+It does not change when its source list changes. Modes change how a queue is traversed, never its saved order.
 
 - Tapping a song snapshots the complete displayed list, in its filtered and sorted order, and starts at the tapped occurrence.
 - An identical queue is reused, not duplicated.
@@ -8,96 +10,89 @@ A queue or playlist is an ordered list of occurrences. An occurrence is one appe
 - Sorting a queue or playlist physically reorders it and keeps a Manual baseline to return to.
 - Status: Implemented.
 
+
 ## The model
 
-| Thing | Stored as |
-| --- | --- |
-| Occurrence | An independent ID plus a shared track snapshot. |
-| Order | The physical order of occurrences. Search never rewrites it. |
-| Cursor | Current occurrence and position. Cursor-only updates do not rewrite entries. |
-| Visit history | Typed rows of actual visits, separate from planned cycle membership. |
-| Manual baseline | The order to restore when Manual is applied after an automatic sort. |
-
-Available songs show current library metadata. Unavailable songs keep their saved metadata and references. Controllers serialize transactions. Released migrations, IDs, references, grants and settings are preserved; a missing snapshot field stays unknown.
+An occurrence stores its own ID and a shared track snapshot. Physical order, current cursor, visit history and Manual baseline are separate facts. Available songs project current metadata; unavailable songs retain saved references. Controllers serialize transactions. Cursor-only writes do not rewrite entries, and absent snapshot fields stay unknown.
 
 ## Creating a queue
 
-| Decision | Rule |
-| --- | --- |
-| Song tap | Default: snapshot and play from the tapped occurrence, keeping earlier songs. Alternatives: insert after current and play, add next, append. |
-| Tap scope | One app-wide default, with optional overrides per song, album, artist, Album Artist, folder, playlist and search list. Explicit selection actions bypass tap preferences. |
-| Names | Describe the source: `Album ◀ Artist`, `All Songs ◀ Artist`. Mixed-artist lists omit the suffix. |
-| Mixed results | A queue from mixed search results holds only the displayed song occurrences, in order. |
+Song taps snapshot the complete displayed order. Preferences may instead insert-and-play, add next or append, with scoped inheritance; explicit selection commands bypass tap preferences. Names describe their source, such as `Album ◀ Artist`. Mixed search results contribute displayed songs only.
 
 ### Reuse
 
-Before creating a queue, look for one with the exact intended name, ordered song identities and per-occurrence playlist origins. Prefer the active match, otherwise the first in saved order. Play the requested occurrence from zero, and keep that queue's occurrence IDs, order and history.
-
-Metadata, statistics and playback position do not distinguish queues. A different name, order, duplicate count or origin does. A source name is never inferred from an existing suffix, and saved queues are never merged.
+Reuse compares intended name, ordered song identities and playlist origins. Prefer the active exact match, then the first saved match. Start the selected occurrence at zero while preserving occurrence IDs and history. Metadata, counts and position do not distinguish queues; differing order, duplicates, names or origins do. Never infer names from suffixes or merge queues.
 
 ## Managing queues
 
-| Decision | Rule |
-| --- | --- |
-| Independence | Later edits to the source list do not change the queue. Order, duplicates, cursor and visit history survive restarts. |
-| Restore | Restore paused unless an explicit play request is pending. Launch alone never starts playback. |
-| Browsing | Selecting a queue browses it without changing playback, by default. Selecting an occurrence activates its queue. |
-| Deletion | Deleting the active queue restores the most recently activated remaining queue and its cursor. Inactive edits leave playback intact. |
-| Retention | Unlimited by default. At an optional limit, propose the oldest inactive queue by name and confirm. The active queue is protected. |
-
-Activation recency is independent of manual queue order.
+Restore paused unless an explicit Play is pending. Browsing defaults to leaving playback unchanged; choosing an occurrence activates its queue. Active deletion restores the most recently activated remaining queue, independent of manual order. Retention is unlimited by default; optional removal requires confirmation and protects the active queue.
 
 ## Traversal
 
-Repeat and Shuffle are global, persisted modes, initially off. `QueuePreferences` owns them.
+Global Repeat/Shuffle default off. Shuffle changes traversal, never physical order. One concrete future is shared by transport, preload and artwork; projections never count as visits. History retraces actual visits across repeat cycles/restoration. Explicit selection replaces forward history; exhaustion starts another cycle.
 
-- Shuffle visits occurrence IDs without repeating before exhaustion.
-- Each traversal keeps visited membership, a history cursor and a concrete future. Transport, preloading and artwork share that future.
-- Back and forward retrace actual visits, across repeat cycles and restarts.
-- An explicit selection replaces retraceable forward history. Selection after exhaustion starts a new cycle.
-- Projecting neighbours never records them as played.
-
-Turning Shuffle off keeps the current occurrence, position and Repeat mode; next and previous then follow visible order. Turning it on starts a fresh traversal at the current occurrence. Reordering keeps shuffled plans, appended songs join them, and removals drop invalid visits.
+Mode changes preserve current occurrence/position. Enabling Shuffle starts a fresh traversal; disabling it resumes visible order. Reorders preserve plans; additions join and removals invalidate visits. Journey tests specify these transitions.
 
 ### Play Next
 
-Play Next inserts each batch immediately after the current occurrence, in visible order and in playback, ahead of shuffled forward history. A newer batch precedes earlier ones; each batch keeps its own order. A scheduled visit becomes visited only on arrival. Unplayed batches stay next-up after an explicit selection.
+A batch inserts after current in physical order and traversal, before shuffled forward history. Newer batches precede earlier batches while retaining internal order. Scheduled visits become visited on arrival and survive explicit selection/restoration.
 
 ### Repeat
 
-Advanced Repeat sets what happens when a song ends (Stop, Load next paused, Next, Repeat) and when a queue ends (Stop, Next queue, Repeat), with reset-to-first and reshuffle options. Retraced history and scheduled Play Next visits keep the song-end choice. Only advancing beyond the active traversal invokes queue-end behaviour.
+Song-end choices are Stop, Load next paused, Next and Repeat. Queue-end choices are Stop, Next queue and Repeat, with reset/reshuffle options. Retraced or scheduled visits retain song-end rules; queue-end rules apply only beyond the traversal.
 
 ## Sorting and the Manual baseline
 
-Sorting a queue or playlist explicitly reorders the original occurrences, using current displayed metadata and statistics.
-
-| Action | Effect on the baseline |
-| --- | --- |
-| Automatic sort | Keeps the Manual baseline. Applying Manual restores it. |
-| Actual manual move, Randomize, Reverse | Replaces the baseline. A no-op move leaves it intact. |
-| Revert | Restores the order and sort settings from when the options opened. Available only while the order differs. |
-
-Randomize persists a new order. In the active queue the current occurrence goes first and the rest shuffle. Sorting and migration keep occurrence identities, cursor and traversal history. A failed save stays retryable. Later additions and removals are reconciled without restoring stale contents.
+Automatic sorts retain Manual order. Actual manual moves, Randomize and Reverse replace it; no-op moves do not. Revert restores the order/settings captured when options opened, reconciling later additions/removals. Failures remain retryable. IDs, cursor and history survive every reorder; active randomization places current first.
 
 ## Playlists
 
-- Names are unique after trimming, ignoring case. Creation, rename and import reject duplicates without rewriting legacy duplicates.
-- Add to playlists appends atomically to the chosen playlists and an optional new one.
-- Imports accept local M3U, M3U8 and PLS files, resolved against indexed music. Ambiguous and unresolved entries are reviewed before skipping. Remote audio is never fetched.
-- Import input is capped at 5 MiB and 20,000 entries, and commits after review.
-- A custom cover is a required square crop stored privately. Replacement removes only unreferenced app-owned copies.
+Names are trimmed, case-insensitive and unique for create/rename/import without rewriting legacy duplicates. Destination additions commit atomically. Local M3U/M3U8/PLS imports resolve against indexed music and require review of ambiguous/missing entries; no remote audio is fetched. Imports cap at 5 MiB/20,000 entries. Custom covers require square crops; cleanup removes only unreferenced owned files.
 
 ## Storage
 
-The traversal persists a namespace and a real anchor token, so projected neighbours stay stable after restore or history removal without inventing visits. Media3 receives a bounded window of tokened visits in identity order, because the saved sequence already includes the shuffle. Legacy per-queue modes are imported once; their columns then stay inert.
+Traversal namespaces and real anchor tokens stabilize projected neighbours without inventing visits. Media3 receives a bounded window of tokened visits in traversal order. Legacy per-queue modes import once, then remain inert. Storage and compatibility tests own the migration cases.
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Storage | `QueueDatabaseTest`, `PlaylistDatabaseTest`, `OrderedJourneyDatabaseTest`, `QueuePersistenceTest`, `QueueRestoreTest` |
-| Creation and reuse | `QueueBrowsingTest`, `QueueReusePlaybackTest`, `QueueSaveOriginTest` |
-| Traversal | `ShuffleModePlaybackTest`, `PlayNextJourneyTest`, `QueueJourneyPlaybackTest`, `QueueJourneyPersistenceTest`, `AdvancedRepeatTest` |
-| Sorting | `BrowseSortRevertTest`, `RevertOrderPersistenceTest`, `ReverseOrderPersistenceTest`, `LiveOrderPersistenceTest`, `QueueRandomizePlaybackTest` |
-| Playlists | `PlaylistCompletionTest`, `PlaylistCoverActionTest` |
-| Upgrade compatibility | `ShuffleApkCompatibilityTest` |
+[QueueDatabaseTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueueDatabaseTest.kt).
+
+[PlaylistDatabaseTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlaylistDatabaseTest.kt).
+
+[OrderedJourneyDatabaseTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/OrderedJourneyDatabaseTest.kt).
+
+[QueuePersistenceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueuePersistenceTest.kt).
+
+[QueueRestoreTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueueRestoreTest.kt).
+
+[QueueBrowsingTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueueBrowsingTest.kt).
+
+[QueueReusePlaybackTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueueReusePlaybackTest.kt).
+
+[QueueSaveOriginTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueueSaveOriginTest.kt).
+
+[ShuffleModePlaybackTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ShuffleModePlaybackTest.kt).
+
+[PlayNextJourneyTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayNextJourneyTest.kt).
+
+[QueueJourneyPlaybackTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueueJourneyPlaybackTest.kt).
+
+[QueueJourneyPersistenceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueueJourneyPersistenceTest.kt).
+
+[AdvancedRepeatTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/AdvancedRepeatTest.kt).
+
+[BrowseSortRevertTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/BrowseSortRevertTest.kt).
+
+[RevertOrderPersistenceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/RevertOrderPersistenceTest.kt).
+
+[ReverseOrderPersistenceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ReverseOrderPersistenceTest.kt).
+
+[LiveOrderPersistenceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LiveOrderPersistenceTest.kt).
+
+[QueueRandomizePlaybackTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/QueueRandomizePlaybackTest.kt).
+
+[PlaylistCompletionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlaylistCompletionTest.kt).
+
+[PlaylistCoverActionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlaylistCoverActionTest.kt).
+
+[ShuffleApkCompatibilityTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ShuffleApkCompatibilityTest.kt).

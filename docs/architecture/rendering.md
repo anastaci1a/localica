@@ -8,101 +8,99 @@ Everything on screen that is not glass follows three rules. Decode and prepare o
 - Shadows: one shape-aware field per group, in every renderer.
 - Status: Implemented.
 
+
 ## Artwork pipeline
 
-| Stage | Rule |
-| --- | --- |
-| Decode | Cancellable reads. At most three parallel decodes, one per cover and size bucket. Buckets are 128, 192, 256, 384 and 768 px. |
-| Cache | Decoded covers take an eighth of the heap class, between 12 and 48 MB. Missing results are cached too. |
-| Display | Cached artwork is read synchronously. A smaller cover of the same identity stays while a larger decode loads. |
-| Invalidate | Rescans and edits invalidate artwork and lyric caches. Requests are revision-checked, so a stale decode never publishes. |
+Cancellable background decodes share one request per cover/size bucket, with at most three concurrent decodes. Buckets are 128–768 px; the bounded cache uses one eighth of heap class within 12–48 MB. Cached smaller covers remain until replacements arrive. Revision checks reject stale publication; rescans/edits invalidate affected caches.
 
-A long automatic scroll keeps cached covers but defers uncached decodes until it settles or is interrupted. Manual browsing loads normally. Artwork is never scraped.
-
-Activity-local viewport leases hold bitmap references for the current tabs and two Back destinations. A recycled row never keeps another identity. One immutable browse-order snapshot resolves collection ordering for cards, Home and details, so no card reads preferences itself.
+Viewport leases retain current tabs and two Back destinations. Long automatic scrolls defer uncached decoding. One browse-order snapshot serves cards, Home and details. The cache, concurrency and decode tests specify eviction and cancellation.
 
 ### Average colours
 
-Loading placeholders use the item's average artwork colour. Colours live in the `track_artwork` table, keyed by track with the source modification time. A changed time marks the colour stale. Catalog writes never wait for colours, and colour writes never republish the catalog.
-
-- The average is a 16×16 filtered downscale, averaged in linear light.
-- One single-flight worker computes missing colours from 64 px decodes, without GPU upload.
-- Visible placeholders and the player's current and next tracks queue first. Display decodes donate their averages.
-- Bulk work waits for foreground decodes, and stops during a scan or while the app is stopped.
-- The index republishes at most every 400 ms. Only loading placeholders observe it.
+A separate modification-keyed index stores linear-light averages from 16×16 downscales. A single-flight worker prioritizes visible placeholders and player neighbours; decodes donate averages. Bulk work yields to foreground work/scans. Publishing colours never republishes the catalog and is limited to once per 400 ms.
 
 ### Player artwork
 
-The player keeps its complete previous artwork and palette until the next pair is ready. Bundles for the current song and its neighbours, with soft edges, are prepared off the main thread within a bounded cache. That budget excludes the decoded cache and live frames.
-
-Covers blend with a colour continuation. Blur-through uses a live blur on Android 12+ and prepared soft-cover endpoints on older versions. Neither filters a fresh bitmap each frame. Washes, panel frost and older-device snapshots share one separable box-filter kernel.
+Current/next artwork and palette bundles are prepared together in bounded caches. The previous complete bundle stays until its replacement is ready. Android 12+ uses live blur; older devices blend prepared endpoints. Washes, frost and snapshots reuse a separable box filter.
 
 ## Recordings and readback
 
-A recording is a retained drawing of one owner. Stable recording owners paint all text below all artwork.
-
-- Readbacks serialize per source. The layer parent is retained until native copying completes, even after the caller cancels.
-- A deadline cannot release pending native work. Release and cancellation checks run on the owning UI thread.
-- A lifted item is drawn only from its own retained recording. The host adds the lifted drawing and never takes ownership, so no cover or label vanishes.
-- The current-song texture is kept as an immutable bitmap at display resolution. Grain is never replayed during scrolling.
-- Thumbnail captures join matching draw generations before copying. A stale generation cannot publish.
+Retained drawings have one owner. Native copies serialize per source and retain parents until completion, even after caller cancellation. Cleanup stays on the UI thread; a deadline never releases pending native work. Generation checks prevent stale publication. Lifted items draw their own retained recording, while current-song grain is an immutable display-resolution bitmap.
 
 ## Pinch snapshots
 
-A pinch freezes bounded source drawings before reflow, then moves them to layout-only destinations.
+Pinch freezes bounded source drawings before reflow and moves them to layout-only destinations. One frame value drives placement/drawing. Bitmap leases, anchors and endpoints survive reversal or replacement settlement; cleanup tokens belong to each settlement. Legacy atlases preserve alpha and stride. Offscreen headers beyond two viewports are omitted.
 
-- Progress updates inside the frame callback, so placement and drawing observe one value.
-- Live and virtualized cells share fixed text and artwork endpoints.
-- The source-viewport bitmap lease, drawings and midpoint anchor survive reversal, release and handoff.
-- Each settle owns its cleanup token. Replacing it keeps the transaction's frozen endpoints.
-- Atlases preserve exact pixels with separated regions, premultiplied alpha and row stride on legacy Android.
-- A header more than two viewports away is offscreen. The pinch proceeds without it.
-
-What the user sees is in [Browsing](../interface/browsing.md#pinch).
+The lifetime and placement tests specify ownership transitions; [Browsing](../interface/browsing.md#pinch) owns the visible gesture.
 
 ## Player expansion
 
-One expansion progress controls artwork, title and transport geometry and masks. Root navigation observes threshold crossings only. The Queue moves a fixed viewport; its list is not remeasured during expansion. Fixed-size glyphs are scaled, never stepped through font sizes. Cover-edge masks combine in one offscreen layer, and settled artwork draws directly.
+One progress drives geometry and masks. Navigation observes thresholds only; Queue moves a fixed viewport. Glyphs scale without font remeasurement. Cover masks share one offscreen layer and settled artwork draws directly.
 
 ## Ink polarity and adaptive contrast
 
-A page has one ink polarity: black or white for text and icons. Glass controls, panel frost, Queue frost and nested popups follow it.
+One page-wide black/white decision follows the actual backing, including crossfades. Matching tone preparation must finish before a new decision publishes; otherwise the last verified decision remains, initially white. Ink changes do not retone the backing, and asynchronous presentation is not atomic.
 
-- For the player, black and white ink are compared against the displayed backing behind title, artist and controls, including live crossfades.
-- A choice is current only after matching tone preparation completes. Otherwise the last verified decision stays. White is used before any verification.
-- Changing ink does not retone the backing.
-- Preparation, sampling and presentation are asynchronous. Atomic presentation of ink and background is not guaranteed.
-
-One fraction, `PlayerBackgroundPolarityState.lightMix`, drives foreground, glass ink and tone, frost, and backdrops that follow the player's ink. Surfaces read it instead of the discrete decision. Lyric lines take the interpolated ink uniformly; only each line's emphasis has its own clock.
-
-Brightness trim darkens highlights under white ink and lifts shadows under dark ink. The applied trim is limited so that brightness order never inverts:
-
-$$
-\mathrm{trim}_{\mathrm{applied}} \le \frac{1}{w}
-$$
-
-Here $w$ is the weighting from 1 to 8. Ranges and defaults are in [Settings](../interface/settings.md#glass-settings).
-
-With trim enabled, the current song's full-player backdrop is prepared while the player is minimized. Expanding draws the final backdrop from its first frame. A drawn backdrop stays until its replacement is ready. It never blanks.
+One interpolated light-mix fraction serves text, glass and frost. Lyric emphasis keeps its own clock. Brightness trim preserves brightness order by limiting applied trim to the reciprocal of weighting. [Settings](../interface/settings.md#glass-settings) owns ranges. Prepared backdrops appear on expansion's first frame and remain until replaced.
 
 ## Shadows
 
-- One shadow per group. Siblings that move together share a union: bottom chrome and filter strips. Whole pages and modal descendants never do.
-- A shadow inherits its owner's transform, fade and clipping. Scrolling clips are padded for the gradient's reach.
-- Textures are padded and exclude transparent interiors. A geometry change invalidates the texture; a translation reuses it.
-- Falloff samples adapt to the physical spread, and reach the background smoothly without visible rings.
-- Popup and trigger transfer exclusive shadow ownership at handoff.
-- Shadows use the same path in every renderer.
-
-The lift shadow follows the menu's theme: dark under dark-ink menus, a white glow under light-ink menus.
+Moving sibling groups share one shape-aware shadow; pages and modal descendants do not. It inherits owner transforms, fades and padded clips. Geometry invalidates its texture; translation reuses it. Popup/trigger handoff transfers exclusive ownership. Every renderer uses the same path. Shadow tests specify falloff, continuity and material parity.
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Artwork cache and decode | `ArtworkCacheTest`, `ArtworkCacheSizingTest`, `ArtworkCacheConcurrencyTest`, `CoverDecodeTest`, `ArtworkColorStorageTest` |
-| Readback and lifetimes | `RetainedLayerReadbackTest`, `NativeWindowCopyOwnershipTest`, `BitmapLifetimeStressTest`, `PinchReadbackLifetimeTest` |
-| Pinch layers | `BrowsePinchLayersTest`, `PinchItemPlacementLifecycleTest`, `CollectionHeaderPinchFrameTest` |
-| Ink and contrast | `PlayerBackgroundPolarityTest`, `PlayerContrastTest`, `PlayerBackdropGradingTest`, `BrightnessWeightingTest`, `PlayerLyricsThemeEaseTest`, `LyricsLineInkEaseTest`, `PlayerExpandReadinessTest` |
-| Shadows | `GlassShadowTest`, `ShadowFalloffTest`, `ShadowContinuityTest`, `NativeShadowFieldConformanceTest`, `LiftShadowTest` |
-| Drag and selection drawing | `DragStackFrameTimeTest`, `GalleryLiftFrameTest`, `SelectionMotionRenderingTest`, `PinchRetainedHighlightTest` |
+[ArtworkCacheTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtworkCacheTest.kt).
+
+[ArtworkCacheSizingTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtworkCacheSizingTest.kt).
+
+[ArtworkCacheConcurrencyTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtworkCacheConcurrencyTest.kt).
+
+[CoverDecodeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/CoverDecodeTest.kt).
+
+[ArtworkColorStorageTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtworkColorStorageTest.kt).
+
+[RetainedLayerReadbackTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/RetainedLayerReadbackTest.kt).
+
+[NativeWindowCopyOwnershipTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/NativeWindowCopyOwnershipTest.kt).
+
+[BitmapLifetimeStressTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/BitmapLifetimeStressTest.kt).
+
+[PinchReadbackLifetimeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PinchReadbackLifetimeTest.kt).
+
+[BrowsePinchLayersTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/BrowsePinchLayersTest.kt).
+
+[PinchItemPlacementLifecycleTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PinchItemPlacementLifecycleTest.kt).
+
+[CollectionHeaderPinchFrameTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/CollectionHeaderPinchFrameTest.kt).
+
+[PlayerBackgroundPolarityTest](../../app/src/test/java/io/github/anastaci1a/localica/ui/PlayerBackgroundPolarityTest.kt).
+
+[PlayerContrastTest](../../app/src/test/java/io/github/anastaci1a/localica/ui/PlayerContrastTest.kt).
+
+[PlayerBackdropGradingTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerBackdropGradingTest.kt).
+
+[BrightnessWeightingTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/BrightnessWeightingTest.kt).
+
+[PlayerLyricsThemeEaseTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerLyricsThemeEaseTest.kt).
+
+[LyricsLineInkEaseTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LyricsLineInkEaseTest.kt).
+
+[PlayerExpandReadinessTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerExpandReadinessTest.kt).
+
+[GlassShadowTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassShadowTest.kt).
+
+[ShadowFalloffTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ShadowFalloffTest.kt).
+
+[ShadowContinuityTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ShadowContinuityTest.kt).
+
+[NativeShadowFieldConformanceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/NativeShadowFieldConformanceTest.kt).
+
+[LiftShadowTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LiftShadowTest.kt).
+
+[DragStackFrameTimeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/DragStackFrameTimeTest.kt).
+
+[GalleryLiftFrameTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GalleryLiftFrameTest.kt).
+
+[SelectionMotionRenderingTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SelectionMotionRenderingTest.kt).
+
+[PinchRetainedHighlightTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PinchRetainedHighlightTest.kt).

@@ -1,6 +1,6 @@
 # Build
 
-Localica builds with the pinned Gradle wrapper, JDK 17 and one Android SDK. There are three variants: `debug` for tests, `distribution` for the APK people install, and an unsigned `release`. The distributed APK is always non-debuggable and R8-minified, and it keeps one application ID and signing key so updates install in place.
+Use the pinned Gradle wrapper, JDK 17 and Android SDK. Debug serves tests; distribution produces non-debuggable R8-minified installs; release is unsigned. Stable application ID and signing allow in-place updates.
 
 - Android 8 or newer. MP3 and AAC/M4A are the primary formats.
 - A build without a Last.fm key compiles and disables syncing.

@@ -66,4 +66,10 @@ PTS and stream offset use microseconds. Flooring the edit permits less than one 
 
 ## Tests
 
-`LegacyMp3BoundaryTest`, `AacEditListExtractionTest`, `MediaEditSinkLifecycleTest`, `PrivateQueueBoundaryTest`. Boundary tests compare decoded samples and waveform alignment; sample counts alone are insufficient.
+[LegacyMp3BoundaryTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LegacyMp3BoundaryTest.kt).
+
+[AacEditListExtractionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/AacEditListExtractionTest.kt).
+
+[MediaEditSinkLifecycleTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/MediaEditSinkLifecycleTest.kt).
+
+[PrivateQueueBoundaryTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PrivateQueueBoundaryTest.kt).

@@ -8,92 +8,55 @@ The library is a Room database of songs found in folders the user granted. A son
 - Date added is owned by Localica. Audio files do not store it.
 - Status: Implemented. The two-value date model (#930) lands in v0.34.3.
 
+
 ## Identity and roots
 
-| Fact | Rule |
-| --- | --- |
-| Identity | Provider authority + document ID. A document ID is never read as a filesystem path. |
-| Root membership | Stores the access URI and the relative path separately. |
-| Overlapping roots | Share one song identity and keep alternate access paths. |
-| Moves and renames | Keep identity only if the provider keeps its ID. |
-| Removed root | Songs leave browsing. Saved occurrences keep their metadata and stay visible as unavailable. |
-| Grants | Removed grants are released after commit. Playback rechecks live alternate grants. |
+Root membership stores access URI and relative path separately from provider/document identity. Overlapping roots retain alternate grants; removal releases grants after commit but preserves saved unavailable occurrences. Moves retain identity only when the provider retains its ID. Playback rechecks live alternatives.
 
 ## Scans
 
-Two scans exist. Each can also run at startup; both startup switches default to off.
-
-| Scan | Does | Never does |
-| --- | --- | --- |
-| Quick Scan | Enumerates permitted folders and reads metadata only for unindexed identities. Inserts additions in one transaction. | Overwrite cached rows, dates or references. |
-| Full scan | Also refreshes changed files and reconciles removals. Replaces a root only after a complete listing. | Replace a root from an incomplete, loading or failed listing. |
-
-- With both startup scans enabled, quick discovery finishes across all roots before the full refresh.
-- Discovery uses provider identity, not file timestamps. It may need to enumerate every included directory.
-- Scans respect Include subfolders, exclusions and minimum duration.
-- Scans serialize with file edits through one [file-operation lock](file-editing.md#the-lock).
-- Cancellation and errors keep the prior contents. A metadata failure keeps a filename fallback.
+Quick Scan inserts unindexed identities without refreshing existing rows. Full scan refreshes changed files and reconciles removals only after complete enumeration. Incomplete/cancelled listings preserve prior contents; metadata failures retain filename fallbacks. Include subfolders, exclusions and duration rules apply to both. Startup quick discovery completes before full refresh; [one lock](file-editing.md#the-lock) serializes scans and edits.
 
 ## Grouping
 
-- Albums group by title plus Album Artist, falling back to track Artist. Case and surrounding whitespace are normalized.
-- Missing metadata forms distinct unknown groups.
-- Artist views use track Artist. Artist and Album Artist stay distinct, compilations included.
-- Folders group by root and relative parent directory.
-- Collection summaries use the earliest known year and the summed known duration, marked when partial.
-
-The artist data source prepares release groups, five ranked songs, the current year's latest releases and playlist membership. Release-type and compilation tags survive storage. Classification reports tagged, heuristic or uncertain confidence. Existing libraries gain tags on a full rescan.
+Albums use normalized title plus Album Artist, falling back to Artist. Artist and Album Artist remain separate; missing values form unknown groups. Folders use root/relative parent. Summaries use earliest year and known duration sums, marked when partial. Artist projections retain release classification/confidence, ranked songs, current-year releases and playlist membership; rescans populate newly supported tags.
 
 ## Queries and caches
 
-A snapshot load prepares an immutable search-text index off the main thread and reuses unchanged entries after a commit. Search matches literal case-normalized substrings and keeps occurrence order. There is no persistent search database.
-
-| Owner | Role |
-| --- | --- |
-| Library snapshot | Immutable. Browse and playlist projections share one lazy, thread-safe current-track lookup per snapshot. |
-| Grouping plans | Bounded order and membership plans per metadata source. Count-dependent ordering always stays fresh. |
-| Statistics overlay | Prepared off the main thread. Reuses source tracks whose counts match. |
-| `BrowsePresentationCache` | Bounded completed queries. Waits for the route's catalog sources and publishes only matching source, query and style revisions. |
-
-Upcoming tab and queue queries are warmed off the main thread. A selection that exceeds SQL binding limits, or has ambiguous sort ties, uses the canonical full read. Queue creation receives every displayed occurrence and the selected index. Future paging must keep complete queue snapshots.
+Immutable snapshots prepare literal case-normalized substring indexes off main and share track lookups. Bounded grouping/query caches and statistics overlays reuse unchanged sources. BrowsePresentationCache publishes only matching source/query/style revisions. Warm-up stays off main; ambiguous ties or SQL-limit selections use canonical full reads. Queue snapshots always retain every displayed occurrence and selected index, including future paging.
 
 ## Dates
 
-| Value | Rule |
-| --- | --- |
-| First seen | Written once when a song is first discovered. Never changed by scans, settings, imports or recovery. From v0.34.3. |
-| Date added | What lists show and sort by. Starts equal to first seen. A [library data](../library-data.md) import can replace it; rescans keep the imported date. |
-| Removed, then indexed again | Starts a new date. |
-| Collection dates | Albums, artists, Album Artists and folders use the earliest added and latest known modification among current distinct songs. |
-| Playlist dates | Creation or import date. Modification changes on rename, cover, membership or order edits, not on metadata refresh. |
+First seen records discovery once; imports/settings/recovery cannot change it. Date added starts equal to first seen but [library data](../library-data.md) imports may replace it. Rescans preserve both. This two-value model is part of v0.34.3 (#930); earlier releases used one value and could share a migration timestamp. Historical dates are never invented.
 
-Before v0.34.3 one value served both roles, and songs present at the migration that introduced it share that migration's date. Localica never invents a historical date.
+From v0.34.3, track rows outlive folder membership: removing and re-adding the same provider identity preserves both dates. Collections use earliest added/latest known modification of distinct members. Playlist creation/import dates stay fixed; rename, cover, membership and order change modification, while metadata refresh does not.
 
 ## Lyric sources
 
-Lyrics are read locally, with no online lookup.
+Local embedded synced/plain lyrics and same-basename granted-folder LRC sidecars remain selectable. Usable synced sources win; sidecars win equal timing types. Duplicate plain copies are hidden. Choices persist per song. Source/directory failures do not hide usable siblings or interrupt playback.
 
-- Sources: embedded synced or plain lyrics, and a same-basename `.lrc` sidecar in the song's granted folder.
-- Priority: usable synced lyrics first, then a sidecar over an embedded source of equal timing type.
-- Distinct sources stay selectable. A plain copy of a synced source is not listed twice. The choice is saved per song.
-- A failed source never hides usable siblings. A directory failure affects only that location.
-- Missing, malformed or untimed lyrics never interrupt playback, and timestamps are never invented.
-
-| Format | Support |
-| --- | --- |
-| LRC | Offsets and repeated timestamps. Input capped at 2 MiB and 10,000 lines. |
-| ID3v2.2 SLT, ID3v2.3/2.4 SYLT | Millisecond timing. Frame-count SYLT is unsupported. |
-| Opus | Through Media3's Vorbis-comment reader. |
-| Word timing | Used only when a supported source supplies it. |
-
-Sidecars resolve through tree children and indexed relative folders. Presentation and timing offset are in [Artwork and lyrics](../interface/artwork-and-lyrics.md#lyrics).
+LRC supports offsets/repeated timestamps within 2 MiB/10,000 lines. ID3 SLT/SYLT supports milliseconds, not frame timing. Opus uses Media3 Vorbis comments. Word timing requires an actual supported source. Tree children/indexed folders resolve sidecars. [Artwork and lyrics](../interface/artwork-and-lyrics.md#lyrics) owns presentation.
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Database and scans | `LibraryDatabaseTest`, `IncompleteScanTest`, `StartupMergeTest`, `LibraryPlaybackReadTest` |
-| Queries and caches | `SearchSourceRevisionTest`, `BrowseRetentionTest`, `PinnedHomePreparationTest` |
-| Dates and exchange | `LibraryDataExchangeTest` |
-| Artist data | `ArtistDataStorageTest` |
-| Lyrics | `LyricsReaderTest`, `EmbeddedTagsTest` |
+[LibraryDatabaseTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LibraryDatabaseTest.kt).
+
+[IncompleteScanTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/IncompleteScanTest.kt).
+
+[StartupMergeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/StartupMergeTest.kt).
+
+[LibraryPlaybackReadTest](../../app/src/test/java/io/github/anastaci1a/localica/library/LibraryPlaybackReadTest.kt).
+
+[SearchSourceRevisionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SearchSourceRevisionTest.kt).
+
+[BrowseRetentionTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/BrowseRetentionTest.kt).
+
+[PinnedHomePreparationTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PinnedHomePreparationTest.kt).
+
+[LibraryDataExchangeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LibraryDataExchangeTest.kt).
+
+[ArtistDataStorageTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ArtistDataStorageTest.kt).
+
+[LyricsReaderTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LyricsReaderTest.kt).
+
+[EmbeddedTagsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/EmbeddedTagsTest.kt).

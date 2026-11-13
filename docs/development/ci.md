@@ -34,33 +34,17 @@ Shards wait only for `test-apks`. The summary and verified-run reuse require all
 
 ## Shards and the inventory union
 
-Each API suite splits into eight shards on separate emulators with one profile. Whole classes are assigned by measured duration, longest first, from the [duration profile](../../.github/test-evidence/class-durations.csv).
-
-- `device-tests-summary` downloads every shard's XML. It passes only if each API's union equals the source inventory exactly once, skipped assumptions included, and every shard passed.
-- Each device artifact keeps `native-shard-plan.json`: hashes, class assignments, expected methods and estimated loads.
-- A new class uses the measured median per-method cost until it is profiled. Refresh the profile after adding a slow class.
-- Shards time out after 35 minutes. A timed-out shard fails the summary even if its XML is complete.
+Eight shards per API assign whole classes by measured longest-first duration from the [profile](../../.github/test-evidence/class-durations.csv). New classes use median per-method cost. Each artifact records hashes, assignments, methods and estimated loads. The summary requires every source method exactly once, including assumption skips, and passing shards. A 35-minute timeout fails even with complete XML.
 
 ## Risk preflight
 
-A dispatch may pass `risk_classes`: up to 20 comma-separated instrumentation classes, 4096 characters at most. Each shard runs its slice of those classes first, then its slice of the rest.
-
-- Preflight must run exactly its expected methods, with no failures or skips, before the remainder starts.
-- Preflight XML and remainder XML must form the complete disjoint union. Remainder XML alone is not full-suite evidence.
-- A failed preflight stops before the remainder and keeps its status, log and reports.
-- Original assumptions stay explicit skips, not passes.
+Dispatches may prioritize up to 20 classes within 4096 characters. Each shard runs its slice first; failures/skips stop it. Preflight and remainder XML must form a complete disjoint union. Keep original status, logs and explicit assumption skips.
 
 ## Live evidence
 
-Complete device jobs set `LOCALICA_LIVE_EVIDENCE=true`. An observer and a supervised publisher preserve provisional failure observations while the run is still going.
+Complete jobs enable the observer/supervised publisher, with at most six provisional packets. Final XML owns outcomes; contradictory/degraded monitoring blocks green. Failure/cancellation retains precedence. Read-only crash/window snapshots precede teardown; fresh live evidence uploads on failure too.
 
-- A job uploads at most six live packets in total.
-- Contradictory or degraded evidence stops the job. Existing evidence is refused, never replayed.
-- Test failure and cancellation keep their exit precedence.
-- Before failure teardown, read-only crash-buffer and window snapshots are captured.
-- Fresh `native-live-evidence` is always uploaded, on failure too.
-
-The publisher tooling uses Node 24 with a committed lockfile, and the Python contracts use a hash-locked [requirements file](../../.github/tests/requirements.txt) for CPython 3.12. Passing contracts validate mocks and protocol handling, not Android outcomes.
+Publisher tooling uses locked Node 24 dependencies. Python contracts use hash-locked [CPython 3.12 requirements](../../.github/tests/requirements.txt). Mocks validate protocol handling, not Android outcomes.
 
 ## Emulators
 

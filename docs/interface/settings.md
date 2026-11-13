@@ -10,13 +10,7 @@ Settings is a tree of pages built from one shared row. Every page aligns its tex
 
 ## Structure
 
-Category rows have icons, summaries and chevrons. Player settings live inside Interface. Both Back controls reverse the page's entrance direction.
-
-Every row (link, switch, slider, choice or heading) uses the shared row in `ui/PreferenceFrames.kt`.
-
-- The leading icon sits in a fixed 40 dp slot, centred vertically, at any line count, font scale or density. So does the trailing control.
-- All rows on a page start their text at the same x. Pages whose rows carry icons keep the empty slot on rows without one.
-- No two rows share an icon. The glyphs have `settings.*` [icon ids](../icon-packs.md#icon-ids).
+Category rows use icons, summaries and chevrons. PreferenceFrames supplies every row, with shared 40 dp leading slots and vertically centred trailing controls across font scales. Empty icon slots preserve alignment; each row has a distinct [settings icon ID](../icon-packs.md#icon-ids). Player settings live under Interface. Back reverses entrance.
 
 ## Search
 
@@ -24,17 +18,7 @@ The root page has global search; sub-pages omit it. Selecting a result scrolls t
 
 ## Controls
 
-| Control | Rule |
-| --- | --- |
-| Choice, two or three options | Equal inline segments, when the measured labels fit. |
-| Choice, longer list | A staged draft until Select. Cancel discards it. |
-| Slider | Shows label, value, endpoints and an accessible range. Runs from leading minimum to trailing maximum, in right-to-left layouts too. |
-| Discrete slider | Matching ticks and accessible increments. Percentages use 5% steps. |
-| Switch row | One accessible Boolean control. A drag previews, release commits once, cancellation restores. |
-
-Every slider shares the [seek track's touch model](player.md#seeking). A locked drag raises an X target at the bottom of its menu or page. Hovering X eases back to the value the drag started from; releasing there keeps that value. When X would cover the slider, the page eases up during the drag.
-
-Track and thumb share one coordinate model for fill, travel and wall contact. Haptics follow the [shared rule](materials-and-controls.md#haptics).
+Two/three-option choices use equal inline segments when labels fit; larger choices stage a draft until Select. Sliders expose accessible ranges and discrete increments; switches preview then commit once on release. All share the [seek touch model](player.md#seeking), coordinate geometry and cancellation target. Hovering X previews the original value; release keeps it. Control tests specify touch, accessibility and restoration.
 
 ## Glass settings
 
@@ -61,26 +45,44 @@ Animation speed runs from 0.5× to 1.5×. Reduce motion snaps shared motion. Lon
 
 ## Export diagnostics
 
-**About and licenses → Export diagnostics** opens a glass dialog, then the Android share sheet with one text file: app version, device model, Android version, export time and the diagnostics trail. Nothing leaves the device unless the user picks a share target. There is no network path. What the trail holds is in [Testing](../development/testing.md#field-diagnostics).
+**About and licenses → Export diagnostics** shares one text file through Android, containing app/device identity and the [in-memory trail](../development/testing.md#field-diagnostics). Nothing leaves without a chosen share target; export has no network path.
 
 ## Online features
 
-Online features groups the consent switch, Last.fm and Artist photos. Search finds their individual controls. The rules are in [Online](../architecture/online.md).
-
-### Last.fm pages
-
-- The page opens with a sync ring, percent and live counts, and an archive card. Overview, Matches and Data are glass tabs.
-- Overview opens with cached numbers and refreshes in the background. Uncached numbers use text placeholders with the final line height.
-- Matches shows an exact-proportion colour strip with a tappable legend: Matched, Judgment calls, Needs review, Auto-matched editions and Not in your library.
-- Every row opens one decision popup that can match any library song. Skip keeps the current match. A failed save keeps the popup open.
-- Data offers background continuation, quick refresh, Full rescan, Disconnect and a confirmed Delete synced Last.fm data.
+One consent root groups Last.fm and Artist photos; search reaches each control. Last.fm presents cached Overview, Matches and Data tabs, progressive sync, review decisions and explicit disconnect/delete controls. Failed decisions remain editable. [Online](../architecture/online.md) owns retention, matching and request rules; settings tests specify presentation.
 
 ## Tests
 
-| Topic | Classes |
-| --- | --- |
-| Structure and search | `SettingsRootSearchTest`, `SettingsSearchTest`, `SettingsRowAlignmentTest`, `SettingsOptionsTest` |
-| Controls | `ChoiceControlsTest`, `SliderModelTest`, `InterfaceControlsTest`, `SwitchTapOpticsTest` |
-| Glass | `GlassRendererSettingsTest`, `GlassRendererPreferenceTest`, `GlassScrollHoldTest` |
-| Diagnostics | `PinchDiagnosticsRecorderTest`, `FrameStatsSettingsTest` |
-| Last.fm | `LastFmSettingsTest`, `LastFmDashboardTest`, `LastFmChoiceDialogTest`, `LastFmMatchingBarTest` |
+[SettingsRootSearchTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SettingsRootSearchTest.kt).
+
+[SettingsSearchTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SettingsSearchTest.kt).
+
+[SettingsRowAlignmentTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SettingsRowAlignmentTest.kt).
+
+[SettingsOptionsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SettingsOptionsTest.kt).
+
+[ChoiceControlsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ChoiceControlsTest.kt).
+
+[SliderModelTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SliderModelTest.kt).
+
+[InterfaceControlsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/InterfaceControlsTest.kt).
+
+[SwitchTapOpticsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/SwitchTapOpticsTest.kt).
+
+[GlassRendererSettingsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassRendererSettingsTest.kt).
+
+[GlassRendererPreferenceTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassRendererPreferenceTest.kt).
+
+[GlassScrollHoldTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassScrollHoldTest.kt).
+
+[PinchDiagnosticsRecorderTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PinchDiagnosticsRecorderTest.kt).
+
+[FrameStatsSettingsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/FrameStatsSettingsTest.kt).
+
+[LastFmSettingsTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LastFmSettingsTest.kt).
+
+[LastFmDashboardTest](../../app/src/test/java/io/github/anastaci1a/localica/lastfm/LastFmDashboardTest.kt).
+
+[LastFmChoiceDialogTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LastFmChoiceDialogTest.kt).
+
+[LastFmMatchingBarTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LastFmMatchingBarTest.kt).

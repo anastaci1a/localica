@@ -1,6 +1,6 @@
 # Release
 
-A release is a tag on a commit in `main` whose exact Git tree has a complete green Android run. Releases are scoped and time-boxed: ship what is accepted at the cut, and let the rest ride the next one. Nothing is tagged on focused or partial evidence, and a candidate is never altered after its gate.
+A release tags an immutable `main` candidate with complete green exact-tree Android evidence. Ship accepted scope at the cut; pending work follows later. Focused evidence cannot qualify a release.
 
 - Tags are `vX.Y.Z` and match the app version. Every distributed update increments `versionCode`.
 - The UI-rule ratchet must pass: no new override, and no count going up.
@@ -46,7 +46,7 @@ Every release passes the [lint gate](../architecture/ui-system.md#the-lint-gate)
 Queue schema 7 cannot be reopened by the original schema-6 APK. Before distributing a build, dispatch the exact candidate through the Android workflow with `compatibility=true`.
 
 - On API 26 and 36, the gate installs candidate → legacy-behaviour bridge → candidate, with the same package and signature and increasing private version codes, without clearing data.
-- `ShuffleApkCompatibilityTest` checks duplicate occurrences, saved order and cursor, controller reopening and statistics across the `seed`, `bridge` and `verify` phases.
+- [ShuffleApkCompatibilityTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ShuffleApkCompatibilityTest.kt) checks duplicate occurrences, saved order and cursor, controller reopening and statistics across the `seed`, `bridge` and `verify` phases.
 - The [isolated overlay](../../.github/compatibility/prepare.py) changes only traversal behaviour. Schema, journal and recovery safety stay current.
 - Private compatibility artifacts are never distributed. Ordinary migration tests do not replace this gate.
 
@@ -58,11 +58,11 @@ Exact-source evidence is tracked in [#295](https://github.com/anastaci1a/localic
 | --- | --- |
 | Roadmap | Replace completed outcomes with the next ones in [Roadmap](../roadmap.md). |
 | Documentation | Confirm each changed contract has its page updated, and each status word is still true. |
-| Screenshots | Review the README images. Recapture changed screens from the candidate, inspect at README size, update the version and credits. |
+| Screenshots | Retake README screenshots at every minor release. For other releases, recapture changed screens. Inspect at README size and update version/credits. |
 | App-source lines | Report total lines under `app/src/main` against the previous release. The trend should go down. |
 | Simplicity review | One review of shared code whose only question is what can be removed. |
 | Run timings | Log build, slowest-shard and whole-run durations against the [CI budgets](ci.md). |
 
 ### Screenshots
 
-Keep navigation recordings short and silent. Keep third-party demo media outside Git and the APK. Reuse `${XDG_DATA_HOME:-$HOME/.local/share}/localica/previews/` for the local library, setup notes and raw captures. Update the emulator with `adb install -r` so its music and app data survive.
+Keep navigation recordings short and silent. Keep third-party demo media outside Git and the APK. Use an untracked, task-owned evidence folder for the local library, setup notes and raw captures. Update the emulator with `adb install -r` so its music and app data survive.

@@ -2,25 +2,13 @@
 
 Read the [documentation map](../docs/README.md) before editing. Follow the [documentation standard](../DOCUMENTATION.md) and [collaboration contract](collaboration.md). Task-specific owner instructions take precedence.
 
-## Passive documentation maintenance
+## Component integration
 
-Consolidate documentation during every relevant change. Edit the authoritative rule and remove superseded statements in the same pass.
-
-Preserve agreed behavior, defaults, exceptions and constraints. Keep the README short and review [previews](../docs/build.md#previews) during release preparation.
-
-Run the [documentation checks](../docs/build.md#documentation) before committing prose. Review meaning, duplication and current-versus-planned status as well as automated results.
-
-## Shared interface controls
-
-Build app-owned choices, switches, sliders, text fields, dialogs and drag visuals from the shared `ui` controls documented in [Interface](../docs/interface.md).
-
-Extend the abstraction when behavior is missing. Avoid raw Material segmented buttons, radio rows and parallel visual implementations. System permissions and external pickers remain native.
-
-Keep shared gesture, selection and material regression tests with changes to those abstractions.
+Before integrating a component change, review its shared owner, regression coverage and [engineering rules](../AGENTS.md). Update its authoritative documentation in the same change.
 
 ## Verification coordination
 
-Follow [development and final validation](../docs/build.md#development-and-final-validation). The Localica lead initiates focused local checks. Freeze a complete candidate before full validation; coordinate parallel comparisons and any cancellation with the parent and run owner.
+Follow [development and final validation](../docs/development/testing.md). The Localica lead initiates focused local checks. Freeze a complete candidate before full validation; coordinate parallel comparisons and any cancellation with the parent and run owner.
 
 ## Agent communication
 
@@ -68,6 +56,6 @@ Reuse this vocabulary. Add labels only for recurring gaps and update the table. 
 
 ## Releases
 
-Follow [release preparation](../docs/build.md#release-preparation), including its exact-commit gate and [release template](../.github/RELEASE_TEMPLATE.md).
+Follow [release preparation](../docs/development/release.md), including its exact-commit gate and [release template](../.github/RELEASE_TEMPLATE.md).
 
 Use `vX.X.X` tags matching app versions: major for breaking changes, minor for features and patch for fixes. Leave published release descriptions unchanged unless requested.
