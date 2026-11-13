@@ -41,7 +41,7 @@ class SpringRetargetContinuityTest {
         }
     }
 
-    @Test fun everyIntentKeepsEveryChannelC1AndFinishesTogether() {
+    @Test fun everyIntentKeepsEveryChannelC1AndFinishesTogether() = withAdmittedReversalBands(spec.popupMotion) {
         for (c in cases) for (hz in listOf(60, 90, 120)) for (seed in 0 until 12) EngineHarness(spec = spec).use { h ->
             h.setContext(hz); val r = Random(854_600L + seed * 31 + hz)
             val motion = PopupWindowMotion(h.clock, spec.expansion, "t6-${c.name}-$hz-$seed", c.prepared, c.quiet, c.kind)

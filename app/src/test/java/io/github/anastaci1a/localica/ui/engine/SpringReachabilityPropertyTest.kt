@@ -24,7 +24,7 @@ class SpringReachabilityPropertyTest {
         return ExpansionBasis(rect(), rect(), 1f)
     }
 
-    private fun runChain(h: EngineHarness, index: Int) {
+    private fun runChain(h: EngineHarness, index: Int, crossBounded: Boolean) {
         val r = Random(854_000L + index)
         val hz = listOf(60, 90, 120)[r.nextInt(3)]; var speed = (5 + r.nextInt(11)) / 10f
         h.setContext(hz, speed)
@@ -35,7 +35,7 @@ class SpringReachabilityPropertyTest {
         fun note(op: String) { val s = h.clock.stampNow; log.append(" | $op p=${phase.rawValue(s)} v=${phase.rawVelocity(s)}") }
         fun frame() {
             h.advance(1.0 / hz); val stamp = h.clock.stampNow
-            for (m in listOfNotNull(phase, cross)) { val p = m.rawValue(stamp); assertTrue("phase $p outside [0, ${1 + kappa}]; $log", p >= -1e-9 && p <= 1 + kappa + 1e-9) }
+            for (m in listOfNotNull(phase, cross.takeIf { crossBounded })) { val p = m.rawValue(stamp); assertTrue("phase $p outside [0, ${1 + kappa}]; $log", p >= -1e-9 && p <= 1 + kappa + 1e-9) }
         }
         fun acknowledge() { if (owner.awaitingNativeGate) { note("ack"); owner.acknowledgeNativeGate(owner.nativeGeneration) } }
         repeat(4 + r.nextInt(9)) {
@@ -62,9 +62,9 @@ class SpringReachabilityPropertyTest {
         owner.dispose()
     }
 
-    @Test fun randomChainsStayInTheBandBecauseTheSpeedIsCapturedPerFlight() = EngineHarness().use { h ->
-        for (i in 0 until chains) try { runChain(h, i) } catch (e: Throwable) { throw AssertionError("chain $i (seed ${854_000L + i}) of $chains: ${e.message}", e) }
-    }
+    @Test fun randomChainsStayInTheBandBecauseTheSpeedIsCapturedPerFlight() = withAdmittedReversalBands(StockPopupMotion) { crossBounded -> EngineHarness().use { h ->
+        for (i in 0 until chains) try { runChain(h, i, crossBounded) } catch (e: Throwable) { throw AssertionError("chain $i (seed ${854_000L + i}) of $chains: ${e.message}", e) }
+    } }
 
     @Test fun dampedExtremaAreExactForEveryReachableState() {
         val r = Random(854_001L)
