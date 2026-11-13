@@ -442,7 +442,7 @@ fun LocalicaScreen(
         }
 
         }
-        Sheet(sheet, onSettled = { expanded = it }) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
+        Sheet(sheet, onSettled = { expanded = it }, returningChild = queueSheet) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, noneAtlasInput = shellNoneAtlas, visual = playerVisual,

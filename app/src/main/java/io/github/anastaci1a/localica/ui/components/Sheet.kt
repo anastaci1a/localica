@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import io.github.anastaci1a.localica.ui.engine.*
 import kotlinx.coroutines.flow.first
@@ -54,10 +55,11 @@ private class SheetHandle(override val expansion: ExpansionView, initial: Boolea
     }
     return handle
 }
-@Composable fun Sheet(state: SheetState, onSettled: ((Boolean) -> Unit)? = null, content: @Composable SheetScope.() -> Unit) {
+@Composable fun Sheet(state: SheetState, onSettled: ((Boolean) -> Unit)? = null, returningChild: SheetState? = null,
+    content: @Composable SheetScope.() -> Unit) {
     val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val target = onSettled?.let { SheetDragTarget(state, it) } ?: LocalSheetDragTarget.current
-    CompositionLocalProvider(LocalSheetDragTarget provides target) {
-        content(object : SheetScope { override val expanded = state.expanded; override val navigationInset = inset })
-    }
+    val scope = object : SheetScope { override val expanded = state.expanded; override val navigationInset = inset }
+    if (onSettled != null && returningChild != null) Box(Modifier.fillMaxSize().sheetDrag(SheetDragTarget(state, onSettled),
+        canStart = { !returningChild.expanded && !returningChild.expansion.phase.settled })) { content(scope) }
+    else content(scope)
 }

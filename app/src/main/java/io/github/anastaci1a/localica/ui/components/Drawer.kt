@@ -24,14 +24,6 @@ private fun ExpansionView.rest() = if (inContact || !phase.settled) ExpansionRes
 private val ScrimAlpha = Curve.smooth(0f, .2f)
 /** The drawer's retained scrim: always composed, drawn from the shared phase through one C1 map, dismissing while shown. */
 @Composable fun DrawerScrim(view: ExpansionView, shown: Boolean, color: Color, onDismiss: () -> Unit) {
-    val parent = LocalSheetDragTarget.current
-    var contactActive by remember { mutableStateOf(false) }
-    // Keep the scrim's pixels and tap behavior through return, but let a fresh
-    // swipe in the exposed area drive the parent sheet. The child face is above
-    // this scrim in hit testing and retains its own uninterrupted contact path.
-    val drag = if (parent != null && (contactActive || shown && !view.expanded))
-        Modifier.sheetDrag(parent, onContactChanged = { contactActive = it }) else Modifier
     Box(Modifier.fillMaxSize().drawBehind { drawRect(color, alpha = ScrimAlpha.at(view.phase.value())) }
-        .then(drag)
         .then(if (shown) Modifier.clickable(onClick = onDismiss) else Modifier))
 }
