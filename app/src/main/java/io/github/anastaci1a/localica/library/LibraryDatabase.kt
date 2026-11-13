@@ -133,28 +133,24 @@ abstract class LibraryDao {
     @Insert protected abstract suspend fun insertTracks(tracks: List<TrackRecord>)
     @Update protected abstract suspend fun updateTracks(tracks: List<TrackRecord>)
     @Query("SELECT id, addedAt, firstSeenAt FROM tracks WHERE id IN (:ids)") protected abstract suspend fun dates(ids: List<String>): List<AddedDate>
-    @Transaction open suspend fun updateMetadata(track: TrackRecord) {
-        val saved = dates(listOf(track.id)).singleOrNull() ?: return
-        updateTracks(listOf(track.copy(addedAt = saved.addedAt, firstSeenAt = saved.firstSeenAt)))
-    }
-    @Transaction open suspend fun updateMetadataBatch(tracks: List<TrackRecord>) { tracks.forEach { updateMetadata(it) } }
+    @Transaction open suspend fun updateMetadataBatch(tracks: List<TrackRecord>) { tracks.asSequence().chunked(900).forEach { updateSaved(it) } }
     @Insert protected abstract suspend fun insertLocations(locations: List<FolderTrackRecord>)
     @Insert(onConflict = OnConflictStrategy.IGNORE) protected abstract suspend fun insertNewLocations(locations: List<FolderTrackRecord>)
     @Query("DELETE FROM folder_tracks WHERE folderUri = :uri") protected abstract suspend fun clearLocations(uri: String)
     /** Tracks outlive their folders: the track row owns its dates, memberships only decide visibility (#930). */
     @Query("DELETE FROM folders WHERE uri = :uri") abstract suspend fun removeRoot(uri: String)
 
-    /** Saved ids keep both dates, nulls included; a first sighting sets both to one [now] (#930). */
+    private suspend fun updateSaved(chunk: List<TrackRecord>): List<TrackRecord> {
+        val saved = dates(chunk.map { it.id }).associateBy { it.id }
+        val (known, fresh) = chunk.partition { it.id in saved }
+        updateTracks(known.map { saved.getValue(it.id).run { it.copy(addedAt = addedAt, firstSeenAt = firstSeenAt) } })
+        return fresh
+    }
     private suspend fun saveTracks(folder: FolderRecord, tracks: List<TrackRecord>, locations: List<FolderTrackRecord>) {
         require(locations.all { it.folderUri == folder.uri })
         upsertFolder(folder)
         val now = System.currentTimeMillis()
-        tracks.chunked(900).forEach { chunk ->
-            val saved = dates(chunk.map { it.id }).associateBy { it.id }
-            val (known, fresh) = chunk.partition { it.id in saved }
-            updateTracks(known.map { saved.getValue(it.id).run { it.copy(addedAt = addedAt, firstSeenAt = firstSeenAt) } })
-            insertTracks(fresh.map { it.copy(addedAt = now, firstSeenAt = now) })
-        }
+        tracks.asSequence().chunked(900).forEach { chunk -> insertTracks(updateSaved(chunk).map { it.copy(addedAt = now, firstSeenAt = now) }) }
     }
 
     @Transaction
