@@ -38,19 +38,19 @@ class FolderPickerTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val device = UiDevice.getInstance(instrumentation)
-        compose.onNodeWithContentDescription("Library").performClick()
+        compose.onPopupAction(hasContentDescription("Library")).performClick()
         // Real picker tests must also be repeatable after manual library checks on this device.
         val repository = (context.applicationContext as LocalicaApplication).library
         runBlocking { repository.snapshots.first().folders.forEach { repository.removeFolder(it.uri) } }
-        compose.onNodeWithContentDescription("More").performClick()
-        compose.onNodeWithText("Settings").performClick()
-        compose.onNodeWithText("Library and tags").performClick()
-        compose.onNodeWithText("Folders to scan").performClick()
+        compose.onPopupAction(hasContentDescription("More")).performClick()
+        compose.onPopupAction(hasText("Settings")).performClick()
+        compose.onPopupAction(hasText("Library and tags")).performClick()
+        compose.onPopupAction(hasText("Folders to scan")).performClick()
         compose.waitUntil(10000) {
             compose.onAllNodes(hasText("Choose folder") or hasText("Add folder"))
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNode(hasText("Choose folder") or hasText("Add folder")).performClick()
+        compose.onPopupAction(hasText("Choose folder") or hasText("Add folder")).performClick()
         // DocumentsUI can use either the Android or Google package depending on the image.
         // Tree pickers can omit non-directory entries; the fixture always has this child folder.
         device.openTestLibraryRoot(By.text("nested"))
@@ -59,10 +59,10 @@ class FolderPickerTest {
         device.wait(Until.findObject(By.text(Pattern.compile("allow", Pattern.CASE_INSENSITIVE))), 2000)?.click()
         val tree = "content://io.github.anastaci1a.localica.test.documents/tree/root"
         await { context.contentResolver.persistedUriPermissions.any { it.uri.toString() == tree && it.isReadPermission } }
-        compose.onNodeWithContentDescription("Close settings").performClick()
-        compose.onNodeWithContentDescription("More").performClick()
-        compose.onNodeWithText("Scan music").performClick()
-        compose.onNodeWithText("Full scan").assertIsEnabled().performClick()
+        compose.onPopupAction(hasContentDescription("Close settings")).performClick()
+        compose.onPopupAction(hasContentDescription("More")).performClick()
+        compose.onPopupAction(hasText("Scan music")).performClick()
+        compose.onPopupAction(hasText("Full scan")).assertIsEnabled().performClick()
         val app = context.applicationContext as LocalicaApplication
         await { app.scanner.state.value.folder != null }
         compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
@@ -70,16 +70,16 @@ class FolderPickerTest {
         assertEquals("Scan complete.", app.scanner.state.value.message)
         compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
         compose.waitUntil(15000) { compose.onAllNodesWithText("Scan complete.").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Close").performClick()
-        compose.onNodeWithContentDescription("Library").performClick()
-        compose.onNodeWithText("Songs").performClick()
+        compose.onPopupAction(hasText("Close")).performClick()
+        compose.onPopupAction(hasContentDescription("Library")).performClick()
+        compose.onPopupAction(hasText("Songs")).performClick()
         val inList = hasAnyAncestor(hasTestTag("browser-list"))
         compose.waitUntil(10000) { compose.onAllNodes(hasText("Morning tone") and inList).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Quiet interval"))
-        compose.onNode(hasText("Quiet interval") and inList).assertIsDisplayed()
+        compose.onPopupAction(hasTestTag("browser-list")).performScrollToNode(hasText("Quiet interval"))
+        compose.onPopupAction(hasText("Quiet interval") and inList).assertIsDisplayed()
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Morning tone"))
-        compose.onNode(hasText("Morning tone") and inList).assertIsDisplayed()
+        compose.onPopupAction(hasTestTag("browser-list")).performScrollToNode(hasText("Morning tone"))
+        compose.onPopupAction(hasText("Morning tone") and inList).assertIsDisplayed()
         val scan = runBlocking { TreeScanner(AndroidDocuments(context)).scan(tree) }
         assertEquals(2, scan.tracks.size)
         assertEquals("nested/tone.m4a", scan.tracks.last().relativePath)
@@ -121,7 +121,7 @@ class FolderPickerTest {
         }
         try {
             await { playback.state.value.connected }
-            compose.onNode(hasText("Morning tone") and inList).performClick()
+            compose.onPopupAction(hasText("Morning tone") and inList).performClick()
             await { playback.state.value.ended && playback.state.value.title == "Quiet interval" }
             assertEquals(listOf("Morning tone", "Quiet interval"), played.toList())
             assertEquals("Quiet interval", playback.state.value.title)
@@ -132,14 +132,14 @@ class FolderPickerTest {
             runCatching { compose.onNodeWithTag("player-title", useUnmergedTree = true)
                 .assertIsDisplayed().assert(hasAnyDescendant(hasText("Quiet interval"))) }.isSuccess
         }
-        compose.onNodeWithContentDescription("Collapse player").performClick()
-        compose.onNodeWithContentDescription("Library").performClick()
-        compose.onNodeWithContentDescription("Add playlist").performClick()
-        compose.onNodeWithText("Import playlist from file").performClick()
+        compose.onPopupAction(hasContentDescription("Collapse player")).performClick()
+        compose.onPopupAction(hasContentDescription("Library")).performClick()
+        compose.onPopupAction(hasContentDescription("Add playlist")).performClick()
+        compose.onPopupAction(hasText("Import playlist from file")).performClick()
         device.openTestLibraryRoot(By.text("import.m3u8"))
         device.clickWhenReady(By.text("import.m3u8"))
         compose.waitUntil(15000) { compose.onAllNodesWithText("Import 3 songs").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Import 3 songs").performClick()
+        compose.onPopupAction(hasText("Import 3 songs")).performClick()
         await { app.playlists.state.value.playlists.any { it.name == "import" } }
         val imported = app.playlists.state.value.playlists.last { it.name == "import" }
         assertEquals(listOf("tone.mp3", "tone.m4a", "tone.mp3"), imported.entries.map { it.track.fileName })
