@@ -176,6 +176,14 @@ class DateModel930Test {
         assertTrue(titles.toString(), titles == setOf("Song") || titles == setOf("Cancelled"))
     }
 
+    @Test fun savedTrackSnapshotKeepsModificationEvidenceAndAcceptsLegacyMissingKey() {
+        val track = song(7).copy(firstSeenAt = 500, modifiedAt = 900, firstSeenModifiedAt = 123, durationMs = 200_000, trackNumber = 2)
+        assertEquals(track, TrackSnapshot.decode(TrackSnapshot.encode(track)))
+        val legacy = JSONObject(TrackSnapshot.encode(track)).apply { remove("firstSeenModified") }
+        assertEquals(track.copy(firstSeenModifiedAt = null), TrackSnapshot.decode(legacy.toString()))
+        assertEquals(track.copy(firstSeenModifiedAt = null), TrackSnapshot.decode(TrackSnapshot.encode(track.copy(firstSeenModifiedAt = null))))
+    }
+
     @Test fun migrations9And10To11PreserveDatesAndCaptureStoredModificationAt18k() = runBlocking {
         for (version in listOf(9, 10)) {
             val name = "date-model-930-$version.db"

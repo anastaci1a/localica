@@ -93,14 +93,6 @@ class LibraryDataTest {
         }
     }
 
-    @Test fun savedTrackSnapshotKeepsModificationEvidenceAndAcceptsLegacyMissingKey() {
-        val track = library.tracks.first().copy(firstSeenAt = 500, modifiedAt = 900, firstSeenModifiedAt = 123)
-        assertEquals(track, TrackSnapshot.decode(TrackSnapshot.encode(track)))
-        val legacy = JSONObject(TrackSnapshot.encode(track)).apply { remove("firstSeenModified") }
-        assertEquals(track.copy(firstSeenModifiedAt = null), TrackSnapshot.decode(legacy.toString()))
-        assertEquals(track.copy(firstSeenModifiedAt = null), TrackSnapshot.decode(TrackSnapshot.encode(track.copy(firstSeenModifiedAt = null))))
-    }
-
     @Test fun matchingUsesIdThenLocationThenStrictMetadata() {
         fun stage(record: JSONObject) = LibraryDataImport.match(document(record).records.single(), library)
         assertEquals(LibraryDataImport.Match.Matched("b", LibraryDataMatchStage.Id),
