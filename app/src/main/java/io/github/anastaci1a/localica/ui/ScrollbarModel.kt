@@ -202,22 +202,3 @@ internal class ScrollbarDrag {
      */
     fun accept() { applied = taken }
 }
-
-/** Resting and held geometry of the scrollbar thumb; the held thumb is a uniform scale of the resting one. */
-internal object ScrollbarGrip {
-    const val RestWidthDp = 4f
-    const val RestHeightDp = 48f
-    const val MinHeightDp = 32f
-    const val MaxTrackShare = .35f
-    const val HeldScale = 1.5f
-    /** Touch strip along the edge; the drawn thumb is unchanged. */
-    const val HitWidthDp = 48f
-    const val HitVerticalPaddingDp = 8f
-    private const val BaseMillis = 240f
-
-    /** Ease-out duration scaled by the motion speed; zero (snap) under Reduced Motion. */
-    fun durationMillis(speed: Float, reducedMotion: Boolean) = if (reducedMotion) 0 else (BaseMillis / speed).toInt()
-
-    /** Top of a thumb of [height] for fraction [f]: the covered point never leaves the track. */
-    fun top(f: Float, track: Float, height: Float) = f.coerceIn(0f, 1f) * (track - height).coerceAtLeast(0f)
-}

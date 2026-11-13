@@ -138,26 +138,6 @@ class ScrollbarModelTest {
         }
     }
 
-
-    @Test fun gripScalesUniformlyAndStaysInsideTheTrackAtEveryScale() {
-        val track = 800f
-        for (f in listOf(0f, .5f, 1f)) for (step in 0..20) {
-            val scale = 1f + (ScrollbarGrip.HeldScale - 1f) * step / 20f
-            val height = ScrollbarGrip.RestHeightDp * scale
-            val top = ScrollbarGrip.top(f, track, height)
-            assertTrue("f=$f scale $scale", top >= 0f && top + height <= track + 1e-3f)
-            if (f == 0f) assertEquals(0f, top, 0f)
-            if (f == 1f) assertEquals(track, top + height, 1e-3f)
-            // The point at fraction f of the thumb stays at one track position: no jump when the size changes.
-            assertEquals(f * track, top + f * height, 1e-3f)
-        }
-        assertEquals(1.5f, ScrollbarGrip.HeldScale, 0f)
-        assertEquals(0, ScrollbarGrip.durationMillis(4f / 3f, true))
-        assertEquals(180, ScrollbarGrip.durationMillis(4f / 3f, false))
-        assertTrue(ScrollbarGrip.durationMillis(2f, false) < 180)
-        assertTrue(ScrollbarGrip.HitWidthDp >= 32f)
-    }
-
     /** Scroll offset of [index] plus [offset] in [grid]: what scrollToItem lands on. */
     private fun scrollOf(grid: SimGrid, index: Int, offset: Int): Int {
         val line = grid.lines.last { it.first <= index }

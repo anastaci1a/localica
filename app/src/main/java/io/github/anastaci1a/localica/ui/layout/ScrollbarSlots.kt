@@ -10,8 +10,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -26,22 +29,23 @@ import kotlin.math.roundToInt
 /** The measured rail owns thumb travel, its input geometry and the adjacent preview slot.
  * Its model supplies only normalized position and resting length for the measured track. The track
  * is the rail's height less standard padding at both ends; hosts bound the rail by their controls.
- * The held thumb's width, length and colour are one function of the grip progress (#704). Drags report
- * thumb-fraction deltas ([dragBy]); the caller turns them into list movement.
+ * The held thumb's width, length and colour are one function of the grip progress (#704). The thumb has two
+ * states: [active] while it owns a contact, else inactive (#952). Active travel reports thumb-fraction deltas
+ * ([dragBy]); the caller turns them into list movement. [claim] resolves a press over a shared button (#950).
  */
 @Composable
 internal fun ScrollbarSlots(state: Any, key: Any, movement: () -> Pair<Int, Int>,
     fraction: () -> Float, thumbSize: (Float, Float) -> Float, scrolling: () -> Boolean,
-    dragging: () -> Boolean, onDragging: (Boolean) -> Unit, dragFraction: () -> Float,
-    dragFrom: (Float) -> Unit, dragBy: (Float) -> Unit,
+    active: () -> Boolean, onActive: (Boolean) -> Unit, claim: (Offset) -> ((Offset, Long) -> Boolean?)?,
+    dragFraction: () -> Float, dragFrom: (Float) -> Unit, dragBy: (Float) -> Unit,
     request: (Float) -> Boolean, previewFor: () -> String?,
     speed: Float, reduced: Boolean, modifier: Modifier) {
     val density = LocalDensity.current
-    var pressed by remember { mutableStateOf(false) }
     var activity by remember { mutableIntStateOf(0) }
+    val placed = remember { arrayOfNulls<LayoutCoordinates>(1) }
     // Pointer coroutines retain this reader across owner replacement during a held contact.
     val motion by rememberUpdatedState(rememberScrollbarMotion(state, movement, { activity }, scrolling,
-        dragging() || pressed, speed, reduced))
+        active(), speed, reduced))
     val rest = MaterialTheme.colorScheme.outlineVariant
     val held = MaterialTheme.colorScheme.primary
     // The preview extends 28 dp inward from the 48 dp input rail.
@@ -58,7 +62,7 @@ internal fun ScrollbarSlots(state: Any, key: Any, movement: () -> Pair<Int, Int>
         val radius = with(density) { ScrollbarSpec.thumbRadius.toPx() }
         fun restingThumb(): Float { fraction(); return thumbSize(track, minThumb) }
         fun thumb(): Float { val r = restingThumb(); return r + ScrollbarSpec.heldExtraLength(r, lengthCap) * motion.grip() }
-        fun displayed() = if (dragging()) dragFraction() else (fraction() + motion.releaseOffset()).coerceIn(0f, 1f)
+        fun displayed() = if (active()) dragFraction() else (fraction() + motion.releaseOffset()).coerceIn(0f, 1f)
         fun position() = displayed().coerceIn(0f, 1f) * (track - thumb()).coerceAtLeast(0f)
         // The visible thumb (at least the opacity floor), at least the minimum touch length about its centre.
         fun hit(y: Float): Boolean {
@@ -68,33 +72,34 @@ internal fun ScrollbarSlots(state: Any, key: Any, movement: () -> Pair<Int, Int>
             val centre = position() + length / 2f
             return y >= centre - reach && y <= centre + reach
         }
-        fun begin() {
-            dragFrom(displayed())
-            onDragging(true)
+        // A modal cancellation may have deactivated it already; that release is not repeated.
+        fun activate(on: Boolean) {
+            if (on == active()) return
+            activity++
+            if (on) dragFrom(displayed())
+            onActive(on)
+            if (!on) motion.release(dragFraction() - fraction())
         }
         fun move(dy: Float) {
             activity++
             dragBy(dy / (track - thumb()).coerceAtLeast(1f))
         }
-        fun endDrag() {
-            if (!dragging()) return
-            onDragging(false)
-            motion.release(dragFraction() - fraction())
-        }
+        fun claimAt(p: Offset) = placed[0]?.takeIf { it.isAttached }?.let { claim(it.localToRoot(p)) }
         // The pointer coroutine outlives compositions; the track moves with the host bounds (#704), so it reads
         // the current geometry rather than the first composition's.
         val hitNow by rememberUpdatedState<(Float) -> Boolean>(::hit)
-        val beginNow by rememberUpdatedState<() -> Unit>(::begin)
+        val claimNow by rememberUpdatedState<(Offset) -> ((Offset, Long) -> Boolean?)?>(::claimAt)
+        val activateNow by rememberUpdatedState<(Boolean) -> Unit>(::activate)
         val moveNow by rememberUpdatedState<(Float) -> Unit>(::move)
-        val endNow by rememberUpdatedState<() -> Unit>(::endDrag)
         Box(Modifier.align(Alignment.CenterEnd).width(ScrollbarSpec.hitWidth)
             .fillMaxHeight().then(ScrollbarTapSharing).testTag("browse-scrollbar")
+            .onPlaced { placed[0] = it }
             .semantics {
                 contentDescription = "Scroll list"
                 progressBarRangeInfo = ProgressBarRangeInfo(fraction(), 0f..1f)
                 setProgress { request(it.coerceIn(0f, 1f)) }
             }
-            .scrollbarInput(key, { hitNow(it) }, { pressed = it; activity++ }, { beginNow() }, { moveNow(it) }, { endNow() })) {
+            .scrollbarInput(key, { hitNow(it) }, { claimNow(it) }, { activateNow(it) }, { moveNow(it) })) {
             Box(Modifier.align(Alignment.TopEnd).offset(x = -ScrollbarSpec.edgeInset)
                 .scrollbarPresentation(motion, ::position)
                 .layout { measurable, _ ->
@@ -111,8 +116,8 @@ internal fun ScrollbarSlots(state: Any, key: Any, movement: () -> Pair<Int, Int>
         // The preview text is derived state: a drag reads the list position, but the rail recomposes only when
         // the label itself changes, never on each movement frame.
         val labelFor by rememberUpdatedState(previewFor)
-        val isDragging by rememberUpdatedState(dragging)
-        val preview by remember { derivedStateOf { if (isDragging()) labelFor() else null } }
+        val isActive by rememberUpdatedState(active)
+        val preview by remember { derivedStateOf { if (isActive()) labelFor() else null } }
         val label = preview
         if (label != null) Surface(Modifier.align(Alignment.TopStart)
             .scrollbarPresentation(motion, ::position).testTag("scroll-preview"),

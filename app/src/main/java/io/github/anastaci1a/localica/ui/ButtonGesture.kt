@@ -9,13 +9,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.composed
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.node.ModifierNodeElement
 
 /** Keep standard click/long-press/accessibility handling; only arbitrate movement.
  * A scroll winner sees movement before Final cancels the button's activation. */
 internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventPass = PointerEventPass.Initial): Modifier =
     if (!enabled) this else composed {
     val parent = rememberControlScrollContext()
-    Modifier.readControlScrollContext(parent).pointerInput(pass) {
+    Modifier.readControlScrollContext(parent).then(SharedButton(LocalModalGestures.current)).pointerInput(pass) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
             val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.directions())
@@ -40,6 +41,16 @@ internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventP
             } while (point.pressed)
         }
     }
+}
+
+/** Registers a shared button with its window while attached ([ModalGestureScope.buttons]). */
+private data class SharedButton(val owner: ModalGestureScope?) : ModifierNodeElement<SharedButtonNode>() {
+    override fun create() = SharedButtonNode(owner)
+    override fun update(node: SharedButtonNode) { node.onDetach(); node.owner = owner; if (node.isAttached) node.onAttach() }
+}
+private class SharedButtonNode(var owner: ModalGestureScope?) : Modifier.Node() {
+    override fun onAttach() { owner?.buttons?.add(this) }
+    override fun onDetach() { owner?.buttons?.remove(this) }
 }
 
 @androidx.compose.runtime.Composable

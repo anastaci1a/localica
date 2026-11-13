@@ -43,7 +43,11 @@ Row overflow taps open actions and holds select. Galleries use long-press withou
 
 ## Scrollbar
 
-The scrollbar spans the header-to-bottom-control viewport and follows those controls. Its visible thumb owns drag until release, moving by finger travel without jumping. It fades after 1.2 seconds of rest; below half opacity input reaches the list. Title/year previews appear only under matching sorts.
+The scrollbar spans the header-to-bottom-control viewport and follows those controls. The thumb is active or inactive. A touch-down on the visible thumb activates it at once; it then owns the touch until release, moving the list by finger travel without jumping. Republished rows never move a held thumb.
+
+The thumb fades after 1.2 seconds of rest; below half opacity input reaches the list. Title/year previews appear only while it is active under matching sorts.
+
+A shared button under the thumb, such as a row's ⋯, keeps plain taps and holds. The thumb takes that contact only when it becomes vertical travel before the 250 ms hold.
 
 ## Long scrolls
 
