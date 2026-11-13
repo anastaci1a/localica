@@ -102,7 +102,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     // Keyboard and accessible activation keep the single weak activation pulse.
     fun tap(index: Int, haptic: ControlHaptic? = ControlHaptic.Weak) {
         haptic?.let(haptics::emit)
-        if (tabs[index] == active && abs(page - index) < .001f && !pageDragging) {
+        if (tabs[index] == active) {
             onReselect(tabs[index]); return
         }
         requested = index

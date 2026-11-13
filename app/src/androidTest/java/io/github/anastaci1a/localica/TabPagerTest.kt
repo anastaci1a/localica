@@ -16,9 +16,54 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import kotlinx.coroutines.launch
 
 class TabPagerTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun reselectDuringSwipeSettlementDoesNotRestartThePagerOrLoseTheNextTap() {
+        val tabs = listOf(MainTab.Home, MainTab.Library)
+        lateinit var pager: PagerState
+        var selections = 0
+        var reselections = 0
+        var filterTaps = 0
+        compose.setContent { LocalicaTheme {
+            pager = rememberPagerState { tabs.size }
+            val scope = rememberCoroutineScope()
+            Column(Modifier.fillMaxSize()) {
+                TabPager(pager, { tabs }, Modifier.weight(1f).testTag("swipe-pages")) { page ->
+                    if (page == 1) androidx.compose.material3.Button(onClick = { filterTaps++ },
+                        modifier = Modifier.fillMaxWidth().height(64.dp).testTag("next-filter")) { Text("Songs") }
+                    else Text("Home")
+                }
+                Box(Modifier.fillMaxWidth().height(64.dp)) {
+                    SlidingTabs(tabs, tabs[pager.targetPage], { pager.currentPage + pager.currentPageOffsetFraction },
+                        onReselect = { reselections++ }) { tab ->
+                        selections++
+                        scope.launch { pager.animateScrollToPage(tabs.indexOf(tab)) }
+                    }
+                }
+            }
+        } }
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithTag("swipe-pages").performTouchInput {
+                swipe(Offset(width * .9f, centerY), Offset(width * .2f, centerY), 400)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.runOnIdle {
+                assertEquals(1, pager.targetPage)
+                assertTrue("The swipe must still be settling", pager.isScrollInProgress)
+                assertTrue("The target is not snapped yet", pager.currentPageOffsetFraction != 0f)
+            }
+            compose.onNodeWithContentDescription("Library").performClick()
+            compose.onNodeWithTag("next-filter").performClick()
+            compose.runOnIdle {
+                assertEquals("Reselection cannot request another page animation", 0, selections)
+                assertEquals(1, reselections)
+                assertEquals("The immediate filter tap must land", 1, filterTaps)
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
     @Test fun diagonalListScrollStaysVerticalButShelfAndDeliberatePageSwipesRemainHorizontal() {
         lateinit var pager: PagerState
         lateinit var list: LazyListState
