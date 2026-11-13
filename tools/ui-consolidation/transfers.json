@@ -104,24 +104,6 @@
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
-      "codeSha256": "9006d8670726a0fef24b1556ff132fe320ad3e775770cea328f7e90d2cc18aaa",
-      "removedBy": "U10.05",
-      "reason": "U10.05 removes (second recorded U10.03 relabel, lead decision 2026-11-07 12:10 PM): seek row lifetime gate (player action/seek rows, U10.05 Component boundary); was U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (rowMotion.seekAlpha > 0f) add(\"seek\")",
-      "relabel": "U10.03-relabel-2-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
-      "codeSha256": "32fee3179e70893e7541529980de458924164200b83a4858393d1618c0f617f7",
-      "removedBy": "U10.05",
-      "reason": "U10.05 removes (second recorded U10.03 relabel, lead decision 2026-11-07 12:10 PM): action row lifetime gate (PlayerActions call sites, U10.05); was U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (rowMotion.actionsAlpha > 0f) add(\"actions\")",
-      "relabel": "U10.03-relabel-2-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
       "codeSha256": "167dc80e4d3bc55bce0684cb78db95e143e74938bba15bc88fc87c33b3a16aba",
       "removedBy": "U10.04",
       "reason": "U10.04 removes (one-off U10.03 relabel 2026-11-07, artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): footprints, backgroundProgress * (1f - lyricProgress), maxOf(1f - coverBlend, swipeFeather",
@@ -374,42 +356,6 @@
       "codeSha256": "c30ed0ae4ad7adac038b5744788703e04755bcf7b9b770c951783f1b72d8ab4c",
       "removedBy": "U10.05",
       "reason": "U10.05 removes (second recorded U10.03 relabel, lead decision 2026-11-07 12:10 PM): lyrics source action visibility (LyricsSourcePhase adapter, U10.05); was U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): onSources = { if (lyricsResult?.sources?.isNotEmpty() == true) sourcesVisible = true },",
-      "relabel": "U10.03-relabel-2-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "1c0f88107fbafa9e295dcdebd7c621c0ceaa6f4aa38681a71313be6111984acd",
-      "removedBy": "U11.04",
-      "reason": "U11.04 removes (one-off U10.03 relabel 2026-11-07, title-to-lyrics input band bounds from player geometry (#472; U11.04 player stock geometry)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val inputTop = ((statusInset + 48.dp).roundToPx() - origin).coerceIn(0, height)",
-      "relabel": "U10.03-relabel-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "5ac821870dadad34c3377947252a09eae22eb6e2acde6efa5a94cbe4821ba520",
-      "removedBy": "U11.04",
-      "reason": "U11.04 removes (one-off U10.03 relabel 2026-11-07, title-to-lyrics input band bounds from player geometry (#472; U11.04 player stock geometry)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputT",
-      "relabel": "U10.03-relabel-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "4970cf84c028e053511b372a0f334fad537f2cf265985a5a0182e8cc659a3032",
-      "removedBy": "U11.04",
-      "reason": "U11.04 removes (one-off U10.03 relabel 2026-11-07, title-to-lyrics input band bounds from player geometry (#472; U11.04 player stock geometry)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputT",
-      "relabel": "U10.03-relabel-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "fe82c00278535b2a7472bc0107cca419f3dde40447d1374472ee3a27ca5c0a57",
-      "removedBy": "U10.05",
-      "reason": "U10.05 removes (second recorded U10.03 relabel, lead decision 2026-11-07 12:10 PM): seek row lifetime gate (player action/seek rows, U10.05 Component boundary); was U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(co",
       "relabel": "U10.03-relabel-2-2026-11-07"
     },
     {

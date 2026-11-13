@@ -4723,12 +4723,12 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                val inputTop = ((statusInset + 48.dp).roundToPx() - origin).coerceIn(0, height)"
-        errorLine2="                                               ~~~~~">
+        errorLine1="                    (statusInset + 48.dp).roundToPx(), height, padding)"
+        errorLine2="                                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="614"
-            column="48"/>
+            line="609"
+            column="36"/>
     </issue>
 
     <issue
@@ -4771,7 +4771,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="647"
+            line="642"
             column="35"/>
     </issue>
 
@@ -4782,7 +4782,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="647"
+            line="642"
             column="43"/>
     </issue>
 
@@ -4793,7 +4793,7 @@
         errorLine2="                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="647"
+            line="642"
             column="51"/>
     </issue>
 
@@ -4848,7 +4848,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="653"
+            line="648"
             column="35"/>
     </issue>
 
@@ -4859,7 +4859,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="653"
+            line="648"
             column="43"/>
     </issue>
 
@@ -4870,7 +4870,7 @@
         errorLine2="                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="653"
+            line="648"
             column="51"/>
     </issue>
 
@@ -8353,17 +8353,6 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="            if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)"
-        errorLine2="                                          ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="634"
-            column="43"/>
-    </issue>
-
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
         errorLine1="            Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - transportWidth) / 2) * transportMotion,"
         errorLine2="            ~~~">
         <location
@@ -9541,28 +9530,6 @@
     <issue
         id="RawMotionMap"
         message="Use Curve maps and owner-only mutation"
-        errorLine1="        if (rowMotion.seekAlpha > 0f) add(&quot;seek&quot;)"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="351"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="RawMotionMap"
-        message="Use Curve maps and owner-only mutation"
-        errorLine1="        if (rowMotion.actionsAlpha > 0f) add(&quot;actions&quot;)"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="352"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="RawMotionMap"
-        message="Use Curve maps and owner-only mutation"
         errorLine1="            footprints, backgroundProgress * (1f - lyricProgress), maxOf(1f - coverBlend, swipeFeather / .9f),"
         errorLine2="                                                                   ~~~~~">
         <location
@@ -9888,50 +9855,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
             line="583"
             column="47"/>
-    </issue>
-
-    <issue
-        id="RawMotionMap"
-        message="Use Curve maps and owner-only mutation"
-        errorLine1="                val inputTop = ((statusInset + 48.dp).roundToPx() - origin).coerceIn(0, height)"
-        errorLine2="                                                                            ~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="614"
-            column="77"/>
-    </issue>
-
-    <issue
-        id="RawMotionMap"
-        message="Use Curve maps and owner-only mutation"
-        errorLine1="                val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputTop)"
-        errorLine2="                                  ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="615"
-            column="35"/>
-    </issue>
-
-    <issue
-        id="RawMotionMap"
-        message="Use Curve maps and owner-only mutation"
-        errorLine1="                val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputTop)"
-        errorLine2="                                                                                      ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="615"
-            column="87"/>
-    </issue>
-
-    <issue
-        id="RawMotionMap"
-        message="Use Curve maps and owner-only mutation"
-        errorLine1="            if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="634"
-            column="17"/>
     </issue>
 
     <issue
@@ -11136,23 +11059,23 @@
     <issue
         id="RawPresentationTransform"
         message="Bind presentation through Modifier.surface"
-        errorLine1="                .testTag(&quot;player-seek-row&quot;).onGloballyPositioned { polarity.measure(&quot;seek&quot;, it) }.graphicsLayer { alpha = rowMotion.seekAlpha }) {"
-        errorLine2="                                                                                                  ~~~~~~~~~~~~~">
+        errorLine1="                    .testTag(&quot;player-seek-row&quot;).onGloballyPositioned { polarity.measure(&quot;seek&quot;, it) }.graphicsLayer { alpha = rowMotion.seekAlpha } }) {"
+        errorLine2="                                                                                                      ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="635"
-            column="99"/>
+            line="630"
+            column="103"/>
     </issue>
 
     <issue
         id="RawPresentationTransform"
         message="Bind presentation through Modifier.surface"
-        errorLine1="                .testTag(&quot;player-seek-row&quot;).onGloballyPositioned { polarity.measure(&quot;seek&quot;, it) }.graphicsLayer { alpha = rowMotion.seekAlpha }) {"
-        errorLine2="                                                                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="                    .testTag(&quot;player-seek-row&quot;).onGloballyPositioned { polarity.measure(&quot;seek&quot;, it) }.graphicsLayer { alpha = rowMotion.seekAlpha } }) {"
+        errorLine2="                                                                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="635"
-            column="115"/>
+            line="630"
+            column="119"/>
     </issue>
 
     <issue
@@ -11675,11 +11598,11 @@
     <issue
         id="RawShadowOrZOrder"
         message="Use SurfaceTarget and ShadowRole"
-        errorLine1="                Modifier.offset(textX, subtitleY).width(textWidth).zIndex(metadataLayer).scalePlayerText(subtitleScale + (1f - subtitleScale) * p).testTag(&quot;player-artist&quot;).onGloballyPositioned { polarity.measure(&quot;artist&quot;, it) },"
+        errorLine1="                Modifier.offset(textX, subtitleY).width(textWidth).zIndex(metadataLayer).scalePlayerText(subtitleScale + (1f - subtitleScale) * boundedProgress).testTag(&quot;player-artist&quot;).onGloballyPositioned { polarity.measure(&quot;artist&quot;, it) },"
         errorLine2="                                                                   ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="631"
+            line="625"
             column="68"/>
     </issue>
 

@@ -12,6 +12,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - Add an Animation speed slider and a Respect system animation scale toggle.
 - Enforce shared popup ownership and prevent new screen-owned popup overrides through release gates.
 - Improve native keyboard isolation, Reduced motion fixtures and prototype verification policy.
+- Reduce inherited UI debt from 1,487 to 1,480: RawMotionMap 46 → 40 and NonPresetScreenLayout 283 → 282.
 
 ## Resolved issues
 
