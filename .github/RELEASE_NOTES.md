@@ -32,6 +32,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#938](https://github.com/anastaci1a/localica/issues/938): An API 36 CI shard can lose its shared app/instrumentation process; exit-reason capture is in place while the cause is investigated.
 - [#947](https://github.com/anastaci1a/localica/issues/947): QueueLibraryHeapTest can exhaust the 192 MB test heap when it runs late in a long shard process; release runs isolate it in its own process (the 192 MB limit is unchanged) while the cross-test retention is investigated.
 - [#738](https://github.com/anastaci1a/localica/issues/738): The API 36 CI emulator can disappear mid-instrumentation.
+- [#955](https://github.com/anastaci1a/localica/issues/955): TestProcessAccessibilityLaunchTest can fail on API 26 when a framework accessibility NullPointerException escapes its guard in CI.
 - [#787](https://github.com/anastaci1a/localica/issues/787): LastFmGroupListTest can fail to scroll at the largest font in RTL in full runs.
 - [#940](https://github.com/anastaci1a/localica/issues/940): Re-tapping Sort or View while its popup is closing is ignored instead of reopening it.
 - [#920](https://github.com/anastaci1a/localica/issues/920): Reversing the bottom popup during opening can exceed its cross-axis band; reversal work remains deferred.
