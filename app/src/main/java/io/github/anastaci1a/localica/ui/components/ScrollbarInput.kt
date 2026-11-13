@@ -3,48 +3,46 @@ package io.github.anastaci1a.localica.ui.components
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.PointerInputModifierNode
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.IntSize
 
-/** Only a touch-down on the visible thumb's target ([hit]) belongs to the scrollbar; every other touch
- * on the strip stays unconsumed for the list and its rows. An accepted contact is selected at once
- * ([press]) and captured exclusively until release: the list beneath sees a consumed stream, so it never
- * scrolls, presses, long-presses or taps. Past touch slop the finger's travel beyond the slop drives the
- * drag as relative deltas ([move]); releasing without a drag only deselects.
+/** Only a touch-down on the visible thumb's target ([hit]) can belong to the scrollbar; other touches reach the
+ * list. Over a shared button, [claim] resolves travel and time (null pending, true bar, false button) and nothing
+ * is consumed until the bar wins, so the button keeps taps and holds (#950); otherwise the bar owns it at once.
+ * An owned contact is [active] and captured exclusively until release; each finger pixel is a [move] delta.
  */
-internal fun Modifier.scrollbarInput(key: Any, hit: (Float) -> Boolean, press: (Boolean) -> Unit,
-    begin: () -> Unit, move: (Float) -> Unit, end: () -> Unit): Modifier = this
+internal fun Modifier.scrollbarInput(key: Any, hit: (Float) -> Boolean, claim: (Offset) -> ((Offset, Long) -> Boolean?)?,
+    active: (Boolean) -> Unit, move: (Float) -> Unit): Modifier = this
             .pointerInput(key) {
                 // The strip shares input with the list beneath, so contact is claimed on the Initial pass.
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     if (!hit(down.position.y)) return@awaitEachGesture
-                    down.consume()
-                    press(true)
-                    var travel = 0f
-                    var dragging = false
+                    val pending = claim(down.position)
+                    var owned = pending == null
+                    if (owned) { down.consume(); active(true) }
+                    var travel = Offset.Zero
                     try {
                         while (true) {
                             val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
-                            if (change.isConsumed) break
+                            if (change.isConsumed || !change.pressed) break
+                            var dy = change.position.y - change.previousPosition.y
+                            if (!owned) {
+                                travel += change.position - change.previousPosition
+                                when (pending!!(travel, change.uptimeMillis - down.uptimeMillis)) {
+                                    null -> continue
+                                    false -> break
+                                    true -> { owned = true; active(true); dy = travel.y }
+                                }
+                            }
                             change.consume()
-                            if (!change.pressed) break
-                            val dy = change.position.y - change.previousPosition.y
-                            if (dragging) { move(dy); continue }
-                            travel += dy
-                            val beyond = kotlin.math.abs(travel) - viewConfiguration.touchSlop
-                            if (beyond < 0f) continue
-                            dragging = true
-                            begin()
-                            move(if (travel > 0f) beyond else -beyond)
+                            move(dy)
                         }
-                    } finally {
-                        if (dragging) end()
-                        press(false)
-                    }
+                    } finally { if (owned) active(false) }
                 }
             }
 

@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalViewConfiguration
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.library.TrackSort
 import kotlinx.coroutines.awaitCancellation
@@ -20,7 +22,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sort: TrackSort, modifier: Modifier = Modifier, onUserScroll: () -> Unit = {}) {
-    ListScrollbar(state, items, { state.canScrollForward || state.canScrollBackward }, { state.scrollbarFrame() },
+    ListScrollbar(state, { state.canScrollForward || state.canScrollBackward }, { state.scrollbarFrame() },
         { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }, { state.isScrollInProgress },
         { index, offset -> state.scrollToItem(index, offset) }, { state.dragBy(it) }, modifier, onUserScroll) { target ->
         // Grid item 0 is the header; browser items start at grid index 1.
@@ -34,20 +36,21 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
 
 @Composable
 internal fun BrowseScrollbar(state: LazyListState, modifier: Modifier = Modifier, onUserScroll: () -> Unit = {}) {
-    ListScrollbar(state, state, { state.canScrollForward || state.canScrollBackward }, { state.scrollbarFrame() },
+    ListScrollbar(state, { state.canScrollForward || state.canScrollBackward }, { state.scrollbarFrame() },
         { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }, { state.isScrollInProgress },
         { index, offset -> state.scrollToItem(index, offset) }, { state.dragBy(it) }, modifier, onUserScroll) { null }
 }
 
 @Composable
-private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean, frame: () -> ScrollbarFrame,
+private fun ListScrollbar(state: Any, scrollable: () -> Boolean, frame: () -> ScrollbarFrame,
     movement: () -> Pair<Int, Int>, scrolling: () -> Boolean, scrollTo: suspend (Int, Int) -> Unit,
     scrollBy: suspend (Float) -> Float, modifier: Modifier, onUserScroll: () -> Unit, previewFor: (Int) -> String?) {
     if (!scrollable()) return
     val owner = LocalModalGestures.current
     val userScroll by rememberUpdatedState(onUserScroll)
-    val model = remember(state, contentKey) { ScrollbarModel() }
-    val drag = remember(state, contentKey) { ScrollbarDrag() }
+    // Keyed by the list only: republished rows must not replace a held contact's drag (#951).
+    val model = remember(state) { ScrollbarModel() }
+    val drag = remember(state) { ScrollbarDrag() }
     val latestScrollTo by rememberUpdatedState(scrollTo)
     val latestScrollBy by rememberUpdatedState(scrollBy)
     // An absolute (semantics) target, or NaN while the drag owes relative movement.
@@ -85,18 +88,22 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
             withFrameNanos { }
         }
     }
-    var dragging by remember { mutableStateOf(false) }
-    OnModalGestureCancellation { dragging = false }
-    // A drag is a far journey: keep cached covers, defer uncached artwork I/O until release.
+    var active by remember { mutableStateOf(false) }
+    OnModalGestureCancellation { active = false }
+    // A held thumb is a far journey: keep cached covers, defer uncached artwork I/O until release.
     val transit = LocalArtworkTransit.current
-    LaunchedEffect(dragging, transit) {
-        if (dragging && transit != null) transit.during(true) { awaitCancellation() }
+    LaunchedEffect(active, transit) {
+        if (active && transit != null) transit.during(true) { awaitCancellation() }
     }
+    val slop = LocalViewConfiguration.current.touchSlop
+    // A shared button under the press keeps taps and holds; vertical travel before the hold lock is the bar's (#950).
+    fun claim(root: Offset) = if (owner?.buttonAt(root) != true) null else ControlGestureIntent(slop, ControlScrollDirection.Vertical)
+        .let { i -> { t: Offset, ms: Long -> i.move(t.x, t.y, ms).takeIf { it != ControlGestureOwner.Pending }?.let { it == ControlGestureOwner.Scroll } } }
     // Read in the layout, draw and semantics phases, so scrolling never recomposes the scrollbar.
     fun fraction() = model.observe(frame())
     ScrollbarSlots(state, model, movement, ::fraction,
         { track, minimum -> model.thumbSize(track, minimum, track * ScrollbarSpec.maximumTrackShare) },
-        scrolling, { dragging }, { dragging = it }, { drag.fraction }, drag::begin, { drag.move(it); wake() }, ::request,
+        scrolling, { active }, { active = it }, ::claim, { drag.fraction }, drag::begin, { drag.move(it); wake() }, ::request,
         { previewFor(movement().first) }, LocalMotionSpeed.current, LocalReducedMotion.current,
         modifier)
 }

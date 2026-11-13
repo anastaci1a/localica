@@ -17,6 +17,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.node.DelegatableNode
+import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.window.DialogWindowProvider
@@ -65,6 +68,12 @@ internal class ModalGestureScope(
         private set
     private val cancellations = mutableSetOf<() -> Unit>()
     private val scrolls = mutableMapOf<ScrollableState, Pair<Int, Job?>>()
+    /** Shared buttons mounted in this window. Sibling hit paths share no other channel, so a scrollbar
+     * asks here at touch-down whether a button lies under the finger (#950); geometry is read only then. */
+    val buttons = mutableSetOf<DelegatableNode>()
+    fun buttonAt(root: Offset) = buttons.any { button ->
+        button.node.isAttached && button.requireLayoutCoordinates().let { it.isAttached && it.boundsInRoot().contains(root) }
+    }
 
     val root get() = parent == null
     fun activate() = coordinator.activate(this)
