@@ -13,9 +13,9 @@ import kotlin.math.roundToInt
 
 internal fun ComposeContentTestRule.nativePointer(node: SemanticsNodeInteraction, holdMillis: Int = 0) {
     val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-    device.waitForIdle()
     awaitExpectedWindowFocus(node)
     val semantic = node.fetchSemanticsNode()
+    device.waitForIdle()
     val origin = IntArray(2)
     runOnUiThread { (semantic.root as ViewRootForTest).view.getLocationOnScreen(origin) }
     val center = semantic.boundsInRoot.center
