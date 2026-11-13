@@ -2,10 +2,27 @@ package io.github.anastaci1a.localica
 
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.compose.ui.platform.ViewRootForTest
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.UiDevice
 import org.junit.Assert.assertTrue
+import kotlin.math.roundToInt
+
+internal fun ComposeContentTestRule.nativePointer(node: SemanticsNodeInteraction, holdMillis: Int = 0) {
+    awaitExpectedWindowFocus(node)
+    val semantic = node.fetchSemanticsNode()
+    val origin = IntArray(2)
+    runOnUiThread { (semantic.root as ViewRootForTest).view.getLocationOnScreen(origin) }
+    val center = semantic.boundsInRoot.center
+    val x = origin[0] + center.x.roundToInt()
+    val y = origin[1] + center.y.roundToInt()
+    val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+    device.executeShellCommand(if (holdMillis == 0) "input tap $x $y" else "input swipe $x $y $x $y $holdMillis")
+    waitForIdle()
+}
 
 /** Send Back through Android itself without racing a transitioning window's input target. */
 internal fun pressSystemBack() {

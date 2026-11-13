@@ -5,6 +5,8 @@ import androidx.compose.runtime.*
 import io.github.anastaci1a.localica.ui.engine.*
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -23,6 +25,11 @@ import kotlinx.coroutines.test.TestCoroutineScheduler
 private fun queuedEffects(context: CoroutineContext): CoroutineContext =
     if (context[ContinuationInterceptor] != null) context
     else context + StandardTestDispatcher(context[TestCoroutineScheduler])
+
+internal fun ComposeContentTestRule.onPopupAction(matcher: SemanticsMatcher): SemanticsNodeInteraction {
+    waitUntil(5000) { onAllNodes(matcher).fetchSemanticsNodes().size == 1 }
+    return onNode(matcher)
+}
 
 /** The running test's virtual time, for Engine owners in fixture hosts (PlayerSurfaceHarness); real-app owner tests pass it
  * to their own UiClock. The theme clock would stamp an idle intent at its last presented frame instead. */
