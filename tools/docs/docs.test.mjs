@@ -11,6 +11,14 @@ test('prose limits count visible labels and catch lazy list continuations',()=>{
  assert.ok(proseErrors('# Title\n\n- '+Array(20).fill('word').join(' ')+'\n'+Array(20).fill('word').join(' '),'x.md').length);
  assert.deepEqual(proseErrors('# Title\n\n```sh\nX=value\n```','x.md'),[]);
 });
+test('maintained pages allow 200 source lines, including blanks, but reject 201',()=>{
+ const page=['# Title','','Overview.',...Array(196).fill(''),'End.'].join('\n');
+ for(const ending of ['','\n']){
+  assert.deepEqual(proseErrors(page+ending,'docs/page.md'),[]);
+ }
+ assert.ok(proseErrors(page+'\n\n','docs/page.md').some(e=>e.includes('201 source lines')));
+ assert.ok(proseErrors((page+'\n\n').replaceAll('\n','\r\n'),'README.md').some(e=>e.includes('201 source lines')));
+});
 test('display math renders fractions, labeled subscripts, gradients and matrices',()=>{
  const html=parser().parse('$$\n\\nabla h=\\frac{x_{\\mathrm{rim}}}{2},\\quad \\mathbf{v}=\\begin{bmatrix}1\\\\2\\end{bmatrix}\n$$\n');
  assert.match(html,/<math/);assert.match(html,/<mfrac>/);assert.match(html,/<msub>/);assert.match(html,/<mtable/);assert.doesNotMatch(html,/katex-error/);

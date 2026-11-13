@@ -33,6 +33,8 @@ export function parser() {
 }
 export function proseErrors(source,file) {
   const errors=[];
+  const lines=source.split('\n').length-Number(source.endsWith('\n'));
+  if(lines>200)errors.push(`page has ${lines} source lines; maximum is 200`);
   let content=source.replace(/^---\n[\s\S]*?\n---\n/,'').replace(/<!--[\s\S]*?-->/g,'');
   if(file==='DOCUMENTATION.md')content=content.replace(/## Required standard\n[\s\S]*?(?=\n## Scope and review)/,'');
   const visit=tokens=>{for(const t of tokens){
