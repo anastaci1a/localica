@@ -464,7 +464,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var nativePlane by remember { mutableStateOf<ShadowPlane?>(null).step0(anchor, "instance.nativePlane") }
     var nativeNode by remember { mutableStateOf<SurfaceView?>(null).step0(anchor, "instance.nativeNode") }
     var leasedNode: SurfaceView? by remember { mutableStateOf<SurfaceView?>(null).step0(anchor, "instance.leasedNode") }
-    val nativeLease = remember { arrayOfNulls<()->Unit>(1) }
+    val nativeLease = remember { Step0Trace.slot<()->Unit>(anchor, "instance.nativeLease") }
     DisposableEffect(anchor) { onDispose { nativeLease[0]?.invoke(); nativeLease[0]=null } }
     var readyWindow by remember { mutableStateOf<android.view.Window?>(null).step0(anchor, "instance.readyWindow") }
     var origin by remember { mutableStateOf(Rect.Zero).step0(anchor, "instance.origin") }
@@ -530,7 +530,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     }
     val ambientSource = LocalModalBackdrop.current
     androidx.activity.compose.BackHandler(visible && originPreparation != null && (if (continuousOrigin != null) !originAdmitted || !anchor.hidden else !present)) { dismissNow() }
-    val transitionJob = remember { arrayOfNulls<Job>(1) }
+    val transitionJob = remember { Step0Trace.slot<Job>(anchor, "instance.transitionJob") }
     val reclaimOpening = remember(anchor, continuousOrigin, placement.takeIf { continuousOrigin != null }) { {
         // A click updates its conditional caller before the next composition can
         // remount the retained entry. Stop the old return at that admission point,
