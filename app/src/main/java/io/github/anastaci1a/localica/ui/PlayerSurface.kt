@@ -173,7 +173,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         ArtworkAction.None -> Unit
     } }
     val drag = Modifier.sheetDrag(SheetDragTarget(sheet, onExpanded),
-        openingChild = queue?.let { SheetDragTarget(it) { open -> onExpanded(true); if (open) onQueue() } },
+        openingChild = queue?.let { SheetDragTarget(it, { open -> onExpanded(true); if (open) onQueue() }) },
         canStart = { !scrubCancel.active }, onDraggingChanged = { dragging = it })
     // Finish the cover mask late, independently of the backing's color. Delaying the
     // color continuation too would reveal a dark average palette before light artwork.

@@ -11,9 +11,9 @@ import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
-internal data class SheetDragTarget(val state: SheetState, val onSettled: (Boolean) -> Unit)
+internal data class SheetDragTarget(val state: SheetState, val onSettled: (Boolean) -> Unit, val onOpening: () -> Unit = {})
 
-/** A contact belongs to its hit surface; a fresh directed drag can select its opening child. */
+/** A contact belongs to its hit surface; a fresh directed drag can select its opening child and reports an opening. */
 @Composable internal fun Modifier.sheetDrag(target: SheetDragTarget, openingChild: SheetDragTarget? = null,
     canStart: () -> Boolean = { true }, onDraggingChanged: (Boolean) -> Unit = {}): Modifier {
     val currentTarget by rememberUpdatedState(target)
@@ -35,8 +35,9 @@ internal data class SheetDragTarget(val state: SheetState, val onSettled: (Boole
             draggingChanged(true)
         }, onDelta = { delta ->
             if (owner == null) {
-                owner = if (currentTarget.state.expanded && (delta < 0f || currentChild?.state?.expanded == true)) currentChild ?: currentTarget else currentTarget
-                touching = owner?.state?.contact?.onDragStart() == true
+                val hit = if (currentTarget.state.expanded && (delta < 0f || currentChild?.state?.expanded == true)) currentChild ?: currentTarget else currentTarget
+                owner = hit; touching = hit.state.contact.onDragStart()
+                if (delta < 0f && !hit.state.expanded) hit.onOpening()
             }
             movement += delta
             if (touching) owner?.state?.contact?.onDrag(-movement)

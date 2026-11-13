@@ -583,7 +583,7 @@ test('#885 shared sheet routing admits its owners and rejects other direct, alia
  for(const [owner,api,call] of [
   ['LocalicaScreen.kt','Sheet','Sheet(state, onSettled = {}, returningChild = child) {}'],
   ['PlayerSurface.kt','sheetDrag','Modifier.sheetDrag(target, onDraggingChanged = {})'],
-  ['QueueSurface.kt','verticalSurfaceDrag','Modifier.verticalSurfaceDrag({}, {}, {}, {})']]) {
+  ['QueueSurface.kt','sheetDrag','Modifier.sheetDrag(target)']]) {
   const head='package io.github.anastaci1a.localica.ui\nimport io.github.anastaci1a.localica.ui.components.'+api+'\n';
   assert.deepEqual(checkPopupSource(root+owner,head+'fun f() { '+call+' }'),[]);
   for(const [imports,body] of [[head,call],
@@ -591,4 +591,7 @@ test('#885 shared sheet routing admits its owners and rejects other direct, alia
    [head,call.replace(api,api==='Sheet'?'io.github.anastaci1a.localica.ui.components.Sheet':api).replace('Modifier.','androidx.compose.ui.Modifier.')]])
    assert.ok(checkPopupSource(screen,imports+'fun f() { '+body+' }').some(i=>i.rule==='ScreenPopupMotion' && /pinned callers/.test(i.note)),api+': '+body);
  }
+ // #931: QueueSurface reaches the recognizer only through sheetDrag.
+ assert.ok(checkPopupSource(root+'QueueSurface.kt','package io.github.anastaci1a.localica.ui\nimport io.github.anastaci1a.localica.ui.components.verticalSurfaceDrag\nfun f() { Modifier.verticalSurfaceDrag({}, {}, {}, {}) }')
+  .some(i=>i.rule==='ScreenPopupMotion' && /pinned callers/.test(i.note)));
 });
