@@ -25,6 +25,7 @@ import org.junit.Test
 /** Readiness can change independently of the lifetime of an already owned contact. */
 class SharedKeyedDragRefreshTest {
     @get:Rule val compose = createComposeRule()
+    private var attached by mutableStateOf(true)
     private var ready by mutableStateOf(true)
     private var eligible by mutableStateOf(true)
     private var revision by mutableIntStateOf(0)
@@ -43,8 +44,8 @@ class SharedKeyedDragRefreshTest {
             val captured = callbackRevision
             Box(Modifier.fillMaxWidth().height(360.dp).testTag("host")
                 .onSizeChanged { state.viewportWidth = it.width; state.viewportHeight = it.height }
-                .sharedKeyedDrag(state, eligible && (!legacyReadinessWiring || ready), true, ownerKey = revision, acquisitionReady = ready,
-                    itemAt = state::hit, commit = { _, _, complete -> committed.add(captured); complete(true) })) {
+                .then(if (attached) Modifier.sharedKeyedDrag(state, eligible && (!legacyReadinessWiring || ready), true, ownerKey = revision, acquisitionReady = ready,
+                    itemAt = state::hit, commit = { _, _, complete -> committed.add(captured); complete(true) }) else Modifier)) {
                 LazyVerticalGrid(GridCells.Fixed(1), state = grid) {
                     items(state.rendered(entries), key = { it ?: DropGapKey }) { item ->
                         Box(Modifier.fillMaxWidth().height(52.dp)) { Text(item.orEmpty()) }
@@ -97,6 +98,34 @@ class SharedKeyedDragRefreshTest {
         compose.waitUntil(5000) { state.drag == null }
         compose.onNodeWithTag("host").performTouchInput { up() }
         compose.runOnIdle { assertTrue(committed.isEmpty()) }
+    }
+    @Test fun disposedPendingSaveCannotOverwriteReattachedTransactionOrder() {
+        fixture()
+        var oldSave: ((Boolean) -> Unit)? = null
+        var oldSuccess = 0
+        compose.runOnIdle {
+            assertTrue(state.begin(entries[1], setOf(entries[1]), state.bounds().getValue(entries[1]).center))
+            state.move(state.bounds().getValue(entries[4]).bottomCenter - Offset(0f, 1f))
+            state.finish(false, true, onMoved = { oldSuccess++ }) { _, _, complete -> oldSave = complete }
+        }
+        compose.waitUntil(2000) { oldSave != null }
+        compose.runOnIdle { attached = false }
+        compose.runOnIdle { assertNull(state.drag); attached = true }
+        val expected = compose.runOnIdle {
+            assertTrue(state.begin(entries[3], setOf(entries[3]), state.bounds().getValue(entries[3]).center))
+            state.move(state.bounds().getValue(entries[0]).topCenter + Offset(0f, 1f))
+            state.drag!!.ordered().also {
+                assertNotEquals(entries, it)
+                state.finish(false, true) { _, _, complete -> complete(true) }
+            }
+        }
+        compose.waitUntil(2000) { state.drag == null }
+        compose.runOnIdle { assertEquals(expected, state.rendered(entries)); oldSave!!(true) }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.runOnIdle {
+            assertEquals("Retired save cannot publish its optimistic order", expected, state.rendered(entries))
+            assertEquals("Retired save cannot report success", 0, oldSuccess)
+        }
     }
     @Test fun queuedQueueDropRejectsChangedOccurrenceOrderEvenForDuplicateTracks() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
