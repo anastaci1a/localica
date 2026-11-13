@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.BrowserItem
+import io.github.anastaci1a.localica.library.LibraryGroup
 import io.github.anastaci1a.localica.library.TrackSort
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
@@ -38,14 +39,18 @@ class ScrollbarRowInputTest {
     private val state = LazyGridState()
     private var items by mutableStateOf(List(60) { BrowserItem(MediaRef(MediaKind.Album, "$it"), "Album $it", null, emptyList()) })
 
+    private val albums = List(8) { LibraryGroup("album:$it", "Choice $it", null, emptyList()) }
+    private val selections = mutableListOf<List<String>>()
     @OptIn(ExperimentalFoundationApi::class)
-    private fun host() {
+    private fun host(carousel: Boolean = false, all: Boolean = false) {
         compose.setContent { LocalicaTheme {
             longPress = LocalViewConfiguration.current.longPressTimeoutMillis
             CompositionLocalProvider(LocalArtworkTransit provides transit) {
-                Box(Modifier.width(300.dp).height(500.dp)) {
+                Box(Modifier.width(if (all) 128.dp else 300.dp).height(500.dp)) {
                     LazyVerticalGrid(GridCells.Fixed(1), Modifier.fillMaxSize().testTag("rows"), state = state) {
                         items(61) {
+                            if (carousel && it == 15) ArtistAlbumChoices(albums, listOf(albums[0].id)) { selections += it }
+                            else
                             Box(Modifier.fillMaxWidth().height(100.dp)
                                 .combinedClickable(onClick = { rowTaps++ }, onLongClick = { rowHolds++ })) {
                                 Text("Row $it")
@@ -232,6 +237,88 @@ class ScrollbarRowInputTest {
         assertTrue("The same drag continues", thumb().top > top)
         bar().performTouchInput { up() }
         compose.mainClock.advanceTimeBy(400)
+        compose.mainClock.autoAdvance = true
+    }
+
+    private fun thumbOverAlbumTile(all: Boolean = false): Offset {
+        host(carousel = true, all = all)
+        compose.runOnIdle { state.requestScrollToItem(14, with(compose.density) { 60.dp.roundToPx() }) }
+        compose.revealScrollbar(state)
+        val strip = bar().fetchSemanticsNode().boundsInRoot
+        val tile = compose.onNodeWithText(if (all) "All albums" else "Choice 0").fetchSemanticsNode().boundsInRoot
+        val grip = thumb()
+        val left = maxOf(strip.left, tile.left); val right = minOf(strip.right, tile.right)
+        val top = maxOf(grip.top, tile.top); val bottom = minOf(grip.bottom, tile.bottom)
+        assertTrue("Fixture: the thumb overlaps the album tile", right > left && bottom > top)
+        return Offset((left + right) / 2 - strip.left, (top + bottom) / 2 - strip.top)
+    }
+
+    @Test fun albumTapUnderTheThumbSelectsOnlyOnceWithoutActivatingTheBar() {
+        val at = thumbOverAlbumTile()
+        val before = compose.runOnIdle { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+        val rest = thumbColour()
+        bar().performTouchInput { down(at) }
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        assertEquals(rest, thumbColour())
+        bar().performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(64)
+        compose.runOnIdle {
+            assertEquals(listOf(listOf(albums[0].id)), selections)
+            assertEquals(before, state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset)
+            assertFalse(transit.active)
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun albumHoldUnderTheThumbTogglesOnceWithoutActivatingTheBar() {
+        val at = thumbOverAlbumTile()
+        val rest = thumbColour()
+        bar().performTouchInput { down(at) }
+        compose.mainClock.advanceTimeBy(longPress + 100)
+        assertEquals(rest, thumbColour())
+        bar().performTouchInput { up() }
+        compose.runOnIdle {
+            assertEquals(listOf(emptyList<String>()), selections)
+            assertFalse(transit.active)
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun horizontalAlbumSwipeUnderTheThumbMovesOnlyTheCarousel() {
+        val at = thumbOverAlbumTile()
+        val before = compose.runOnIdle { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+        val row = compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.HorizontalScrollAxisRange))
+        val position = row.fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.HorizontalScrollAxisRange].value()
+        val rest = thumbColour()
+        bar().performTouchInput { down(at); moveBy(Offset(-100f, 0f), delayMillis = 100) }
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        assertEquals(rest, thumbColour())
+        bar().performTouchInput { up() }
+        compose.runOnIdle {
+            assertTrue(row.fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.HorizontalScrollAxisRange].value() > position)
+            assertEquals(before, state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset)
+            assertTrue(selections.isEmpty()); assertFalse(transit.active)
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun verticalAlbumDragUnderTheThumbBelongsToTheBar() {
+        val at = thumbOverAlbumTile()
+        val index = compose.runOnIdle { state.firstVisibleItemIndex }
+        val rest = thumbColour()
+        bar().performTouchInput { down(at); moveBy(Offset(0f, 100f), delayMillis = 100) }
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        assertNotEquals(rest, thumbColour())
+        compose.runOnIdle { assertTrue(transit.active); assertTrue(state.firstVisibleItemIndex > index); assertTrue(selections.isEmpty()) }
+        bar().performTouchInput { up() }
+        compose.runOnIdle { assertTrue(selections.isEmpty()) }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun allAlbumsTapUnderTheThumbClearsTheSelection() {
+        val at = thumbOverAlbumTile(all = true)
+        bar().performTouchInput { click(at) }
+        compose.runOnIdle { assertEquals(listOf(emptyList<String>()), selections); assertFalse(transit.active) }
         compose.mainClock.autoAdvance = true
     }
 }
