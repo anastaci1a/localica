@@ -125,7 +125,7 @@ guard_error_dialogs() {
   if [[ -z "$dialogs_ready" ]]; then
     dialogs_ready=yes
     # Keys absent on an API are harmless; read each back to prove the value.
-    for setting in global:hide_error_dialogs:1 secure:anr_show_background:0 global:show_first_crash_dialog:0 global:show_first_crash_dialog_dev_option:0; do
+    for setting in secure:anr_show_background:0 global:show_first_crash_dialog:0 global:show_first_crash_dialog_dev_option:0; do
       IFS=: read -r ns key value <<< "$setting"
       dialog_adb shell settings put "$ns" "$key" "$value" >/dev/null 2>&1 || true
       echo "error-dialog setting $ns/$key=$(dialog_adb shell settings get "$ns" "$key" 2>/dev/null | tr -d '\r') (wanted $value)"

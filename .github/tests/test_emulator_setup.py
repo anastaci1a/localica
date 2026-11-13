@@ -52,6 +52,8 @@ class FakeDevice:
             return state.get('qemu', '1')
         if args == ('get-serialno',):
             return state.get('serial', 'emulator-5554')
+        if args == ('shell', 'settings', 'get', 'global', 'hide_error_dialogs'):
+            return '1'
         if args == ('shell', 'settings', 'get', 'secure', 'navigation_mode'):
             return state.get('navigation_mode', '0')
         if args == ('shell', 'am', 'force-stop', 'com.android.launcher3'):
@@ -103,6 +105,11 @@ class ReadinessTests(unittest.TestCase):
         result, device, clock = self.run_gate([{'boot': '0'}, {'pm': ''}, {}, {}, {}])
         self.assertTrue(result['ready'])
         self.assertEqual(5, len(result['samples']))
+        hide = ('shell', 'settings', 'put', 'global', 'hide_error_dialogs', '1')
+        self.assertEqual(1, device.calls.count(hide))
+        launch = next(i for i, args in enumerate(device.calls) if args[:3] == ('shell', 'am', 'start'))
+        self.assertLess(device.calls.index(hide), launch)
+        self.assertEqual('1', next(s['hide_error_dialogs'] for s in result['samples'] if 'hide_error_dialogs' in s))
         self.assertEqual(2, clock.time)
         self.assertEqual(1, sum(args[:3] == ('shell', 'am', 'start') for args in device.calls))
         self.assertEqual(3, sum(args[:2] == ('exec-out', 'screencap') for args in device.calls))

@@ -105,7 +105,7 @@ class PrepareDeviceTestsTest(unittest.TestCase):
 
     def test_api36_preserves_packages_and_suppresses_error_dialogs_before_tests(self):
         self.state['api']='36';self.assert_exit(0);self.assertEqual(0,self.state['mutations'])
-        self.assertEqual('1',self.state.get('settings',{}).get('global/hide_error_dialogs'))
+        self.assertNotIn('global/hide_error_dialogs',self.state.get('settings',{}))
 
     def test_shared_preparation_dismisses_launcher_anr_before_prototype_or_full(self):
         self.state['api']='36'
@@ -139,8 +139,8 @@ class PrepareDeviceTestsTest(unittest.TestCase):
 
     def test_error_dialogs_are_suppressed_and_absent_dialog_is_logged(self):
         r=self.run_script(script='run-device-tests.sh');self.assertEqual(0,r.returncode,r.stdout+r.stderr)
-        self.assertEqual({'global/hide_error_dialogs':'1','secure/anr_show_background':'0','global/show_first_crash_dialog':'0','global/show_first_crash_dialog_dev_option':'0'},self.state['settings'])
-        self.assertIn('error-dialog setting global/hide_error_dialogs=1 (wanted 1)',r.stdout)
+        self.assertEqual({'secure/anr_show_background':'0','global/show_first_crash_dialog':'0','global/show_first_crash_dialog_dev_option':'0'},self.state['settings'])
+        self.assertIn('error-dialog setting secure/anr_show_background=0 (wanted 0)',r.stdout)
         self.assertIn('error-dialog check before full: none found',r.stdout)
         # #673: System UI's jank tracker races WM Shell's leash release and aborts System UI.
         self.assertEqual({'interaction_jank_monitor/enabled':'false'},self.state['deviceConfig'])

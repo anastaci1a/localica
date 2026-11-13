@@ -143,6 +143,9 @@ def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep,
                                                            '-c', 'android.intent.category.HOME'))
                     if candidate is None:
                         raise ValueError('No resolved HOME activity')
+                    if device.call('shell', 'getprop', 'ro.kernel.qemu') == '1':
+                        device.call('shell', 'settings', 'put', 'global', 'hide_error_dialogs', '1')
+                        sample['hide_error_dialogs'] = device.call('shell', 'settings', 'get', 'global', 'hide_error_dialogs')
                     if normalize_navigation and normalization is None:
                         try:
                             normalization = normalize_launcher(device, candidate)
