@@ -55,7 +55,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.math.max
 
-/** #867/#667: the real overflow starts above tabs, then retracts beneath bottom chrome. */
+/** #926: the real overflow stays above the bars on a plain close; only a page takeover moves it into the page. */
 class PopupChromeDepthTest {
     @get:Rule val compose = localicaComposeRule()
     private val frames by lazy { PopupWindowEvidence(compose) }
@@ -63,12 +63,12 @@ class PopupChromeDepthTest {
 
     @org.junit.After fun removeMarkers() = frames.dispose()
 
-    @Test fun overflowSettingsRetractsBehindMiniPlayerAndTabs() { overflow("Settings") }
-    @Test fun overflowScanRetractsBehindMiniPlayerAndTabs() { overflow("Scan music") }
-    @Test fun overflowBackReturnsInlineBehindChrome() { overflow("Back") }
-    @Test fun overflowOutsideTapReturnsInlineBehindChrome() { overflow("Outside tap") }
-    @Test fun overflowTriggerTapReturnsInlineBehindChrome() { overflow("Trigger") }
-    @Test fun normalBelowChromeProjectionIsOutsideItsSampledBackdrop() { cleanBackdrop(GlassRendererMode.Normal) }
+    @Test fun overflowSettingsHandsOffUnderTheSettingsPage() { overflow("Settings") }
+    @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsScan() { overflow("Scan music") }
+    @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsBack() { overflow("Back") }
+    @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsOutsideTap() { overflow("Outside tap") }
+    @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsTrigger() { overflow("Trigger") }
+    @Test fun normalHomeProjectionIsOutsideItsSampledBackdrop() { cleanBackdrop(GlassRendererMode.Normal) }
     @Test fun normalDepartingBrowseMenuStaysAboveTabs() { nonChromeMenu(GlassRendererMode.Normal) }
     @Test fun normalSelectionPillKeepsItsShellDepth() { selectionPill(GlassRendererMode.Normal) }
     @Test fun collapsedShellControlsRemainAccessible() {
@@ -102,21 +102,30 @@ class PopupChromeDepthTest {
         } finally { preferences.write(previous) }
     }
 
+    /** #926: a plain close never leaves its window, so a re-tap at any point of the return has no projection to clear. */
+    @Test fun plainMoreRetapStaysInItsWindowEarly() = reopenMore(.92f, takeover = false)
+    @Test fun plainMoreRetapStaysInItsWindowMid() = reopenMore(.7f, takeover = false)
+    @Test fun plainMoreRetapStaysInItsWindowLate() = reopenMore(.45f, takeover = false)
+    @Test fun plainMoreRetapStaysInItsWindowTail() = reopenMore(.2f, takeover = false)
+    /** #925: a takeover that reverts mid-return, then a re-tap. */
     @Test fun earlyMoreReopenClearsProjectionBeforeDialogDraw() = reopenMore(.92f)
     @Test fun lateMoreReopenClearsProjectionBeforeDialogDraw() = reopenMore(.45f)
     /** #925: the opposite native order. A cycle crashes the RenderThread on API 33+. */
     @Test fun dialogFirstMoreReopenSamplesOutsideItsProjectingHome() = reopenMore(.45f, dialogFirst = true)
 
-    private fun reopenMore(target: Float, dialogFirst: Boolean = false) {
+    private fun reopenMore(target: Float, dialogFirst: Boolean = false, takeover: Boolean = true) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
         val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
-            "reopen-$target").apply { mkdirs() }
+            "reopen-$target-${if (takeover) "takeover" else "plain"}").apply { mkdirs() }
         lateinit var host: View
         lateinit var home: GlassPopupHome
+        lateinit var anchor: GlassAnchor
+        val phase = { anchor.contact.expansion.value }
         var popup: Window? = null
         var open by mutableStateOf(false)
+        var departing by mutableStateOf(false)
         var blockedTree: ViewTreeObserver? = null
         var blocker: ViewTreeObserver.OnPreDrawListener? = null
         var nativeDraws = 0
@@ -127,11 +136,11 @@ class PopupChromeDepthTest {
             preferences.write(InterfaceSettings(reducedMotion = false, glass = GlassAppearance(renderer = GlassRendererMode.Normal)))
             compose.setContent { LocalicaTheme {
                 host = LocalView.current
-                home = rememberGlassPopupHome(false)
+                home = rememberGlassPopupHome(departing)
                 val page = rememberFrostedBackdrop(home, dark = false)
                 // As in LocalicaScreen, the ambient modal scene encloses the popup home.
                 val modal = rememberFrostedBackdrop(page, dark = false)
-                val anchor = rememberGlassAnchor()
+                anchor = rememberGlassAnchor()
                 CompositionLocalProvider(LocalModalBackdrop provides modal, LocalGlassMorphWorkObserver provides { kind, window, _ ->
                     if (kind == "dialog" && window != null) popup = window
                 }) {
@@ -151,14 +160,28 @@ class PopupChromeDepthTest {
             compose.runOnUiThread { open = true }
             compose.waitUntil(10000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-                home.flights.singleOrNull()?.phase()?.let { it >= .999f } == true && popup != null
+                home.flights.isNotEmpty() && phase() >= .999f && popup != null
             }
             val flight = compose.runOnUiThread { home.flights.single() }
             val window = requireNotNull(popup)
-            compose.runOnUiThread { open = false }
+            // Settings-style takeover: the home departs with the close, then returns before the re-tap.
+            compose.runOnUiThread { departing = takeover; open = false }
             compose.waitUntil(10000) {
                 compose.mainClock.advanceTimeBy(1); compose.waitForIdle()
-                flight.prepared && flight.handedOff && flight.phase() <= target
+                phase() <= target && (!takeover || flight.prepared && flight.handedOff)
+            }
+            if (!takeover) {
+                assertFalse("#926 a plain close is never handed to the home", flight.handedOff || flight.wasProjected)
+                assertTrue("The return is still in its native window", window.decorView.isAttachedToWindow)
+                compose.runOnUiThread { open = true }
+                compose.waitUntil(10_000) {
+                    compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                    assertFalse("#926 the re-tapped popup never projects", flight.handedOff || flight.wasProjected)
+                    phase() >= .999f
+                }
+                File(output, "plain-retap.json").writeText(JSONObject().put("target", target)
+                    .put("source", BuildConfig.SOURCE_SHA).put("reopened", phase()).toString(2))
+                return
             }
             assertTrue("Reopen starts from an actual prepared home projection", flight.wasProjected)
             val activity = compose.runOnUiThread {
@@ -171,7 +194,7 @@ class PopupChromeDepthTest {
                 blocker = ViewTreeObserver.OnPreDrawListener { blockedDraws++; false }
                 blockedTree!!.addOnPreDrawListener(blocker)
                 window.decorView.viewTreeObserver.addOnDrawListener(nativeWatch)
-                open = true
+                departing = false; open = true
                 window.decorView.invalidate()
             }
             compose.waitUntil(10_000) {
@@ -194,7 +217,7 @@ class PopupChromeDepthTest {
             // the ordering that exposed B1; no race between native windows.
             original(activity, output, "activity-first-reopen").recycle()
             val result = compose.runOnUiThread {
-                JSONObject().put("target", target).put("phase", flight.phase())
+                JSONObject().put("target", target).put("phase", phase())
                     .put("prepared", flight.prepared).put("handedOff", flight.handedOff)
                     .put("blockedNativePreDraws", blockedDraws).put("nativeDraws", nativeDraws)
                     .put("source", BuildConfig.SOURCE_SHA)
@@ -474,17 +497,17 @@ class PopupChromeDepthTest {
             frames.openReferenceTrigger("Open overlap menu")
             compose.waitUntil(10000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-                popup?.decorView?.hasWindowFocus() == true && home.flights.singleOrNull()?.phase?.invoke()?.let { it >= .999f } == true
+                popup?.decorView?.hasWindowFocus() == true && home.flights.size == 1 && fixtureAnchor.contact.expansion.value >= .999f
             }
             val window = requireNotNull(popup)
             val flight = compose.runOnUiThread { home.flights.single() }
-            assertFalse("BrowseOptions is a non-chrome role", flight.chromeTrigger)
+            assertFalse("BrowseOptions is a non-chrome role", fixtureAnchor.chromeTrigger)
             val tabBounds = compose.onNodeWithTag("overlap-tabs").fetchSemanticsNode().boundsInRoot
             // The pre-open scene remains evidence of the retiring trigger field.
             // Freeze the independent complete-home record at the same hidden-trigger state as return.
             original(activity, output, "reference-ready-root").recycle()
             val referenceState = compose.runOnUiThread {
-                JSONObject().put("phase", flight.phase()).put("popupFocused", window.decorView.hasWindowFocus())
+                JSONObject().put("phase", fixtureAnchor.contact.expansion.value).put("popupFocused", window.decorView.hasWindowFocus())
                     .put("triggerHidden", fixtureAnchor.hidden).put("handedOff", flight.handedOff)
                     .put("wasProjected", flight.wasProjected).put("homeDeparting", home.departing)
                     .put("leavePageClicked", leaveClicked)
@@ -537,7 +560,7 @@ class PopupChromeDepthTest {
                 // Add projected sub-full frames above .8; retain the .1 lower bound and 96-step budget.
                 compose.mainClock.advanceTimeBy(4, ignoreFrameDuration = true); compose.waitForIdle()
                 val attached = window.decorView.isAttachedToWindow
-                val phase = flight.phase()
+                val phase = fixtureAnchor.contact.expansion.value
                 phaseControl.put(JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
                     .put("presentedNanos", compose.runOnUiThread { clock.stamp.nanos }).put("flightPhase", phase).put("phaseBits", phase.toRawBits()).put("geometryPhase", geometryProgress)
                     .put("attached", attached).put("prepared", flight.prepared).put("triggerHidden", fixtureAnchor.hidden))
@@ -675,7 +698,7 @@ class PopupChromeDepthTest {
                 val layer = rememberGraphicsLayer()
                 BackdropLease(page)
                 DisposableEffect(home, layer) {
-                    flight.layer = layer; flight.chromeTrigger = true; flight.phase = { .5f }; flight.prepared = true
+                    flight.layer = layer; flight.prepared = true
                     home.flights.add(flight)
                     onDispose { home.flights.remove(flight) }
                 }
@@ -705,11 +728,11 @@ class PopupChromeDepthTest {
                     val samplePixel = sampled.getPixel(x, y)
                     val displayPixel = root.getPixel(rootX, rootY)
                     File(output, "clean-$frame.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
-                        .put("renderer", mode.name).put("phase", flight.phase()).put("projected", flight.wasProjected)
+                        .put("renderer", mode.name).put("projected", flight.wasProjected)
                         .put("samplePixel", samplePixel).put("displayPixel", displayPixel).toString(2))
-                    assertTrue("Below-chrome projection is actually displayed", flight.wasProjected)
+                    assertTrue("The home projection is actually displayed", flight.wasProjected)
                     assertEquals("Displayed flight control is magenta", Color.MAGENTA, displayPixel)
-                    assertEquals("Below-chrome projection must not enter the backdrop sampled by its flight", Color.GREEN, samplePixel)
+                    assertEquals("The home projection must not enter the backdrop sampled by its flight", Color.GREEN, samplePixel)
                 } finally { root.recycle(); sampled.recycle() }
             }
         } finally { preferences.write(previous) }
@@ -724,7 +747,7 @@ class PopupChromeDepthTest {
         val samples = JSONArray()
         val report = JSONObject().put("source", BuildConfig.SOURCE_SHA).put("destination", destination).put("renderer", mode.name)
             .put("samples", samples).put("status", "preparing").put("captureOrder", "popup-before-activity")
-            .put("comparison", "Original activity and overflow buffers, SrcOver in source space; destination excluded; neutral black scrim only")
+            .put("comparison", "Opaque overflow-window pixels over the bar regions, per frame")
         fun save() { File(output, "frames.json").writeText(report.toString(2)) }
         var baseline: Bitmap? = null
         try {
@@ -758,7 +781,7 @@ class PopupChromeDepthTest {
                 (owner as Activity).window
             }
             val origin = IntArray(2).also { compose.runOnUiThread { host.getLocationInWindow(it) } }
-            val regions = listOf("mini-player" to "player-surface", "tabs" to "tab-pill").map { (name, tag) ->
+            val regions = listOf("mini-player" to "player-surface", "tabs" to "tab-pill", "utility" to "utility-pill").map { (name, tag) ->
                 name to compose.onNodeWithTag(tag, useUnmergedTree = true).assertIsDisplayed()
                     .fetchSemanticsNode().boundsInRoot.translate(androidx.compose.ui.geometry.Offset(origin[0].toFloat(), origin[1].toFloat()))
             }
@@ -792,120 +815,47 @@ class PopupChromeDepthTest {
                 }
                 else -> compose.onNodeWithText(destination, substring = false).performClick()
             }
-            var fullSizeFrames = 0
-            var valid = 0
-            var highest = 0f
+            // #926: a plain close stays in its native window above the bars until it retires. Only the
+            // Settings takeover hands the popup to its departing home, which the Settings window covers.
+            val takeover = destination == "Settings"
+            var overChrome = 0
             var lowest = 1f
-            val violations = mutableListOf<String>()
-            val inset = 4f * host.resources.displayMetrics.density
+            var projected = false
             for (frame in 0 until 96) {
                 if (frame < 8) compose.mainClock.advanceTimeBy(1) else compose.mainClock.advanceTimeByFrame()
                 compose.waitForIdle()
                 if (!window.decorView.isAttachedToWindow) break
                 val p = progress.coerceIn(0f, 1f)
-                if (p > .9f && flight.prepared) {
-                    val modal = original(window, output, "full-$frame-popup")
-                    val root = original(activity, output, "full-$frame-root")
-                    val layer = r1InspectionBitmap(runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap(), output, "full-$frame-flight-layer")
-                    try {
-                        val rootAt = IntArray(2); val modalAt = IntArray(2)
-                        var nativeAlpha = 1f
-                        compose.runOnUiThread {
-                            activity.decorView.getLocationOnScreen(rootAt); window.decorView.getLocationOnScreen(modalAt)
-                            nativeAlpha = window.attributes.alpha
-                        }
-                        val bounds = regions.single { it.first == "tabs" }.second
-                        val origin = flight.origin
-                        var count = 0; var bad = 0
-                        for (y in bounds.top.toInt() until bounds.bottom.toInt() step 2)
-                            for (x in bounds.left.toInt() until bounds.right.toInt() step 2) {
-                                val lx = x + rootAt[0] - origin.x.toInt(); val ly = y + rootAt[1] - origin.y.toInt()
-                                if (lx !in 0 until layer.width || ly !in 0 until layer.height) continue
-                                val expected = layer.getPixel(lx, ly)
-                                // Fully opaque menu interior has no permitted chrome contribution.
-                                if (Color.alpha(expected) < 254) continue
-                                val mx = x + rootAt[0] - modalAt[0]; val my = y + rootAt[1] - modalAt[1]
-                                val m = if (mx in 0 until modal.width && my in 0 until modal.height) modal.getPixel(mx, my) else Color.TRANSPARENT
-                                val a = Color.alpha(m) / 255f * nativeAlpha
-                                val r = root.getPixel(x, y)
-                                if (channels.maxOf { abs(it(m) * a + it(r) * (1f - a) - it(expected)) } > 14f) bad++
-                                count++
-                            }
-                        if (count > 100) {
-                            fullSizeFrames++
-                            samples.put(JSONObject().put("frame", frame).put("phase", p).put("routing", "above-chrome").put("pixels", count).put("changed", bad))
-                            save()
-                            assertTrue("#867 tabs must not cover the full-size More menu: p=$p changed=$bad/$count", bad <= max(4, count / 1000))
-                        }
-                    } finally { modal.recycle(); root.recycle(); layer.recycle() }
-                    continue
-                }
-                if (p !in .04f.. .9f) continue
-                val before = compose.runOnUiThread { flight.handedOff }
-                val sample = JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
-                    .put("phase", p).put("projectedBefore", before)
-                samples.put(sample); save()
-                // Update the native flight recording before its Activity projection.
+                val handedOff = compose.runOnUiThread { flight.handedOff || flight.wasProjected }
+                projected = projected || handedOff
+                if (!takeover) assertFalse("#926 a plain $destination close must not leave its window: frame=$frame p=$p", handedOff)
+                if (p !in .04f..0.9f) continue
                 val modal = original(window, output, "frame-$frame-popup")
                 try {
-                    val root = original(activity, output, "frame-$frame-root")
-                    try {
-                        val after = compose.runOnUiThread { flight.handedOff }
-                        sample.put("projectedAfter", after)
-                        // A pair spanning the one native→scene ownership event is not one compositor frame.
-                        // Preserve both originals and classify by the routing receipt, never by optical pixels.
-                        if (before != after) { sample.put("status", "mixed-routing-epoch"); save(); continue }
-                        val rootAt = IntArray(2); val modalAt = IntArray(2)
-                        var nativeAlpha = 1f
-                        compose.runOnUiThread {
-                            activity.decorView.getLocationOnScreen(rootAt); window.decorView.getLocationOnScreen(modalAt)
-                            nativeAlpha = window.attributes.alpha
-                        }
-                        sample.put("nativeWindowAlpha", nativeAlpha)
-                        val counts = JSONArray()
-                        regions.forEach { (name, bounds) ->
-                            var count = 0; var bad = 0
-                            for (y in bounds.top.toInt() until bounds.bottom.toInt() step 2)
-                                for (x in bounds.left.toInt() until bounds.right.toInt() step 2) {
-                                    if (!insideCapsule(x.toFloat(), y.toFloat(), bounds, inset)) continue
-                                    val b = requireNotNull(baseline).getPixel(x, y)
-                                    val r = root.getPixel(x, y)
-                                    val mx = x + rootAt[0] - modalAt[0]; val my = y + rootAt[1] - modalAt[1]
-                                    val m = if (mx in 0 until modal.width && my in 0 until modal.height) modal.getPixel(mx, my) else Color.TRANSPARENT
-                                    val a = Color.alpha(m) / 255f * nativeAlpha
-                                    val norm = channels.sumOf { (it(b) * it(b)).toDouble() }.toFloat()
-                                    val dot = channels.sumOf { (it(b) * (it(m) * a + it(r) * (1f - a))).toDouble() }.toFloat()
-                                    val gain = (if (norm == 0f) 1f else dot / norm).coerceIn(1f - .16f * p, 1f)
-                                    val error = channels.maxOf { channel ->
-                                        abs(channel(m) * a + channel(r) * (1f - a) - channel(b) * gain) / 255f
-                                    }
-                                    // Permit only neutral black-scrim attenuation, in either source space; never substituted chrome ink.
-                                    if (error > .055f) bad++
-                                    count++
-                                }
-                            counts.put(JSONObject().put("region", name).put("pixels", count).put("changed", bad))
-                            assertTrue("A real interior chrome region is sampled: $name=$bounds", count > 100)
-                            if (bad > max(4, count / 1000)) violations += "frame=$frame p=$p $name changed=$bad/$count projected=$after"
-                        }
-                        sample.put("regions", counts).put("status", "sampled")
-                        valid++; highest = maxOf(highest, p); lowest = minOf(lowest, p)
-                    } finally { root.recycle() }
+                    val rootAt = IntArray(2); val modalAt = IntArray(2)
+                    compose.runOnUiThread { activity.decorView.getLocationOnScreen(rootAt); window.decorView.getLocationOnScreen(modalAt) }
+                    val counts = JSONArray()
+                    var opaque = 0
+                    regions.forEach { (name, bounds) ->
+                        var count = 0
+                        for (y in bounds.top.toInt() until bounds.bottom.toInt() step 2)
+                            for (x in bounds.left.toInt() until bounds.right.toInt() step 2) {
+                                val mx = x + rootAt[0] - modalAt[0]; val my = y + rootAt[1] - modalAt[1]
+                                if (mx in 0 until modal.width && my in 0 until modal.height && Color.alpha(modal.getPixel(mx, my)) >= 254) count++
+                            }
+                        counts.put(JSONObject().put("region", name).put("opaquePopupPixels", count))
+                        opaque += count
+                    }
+                    samples.put(JSONObject().put("frame", frame).put("phase", p).put("projected", handedOff).put("regions", counts)); save()
+                    if (takeover && handedOff) assertTrue("#667 a handed-off popup draws nothing in its own window: frame=$frame $counts", opaque <= 4)
+                    if (!takeover && opaque > 100) { overChrome++; lowest = minOf(lowest, p) }
                 } finally { modal.recycle() }
-                save()
             }
-            report.put("fullSizeFrames", fullSizeFrames).put("validFrames", valid).put("highestPhase", highest).put("lowestPhase", lowest)
-                .put("violations", JSONArray(violations)).put("status", if (violations.isEmpty()) "sampled" else "failed-depth")
-            save()
-            assertTrue("#867 requires a presented full-size menu overlapping the tabs", fullSizeFrames > 0)
-            assertTrue("#667 needs actual intermediate-frame coverage: $report", valid >= 3 && highest >= .6f && lowest <= .2f)
-            assertTrue("#667 returning $destination pixels crossed bottom chrome: $violations", violations.isEmpty())
-            // The disposable flight clears its live flag when the native window retires.
-            // Existing frame receipts preserve whether an actual Activity projection occurred.
-            val projectedDuringReturn = (0 until samples.length()).any {
-                samples.getJSONObject(it).optBoolean("projectedAfter")
-            }
-            assertTrue("Every More close intent must use the inline return: $destination", projectedDuringReturn)
+            report.put("overChromeFrames", overChrome).put("lowestOverChromePhase", lowest).put("projected", projected); save()
+            if (takeover) assertTrue("The Settings takeover hands the popup to its departing home", projected)
+            else assertTrue("#926 the popup draws over the bars into its tail: $report", overChrome >= 3 && lowest <= .2f)
             assertFalse("The overflow's original native window retires after return", window.decorView.isAttachedToWindow)
+            if (!takeover) compose.onNodeWithTag("utility-pill").assertIsDisplayed()
             report.put("status", "passed"); save()
         } catch (failure: Throwable) {
             report.put("status", "failed").put("failure", failure.toString()); save(); throw failure
@@ -914,11 +864,6 @@ class PopupChromeDepthTest {
         }
     }
 
-    private fun insideCapsule(x: Float, y: Float, r: Rect, inset: Float): Boolean {
-        val radius = r.height / 2f
-        val dx = maxOf(r.left + radius - x, 0f, x - (r.right - radius))
-        return dx * dx + (y - r.center.y) * (y - r.center.y) < (radius - inset) * (radius - inset)
-    }
 
     /** One original Window copy after a native draw receipt, with an unrelated opaque frame token. No copy retry. */
     private fun original(window: Window, output: File, name: String): Bitmap = frames.capture(window, output, name)

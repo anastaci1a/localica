@@ -35,8 +35,6 @@ internal class GlassPopupHome(private val leaving: State<Boolean>) {
 }
 
 internal class GlassPopupFlight {
-    var chromeTrigger = false
-    var phase: () -> Float = { 0f }
     var layer by mutableStateOf<GraphicsLayer?>(null)
     var origin = Offset.Zero
     var homeOrigin = Offset.Zero
@@ -60,7 +58,7 @@ internal fun rememberGlassPopupHome(departing: Boolean, parent: GlassPopupHome? 
 }
 
 @Composable
-internal fun Modifier.glassPopupHome(home: GlassPopupHome, aboveChrome: Boolean? = null): Modifier {
+internal fun Modifier.glassPopupHome(home: GlassPopupHome): Modifier {
     val view = LocalView.current
     // Keep size/readback subscriptions in this layout scope, not in the modal's
     // committed window owner above the per-frame geometry scope.
@@ -83,12 +81,12 @@ internal fun Modifier.glassPopupHome(home: GlassPopupHome, aboveChrome: Boolean?
         home.liveRegistration = BackdropRegistration.fromMapping(it.size.width.toFloat(), it.size.height.toFloat()) { point ->
             it.localToRoot(point) + offset
         }
-        if (!home.departing && home.flights.none { it.handedOff && !it.chromeTrigger }) {
+        if (!home.departing && home.flights.none { it.handedOff }) {
             home.origin = home.currentOrigin
             home.registration = home.liveRegistration
         }
     }.drawWithContent {
-        val retaining = home.departing || home.flights.any { it.handedOff && !it.chromeTrigger }
+        val retaining = home.departing || home.flights.any { it.handedOff }
         if (!retaining) home.registration = home.liveRegistration
         val registration = home.registration.takeIf { retaining }
         if (backdrop.location.retainedRegistration != registration) {
@@ -96,22 +94,17 @@ internal fun Modifier.glassPopupHome(home: GlassPopupHome, aboveChrome: Boolean?
             androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { backdrop.location.transformRevision++ }
         }
         drawContent()
-        projectFlights(home, aboveChrome)
+        projectFlights(home)
     // Sampling is deliberately inside the overlay. Retained ancestor RenderNodes
     // can contain this home, so merely freezing an ancestor recording is insufficient
     // to prevent a modal from sampling itself during the inline handoff.
     }.then(recording)
 }
 
-private const val ChromeReturnDepthHandoff = .9f
-
-private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: Boolean? = null) {
+private fun ContentDrawScope.projectFlights(home: GlassPopupHome) {
     home.flights.forEach { flight ->
         // wasProjected is this frame's receipt: only a frame without the flight releases its presenter's source latch.
         if (!flight.prepared) flight.wasProjected = false
-        // A full-size chrome menu stays above chrome at the start of close (#867).
-        // Its converging chip returns underneath the same chrome (#667).
-        if (aboveChrome != null && aboveChrome != (!flight.chromeTrigger || flight.phase() > ChromeReturnDepthHandoff)) return@forEach
         flight.revision
         val layer = flight.layer
         // prepared is published only after the native presenter selected the
@@ -157,9 +150,7 @@ private fun GlassPopupHome(home: GlassPopupHome, chrome: (@Composable () -> Unit
             else io.github.anastaci1a.localica.ui.layout.ChromeViewportSlot(
                 // As at base, ordinary flights sample the complete scene with
                 // chrome. The chrome trigger samples its own clean page source.
-                modifier = host.glassPopupHome(home, aboveChrome = true),
-                contentModifier = Modifier.drawWithContent { drawContent(); projectFlights(home, aboveChrome = false) },
-                chrome = chrome, content = content)
+                modifier = host.glassPopupHome(home), chrome = chrome, content = content)
         }
     }
 }
