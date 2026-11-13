@@ -32,17 +32,8 @@ class GlassRendererPreferenceTest {
         }
     }
 
-    @Test fun legacyNoneMigratesToSingleToneBlurAndNeverToFlatNone() = withPreferences { context, raw ->
-        raw.edit().putString("glass-renderer", "None").putFloat("glass-depth", .8f).commit()
-        val restored = InterfacePreferences(context).read()
-        assertEquals(GlassRendererMode.SingleToneBlur, restored.glass.renderer)
-        assertEquals("SingleToneBlur", raw.getString("glass-renderer", null))
-        assertEquals(.8f, restored.glass.depth, 0f)
-        assertEquals(restored, InterfacePreferences(context).read())
-    }
-
     @Test fun retiredModesMigrateAndRetiredScrollSettingIsRemoved() = withPreferences { context, raw ->
-        for (name in listOf("Automatic", "Modern", "Legacy")) for (scroll in listOf(false, true)) {
+        for (name in listOf("SingleToneBlur", "None", "Automatic", "Modern", "Legacy")) for (scroll in listOf(false, true)) {
             raw.edit().clear().putString("glass-renderer", name)
                 .putBoolean("glass-live-scroll", scroll).putBoolean("confirm-exit", true).commit()
             val restored = InterfacePreferences(context).read()
@@ -80,7 +71,7 @@ class GlassRendererPreferenceTest {
             assertEquals(requested, restored)
             assertEquals(mode.name, raw.getString("glass-renderer", null))
             if (mode == GlassRendererMode.Normal) {
-                assertEquals(GlassBackend.SingleToneBlur, effectiveGlassBackend(restored.glass.renderer, 26))
+                assertEquals(GlassBackend.AverageFallback, effectiveGlassBackend(restored.glass.renderer, 26))
                 assertEquals(GlassRendererMode.Normal, InterfacePreferences(context).read().glass.renderer)
                 assertEquals("Normal", raw.getString("glass-renderer", null))
             }

@@ -1,7 +1,5 @@
 package io.github.anastaci1a.localica
 
-import io.github.anastaci1a.localica.ui.components.NoneReductionAtlasHost
-import io.github.anastaci1a.localica.ui.GlassColorShader
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -90,8 +88,6 @@ class MainActivity : ComponentActivity() {
                     (if (io.github.anastaci1a.localica.diagnostics.FrameStats.recording.value)
                         { _, window, _ -> io.github.anastaci1a.localica.diagnostics.FrameStats.attach(window) }
                     else null)) {
-            // One shared None reduction for every material in this window (#691).
-            NoneReductionAtlasHost(GlassColorShader, enabled = !io.github.anastaci1a.localica.ui.flatGlass()) {
             io.github.anastaci1a.localica.ui.LocalicaUiRoot {
             LocalicaTheme {
                 io.github.anastaci1a.localica.ui.TagEditorHost((application as LocalicaApplication).tagEditing) {
@@ -105,7 +101,6 @@ class MainActivity : ComponentActivity() {
                     onScanAll = model::scanAll, onQuickScan = model::scanNewFiles, scannerRequest = scannerRequest, lastFmSettingsRequest = lastFmSettingsRequest, onRetryPlayback = model.playback::retry,
                     onSeekRequest = model.playback::requestSeek, playbackSample = playbackObservation.sample)
                 }
-            }
             }
             }
             }

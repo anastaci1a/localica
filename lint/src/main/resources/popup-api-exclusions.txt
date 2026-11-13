@@ -1,8 +1,6 @@
 BindBrowsePinchProgress|app/src/main/java/io/github/anastaci1a/localica/ui/components/BrowsePinchProgress.kt|browse pinch zoom clock binding, not a popup; its timing is the window scale (#862)
 ControlProgress|app/src/main/java/io/github/anastaci1a/localica/ui/components/ControlProgress.kt|slider/control progress drawing, not a popup
 DrawerScrim|app/src/main/java/io/github/anastaci1a/localica/ui/components/Drawer.kt|player drawer scrim drawn from an existing expansion; no motion input
-NoneReductionAtlasHost|app/src/main/java/io/github/anastaci1a/localica/ui/components/NoneReductionAtlas.kt|glass None-mode atlas host (optics, rule 7), no motion input
-NoneReductionAtlasHost|app/src/main/java/io/github/anastaci1a/localica/ui/engine/NoneReductionAtlas.kt|glass None-mode atlas host (optics, rule 7), no motion input
 ProvideUiClock|app/src/main/java/io/github/anastaci1a/localica/ui/engine/UiClock.kt|root clock provider, pinned by the UiLayerDependency rootClockProvider rule to Theme.kt
 SettingsIconComparisonRow|app/src/main/java/io/github/anastaci1a/localica/ui/components/SettingsStockSlots.kt|settings layout slot, not a popup
 SettingsOrderCard|app/src/main/java/io/github/anastaci1a/localica/ui/components/SettingsStockSlots.kt|settings layout slot, not a popup
@@ -41,7 +39,6 @@ rememberLyricsHeaderSurface|app/src/main/java/io/github/anastaci1a/localica/ui/c
 rememberMaterialAreaReduction|app/src/main/java/io/github/anastaci1a/localica/ui/components/MaterialAreaReduction.kt|material reduction (optics), no motion input
 rememberMaterialAreaReduction|app/src/main/java/io/github/anastaci1a/localica/ui/engine/MaterialAreaReduction.kt|material reduction (optics), no motion input
 rememberNativeViewportRelocation|app/src/main/java/io/github/anastaci1a/localica/ui/components/NativeViewportRelocation.kt|IME viewport relocation, not a popup
-rememberNoneReductionAtlas|app/src/main/java/io/github/anastaci1a/localica/ui/components/NoneReductionAtlas.kt|glass None-mode atlas (optics), no motion input
 rememberPhaseShape|app/src/main/java/io/github/anastaci1a/localica/ui/engine/PersistentShape.kt|shape following an existing phase, no motion input
 rememberProfileColor|app/src/main/java/io/github/anastaci1a/localica/ui/components/Presence.kt|control colour on a stock motion profile, not a popup
 rememberProfileValue|app/src/main/java/io/github/anastaci1a/localica/ui/components/Presence.kt|control value on a stock motion profile, not a popup

@@ -41,7 +41,6 @@ class GlassRendererSwitchingTest {
         val draft: String = "", val material: FrostedBackdrop? = null)
 
     @Test fun retainedNormalPopupRebindsAfterFlatNone() = retainedScene(GlassRendererMode.Normal)
-    @Test fun retainedSingleTonePopupRebindsAfterFlatNone() = retainedScene(GlassRendererMode.SingleToneBlur)
     @Test fun popupOpenedInFlatNoneAcquiresCurrentScene() = retainedScene(GlassRendererMode.FlatNone)
 
     private fun retainedScene(initialMode: GlassRendererMode) {
@@ -162,7 +161,7 @@ class GlassRendererSwitchingTest {
         compose.onNodeWithTag("renderer-draft").performTextInput("First draft")
         val initial = compose.runOnIdle { requireNotNull(observed.get()) }
         val entry = compose.runOnIdle { host.entries.single() }
-        for (mode in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.FlatNone, GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.SingleToneBlur)) {
+        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.Normal)) {
             compose.runOnIdle { runtime.request(mode) }
             compose.waitForIdle()
             compose.runOnIdle {
@@ -252,7 +251,7 @@ class GlassRendererSwitchingTest {
         var previousParent = firstParent
         var previousChild = firstChild
         var previousMode = GlassRendererMode.Normal
-        for (mode in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.FlatNone, GlassRendererMode.SingleToneBlur, GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.Normal)) {
+        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.Normal)) {
             compose.runOnIdle { runtime.request(mode) }
             compose.waitForIdle()
             compose.runOnIdle {

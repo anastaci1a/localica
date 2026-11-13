@@ -369,10 +369,7 @@ io.github.anastaci1a.localica.TransportAnimationFrameTest
 io.github.anastaci1a.localica.TransportScrollTest
 io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest
 io.github.anastaci1a.localica.WorkflowPersistenceTest
-io.github.anastaci1a.localica.NoneFullAreaTest
-io.github.anastaci1a.localica.NoneQueueMaterialTest
 io.github.anastaci1a.localica.QueueHeaderMaterialBoundaryTest
-io.github.anastaci1a.localica.NonePreimageTest
 io.github.anastaci1a.localica.NoneShadowParityTest
 io.github.anastaci1a.localica.NoneShadowScreenshotTest
 
@@ -467,8 +464,6 @@ io.github.anastaci1a.localica.GlassActionCentreTest
 io.github.anastaci1a.localica.LyricsLineInkEaseTest
 io.github.anastaci1a.localica.LyricsLineAnchorTest
 io.github.anastaci1a.localica.PlayerLyricsMountTest
-io.github.anastaci1a.localica.NoneControlPolicyTest
-io.github.anastaci1a.localica.NoneRequestedPolicyTest
 io.github.anastaci1a.localica.NestedGlassRegistrationTest
 io.github.anastaci1a.localica.SublistLoadingPlaceholderCaptureTest
 io.github.anastaci1a.localica.LoadingSweepContrastTest
@@ -479,10 +474,7 @@ io.github.anastaci1a.localica.BackdropEdgeStripTest
 
 io.github.anastaci1a.localica.CollectionLoadingRevealTest
 io.github.anastaci1a.localica.LibraryDataExchangeTest
-io.github.anastaci1a.localica.NoneExactReductionTest
-io.github.anastaci1a.localica.NoneAtlasTest
 
-io.github.anastaci1a.localica.NoneRealAppWalkTest
 io.github.anastaci1a.localica.LyricsReturnBoundsTest
 
 io.github.anastaci1a.localica.IconOpticalCentringTest

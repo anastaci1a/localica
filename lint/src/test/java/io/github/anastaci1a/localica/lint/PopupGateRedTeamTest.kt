@@ -14,7 +14,7 @@ class MutableOutput { var value=1f }
 class SurfaceModifier
 fun SurfaceModifier.glassSurfaceAnchor(source: Any?, cornerRadius: Any?): GlassAnchor? = null
 fun SurfaceModifier.glassSurfaceAnchor(): GlassAnchor? = null
-fun PopupActionPill(anchor: GlassAnchor, source: Any? = null, modifier: Any? = null, noneAtlasInput: Any? = null, chromeVisibility: () -> Float = { 1f }, playerExpansion: Any? = null) {}
+fun PopupActionPill(anchor: GlassAnchor, source: Any? = null, modifier: Any? = null, chromeVisibility: () -> Float = { 1f }, playerExpansion: Any? = null) {}
 class GlassShape
 class GlassExpansion { fun bind() {} }
 class GlassMomentum { var damping=1f; fun reset() {} }

@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 import io.github.anastaci1a.localica.ui.components.PopupSharedContent
 
-import io.github.anastaci1a.localica.ui.components.NoneReductionAtlasHost
 import io.github.anastaci1a.localica.ui.layout.PopupViewportSlot
 import io.github.anastaci1a.localica.ui.spec.PopupViewportInsets
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
@@ -721,7 +720,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         if (countsAsPanel) parentPanels?.let { it.intValue++ }
         onDispose { if (countsAsPanel) parentPanels?.let { it.intValue-- } }
     }
-    Dialog(onDismissRequest = { if (continuousOrigin == null || originAdmitted) dismissNow() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { ModalGestureWindow(gestures) { TextEditingFocusHost { NoneReductionAtlasHost(GlassColorShader, enabled = !io.github.anastaci1a.localica.ui.flatGlass()) {
+    Dialog(onDismissRequest = { if (continuousOrigin == null || originAdmitted) dismissNow() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { ModalGestureWindow(gestures) { TextEditingFocusHost {
         val view = LocalView.current
         val window = (view.parent as? DialogWindowProvider)?.window
         val windowPlane = rememberShadowPlane()
@@ -1170,7 +1169,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             }
             SliderCancelLayer(sliderCancel, WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp)
         }
-    } } } }
+    } } }
 }
 
 
@@ -1182,7 +1181,7 @@ internal fun glassMorphPixelBounds(rect: Rect): MotionPixelRect =
 /** Both actions press the same shell and keep their own click/drag ownership. */
 @Composable
 internal fun PopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop? = LocalFrostedBackdrop.current,
-    modifier: Modifier = Modifier, noneAtlasInput: NoneAtlasInput? = null,
+    modifier: Modifier = Modifier,
     chromeVisibility: () -> Float = { 1f }, playerExpansion: io.github.anastaci1a.localica.ui.engine.ExpansionView? = null,
     leadingIcon: AppIcon = AppIcon.ActionSearch, trailingIcon: AppIcon = AppIcon.ActionEllipsis,
     leadingLabel: String = "Search library", trailingLabel: String = "More", tag: String = "utility-pill",
@@ -1204,7 +1203,7 @@ internal fun PopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop? = Loc
     LiquidGlassSurface(if (raised) surfaceModifier.pageGlassCaster(opacity = effectiveShadow) else surfaceModifier,
         source = source, shadow = !raised,
         contactAdmission = { raised || !anchor.hidden },
-        depthScale = if (raised) RaisedGlassDepthScale else anchor.depthScale, noneAtlasInput = noneAtlasInput) {
+        depthScale = if (raised) RaisedGlassDepthScale else anchor.depthScale) {
         anchor.captureInk()
         io.github.anastaci1a.localica.ui.layout.ActionButtonFaceSlot(
             if (raised) Modifier.fillMaxSize() else Modifier.align(Alignment.Center), iconOnly = false,

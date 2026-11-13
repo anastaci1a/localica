@@ -95,20 +95,18 @@ class FlatNoneMaterialTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
-    @Test fun disablingTheWindowAtlasKeepsUnsavedContentMounted() {
+    @Test fun rendererChangesKeepUnsavedContentMounted() {
         val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
         var mounts = 0
         compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {
-            io.github.anastaci1a.localica.ui.components.NoneReductionAtlasHost(GlassColorShader, enabled = !io.github.anastaci1a.localica.ui.flatGlass()) {
                 LocalicaTheme {
                     remember { mounts++; Any() }
                     var draft by remember { mutableStateOf("") }
                     androidx.compose.material3.OutlinedTextField(draft, { draft = it }, Modifier.testTag("atlas-draft"))
                 }
-            }
         } }
         compose.onNodeWithTag("atlas-draft").performTextInput("Unsaved mode change")
-        for (mode in listOf(GlassRendererMode.FlatNone, GlassRendererMode.SingleToneBlur, GlassRendererMode.FlatNone, GlassRendererMode.Normal)) {
+        for (mode in listOf(GlassRendererMode.FlatNone, GlassRendererMode.Normal)) {
             compose.runOnIdle { runtime.request(mode) }
             compose.onNodeWithTag("atlas-draft").assertTextContains("Unsaved mode change")
             compose.runOnIdle { assertEquals("Mode changes cannot recreate window content", 1, mounts) }
@@ -195,44 +193,4 @@ class FlatNoneMaterialTest {
         } finally { compose.runOnUiThread { GlassWork.observer = null } }
     }
 
-    @Test fun migratedLegacyNoneAndCanonicalSingleToneBlurHaveIdenticalPixels() {
-        val base = InstrumentationRegistry.getInstrumentation().targetContext
-        val name = "flat-none-migration-pixels"
-        val context = object : ContextWrapper(base) {
-            override fun getSharedPreferences(ignored: String, mode: Int) = base.getSharedPreferences(name, mode)
-        }
-        val raw = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
-        try {
-            raw.edit().clear().putString("glass-renderer", "None").commit()
-            val legacy = InterfacePreferences(context).read().glass
-            assertEquals(GlassRendererMode.SingleToneBlur, legacy.renderer)
-            assertEquals("SingleToneBlur", raw.getString("glass-renderer", null))
-            var appearance by mutableStateOf(legacy)
-            lateinit var source: FrostedBackdrop
-            compose.setContent { LocalicaTheme {
-                CompositionLocalProvider(LocalDensity provides Density(1f),
-                    LocalGlassRendererRuntime provides remember { GlassRendererRuntime(legacy.renderer) },
-                    LocalGlassAppearance provides appearance) {
-                    source = rememberFrostedBackdrop(Unit, dark = false)
-                    Box(Modifier.size(180.dp)) {
-                        Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
-                            drawRect(Color(0xFFE02060))
-                            drawRect(Color(0xFF1040E0), Offset(size.width / 2, 0f), Size(size.width / 2, size.height))
-                        }
-                        LiquidGlassSurface(Modifier.padding(20.dp).size(140.dp).testTag("legacy"), source,
-                            cornerRadius = 24.dp, shadow = false, pressFeedback = false) {}
-                    }
-                }
-            } }
-            compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
-            val before = compose.onNodeWithTag("legacy").captureToImage()
-            raw.edit().putString("glass-renderer", "SingleToneBlur").commit()
-            compose.runOnIdle { appearance = InterfacePreferences(context).read().glass }
-            val after = compose.onNodeWithTag("legacy").captureToImage()
-            assertTrue("Legacy None migration must be byte-identical", before.asAndroidBitmap().sameAs(after.asAndroidBitmap()))
-            val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
-                ?: base.getExternalFilesDir(null)!!
-            File(root, "legacy-none-migrated.png").outputStream().use { before.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
-        } finally { raw.edit().clear().commit(); base.deleteSharedPreferences(name) }
-    }
 }

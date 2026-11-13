@@ -221,7 +221,7 @@ class LastFmScrollStressTest {
             runBlocking { app.onlineMetadataConsent.setAllowed(photos) }
             runBlocking { store.replaceRoot(ScanResult(FolderSelection(ROOT, "Stress 779"), tracks, 0)) }
             interfacePreferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, tab),
-                expandOnPlay = false, glass = GlassAppearance(renderer = GlassRendererMode.SingleToneBlur)))
+                expandOnPlay = false, glass = GlassAppearance(renderer = GlassRendererMode.Normal)))
             browsePreferences.write(BrowseRoute(tab), BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5), false)
             counters.reset()
             val fixtureStart = GcStats.now()

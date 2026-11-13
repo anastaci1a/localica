@@ -77,7 +77,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     lyricsOpen: Boolean = false, onLyrics: (Boolean) -> Unit = {},
     track: Track? = null, onSettings: (InterfaceSettings) -> Unit = {},
     actionRows: Int = 1, queue: SheetState? = null, frostedBackdrop: FrostedBackdrop? = null,
-    glassBackdrop: FrostedBackdrop? = null, noneAtlasInput: NoneAtlasInput? = null, visual: PlayerVisual? = null,
+    glassBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null,
     artworkVisit: String? = null, previousArtwork: ArtworkNeighbor? = null, nextArtwork: ArtworkNeighbor? = null,
     onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, bottomChrome: androidx.compose.ui.unit.Dp = 80.dp, miniForeground: Color = Color.Black,
     onSeekRequest: ((Long, String?) -> Long)? = null,
@@ -459,8 +459,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         val editArtwork = presentedArtworkEdit()
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
-            depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * boundedProgress,
-            noneAtlasInput = noneAtlasInput.takeIf { collapsedPhase(p) })
+            depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * boundedProgress)
         Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > this@PlayerSurface.maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
             .onGloballyPositioned { polarity.measure("background", it) }

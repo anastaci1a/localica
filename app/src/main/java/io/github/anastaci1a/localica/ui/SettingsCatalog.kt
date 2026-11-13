@@ -60,7 +60,7 @@ internal object SettingsCatalog {
         SettingSpec("Refresh all photos", "Artist photos", "refetch library artists"),
         SettingSpec("Interface gray", "Appearance", "grey contrast secondary text"),
         SettingSpec("Reset gray tone", "Appearance", "default"),
-        SettingSpec("Glass renderer", "Glass", "render normal none single tone blur testing disable effects", values = GlassRendererMode.entries.map { it.label }),
+        SettingSpec("Glass renderer", "Glass", "render normal none disable effects", values = GlassRendererMode.entries.map { it.label }),
         SettingSpec("Blur", "Glass appearance", "frosted background blur"),
         SettingSpec("White tint", "Glass appearance", "opacity transparent"),
         SettingSpec("Shadow strength", "Glass appearance", "floating darkness"),

@@ -46,11 +46,6 @@ internal fun glassAverageProgress(): State<Float> = androidx.compose.animation.c
 /** Counts optical work at invocation, without retaining scenes or scheduling frames. */
 internal val LocalGlassOpticalWork = staticCompositionLocalOf<(() -> Unit)?> { null }
 
-/** Only the legacy sampling mode retains its resting-only control exception. */
-@Composable
-internal fun requestedSingleToneBlur(): Boolean =
-    (LocalGlassRendererRuntime.current?.requested ?: LocalGlassAppearance.current.renderer) == GlassRendererMode.SingleToneBlur
-
 /** Flat mode bypasses the complete glass graph, including allocation and preparation. */
 @Composable
 internal fun flatGlass(): Boolean = currentGlassRendererGeneration().backend == GlassBackend.FlatNone

@@ -11,7 +11,7 @@ class InterfacePreferences(context: Context) {
     private val preferences = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
     fun read(): InterfaceSettings {
         val savedRenderer = preferences.getString("glass-renderer", null)
-        if (savedRenderer in listOf("None", "Automatic", "Modern", "Legacy") || preferences.contains("glass-live-scroll")) {
+        if (savedRenderer in listOf("None", "SingleToneBlur", "Automatic", "Modern", "Legacy") || preferences.contains("glass-live-scroll")) {
             preferences.edit().apply {
                 putString("glass-renderer", GlassRendererMode.fromStored(savedRenderer).name)
                 remove("glass-live-scroll")

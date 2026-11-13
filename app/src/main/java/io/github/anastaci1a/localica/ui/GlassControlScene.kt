@@ -28,20 +28,20 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val flat = flatGlass()
     val flatColor = flatGlassColor()
     val geometryObserver = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) LocalControlGeometryDraw.current else null
-    if (flat || requestedSingleToneBlur()) {
+    if (flat) {
         // No recording, source subscription, lens, reduction or exclusive lease in None.
         Canvas(modifier) {
             scene()
             val shape = geometry()
             geometryObserver?.invoke(shape)
-            drawRoundRect(if (flat) flatColor else Color.White, shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
+            drawRoundRect(flatColor, shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
         }
         return
     }
     val renderer = currentGlassRendererGeneration()
     val modern = Build.VERSION.SDK_INT >= 33
     val none by androidx.compose.animation.core.animateFloatAsState(
-        if (renderer.backend == GlassBackend.SingleToneBlur) 1f else 0f,
+        if (renderer.backend == GlassBackend.AverageFallback) 1f else 0f,
         androidx.compose.animation.core.spring(1f, 450f), label = "Control render mode")
     val currentActive by rememberUpdatedState(active)
     val optical by remember { derivedStateOf { currentActive() > 0f } }

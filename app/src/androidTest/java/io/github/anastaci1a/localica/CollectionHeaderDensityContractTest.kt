@@ -46,7 +46,7 @@ class CollectionHeaderDensityContractTest {
                     Box(Modifier.requiredWidth(with(windowDensity) { 1080.toDp() }).wrapContentHeight(unbounded = true)) {
                         MaterialTheme(colorScheme = scheme) {
                             CompositionLocalProvider(LocalDensity provides suppliedDensity,
-                                LocalGlassAppearance provides GlassAppearance(renderer = GlassRendererMode.SingleToneBlur)) {
+                                LocalGlassAppearance provides GlassAppearance(renderer = GlassRendererMode.Normal)) {
                                 Box(Modifier.onSizeChanged { measured = it }) {
                                     CollectionHeader("Density header", "Artist", visual, false, true, play, shuffle)
                                 }

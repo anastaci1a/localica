@@ -100,12 +100,10 @@ fun Float.normalizedGrayTone() = if (isFinite()) coerceIn(0f, 1f) else .4f
 enum class TabLensStyle(val label: String) { Adjustable("Adjustable glass"), Overlay("Clear overlay lens"), Classic("Classic gray pill") }
 
 enum class GlassRendererMode(val label: String) {
-    Normal("Normal"), SingleToneBlur("Single-Tone Blur"), FlatNone("None");
+    Normal("Normal"), FlatNone("None");
 
     companion object {
-        /** The old None wire value always retains its sampling pixels. */
         fun fromStored(value: String?): GlassRendererMode = when (value) {
-            "None", "SingleToneBlur" -> SingleToneBlur
             "FlatNone" -> FlatNone
             else -> Normal
         }

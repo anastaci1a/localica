@@ -37,8 +37,6 @@ class BoundaryAdoptionPixelReferenceTest {
 
     @Test fun NormalLive() = fixture(true, GlassRendererMode.Normal)
     @Test fun NormalRetained() = fixture(false, GlassRendererMode.Normal)
-    @Test fun SingleToneBlurLive() = fixture(true, GlassRendererMode.SingleToneBlur)
-    @Test fun SingleToneBlurRetained() = fixture(false, GlassRendererMode.SingleToneBlur)
     @Test fun FlatNoneLive() = fixture(true, GlassRendererMode.FlatNone)
     @Test fun FlatNoneRetained() = fixture(false, GlassRendererMode.FlatNone)
 
