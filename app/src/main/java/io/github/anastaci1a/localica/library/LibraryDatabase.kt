@@ -38,6 +38,7 @@ data class TrackRecord(
     val releaseType: String? = null,
     val compilation: Boolean? = null,
     val musicBrainzId: String? = null,
+    val firstSeenAt: Long? = null,
 )
 
 @Entity(tableName = "folder_tracks", primaryKeys = ["folderUri", "trackId"], foreignKeys = [
@@ -68,7 +69,7 @@ data class FolderWithTracks(
     val tracks: List<TrackInFolder>,
 )
 
-data class AddedDate(val id: String, val addedAt: Long?)
+data class AddedDate(val id: String, val addedAt: Long?, val firstSeenAt: Long?)
 
 @Dao
 abstract class LibraryDao {
@@ -129,41 +130,44 @@ abstract class LibraryDao {
     }
 
     @Upsert protected abstract suspend fun upsertFolder(folder: FolderRecord)
-    @Upsert protected abstract suspend fun upsertTracks(tracks: List<TrackRecord>)
-    @Update protected abstract suspend fun updateTrack(track: TrackRecord)
-    @Query("SELECT * FROM tracks WHERE id = :id") protected abstract suspend fun track(id: String): TrackRecord?
-    @Query("SELECT id, addedAt FROM tracks") protected abstract suspend fun addedDates(): List<AddedDate>
+    @Insert protected abstract suspend fun insertTracks(tracks: List<TrackRecord>)
+    @Update protected abstract suspend fun updateTracks(tracks: List<TrackRecord>)
+    @Query("SELECT id, addedAt, firstSeenAt FROM tracks WHERE id IN (:ids)") protected abstract suspend fun dates(ids: List<String>): List<AddedDate>
     @Transaction open suspend fun updateMetadata(track: TrackRecord) {
-        val saved = track(track.id) ?: return
-        updateTrack(track.copy(addedAt = saved.addedAt))
+        val saved = dates(listOf(track.id)).singleOrNull() ?: return
+        updateTracks(listOf(track.copy(addedAt = saved.addedAt, firstSeenAt = saved.firstSeenAt)))
     }
     @Transaction open suspend fun updateMetadataBatch(tracks: List<TrackRecord>) { tracks.forEach { updateMetadata(it) } }
     @Insert protected abstract suspend fun insertLocations(locations: List<FolderTrackRecord>)
-    @Insert(onConflict = OnConflictStrategy.IGNORE) protected abstract suspend fun insertNewTracks(tracks: List<TrackRecord>)
     @Insert(onConflict = OnConflictStrategy.IGNORE) protected abstract suspend fun insertNewLocations(locations: List<FolderTrackRecord>)
     @Query("DELETE FROM folder_tracks WHERE folderUri = :uri") protected abstract suspend fun clearLocations(uri: String)
-    @Query("DELETE FROM folders WHERE uri = :uri") protected abstract suspend fun deleteFolder(uri: String)
-    @Query("DELETE FROM tracks WHERE id NOT IN (SELECT trackId FROM folder_tracks)") protected abstract suspend fun pruneTracks()
+    /** Tracks outlive their folders: the track row owns its dates, memberships only decide visibility (#930). */
+    @Query("DELETE FROM folders WHERE uri = :uri") abstract suspend fun removeRoot(uri: String)
 
-    @Transaction
-    open suspend fun replaceRoot(folder: FolderRecord, tracks: List<TrackRecord>, locations: List<FolderTrackRecord>) {
+    /** Saved ids keep both dates, nulls included; a first sighting sets both to one [now] (#930). */
+    private suspend fun saveTracks(folder: FolderRecord, tracks: List<TrackRecord>, locations: List<FolderTrackRecord>) {
         require(locations.all { it.folderUri == folder.uri })
         upsertFolder(folder)
-        val dates = addedDates().associate { it.id to it.addedAt }
         val now = System.currentTimeMillis()
-        upsertTracks(tracks.map { it.copy(addedAt = addedDateAfterScan(dates[it.id], now)) })
-        clearLocations(folder.uri)
-        insertLocations(locations)
-        pruneTracks()
+        tracks.chunked(900).forEach { chunk ->
+            val saved = dates(chunk.map { it.id }).associateBy { it.id }
+            val (known, fresh) = chunk.partition { it.id in saved }
+            updateTracks(known.map { saved.getValue(it.id).run { it.copy(addedAt = addedAt, firstSeenAt = firstSeenAt) } })
+            insertTracks(fresh.map { it.copy(addedAt = now, firstSeenAt = now) })
+        }
     }
 
     @Transaction
+    open suspend fun replaceRoot(folder: FolderRecord, tracks: List<TrackRecord>, locations: List<FolderTrackRecord>) {
+        saveTracks(folder, tracks, locations)
+        clearLocations(folder.uri)
+        insertLocations(locations)
+    }
+
+    /** Keeps existing memberships and their metadata failure state. */
+    @Transaction
     open suspend fun mergeRoot(folder: FolderRecord, tracks: List<TrackRecord>, locations: List<FolderTrackRecord>) {
-        require(locations.all { it.folderUri == folder.uri })
-        upsertFolder(folder)
-        val now = System.currentTimeMillis()
-        // INSERT IGNORE preserves metadata, dates and existing membership failure state atomically.
-        insertNewTracks(tracks.map { it.copy(addedAt = now) })
+        saveTracks(folder, tracks, locations)
         insertNewLocations(locations)
     }
 
@@ -171,19 +175,19 @@ abstract class LibraryDao {
 
     /** Library data import (#720): every date in one transaction; returns the rows written. */
     @Transaction open suspend fun applyAddedDates(dates: Map<String, Long>): Int = dates.entries.sumOf { (id, date) -> setAddedAt(id, date) }
-
-    @Transaction
-    open suspend fun removeRoot(uri: String) {
-        deleteFolder(uri)
-        pruneTracks()
-    }
 }
 
-@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class, TrackArtworkRecord::class], version = 9, exportSchema = true)
+@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class, TrackArtworkRecord::class], version = 10, exportSchema = true)
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 
     companion object {
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tracks ADD COLUMN firstSeenAt INTEGER")
+                db.execSQL("UPDATE tracks SET firstSeenAt = addedAt")
+            }
+        }
         val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE tracks ADD COLUMN musicBrainzId TEXT") }
         }
@@ -200,7 +204,7 @@ abstract class LibraryDatabase : RoomDatabase() {
             }
         }
         /** Every migration, in order; shared by the app and migration tests. */
-        val MIGRATIONS get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+        val MIGRATIONS get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tracks ADD COLUMN addedAt INTEGER")
@@ -291,29 +295,21 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
     }.flowOn(Dispatchers.Default)
     override suspend fun current() = dao.read().toSnapshot()
     override suspend fun playbackSnapshot(trackIds: Set<String>) = dao.playbackSnapshot(trackIds)
-    override suspend fun replaceRoot(result: ScanResult) {
-        dao.replaceRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
-            TrackRecord(it.id, it.title, it.artist, it.album, it.durationMs, it.fileName,
-                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment, it.composer, it.lyricist, it.modifiedAt,
-                releaseType = it.releaseType, compilation = it.compilation, musicBrainzId = it.musicBrainzId)
-        }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath, it.id in result.failedMetadataIds) })
-    }
-    override suspend fun mergeRoot(result: ScanResult) {
-        dao.mergeRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
-            TrackRecord(it.id, it.title, it.artist, it.album, it.durationMs, it.fileName,
-                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment, it.composer, it.lyricist, it.modifiedAt,
-                releaseType = it.releaseType, compilation = it.compilation, musicBrainzId = it.musicBrainzId)
-        }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath, it.id in result.failedMetadataIds) })
+    override suspend fun replaceRoot(result: ScanResult) = save(result, dao::replaceRoot)
+    override suspend fun mergeRoot(result: ScanResult) = save(result, dao::mergeRoot)
+    private suspend fun save(result: ScanResult, write: suspend (FolderRecord, List<TrackRecord>, List<FolderTrackRecord>) -> Unit) = with(result) {
+        write(FolderRecord(folder.uri, folder.name), tracks.map { it.record() },
+            tracks.map { FolderTrackRecord(folder.uri, it.id, it.uri, it.relativePath, it.id in failedMetadataIds) })
     }
     override suspend fun removeRoot(uri: String) = dao.removeRoot(uri)
     override suspend fun applyAddedDates(dates: Map<String, Long>) = if (dates.isEmpty()) 0 else dao.applyAddedDates(dates)
     override suspend fun updateMetadata(track: Track) = updateMetadataBatch(listOf(track))
-    override suspend fun updateMetadataBatch(tracks: List<Track>) = dao.updateMetadataBatch(tracks.map { track ->
-        TrackRecord(track.id, track.title, track.artist, track.album, track.durationMs, track.fileName, track.albumArtist,
-            track.trackNumber, track.discNumber, track.year, track.genre, track.comment, track.composer, track.lyricist, track.modifiedAt,
-            releaseType = track.releaseType, compilation = track.compilation, musicBrainzId = track.musicBrainzId)
-    })
+    override suspend fun updateMetadataBatch(tracks: List<Track>) = dao.updateMetadataBatch(tracks.map { it.record() })
 }
+
+/** Metadata only; the DAO owns both dates. */
+private fun Track.record() = TrackRecord(id, title, artist, album, durationMs, fileName, albumArtist, trackNumber, discNumber,
+    year, genre, comment, composer, lyricist, modifiedAt, releaseType = releaseType, compilation = compilation, musicBrainzId = musicBrainzId)
 
 private fun List<FolderWithTracks>.toSnapshot(): LibrarySnapshot {
     val tracks = flatMap { it.tracks }.canonicalTracks()
@@ -332,5 +328,5 @@ private fun List<TrackInFolder>.canonicalTracks(): List<Track> =
         Track(location.uri, record.title, record.artist, record.album, record.durationMs, record.fileName,
             location.relativePath, record.id, record.albumArtist, record.trackNumber, record.discNumber, record.year,
             record.genre, record.comment, locations, record.composer, record.lyricist, record.modifiedAt, record.addedAt,
-            releaseType = record.releaseType, compilation = record.compilation, musicBrainzId = record.musicBrainzId)
+            releaseType = record.releaseType, compilation = record.compilation, musicBrainzId = record.musicBrainzId, firstSeenAt = record.firstSeenAt)
     }.inCanonicalOrder()

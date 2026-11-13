@@ -37,9 +37,9 @@ class LibraryDataTest {
         val text = bytes.toString(Charsets.UTF_8)
         val root = JSONObject(text)
         assertEquals("localica-library-data", root.getString("format"))
-        assertEquals("1.0", root.getString("version"))
+        assertEquals("1.1", root.getString("version"))
         val first = root.getJSONArray("tracks").getJSONObject(0)
-        for (key in listOf("id", "uri", "locations", "sizeBytes", "durationMs", "title", "artist", "album", "albumArtist", "trackNumber", "discNumber", "addedAt"))
+        for (key in listOf("id", "uri", "locations", "sizeBytes", "durationMs", "title", "artist", "album", "albumArtist", "trackNumber", "discNumber", "addedAt", "firstSeenAt"))
             assertTrue("missing $key", first.has(key))
         assertEquals("Music", first.getJSONArray("locations").getJSONObject(0).getString("rootName"))
         assertTrue(root.getJSONArray("tracks").getJSONObject(2).isNull("addedAt"))
@@ -53,6 +53,16 @@ class LibraryDataTest {
             val added = plan.fields.single { it.field == LibraryDataField.AddedAt }
             assertEquals(LibraryDataFieldSummary(LibraryDataField.AddedAt, 2, 2, 0, 0, 0, 0), added)
         }
+    }
+
+    @Test fun firstSeenIsExportedButNeverImportedAndVersionOneZeroFilesStillImport() {
+        val seen = library.copy(tracks = library.tracks.map { it.copy(firstSeenAt = 500) })
+        assertEquals(500L, JSONObject(export(seen).toString(Charsets.UTF_8)).getJSONArray("tracks").getJSONObject(0).getLong("firstSeenAt"))
+        val old = document(JSONObject().put("id", "a").put("addedAt", 5).put("firstSeenAt", 7))
+        assertEquals("1.0", old.version)
+        val plan = LibraryDataImport.plan(old, seen)
+        assertEquals(mapOf("a" to 5L), plan.addedAtChanges)
+        assertEquals(listOf(LibraryDataField.AddedAt), plan.fields.map { it.field })
     }
 
     @Test fun matchingUsesIdThenLocationThenStrictMetadata() {
@@ -150,7 +160,7 @@ class LibraryDataTest {
     }
 }
 
-/** Mirrors the Room store's date rules through the same [addedDateAfterScan] helper. */
+/** Mirrors the Room store's presence-aware date carry: saved ids keep their date, nulls included. */
 private class ScanStore : LibraryStore {
     override val snapshots = MutableStateFlow(LibrarySnapshot())
     private var clock = 1_000L
@@ -161,7 +171,7 @@ private class ScanStore : LibraryStore {
         val now = clock++
         snapshots.value = LibrarySnapshot(before.folders.filterNot { it.uri == result.folder.uri } + result.folder,
             before.tracks.filterNot { it.locations.any { place -> place.folderUri == result.folder.uri } } + result.tracks.map {
-                it.copy(addedAt = addedDateAfterScan(saved[it.id], now), locations = listOf(TrackLocation(result.folder.uri, it.uri, it.relativePath)))
+                it.copy(addedAt = saved.getOrDefault(it.id, now), locations = listOf(TrackLocation(result.folder.uri, it.uri, it.relativePath)))
             })
     }
     override suspend fun mergeRoot(result: ScanResult) {

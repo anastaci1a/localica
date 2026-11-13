@@ -222,7 +222,7 @@ Replaceable cover providers use bounded caches (including missing results), canc
 
 Rescans/edits invalidate artwork/lyric caches. Long automatic scrolls retain cached covers but defer uncached decode requests until settling or interruption. Manual browsing keeps normal loading. No scraping.
 
-Average artwork colours live in the library database's `track_artwork` table, keyed by track with the source `modifiedAt`. A changed `modifiedAt` marks a colour stale, and removing a track cascades its row. Catalog writes never wait for colours, and colour writes never republish the catalog.
+Average artwork colours live in the library database's `track_artwork` table, keyed by track with the source `modifiedAt`. A changed `modifiedAt` marks a colour stale. Tracks outlive their folders (#930), so a hidden track keeps its row and every colour read joins `folder_tracks`. Catalog writes never wait for colours, and colour writes never republish the catalog.
 
 The average is a 16 by 16 filtered downscale averaged in linear light. A URI-keyed index loads off Main and republishes at most every 400 ms. Only loading artwork placeholders observe it.
 
