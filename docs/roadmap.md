@@ -1,26 +1,27 @@
 # Roadmap
 
-Status: proposed work. These outcomes require implementation or verification. They do not establish released behavior.
+Released: [v0.34.4](https://github.com/anastaci1a/localica/releases/tag/v0.34.4). The milestones below describe planned outcomes, not claims of release or physical-device verification. Issues own acceptance criteria; [release gates](development/release.md) own distribution readiness.
 
-## Current checkpoint
+## Milestones
 
-Released v0.30.0 delivered gesture ownership, queue reuse and the shared glass controls. The next checkpoint is physical-device confidence in responsiveness and stability, judged against [release gates](build.md#release-preparation).
+| Milestone | Outcome |
+| --- | --- |
+| [M1 Stable base](https://github.com/anastaci1a/localica/milestone/12) | Current UI defects resolved, no open flakes, self-hosted runner available. |
+| [M2 Apple-feel player & Queue](https://github.com/anastaci1a/localica/milestone/13) | Player and Queue use the measured motion model; A35 runner and Checkpoint A establish physical-device smoothness. |
+| [M3 Surfaces & popups](https://github.com/anastaci1a/localica/milestone/14) | Persistent shared shapes, compositor and shadow planes, popup morphs; A35 Checkpoint B. |
+| [M4 Lists & controls](https://github.com/anastaci1a/localica/milestone/15) | Shared controls, reveals, rows, selection, pinch and list motion; A35 Checkpoint C without list stutter. |
+| [M5 Cleanup & final](https://github.com/anastaci1a/localica/milestone/16) | Delete dead code, shrink the codebase, complete final A35 measurements and visual review. |
+| [M6 Liquid Glass to spec](https://github.com/anastaci1a/localica/milestone/17) | Match the liquid-glass geometry specifications. Optics changes are confined to this milestone unless priorities change. |
 
-Improve startup and dense-library responsiveness ([#406](https://github.com/anastaci1a/localica/issues/406)).
+## Outstanding verification
 
-Investigate the open stability reports: repeated pinching at Smallest ([#474](https://github.com/anastaci1a/localica/issues/474)) and Legacy renderer observer failures during navigation ([#475](https://github.com/anastaci1a/localica/issues/475)).
+- Startup and dense-library responsiveness: [#406](https://github.com/anastaci1a/localica/issues/406).
+- Repeated pinching at Smallest: [#474](https://github.com/anastaci1a/localica/issues/474).
+- Queue/player rendering performance and manual-scroll jitter: [#167](https://github.com/anastaci1a/localica/issues/167), [#150](https://github.com/anastaci1a/localica/issues/150).
+- Selection appearance and reversal on physical devices: [#107](https://github.com/anastaci1a/localica/issues/107).
+- AAC boundaries on physical audio output: [#28](https://github.com/anastaci1a/localica/issues/28).
 
-Resolve the post-release defects [#491](https://github.com/anastaci1a/localica/issues/491) to [#496](https://github.com/anastaci1a/localica/issues/496) and the test-reliability reports [#498](https://github.com/anastaci1a/localica/issues/498) and [#499](https://github.com/anastaci1a/localica/issues/499). Clean up inert CI workflows ([#497](https://github.com/anastaci1a/localica/issues/497)).
-
-Require reproducible optical comparisons before changing glass defaults.
-
-Review the [material and control contracts](interface.md#materials-and-controls) on representative physical devices: depth response, interrupted gestures, large collections and material handoffs.
-
-Validate [rendering performance](https://github.com/anastaci1a/localica/issues/167), especially queue scrolling and player expansion. Emulator measurements do not establish physical-device frame rates. Reproduce [intermittent manual-scroll jitter](https://github.com/anastaci1a/localica/issues/150).
-
-Validate [selection appearance and reversal](https://github.com/anastaci1a/localica/issues/107) on physical devices, preserving accessibility and reduced motion.
-
-Verify [AAC track boundaries](https://github.com/anastaci1a/localica/issues/28) on physical output. Decoded sample equality does not establish seamless speaker playback.
+Emulator timing and decoded-sample equality do not establish physical-device smoothness or seamless speaker playback. The [performance budget](development/performance.md) remains 8.3 ms per whole A35 frame.
 
 ## Deferred capabilities
 

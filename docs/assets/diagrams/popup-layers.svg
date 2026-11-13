@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 280" role="img" aria-labelledby="title desc">
+<title id="title">Proposed popup layers</title><desc id="desc">From bottom to top: screen content, floating chrome, popup and lifted source, then page transitions. Glass samples only layers below the popup.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#334155"/></marker></defs>
+<style>text{font:18px sans-serif;fill:#172033}rect{fill:#eef3fa;stroke:#64748b;stroke-width:2}.arrow{fill:none;stroke:#334155;stroke-width:2;marker-end:url(#arrow)}</style>
+<rect x="1" y="1" width="958" height="278" rx="12" style="fill:white;stroke:#cbd5e1"/>
+<rect x="40" y="25" width="740" height="42" rx="8"/><text x="410" y="52" text-anchor="middle">Page transitions</text><rect x="40" y="85" width="740" height="42" rx="8"/><text x="410" y="112" text-anchor="middle">Popup + lifted source</text><rect x="40" y="145" width="740" height="42" rx="8"/><text x="410" y="172" text-anchor="middle">Floating chrome</text><rect x="40" y="205" width="740" height="42" rx="8"/><text x="410" y="232" text-anchor="middle">Screen content</text><path class="arrow" d="M840 242L840 30"/><text x="855" y="140">Top</text>
+</svg>

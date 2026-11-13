@@ -33,8 +33,15 @@ export function parser() {
 }
 export function proseErrors(source,file) {
   const errors=[];
+  const lines=source.split('\n').length-Number(source.endsWith('\n'));
+  if(lines>200)errors.push(`page has ${lines} source lines; maximum is 200`);
   let content=source.replace(/^---\n[\s\S]*?\n---\n/,'').replace(/<!--[\s\S]*?-->/g,'');
   if(file==='DOCUMENTATION.md')content=content.replace(/## Required standard\n[\s\S]*?(?=\n## Scope and review)/,'');
+  const tokens=parser().lexer(content);
+  if(/^docs\/(?:architecture|interface|development)\//.test(file)){
+    const blocks=tokens.filter(t=>t.type!=='space');
+    if(blocks[blocks.findIndex(t=>t.type==='heading'&&t.depth===1)+1]?.type!=='paragraph')errors.push('expected overview paragraph after H1');
+  }
   const visit=tokens=>{for(const t of tokens){
     if(t.type==='paragraph'&&words(t.text)>=60)errors.push(`paragraph has ${words(t.text)} words: ${t.text.slice(0,70)}`);
     if(t.type==='list')for(const item of t.items){if(words(item.text)>=30)errors.push(`bullet has ${words(item.text)} words: ${item.text.slice(0,70)}`);}
@@ -42,7 +49,7 @@ export function proseErrors(source,file) {
     if(t.type==='blockquote')visit(t.tokens);
     if(t.type==='code'&&/[=∇∈]/.test(t.text)&&(!t.lang||t.lang==='text'))errors.push('mathematical code block needs display LaTeX');
   }};
-  visit(parser().lexer(content));
+  visit(tokens);
   if(/\b(?:Ana|Anastacia|Anastaciia|Anastasia)\b/i.test(content.replace(/https?:\/\/[^\s)]+/g,'')))errors.push('personal name in maintained prose');
   if(/`[^`\n]*(?:\s=\s|∈|∇)[^`\n]*`/.test(content))errors.push('inline formula needs display LaTeX');
   return errors;
@@ -80,7 +87,7 @@ export function build(base=root,destination=path.join(base,'build/docs-site/docs
    if(/^(?:https?:|mailto:)/.test(href))return href;
    const {target,hash}=localTarget(file,href);let dest;
    if(files.includes(target))dest=outputPath(target);
-   else if(target.startsWith('docs/images/')){dest=target.replace('docs/','');assets.add(target);}
+   else if(target.startsWith('docs/assets/')){dest=target.replace('docs/','');assets.add(target);}
    else return `${repository}/blob/main/${target}${hash?'#'+hash:''}`;
    return relative(dest)+(hash?'#'+hash:'');
   };

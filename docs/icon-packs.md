@@ -153,3 +153,7 @@ Older packs and installed files may use these aliases. Settings and template exp
 | `menu.play_next` | `menu.list_add_next` |
 | `menu.queue_add` | `menu.list_add_last` |
 | `action.playlist_add` | `action.list_add_last` |
+
+## Icon style
+
+Built-in icons use 24 dp vectors with a 1.8 dp stroke, rounded caps and rounded joins. Keep imported artwork optically consistent. Download is a tray with a downward arrow.

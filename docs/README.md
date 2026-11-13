@@ -1,21 +1,50 @@
-# Documentation map
+# Documentation
 
-Each topic has one authoritative home. Product, Interface and Structure describe the checked-out branch's contracts. They do not establish that every behavior is verified or released.
+Start with [Product](product.md) for scope and [Roadmap](roadmap.md) for planned outcomes. Architecture explains models; interface pages describe the experience; development pages explain verification and delivery.
 
-| Document | Owns |
-| --- | --- |
-| [Product](product.md) | Scope, library and queue semantics, file safety, lyrics sources and statistics. |
-| [Interface](interface.md) | Layout, gestures, navigation, selection and UI defaults. |
-| [Structure](structure.md) | Code boundaries, persistence, concurrency, rendering and technical constraints. |
-| [Library data](library-data.md) | Export/import file format, fields, versions and matching rules. |
-| [Roadmap](roadmap.md) | Proposed outcomes and deferred capabilities. |
-| [Build](build.md) | Verification, compatibility, signing, release preparation, previews and documentation publishing. |
-| [Documentation standard](../DOCUMENTATION.md) | Public prose, ownership of facts, status labels and review criteria. |
-| [Working instructions](../agents/README.md) | Contributor workflow, issues, labels and commits. |
-| [Collaboration](../agents/collaboration.md) | Responsibility, integration and handoffs. |
+## Architecture
+- [Audio corrections](architecture/audio-corrections.md).
+- [File editing](architecture/file-editing.md).
+- [Glass](architecture/glass.md).
+- [Library](architecture/library.md).
+- [Motion](architecture/motion.md).
+- [Online features](architecture/online.md).
+- [Architecture overview](architecture/overview.md).
+- [Playback](architecture/playback.md).
+- [Popups](architecture/popups.md).
+- [Queues and playlists](architecture/queues.md).
+- [Rendering](architecture/rendering.md).
+- [UI system](architecture/ui-system.md).
 
-The [root README](../README.md) introduces the app. [Issues](https://github.com/anastaci1a/localica/issues) own actionable work and acceptance criteria. [Releases](https://github.com/anastaci1a/localica/releases) identify distributed builds. Git and PR evidence retain history and tested revisions.
+## Interface
+- [Actions and editing](interface/actions-and-editing.md).
+- [Artwork and lyrics](interface/artwork-and-lyrics.md).
+- [Browsing](interface/browsing.md).
+- [Collection pages](interface/collections.md).
+- [Materials and controls](interface/materials-and-controls.md).
+- [Navigation](interface/navigation.md).
+- [Player](interface/player.md).
+- [Queue drawer](interface/queue.md).
+- [Scanner and folders](interface/scanner.md).
+- [Search and sort](interface/search-and-sort.md).
+- [Selection and reordering](interface/selection-and-reordering.md).
+- [Settings](interface/settings.md).
 
-Before integrating a component PR, inspect ancestry, diffs and exact-source evidence. An open PR may already be included in a cumulative branch.
+## Development
+- [Build](development/build.md).
+- [Continuous integration](development/ci.md).
+- [Performance](development/performance.md).
+- [Prototype runs](development/prototypes.md).
+- [Release](development/release.md).
+- [Testing](development/testing.md).
 
-Archived records under `docs/project-history/` preserve historical evidence. They are outside the maintained contract and website inventory.
+## References
+- [Library data format](library-data.md).
+- [Icon packs and style](icon-packs.md).
+- [Live failure context](qa/live-failure-context.md).
+- [Lyrics source phases](qa/lyrics-source-phase.md).
+
+## Contributing
+- [Working instructions](../agents/README.md) and [collaboration](../agents/collaboration.md).
+- [Engineering rules](../AGENTS.md) and [writing standard](../DOCUMENTATION.md).
+- Previous guides: [Interface](interface.md), [Structure](structure.md), [Build](build.md).

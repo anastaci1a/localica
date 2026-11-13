@@ -11,7 +11,7 @@ Both agents use the same GitHub account. Ownership labels distinguish responsibi
 | Dot | User-observation intake, investigation, bounded or repetitive implementation and development APKs. |
 | Codex lead | Architecture, rendering, independent review, local/device verification, main integration and release publication under standing approval. |
 
-A task-specific freeze or no-release instruction overrides standing approval. [Verification gates](../docs/build.md#release-preparation) still apply. Documentation work does not authorize application changes or releases.
+A task-specific freeze or no-release instruction overrides standing approval. [Verification gates](../docs/development/release.md) still apply. Documentation work does not authorize application changes or releases.
 
 Read current issue comments, branches and `owner:dot` / `owner:codex` labels before claiming work. Use one ownership label and `in progress`. Coordinate overlapping shared-code edits before proceeding.
 

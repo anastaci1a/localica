@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 280" role="img" aria-labelledby="title desc">
+<title id="title">Proposed presence and shape model</title><desc id="desc">Presence changes material strength from zero to one. Shape changes geometry independently; thickness derives from resting volume divided by footprint area.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#334155"/></marker></defs>
+<style>text{font:18px sans-serif;fill:#172033}rect{fill:#eef3fa;stroke:#64748b;stroke-width:2}.arrow{fill:none;stroke:#334155;stroke-width:2;marker-end:url(#arrow)}</style>
+<rect x="1" y="1" width="958" height="278" rx="12" style="fill:white;stroke:#cbd5e1"/>
+<path class="arrow" d="M95 225L900 225"/><path class="arrow" d="M95 225L95 30"/><text x="450" y="262">Presence: 0 (absent) to 1 (full material)</text><text x="115" y="35">Shape: size, position, morph and squish</text><rect x="180" y="80" width="100" height="40" rx="20" style="fill:#c7d8f2;fill-opacity:0"/><rect x="180" y="155" width="100" height="24" rx="12" style="fill:#c7d8f2;fill-opacity:0"/><rect x="420" y="80" width="100" height="40" rx="20" style="fill:#c7d8f2;fill-opacity:0.45"/><rect x="420" y="155" width="100" height="24" rx="12" style="fill:#c7d8f2;fill-opacity:0.45"/><rect x="700" y="80" width="100" height="40" rx="20" style="fill:#c7d8f2;fill-opacity:1"/><rect x="700" y="155" width="100" height="24" rx="12" style="fill:#c7d8f2;fill-opacity:1"/>
+</svg>

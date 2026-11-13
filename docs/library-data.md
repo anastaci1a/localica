@@ -95,7 +95,7 @@ A stage with several candidates makes the record ambiguous. Several records that
 3. **Apply** plans again under the scan lock and writes every change in one database transaction.
 4. The result shows the applied counts.
 
-Nothing changes when the file is refused or the confirmation is cancelled. Later Quick Scans, Full scans and tag edits keep imported dates. Removing a song or its folder and indexing it again keeps both dates, as described in [Product](product.md#dates-and-listening-statistics).
+Nothing changes when the file is refused or the confirmation is cancelled. Later Quick Scans, Full scans and tag edits keep imported dates. Removing a song or its folder and indexing it again keeps both dates, as described in [Library](architecture/library.md#dates).
 
 ## Versions
 

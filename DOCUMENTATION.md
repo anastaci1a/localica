@@ -15,11 +15,16 @@ Apply this standard to maintained documentation, contributor instructions and te
 9. Preserve existing public URLs and deployment boundaries. Do not overwrite unrelated content or introduce a release as part of this documentation task.
 10. Validate structure, links, concise prose, mathematical rendering where present, and fresh-checkout build instructions. Do not run the Android/device suite solely for documentation changes.
 
+11. Explain the model before the behaviour. State what the system is, its rules and why they exist. Exhaustive behaviour lives in tests: link the test class instead of listing its cases. Reference pages (file formats, identifier tables) are the only catalogues.
+12. Open every page with an overview a reader can stop at: one short paragraph, then at most five bullets, before the first section heading. State there which parts are Proposed.
+13. Keep every maintained page at or below 200 source lines. Split a larger page by model, not by length. Targets per page type are in the table below.
+14. Update a page in the same change that alters a contract it documents. A change that leaves a documented contract false is incomplete. Each minor release checks the roadmap and retakes the screenshots.
+
 ## Scope and review
 
 The checker inventories root Markdown, `agents/`, maintained `docs/`, issue templates and release templates. `docs/project-history/` and published release notes are historical evidence; preserve their content and acceptance history.
 
-The numbered standard above is retained verbatim. Its longer items are the only maintained-prose exception to the bullet limit. Table cells follow the paragraph limit.
+Items 1–10 above are retained verbatim; #929 adds items 11–14. Its longer items are the only maintained-prose exception to the bullet limit. Table cells follow the paragraph limit.
 
 Review meaning as well as syntax. Remove duplicate contracts, stale tense and unnecessary narrative while preserving defaults, exceptions, recovery rules and evidence identities.
 
@@ -34,10 +39,23 @@ Use status words precisely:
 | Incomplete | Required work or verification remains. |
 | Released | Included in an identified distributed build. |
 
+## Page types and budgets
+
+| Type | Where | Target lines |
+| --- | --- | --- |
+| Overview | `README.md`, `docs/README.md`, `product.md`, `roadmap.md` | 20–60 |
+| Architecture | `docs/architecture/` | 60–150 |
+| Interface | `docs/interface/` | 40–120 |
+| Development | `docs/development/` | 60–160 |
+| Reference | `library-data.md`, `icon-packs.md` | up to 200 |
+| Moved page | An old path listing new homes | up to 30 |
+
+Every type shares the 200-line hard cap. Count Markdown source lines, including blanks and tables.
+
 ## Checks and publishing
 
-Use the [documentation commands](docs/build.md#documentation) from a fresh checkout. Checks validate prose limits, headings, local files, fragments, image descriptions and rendered navigation.
+Use the [documentation commands](docs/development/build.md#documentation) from a fresh checkout. Checks validate prose limits, headings, local files, fragments, image descriptions and rendered navigation.
 
-The website publishes maintained pages under `/localica/docs/`. Existing root pages and other published paths remain outside this deployment's ownership.
+The documentation workflow uploads a rendered site artifact; it does not publish the site. The artifact targets `/localica/docs/`. Existing root pages and other published paths remain outside this deployment's ownership.
 
 Review external source accuracy separately; local link checks do not establish that a remote page remains available or supports a claim. Historical documents are available from explicitly labeled source links.
