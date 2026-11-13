@@ -199,10 +199,9 @@ class QueueOwnerContinuityTest {
         // The Queue clears its semantics while the player moves; its lip stays on the face at every phase.
         scene.recorder.joins.clear()
         root.performTouchInput { down(Offset(center(), scene.closed.toFloat() + 24f))
-            repeat(3) { moveBy(Offset(0f, -16f), delayMillis = 8) } }
+            repeat(3) { moveBy(Offset(0f, -16f), delayMillis = 8) }; up() }
         mainClock.advanceTimeByFrame()
         assertTrue("The Queue face must catch and drive its own moving drawer", scene.recorder.joins.any { it.policy == "DrivenInput" })
-        root.performTouchInput { up() }
         repeat(60) { mainClock.advanceTimeByFrame() }
         assertEquals("The face contact must not drive the player", 1f, scene.playerProgress, .001f)
     }
@@ -213,13 +212,12 @@ class QueueOwnerContinuityTest {
         assertTrue("The queue must still be returning", phase(scene) > 0.0 && phase(scene) < 1.0)
         // Both targets collapse together, as openCollection requests (LocalicaScreen.kt:215).
         root.performTouchInput { down(Offset(bounds.width * .75f, top().toFloat() * .5f))
-            repeat(6) { moveBy(Offset(0f, bounds.height * .07f), delayMillis = 8) }; up() }
-        var frames = 0
-        while (scene.playerProgress > .6f && frames++ < 30) mainClock.advanceTimeByFrame()
-        val pressed = scene.playerProgress
-        assertTrue("The player must still be minimizing", pressed > 0f)
+            repeat(3) { moveBy(Offset(0f, bounds.height * .07f), delayMillis = 8) }; up() }
+        mainClock.advanceTimeByFrame()
+        assertTrue("The player must be minimizing", scene.playerProgress > 0f && scene.playerProgress < 1f)
         // Browse above the shrinking player's top edge, outside the clipped Queue scrim.
-        root.performTouchInput { down(Offset(bounds.width / 2, bounds.height * .1f)) }
+        root.performTouchInput { down(Offset(bounds.width / 2, bounds.height * .03f)) }
+        mainClock.advanceTimeByFrame(); val pressed = scene.playerProgress
         mainClock.advanceTimeByFrame()
         assertTrue("The browse contact must not catch the minimizing player", scene.playerProgress < pressed)
         root.performTouchInput { up() }
