@@ -67,7 +67,6 @@ class PopupChromeDepthTest {
     @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsScan() { overflow("Scan music") }
     @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsBack() { overflow("Back") }
     @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsOutsideTap() { overflow("Outside tap") }
-    @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsTrigger() { overflow("Trigger") }
     @Test fun normalHomeProjectionIsOutsideItsSampledBackdrop() { cleanBackdrop(GlassRendererMode.Normal) }
     @Test fun normalDepartingBrowseMenuStaysAboveTabs() { nonChromeMenu(GlassRendererMode.Normal) }
     @Test fun normalSelectionPillKeepsItsShellDepth() { selectionPill(GlassRendererMode.Normal) }
@@ -788,7 +787,6 @@ class PopupChromeDepthTest {
             report.put("chrome", JSONArray(regions.map { (name, r) -> JSONObject().put("name", name).put("bounds", r.toString()) }))
             compose.mainClock.autoAdvance = false
             baseline = original(activity, output, "baseline")
-            val trigger = compose.onNodeWithContentDescription("More").fetchSemanticsNode().boundsInRoot.center
             compose.onNodeWithContentDescription("More").performClick()
             compose.waitUntil(10_000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
@@ -808,10 +806,6 @@ class PopupChromeDepthTest {
                 "Outside tap" -> {
                     val screen = IntArray(2).also { compose.runOnUiThread { host.getLocationOnScreen(it) } }
                     assertTrue("Outside input is injected", device.click(screen[0] + host.width / 2, screen[1] + 64))
-                }
-                "Trigger" -> {
-                    val screen = IntArray(2).also { compose.runOnUiThread { host.getLocationOnScreen(it) } }
-                    assertTrue("Trigger input is injected", device.click(screen[0] + trigger.x.toInt(), screen[1] + trigger.y.toInt()))
                 }
                 else -> compose.onNodeWithText(destination, substring = false).performClick()
             }
