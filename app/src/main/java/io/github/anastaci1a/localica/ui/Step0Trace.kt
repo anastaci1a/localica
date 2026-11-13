@@ -7,6 +7,7 @@ import kotlin.reflect.KProperty
 
 internal object Step0Trace {
     private var sequence = 0L
+    var sink: java.io.OutputStream? = null
     private fun id(v: Any) = v.javaClass.simpleName + "@" + System.identityHashCode(v).toString(16)
     private fun encode(v: Any?): Any = when (v) {
         null -> org.json.JSONObject.NULL
@@ -17,10 +18,10 @@ internal object Step0Trace {
         else -> id(v)
     }
     @Synchronized fun put(owner: Any, name: String, value: Any?, event: String = "write") {
-        if (!BuildConfig.DEBUG) return
+        if (!BuildConfig.DEBUG || sink == null) return
         val row = org.json.JSONObject().put("n", ++sequence).put("t", android.os.SystemClock.uptimeMillis())
-            .put("owner", id(owner)).put("event", event).put("key", name).put("value", encode(value))
-        android.util.Log.i("PopupStep0", row.toString())
+            .put("pid", android.os.Process.myPid()).put("owner", id(owner)).put("event", event).put("key", name).put("value", encode(value))
+        sink!!.write((row.toString() + "\n").toByteArray(Charsets.UTF_8))
     }
     fun link(owner: Any, name: String, value: Any?) = put(owner, name, value, "link")
     fun frame(owner: Any, kind: String, progress: Float) = put(owner, kind, progress, "frame")
