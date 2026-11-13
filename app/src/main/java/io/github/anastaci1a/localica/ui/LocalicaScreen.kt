@@ -313,8 +313,8 @@ fun LocalicaScreen(
         val screenScope = this
         SideEffect { uiRoot.size = androidx.compose.ui.unit.IntSize(constraints.maxWidth, constraints.maxHeight) }
         val queueSelectionMaxHeight = maxHeight / 3
+        Sheet(sheet, onSettled = { expanded = it }, returningChild = queueSheet) {
         SongDragScene(dragHost, Modifier.fillMaxSize()) {
-
         GlassPopupHome(browsePopupHome, chrome = {
         val tabActivity = rememberSelectorTrackActivity()
         Row(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
@@ -442,7 +442,7 @@ fun LocalicaScreen(
         }
 
         }
-        Sheet(sheet, onSettled = { expanded = it }, returningChild = queueSheet) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
+        if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, noneAtlasInput = shellNoneAtlas, visual = playerVisual,

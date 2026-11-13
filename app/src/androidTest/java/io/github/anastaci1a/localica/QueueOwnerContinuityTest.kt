@@ -173,5 +173,8 @@ class QueueOwnerContinuityTest {
         onNodeWithContentDescription("Player handle", useUnmergedTree = true).performTouchInput { click() }
         repeat(60) { mainClock.advanceTimeByFrame() }
         assertEquals("The real tap must reach the underlying player handle", 0f, scene.playerProgress, .001f)
+        onNodeWithTag("tab-option-1").assertIsNotSelected().performTouchInput { click() }
+        repeat(60) { mainClock.advanceTimeByFrame() }
+        onNodeWithTag("tab-option-1").assertIsSelected()
     }
 }
