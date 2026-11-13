@@ -107,6 +107,8 @@ private const val ChromeReturnDepthHandoff = .9f
 
 private fun ContentDrawScope.projectFlights(home: GlassPopupHome, aboveChrome: Boolean? = null) {
     home.flights.forEach { flight ->
+        // wasProjected is this frame's receipt: only a frame without the flight releases its presenter's source latch.
+        if (!flight.prepared) flight.wasProjected = false
         // A full-size chrome menu stays above chrome at the start of close (#867).
         // Its converging chip returns underneath the same chrome (#667).
         if (aboveChrome != null && aboveChrome != (!flight.chromeTrigger || flight.phase() > ChromeReturnDepthHandoff)) return@forEach
