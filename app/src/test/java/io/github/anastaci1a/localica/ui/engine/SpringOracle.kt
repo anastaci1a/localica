@@ -56,10 +56,6 @@ internal class PopupRig(h: EngineHarness, val basis: ExpansionBasis, kind: Popup
     fun edge(i: Int, stamp: FrameStamp) = requireNotNull(rect).channels[i].rawValue(stamp)
 }
 
-/** Reversal properties follow admission's covered pairs; deferred cross pairs use release telemetry. */
-internal fun withAdmittedReversalBands(model: PopupMotionModel, block: (Boolean) -> Unit) {
-    val crossBounded = popupReversalReach(model).keys.any { it.startsWith("cross") }
-    val strict = SpringBandTelemetry.strict
-    try { SpringBandTelemetry.strict = strict && crossBounded; block(crossBounded) }
-    finally { SpringBandTelemetry.strict = strict }
-}
+/** Random reversal chains exercise only the pairs covered by model admission. */
+internal fun Set<String>.admitsCrossReversal(cross: MotionFloat?, expanded: Boolean, target: Boolean) =
+    cross == null || cross.settled || expanded == target || "cross${if (expanded) "OpenClose" else "CloseOpen"}" in this

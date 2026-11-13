@@ -17,6 +17,7 @@ class SpringRetargetContinuityTest {
     private val home = Rect(40f, 50f, 88f, 98f)
     private val envelope = Rect(10f, 20f, 310f, 620f)
     private val range = 4000.0
+    private val reversals = popupReversalReach(spec.popupMotion).keys
     private class Case(val name: String, val prepared: Boolean, val quiet: Boolean, val kind: PopupKind)
     private val cases = listOf(Case("prepared menu", true, false, PopupKind.Menu), Case("row menu", false, true, PopupKind.RowMenu),
         Case("bottom menu", false, false, PopupKind.BottomMenu), Case("dialog", false, false, PopupKind.Dialog))
@@ -41,7 +42,7 @@ class SpringRetargetContinuityTest {
         }
     }
 
-    @Test fun everyIntentKeepsEveryChannelC1AndFinishesTogether() = withAdmittedReversalBands(spec.popupMotion) {
+    @Test fun everyIntentKeepsEveryChannelC1AndFinishesTogether() {
         for (c in cases) for (hz in listOf(60, 90, 120)) for (seed in 0 until 12) EngineHarness(spec = spec).use { h ->
             h.setContext(hz); val r = Random(854_600L + seed * 31 + hz)
             val motion = PopupWindowMotion(h.clock, spec.expansion, "t6-${c.name}-$hz-$seed", c.prepared, c.quiet, c.kind)
@@ -58,6 +59,7 @@ class SpringRetargetContinuityTest {
                 val stamp = h.clock.stampNow; val before = sample(stamp); op(); val after = sample(stamp)
                 for (i in before.indices) assertEquals("$label $name entry $i", before[i].first, after[i].first, before[i].second)
             }
+            fun show() { if (reversals.admitsCrossReversal(cross, shown, !shown)) intent("show") { shown = !shown; motion.show(shown) } }
             fun finishTogether(name: String) {
                 // Every channel of the last intent is on one plan: all settle on the same frame.
                 var frames = 0
@@ -66,12 +68,12 @@ class SpringRetargetContinuityTest {
             }
             repeat(14) {
                 when (r.nextInt(6)) {
-                    0 -> intent("show") { shown = !shown; motion.show(shown) }
+                    0 -> show()
                     1 -> intent("place") { env = env.copy(right = env.right + r.nextFloat() * 120 - 40, bottom = env.bottom + r.nextFloat() * 120 - 40); motion.place(home, env, 1f) }
                     2 -> intent("acknowledge") { if (e.awaitingNativeGate) e.acknowledgeNativeGate(e.nativeGeneration) }
                     3 -> intent("speed") { motion.updateSpeed(4f * (5 + r.nextInt(11)) / 30f) }
                     4 -> repeat(1 + r.nextInt(30)) { h.advance(1.0 / hz) }
-                    else -> { repeat(1 + r.nextInt(10)) { h.advance(1.0 / hz) }; intent("show") { shown = !shown; motion.show(shown) } }
+                    else -> { repeat(1 + r.nextInt(10)) { h.advance(1.0 / hz) }; show() }
                 }
                 if (e.awaitingNativeGate && r.nextBoolean()) intent("acknowledge") { e.acknowledgeNativeGate(e.nativeGeneration) }
             }

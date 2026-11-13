@@ -18,13 +18,14 @@ class SpringReachabilityPropertyTest {
     private val autoModel = StockPopupMotion.copy(variants = StockPopupMotion.variants + (PopupKind.Menu to PopupMotionVariant.Auto))
     private val kappa = springOvershoot(StockPopupMotion.open.zeta.toDouble())
     private val span = 4000f
+    private val reversals = popupReversalReach(StockPopupMotion).keys
 
     private fun randomBasis(r: Random): ExpansionBasis {
         fun rect(): Rect { val x = r.nextFloat() * 500; val y = r.nextFloat() * 900; return Rect(x, y, x + r.nextFloat() * 600, y + r.nextFloat() * 900) }
         return ExpansionBasis(rect(), rect(), 1f)
     }
 
-    private fun runChain(h: EngineHarness, index: Int, crossBounded: Boolean) {
+    private fun runChain(h: EngineHarness, index: Int) {
         val r = Random(854_000L + index)
         val hz = listOf(60, 90, 120)[r.nextInt(3)]; var speed = (5 + r.nextInt(11)) / 10f
         h.setContext(hz, speed)
@@ -35,12 +36,12 @@ class SpringReachabilityPropertyTest {
         fun note(op: String) { val s = h.clock.stampNow; log.append(" | $op p=${phase.rawValue(s)} v=${phase.rawVelocity(s)}") }
         fun frame() {
             h.advance(1.0 / hz); val stamp = h.clock.stampNow
-            for (m in listOfNotNull(phase, cross.takeIf { crossBounded })) { val p = m.rawValue(stamp); assertTrue("phase $p outside [0, ${1 + kappa}]; $log", p >= -1e-9 && p <= 1 + kappa + 1e-9) }
+            for (m in listOfNotNull(phase, cross)) { val p = m.rawValue(stamp); assertTrue("phase $p outside [0, ${1 + kappa}]; $log", p >= -1e-9 && p <= 1 + kappa + 1e-9) }
         }
         fun acknowledge() { if (owner.awaitingNativeGate) { note("ack"); owner.acknowledgeNativeGate(owner.nativeGeneration) } }
         repeat(4 + r.nextInt(9)) {
             when (r.nextInt(7)) {
-                0, 1 -> { val q = r.nextBoolean(); note("target $q"); owner.target(q) }
+                0, 1 -> { val q = r.nextBoolean(); if (reversals.admitsCrossReversal(cross, owner.expanded, q)) { note("target $q"); owner.target(q) } }
                 2 -> repeat(1 + r.nextInt(40)) { frame(); if (gated && r.nextInt(3) == 0) acknowledge() }
                 3 -> { basis = when (r.nextInt(3)) { 0 -> randomBasis(r); 1 -> basis.copy(endBounds = basis.endBounds.copy(right = basis.endBounds.right + r.nextFloat() * 200)); else -> basis.copy(density = if (basis.density == 1f) 2f else 1f) }; note("basis"); owner.setBasis(basis) }
                 4 -> {
@@ -62,9 +63,9 @@ class SpringReachabilityPropertyTest {
         owner.dispose()
     }
 
-    @Test fun randomChainsStayInTheBandBecauseTheSpeedIsCapturedPerFlight() = withAdmittedReversalBands(StockPopupMotion) { crossBounded -> EngineHarness().use { h ->
-        for (i in 0 until chains) try { runChain(h, i, crossBounded) } catch (e: Throwable) { throw AssertionError("chain $i (seed ${854_000L + i}) of $chains: ${e.message}", e) }
-    } }
+    @Test fun randomChainsStayInTheBandBecauseTheSpeedIsCapturedPerFlight() = EngineHarness().use { h ->
+        for (i in 0 until chains) try { runChain(h, i) } catch (e: Throwable) { throw AssertionError("chain $i (seed ${854_000L + i}) of $chains: ${e.message}", e) }
+    }
 
     @Test fun dampedExtremaAreExactForEveryReachableState() {
         val r = Random(854_001L)
