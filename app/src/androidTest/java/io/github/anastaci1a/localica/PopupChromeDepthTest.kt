@@ -282,7 +282,7 @@ class PopupChromeDepthTest {
                             val px = x + location[0]; val py = y + location[1]
                             val expected = alone.getPixel(px, py)
                             val behind = tabs.getPixel(px, py)
-                            if (Color.blue(expected) > Color.red(expected) + 40 && abs(Color.blue(expected) - Color.blue(behind)) > 40) {
+                            if (expected == Color.BLUE && abs(Color.blue(expected) - Color.blue(behind)) > 40) {
                                 discriminating++
                                 if (combined.getPixel(px, py) != expected) wrong++
                             }
@@ -690,11 +690,8 @@ class PopupChromeDepthTest {
             }
             for (frame in 0..2) {
                 val root = original(activity, output, "clean-$frame-root")
-                val sampled = runBlocking { page.layer.toImageBitmap() }.asAndroidBitmap()
+                val sampled = r1InspectionBitmap(runBlocking { page.layer.toImageBitmap() }.asAndroidBitmap(), output, "clean-$frame-sampled-backdrop")
                 try {
-                    File(output, "clean-$frame-sampled-backdrop.png").outputStream().use {
-                        assertTrue(sampled.compress(Bitmap.CompressFormat.PNG, 100, it))
-                    }
                     val rootAt = IntArray(2).also { compose.runOnUiThread { activity.decorView.getLocationOnScreen(it) } }
                     val x = sampled.width / 2; val y = sampled.height / 2
                     val rootX = (home.currentOrigin.x - rootAt[0]).toInt() + x
@@ -803,7 +800,7 @@ class PopupChromeDepthTest {
                 if (p > .9f && flight.prepared) {
                     val modal = original(window, output, "full-$frame-popup")
                     val root = original(activity, output, "full-$frame-root")
-                    val layer = runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap()
+                    val layer = r1InspectionBitmap(runBlocking { requireNotNull(flight.layer).toImageBitmap() }.asAndroidBitmap(), output, "full-$frame-flight-layer")
                     try {
                         val rootAt = IntArray(2); val modalAt = IntArray(2)
                         var nativeAlpha = 1f
