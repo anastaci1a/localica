@@ -7,7 +7,6 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
-import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -28,9 +27,8 @@ private fun queuedEffects(context: CoroutineContext): CoroutineContext =
     else context + StandardTestDispatcher(context[TestCoroutineScheduler])
 
 internal fun ComposeContentTestRule.onPopupAction(matcher: SemanticsMatcher): SemanticsNodeInteraction {
-    val live = matcher and isEnabled()
-    waitUntil(5000) { onAllNodes(live).fetchSemanticsNodes().size == 1 }
-    return onNode(live)
+    waitUntil(5000) { onAllNodes(matcher).fetchSemanticsNodes().size == 1 }
+    return onNode(matcher)
 }
 
 /** The running test's virtual time, for Engine owners in fixture hosts (PlayerSurfaceHarness); real-app owner tests pass it
