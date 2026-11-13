@@ -672,6 +672,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         if (placement == GlassPlacement.Search) { val token = anchor.searchSlot.begin(); anchor.searchSlot.settle(token, 0f) }
         anchor.hidden = false; anchor.modalPresent = false; anchor.shadowInModal = false; anchor.contact.modal = false
     } }
+    if (io.github.anastaci1a.localica.BuildConfig.DEBUG) popupPhaseProbe?.let { probe ->
+        SideEffect { probe(popupFlight, anchor) { PopupFlags(present, anchor.hidden, anchor.modalPresent, anchor.shadowInModal,
+            anchor.contact.modal, continuousOrigin != null, originAdmitted, modalWindow != null && modalWindow === readyWindow,
+            requestedVisible, popupHome?.departing == true, popupHome?.mounted == false, popupFlight.prepared,
+            popupFlight.handedOff, popupFlight.wasProjected, progress.value) } }
+        DisposableEffect(probe, popupFlight) { onDispose { probe(popupFlight, anchor, null) } }
+    }
     if (!present || popupHome?.mounted == false) return
     // Flat None retires the optical descriptor without retiring this window.
     // Rebind in this composition, before drawing, rather than restarting its
