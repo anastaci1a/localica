@@ -245,7 +245,7 @@ class ScrollbarRowInputTest {
         compose.runOnIdle { state.requestScrollToItem(14, with(compose.density) { 60.dp.roundToPx() }) }
         compose.revealScrollbar(state)
         val strip = bar().fetchSemanticsNode().boundsInRoot
-        val tile = compose.onNodeWithText(if (all) "All albums" else "Choice 0").fetchSemanticsNode().boundsInRoot
+        val tile = compose.onNodeWithText(if (all) "All albums" else "Choice 1").fetchSemanticsNode().boundsInRoot
         val grip = thumb()
         val left = maxOf(strip.left, tile.left); val right = minOf(strip.right, tile.right)
         val top = maxOf(grip.top, tile.top); val bottom = minOf(grip.bottom, tile.bottom)
@@ -263,7 +263,7 @@ class ScrollbarRowInputTest {
         bar().performTouchInput { up() }
         compose.mainClock.advanceTimeBy(64)
         compose.runOnIdle {
-            assertEquals(listOf(listOf(albums[0].id)), selections)
+            assertEquals(listOf(listOf(albums[1].id)), selections)
             assertEquals(before, state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset)
             assertFalse(transit.active)
         }
@@ -278,7 +278,7 @@ class ScrollbarRowInputTest {
         assertEquals(rest, thumbColour())
         bar().performTouchInput { up() }
         compose.runOnIdle {
-            assertEquals(listOf(emptyList<String>()), selections)
+            assertEquals(listOf(albums.take(2).map { it.id }), selections)
             assertFalse(transit.active)
         }
         compose.mainClock.autoAdvance = true
