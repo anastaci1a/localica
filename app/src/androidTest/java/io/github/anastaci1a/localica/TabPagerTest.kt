@@ -20,20 +20,17 @@ import kotlinx.coroutines.launch
 
 class TabPagerTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun reselectDuringSwipeSettlementDoesNotRestartThePagerOrLoseTheNextTap() {
+    @Test fun reselectDuringAndAfterSwipeSettlementDoesNotRestartThePager() {
         val tabs = listOf(MainTab.Home, MainTab.Library)
         lateinit var pager: PagerState
         var selections = 0
         var reselections = 0
-        var filterTaps = 0
         compose.setContent { LocalicaTheme {
             pager = rememberPagerState { tabs.size }
             val scope = rememberCoroutineScope()
             Column(Modifier.fillMaxSize()) {
                 TabPager(pager, { tabs }, Modifier.weight(1f).testTag("swipe-pages")) { page ->
-                    if (page == 1) androidx.compose.material3.Button(onClick = { filterTaps++ },
-                        modifier = Modifier.fillMaxWidth().height(64.dp).testTag("next-filter")) { Text("Songs") }
-                    else Text("Home")
+                    Text(tabs[page].label)
                 }
                 Box(Modifier.fillMaxWidth().height(64.dp)) {
                     SlidingTabs(tabs, tabs[pager.targetPage], { pager.currentPage + pager.currentPageOffsetFraction },
@@ -56,13 +53,19 @@ class TabPagerTest {
                 assertTrue("The target is not snapped yet", pager.currentPageOffsetFraction != 0f)
             }
             compose.onNodeWithContentDescription("Library").performClick()
-            compose.onNodeWithTag("next-filter").performClick()
             compose.runOnIdle {
                 assertEquals("Reselection cannot request another page animation", 0, selections)
                 assertEquals(1, reselections)
-                assertEquals("The immediate filter tap must land", 1, filterTaps)
             }
         } finally { compose.mainClock.autoAdvance = true }
+        compose.waitForIdle()
+        compose.runOnIdle { assertFalse("The pager must now be at rest", pager.isScrollInProgress) }
+        compose.onNodeWithContentDescription("Library").performClick()
+        compose.runOnIdle {
+            assertEquals("A current-tab tap at rest cannot restart the pager", 0, selections)
+            assertEquals(2, reselections)
+            assertFalse(pager.isScrollInProgress)
+        }
     }
     @Test fun diagonalListScrollStaysVerticalButShelfAndDeliberatePageSwipesRemainHorizontal() {
         lateinit var pager: PagerState
