@@ -624,8 +624,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         updateSettings(value)
         configurePreloading()
         mutable.update { it.copy(library = reconcile(it.library)) }
-        syncTimeline()
         applyPlaybackModes()
+        syncTimeline()
         persist(state.value.library)
     }
     private fun updateSettings(value: QueueSettings) {
@@ -635,7 +635,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private fun applyPlaybackModes(timelineChanged: Boolean = false) {
         val attached = player ?: return
         val modes = state.value.settings
-        if (attached is ExoPlayer && (timelineChanged || attached.shuffleModeEnabled != modes.shuffle)) {
+        if (attached is ExoPlayer && timelineChanged) {
             // The saved journey already defines shuffle order. Native preloading must follow it exactly.
             attached.setShuffleOrder(androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(
                 IntArray(attached.mediaItemCount) { it }, 0L))

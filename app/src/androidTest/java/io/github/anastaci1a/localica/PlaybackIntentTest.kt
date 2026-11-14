@@ -1174,6 +1174,50 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun shuffleFlagsCommitBeforeWindowResolutionWithoutChangingNativeOrder() {
+        val reads = AtomicReference<Gate?>()
+        fixture(rawPlayer = true, duplicateOccurrences = true, playbackStore = { heldReads(reads, it) }) {
+            awaitMain { player.engine.playbackState == Player.STATE_READY }
+            barrier()
+            val changes = AtomicInteger()
+            val listener = object : Player.Listener {
+                override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                    if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) changes.incrementAndGet()
+                }
+            }
+            withContext(Dispatchers.Main) { player.engine.addListener(listener) }
+            try {
+                for (shuffle in listOf(true, false)) {
+                    val held = Gate()
+                    val before = withContext(Dispatchers.Main) {
+                        Triple(changes.get(), (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueVisit }, player.currentMediaItemIndex)
+                    }
+                    assertTrue(before.second.size > 1)
+                    try {
+                        withContext(Dispatchers.Main) {
+                            reads.set(held)
+                            queues.settings { it.copy(shuffle = shuffle) }
+                        }
+                        held.entered.await()
+                        withContext(Dispatchers.Main) {
+                            assertEquals(shuffle, queues.state.value.settings.shuffle)
+                            assertEquals(shuffle, player.engine.shuffleModeEnabled)
+                            assertEquals(before.first, changes.get())
+                            assertEquals(before.second, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueVisit })
+                            assertEquals(before.third, player.currentMediaItemIndex)
+                            val timeline = player.engine.currentTimeline
+                            for (index in 0 until timeline.windowCount) {
+                                assertEquals(if (index == timeline.windowCount - 1) androidx.media3.common.C.INDEX_UNSET else index + 1,
+                                    timeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, true))
+                            }
+                        }
+                    } finally { reads.compareAndSet(held, null); held.release.complete(Unit) }
+                    barrier()
+                }
+            } finally { withContext(Dispatchers.Main) { player.engine.removeListener(listener) } }
+        }
+    }
+
     @Test fun playNextAndPauseSurviveEveryReadHeldDuringActivation() {
         val held = Gate()
         val reads = AtomicReference<Gate?>(held)
