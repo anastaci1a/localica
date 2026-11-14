@@ -81,32 +81,31 @@ data class QueueJourney(
     /** A native receipt remains admissible when a new explicit batch displaced its window item. */
     fun arrive(token: String, ids: List<String>, random: Random = Random.Default, receipt: QueueVisit? = null): QueueJourney {
         if (token == current?.token) return this
-        if (traversal == null) {
-            val repaired = reconcile(ids, current?.entryId, modes, random)
-            if (repaired.current == null) return this
-            val arrived = repaired.arrive(token, ids, random, receipt)
-            return if (arrived.current?.token == token) arrived else this
-        }
-        val exposed = traversal?.window?.firstOrNull { it.visit.token == token }
-        if (!modes.shuffle) {
-            val visit = exposed?.visit ?: return this
-            val old = history.indexOfFirst { it.token == token }
-            val recorded = if (old >= 0) history else history + visit
-            val membership = if (visit.cycle == cycle) visited else
-                recorded.filter { it.cycle == visit.cycle }.mapTo(mutableSetOf()) { it.entryId }
-            return copy(history = recorded, cursor = if (old >= 0) old else recorded.lastIndex, cycle = visit.cycle,
-                visited = membership + visit.entryId).prepare(ids, random, previous = traversal, rank = exposed.ordinal)
-        }
         val old = history.indexOfFirst { it.token == token }
-        if (old >= 0) {
+        val arrived = if (old >= 0 && (modes.shuffle || plans.isEmpty())) {
             val visit = history[old]
             val reserved = scheduledNext().mapTo(hashSetOf()) { it.token }
             val skipped = if (old > cursor) history.subList(cursor + 1, old).filter { it.token in reserved } else emptyList()
             val skippedTokens = skipped.mapTo(hashSetOf()) { it.token }
             val prefix = history.take(old + 1).filterNot { it.token in skippedTokens }
-            return copy(history = if (skipped.isEmpty()) history else prefix + skipped + history.drop(old + 1),
+            copy(history = if (skipped.isEmpty()) history else prefix + skipped + history.drop(old + 1),
                 cursor = prefix.lastIndex, visited = if (visit.cycle == cycle) visited + visit.entryId else visited)
-                .prepare(ids, random, previous = traversal)
+        } else this
+        if (traversal == null) {
+            val repaired = arrived.reconcile(ids, arrived.current?.entryId, modes, random)
+            if (repaired.current == null) return this
+            val arrived = repaired.arrive(token, ids, random, receipt)
+            return if (arrived.current?.token == token) arrived else this
+        }
+        if (arrived !== this) return arrived.prepare(ids, random, previous = traversal)
+        val exposed = traversal?.window?.firstOrNull { it.visit.token == token }
+        if (!modes.shuffle) {
+            val visit = exposed?.visit ?: return this
+            val recorded = if (old >= 0) history else history + visit
+            val membership = if (visit.cycle == cycle) visited else
+                recorded.filter { it.cycle == visit.cycle }.mapTo(mutableSetOf()) { it.entryId }
+            return copy(history = recorded, cursor = if (old >= 0) old else recorded.lastIndex, cycle = visit.cycle,
+                visited = membership + visit.entryId).prepare(ids, random, previous = traversal, rank = exposed.ordinal)
         }
         val visit = exposed?.visit ?: receipt?.takeIf { it.token == token && it.token == token(it.cycle, it.entryId) &&
             it.cycle in plans && it.entryId in plans.getValue(it.cycle) &&
