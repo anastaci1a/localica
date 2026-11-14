@@ -468,17 +468,16 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     }
     val searchMotion = remember { SearchMorphMotion() }
     SideEffect { searchMotion.observer = searchObserver }
-    val departingHold = !visible && popupHome?.departing == true && popupHome.mounted &&
-        !anchor.chromeTrigger
-    SideEffect {
-        motion.updateSpeed(speed)
-        if (departingHold || !visible && !childHome.handedOff) motion.hold() else motion.release()
+    fun show(visible: Boolean) {
+        val departingHold = popupHome?.departing == true && popupHome.mounted && !anchor.chromeTrigger
+        if (!visible && anchor.present && (departingHold || !childHome.handedOff)) motion.hold() else motion.release()
         motion.show(visible)
     }
+    SideEffect { motion.updateSpeed(speed); show(visible) }
     var searchHeightLimit by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(Int.MAX_VALUE) }
     val dismissNow: () -> Unit = {
         // Hide releases semantics at the event; a refusing caller re-shows on its next composition.
-        motion.show(false)
+        show(false)
         modalWindow?.glassInput(false, event = true)
         gestures.deactivate()
         onDismiss()
@@ -521,7 +520,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         if (!visible) anchor.advance(PopupTakeover.Closed, PopupTakeover.Admitting)
         // Descendant native windows must enter this home before its opacity can move.
         if (!visible) snapshotFlow { childHome.handedOff }.first { it }
-        motion.show(visible)
+        show(visible)
         snapshotFlow { motion.bounds != null || !anchor.present }.first { it }
         gateLoop@ while (true) {
             snapshotFlow { motion.expansion.awaitingNativeGate || motion.expansion.retirementReady }.first { it }
