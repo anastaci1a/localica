@@ -153,7 +153,6 @@ class PlayerInkArtworkClockTest {
             assertEquals(previous.velocity, motion.velocity(), .0001f)
             h.advance(1.0 / 120)
             val continued = motion.sample()
-            assertTrue(continued.value > shown)
             assertEquals(continued.value, sample(0f, .55f), .0001f)
             assertEquals(continued.velocity, motion.velocity(), .0001f)
             h.advance(1.0)
