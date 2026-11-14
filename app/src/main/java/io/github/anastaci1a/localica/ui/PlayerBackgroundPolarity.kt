@@ -119,7 +119,7 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
         ?: if (visual.artwork == null && visual.palette == NeutralPalette) BackdropRoleGrade(true, 0f) else null
     /** Prepared ink belongs to the incoming visual, including while the player is minimized. */
     val destinationLightInk: Boolean? get() = pinned ?: frame?.roles?.firstOrNull { it.incoming && !it.soft }
-        ?.let { (visualGrades[it.visual] ?: grade(it.identity, it.visual))?.lightInk }
+        ?.let { grade(null, it.visual)?.lightInk }
     /** The artwork blend clock (1 when settled): drives the same ease as the lyrics clock for song changes. */
     var artworkClock by mutableFloatStateOf(1f); private set
     internal fun presentGrades(grades: Map<Any, BackdropRoleGrade>) {
@@ -186,14 +186,14 @@ internal val LocalPlayerBackgroundPreparationBarrier = staticCompositionLocalOf<
 /** The role key of a song prepared before any blend role exists for it. */
 private object PrewarmRole
 
-/** Prepare endpoint ink and optional graded pixels while minimized, using the settled sampler (#634/#969). */
+/** Prepare endpoint ink and graded pixels while minimized, using the settled sampler (#634/#969). */
 @Composable internal fun PrewarmPlayerBackdrop(owner: PlayerBackgroundPolarityState, visual: PlayerVisual,
     geometry: PlayerBackgroundGeometry?, grading: Boolean) {
     val barrier = LocalPlayerBackgroundPreparationBarrier.current
     // A known grade, measured or prewarmed, needs no new geometry; only its pixels are re-checked.
     val known = owner.grade(null, visual)
     LaunchedEffect(owner, visual, if (known == null) geometry else null, known, grading, barrier) {
-        if (visual.artwork == null || visual.loading) return@LaunchedEffect
+        if (!grading || visual.artwork == null || visual.loading) return@LaunchedEffect
         val grade = known ?: run {
             val endpoint = geometry ?: return@LaunchedEffect
             barrier?.invoke()
@@ -203,7 +203,7 @@ private object PrewarmRole
                 ?: return@LaunchedEffect
             gradeRoles(sample)[PrewarmRole] ?: return@LaunchedEffect
         }
-        val tone = GlassTone(shift = if (grading) grade.shift else 0f)
+        val tone = GlassTone(shift = grade.shift)
         val images = listOfNotNull(visual.palette.wash, visual.palette.softWash).mapNotNull { PreparedToneImage.prepare(it, tone) }
         currentCoroutineContext().ensureActive()
         owner.prewarmed(visual, grade, images)

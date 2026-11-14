@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.Color
 import io.github.anastaci1a.localica.ui.engine.PhaseBinding
 import io.github.anastaci1a.localica.ui.engine.EngineHarness
 import io.github.anastaci1a.localica.ui.engine.MotionFloat
+import io.github.anastaci1a.localica.ui.engine.EngineContext
+import io.github.anastaci1a.localica.ui.spec.*
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.abs
@@ -62,17 +64,66 @@ class PlayerInkArtworkClockTest {
         }
     }
 
-    @Test fun anOwnerPhaseTakesOverALateEaseWithoutJumpingAndLandsAtItsEndpoint() {
+    private fun ownerStartsDuringLateEase(owner: Int) {
         EngineHarness().use { h ->
-            val binding = PhaseBinding(1f, MotionFloat(h.clock, 1f, 1f))
-            fun sample(phase: Float, end: Float) = binding.resolve(0f, phase, end, clock = 2).also(binding::present).value
-            sample(0f, 0f)
+            val motion = MotionFloat(h.clock, 1f, 1f)
+            val binding = PhaseBinding(1f, motion)
+            fun sample(phase: Float, end: Float, clock: Int) = binding.resolve(0f, phase, end, clock).also(binding::present).value
+            sample(0f, 0f, 2)
             h.advance(.1)
-            val before = sample(0f, 0f)
-            assertTrue(before in .01f..0.99f)
-            assertEquals(before, sample(0f, 1f), .0001f)
-            (1..20).forEach { h.advance(1.0 / 120); sample(it / 20f, 1f) }
-            assertEquals(0f, sample(1f, 1f), 0f)
+            val before = motion.sample()
+            assertTrue(before.value in .01f..0.99f)
+            assertTrue(abs(before.velocity) > .01f)
+            assertEquals(before.value, sample(0f, 1f, owner), .0001f)
+            assertEquals("Owner start retains temporal velocity", before.velocity, motion.velocity(), .0001f)
+            h.advance(1.0 / 120)
+            val continued = motion.sample()
+            assertEquals(continued.value, sample(.05f, 1f, owner), .0001f)
+            assertEquals(continued.velocity, motion.velocity(), .0001f)
+            (2..40).forEach { h.advance(1.0 / 120); sample((it / 20f).coerceAtMost(1f), 1f, owner) }
+            assertEquals(0f, sample(1f, 1f, owner), 0f)
+            assertEquals(0, h.clock.activeCount)
+        }
+    }
+
+    @Test fun lyricsToggleDuringALateEaseKeepsValueAndVelocityContinuous() = ownerStartsDuringLateEase(0)
+    @Test fun expansionDuringALateEaseKeepsValueAndVelocityContinuous() = ownerStartsDuringLateEase(2)
+
+    @Test fun aNormalPhaseBoundTransitionIsUnchangedWithTheValueChannel() {
+        EngineHarness().use { h ->
+            val binding = PhaseBinding(0f, MotionFloat(h.clock, 0f, 1f))
+            (0..20).forEach {
+                h.advance(1.0 / 120)
+                val phase = it / 20f
+                assertEquals(phase, binding.resolve(1f, phase, 1f, 1).also(binding::present).value, .0001f)
+            }
+            assertEquals(0, h.clock.activeCount)
+        }
+    }
+
+    @Test fun aChangedLateTargetRetargetsTheSameValueAndVelocity() {
+        EngineHarness().use { h ->
+            val motion = MotionFloat(h.clock, 1f, 1f)
+            val binding = PhaseBinding(1f, motion)
+            fun sample(target: Float) = binding.resolve(target, 1f, 1f, 2).also(binding::present)
+            sample(0f); h.advance(.1)
+            val before = motion.sample()
+            assertEquals(before.value, sample(1f).value, 0f)
+            assertEquals(before.velocity, motion.velocity(), .0001f)
+            h.advance(1.0)
+            assertEquals(1f, sample(1f).value, 0f)
+            assertEquals(0, h.clock.activeCount)
+        }
+    }
+
+    @Test fun reducedMotionAndZeroDurationScaleCompleteALateDestination() {
+        for (reduced in listOf(false, true)) EngineHarness().use { h ->
+            h.clock.configure(EngineContext(1f / 120, 1000f,
+                if (reduced) MotionAccess.Reduced else MotionAccess.Standard, if (reduced) 1f else 0f), StockUiSpec)
+            val binding = PhaseBinding(1f, MotionFloat(h.clock, 1f, 1f))
+            fun sample() = binding.resolve(0f, 1f, 1f, 2).also(binding::present).value
+            sample(); h.advance(1.0 / 120)
+            assertEquals(0f, sample(), 0f)
             assertEquals(0, h.clock.activeCount)
         }
     }

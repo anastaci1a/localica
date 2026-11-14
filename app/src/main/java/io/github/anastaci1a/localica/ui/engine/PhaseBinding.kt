@@ -17,11 +17,12 @@ internal class PhaseBinding(initial: Float, private val motion: MotionFloat? = n
     /** Pure, so composition may call it; [phase] travels toward [end]. Publish the result with [present]. */
     fun resolve(target: Float, phase: Float, end: Float, clock: Int = 0): Step {
         val s = committed
-        if (abs(phase - end) <= SETTLED) {
-            val value = if (target != s.target || abs(s.last - s.end) <= SETTLED && s.value != target) motion?.value() ?: target else target
-            return Step(value, 0f, target, target, 0f, 0f, phase, end, clock, phase)
+        val timed = motion?.kind == 1
+        if (timed || abs(phase - end) <= SETTLED) {
+            val value = if (timed || target != s.target || abs(s.last - s.end) <= SETTLED && s.value != target) motion?.value() ?: target else target
+            return Step(value, 0f, target, target, 0f, 0f, phase, phase, clock, phase)
         }
-        val rejoin = target != s.target || s.value != target && (s.end != end || s.clock != clock ||
+        val rejoin = abs(s.last - s.end) <= SETTLED || target != s.target || s.value != target && (s.end != end || s.clock != clock ||
             (if (end > .5f) phase < s.last - SETTLED else phase > s.last + SETTLED))
         // The same clock rejoins its own curve at this phase, never retracing it; another clock, the last shown frame.
         val travel = maxOf(abs(phase - s.start), abs(s.last - s.start)); val same = s.clock == clock && abs(s.last - s.end) > SETTLED
@@ -33,7 +34,7 @@ internal class PhaseBinding(initial: Float, private val motion: MotionFloat? = n
     }
     fun present(step: Step) {
         motion?.let {
-            if (step.value == step.target) it.snapTo(step.target)
+            if (step.value == step.target && it.kind != 1) it.snapTo(step.target)
             else if (abs(step.last - step.end) <= SETTLED) it.retarget(step.target, motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.ArtworkLayout))
             else it.drive(step.value, it.clock.stampNow)
         }
