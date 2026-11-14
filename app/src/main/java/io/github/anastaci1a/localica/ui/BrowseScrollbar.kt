@@ -101,7 +101,7 @@ private fun ListScrollbar(state: Any, scrollable: () -> Boolean, frame: () -> Sc
         .let { i -> { t: Offset, ms: Long -> i.move(t.x, t.y, ms).takeIf { it != ControlGestureOwner.Pending }?.let { it == ControlGestureOwner.Scroll } } }
     // Read in the layout, draw and semantics phases, so scrolling never recomposes the scrollbar.
     fun fraction() = model.observe(frame())
-    ScrollbarSlots(state, model, movement, ::fraction,
+    ScrollbarSlots(state, movement, ::fraction,
         { track, minimum -> model.thumbSize(track, minimum, track * ScrollbarSpec.maximumTrackShare) },
         scrolling, { active }, { active = it }, ::claim, { drag.fraction }, drag::begin, { drag.move(it); wake() }, ::request,
         { previewFor(movement().first) }, LocalMotionSpeed.current, LocalReducedMotion.current,
