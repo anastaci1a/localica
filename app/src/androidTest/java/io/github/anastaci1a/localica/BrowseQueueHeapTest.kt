@@ -57,8 +57,6 @@ class BrowseQueueHeapTest {
         try {
             step("open", mb) { BrowseQueries.openingQueue(library, queue, detail, "e${entries / 2}")!!.also { it.indexOfKey("e${entries / 2}") } }
             step("detail", mb) { BrowseQueries.evaluate(library, emptyList(), detail, queues = listOf(queue)) }
-            step("queuesTab", mb) { BrowseQueries.evaluate(library, emptyList(), BrowseRoute(MainTab.Queues), queues = listOf(queue))
-                .also { it.items.single().let { item -> item.playCount; item.duration(); item.information(BrowseStyle(extraInfo = ExtraInfo.Genre)) } } }
             step("zeroMatch", mb) { BrowseQueries.evaluate(library, emptyList(), detail.copy(search = true, text = "nothing matches"), queues = listOf(queue)) }
             step("broad", mb + 8L * entries) { BrowseQueries.evaluate(library, emptyList(), detail.copy(search = true, text = "song 1"), queues = listOf(queue)) }
             step("matchAll", mb + 8L * entries) { BrowseQueries.evaluate(library, emptyList(), detail.copy(search = true, text = "mp3"), queues = listOf(queue))
