@@ -13,7 +13,7 @@ import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
+import io.github.anastaci1a.localica.pilotComposeRule as createComposeRule
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -25,12 +25,15 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
 import kotlin.math.roundToInt
 
 /** Rendered alpha, including the distinct live and retained compositing paths. */
+@RunWith(AndroidJUnit4::class)
 class PinchFadeTest {
     @get:Rule val compose = createComposeRule()
 

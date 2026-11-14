@@ -61,7 +61,8 @@ android {
         require(sourceSha.matches(Regex("[a-f0-9]{40}"))) { "A full source SHA is required" }
         buildConfigField("String", "SOURCE_SHA", "\"$sourceSha\"")
     }
-    // Platform-free helpers are test-only, shared by host contracts and device callers.
+    testOptions.unitTests.isIncludeAndroidResources = true
+    // Test fixtures and contracts are shared by JVM and device callers.
     sourceSets.getByName("test").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("androidTest").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
@@ -92,6 +93,12 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.inspector)
     implementation(libs.coroutines.android)
+    testImplementation("org.robolectric:robolectric:4.18")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.60.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.60.0")
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.test)
+    testImplementation(libs.androidx.test.junit)
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
     testImplementation(libs.coroutines.test)
@@ -116,7 +123,27 @@ val archiveDebugUnitXml = tasks.register<org.gradle.api.tasks.Copy>("archiveDebu
     })
 }
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
-    if (name == "testDebugUnitTest") finalizedBy(archiveDebugUnitXml)
+    if (name == "testDebugUnitTest") {
+        finalizedBy(archiveDebugUnitXml)
+        javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(21)) })
+        maxHeapSize = "2g"
+        jvmArgs(
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "--add-opens=java.base/java.util=ALL-UNNAMED",
+            "--add-opens=java.base/java.io=ALL-UNNAMED",
+            "--add-opens=java.base/java.net=ALL-UNNAMED",
+            "--add-opens=java.base/java.security=ALL-UNNAMED",
+            "--add-opens=java.base/java.text=ALL-UNNAMED",
+            "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+            "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+            "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED",
+        )
+        systemProperty("robolectric.graphicsMode", "NATIVE")
+        systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+        systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
+        systemProperty("maven.repo.local", gradle.gradleUserHomeDir.resolve("caches/robolectric-maven").absolutePath)
+        systemProperty("roborazzi.test.record", providers.gradleProperty("roborazzi.test.record").orElse("false").get())
+    }
 }
 
 // Standalone test components cannot use the target APK's classloader. AGP subtracts

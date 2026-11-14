@@ -17,6 +17,14 @@ Test in proportion to the change. While implementing, run focused checks that co
 | Lint | `lint/src/test` | The UI policy rules and their fixtures. |
 | Host contracts | `.github/tests` | Workflow selection, evidence observers and publishers, without a device. |
 
+### JVM screenshot pilot
+
+The tab-slide, pinch-fade and pinch-retarget classes share their assertions between JVM and device tests. The JVM fixture uses Robolectric native graphics, hardware PixelCopy and the existing Flat None appearance and renderer. Native window receipts and glass recordings remain device checks.
+
+Structure and existing assertions retain their tolerances. Screenshot interiors and dimensions are exact. Only pixels in a reference's nonuniform 3×3 neighbourhood permit channel differences up to 3/255; at most 0.5% of those pixels may differ. Images cannot shift.
+
+Reference PNGs are stored as Base64 text and decoded into build reports. Verification is the default in `testDebugUnitTest`. Record explicitly with `-Proborazzi.test.record=true`, then review changes before updating references. Runtime equivalence and device-test retirement remain pilot acceptance requirements.
+
 ## Focused and final validation
 
 | Stage | Required evidence |
@@ -39,7 +47,7 @@ Final commands, run only after the candidate is frozen:
 
 ## Writing device tests
 
-- Use the [shared Compose test factories](../../app/src/androidTest/java/io/github/anastaci1a/localica/TestComposeRules.kt). They select `StandardTestDispatcher` by default.
+- Use the [shared Compose test factories](../../app/src/sharedTest/java/io/github/anastaci1a/localica/TestComposeRules.kt). They select `StandardTestDispatcher` by default.
 - Keep clock advances and input assertions explicit. Compose 1.10 drains due work while idling; do not add another idle-drain.
 - Mandatory regressions keep presented-pixel, lifecycle, first-frame, reopened-frame, interruption and disposal assertions.
 - Select diagnostic methods explicitly, never with a wildcard exclusion that could remove correctness tests.

@@ -11,6 +11,8 @@ Use the pinned Gradle wrapper, JDK 17 and Android SDK. Debug serves tests; distr
 
 Use JDK 17, Android platform 36 and build tools 35.0.0. Set `ANDROID_HOME`, or an untracked `local.properties` with the SDK path. The wrapper verifies its download checksum.
 
+Install JDK 21 alongside JDK 17 for `testDebugUnitTest`. Its Robolectric API 36 tests use a Java 21 launcher; Gradle and app compilation use Java 17.
+
 For repeated compile or assemble runs, the configuration cache is an opt-in:
 
 ```sh

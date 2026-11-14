@@ -18,16 +18,19 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
+import io.github.anastaci1a.localica.pilotComposeRule as createComposeRule
 import io.github.anastaci1a.localica.navigation.MainTab
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
 import org.junit.Rule
 import org.junit.Test
 import kotlin.math.abs
 
 /** #728: four home tabs at the operator's Galaxy A35 width and density (1080 px at
  * 397 dpi, font scale 0.9), sliding one contact across every boundary both ways. */
+@RunWith(AndroidJUnit4::class)
 class SlidingTabsFourTabSlideTest {
     @get:Rule val compose = createComposeRule()
     private val four = listOf(MainTab.Home, MainTab.Library, MainTab.Playlists, MainTab.AlbumArtists)
