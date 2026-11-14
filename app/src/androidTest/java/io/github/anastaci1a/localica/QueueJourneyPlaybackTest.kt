@@ -77,7 +77,7 @@ class QueueJourneyPlaybackTest {
             val branched = queues.state.value.library.active!!.journey!!
             assertEquals(listOf(0, 3, 6).map { ids[it] }, branched.history.map { it.entryId })
             assertTrue(branched.visited.containsAll(listOf(ids[1], ids[5])))
-            assertTrue(branched.future.none { it.entryId in branched.visited })
+            assertTrue(branched.window().filterNot { it in branched.history }.none { it.entryId in branched.visited })
             val expectedNext = branched.next!!
             instrumentation.runOnMainSync {
                 assertEquals(expectedNext.token, player.getMediaItemAt(player.nextMediaItemIndex).mediaMetadata.extras!!.getString("queueVisit"))

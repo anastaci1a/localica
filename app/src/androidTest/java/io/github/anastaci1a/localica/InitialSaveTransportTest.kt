@@ -184,5 +184,5 @@ private class InitialSaveGateDao(private val delegate: QueueDao) : QueueDao() {
     override suspend fun clearEntries(id: String): Unit = error("Use save")
     override suspend fun deleteQueue(id: String): Unit = error("Use save")
     override suspend fun deleteVisits(queueId: String, tokens: List<String>): Unit = error("Use save")
-    override suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("Use save")
+    override suspend fun deleteSparseMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("Use save")
 }

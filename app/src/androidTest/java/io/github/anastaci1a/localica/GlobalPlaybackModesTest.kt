@@ -37,7 +37,7 @@ class GlobalPlaybackModesTest {
                 assertEquals(journey.window().map { it.token }, (0 until player.mediaItemCount).map {
                     player.getMediaItemAt(it).mediaMetadata.extras!!.getString("queueVisit")
                 })
-                val remaining = journey.future.filter { it.cycle == journey.cycle }.map { it.entryId }
+                val remaining = journey.window().filterNot { it in journey.history }.filter { it.cycle == journey.cycle }.map { it.entryId }
                 assertEquals(tracks.size - journey.visited.size, remaining.size)
                 assertEquals(remaining.size, remaining.toSet().size)
                 assertTrue(remaining.none { it in journey.visited })

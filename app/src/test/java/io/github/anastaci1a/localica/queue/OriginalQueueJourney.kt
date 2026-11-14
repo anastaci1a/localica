@@ -3,8 +3,10 @@ package io.github.anastaci1a.localica.queue
 import java.util.UUID
 import kotlin.random.Random
 
-/** Actual visits plus mode-owned traversal shared by transport, preloading and artwork. */
+// Frozen f3a9dde4a behavioral oracle; candidate tokens are tested separately.
+/** Visits plus mode-owned traversal shared by transport, preloading and artwork. */
 data class OriginalQueueJourney(
+    // Explicit Play Next visits can be reserved after the cursor; visited records actual arrivals.
     val history: List<QueueVisit> = emptyList(),
     val cursor: Int = -1,
     val future: List<QueueVisit> = emptyList(),
@@ -72,14 +74,31 @@ data class OriginalQueueJourney(
             if (end > history.size) future.take(end - history.size) else emptyList()
     }
 
+    // Unplayed explicit visits use the active cycle even while retracing older history.
+    // Membership distinguishes them from already-played forward history without new stored state.
+    private fun scheduledNext(): List<QueueVisit> = if (!modes.shuffle) emptyList() else
+        history.drop(cursor + 1).filter { it.cycle == cycle && it.entryId !in visited }
+
     fun select(entryId: String, ids: List<String>, random: Random = Random.Default): OriginalQueueJourney {
         require(entryId in ids)
         if (modes.shuffle && visited.containsAll(ids)) return restart(ids, entryId, random)
         val visit = QueueVisit(entryId, cycle)
         val kept = history.take(cursor + 1) + visit
-        return copy(history = kept, cursor = kept.lastIndex, visited = visited + entryId,
+        return copy(history = kept + scheduledNext().filterNot { it.entryId == entryId }, cursor = kept.lastIndex, visited = visited + entryId,
             orderedTraversalId = if (modes.shuffle) null else UUID.randomUUID().toString(),
             orderedAnchorToken = if (modes.shuffle) null else visit.token).planned(ids, random)
+    }
+
+    /** Explicit next visits precede retraceable history without becoming visited until arrival. */
+    fun playNext(added: List<String>, ids: List<String>, random: Random = Random.Default): OriginalQueueJourney {
+        require(added.toSet().size == added.size && ids.toSet().containsAll(added))
+        val anchor = current ?: return reconcile(ids, ids.firstOrNull(), modes, random)
+        if (!modes.shuffle) return reconcile(ids, anchor.entryId, modes, random)
+        val existing = (history.asSequence() + future.asSequence()).map { it.entryId }.toHashSet()
+        require(added.none { it in existing })
+        val visits = added.map { QueueVisit(it, cycle) }
+        return copy(history = history.take(cursor + 1) + visits + history.drop(cursor + 1))
+            .planned(ids, random)
     }
 
     fun arrive(token: String, ids: List<String>, random: Random = Random.Default): OriginalQueueJourney {
@@ -95,19 +114,49 @@ data class OriginalQueueJourney(
                 visited = membership + visit.entryId).planned(ids, random)
         }
         val old = history.indexOfFirst { it.token == token }
-        if (old >= 0) return copy(cursor = old)
+        if (old >= 0) {
+            val visit = history[old]
+            val reserved = scheduledNext().mapTo(hashSetOf()) { it.token }
+            val skipped = if (old > cursor) history.subList(cursor + 1, old).filter { it.token in reserved } else emptyList()
+            if (skipped.isEmpty()) return copy(cursor = old,
+                visited = if (visit.cycle == cycle) visited + visit.entryId else visited)
+            val skippedTokens = skipped.mapTo(hashSetOf()) { it.token }
+            val prefix = history.take(old + 1).filterNot { it.token in skippedTokens }
+            return copy(history = prefix + skipped + history.drop(old + 1), cursor = prefix.lastIndex,
+                visited = if (visit.cycle == cycle) visited + visit.entryId else visited).planned(ids, random)
+        }
         val visit = future.firstOrNull { it.token == token } ?: return this
         val kept = history.take(cursor + 1) + visit
-        return copy(history = kept, cursor = kept.lastIndex, cycle = visit.cycle,
+        val scheduled = scheduledNext().filterNot { it.entryId == visit.entryId }
+            .map { if (it.cycle == visit.cycle) it else it.copy(cycle = visit.cycle) }
+        return copy(history = kept + scheduled, cursor = kept.lastIndex, cycle = visit.cycle,
             visited = (if (visit.cycle == cycle) visited else emptySet()) + visit.entryId)
             .planned(ids, random)
     }
 
+    private data class Reconciliation(val ids: List<String>, val currentEntryId: String?, val modes: JourneyModes)
+    // Only fresh normalized outputs receive this marker. Generated copies and restored values start cold.
+    private var reconciliation: Reconciliation? = null
+
     /** Remove invalid occurrences, retaining valid visits on both sides of the cursor. */
     fun reconcile(ids: List<String>, currentEntryId: String?, requested: JourneyModes,
         random: Random = Random.Default): OriginalQueueJourney {
-        if (ids.isEmpty()) return OriginalQueueJourney(modes = requested)
+        reconciliation?.let { previous ->
+            if (previous.currentEntryId == currentEntryId && previous.modes == requested && previous.ids == ids) return this
+        }
         val valid = ids.toSet()
+        return reconcileUnprepared(ids, currentEntryId, requested, random, valid).also { result ->
+            // Duplicate occurrences/plans can change future-token ownership on another repair pass.
+            // Preserve that repair rather than treating malformed data as a reusable fixed point.
+            if (valid.size == ids.size && result.plans.values.all { it.toSet().size == it.size }) {
+                result.reconciliation = Reconciliation(ids.toList(), currentEntryId, requested)
+            }
+        }
+    }
+
+    private fun reconcileUnprepared(ids: List<String>, currentEntryId: String?, requested: JourneyModes,
+        random: Random, valid: Set<String>): OriginalQueueJourney {
+        if (ids.isEmpty()) return OriginalQueueJourney(modes = requested)
         val selected = currentEntryId?.takeIf { it in valid } ?: ids.first()
         var kept = history.filter { it.entryId in valid }
         var position = history.take(cursor + 1).count { it.entryId in valid } - 1
@@ -173,10 +222,13 @@ data class OriginalQueueJourney(
             prepared[number] = retained + added
         }
         val oldVisits = future.associateBy { it.cycle to it.entryId }
+        val scheduled = history.drop(cursor + 1).groupBy { it.cycle }
+            .mapValues { (_, visits) -> visits.mapTo(hashSetOf()) { it.entryId } }
         val pending = prepared.flatMap { (number, order) ->
             val remaining = if (number != cycle) order else if (modes.shuffle) order.filterNot { it in visited }
                 else order.drop((order.indexOf(current?.entryId) + 1).coerceAtLeast(0))
-            remaining.map { id -> oldVisits[number to id] ?: QueueVisit(id, number) }
+            remaining.filterNot { modes.shuffle && it in scheduled[number].orEmpty() }
+                .map { id -> oldVisits[number to id] ?: QueueVisit(id, number) }
         }
         return copy(plans = prepared, future = pending)
     }

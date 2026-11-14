@@ -31,6 +31,8 @@ data class QueueJourney(
     val previous: QueueVisit? get() = history.getOrNull(cursor - 1)
     val next: QueueVisit? get() = history.getOrNull(cursor + 1) ?: future.firstOrNull()
 
+    internal fun sourceOrdinal(ids: List<String>, entryId: String?): Int? = ids.indexOf(entryId).takeIf { it >= 0 }
+
     /** Nearest legacy visits first; schema-7 ordered identities remain inert. */
     fun artworkWindow(radius: Int = 4): List<QueueVisit> {
         require(radius in 0..4)
@@ -64,7 +66,7 @@ data class QueueJourney(
         return reconcile(ids, current?.entryId, modes, random)
     }
 
-    fun arrive(token: String, ids: List<String>, random: Random = Random.Default): QueueJourney {
+    fun arrive(token: String, ids: List<String>, random: Random = Random.Default, @Suppress("UNUSED_PARAMETER") receipt: QueueVisit? = null): QueueJourney {
         val old = history.indexOfFirst { it.token == token }
         if (old >= 0) return copy(cursor = old)
         val visit = future.firstOrNull { it.token == token } ?: return this

@@ -43,7 +43,7 @@ Every release passes the [lint gate](../architecture/ui-system.md#the-lint-gate)
 
 ## Compatibility gate
 
-Queue schema 7 cannot be reopened by the original schema-6 APK. Before distributing a build, dispatch the exact candidate through the Android workflow with `compatibility=true`.
+Queue schema 8 cannot be reopened by older schema-6 or schema-7 APKs. Before distributing a build, dispatch the exact candidate through the Android workflow with `compatibility=true`.
 
 - On API 26 and 36, the gate installs candidate → legacy-behaviour bridge → candidate, with the same package and signature and increasing private version codes, without clearing data.
 - [ShuffleApkCompatibilityTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/ShuffleApkCompatibilityTest.kt) checks duplicate occurrences, saved order and cursor, controller reopening and statistics across the `seed`, `bridge` and `verify` phases.

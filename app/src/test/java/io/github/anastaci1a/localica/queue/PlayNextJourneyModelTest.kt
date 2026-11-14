@@ -11,7 +11,7 @@ class PlayNextJourneyModelTest {
             .select("B", original).select("C", original)
         path = path.arrive(path.history.first().token, original)
         val history = path.history
-        val pending = path.future
+        val pending = path.window().filterNot { it in path.history }
         val visited = path.visited
         val ids = listOf("A", "X", "Y", "B", "C", "D")
         path = path.playNext(listOf("X", "Y"), ids, Random(4))
@@ -19,7 +19,7 @@ class PlayNextJourneyModelTest {
         assertEquals(visited, path.visited)
         assertEquals(listOf("A", "X", "Y", "B", "C"), path.history.map { it.entryId })
         assertEquals(history.drop(1), path.history.drop(3))
-        assertEquals(pending, path.future)
+        assertEquals(pending, path.window().filterNot { it in path.history })
         assertEquals(path, path.reconcile(ids, "A", path.modes))
         val secondIds = listOf("A", "Z", "W", "X", "Y", "B", "C", "D")
         path = path.playNext(listOf("Z", "W"), secondIds)
@@ -69,13 +69,13 @@ class PlayNextJourneyModelTest {
         assertEquals(setOf("A", "B"), selected.visited)
         // Selecting elsewhere keeps unplayed explicit requests ahead of the random plan.
         assertEquals(listOf("X", "Y"), selected.history.drop(selected.cursor + 1).map { it.entryId })
-        assertEquals(listOf("C"), selected.future.map { it.entryId })
+        assertEquals(listOf("C"), selected.window().filterNot { it in selected.history }.map { it.entryId })
         val ordered = path.reconcile(ids, "A", JourneyModes())
         assertEquals("X", ordered.next!!.entryId)
         val reset = ordered.reconcile(ids, "A", path.modes)
         assertEquals(listOf(path.current), reset.history)
         assertEquals(setOf("A"), reset.visited)
-        assertEquals(setOf("X", "Y", "B", "C"), reset.future.map { it.entryId }.toSet())
+        assertEquals(setOf("X", "Y", "B", "C"), reset.window().filterNot { it in reset.history }.map { it.entryId }.toSet())
     }
 
     @Test fun insertionAfterPreviousAcrossRepeatBoundaryKeepsLaterCycleVisits() {
@@ -98,7 +98,7 @@ class PlayNextJourneyModelTest {
             path = path.arrive(visit.token, updated)
         }
         // Requests made from older history belong to the active cycle and must not repeat there.
-        assertFalse(path.future.any { it.entryId in listOf("X", "Y") && it.cycle == 1L })
+        assertFalse(path.window().filterNot { it in path.history }.any { it.entryId in listOf("X", "Y") && it.cycle == 1L })
     }
     @Test fun skipsIntoForwardHistoryKeepUnplayedRequestsButDoNotReservePlayedRetrace() {
         val original = listOf("A", "B", "C", "D")
@@ -131,7 +131,7 @@ class PlayNextJourneyModelTest {
         assertEquals(tokens, path.history.drop(path.cursor + 1).map { it.token })
         assertEquals(listOf(1L, 1L), path.history.drop(path.cursor + 1).map { it.cycle })
         repeat(2) { path = path.arrive(path.next!!.token, ids) }
-        assertTrue(path.future.none { it.cycle == 1L && it.entryId in listOf("X", "Y") })
+        assertTrue(path.window().filterNot { it in path.history }.none { it.cycle == 1L && it.entryId in listOf("X", "Y") })
     }
 
 }
