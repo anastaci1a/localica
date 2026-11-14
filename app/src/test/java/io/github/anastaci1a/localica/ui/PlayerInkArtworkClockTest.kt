@@ -134,6 +134,34 @@ class PlayerInkArtworkClockTest {
         }
     }
 
+    @Test fun aLateDestinationAdvancesTheCurrentPhaseBeforeTakingValueOwnership() {
+        for (owner in 0..2) EngineHarness().use { h ->
+            val motion = MotionFloat(h.clock, 0f, 1f, 0.0..1.0)
+            val binding = PhaseBinding(0f, motion)
+            fun sample(target: Float, phase: Float) = binding.resolve(target, phase, 1f, owner).also(binding::present).value
+            (0..9).forEach {
+                if (it > 0) h.advance(1.0 / 120)
+                sample(1f, it / 20f)
+            }
+            val previous = motion.sample()
+            assertTrue(previous.velocity > .01f)
+            h.advance(1.0 / 120)
+            val shown = sample(0f, .5f)
+            assertEquals("The phase advances on the hand-off frame", .5f, shown, .0001f)
+            assertTrue(shown > previous.value)
+            assertEquals("The timed correction starts at this frame's value", shown, motion.value(), .0001f)
+            assertEquals(previous.velocity, motion.velocity(), .0001f)
+            h.advance(1.0 / 120)
+            val continued = motion.sample()
+            assertTrue(continued.value > shown)
+            assertEquals(continued.value, sample(0f, .55f), .0001f)
+            assertEquals(continued.velocity, motion.velocity(), .0001f)
+            h.advance(1.0)
+            assertEquals(0f, sample(0f, 1f), 0f)
+            assertEquals(0, h.clock.activeCount)
+        }
+    }
+
     @Test fun aTrackChangeDuringALateEaseRetargetsTheSameValueAndVelocity() {
         EngineHarness().use { h ->
             val motion = MotionFloat(h.clock, 1f, 1f, 0.0..1.0)
