@@ -1196,7 +1196,7 @@ class PlaybackIntentTest {
             assertEquals(2, inserted.size)
             assertEquals((original + inserted).toSet(), active.entries.map { it.id }.toSet())
             val journey = active.journey!!
-            assertEquals(inserted, journey.history.drop(journey.cursor + 1).take(2).map { it.entryId })
+            assertEquals(inserted, journey.window().dropWhile { it.token != journey.current!!.token }.drop(1).take(2).map { it.entryId })
             withContext(Dispatchers.Main) {
                 assertEquals(journey.window().map { it.entryId }, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId })
                 assertEquals(original.first(), player.currentMediaItem!!.mediaId)
