@@ -101,14 +101,14 @@ class PlayerInkArtworkClockTest {
         }
     }
 
-    @Test fun aChangedLateTargetRetargetsTheSameValueAndVelocity() {
+    @Test fun aTrackChangeDuringALateEaseRetargetsTheSameValueAndVelocity() {
         EngineHarness().use { h ->
             val motion = MotionFloat(h.clock, 1f, 1f)
             val binding = PhaseBinding(1f, motion)
-            fun sample(target: Float) = binding.resolve(target, 1f, 1f, 2).also(binding::present)
+            fun sample(target: Float, phase: Float = 1f, clock: Int = 2) = binding.resolve(target, phase, 1f, clock).also(binding::present)
             sample(0f); h.advance(.1)
             val before = motion.sample()
-            assertEquals(before.value, sample(1f).value, 0f)
+            assertEquals(before.value, sample(1f, 0f, 1).value, 0f)
             assertEquals(before.velocity, motion.velocity(), .0001f)
             h.advance(1.0)
             assertEquals(1f, sample(1f).value, 0f)
@@ -125,6 +125,22 @@ class PlayerInkArtworkClockTest {
             sample(); h.advance(1.0 / 120)
             assertEquals(0f, sample(), 0f)
             assertEquals(0, h.clock.activeCount)
+        }
+    }
+
+    @Test fun disposingDuringALateEaseUnregistersTheValueChannel() {
+        EngineHarness().use { h ->
+            val motion = MotionFloat(h.clock, 1f, 1f)
+            val binding = PhaseBinding(1f, motion)
+            binding.present(binding.resolve(0f, 1f, 1f, 2))
+            h.advance(.1)
+            assertTrue(motion.value() in .01f..0.99f)
+            assertEquals(1, h.clock.activeCount)
+            motion.dispose()
+            assertEquals(0, h.clock.activeCount)
+            val awaits = h.awaits
+            h.advance(1.0)
+            assertEquals(awaits, h.awaits)
         }
     }
 }
