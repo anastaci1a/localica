@@ -31,6 +31,27 @@ import org.junit.Test
 class ShadowContinuityTest {
     @get:Rule val compose = localicaComposeRule()
 
+    @Test fun unpresentedWindowFailsAdmissionBeforeFieldCapture() {
+        lateinit var view: android.view.View
+        compose.setContent {
+            view = androidx.compose.ui.platform.LocalView.current
+            Box(Modifier.size(100.dp).background(Color.White).testTag("unpresented-shadow"))
+        }
+        val window = compose.runOnUiThread {
+            generateSequence(view.context) { (it as? android.content.ContextWrapper)?.baseContext }
+                .filterIsInstance<android.app.Activity>().first().window
+        }
+        val alpha = compose.runOnUiThread { window.attributes.alpha }
+        try {
+            compose.runOnUiThread { window.attributes = window.attributes.apply { this.alpha = 0f } }
+            ShadowNativeCapture(compose, compose.onNodeWithTag("unpresented-shadow")) { 0L }.use { capture ->
+                val failure = org.junit.Assert.assertThrows(IllegalStateException::class.java) { capture.capture() }
+                assertTrue(failure.message.orEmpty(), failure.message.orEmpty()
+                    .matches(Regex("Native window admission timed out: \\[window-[0-9]+\\]")))
+            }
+        } finally { compose.runOnUiThread { window.attributes = window.attributes.apply { this.alpha = alpha } } }
+    }
+
     @Test fun retainedShadowDoesNotPopWhenMotionStartsOrSettles() {
         var moving by mutableStateOf(false)
         var background by mutableStateOf(Color.White)
@@ -76,9 +97,6 @@ class ShadowContinuityTest {
                     .put("systemBarsIgnoringVisibility", insets.getInsetsIgnoringVisibility(androidx.core.view.WindowInsetsCompat.Type.systemBars()).toString())
                     .put("statusBarsVisible", insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars()))
         }
-        // A submitted View draw may still be behind Launcher during Activity admission.
-        // Qualify the actual fixture window before the unchanged one-shot field capture.
-        compose.waitUntil(5000) { compose.runOnUiThread { view.isShown && view.hasWindowFocus() } }
         val included = ShadowNativeCapture(compose, scene) { clock.stampNow.sequence }.use { geometryCapture(it) }
         val includedInsets = insetsReceipt()
         compose.runOnIdle {
