@@ -34,7 +34,7 @@ internal fun awaitGlassReturn(rule: ComposeContentTestRule, anchor: GlassAnchor,
         val state = "$detail virtualElapsed=${rule.mainClock.currentTime - virtualStart} " +
             "wallElapsed=${android.os.SystemClock.uptimeMillis() - wallStart} " +
             "callerAutoAdvance=$autoAdvance hidden=${anchor.hidden} present=${anchor.modalPresent} " +
-            "mounted=${anchor.triggerMounted} drawn=${anchor.restoredDrawn} shadow=${anchor.shadowInModal} " +
+            "mounted=${anchor.triggerMounted} drawn=${anchor.restoredDrawn} shadow=${anchor.modalPresent} " +
             "progress=${anchor.contact.expansion.value} target=${anchor.contact.expansion.targetValue} " +
             "running=${anchor.contact.expansion.isRunning} velocity=${anchor.contact.expansion.velocity}"
         Log.e("GlassReturn", state, failure)

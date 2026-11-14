@@ -86,14 +86,14 @@ class PopupShadowContinuityTest {
         fun frame(label: String) {
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
             val p = anchor.contact.expansion.value
-            val captureName = label.takeIf { p <= .002f && previousOwner != null && previousOwner != anchor.shadowInModal }
+            val captureName = label.takeIf { p <= .002f && previousOwner != null && previousOwner != anchor.modalPresent }
             val (gap, reference) = sharedGapSample(captureName)
             assertReferenceIsolation()
             val error = gap - reference
             if (p <= .002f) {
                 homeContinuity.observeLuminance(1f - error / 255f)
                 rawContinuity.observeLuminance(1f - gap / 255f)
-                val owner = anchor.shadowInModal
+                val owner = anchor.modalPresent
                 if (owner) popupHomeFrames++ else pageHomeFrames++
                 if (previousOwner != null && previousOwner != owner) handoffs++
                 previousOwner = owner
@@ -102,7 +102,7 @@ class PopupShadowContinuityTest {
             }
             frames += p to error
             val shape = anchor.contact.body.value
-            log.append("$label p=$p hidden=${anchor.hidden} inModal=${anchor.shadowInModal} window=${popupWindow != null} " +
+            log.append("$label p=$p hidden=${anchor.hidden} inModal=${anchor.modalPresent} window=${popupWindow != null} " +
                 "strain=${shape.strain} depth=${shape.depth} gap=$gap reference=$reference error=$error $sharedSampleCoordinates\n")
         }
         fun returnToRest(label: String) {
@@ -338,7 +338,7 @@ class PopupShadowContinuityTest {
             // only copies values; the log is written here, on the instrumentation thread.
             val returns = java.util.concurrent.ConcurrentLinkedQueue<ReturnPoint>()
             fun record() = returns.add(ReturnPoint(anchor.hidden, anchor.restoredDrawRequest,
-                anchor.restoredPresentedReceipt, anchor.modalPresent, anchor.shadowInModal, popupWindow != null))
+                anchor.restoredPresentedReceipt, anchor.modalPresent, anchor.modalPresent, popupWindow != null))
             val request = compose.runOnIdle { record(); anchor.restoredDrawRequest }
             val observer = androidx.compose.runtime.snapshots.Snapshot.registerApplyObserver { _, _ -> record() }
             var returned = false
@@ -372,7 +372,7 @@ class PopupShadowContinuityTest {
             if (!nested) verifyField("first-trigger-owned-frame", popup = false)
             assertFalse(anchor.modalPresent)
             assertFalse(anchor.hidden)
-            assertFalse(anchor.shadowInModal)
+            assertFalse(anchor.modalPresent)
             // A complete close/reopen uses a new window, not an old retained shadow.
             compose.runOnIdle { open = true }
             advanceEndpoint(1200)

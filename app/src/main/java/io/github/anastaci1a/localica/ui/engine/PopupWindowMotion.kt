@@ -7,7 +7,7 @@ import io.github.anastaci1a.localica.ui.spec.PopupKind
 
 /** #920: a popup's one stored takeover phase (SPEC.md section 2); every takeover flag is a view of it. */
 internal enum class PopupTakeover { Closed, Admitting, InWindow, Restoring }
-/** The trigger's anchor stores the phase, so it outlives an owner rebuilt for a new kind; shared content reads it here. */
+/** A retained presentation owns takeover; its trigger and shared content borrow the current view. */
 internal interface PopupTakeoverOwner {
     val takeover: PopupTakeover
     val expanded: Boolean get() = takeover == PopupTakeover.InWindow
@@ -45,6 +45,8 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     val bounds: MotionRectView? get() = rectangle
     /** The intent: what [show] last asked for. Foreground semantics follow it, so Hide releases them at its event. */
     var shown by mutableStateOf(false); private set
+    val openAtRest get() = expansion.retirementReady && expansion.phase.value() == 1f
+    val moving get() = if (shown) expansion.phase.value() != 1f else !expansion.retirementReady
     private var holding = false
     private var openingEnvelope: Rect? = null
     private var nativeWindow: java.lang.ref.WeakReference<Any>? = null

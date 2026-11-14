@@ -8,10 +8,10 @@ import org.junit.Test
 
 /** #920 step 1: the derived phase names every model state and refuses every flag vector outside the model. */
 class PopupPhaseTest {
-    private val closed = PopupFlags(present = false, hidden = false, modalPresent = false, shadowInModal = false,
+    private val closed = PopupFlags(present = false, hidden = false, modalPresent = false,
         contactModal = false, preparedOrigin = false, originAdmitted = false, windowAdmitted = false, shown = false,
         homeDeparting = false, homeGone = false, offered = false, taken = false, projected = false, expansion = 0f)
-    private val inWindow = closed.copy(present = true, hidden = true, modalPresent = true, shadowInModal = true,
+    private val inWindow = closed.copy(present = true, hidden = true, modalPresent = true,
         contactModal = true, windowAdmitted = true, shown = true, expansion = .5f)
     private val restoring = inWindow.copy(hidden = false, shown = false, expansion = 0f)
 
@@ -57,7 +57,7 @@ class PopupPhaseTest {
     }
 
     @Test fun everyRuleRefusesItsState() {
-        assertEquals("split ownership", rule(inWindow.copy(shadowInModal = false)))
+        assertEquals("split ownership", rule(inWindow.copy(contactModal = false)))
         assertEquals("split ownership", rule(inWindow.copy(preparedOrigin = true)))
         assertEquals("taken without offer", rule(inWindow.copy(taken = true)))
         assertEquals("takeover without a window", rule(inWindow.copy(present = false)))

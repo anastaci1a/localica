@@ -318,7 +318,7 @@ class PopupFamilyPresentationTest {
             .put("placement", entry?.placement?.name ?: "UNKNOWN: caller-private direct menu")
             .put("expansion", anchor?.contact?.expansion?.value ?: "UNKNOWN: caller-private direct menu")
             .put("bodySettled", anchor?.contact?.state?.momentum?.settled ?: "UNKNOWN: caller-private direct menu")
-            .put("shadowOwnerInModal", anchor?.shadowInModal ?: "UNKNOWN: caller-private direct menu")
+            .put("shadowOwnerInModal", anchor?.modalPresent ?: "UNKNOWN: caller-private direct menu")
             .put("triggerHidden", anchor?.hidden ?: "UNKNOWN: caller-private direct menu")
             .put("anchorBounds", anchor?.bounds?.let(::rect) ?: "UNKNOWN")
             .put("anchorSource", sourceFacts(anchor?.source, screenBounds))

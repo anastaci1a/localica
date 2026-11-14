@@ -68,7 +68,7 @@ class SearchDismissalLifecycleTest {
                 assertEquals(1f, anchor.contact.expansion.value, 0f)
                 assertTrue("The search publishes placed geometry", samples.isNotEmpty())
                 assertNull("No opening owner can wait for a flight that dismissal retired", samples.last().flight)
-                assertEquals("Opening vacancy settles after the replacement owner", 1f, anchor.searchSlot.fraction, 0f)
+                assertEquals("Opening vacancy settles after the replacement owner", 1f, anchor.searchSlotFraction, 0f)
             }
             compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(1)
             compose.onNodeWithText("Keep editing").performClick()

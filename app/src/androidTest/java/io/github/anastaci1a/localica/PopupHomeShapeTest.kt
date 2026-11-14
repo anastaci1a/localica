@@ -224,7 +224,7 @@ class PopupHomeShapeTest {
                         .put("trigger", trigger.name).put("sampleX", c.x).put("sampleY", c.y)
                         .put("centre", centre).put("background", background).put("contrast", contrast)
                         .put("bounds", anchor.bounds.toString()).put("presentedBounds", b.toString())
-                        .put("hidden", anchor.hidden).put("modal", anchor.modalPresent).put("inModal", anchor.shadowInModal)
+                        .put("hidden", anchor.hidden).put("modal", anchor.modalPresent).put("inModal", anchor.modalPresent)
                         .put("restored", anchor.restoredDrawn).put("request", anchor.restoredDrawRequest)
                         .put("receipt", anchor.restoredDrawReceipt).put("posted", anchor.restoredPresentedReceipt))
                     return contrast

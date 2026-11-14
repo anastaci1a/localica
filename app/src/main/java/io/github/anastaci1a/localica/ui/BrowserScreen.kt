@@ -418,7 +418,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
     val restoredSearchSlotHeight = with(density) { pillSlotHeight.roundToPx() }
     LaunchedEffect(localSearchOpen, searchAnchor, showSearchPill, restoredSearchSlotHeight) {
-        snapshotFlow { searchAnchor.searchSlot.fraction }.first { it == if (localSearchOpen) 1f else 0f }
+        snapshotFlow { searchAnchor.searchSlotFraction }.first { it == if (localSearchOpen) 1f else 0f }
         if (!localSearchOpen) {
             if (searchOriginalOffset >= 0) {
                 if (showSearchPill && searchVacancy > 0f) {
@@ -443,7 +443,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     // as its scroll anchor. The request schedules, never forces, remeasurement.
     val searchSlotGridLayout = Modifier.layout { measurable, constraints ->
         val lookahead = isLookingAhead
-        val measure = searchSlotLayoutOwner.measure(lookahead, searchAnchor.searchSlot.fraction,
+        val measure = searchSlotLayoutOwner.measure(lookahead, searchAnchor.searchSlotFraction,
             searchOriginalOffset, searchVacancy)
         measure.anchorOffset?.let { gridState.requestScrollToItem(0, it) }
         val child = measurable.measure(constraints)
@@ -456,7 +456,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val searchSlotLayout = Modifier.layout { measurable, constraints ->
         // Dirty parent and cached spacer from the same animation mutation, before
         // traversal; a state write during parent measurement would notify too late.
-        searchAnchor.searchSlot.fraction
+        searchAnchor.searchSlotFraction
         // Use this pass's captured owner, not a speculative lookahead value or a
         // separately sampled animation frame after the anchor request.
         val fraction = searchSlotLayoutOwner.fraction(isLookingAhead)
@@ -1047,7 +1047,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     if (showSearchPill) {
                         // Invalidate with the same motion, then draw the fraction
                         // consumed by actual placement rather than lookahead.
-                        searchAnchor.searchSlot.fraction
+                        searchAnchor.searchSlotFraction
                         1f - searchSlotLayoutOwner.placedFraction
                     } else 1f
                 } else Modifier)

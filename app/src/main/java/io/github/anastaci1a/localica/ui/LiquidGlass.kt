@@ -101,7 +101,8 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
     fun unbind(owner: io.github.anastaci1a.localica.ui.engine.ExpandCollapse)=phase.unbind(owner)
 }
 
-@Stable internal class GlassContact(private val inModal: () -> Boolean = { false }) {
+@Stable internal class GlassContact(private val inModal: () -> Boolean = { false },
+    private val presentedExpansion: () -> GlassExpansion? = { null }) {
     var pressed by mutableStateOf(false)
     var travel by mutableFloatStateOf(0f)
     val modal get() = inModal()
@@ -116,7 +117,8 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
             state.output.value = state.momentum.shape
             verticalAxis = value
         }
-    val expansion = GlassExpansion()
+    private val idleExpansion = GlassExpansion()
+    val expansion get() = presentedExpansion() ?: idleExpansion
     val state = GlassBodyState()
     val body: State<GlassShape> get() = state.output
 }
@@ -357,7 +359,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                         homeWeight(), appearance.blur, appearance.whiteTint, appearance.depth, depthScale, refraction,
                         shadow, shadows.shadowStrength, shadows.shadowSpread,
                         surfaceDrawIdentity(observedShadowGroup),
-                        anchor?.shadowInModal, silhouette != null, lightMix, coatingLightMix))
+                        anchor?.modalPresent, silhouette != null, lightMix, coatingLightMix))
                 }
             } catch (_: Throwable) { /* A diagnostic must never fail or change the drawing. */ }
 

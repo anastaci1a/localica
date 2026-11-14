@@ -413,7 +413,7 @@ class NestedGlassRegistrationTest {
         // The home weight 1 - window(0, .5) of the phase is positive only below .5, so each phase is reached by stepping the
         // active law one frame at a time, never by a budget tuned to one law (#854's open law passes .5 at ~53 ms).
         fun admitted() = popupView?.let { it.isAttachedToWindow && it.isLaidOut && it.hasWindowFocus() } == true &&
-            anchor.modalPresent && anchor.hidden && anchor.shadowInModal
+            anchor.modalPresent && anchor.hidden
         fun stepUntilHomeWeighted(label: String, opening: Boolean) {
             var frames = 0
             do {
@@ -431,7 +431,7 @@ class NestedGlassRegistrationTest {
             compose.runOnIdle {
                 val view = requireNotNull(popupView)
                 assertTrue("Actual native popup owns a ready window", view.isAttachedToWindow && view.isLaidOut && view.hasWindowFocus())
-                assertTrue(anchor.modalPresent && anchor.hidden && anchor.shadowInModal)
+                assertTrue(anchor.modalPresent && anchor.hidden)
                 assertTrue("Opening remains the real intermediate morph", expansionOwner.value > 0f && expansionOwner.value < 1f)
             }
             val window = requireNotNull(popupView)
@@ -460,7 +460,7 @@ class NestedGlassRegistrationTest {
             }
             compose.mainClock.advanceTimeBy(1200)
             compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
-            compose.runOnIdle { assertFalse(anchor.hidden || anchor.modalPresent || anchor.shadowInModal) }
+            compose.runOnIdle { assertFalse(anchor.hidden || anchor.modalPresent) }
             verifyDraws("return-moved", opening = false)
             producerFootprint("restored")
         } finally { compose.mainClock.autoAdvance = true }
@@ -572,7 +572,7 @@ class NestedGlassRegistrationTest {
                     assertTrue("API26 has no modern Canvas averaging witness", draws.isEmpty())
                     android.util.Log.i("MorphHomeFootprint", "detached return: API26 last measured producer/window metadata only; no sampling/pixel-consumption proof")
                 }
-                assertFalse(anchor.hidden || anchor.modalPresent || anchor.shadowInModal)
+                assertFalse(anchor.hidden || anchor.modalPresent)
             }
             compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
         } finally { compose.mainClock.autoAdvance = true }
