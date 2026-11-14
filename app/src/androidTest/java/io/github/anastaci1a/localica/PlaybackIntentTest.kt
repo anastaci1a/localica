@@ -2,6 +2,9 @@ package io.github.anastaci1a.localica
 
 import android.content.ContextWrapper
 import android.net.Uri
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.test.*
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -16,6 +19,8 @@ import io.github.anastaci1a.localica.playback.NativeReaders
 import io.github.anastaci1a.localica.playback.RecoveryAdmission
 import io.github.anastaci1a.localica.playback.track
 import io.github.anastaci1a.localica.queue.*
+import io.github.anastaci1a.localica.ui.LocalicaTheme
+import io.github.anastaci1a.localica.ui.QueueScreen
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -32,6 +37,81 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    @Test fun sameQueueSelectionMatchesPriorNativePathWithoutReloading() {
+        for (playing in listOf(false, true)) {
+            var reference: List<String>? = null
+            for (oldPath in listOf(true, false)) fixture(duplicateOccurrences = true) {
+                awaitMain { player.engine.playbackState == Player.STATE_READY }
+                queues.playbackRequested(playing)
+                barrier()
+                withContext(Dispatchers.Main) { player.selectionCalls.clear() }
+                if (oldPath) {
+                    // Frozen pre-consolidation selectEntry branch, after its prepared-library publication.
+                    val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+                    @Suppress("UNCHECKED_CAST")
+                    val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+                    val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
+                    val revision = QueueController::class.java.getDeclaredField("commandRevision").apply { isAccessible = true }
+                    val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
+                    val apply = QueueController::class.java.declaredMethods.single { it.name == "applyNativeIntent" }.apply { isAccessible = true }
+                    val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
+                    val action: suspend () -> Unit = {
+                        val active = state.value.library.active!!
+                        val selected = withContext(Dispatchers.Default) { active.copy(currentEntryId = "duplicate-1", positionMs = 0,
+                            journey = active.journey!!.select("duplicate-1", active.ids)) }
+                        state.value = state.value.copy(library = state.value.library.update(selected))
+                        val accepted = revision.getLong(queues)
+                        intents.propose(accepted, true, documentIdentity(track.id))
+                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
+                            sync.invoke(queues, true, true, null, it)
+                        }
+                        apply.invoke(queues, player, accepted, true)
+                    }
+                    withContext(Dispatchers.Main) {
+                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                            command.invoke(queues, false, {}, action, it)
+                        }
+                    }
+                } else queues.selectEntry("duplicate-1")
+                barrier()
+                withContext(Dispatchers.Main) {
+                    assertEquals("duplicate-1", player.currentMediaItem!!.mediaId)
+                    assertTrue(player.playWhenReady)
+                    assertTrue(player.currentPosition < 1500)
+                    val calls = player.selectionCalls.toList()
+                    assertFalse("Selection must retain the prepared player", calls.any { it in listOf("load", "prepare", "stop", "clear") })
+                    assertTrue(calls.contains("seek:duplicate-1:0"))
+                    if (oldPath) reference = calls else assertEquals("Native calls must match the prior same-queue path", reference, calls)
+                }
+            }
+        }
+    }
+
+    @Test fun tappingQueueRowDuringPlaybackRetainsThePreparedPlayer() = fixture(duplicateOccurrences = true) {
+        queues.playbackRequested(true)
+        barrier()
+        awaitMain { player.isPlaying }
+        val request = queues.state.value.playerRequest
+        localicaRunComposeUiTest {
+            setContent { LocalicaTheme {
+                val state by queues.state.collectAsState()
+                QueueScreen(state, queues, isPlaying = true)
+            } }
+            waitUntil(5000) { onAllNodesWithTag("media-duplicate-1").fetchSemanticsNodes().isNotEmpty() }
+            runOnIdle { player.selectionCalls.clear() }
+            onNodeWithTag("media-duplicate-1").performTouchInput { click() }
+            waitUntil(10000) { queues.state.value.playerRequest == request + 1 }
+            runOnIdle {
+                assertEquals("duplicate-1", player.currentMediaItem!!.mediaId)
+                assertTrue(player.playWhenReady)
+                assertTrue(player.currentPosition < 1500)
+                assertFalse(player.selectionCalls.any { it in listOf("load", "prepare", "stop", "clear") })
+                assertEquals(1, player.selectionCalls.count { it == "seek:duplicate-1:0" })
+                assertNull(queues.state.value.problem)
+            }
+        }
+    }
+
     @Test fun failedInitialRestoreRejectsQueuedAndLaterCompletionsWithoutEditingStorage() = fixture(attach = false, blockRestore = true) {
         dao.restore!!.entered.await()
         val receipts = CopyOnWriteArrayList<Pair<String, Boolean>>()
@@ -1519,6 +1599,88 @@ class PlaybackIntentTest {
         assertTrue(dao.read().active!!.journey!!.history.none { it.entryId == "removed" })
     }
 
+    @Test fun newerPlaySupersedesSuspendedColdActivationAndKeepsItsSourceWithoutAPlayer() = fixture(attach = false) {
+        val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+        val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
+        val activate = QueueController::class.java.declaredMethods.single { it.name == "activate" }.apply { isAccessible = true }
+        val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
+        val gate = Gate()
+        val firstRead = java.util.concurrent.atomic.AtomicBoolean(true)
+        val entries = object : AbstractList<QueueEntry>() {
+            override val size = first.entries.size
+            override fun get(index: Int): QueueEntry {
+                if (firstRead.getAndSet(false)) {
+                    assertNotEquals("Cold preparation must run off Main", android.os.Looper.getMainLooper(), android.os.Looper.myLooper())
+                    runBlocking { gate.await() }
+                }
+                return first.entries[index]
+            }
+        }
+        withContext(Dispatchers.Main) { state.value = state.value.copy(library = state.value.library.update(first.copy(entries = entries))) }
+        val pending = async(Dispatchers.Main) {
+            val action: suspend () -> Unit = {
+                val before = state.value.library
+                kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                    activate.invoke(queues, true, false, true, true, null, it)
+                }
+                assertSame("Superseded preparation cannot publish its library", before, state.value.library)
+                assertNull(player.currentMediaItem)
+            }
+            kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                command.invoke(queues, false, {}, action, it)
+            }
+        }
+        try {
+            gate.entered.await()
+            withContext(Dispatchers.Main) { queues.playbackRequested(true) }
+        } finally { gate.release.complete(Unit) }
+        pending.await()
+        barrier()
+        withContext(Dispatchers.Main) {
+            assertEquals(documentIdentity(track.id), intents.pending()!!.source)
+            assertTrue(intents.pending()!!.play)
+            assertNotNull(state.value.library.active!!.journey!!.current)
+            assertNull(player.currentMediaItem)
+        }
+    }
+
+    @Test fun timelineResolutionAfterGenerationChangeCannotPublishToTheSamePlayer() = fixture {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        barrier()
+        val resolved = QueueController::class.java.getDeclaredField("resolved").apply { isAccessible = true }
+        val timeline = QueueController::class.java.getDeclaredField("timeline").apply { isAccessible = true }.get(queues)
+        val templates = QueueTimeline::class.java.getDeclaredField("templates").apply { isAccessible = true }
+        val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
+        val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
+        val gate = store.gateNextSnapshot()
+        store.snapshot = LibrarySnapshot(tracks = listOf(track.copy(title = "Late generation")))
+        val pending = async(Dispatchers.Main) {
+            val action: suspend () -> Unit = {
+                val oldResolved = resolved.get(queues)
+                val oldTemplates = templates.get(timeline)
+                val oldNative = player.currentMediaItem
+                val published = kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
+                    sync.invoke(queues, false, true, null, it)
+                }
+                assertFalse(published)
+                assertSame(oldResolved, resolved.get(queues))
+                assertSame(oldTemplates, templates.get(timeline))
+                assertSame(oldNative, player.currentMediaItem)
+            }
+            kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                command.invoke(queues, false, {}, action, it)
+            }
+        }
+        try {
+            gate.entered.await()
+            withContext(Dispatchers.Main) { queues.attach(player) }
+        } finally { gate.release.complete(Unit) }
+        pending.await()
+        barrier()
+    }
+
     @Test fun staleWindowResolutionCannotPublishForANewerActiveQueue() = fixture(duplicateOccurrences = true) {
         awaitMain { player.engine.playbackState == Player.STATE_READY }
         barrier()
@@ -1820,6 +1982,13 @@ class PlaybackIntentTest {
     }
 
     private class RecordingPlayer(val engine: ExoPlayer) : ForwardingPlayer(engine) {
+        val selectionCalls = CopyOnWriteArrayList<String>()
+        override fun setMediaItems(items: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
+            selectionCalls.add("load")
+            super.setMediaItems(items, startIndex, startPositionMs)
+        }
+        override fun stop() { selectionCalls.add("stop"); super.stop() }
+        override fun clearMediaItems() { selectionCalls.add("clear"); super.clearMediaItems() }
         var timelineRead: (() -> Unit)? = null
         override fun getMediaItemCount(): Int {
             timelineRead?.also { timelineRead = null; it() }
@@ -1828,6 +1997,7 @@ class PlaybackIntentTest {
         val seekVisits = CopyOnWriteArrayList<String>()
         val positionSeeks = CopyOnWriteArrayList<Pair<String?, Long>>()
         override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+            selectionCalls.add("seek:${getMediaItemAt(mediaItemIndex).mediaId}:$positionMs")
             seekVisits.add(getMediaItemAt(mediaItemIndex).mediaId)
             super.seekTo(mediaItemIndex, positionMs)
         }
@@ -1852,11 +2022,12 @@ class PlaybackIntentTest {
         override fun isPlaying() = playWhenReady && playbackState == Player.STATE_READY && playerError == null &&
             playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE && engine.isPlaying
         override fun setPlayWhenReady(playWhenReady: Boolean) {
+            selectionCalls.add("play:$playWhenReady")
             requested.add(playWhenReady)
             if (playWhenReady) trueRequestSources.add(engine.currentMediaItem?.mediaMetadata?.extras?.getString("trackId"))
             super.setPlayWhenReady(playWhenReady)
         }
-        override fun prepare() { preparedWhilePlaying = preparedWhilePlaying || playWhenReady; super.prepare() }
+        override fun prepare() { selectionCalls.add("prepare"); preparedWhilePlaying = preparedWhilePlaying || playWhenReady; super.prepare() }
     }
 
     private class Gate {
