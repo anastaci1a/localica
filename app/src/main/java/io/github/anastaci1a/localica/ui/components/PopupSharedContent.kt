@@ -25,8 +25,8 @@ import io.github.anastaci1a.localica.ui.spec.PopupKind
 ) {
     private val key = Any()
     // Views of the popup's takeover (#920): the native surface replays this instance until the restored source is acknowledged.
-    private val expanded get() = owner.takeover == PopupTakeover.InWindow
-    private val nativeDrawing get() = owner.takeover >= PopupTakeover.InWindow
+    private val expanded by derivedStateOf { owner.takeover == PopupTakeover.InWindow }
+    private val nativeDrawing by derivedStateOf { owner.takeover >= PopupTakeover.InWindow }
 
     @Composable fun Compact(modifier: Modifier = Modifier) {
         Box(modifier.then(host.slots.externalHost { !expanded })) {

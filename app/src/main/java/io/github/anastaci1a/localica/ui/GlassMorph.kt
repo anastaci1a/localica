@@ -84,9 +84,10 @@ internal class GlassAnchor : PopupTakeoverOwner {
     /** Only [advance] writes it: compare-and-set from one of [from] (any phase if none), so a stale caller is refused here. */
     override var takeover by mutableStateOf(PopupTakeover.Closed); private set
     fun advance(to: PopupTakeover, vararg from: PopupTakeover) = (from.isEmpty() || takeover in from).also { if (it) takeover = to }
-    val present get() = takeover != PopupTakeover.Closed
-    val hidden get() = takeover == PopupTakeover.InWindow
-    val modalPresent get() = takeover >= PopupTakeover.InWindow
+    // Derived views notify readers only when their own value changes, as the flags they replace did.
+    val present by derivedStateOf { takeover != PopupTakeover.Closed }
+    val hidden by derivedStateOf { takeover == PopupTakeover.InWindow }
+    val modalPresent by derivedStateOf { takeover >= PopupTakeover.InWindow }
     val shadowInModal get() = modalPresent
     var surfaceNode: SurfaceView? by mutableStateOf(null)
     var returningNode: SurfaceView? = null
