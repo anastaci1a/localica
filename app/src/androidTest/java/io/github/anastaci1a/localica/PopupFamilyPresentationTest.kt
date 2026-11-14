@@ -102,10 +102,10 @@ class PopupFamilyPresentationTest {
             val catalog = LibraryUiState(LibrarySnapshot(listOf(FolderSelection("popup-family-root", "Diagnostic music")), tracks), loading = false)
             compose.setContent {
                 val inherited = LocalGlassSurfaceDrawObserver.current
-                val observe = remember(inherited) { { frame: GlassSurfaceDrawObservation ->
+                val observe = remember(inherited) { { frame: GlassDrawReceipt ->
                     // Preserve an existing observer without letting its failure suppress this collector.
-                    try { inherited?.invoke(frame) } catch (_: Throwable) { }
-                    collectSurfaceDraw(frame)
+                    try { (inherited ?: glassDrawProbe)?.invoke(frame) } catch (_: Throwable) { }
+                    if (frame is GlassSurfaceDrawObservation) collectSurfaceDraw(frame)
                 } }
                 CompositionLocalProvider(LocalGlassSurfaceDrawObserver provides observe) {
                 if (mounted) LocalicaTheme {

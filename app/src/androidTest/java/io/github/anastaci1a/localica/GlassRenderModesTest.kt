@@ -85,7 +85,7 @@ class GlassRenderModesTest {
         val owners = mutableSetOf<Int>()
         compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = 0f,
-                contrast = 0f, shadowStrength = 0f), LocalGlassSurfaceDrawObserver provides { owners += it.surfaceIdentity }) {
+                contrast = 0f, shadowStrength = 0f), LocalGlassSurfaceDrawObserver provides { glassDrawProbe?.invoke(it); (it as? GlassSurfaceDrawObservation)?.let { o -> owners += o.surfaceIdentity } }) {
                 view = androidx.compose.ui.platform.LocalView.current
                 source = rememberFrostedBackdrop(Unit, dark = false)
                 Box(Modifier.size(180.dp).testTag("switch-frame")) {

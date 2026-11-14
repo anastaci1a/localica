@@ -49,6 +49,8 @@ class HeaderGlassFreshnessTest {
         compose.setContent { LocalicaTheme {
             view = LocalView.current
             CompositionLocalProvider(LocalGlassSurfaceDrawObserver provides { receipt ->
+                glassDrawProbe?.invoke(receipt)
+                if (receipt !is GlassSurfaceDrawObservation) return@provides
                 samples++
                 latest = "${receipt}"
             }) {

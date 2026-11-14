@@ -49,6 +49,7 @@ internal fun rememberGlassPopupHome(departing: Boolean, parent: GlassPopupHome? 
 @Composable
 internal fun Modifier.glassPopupHome(home: GlassPopupHome): Modifier {
     val view = LocalView.current
+    val receipts = glassDrawObserver()
     // Keep size/readback subscriptions in this layout scope, not in the modal's
     // committed window owner above the per-frame geometry scope.
     val backdrop = rememberFrostedBackdrop(home, dark = LocalContentColor.current.luminance() > .5f)
@@ -83,14 +84,14 @@ internal fun Modifier.glassPopupHome(home: GlassPopupHome): Modifier {
             androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { backdrop.location.transformRevision++ }
         }
         drawContent()
-        projectFlights(home)
+        projectFlights(home, receipts)
     // Sampling is deliberately inside the overlay. Retained ancestor RenderNodes
     // can contain this home, so merely freezing an ancestor recording is insufficient
     // to prevent a modal from sampling itself during the inline handoff.
     }.then(recording)
 }
 
-private fun ContentDrawScope.projectFlights(home: GlassPopupHome) {
+private fun ContentDrawScope.projectFlights(home: GlassPopupHome, receipts: ((GlassDrawReceipt) -> Unit)?) {
     home.flights.forEach { flight ->
         // wasProjected is this frame's receipt: only a frame without the flight releases its presenter's source latch.
         if (!flight.prepared) flight.wasProjected = false
@@ -100,9 +101,11 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome) {
         // return source: the clean page for chrome, the complete home otherwise.
         if (flight.prepared && layer != null && !layer.isReleased) {
             if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
-            drawPopupProjection(layer, flight.origin - flight.homeOrigin)
+            val offset = flight.origin - flight.homeOrigin
+            drawPopupProjection(layer, offset)
             flight.handedOff = true
             flight.wasProjected = true
+            try { receipts?.invoke(GlassProjectionReceipt(System.identityHashCode(home), System.identityHashCode(flight), System.identityHashCode(layer), flight.revision, listOf(offset.x, offset.y))) } catch (_: Throwable) { }
         }
     }
 }
