@@ -97,6 +97,7 @@ private fun GlassAppearanceSettings(value: GlassAppearance, onChange: (GlassAppe
     }
     if (LocalSettingsEnabled.current) GlassChoices(listOf("Dark icons", "White icons"), if (previewLightInk) 1 else 0, horizontal = true) { previewLightInk = it == 1 }
     GlassSlider("Blur", value.blur, "Clear", "Frosted") { onChange(value.copy(blur = it)) }
+    GlassSlider("Touch light", value.touchLight, "Off", "Full") { onChange(value.copy(touchLight = it)) }
     GlassSlider("White tint", value.whiteTint, "None", "White") { onChange(value.copy(whiteTint = it)) }
     GlassSlider("Shadow strength", value.shadowStrength, "Off", "Strong", curve = GlassShadowStrengthCurve, readout = ::shadowStrengthReadout) { onChange(value.copy(shadowStrength = it)) }
     GlassSlider("Shadow spread", value.shadowSpread, "Tight", "Broad") { onChange(value.copy(shadowSpread = it)) }

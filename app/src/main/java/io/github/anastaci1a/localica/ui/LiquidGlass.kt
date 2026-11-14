@@ -104,6 +104,7 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
 @Stable internal class GlassContact(private val inModal: () -> Boolean = { false },
     private val presentedExpansion: () -> GlassExpansion? = { null }) {
     var pressed by mutableStateOf(false)
+    var point by mutableStateOf(Offset(.5f, .5f))
     var travel by mutableFloatStateOf(0f)
     val modal get() = inModal()
     var active by mutableStateOf(true)
@@ -140,7 +141,7 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     return drawWithContent {
         val shape = presentation()
         scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
-    }.observeGlassContact(admit, yieldToParent = true) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+    }.observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
 }
 
 /** Shared contact lifetime for ordinary buttons and independently draggable glass bodies.
@@ -148,7 +149,8 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
  * contact to a scrolling or moving ancestor, even while the finger stays on the control. */
 @Composable
 internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yieldToParent: Boolean = false,
-    onPressed: (Boolean) -> Unit): Modifier {
+    onPoint: ((Offset) -> Unit)? = null, onPressed: (Boolean) -> Unit): Modifier {
+    val reportPoint by rememberUpdatedState(onPoint)
     val notify by rememberUpdatedState(onPressed)
     val admission by rememberUpdatedState(admit)
     val trace by rememberUpdatedState(LocalGlassContactTrace.current)
@@ -165,6 +167,7 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yield
                 down.consume()
                 return@awaitEachGesture
             }
+            reportPoint?.invoke(Offset(down.position.x / size.width, down.position.y / size.height))
             notify(true)
             var pressed = true
             val intent = if (yieldToParent) ControlGestureIntent(viewConfiguration.touchSlop, parent.directions()) else null
@@ -175,6 +178,7 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yield
                 do { val event = awaitPointerEvent(PointerEventPass.Final)
                     event.changes.firstOrNull { it.id == down.id }?.let { point ->
                         runCatching { trace?.invoke(name, if (point.pressed) "held" else "up", point.position, point.isConsumed) }
+                        if (pressed && point.pressed) reportPoint?.invoke(Offset(point.position.x / size.width, point.position.y / size.height))
                         val movement = point.position - down.position
                         if (pressed && point.pressed && intent != null) {
                             if (event.changes.count { it.pressed } > 1) intent.cancel()
@@ -237,6 +241,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val ink = if (flat) MaterialTheme.colorScheme.onSurface else inkOverride ?: lerp(Color(0xFF202124), Color.White, lightMix)
     val anchor = modifier.glassSurfaceAnchor(source, cornerRadius)
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact)
+    val light = io.github.anastaci1a.localica.ui.components.rememberProfileValue(contact to "light", { if (contact.pressed) 1f else 0f },
+        io.github.anastaci1a.localica.ui.spec.MotionProfile.TouchLight, io.github.anastaci1a.localica.ui.spec.MotionProfile.ControlOff)
     val contactShape = contactPresentation ?: modifier.glassSurfaceContactPresentation() ?: { contact.body.value }
     val surfaceClip = remember(silhouette, cornerRadius) {
         silhouette?.let { outline -> androidx.compose.foundation.shape.GenericShape { extent, _ ->
@@ -322,6 +328,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val radius = cornerRadius?.toPx() ?: size.minDimension / 2f
             // Blend the control finish into the shared panel finish during the morph.
             // Flat panel walls have constant normals; diagonal glints stay on corners.
+            val a = light.value() * appearance.touchLight * .12f
+            if (a > 0f) drawContactLight(glassContactPoint(contact.point, size, contactShape(), contact.vertical),
+                outline?.path ?: rim.roundedPath(bounds, radius), a, tone, rim)
             val panelRimWeight = if (popupRim == null) 0f else panel
             if (panelRimWeight < 1f) drawGlassRim(bounds, radius,
                 path = outline?.path, tone = tone, opacity = (1f - splitRim) * (1f - panelRimWeight), cache = rim)

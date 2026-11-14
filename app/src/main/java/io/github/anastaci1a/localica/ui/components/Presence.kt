@@ -21,8 +21,15 @@ import io.github.anastaci1a.localica.ui.spec.MotionProfile
 }
 /** A unit scalar following [target] on a cataloged profile; its rest at the current intent is [MotionValue.settled]. */
 @Composable fun rememberProfileValue(key: Any, target: Float, profile: MotionProfile): MotionValue {
-    val motion = rememberMotionFloat(key, target, 1f)
-    SideEffect { motion.retarget(target, motionProfileId(profile)) }
+    return rememberProfileValue(key, { target }, profile, initial = target)
+}
+@Composable internal fun rememberProfileValue(key: Any, target: () -> Float, profile: MotionProfile,
+    offProfile: MotionProfile = profile, initial: Float = 0f): MotionValue {
+    val motion = rememberNormalizedMotionFloat(key, initial)
+    val request by rememberUpdatedState(target)
+    LaunchedEffect(motion, profile, offProfile) { snapshotFlow { request() }.collect {
+        motion.retarget(it, motionProfileId(if (it == 0f) offProfile else profile))
+    } }
     return motion
 }
 /** A colour from [start] to [end] following [target] on a cataloged profile. The value is read only when the producer

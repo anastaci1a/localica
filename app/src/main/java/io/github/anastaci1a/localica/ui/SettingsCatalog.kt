@@ -62,6 +62,7 @@ internal object SettingsCatalog {
         SettingSpec("Reset gray tone", "Appearance", "default"),
         SettingSpec("Glass renderer", "Glass", "render normal none disable effects", values = GlassRendererMode.entries.map { it.label }),
         SettingSpec("Blur", "Glass appearance", "frosted background blur"),
+        SettingSpec("Touch light", "Glass appearance", "finger illumination strength"),
         SettingSpec("White tint", "Glass appearance", "opacity transparent"),
         SettingSpec("Shadow strength", "Glass appearance", "floating darkness"),
         SettingSpec("Shadow spread", "Glass appearance", "broad tight"),

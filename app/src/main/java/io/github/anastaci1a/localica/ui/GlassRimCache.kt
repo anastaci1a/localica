@@ -2,9 +2,26 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.*
+import androidx.compose.ui.unit.dp
 
 /** One draw owner's current preparation; paths are replaced, never rewritten after publication. */
 internal class GlassRimCache {
+    private var lightTone: GlassTone? = null
+    private var lightShader: Shader? = null
+    private var lightBrush: ShaderBrush? = null
+    private val lightMatrix = android.graphics.Matrix()
+    private var lightStroke = Stroke(0f)
+    fun light(point: Offset, radius: Float, tone: GlassTone): Brush {
+        if (lightTone != tone) {
+            lightShader = android.graphics.RadialGradient(0f, 0f, 1f, tone.color(Color.White).toArgb(), Color.Transparent.toArgb(), android.graphics.Shader.TileMode.CLAMP)
+            lightBrush = ShaderBrush(requireNotNull(lightShader)); lightTone = tone
+        }
+        lightMatrix.setScale(radius, radius); lightMatrix.postTranslate(point.x, point.y)
+        lightShader!!.setLocalMatrix(lightMatrix)
+        return lightBrush!!
+    }
+    fun lightStroke(width: Float): Stroke { if (lightStroke.width != width) lightStroke = Stroke(width); return lightStroke }
     private var center: Offset? = null
     private var tone: GlassTone? = null
     private var brushes: GlassRimBrushes? = null
@@ -50,4 +67,14 @@ internal fun glassRimBrushes(center: Offset, tone: GlassTone): GlassRimBrushes {
         .625f to Color.Transparent, .75f to Color.Transparent, .875f to black.copy(alpha = .11f),
         1f to Color.Transparent, center = center)
     return GlassRimBrushes(shine, shade)
+}
+
+internal fun glassContactPoint(point: Offset, size: Size, shape: GlassShape, vertical: Boolean): Offset =
+    Offset(size.width * (.5f + (point.x - .5f) / shape.scaleX(vertical)), size.height * (.5f + (point.y - .5f) / shape.scaleY(vertical)))
+
+internal fun DrawScope.drawContactLight(point: Offset, path: Path, alpha: Float, tone: GlassTone, cache: GlassRimCache,
+    radius: Float = size.center.getDistance(), rimGain: Float = 2f) {
+    val brush = cache.light(point, radius, tone)
+    drawRect(brush, alpha = alpha)
+    clipPath(path) { drawPath(path, brush, alpha = alpha * rimGain, style = cache.lightStroke(2.6.dp.toPx())) }
 }

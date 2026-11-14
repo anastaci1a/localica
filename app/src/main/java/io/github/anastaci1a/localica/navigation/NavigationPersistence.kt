@@ -41,7 +41,7 @@ class InterfacePreferences(context: Context) {
                 preferences.getFloat("glass-control-expansion", 1.75f), preferences.getFloat("tab-overlay-darkening", 0f),
                 preferences.getBoolean("tab-overlay-foreground", false),
                 GlassRendererMode.fromStored(savedRenderer),
-                preferences.getFloat("glass-lift-shadow-strength", LiftShadowDefault)).normalized(),
+                preferences.getFloat("glass-lift-shadow-strength", LiftShadowDefault), preferences.getFloat("glass-touch-light", 1f)).normalized(),
             grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone(),
             lyricDelayMs = preferences.getInt("lyric-delay-ms", 0).coerceIn(-2000, 2000),
             longScroll = preferences.enumValue<LongScrollStyle>("long-scroll") ?: LongScrollStyle.FlyThrough)
@@ -70,7 +70,7 @@ class InterfacePreferences(context: Context) {
             .putString("tab-lens-style", glass.tabStyle.name)
             .putString("glass-renderer", glass.renderer.name).remove("glass-live-scroll")
             .putFloat("tab-lens-blur", glass.tabBlur).putFloat("tab-lens-tint", glass.tabWhiteTint)
-            .putFloat("glass-lift-shadow-strength", glass.liftShadowStrength)
+            .putFloat("glass-lift-shadow-strength", glass.liftShadowStrength).putFloat("glass-touch-light", glass.touchLight)
             .putFloat("glass-shape-damping", glass.shapeDamping).putFloat("glass-depth", glass.depth)
             .putString("artwork-tap", value.artworkTap.name).putString("artwork-hold", value.artworkHold.name).apply()
     }
