@@ -111,8 +111,7 @@ class PopupKindOwnerTest {
     @Test fun glassMorphPopupKeysItsOwnerAndItsEffectsOnTheSettledKind() {
         val source = File("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt").readText()
         val popup = source.substringAfter("internal fun GlassMorphPopup(").substringBefore("\n@Composable\ninternal fun ")
-        assertTrue(Regex("""val popupKind = settledPopupKind\(anchor, placement\.popupKind\(anchor\), present\)""").containsMatchIn(popup))
-        assertTrue("present is declared before the kind", popup.indexOf("var present by remember") in 0 until popup.indexOf("settledPopupKind("))
+        assertTrue(Regex("""val popupKind = settledPopupKind\(anchor, placement\.popupKind\(anchor\), anchor\.present\)""").containsMatchIn(popup))
         assertTrue(Regex("""rememberPopupWindowMotion\(anchor, [^\n]*, popupKind\)""").containsMatchIn(popup))
         assertTrue("the native gate adapter restarts with its owner", Regex("""LaunchedEffect\(motion, visible, """).containsMatchIn(popup))
         assertEquals(1, Regex("""motion\.attached\(""").findAll(popup).count())
