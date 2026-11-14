@@ -255,12 +255,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         albums.filter { it.id in validAlbums }.flatMap { it.tracks }.map { it.id }.toSet()
     }
     val result = remember(sourceResult, artistDetail, selectedTrackIds) {
-        if (artistDetail && selectedTrackIds.isNotEmpty()) sourceResult.copy(items = sourceResult.items.filter { it.row?.track?.id in selectedTrackIds }) else sourceResult
-    }
-    // Prepared with the query off Main; only an artist album filter derives a new result here.
-    val itemIndices = remember(result.items) { result.keyIndices }
-    val pinchIndices = remember(result.items, itemIndices) {
-        retainedPinchItemIndices(result.items, itemIndices) { it.key }
+        if (artistDetail && selectedTrackIds.isNotEmpty()) songResult(sourceResult.rows.filter { it.track.id in selectedTrackIds }, sourceResult.scope, sourceResult.artistAlbums) else sourceResult
     }
     // The artist page displays songs beneath album-filter chips; its hero follows that displayed list.
     // Entry artwork is only a loading seed, never a permanent override of a newly sorted result.
@@ -483,7 +478,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         val anchor = zoomAnchor ?: return@LaunchedEffect
         if (anchor.route != route) { zoomAnchor = null; return@LaunchedEffect }
         if (queryPending || displayedStyle != anchor.style) return@LaunchedEffect
-        val index = result.items.indexOfFirst { it.key == anchor.key }
+        val index = result.indexOfKey(anchor.key)
         try {
             if (index >= 0) scrollOwnership.during {
                 headerPhase("position-request")
@@ -549,7 +544,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
     val surroundingBackdrop = LocalFrostedBackdrop.current
-    val hasSongItems = result.items.any { it.row != null }
+    val hasSongItems = result.rows.isNotEmpty()
     val needsListBackdrop = (artDetail || hasSongItems || showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
         (route.collection == null && route.tab in setOf(MainTab.Library, MainTab.Playlists)))
     val listBackdrop = rememberFrostedBackdrop(presentation to surroundingBackdrop?.fallback,
@@ -660,7 +655,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val selectionInsetScroll = SelectionInsetScroll(gridState, selectionPanel, scrollOwnership,
         baseInset = { with(density) { selectionBaseInset.toPx() } },
         enabled = { selectionVisible && !playerOpen && !localSearchOpen },
-        selected = { key -> result.items.firstOrNull { it.key == key }?.let { session.selectedCount(it, route.collection) > 0 } == true })
+        selected = { key -> result.items.getOrNull(result.indexOfKey(key))?.let { session.selectedCount(it, route.collection) > 0 } == true })
     OnModalGestureCancellation { playbackFollow.interrupt(); selectionInsetScroll.interrupt() }
     val readyToScroll by rememberUpdatedState(!queryPending && loadedResult != null)
     // Cursor checkpoints replace queue snapshots without changing this list. A return
@@ -811,7 +806,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         !sorting && !collectionMenu && orderScroll.request == null && !listContact && !modalBlocked && modalOwner?.blocked != true
     val initialTarget = playbackFollow.initialTarget(playingEntryId, followOwner, initialEligible, queueOpeningRequest)
     val initialIndex = initialTarget?.takeIf { presentation?.route == route }?.let { target ->
-        result.items.indexOfFirst { it.row?.id == target }.takeIf { it >= 0 }?.plus(1)
+        result.indexOfKey(target).takeIf { it >= 0 }?.plus(1)
     }
     SideEffect {
         if (!unfilteredOpening) playbackFollow.consumeOpening(queueOpeningRequest)
@@ -888,7 +883,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     // Letting that effect borrow it would retire the same request on key replacement.
     // A completed manual trip to the current occurrence's physical end is a return.
     // Never replay a deferred target, move under a contact, or attach a scoped search.
-    val boundaryCurrent = remember(result.items, playingEntryId) { result.items.indexOfFirst { it.row?.id == playingEntryId } }
+    val boundaryCurrent = remember(result.keys, playingEntryId) { playingEntryId?.let(result::indexOfKey) ?: -1 }
     val boundaryReached by remember(gridState, boundaryCurrent, result.items.size, latestTopInset) { derivedStateOf {
         boundaryCurrent >= 0 && (boundaryCurrent == 0 || boundaryCurrent == result.items.lastIndex) &&
             ListScrollTarget.below(boundaryCurrent + 1, latestTopInset).direction(gridState) == 0
@@ -918,7 +913,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 when {
                     !owns() -> -1
                     latestBrowse.pending || published == null -> null
-                    else -> (request.targetIndex(published.result.items) ?: -1).takeIf { it < 0 || published.route == currentRoute &&
+                    else -> (request.targetIndex(published.result) ?: -1).takeIf { it < 0 || published.route == currentRoute &&
                         layout.totalItemsCount == published.result.items.size + 1 && layout.visibleItemsInfo.none { item ->
                             item.index > 0 && published.result.items.getOrNull(item.index - 1)?.key != item.key } }
                 }
@@ -1057,7 +1052,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .then(if (maskedBackdrop && viewportBackdrop != null) Modifier.browseBackdropMaskWitness(backdropScene, viewportBackdrop) else Modifier),
                 contentDrawing = Modifier.onPlaced { pinchHeader?.viewport = it }
                     .collectionPinchOverlay(pinchHeader).graphicsLayer()
-                    .pinchRetainedOverlay(pinchMotion, gridState, pinchIndices, selectionScene),
+                    .pinchRetainedOverlay(pinchMotion, gridState, pinchMotion.indices, selectionScene),
                 scene = selectionScene) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = (if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
                 .then(if (showSearchPill) searchSlotGridLayout else Modifier)
@@ -1167,15 +1162,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         }
                     }
                 }
-                items(reorder.rendered(result.items), key = { it?.key ?: DropGapKey },
-                    contentType = { if (it == null) "gap" else it.ref.kind.name }) { entry ->
+                itemsIndexed(reorder.rendered(result.items), key = { _, it -> it?.key ?: DropGapKey },
+                    contentType = { _, it -> if (it == null) "gap" else it.ref.kind.name }) { itemIndex, entry ->
                     if (entry == null) {
                         val height = with(androidx.compose.ui.platform.LocalDensity.current) { (reorder.drag?.cardSize?.height ?: 0f).toDp() }
                         Box(Modifier.fillMaxWidth().height(height).testTag("drop-gap"))
-                        return@items
+                        return@itemsIndexed
                     }
                     val item = entry
-                    val itemIndex = itemIndices[item.key] ?: 0
                     val loadingCell = if (skeletonReveal && !loadingReveal.complete) loadingReveal.cell(itemIndex) else null
                     val current = route.collection?.kind == MediaKind.Queue && item.row != null && item.row.id == playingEntryId
                     val selectedCount = session.selectedCount(item, route.collection)
@@ -1198,7 +1192,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             }
                             if (previous != alpha) pinchMotion.itemAlpha[item.key] = alpha
                             // The row body, frost and selection share the overlay's departure/arrival fade (#559).
-                            alpha *= pinchMotion.pinchFadeAlpha(item.key, gridState, pinchIndices)
+                            alpha *= pinchMotion.pinchFadeAlpha(item.key, gridState, pinchMotion.indices)
                         }) {
                         // Placement callbacks need not repeat for a re-keyed owner; register the
                         // last placed coordinates whenever this row's key or drag owner changes.
@@ -1271,7 +1265,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
                             .selectionLens(selectedCount > 0, partiallySelected, itemKey = item.key, anchor = menuAnchor, outline = { _, _ -> itemOutline.value },
-                                handle = hover, alpha = { (pinchMotion.itemAlpha[item.key] ?: 1f) * pinchMotion.pinchFadeAlpha(item.key, gridState, pinchIndices) }) { size ->
+                                handle = hover, alpha = { (pinchMotion.itemAlpha[item.key] ?: 1f) * pinchMotion.pinchFadeAlpha(item.key, gridState, pinchMotion.indices) }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
                             .currentSongHighlight(current, MaterialTheme.colorScheme.primary, { _, _ -> itemOutline.value },
@@ -1283,7 +1277,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             onClick = {
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
                                 else if (session.active) session.toggle(route.collection, item.row)
-                                else { onSearchCommit(); onPlay(result.rows, result.rows.indexOfFirst { it.id == item.row.id }, result.scope) }
+                                else { onSearchCommit(); onPlay(result.rows, if (result.rows.size == result.items.size) result.indexOfKey(item.key) else result.rows.indexOf(item.row), result.scope) }
                             }, onLongClickLabel = holdLabel, onLongClick = onHold
                         )) {
                             BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
@@ -1325,8 +1319,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 localSearch = freshSearch(); localFocusRequest++; localSearchOpen = true
             }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = ListPillVerticalInset), anchor = searchAnchor)
             if (dragHost == null) SongDragOverlay(reorder, reducedMotion)
-            val playingIndex = remember(result.items, playingEntryId) {
-                result.items.indexOfFirst { it.row?.id == playingEntryId }.takeIf { playingEntryId != null && it >= 0 }?.plus(1)
+            val playingIndex = remember(result.keys, playingEntryId) {
+                playingEntryId?.let(result::indexOfKey)?.takeIf { it >= 0 }?.plus(1)
             }
             val returnTarget = playingIndex?.let { ListScrollTarget.below(it, latestTopInset) }
             val returnDirection by remember(returnTarget, gridState) { derivedStateOf {

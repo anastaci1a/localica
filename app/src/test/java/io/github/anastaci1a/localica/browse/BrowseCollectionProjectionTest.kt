@@ -150,7 +150,7 @@ class BrowseCollectionProjectionTest {
         fun assertWarmRows(expected: List<SongRow>) {
             val result = evaluate()
             assertEquals(expected, result.rows)
-            assertSame(result, evaluate())
+            assertEquals(result, evaluate()) // Queue routes are never cached (#957): an equal view of the same revision.
         }
         val first = SongRow("first", current, "source-a")
         val repeat = SongRow("repeat", current, "source-b")
@@ -199,12 +199,12 @@ class BrowseCollectionProjectionTest {
         val route = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id), search = true)
         val expected = List(257) { SongRow("occ-$it",
             if (it % 2 == 0) current else missing.copy(playCount = 4), "source-${it % 3}") }
-        assertCanceledDetailRebuilds(entries, expected) { library, text, checkActive ->
+        assertCanceledDetailRebuilds(entries, expected, cached = false) { library, text, checkActive ->
             BrowseQueries.evaluate(library, emptyList(), route.copy(text = text), queues = queues, checkActive = checkActive)
         }
     }
 
-    private fun assertCanceledDetailRebuilds(entries: Counted<*>, expected: List<SongRow>,
+    private fun assertCanceledDetailRebuilds(entries: Counted<*>, expected: List<SongRow>, cached: Boolean = true,
         evaluate: (LibrarySnapshot, String, () -> Unit) -> BrowseResult) {
         // Enumerate this cold, unfiltered preparation's checkpoints, including the final pre-cache check.
         // Each canceled attempt uses a fresh snapshot; its retry then uses that exact same snapshot.
@@ -228,6 +228,12 @@ class BrowseCollectionProjectionTest {
             assertEquals("Complete retry after checkpoint $cancelAt", expected, retry.rows)
             assertTrue("Canceled preparation must not supply the retry catalog", entries.reads > 0)
             entries.reads = 0
+            // A queue route is never cached (#957): the retry is a view, and search reads its entries.
+            if (!cached) {
+                assertEquals(retry, evaluate(library, "") {})
+                assertEquals(expected.filter { it.track.id == missing.id }, evaluate(library, "Unavailable") {}.rows)
+                continue
+            }
             assertSame(retry, evaluate(library, "") {})
             assertEquals(0, entries.reads)
             assertEquals(expected.filter { it.track.id == missing.id }, evaluate(library, "Unavailable") {}.rows)

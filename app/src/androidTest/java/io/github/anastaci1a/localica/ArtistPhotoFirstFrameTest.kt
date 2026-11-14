@@ -169,7 +169,7 @@ class ArtistPhotoFirstFrameTest {
                 // Warm only query rows, so the artwork witness is independent of the catalog's arrival wave.
                 val source = BrowseSourceRevision(snapshot, playlists.playlists, queueState.library.queues, filters)
                 val result = BrowseQueries.evaluate(snapshot, playlists.playlists, nextRoute, style.query(), queueState.library.queues,
-                    filters.allCollections, sorts).prepared()
+                    filters.allCollections, sorts)
                 presentations.put(snapshot, playlists.playlists, queueState.library.queues, filters,
                     PresentedBrowse(nextRoute, style, result, source, sorts))
                 presentations.putHome(snapshot, playlists.playlists, items.map { it.ref }, items, sorts)

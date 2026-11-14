@@ -49,7 +49,7 @@ internal class QueueOpeningPresentation {
             val queue = source.queues.firstOrNull { route.collection == MediaRef(MediaKind.Queue, it.id) }
             if (queue == null || queue.entries.none { it.id == occurrenceId }) return prior
             val warm = cached?.takeIf { matchesBrowseRequest(it, source, route, style, sorts) &&
-                it.result.items.any { item -> item.row?.id == occurrenceId } }
+                it.result.indexOfKey(occurrenceId) >= 0 }
             val result = if (warm == null) BrowseQueries.openingQueue(source.library, queue, route, occurrenceId) else null
             if (warm != null || result != null) {
                 opening = request
@@ -89,7 +89,10 @@ internal class BrowsePresentationCache {
     @Synchronized
     fun put(library: LibrarySnapshot, playlists: List<ManualPlaylist>, queues: List<ListeningQueue>,
         filters: LibraryFilters, presentation: PresentedBrowse) {
-        entries.removeAll { it.library !== library || !it.presentation.sorts.sameCollections(presentation.sorts) || (it.presentation.route == presentation.route && it.presentation.style.sameQuery(presentation.style)) }
+        // Puts are Main-confined and come only from the latest query owner or a live warm effect, so this
+        // revision is current: an entry of any other revision can never match again (#957).
+        entries.removeAll { it.library !== library || it.playlists !== playlists || it.queues !== queues ||
+            !it.presentation.sorts.sameCollections(presentation.sorts) || (it.presentation.route == presentation.route && it.presentation.style.sameQuery(presentation.style)) }
         entries.add(Entry(library, playlists, queues, filters, presentation))
         while (entries.size > 12) entries.removeAt(0)
     }
@@ -140,7 +143,7 @@ internal fun WarmBrowsePresentations(cache: BrowsePresentationCache, library: Li
             if (cache.get(library, playlists, queues, filters, route, style, sorts) != null) continue
             val result = withContext(kotlinx.coroutines.Dispatchers.Default) {
                 val context = currentCoroutineContext()
-                BrowseQueries.evaluate(library, playlists, route, style.query(), queues, filters.allCollections, sorts) { context.ensureActive() }.prepared()
+                BrowseQueries.evaluate(library, playlists, route, style.query(), queues, filters.allCollections, sorts) { context.ensureActive() }
             }
             cache.put(library, playlists, queues, filters, PresentedBrowse(route, style, result, source, sorts))
         }
@@ -192,7 +195,7 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
         if (cachedPresentation != null) { value = cachedPresentation; return@produceState }
         val queried = withContext(queryDispatcher) {
             val context = currentCoroutineContext()
-            BrowseQueries.evaluate(library, playlists, route, style.query(), queues, libraryFilters.allCollections, sorts) { context.ensureActive() }.prepared()
+            BrowseQueries.evaluate(library, playlists, route, style.query(), queues, libraryFilters.allCollections, sorts) { context.ensureActive() }
         }
         if (latestQueryOwner !== queryOwner) return@produceState
         value = PresentedBrowse(route, style, queried, source, sorts).also {

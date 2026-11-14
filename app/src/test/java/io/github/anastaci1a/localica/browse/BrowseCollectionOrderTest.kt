@@ -47,8 +47,8 @@ class BrowseCollectionOrderTest {
     }
     private fun items() = (0 until 150).map { i ->
         BrowserItem(MediaRef(MediaKind.Album, "${i % 13}"), listOf("Alpha", "alpha", "İstanbul", "", "Zulu")[i % 5],
-            null, rows(i), addedAt = if (i % 3 == 0) null else i.toLong(),
-            modifiedAt = if (i % 4 == 0) null else -i.toLong())
+            null, rows(i), added = if (i % 3 == 0) null else i.toLong(),
+            modified = if (i % 4 == 0) null else -i.toLong())
     }
     @Test fun everySortAndDirectionMatchesOriginalIncludingUnknownsDuplicatesAndOverflow() {
         val items = items().shuffled(kotlin.random.Random(428))
@@ -83,14 +83,17 @@ class BrowseCollectionOrderTest {
         override fun get(index: Int): SongRow { reads++; return values[index] }
     }
     @Test fun aggregatePreparationReadsEachMemberOnceAndTitleSortDoesNotReadMembers() {
-        val counted = (0 until 200).map { CountedRows(rows(it + 1)) }
-        val items = counted.mapIndexed { i, songs -> BrowserItem(MediaRef(MediaKind.Album, "$i"), "Item ${200 - i}", null, songs) }
+        // Fresh items per sort: an item folds its members once and keeps the facts (#957).
+        fun counted() = (0 until 200).map { CountedRows(rows(it + 1)) }
+        fun items(counted: List<CountedRows>) = counted.mapIndexed { i, songs -> BrowserItem(MediaRef(MediaKind.Album, "$i"), "Item ${200 - i}", null, songs) }
         for (sort in listOf(TrackSort.Duration, TrackSort.Year, TrackSort.Artist, TrackSort.AlbumArtist, TrackSort.Composer, TrackSort.Genre)) {
+            val counted = counted(); val items = items(counted)
             counted.forEach { it.reads = 0 }
             val sorted = orderCollectionItems(items, LibraryQuery(sort = sort))
             assertEquals(items.size, sorted.size)
             counted.forEach { assertEquals("$sort must visit each member only during preparation", it.size, it.reads) }
         }
+        val counted = counted(); val items = items(counted)
         counted.forEach { it.reads = 0 }
         orderCollectionItems(items, LibraryQuery(sort = TrackSort.Title))
         assertTrue(counted.all { it.reads == 0 })
