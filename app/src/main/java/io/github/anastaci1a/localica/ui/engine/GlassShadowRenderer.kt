@@ -277,7 +277,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                             Size(extent.width.toFloat(), extent.height.toFloat())) {
                             translate(-inset.x, -inset.y) { paintShadow(excludeInterior = false, rasterizing = true) }
                         }
-                    }
+                    }.asAndroidBitmap().copy(android.graphics.Bitmap.Config.ARGB_8888, false).asImageBitmap()
                 }
                 raster = Raster(key, image, inset)
                 rasterizations++
