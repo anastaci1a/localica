@@ -1084,7 +1084,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         val queue = result.active ?: return result
         val item = source?.currentMediaItem ?: return result
-        if (item.listeningQueue != queue.id || queue.entries.none { it.id == item.mediaId }) return result
+        if (item.listeningQueue != queue.id) return result
         // A removed/branched visit must never overwrite a newer explicit selection.
         val captured = queue.captureVisit(item.queueVisit ?: return result) {
             source.currentPosition.coerceAtLeast(0) } ?: return result

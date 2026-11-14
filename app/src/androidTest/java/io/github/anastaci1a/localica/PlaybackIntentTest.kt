@@ -1380,6 +1380,104 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun routineControllerCaptureReadsNoEntriesAtEitherEndOfALargeQueue() {
+        for (initialIndex in listOf(0, 49_990)) fixture(duplicateOccurrences = true, occurrences = 50_000,
+            initialIndex = initialIndex, timeoutMs = 300000) {
+            awaitMain { player.engine.playbackState == Player.STATE_READY }
+            barrier()
+            withContext(Dispatchers.Main) {
+                val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+                @Suppress("UNCHECKED_CAST")
+                val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+                val before = state.value
+                val queue = before.library.active!!
+                var reads = 0
+                val counted = object : AbstractList<QueueEntry>() {
+                    override val size get() = queue.entries.size
+                    override fun get(index: Int): QueueEntry { reads++; return queue.entries[index] }
+                }
+                val capture = QueueController::class.java.getDeclaredMethod("captureNativeState").apply { isAccessible = true }
+                try {
+                    player.engine.seekTo(2000)
+                    state.value = before.copy(library = before.library.update(queue.copy(entries = counted)))
+                    reads = 0
+                    repeat(20) { capture.invoke(queues) }
+                    assertEquals("Routine capture must not inspect occurrence membership", 0, reads)
+                    val captured = state.value.library.active!!
+                    assertSame(queue.journey, captured.journey)
+                    assertEquals(queue.currentEntryId, captured.currentEntryId)
+                    assertEquals(2000L, captured.positionMs)
+                } finally { state.value = before }
+            }
+        }
+    }
+
+    @Test fun controllerCaptureRejectsForeignRemovedAndBranchedTokensAndKeepsDuplicateIdentity() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        barrier()
+        withContext(Dispatchers.Main) {
+            val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+            @Suppress("UNCHECKED_CAST")
+            val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+            val before = state.value
+            val queue = before.library.active!!
+            val native = player.currentMediaItem!!
+            val capture = QueueController::class.java.getDeclaredMethod("capturedLibrary", Player::class.java).apply { isAccessible = true }
+            fun captureFrom(target: ListeningQueue, item: MediaItem, admitted: Boolean): QueueLibrary {
+                state.value = before.copy(library = before.library.update(target))
+                val source = object : ForwardingPlayer(player) {
+                    override fun getCurrentMediaItem() = item
+                    override fun getCurrentPosition(): Long {
+                        assertTrue("Rejected visits must not read native position", admitted)
+                        return 4321
+                    }
+                }
+                return capture.invoke(queues, source) as QueueLibrary
+            }
+            try {
+                val extras = android.os.Bundle(native.mediaMetadata.extras).apply { putString("queueId", second.id) }
+                val foreign = native.buildUpon().setMediaMetadata(native.mediaMetadata.buildUpon().setExtras(extras).build()).build()
+                assertSame(queue, captureFrom(queue, foreign, false).active)
+                val removed = QueueEdits.remove(queue, queue.currentEntryId!!).let {
+                    it.copy(journey = it.journey!!.reconcile(it.entries.map { entry -> entry.id }, it.currentEntryId,
+                        JourneyModes.from(before.settings)))
+                }
+                assertSame(removed, captureFrom(removed, native, false).active)
+                val branched = queue.copy(journey = queue.journey!!.select(queue.currentEntryId!!, queue.entries.map { it.id }))
+                assertTrue(branched.journey!!.window().none { it.token == native.queueVisit })
+                assertSame(branched, captureFrom(branched, native, false).active)
+                val next = player.getMediaItemAt(1)
+                assertEquals(native.mediaMetadata.extras!!.getString("trackId"), next.mediaMetadata.extras!!.getString("trackId"))
+                assertNotEquals(native.mediaId, next.mediaId)
+                val captured = captureFrom(queue, next, true).active!!
+                assertEquals(next.mediaId, captured.currentEntryId)
+                assertEquals(next.queueVisit, captured.journey!!.current!!.token)
+                assertEquals(4321L, captured.positionMs)
+            } finally { state.value = before }
+        }
+    }
+
+    @Test fun restoredInvalidJourneyIsNormalizedBeforeNativeCaptureAdmission() = fixture(attach = false, blockRestore = true) {
+        dao.restore!!.entered.await()
+        val invalid = first.copy(journey = QueueJourney(history = listOf(QueueVisit("removed", 0)), cursor = 0))
+        IntentDao::class.java.getDeclaredField("saved").apply { isAccessible = true }
+            .set(dao, QueueLibrary(listOf(invalid, second), first.id))
+        dao.restore.release.complete(Unit)
+        awaitMain { !queues.state.value.loading }
+        queues.attach(player)
+        barrier()
+        withContext(Dispatchers.Main) {
+            val active = queues.state.value.library.active!!
+            assertEquals(first.currentEntryId, active.journey!!.current!!.entryId)
+            assertTrue(active.journey.history.none { it.entryId == "removed" })
+            assertEquals(active.journey.current!!.token, player.currentMediaItem!!.queueVisit)
+        }
+        queues.seek(1234)
+        barrier()
+        assertEquals(1234L, dao.read().active!!.positionMs)
+        assertTrue(dao.read().active!!.journey!!.history.none { it.entryId == "removed" })
+    }
+
     @Test fun staleWindowResolutionCannotPublishForANewerActiveQueue() = fixture(duplicateOccurrences = true) {
         awaitMain { player.engine.playbackState == Player.STATE_READY }
         barrier()
