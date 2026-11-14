@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.graphics.Color
 import io.github.anastaci1a.localica.ui.engine.PhaseBinding
+import io.github.anastaci1a.localica.ui.engine.EngineHarness
+import io.github.anastaci1a.localica.ui.engine.MotionFloat
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.abs
@@ -43,5 +45,35 @@ class PlayerInkArtworkClockTest {
     @Test fun settledClockAppliesTheTargetAtOnce() {
         val t = PhaseBinding(0f)
         assertEquals(1f, step(t, Color.White, 1f), 0f)
+    }
+
+    @Test fun aDestinationAfterExpansionSettlesUsesTheSharedValueClock() {
+        EngineHarness().use { h ->
+            val motion = MotionFloat(h.clock, 1f, 1f)
+            val binding = PhaseBinding(1f, motion)
+            fun sample(target: Float) = binding.resolve(target, 1f, 1f, clock = 2).also(binding::present).value
+            assertEquals(1f, sample(1f), 0f)
+            assertEquals("The arrival frame keeps the presented ink", 1f, sample(0f), 0f)
+            val values = (0..40).map { h.advance(1.0 / 120); sample(0f) }
+            assertTrue(values.count { it in .01f..0.99f } > 10)
+            values.zipWithNext().forEach { (a, b) -> assertTrue(b <= a && a - b < .1f) }
+            assertEquals(0f, values.last(), 0f)
+            assertEquals("No clock remains awake", 0, h.clock.activeCount)
+        }
+    }
+
+    @Test fun anOwnerPhaseTakesOverALateEaseWithoutJumpingAndLandsAtItsEndpoint() {
+        EngineHarness().use { h ->
+            val binding = PhaseBinding(1f, MotionFloat(h.clock, 1f, 1f))
+            fun sample(phase: Float, end: Float) = binding.resolve(0f, phase, end, clock = 2).also(binding::present).value
+            sample(0f, 0f)
+            h.advance(.1)
+            val before = sample(0f, 0f)
+            assertTrue(before in .01f..0.99f)
+            assertEquals(before, sample(0f, 1f), .0001f)
+            (1..20).forEach { h.advance(1.0 / 120); sample(it / 20f, 1f) }
+            assertEquals(0f, sample(1f, 1f), 0f)
+            assertEquals(0, h.clock.activeCount)
+        }
     }
 }

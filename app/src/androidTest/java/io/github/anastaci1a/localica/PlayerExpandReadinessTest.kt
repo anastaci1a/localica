@@ -50,6 +50,7 @@ class PlayerExpandReadinessTest {
     private lateinit var progress: Animatable<Float, *>
     private lateinit var captureView: android.view.View
     private var captureStage by mutableIntStateOf(0)
+    @Volatile private var inkComposition: PlayerInkComposition? = null
     private fun markerCode(stage: Int) = 20 + (stage % 24) * 8
 
     private fun cover(base: Int, accent: Int, key: String): PlayerVisual {
@@ -67,7 +68,8 @@ class PlayerExpandReadinessTest {
     private fun mount(initial: PlayerVisual, open: Boolean = false) {
         visual = initial; expanded = open
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalPlayerBackgroundPreparationBarrier provides barrier) {
+            CompositionLocalProvider(LocalPlayerBackgroundPreparationBarrier provides barrier,
+                LocalPlayerInkCompositionObserver provides { inkComposition = it }) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(Page)) {
                     captureView = LocalView.current
                     val animated = remember { Animatable(if (open) 1f else 0f) }
@@ -207,6 +209,45 @@ class PlayerExpandReadinessTest {
         compose.runOnIdle { visual = second }
         compose.waitUntil(10_000) { polarity.grade(null, second) != null }
         compose.runOnIdle { assertEquals("Still minimized", 0f, progress.value) }
+    }
+
+    @Test fun firstExpansionUsesThePreparedBrightCoversDarkInkFromItsFirstFrame() {
+        val bright = cover(0xFFFFFF, 0xFFFFFF, "cold-bright")
+        mount(bright)
+        compose.waitUntil(10_000) { polarity.prepared(bright) && polarity.lightMix == 0f }
+        assertEquals(false, polarity.destinationLightInk)
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { expanded = true }
+            repeat(40) {
+                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                assertEquals("Prepared tone stays dark at p=${progress.value}", 0f, polarity.lightMix, .001f)
+                assertEquals(0f, requireNotNull(inkComposition).contentColor.red, .01f)
+            }
+            assertEquals(1f, progress.value, 0f)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun minimizedExternalSongChangeAndExpansionEaseToTheNewCoversInkWithoutASnap() {
+        mount(first)
+        compose.waitUntil(10_000) { polarity.prepared(first) }
+        val bright = cover(0xFFFFFF, 0xFFFFFF, "external-bright")
+        compose.mainClock.autoAdvance = false
+        val values = mutableListOf<Float>()
+        try {
+            compose.runOnIdle { visual = bright; expanded = true }
+            repeat(90) {
+                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                Thread.sleep(10)
+                values += polarity.lightMix
+            }
+            assertEquals(1f, progress.value, 0f)
+            assertEquals(0f, values.last(), .001f)
+            assertTrue("The new artwork supplies intermediate ink: $values", values.count { it in .01f..0.99f } > 3)
+            values.zipWithNext().forEach { (a, b) ->
+                assertTrue("Foreground snaps during external expansion: $values", abs(a - b) < .2f)
+            }
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     /** The reference: the same, already graded song expanded a second time, with nothing pending. */

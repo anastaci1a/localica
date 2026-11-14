@@ -6,6 +6,7 @@ LyricsPanel|io.github.anastaci1a.localica.ui.LyricsPanel|app/src/main/java/io/gi
 LyricsBackdrop|io.github.anastaci1a.localica.ui.LyricsBackdrop|app/src/main/java/io/github/anastaci1a/localica/ui/LyricsBackdrop.kt|LyricsBackdropArgument.|key,modifier,contentAlpha,content|contentAlpha
 rememberEffectiveReducedMotion|io.github.anastaci1a.localica.ui.rememberEffectiveReducedMotion|app/src/main/java/io/github/anastaci1a/localica/ui/InterfaceMotion.kt|ReducedArgument.|appReducedMotion|
 rememberPresence|io.github.anastaci1a.localica.ui.components.rememberPresence|app/src/main/java/io/github/anastaci1a/localica/ui/components/Presence.kt|PresenceArgument.|key,shown,role|
+rememberPhaseBinding|io.github.anastaci1a.localica.ui.engine.rememberPhaseBinding|app/src/main/java/io/github/anastaci1a/localica/ui/engine/PhaseBinding.kt|PhaseBindingArgument.|initial|
 rememberFaceExpansion|io.github.anastaci1a.localica.ui.components.rememberFaceExpansion|app/src/main/java/io/github/anastaci1a/localica/ui/components/MorphFaces.kt|FaceArgument.|expanded,role|
 rememberPopupSharedContent|io.github.anastaci1a.localica.ui.components.rememberPopupSharedContent|app/src/main/java/io/github/anastaci1a/localica/ui/components/PopupSharedContent.kt|SharedContentArgument.|key,shared|
 GlassAlertDialog|io.github.anastaci1a.localica.ui.GlassAlertDialog|app/src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt|GlassAlertDialogArgument.|onDismissRequest,confirmButton,modifier,dismissButton,icon,title,text,actionsMeasurement,widthMeasurement,footer|

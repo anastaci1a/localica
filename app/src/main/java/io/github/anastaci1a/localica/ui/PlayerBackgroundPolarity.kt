@@ -110,27 +110,22 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
      * re-prepares pixels per frame. Held until a new preparation completes.
      */
     var roleGrades by mutableStateOf<Map<Any, BackdropRoleGrade>>(emptyMap()); private set
-    // Blend roles change on admission and settlement. Retain grades by owned visual so
-    // a remounted outgoing role never loses the grade it was already drawing.
+    // Endpoint grades survive changes to the moving frame's role grades.
     private val visualGrades = mutableStateMapOf<PlayerVisual, BackdropRoleGrade>()
     fun grade(identity: Any?, visual: PlayerVisual): BackdropRoleGrade? = roleGrades[identity] ?: visualGrades[visual]
         // The owned neutral gradient already meets white-ink contrast. Missing artwork
         // cannot provide the cover pixels required by the sampler; never hide this
         // known backing indefinitely while waiting for a grade that cannot arrive.
         ?: if (visual.artwork == null && visual.palette == NeutralPalette) BackdropRoleGrade(true, 0f) else null
-    /** The ink the artwork transition is travelling to, once known; null when settled or not yet measured. */
-    var destinationLightInk by mutableStateOf<Boolean?>(null); private set
+    /** Prepared ink belongs to the incoming visual, including while the player is minimized. */
+    val destinationLightInk: Boolean? get() = pinned ?: frame?.roles?.firstOrNull { it.incoming && !it.soft }
+        ?.let { (visualGrades[it.visual] ?: grade(it.identity, it.visual))?.lightInk }
     /** The artwork blend clock (1 when settled): drives the same ease as the lyrics clock for song changes. */
     var artworkClock by mutableFloatStateOf(1f); private set
-    /** The settled decision is current again: it, not the transition's remembered destination, owns the ink. */
-    internal fun settled() { if (destinationLightInk != null) destinationLightInk = null }
-    internal fun presentGrades(grades: Map<Any, BackdropRoleGrade>, destination: Boolean?) {
+    internal fun presentGrades(grades: Map<Any, BackdropRoleGrade>) {
         if (roleGrades != grades) roleGrades = grades
-        frame?.roles?.forEach { role -> grades[role.identity]?.let { visualGrades[role.visual] = it } }
         if (visualGrades.size > 8) visualGrades.keys.filter { visual -> frame?.roles?.none { it.visual == visual } != false }
             .take(visualGrades.size - 8).forEach { visualGrades.remove(it) }
-        // Kept past the end of the transition until the settled decision is current (see [settled]).
-        if (destination != null && destinationLightInk != destination) destinationLightInk = destination
     }
     /** Holds [decision] at a fixed polarity so a presentation test controls exactly when it changes. */
     private var pinned: Boolean? = null
@@ -144,13 +139,9 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
         }
         if (measured !== next) measured = next
     }
-    /**
-     * #634: the last settled ordinary full-player geometry, retained across minimization. It is what the
-     * full player grades a song with once settled, so a song prepared against it while minimized gets the
-     * same grade. Plain metadata: never observed by UI.
-     */
+    /** Last ordinary full-player geometry; minimized covers prepare against this same endpoint (#634). */
     internal var settledEndpoint: PlayerBackgroundGeometry? = null
-    /** Publishes a grade prepared before its backdrop mounted; a measured grade for the same visual wins. */
+    /** Publishes the visual's endpoint grade and prepared pixels together. */
     internal fun prewarmed(visual: PlayerVisual, grade: BackdropRoleGrade, images: List<PreparedToneImage>) {
         // Keep the previous song's set until this one is complete, then replace it in one step.
         PreparedToneImage.retain(this, images)
@@ -163,7 +154,7 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
     fun detach() {
         PreparedToneImage.retain(this, emptyList())
         preparedLyricsInk = null
-        coordinates.clear(); measured = emptyMap(); frame = null; backdrops.clear(); roleGrades = emptyMap(); visualGrades.clear(); destinationLightInk = null; artworkClock = 1f
+        coordinates.clear(); measured = emptyMap(); frame = null; backdrops.clear(); roleGrades = emptyMap(); visualGrades.clear(); artworkClock = 1f
         unavailable(PlayerBackgroundUnavailable.Unmeasured)
     }
     fun frame(value: ArtworkBackgroundFrame) {
@@ -195,20 +186,14 @@ internal val LocalPlayerBackgroundPreparationBarrier = staticCompositionLocalOf<
 /** The role key of a song prepared before any blend role exists for it. */
 private object PrewarmRole
 
-/**
- * #634: while the player shows [visual], even minimized, prepare its full-player backdrop: the grade at the
- * settled full-player [geometry] and the graded wash pixels, off Main, before any expansion asks for them.
- * The backdrop then draws graded on its first expanding frame instead of waiting for a measurement that
- * only a settled full player can finish. Uses the same sampler and grade as the settled measurement.
- */
+/** Prepare endpoint ink and optional graded pixels while minimized, using the settled sampler (#634/#969). */
 @Composable internal fun PrewarmPlayerBackdrop(owner: PlayerBackgroundPolarityState, visual: PlayerVisual,
     geometry: PlayerBackgroundGeometry?, grading: Boolean) {
     val barrier = LocalPlayerBackgroundPreparationBarrier.current
     // A known grade, measured or prewarmed, needs no new geometry; only its pixels are re-checked.
     val known = owner.grade(null, visual)
     LaunchedEffect(owner, visual, if (known == null) geometry else null, known, grading, barrier) {
-        // Missing art keeps its own neutral grade; Off draws untoned and needs nothing prepared.
-        if (!grading || visual.artwork == null || visual.loading) return@LaunchedEffect
+        if (visual.artwork == null || visual.loading) return@LaunchedEffect
         val grade = known ?: run {
             val endpoint = geometry ?: return@LaunchedEffect
             barrier?.invoke()
@@ -218,7 +203,7 @@ private object PrewarmRole
                 ?: return@LaunchedEffect
             gradeRoles(sample)[PrewarmRole] ?: return@LaunchedEffect
         }
-        val tone = GlassTone(shift = grade.shift)
+        val tone = GlassTone(shift = if (grading) grade.shift else 0f)
         val images = listOfNotNull(visual.palette.wash, visual.palette.softWash).mapNotNull { PreparedToneImage.prepare(it, tone) }
         currentCoroutineContext().ensureActive()
         owner.prewarmed(visual, grade, images)
@@ -333,8 +318,7 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
     val failure = reason ?: if (failed == request && request != null) PlayerBackgroundUnavailable.UnreadableImage else PlayerBackgroundUnavailable.Preparing
     SideEffect {
         if (ready != null && frame != null && grades != null) {
-            val destination = frame.roles.firstOrNull { it.incoming && !it.soft }?.takeIf { frame.transitioning }
-            owner.presentGrades(grades, destination?.let { grades[it.identity]?.lightInk })
+            owner.presentGrades(grades)
         }
         if (ready != null && frame != null && reason == null) {
             val weights = ready.request.roles.map { role ->
@@ -352,7 +336,6 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
                 return@SideEffect
             }
             owner.current(choice.lightInk)
-            if (!frame.transitioning) owner.settled()
             val mean = choice.mean
             // Use the current descriptor's provenance for these same prepared pixels. The equality
             // guard above still requires every original sampling input to match. Never retain frame,

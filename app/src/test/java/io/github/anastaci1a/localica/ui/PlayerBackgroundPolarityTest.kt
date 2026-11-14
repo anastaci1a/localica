@@ -6,6 +6,20 @@ import org.junit.Test
 import kotlin.math.sqrt
 
 class PlayerBackgroundPolarityTest {
+    @Test fun preparedDestinationBelongsToTheIncomingVisualBeforeFullPlayerSampling() {
+        val state = PlayerBackgroundPolarityState()
+        val visual = PlayerVisual(contentKey = "bright")
+        val role = Any()
+        state.prewarmed(visual, BackdropRoleGrade(false, 0f), emptyList())
+        state.frame(ArtworkBackgroundFrame(listOf(ArtworkBackgroundRole(role, visual, 1f)), false, false, false))
+        assertEquals(PlayerBackgroundConfidence.Cold, state.decision.confidence)
+        assertEquals(false, state.destinationLightInk)
+        state.presentGrades(mapOf(role to BackdropRoleGrade(true, 0f)))
+        assertEquals("Partial geometry cannot replace the prepared endpoint", false, state.destinationLightInk)
+        state.frame(ArtworkBackgroundFrame(listOf(ArtworkBackgroundRole(Any(), PlayerVisual(), 1f)), false, false, false))
+        assertEquals("The previous cover cannot own the new destination", true, state.destinationLightInk)
+    }
+
     @Test fun coldUnavailableIsDeterministicAndNeverPretendsToBeCurrent() {
         val publication = PlayerBackgroundPublication()
         assertEquals(PlayerBackgroundDecision(), publication.decision)

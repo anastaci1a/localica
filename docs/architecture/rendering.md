@@ -39,9 +39,9 @@ One progress drives geometry and masks. Navigation observes thresholds only; Que
 
 ## Ink polarity and adaptive contrast
 
-One page-wide black/white decision follows the actual backing, including crossfades. Matching tone preparation must finish before a new decision publishes; otherwise the last verified decision remains, initially white. Ink changes do not retone the backing, and asynchronous presentation is not atomic.
+One page-wide black/white decision follows the actual backing, including crossfades. A cover's prepared endpoint grade supplies its destination ink while minimized; partial measurements cannot replace it. Sample confidence still describes the actual backing. Ink changes do not retone the backing, and asynchronous presentation is not atomic.
 
-One interpolated light-mix fraction serves text, glass and frost. Lyric emphasis keeps its own clock. Brightness trim preserves brightness order by limiting applied trim to the reciprocal of weighting. [Settings](../interface/settings.md#glass-settings) owns ranges. Prepared backdrops appear on expansion's first frame and remain until replaced.
+One binding eases text, glass and frost on the active expansion, artwork or lyrics phase. Destinations arriving after those phases settle use the shared value clock. Expansion responds immediately. Lyric emphasis keeps its own clock. Brightness trim preserves brightness order by limiting applied trim to the reciprocal of weighting. [Settings](../interface/settings.md#glass-settings) owns ranges.
 
 ## Shadows
 
@@ -86,6 +86,8 @@ Moving sibling groups share one shape-aware shadow; pages and modal descendants 
 [LyricsLineInkEaseTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/LyricsLineInkEaseTest.kt).
 
 [PlayerExpandReadinessTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerExpandReadinessTest.kt).
+
+[PlayerToneStartTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerToneStartTest.kt).
 
 [GlassShadowTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassShadowTest.kt).
 
