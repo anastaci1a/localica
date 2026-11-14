@@ -160,30 +160,33 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
         } }
     }
 
-    /** Initial single-window fixture admission only; no field image is selected here.
-     * Subsequent capture() calls keep their one original screenshot and strict receipts. */
-    fun admitInitialFixtureWindow() {
-        check(sources.size == 1 && sources.single().popup == null) { "Admission requires one ordinary fixture window" }
-        data class Admission(val point: IntOffset, val token: Int, val view: android.view.View, val sequence: Long)
-        val source = sources.single()
-        rule.runOnUiThread { source.marker.invalidateSelf(); source.view.invalidate() }
+    /** Readiness images never become measured field images. */
+    private fun admitWindows(popup: (() -> PopupShadowComposition)?) {
+        rule.runOnUiThread { sources.forEachIndexed { index, source ->
+            source.marker.popupEncoding = (if (index == 0) popup else source.popup) != null
+            source.marker.invalidateSelf(); source.view.invalidate()
+        } }
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
         while (true) {
-            val bitmap = checkNotNull(automation.takeScreenshot()) { "Initial window screenshot unavailable" }
+            val bitmap = checkNotNull(automation.takeScreenshot()) { "Native window admission screenshot unavailable" }
             try {
-                val admitted = rule.runOnUiThread {
-                    checkNativeRoots(listOf(source.view))
-                    check(root.boundsInRoot == bounds && source.view.matrix.isIdentity) { "Initial fixture geometry changed" }
-                    val origin = IntArray(2).also(source.view::getLocationOnScreen)
-                    val point = IntOffset(origin[0] + source.point.x + 1, origin[1] + source.point.y + 1)
-                    val token = source.marker.token
-                    val inside = point.x >= 0 && point.y >= 0 && point.x + 4 < bitmap.width && point.y < bitmap.height
-                    if (token > 0 && inside && bitmap.getPixel(point.x, point.y) == shadowMarkerColor(token, false) &&
-                        bitmap.getPixel(point.x + 4, point.y) == Color.MAGENTA) Admission(point, token, source.view, clockSequence()) else null
+                val receipts = rule.runOnUiThread {
+                    checkNativeRoots(sources.map { it.view })
+                    check(root.boundsInRoot == bounds) { "Native admission geometry changed" }
+                    sources.mapIndexed { index, source ->
+                        val origin = IntArray(2).also(source.view::getLocationOnScreen)
+                        val descriptor = (if (index == 0) popup else source.popup)?.invoke()
+                        ShadowWindowReceipt(source.id, NativeShadowGeneration(source.marker.token,
+                            IntOffset(origin[0] + source.point.x + 1, origin[1] + source.point.y + 1)),
+                            ShadowDrawState(clockSequence(), 0), descriptor?.let { PopupShadowReceipt(it.ownScrim,
+                                it.higherWindows.map { higher -> sources.single { it.window === higher }.id }) })
+                    }
                 }
-                if (admitted != null) {
-                    val (point, token, nativeView, acceptedSequence) = admitted
+                val image = bitmap.asImageBitmap()
+                val missing = receipts.filter { it.generation.token == 0 || !shadowMarkerMatches(image, it, receipts) }
+                    .map { it.windowId }
+                if (missing.isEmpty()) {
                     val context = InstrumentationRegistry.getInstrumentation().targetContext
                     val directory = nativeEvidenceDirectory("shadow-fixture-window-admission", context.cacheDir)
                     check(directory.isDirectory || directory.mkdirs())
@@ -191,25 +194,20 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
                     File(directory, "$name.png").outputStream().use {
                         check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
                     }
-                    File(directory, "$name.json").writeText(JSONObject()
-                        .put("purpose", "initial-window-admission-only")
-                        .put("window", source.id).put("viewIdentity", System.identityHashCode(nativeView))
-                        .put("markerX", point.x).put("markerY", point.y).put("token", token)
-                        .put("observedTokenColor", bitmap.getPixel(point.x, point.y))
-                        .put("observedSentinelColor", bitmap.getPixel(point.x + 4, point.y))
-                        .put("engineSequence", acceptedSequence).put("sceneBounds", bounds.toString())
-                        .put("fieldImage", false).toString(2))
+                    File(directory, "$name.json").writeText(JSONObject().put("purpose", "native-window-admission-only")
+                        .put("windows", org.json.JSONArray(receipts.map { it.windowId }))
+                        .put("markers", receipts.toString()).put("fieldImage", false).toString(2))
+                    return
                 }
-                if (admitted != null) return
+                check(System.nanoTime() < deadline) { "Native window admission timed out: $missing" }
             } finally { bitmap.recycle() }
-            check(System.nanoTime() < deadline) { "Initial native window admission timed out" }
-            Thread.sleep(10)
         }
     }
 
     fun capture(hostEpoch: Long = 0,
         popup: (() -> PopupShadowComposition)? = null,
         field: ((androidx.compose.ui.geometry.Rect) -> ShadowDrawState)? = null): PresentedCapture {
+        admitWindows(popup)
         val drawn = CountDownLatch(sources.size)
         val ledgers = sources.map { linkedMapOf<Int, Draw>() }
         val submitted = BooleanArray(sources.size)
