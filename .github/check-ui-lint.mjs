@@ -182,14 +182,20 @@ export function compare(before, after, stage, transfers = [], transferReanchored
     for (const d of before.filter(d => !now.has(d.identity))) gone.set(key(d), [...(gone.get(key(d)) ?? []), d]);
     added = added.filter(d => { const same = gone.get(key(d)); if (!same?.length) return true; same.pop(); reanchored.push(d); return false; });
     // Lead ruling 2026-11-10: an incident whose line was edited around its unchanged marked construct is re-anchored, listed
-    // separately and counted neither as removed nor as added; only an unambiguous one-to-one match qualifies.
+    // separately and counted neither as removed nor as added; equal-sized groups pair in source order (#956).
     let removed = [...gone.values()].flat(); const sameIncidents = [], pairedOld = new Set(), pairedNew = new Set();
     for (const d of added) {
+        if (pairedNew.has(d)) continue;
         const olds = removed.filter(g => sameIncident(g, d));
-        if (olds.length !== 1 || added.filter(a => sameIncident(olds[0], a)).length !== 1) continue;
-        pairedOld.add(olds[0]); pairedNew.add(d);
-        sameIncidents.push({rule:d.rule, path:d.path, fqn:d.fqn, construct:d.construct,
-            from:{identity:olds[0].identity, line:olds[0].originalLine}, to:{identity:d.identity, line:d.originalLine}});
+        if (!olds.length) continue;
+        const news = added.filter(a => sameIncident(olds[0], a));
+        if (olds.length !== news.length) continue;
+        for (const group of [olds, news]) group.sort((a,b) => a.originalLine - b.originalLine);
+        news.forEach((d,i) => {
+            pairedOld.add(olds[i]); pairedNew.add(d);
+            sameIncidents.push({rule:d.rule, path:d.path, fqn:d.fqn, construct:d.construct,
+                from:{identity:olds[i].identity, line:olds[i].originalLine}, to:{identity:d.identity, line:d.originalLine}});
+        });
     }
     added = added.filter(d => !pairedNew.has(d)); removed = removed.filter(d => !pairedOld.has(d));
     // A re-anchored transfer's prior identity is the same incident as its transferred head row, not a removal (one-to-one).

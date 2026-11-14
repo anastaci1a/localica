@@ -141,11 +141,11 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
         Text("Albums", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
         SelectionViewport(Modifier.fillMaxWidth(), observePlacement = { scroll.layoutInfo; Unit },
             visibleItemKeys = { scroll.layoutInfo.visibleItemsInfo.mapTo(mutableSetOf()) { it.key } }, liftEdges = LiftEdges.Vertical) { overscroll ->
-        LazyRow(Modifier.modalScroll(scroll).nestedScroll(HorizontalGestureOwner), state = scroll, overscrollEffect = overscroll,
+        LazyRow(Modifier.controlScrollParent(scroll, ControlScrollAxis.Horizontal).nestedScroll(HorizontalGestureOwner), state = scroll, overscrollEffect = overscroll,
             // Vertical room lets a selected album rise without its shadow meeting the clip (#533).
             contentPadding = PaddingValues(horizontal = cell.gridInset.dp, vertical = 8.dp)) {
             item(key = "all-albums") {
-                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = "all-albums", outline = albumOutline).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
+                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = "all-albums", outline = albumOutline).ownButtonDrag().toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
                     .semantics { selected = selectedIds.isEmpty() }.padding(horizontal = inset, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(112.dp)) {
                         Icon(appIconPainter(AppIcon.TabAlbums), null, Modifier.align(Alignment.Center).size(36.dp))
@@ -155,7 +155,7 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
             }
             items(albums, key = { it.id }) { album ->
                 val selected = ArtistAlbumSelection.shownSelected(selectedIds, album.id)
-                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).combinedClickable(
+                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).ownButtonDrag().combinedClickable(
                     interactionSource = null, indication = indication, role = Role.Checkbox,
                     hapticFeedbackEnabled = false, onClickLabel = "Select only this album",
                     onClick = { onSelection(ArtistAlbumSelection.only(album.id)) },

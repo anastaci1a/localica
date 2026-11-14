@@ -179,6 +179,17 @@ test('a same-incident re-anchor onto an edited line is listed separately, never 
     }
     assert.equal(shapes[1][1].construct, 'snapTo'); assert.equal(compare([], [], 0).sameIncidents.length, 0);
 });
+test('equal groups of edited incidents pair in source order; unequal groups stay unpaired (#956)', () => {
+    const before = [row('Column(first)', 0, '~~~~~~', {originalLine:30}), row('Column(second)', 0, '~~~~~~', {originalLine:10})];
+    const after = [row('Column(first).changed()', 0, '~~~~~~', {originalLine:40}), row('Column(second).changed()', 0, '~~~~~~', {originalLine:20})];
+    const paired = compare(before, after, 0);
+    assert.equal(paired.accepted, true); assert.equal(paired.added.length, 0); assert.equal(paired.removed.length, 0);
+    assert.deepEqual(paired.sameIncidents.map(s => [s.from.line, s.to.line]), [[10,20], [30,40]]);
+    assert.equal(paired.counts[before[0].rule].added, 0); assert.equal(paired.counts[before[0].rule].removed, 0);
+    const unequal = compare(before, after.slice(0,1), 0);
+    assert.equal(unequal.accepted, false); assert.equal(unequal.sameIncidents.length, 0);
+    assert.equal(unequal.added.length, 1); assert.equal(unequal.removed.length, 2);
+});
 test('same-incident re-anchors reject every other difference, ambiguity and already matched rows', () => {
     const [old, now] = shapes[1], code = '            if (delta != 0f) scope.launch { lens.snapTo(position) }';
     const rejects = {
