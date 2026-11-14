@@ -217,7 +217,7 @@
         errorLine2="            ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="194"
+            line="193"
             column="13"/>
     </issue>
 
@@ -228,7 +228,7 @@
         errorLine2="            ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="203"
+            line="201"
             column="13"/>
     </issue>
 
@@ -239,7 +239,7 @@
         errorLine2="                                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="522"
+            line="519"
             column="33"/>
     </issue>
 
@@ -250,7 +250,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="524"
+            line="521"
             column="35"/>
     </issue>
 
@@ -261,7 +261,7 @@
         errorLine2="                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="633"
+            line="630"
             column="17"/>
     </issue>
 
@@ -272,7 +272,7 @@
         errorLine2="                                    ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="633"
+            line="630"
             column="37"/>
     </issue>
 
@@ -283,7 +283,7 @@
         errorLine2="            ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="732"
+            line="729"
             column="13"/>
     </issue>
 
@@ -294,7 +294,7 @@
         errorLine2="                                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="732"
+            line="729"
             column="33"/>
     </issue>
 
@@ -305,7 +305,7 @@
         errorLine2="        ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="853"
+            line="850"
             column="9"/>
     </issue>
 
@@ -1163,7 +1163,7 @@
         errorLine2="                                                                ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="598"
+            line="595"
             column="65"/>
     </issue>
 
@@ -1174,7 +1174,7 @@
         errorLine2="                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="763"
+            line="760"
             column="54"/>
     </issue>
 
@@ -1185,7 +1185,7 @@
         errorLine2="                ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="765"
+            line="762"
             column="17"/>
     </issue>
 
@@ -1196,7 +1196,7 @@
         errorLine2="                                      ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="782"
+            line="779"
             column="39"/>
     </issue>
 
@@ -1207,7 +1207,7 @@
         errorLine2="                                                                         ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="790"
+            line="787"
             column="74"/>
     </issue>
 
@@ -1218,7 +1218,7 @@
         errorLine2="                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="978"
+            line="975"
             column="69"/>
     </issue>
 
@@ -1229,7 +1229,7 @@
         errorLine2="                                                                                      ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="978"
+            line="975"
             column="87"/>
     </issue>
 
@@ -1240,7 +1240,7 @@
         errorLine2="                                                                                                             ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1024"
+            line="1021"
             column="110"/>
     </issue>
 
@@ -1251,7 +1251,7 @@
         errorLine2="                                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1153"
+            line="1150"
             column="85"/>
     </issue>
 
@@ -1262,7 +1262,7 @@
         errorLine2="                                                                                                                            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1163"
+            line="1160"
             column="125"/>
     </issue>
 
@@ -1273,7 +1273,7 @@
         errorLine2="                                                                                                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1165"
+            line="1162"
             column="104"/>
     </issue>
 
@@ -1284,7 +1284,7 @@
         errorLine2="                                                                                                                ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1245"
+            line="1242"
             column="113"/>
     </issue>
 
@@ -1295,7 +1295,7 @@
         errorLine2="                                                                                                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1245"
+            line="1242"
             column="131"/>
     </issue>
 
@@ -1306,7 +1306,7 @@
         errorLine2="                                                                                                                        ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1264"
+            line="1261"
             column="121"/>
     </issue>
 
@@ -1317,7 +1317,7 @@
         errorLine2="                                                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1326"
+            line="1323"
             column="73"/>
     </issue>
 
@@ -6674,7 +6674,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="962"
+            line="959"
             column="5"/>
     </issue>
 
@@ -6685,7 +6685,7 @@
         errorLine2="    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="965"
+            line="962"
             column="5"/>
     </issue>
 
@@ -6696,7 +6696,7 @@
         errorLine2="                                                             ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="981"
+            line="978"
             column="62"/>
     </issue>
 
@@ -6707,7 +6707,7 @@
         errorLine2="                    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1129"
+            line="1126"
             column="21"/>
     </issue>
 
@@ -6718,7 +6718,7 @@
         errorLine2="                                                                                        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1144"
+            line="1141"
             column="89"/>
     </issue>
 
@@ -6729,7 +6729,7 @@
         errorLine2="                                                                                         ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1163"
+            line="1160"
             column="90"/>
     </issue>
 
@@ -6740,7 +6740,7 @@
         errorLine2="                        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1174"
+            line="1171"
             column="25"/>
     </issue>
 
@@ -6751,7 +6751,7 @@
         errorLine2="                    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1185"
+            line="1182"
             column="21"/>
     </issue>
 
@@ -6762,7 +6762,7 @@
         errorLine2="                            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1226"
+            line="1223"
             column="29"/>
     </issue>
 
@@ -6773,7 +6773,7 @@
         errorLine2="                        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1246"
+            line="1243"
             column="25"/>
     </issue>
 
@@ -6784,7 +6784,7 @@
         errorLine2="                             ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1312"
+            line="1309"
             column="30"/>
     </issue>
 
@@ -6795,7 +6795,7 @@
         errorLine2="                                                   ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1395"
+            line="1392"
             column="52"/>
     </issue>
 
@@ -7642,7 +7642,7 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="136"
+            line="138"
             column="9"/>
     </issue>
 
@@ -7653,7 +7653,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="137"
+            line="139"
             column="13"/>
     </issue>
 
@@ -10216,7 +10216,7 @@
         errorLine2="                 ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1048"
+            line="1045"
             column="18"/>
     </issue>
 
@@ -10227,7 +10227,7 @@
         errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1048"
+            line="1045"
             column="34"/>
     </issue>
 
@@ -10238,7 +10238,7 @@
         errorLine2="                         ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1190"
+            line="1187"
             column="26"/>
     </issue>
 
@@ -10249,7 +10249,7 @@
         errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1192"
+            line="1189"
             column="29"/>
     </issue>
 
@@ -12691,7 +12691,7 @@
         errorLine2="                                  ~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="504"
+            line="501"
             column="35"/>
     </issue>
 
@@ -12702,7 +12702,7 @@
         errorLine2="                                ~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="506"
+            line="503"
             column="33"/>
     </issue>
 
@@ -12713,7 +12713,7 @@
         errorLine2="                                ~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="511"
+            line="508"
             column="33"/>
     </issue>
 
@@ -12724,7 +12724,7 @@
         errorLine2="                                                                                                                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1048"
+            line="1045"
             column="116"/>
     </issue>
 
@@ -12735,7 +12735,7 @@
         errorLine2="                                                                        ~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1102"
+            line="1099"
             column="73"/>
     </issue>
 
@@ -12746,7 +12746,7 @@
         errorLine2="                                                     ~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1107"
+            line="1104"
             column="54"/>
     </issue>
 
@@ -12757,7 +12757,7 @@
         errorLine2="                                                                ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1189"
+            line="1186"
             column="65"/>
     </issue>
 
@@ -12768,7 +12768,7 @@
         errorLine2="                                                                                                                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1192"
+            line="1189"
             column="116"/>
     </issue>
 
@@ -12779,7 +12779,7 @@
         errorLine2="                                                                                 ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1247"
+            line="1244"
             column="82"/>
     </issue>
 
@@ -12790,7 +12790,7 @@
         errorLine2="                                                                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="1249"
+            line="1246"
             column="89"/>
     </issue>
 
@@ -14664,49 +14664,9 @@
             column="124"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="internal fun searchBottomSpring(speed: Float) = glassMorphSpring(speed).let {"
-        errorLine2="                                                                            ^">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="14"
-            column="77"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    spring(dampingRatio = it.dampingRatio, stiffness = it.stiffness, visibilityThreshold = .5f)"
-        errorLine2="    ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="15"
-            column="5"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    spring(dampingRatio = it.dampingRatio, stiffness = it.stiffness, visibilityThreshold = .5f)"
-        errorLine2="                             ~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="15"
-            column="30"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    spring(dampingRatio = it.dampingRatio, stiffness = it.stiffness, visibilityThreshold = .5f)"
-        errorLine2="                                                          ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="15"
-            column="59"/>
-    </issue>
 
     <issue
         id="RawUiMotion"

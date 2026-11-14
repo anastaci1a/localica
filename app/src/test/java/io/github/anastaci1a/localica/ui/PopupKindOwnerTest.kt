@@ -48,8 +48,9 @@ class PopupKindOwnerTest {
     @Test fun sharedContentRunsOnlyACentredPopupsKind() {
         for (role in roles) for (contextual in listOf(false, true)) {
             val anchor = anchor(role, contextual)
-            assertEquals("$role", SharedContentKind, GlassPlacement.Center.popupKind(anchor))
-            for (placement in GlassPlacement.entries - GlassPlacement.Center)
+            // Search is the Dialog row (#960): it runs the same kind as the centred popup.
+            for (dialog in listOf(GlassPlacement.Center, GlassPlacement.Search)) assertEquals("$dialog $role", SharedContentKind, dialog.popupKind(anchor))
+            for (placement in GlassPlacement.entries - GlassPlacement.Center - GlassPlacement.Search)
                 assertNotEquals("the guard rejects shared content in $placement", SharedContentKind, placement.popupKind(anchor))
         }
     }
