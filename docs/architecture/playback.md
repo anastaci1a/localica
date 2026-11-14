@@ -19,7 +19,7 @@ Accepted Play/Pause enters a revisioned mailbox before actor suspension. Native 
 
 ## Starting
 
-Native playback may start before a full queue save. A loaded selection seeks without reconstruction; eligible transport commands proceed while structural commits wait. Callback batches finish before timeline extension/persistence.
+Native playback may start before a full queue save. Only the native window retains playback templates. Each synchronization refreshes metadata and grants off Main and reuses unchanged templates. Eligible transport commands proceed while structural commits wait. Callback batches finish before timeline extension/persistence.
 
 Decoded PCM prefill targets 50 ms or buffer capacity, whichever is smaller. Start waits for accepted PCM, backpressure or a 30 ms playback-loop deadline; cancellation/flush/release cancels delayed start. Encoded/offloaded/tunneled policy remains unchanged. Start and transport tests own ordering cases.
 
