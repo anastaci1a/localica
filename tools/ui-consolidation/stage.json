@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "stage": 3,
   "integratedSha": "4a71f6bbfac4e94bae91e2acf287cf1243c1adde",
-  "release": "v0.34.5",
+  "release": "v0.34.6",
   "knownSteps": [
     "U01.01",
     "U01.02",
