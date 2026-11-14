@@ -41,7 +41,7 @@ class PlayerToneStartTest {
         val bright = covered("bright", android.graphics.Color.WHITE)
         val playback = compose.runOnUiThread { PlaybackConnection(context) }
         try {
-            preferences.write(InterfaceSettings(tabs = listOf(MainTab.Songs), expandOnPlay = true))
+            preferences.write(InterfaceSettings(tabs = listOf(MainTab.Songs), expandOnPlay = true, respectSystemAnimationScale = false))
             compose.waitUntil(15_000) { playback.state.value.connected && !playback.queues.state.value.loading }
             val initial = if (external) dark else bright
             compose.runOnUiThread { playback.playFromList(listOf(initial), initial.id) }
