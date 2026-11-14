@@ -1174,6 +1174,74 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun playNextAndPauseSurviveEveryReadHeldDuringActivation() {
+        val held = Gate()
+        val reads = AtomicReference<Gate?>(held)
+        fixture(attach = false, duplicateOccurrences = true, playbackStore = { heldReads(reads, it) }) {
+            val original = first.entries.map { it.id }
+            val done = CompletableDeferred<Boolean>()
+            queues.attach(player)
+            controls.play()
+            held.entered.await()
+            withContext(Dispatchers.Main) {
+                queues.act(listOf(track, track), SongTap.PlayNext) { done.complete(it) }
+                controls.pause()
+                held.release.complete(Unit)
+            }
+            assertTrue(withTimeout(5000) { done.await() })
+            barrier()
+            awaitMain { player.engine.playbackState == Player.STATE_READY }
+            val active = queues.state.value.library.active!!
+            val inserted = active.entries.map { it.id }.filterNot { it in original }
+            assertEquals(2, inserted.size)
+            assertEquals((original + inserted).toSet(), active.entries.map { it.id }.toSet())
+            val journey = active.journey!!
+            assertEquals(inserted, journey.history.drop(journey.cursor + 1).take(2).map { it.entryId })
+            withContext(Dispatchers.Main) {
+                assertEquals(journey.window().map { it.entryId }, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId })
+                assertEquals(original.first(), player.currentMediaItem!!.mediaId)
+                assertEquals(journey.current!!.token, player.currentMediaItem!!.queueVisit)
+                assertFalse(player.playWhenReady)
+                assertEquals(0, player.trueRequests)
+                assertFalse(player.preparedWhilePlaying)
+            }
+            assertNull(queues.state.value.problem)
+        }
+    }
+
+    @Test fun newerPauseSurvivesEveryReadHeldThroughNativeQueueEnd() {
+        val reads = AtomicReference<Gate?>()
+        fixture(playbackStore = { heldReads(reads, it) }) {
+            queues.settings { it.copy(advancedRepeat = AdvancedRepeat(queueEnd = QueueEnd.NextQueue)) }
+            barrier()
+            controls.play(); barrier(); assertPlayback(true)
+            val held = Gate()
+            withContext(Dispatchers.Main) {
+                reads.set(held)
+                player.engine.seekTo(player.duration - 80)
+            }
+            held.entered.await()
+            awaitMain { player.engine.playbackState == Player.STATE_ENDED }
+            withContext(Dispatchers.Main) {
+                controls.pause()
+                held.release.complete(Unit)
+            }
+            barrier()
+            awaitMain { player.currentMediaItem?.listeningQueue == second.id }
+            val active = queues.state.value.library.active!!
+            assertEquals(second.id, active.id)
+            assertEquals(second.entries.map { it.id }, active.entries.map { it.id })
+            withContext(Dispatchers.Main) {
+                assertEquals(active.journey!!.window().map { it.entryId }, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId })
+                assertEquals(active.journey.current!!.token, player.currentMediaItem!!.queueVisit)
+                assertFalse(player.playWhenReady)
+                assertEquals(1, player.trueRequests)
+                assertFalse(player.preparedWhilePlaying)
+            }
+            assertNull(queues.state.value.problem)
+        }
+    }
+
     @Test fun playNextWithoutCurrentEntryStartsAtFirstAddedVisit() = fixture(attach = false, noCurrent = true, duplicateOccurrences = true) {
         queues.settings(QueueSettings(shuffle = true)); barrier()
         assertNull(queues.state.value.library.active!!.currentEntryId)
@@ -1599,6 +1667,15 @@ class PlaybackIntentTest {
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         suspend fun await() { entered.complete(Unit); release.await() }
+    }
+    private fun heldReads(held: AtomicReference<Gate?>, tracks: List<Track>): LibraryStore {
+        val source = IntentStore().apply { snapshot = LibrarySnapshot(tracks = tracks) }
+        return object : LibraryStore by source {
+            override suspend fun playbackSnapshot(trackIds: Set<String>): LibraryPlaybackRead {
+                held.get()?.await()
+                return source.playbackSnapshot(trackIds)
+            }
+        }
     }
     private class IntentStore : LibraryStore {
         @Volatile var snapshot: LibrarySnapshot? = null
