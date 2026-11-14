@@ -75,6 +75,9 @@ class QueuePinchPlacementTest {
             val label = "${start.presentation}/${start.listSize}/${start.itemsPerRow} ${if (outward) "out" else "in"}"
             val captured = frames.first()
             val final = frames.last()
+            android.util.Log.i("QueuePinch957", "$label frames=${frames.size} held=${frames.count { it.held }} ready=${frames.count { it.destinationReady }} " +
+                "captured=${captured.items.size} retainedFrames=${frames.count { f -> f.items.values.any { it.retained } }} " +
+                "maxRetained=${frames.maxOf { f -> f.items.values.count { it.retained } }} final=${final.items.size} p=${final.progress}")
             assertTrue("$label settled at ${final.progress}", final.progress > .999f && !final.held)
             assertTrue("$label drew retained keys while held", frames.any { frame -> frame.held && frame.items.values.any { it.retained } })
             fun settled(key: Any) = compose.onAllNodesWithTag("media-$key").fetchSemanticsNodes().singleOrNull()?.boundsInRoot
