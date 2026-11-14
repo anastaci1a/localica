@@ -193,7 +193,9 @@ data class QueueJourney(
             }
             val added = if (valid == null || plans[number] == null || !modes.shuffle) emptyList() else
                 retained.toHashSet().let { kept -> ids.filterNot { it in kept }.shuffled(random) }
-            prepared[number] = if (added.isEmpty()) retained else retained + added
+            val order = if (added.isEmpty()) retained else retained + added
+            prepared[number] = if (valid != null && !modes.reshuffle)
+                prepared.values.firstOrNull { it == order } ?: order else order
         }
         val result = copy(plans = prepared)
         val key = if (ids.viewSource != null && (valid == null || valid.size == ids.size &&
