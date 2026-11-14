@@ -87,6 +87,7 @@ class PlaybackIntentTest {
         }
     }
 
+    @OptIn(ExperimentalTestApi::class)
     @Test fun tappingQueueRowDuringPlaybackRetainsThePreparedPlayer() = fixture(duplicateOccurrences = true) {
         queues.playbackRequested(true)
         barrier()
@@ -97,10 +98,10 @@ class PlaybackIntentTest {
                 val state by queues.state.collectAsState()
                 QueueScreen(state, queues, isPlaying = true)
             } }
-            waitUntil(5000) { onAllNodesWithTag("media-duplicate-1").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 5000) { onAllNodesWithTag("media-duplicate-1").fetchSemanticsNodes().isNotEmpty() }
             runOnIdle { player.selectionCalls.clear() }
             onNodeWithTag("media-duplicate-1").performTouchInput { click() }
-            waitUntil(10000) { queues.state.value.playerRequest == request + 1 }
+            waitUntil(timeoutMillis = 10000) { queues.state.value.playerRequest == request + 1 }
             runOnIdle {
                 assertEquals("duplicate-1", player.currentMediaItem!!.mediaId)
                 assertTrue(player.playWhenReady)
