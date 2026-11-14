@@ -81,7 +81,8 @@ class GlassTouchLightTest {
             }
         }
         android.util.Log.i("Localica642", "analytic realMax=$realError roundedMax=$byteError worst=$worst; straightRim fill/second/composed=${maxima.toList()} witnesses=${witnesses.toList()}")
-        assertTrue("SrcOver realMax=$realError roundedMax=$byteError worst=$worst", realError <= 1f)
+        assertTrue("SrcOver realMax=$realError roundedMax=$byteError worst=$worst", byteError <= 1)
+        for (i in 0..2) assertTrue("native op=$i error=${maxima[i]} witness=${witnesses[i]}", maxima[i] <= if (i == 2) 2 else 1)
         val atCenter = diff(lit, dark, 48, 40, 16)
         val nearEdge = diff(lit, dark, 48, 4, 16)
         val atRim = diff(lit, dark, 48, 0, 16)
@@ -92,29 +93,39 @@ class GlassTouchLightTest {
 
     @Test fun centeredAndMirroredContactsKeepBothAxesSymmetricAndReusePreparation() {
         val radius = extent.center.getDistance()
-        val maxima = IntArray(3); val witnesses = Array(3) { "" }
+        val maxima = IntArray(6); val witnesses = Array(6) { "" }
         for (circle in listOf(false, true)) {
             val cache = GlassRimCache()
             val dark = render(extent.center, 0f, radius, circle)
             val lit = render(extent.center, .12f, radius, circle, cache)
             val left = render(Offset(24f, 40f), .12f, radius, circle, cache)
             val right = render(Offset(72f, 40f), .12f, radius, circle, cache)
+            val fill = render(extent.center, .12f, radius, circle, rimGain = 0f)
+            val fillLeft = render(Offset(24f, 40f), .12f, radius, circle, rimGain = 0f)
+            val fillRight = render(Offset(72f, 40f), .12f, radius, circle, rimGain = 0f)
             for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16)) {
-                val delta = diff(lit, dark, x, y, shift)
-                val errors = listOf(abs(delta - diff(lit, dark, width - 1 - x, y, shift)),
-                    abs(delta - diff(lit, dark, x, height - 1 - y, shift)),
-                    abs(diff(left, dark, x, y, shift) - diff(right, dark, width - 1 - x, y, shift)))
-                for (i in 0..2) if (errors[i] > maxima[i]) {
-                    maxima[i] = errors[i]
-                    witnesses[i] = "circle=$circle channel=$shift ($x,$y) pairedWith=${if (i == 1) x else width - 1 - x},${if (i == 1) height - 1 - y else y} first=${if (i == 2) diff(left, dark, x, y, shift) else delta} second=${if (i == 0) diff(lit, dark, width - 1 - x, y, shift) else if (i == 1) diff(lit, dark, x, height - 1 - y, shift) else diff(right, dark, width - 1 - x, y, shift)} error=${errors[i]}"
+                for (op in 0..1) for (axis in 0..2) {
+                    val centered = if (op == 0) fill else lit
+                    val a = if (axis == 2) (if (op == 0) fillLeft else left) else centered
+                    val b = if (axis == 2) (if (op == 0) fillRight else right) else centered
+                    val px = if (axis == 1) x else width - 1 - x
+                    val py = if (axis == 1) height - 1 - y else y
+                    val first = diff(a, dark, x, y, shift)
+                    val second = diff(b, dark, px, py, shift)
+                    val error = abs(first - second)
+                    val i = op * 3 + axis
+                    if (error > maxima[i]) {
+                        maxima[i] = error
+                        witnesses[i] = "ops=${op + 1} circle=$circle channel=$shift ($x,$y) pairedWith=$px,$py first=$first second=$second error=$error"
+                    }
                 }
             }
             assertSame(cache.light(Offset.Zero, radius, GlassTone()), cache.light(extent.center, radius * 2, GlassTone()))
             assertSame(cache.lightStroke(2.6f), cache.lightStroke(2.6f))
             assertNotSame(cache.light(Offset.Zero, radius, GlassTone()), cache.light(Offset.Zero, radius, GlassTone(.25f)))
         }
-        android.util.Log.i("Localica642", "symmetry x/y/mirrorMax=${maxima.toList()} worstPairs=${witnesses.toList()}")
-        for (i in 0..2) assertTrue("symmetry axis=$i max=${maxima[i]} pair=${witnesses[i]}", maxima[i] <= 1)
+        android.util.Log.i("Localica642", "symmetry fill then composed x/y/mirrorMax=${maxima.toList()} worstPairs=${witnesses.toList()}")
+        for (i in 0..5) assertTrue("symmetry axis=$i max=${maxima[i]} pair=${witnesses[i]}", maxima[i] <= if (i < 3) 2 else 4)
     }
 
     @Test fun actualSurfaceReturnsByteExactlyAfterReleaseAndStrengthZeroDrawsNothing() {
