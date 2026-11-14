@@ -1105,8 +1105,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
     private suspend fun capture(orderTiming: QueueOrderTiming? = null) {
+        val journey = state.value.library.active?.journey
         captureNativeState()
-        syncTimeline()
+        if (state.value.library.active?.journey !== journey) syncTimeline()
         orderTiming?.mark(QueueOrderTiming.Stage.CursorCaptured)
         persist(state.value.library)
     }
