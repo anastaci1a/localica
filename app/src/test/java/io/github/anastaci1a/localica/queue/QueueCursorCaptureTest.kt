@@ -14,7 +14,8 @@ class QueueCursorCaptureTest {
         val track = Track("uri", "Song", fileName = "song.mp3", relativePath = "song.mp3")
         val seed = QueueEdits.create(List(size) { track }, 0, "Queue")
         val visits = seed.entries.take(2).mapIndexed { i, entry -> QueueVisit(entry.id, 0, "visit-$i") }
-        return seed.copy(journey = QueueJourney(history = visits, cursor = 1),
+        return seed.copy(journey = QueueJourney(history = visits, cursor = 1,
+            orderedTraversalId = "capture", orderedAnchorToken = visits.first().token),
             currentEntryId = visits.last().entryId, positionMs = 1234)
     }
 
@@ -57,5 +58,21 @@ class QueueCursorCaptureTest {
         val branched = input.copy(journey = input.journey!!.copy(history = input.journey.history.take(1), cursor = 0))
         assertNull(branched.captureVisit("visit-1") { 0 })
         assertEquals(1234L, input.positionMs)
+    }
+
+    @Test fun coldHistoryArrivesBeforePreparationAndRejectsUnknownOrRemovedVisits() {
+        val input = queue()
+        for (shuffle in listOf(false, true)) {
+            val cold = input.journey!!.copy(orderedTraversalId = null, orderedAnchorToken = null,
+                modes = JourneyModes(shuffle = shuffle))
+            val visit = cold.history.first()
+            val arrived = cold.arrive(visit.token, input.ids)
+            assertEquals(visit, arrived.current)
+            assertEquals(cold.history, arrived.history)
+            assertEquals(setOf(visit.entryId), arrived.visited)
+            assertEquals(visit, arrived.window().single { it.token == visit.token })
+            assertSame(cold, cold.arrive("unknown", input.ids))
+            assertSame(cold, cold.arrive(visit.token, input.ids - visit.entryId))
+        }
     }
 }

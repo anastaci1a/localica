@@ -28,6 +28,8 @@ class OrderedJourneyTest {
         assertEquals(path.previous, window[current - 1])
         assertEquals(path.next, window[current + 1])
         assertEquals(path, path.arrive(before.history[2].token, ids))
+        val cold = path.copy()
+        assertSame(cold, cold.arrive(before.history[2].token, ids))
         val next = path.next!!
         path = path.arrive(next.token, ids)
         assertEquals(before.history + next, path.history)
