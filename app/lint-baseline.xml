@@ -261,7 +261,7 @@
         errorLine2="                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="633"
+            line="628"
             column="17"/>
     </issue>
 
@@ -272,7 +272,7 @@
         errorLine2="                                    ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="633"
+            line="628"
             column="37"/>
     </issue>
 
@@ -283,7 +283,7 @@
         errorLine2="            ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="732"
+            line="727"
             column="13"/>
     </issue>
 
@@ -294,7 +294,7 @@
         errorLine2="                                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="732"
+            line="727"
             column="33"/>
     </issue>
 
@@ -305,7 +305,7 @@
         errorLine2="        ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
-            line="853"
+            line="848"
             column="9"/>
     </issue>
 
