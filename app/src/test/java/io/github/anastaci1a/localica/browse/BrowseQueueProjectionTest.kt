@@ -123,6 +123,12 @@ class BrowseQueueProjectionTest {
         assertNotEquals(item, other)
         assertEquals(shorter.entries.sumOf { it.track.durationMs!! }, other.duration())
         assertEquals(queue.entries.sumOf { it.track.durationMs!! }, item.duration())
+        // An equal-content revision is another item with its own facts; a plain list never equals a view.
+        val copiedItem = queueItem(copied)
+        assertNotEquals(item, copiedItem)
+        assertNotSame(item.facts, copiedItem.facts)
+        assertEquals(item.duration(), copiedItem.duration())
+        assertFalse(first.rows.equals(first.rows.toList()) || first.keys.equals(first.keys.toList()))
     }
 
     @Test fun indexOfKeyKeepsTheLastDuplicateWithoutAllocating() {
