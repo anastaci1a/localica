@@ -199,7 +199,7 @@ data class QueueJourney(
         }
         val result = copy(plans = prepared)
         val key = if (ids.viewSource != null && (valid == null || valid.size == ids.size &&
-                prepared.values.all { it.toSet().size == it.size })) ids.revision else null
+                (!modes.shuffle || plans.isEmpty() || prepared.values.all { it.toSet().size == it.size }))) ids.revision else null
         val selectedRank = rank ?: if (modes.shuffle) -1 else ids.indexOf(current?.entryId)
         val firstRank = oldestRank ?: previous?.oldestRank ?: ids.indexOf(history.firstOrNull()?.entryId)
         result.traversal = result.project(ids, key, selectedRank, firstRank, previous)

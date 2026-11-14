@@ -159,8 +159,9 @@ class QueueJourneyPreparationTest {
         for ((ids, plan) in listOf(listOf("A", "B", "B") to emptyList(), listOf("A", "B") to listOf("A", "B", "B"))) {
             val raw = QueueJourney(history = listOf(QueueVisit("A", 0, "anchor")), cursor = 0,
                 visited = setOf("A"), plans = if (plan.isEmpty()) emptyMap() else mapOf(0L to plan), modes = JourneyModes(shuffle = true))
-            val first = raw.reconcile(ids, "A", raw.modes, Random(3))
-            val second = first.reconcile(ids, "A", raw.modes, Random(3))
+            val view = ids.mapView { it }
+            val first = raw.reconcile(view, "A", raw.modes, Random(3))
+            val second = first.reconcile(view, "A", raw.modes, Random(3))
             assertNotSame(first, second)
             assertEquals(listOf("A", "B", "B"), second.window().map { it.entryId })
             assertEquals(first.next!!.token, second.next!!.token)

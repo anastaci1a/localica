@@ -147,7 +147,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         suspend fun reset(): Boolean {
             val first = queue.journey?.plans?.get(queue.journey.cycle)?.firstOrNull()
                 ?: queue.entries.firstOrNull()?.id ?: return false
-            if (queue.entries.firstOrNull { it.id == first }?.track?.id?.let(::blocksSource) == true) {
+            if (withContext(Dispatchers.Default) { queue.entries.firstOrNull { it.id == first }?.track?.id }?.let(::blocksSource) == true) {
                 reportRecovery(); return false
             }
             val next = queue.copy(currentEntryId = first, positionMs = 0,
@@ -352,7 +352,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             capture()
             val target = state.value.library.queues.firstOrNull { it.id == id }
             if (target == null) { complete(false); return@submit }
-            val next = QueueEdits.insert(target, rows.map { it.track }, SongTap.Append, rows.map { it.sourcePlaylistId })
+            val next = withContext(Dispatchers.Default) { QueueEdits.insert(target, rows.map { it.track }, SongTap.Append, rows.map { it.sourcePlaylistId }) }
             save(state.value.library.update(next))
             if (state.value.library.active?.id == id) activate(null)
             complete(true)
@@ -380,7 +380,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 return false
             } else create(tracks, selectedIndex, emptySet(), expand, sourceName, playlistOrigins)
         } else {
-            var inserted = QueueEdits.insert(current, if (batch) tracks else listOf(selected), action, if (batch) playlistOrigins else listOf(playlistOrigins.getOrNull(selectedIndex)))
+            var inserted = withContext(Dispatchers.Default) { QueueEdits.insert(current, if (batch) tracks else listOf(selected), action, if (batch) playlistOrigins else listOf(playlistOrigins.getOrNull(selectedIndex))) }
             if (action == SongTap.PlayNow) {
                 val target = inserted
                 inserted = target.copy(journey = journey(current) { path, _ -> path.select(
@@ -465,7 +465,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     fun selectEntry(id: String) = submit {
         capture()
-        val active = state.value.library.queues.firstOrNull { queue -> queue.entries.any { it.id == id } } ?: return@submit
+        val source = state.value.library
+        val active = withContext(Dispatchers.Default) { source.queues.firstOrNull { queue -> queue.entries.any { it.id == id } } } ?: return@submit
         selectEntry(active, id, expandPlayer = true)
     }
     private suspend fun selectEntry(active: ListeningQueue, id: String, expandPlayer: Boolean) {
