@@ -241,7 +241,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val ink = if (flat) MaterialTheme.colorScheme.onSurface else inkOverride ?: lerp(Color(0xFF202124), Color.White, lightMix)
     val anchor = modifier.glassSurfaceAnchor(source, cornerRadius)
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact)
-    val light = io.github.anastaci1a.localica.ui.components.rememberProfileValue(contact to "light", { if (contact.pressed) 1f else 0f },
+    val light = io.github.anastaci1a.localica.ui.components.rememberProfileValue(contact to "light", { io.github.anastaci1a.localica.ui.engine.unitTarget(contact.pressed) },
         io.github.anastaci1a.localica.ui.spec.MotionProfile.TouchLight, io.github.anastaci1a.localica.ui.spec.MotionProfile.ControlOff)
     val contactShape = contactPresentation ?: modifier.glassSurfaceContactPresentation() ?: { contact.body.value }
     val surfaceClip = remember(silhouette, cornerRadius) {
@@ -329,7 +329,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             // Blend the control finish into the shared panel finish during the morph.
             // Flat panel walls have constant normals; diagonal glints stay on corners.
             val a = light.value() * appearance.touchLight * .12f
-            if (a > 0f) drawContactLight(glassContactPoint(contact.point, size, contactShape(), contact.vertical),
+            drawContactLight(glassContactPoint(contact.point, size, contactShape(), contact.vertical),
                 outline?.path ?: rim.roundedPath(bounds, radius), a, tone, rim)
             val panelRimWeight = if (popupRim == null) 0f else panel
             if (panelRimWeight < 1f) drawGlassRim(bounds, radius,

@@ -25,12 +25,7 @@ import io.github.anastaci1a.localica.ui.spec.MotionProfile
 }
 @Composable internal fun rememberProfileValue(key: Any, target: () -> Float, profile: MotionProfile,
     offProfile: MotionProfile = profile, initial: Float = 0f): MotionValue {
-    val motion = rememberNormalizedMotionFloat(key, initial)
-    val request by rememberUpdatedState(target)
-    LaunchedEffect(motion, profile, offProfile) { snapshotFlow { request() }.collect {
-        motion.retarget(it, motionProfileId(if (it == 0f) offProfile else profile))
-    } }
-    return motion
+    return rememberNormalizedMotionFloat(key, initial, target, profile, offProfile)
 }
 /** A colour from [start] to [end] following [target] on a cataloged profile. The value is read only when the producer
  * runs, so a draw-time producer's ease never recomposes its caller. */

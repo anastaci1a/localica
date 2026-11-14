@@ -3,7 +3,7 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
-import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.spec.TouchLightRimWidth
 
 /** One draw owner's current preparation; paths are replaced, never rewritten after publication. */
 internal class GlassRimCache {
@@ -74,7 +74,8 @@ internal fun glassContactPoint(point: Offset, size: Size, shape: GlassShape, ver
 
 internal fun DrawScope.drawContactLight(point: Offset, path: Path, alpha: Float, tone: GlassTone, cache: GlassRimCache,
     radius: Float = size.center.getDistance(), rimGain: Float = 2f) {
+    if (alpha == 0f) return
     val brush = cache.light(point, radius, tone)
     drawRect(brush, alpha = alpha)
-    clipPath(path) { drawPath(path, brush, alpha = alpha * rimGain, style = cache.lightStroke(2.6.dp.toPx())) }
+    clipPath(path) { drawPath(path, brush, alpha = alpha * rimGain, style = cache.lightStroke(TouchLightRimWidth.toPx())) }
 }

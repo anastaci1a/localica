@@ -102,7 +102,7 @@ class GlassTouchLightTest {
         val source = File(root, "LiquidGlass.kt").readText()
         val effect = source.substring(source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect("), source.indexOf("\n                else if", source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")))
         assertEquals("20e598e80a1ac997cfb4d02c22a9c8ceffb5f152de28344c6e71ff53ef954892", sha(effect.toByteArray()))
-        assertTrue(Regex("""if \(a > 0f\) drawContactLight\(glassContactPoint\(contact.point""").containsMatchIn(source))
+        assertTrue(File(root, "GlassRimCache.kt").readText().contains("if (alpha == 0f) return"))
         assertTrue(source.contains("MotionProfile.TouchLight, io.github.anastaci1a.localica.ui.spec.MotionProfile.ControlOff"))
         assertEquals(1f, GlassAppearance().touchLight, 0f)
         for (strength in listOf(Float.NaN, Float.POSITIVE_INFINITY)) assertEquals(1f, GlassAppearance(touchLight = strength).normalized().touchLight, 0f)

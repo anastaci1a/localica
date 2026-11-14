@@ -11,6 +11,7 @@ import kotlin.math.*
 
 /** Neutral extent for an absent inset; independent of configurable spacing. */
 val EmptyInset: Dp = Dp.Hairline
+internal val TouchLightRimWidth = 2.6.dp
 
 enum class Space { Hairline, Tight, Compact, Base, Comfortable, Section, Panel }
 enum class Radius { Artwork, Card, Menu, LargeArtwork, Panel, Pill }
