@@ -36,8 +36,7 @@ class SearchDismissalLifecycleTest {
                         .glassAnchor(anchor))
                     GlassMorphPopup(visible, anchor, { dismissals++ }, GlassPlacement.Search) {
                         val view = LocalView.current
-                        val ready = LocalSearchOpeningReady.current
-                        SideEffect { popupView = view; ready?.invoke(false) }
+                        SideEffect { popupView = view }
                         Column(Modifier.fillMaxWidth().height(220.dp)) {
                             ActionTextButton({ edits++ }) { Text("Keep editing") }
                         }

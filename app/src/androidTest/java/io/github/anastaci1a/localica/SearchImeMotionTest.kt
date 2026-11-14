@@ -382,7 +382,6 @@ class SearchImeMotionTest {
                     val focus = remember { FocusRequester() }
                     val keyboard = LocalSoftwareKeyboardController.current
                     val focusedWindow = LocalWindowInfo.current.isWindowFocused
-                    val ready = LocalSearchOpeningReady.current
                     val view = LocalView.current
                     val density = LocalDensity.current
                     val ime = WindowInsets.ime.getBottom(density)
@@ -390,10 +389,9 @@ class SearchImeMotionTest {
                     val target = WindowInsets.imeAnimationTarget.getBottom(density)
                     val hiddenImeConsumed by rememberUpdatedState(ime == 0 && source == 0 && target == 0)
                     SideEffect { popupView = view; keyboardSettled = ime == target && source == target }
-                    LaunchedEffect(visible, focusedWindow, ready) {
+                    LaunchedEffect(visible, focusedWindow) {
                         if (visible && focusedWindow) {
                             withFrameNanos { }
-                            ready?.invoke(true)
                             if (showKeyboard) {
                                 // The delayed fixture releases input only after observing
                                 // the fallback endpoint, independent of CI wall-clock load.
@@ -492,7 +490,7 @@ class SearchImeMotionTest {
     }
 
     private fun springDuration(from: Float, to: Float, velocity: Float = 0f, pixels: Boolean = false): Long =
-        (TargetBasedAnimation(if (pixels) searchBottomSpring(motionSpeed) else glassMorphSpring(motionSpeed), Float.VectorConverter, from, to,
+        (TargetBasedAnimation(glassMorphSpring(motionSpeed), Float.VectorConverter, from, to,
             AnimationVector1D(velocity)).durationNanos + 999_999L) / 1_000_000L
 
     private fun closed() = advanceUntil { !anchor.modalPresent }

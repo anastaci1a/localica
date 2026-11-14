@@ -26,8 +26,8 @@ class PopupKindOwnerTest {
             val anchor = anchor(role, contextual)
             val menu = if (contextual) PopupKind.RowMenu else if (role == TriggerRole.Navigation) PopupKind.BottomMenu else PopupKind.Menu
             assertEquals("$role contextual=$contextual", menu, GlassPlacement.Menu.popupKind(anchor))
-            assertEquals(PopupKind.Dialog, GlassPlacement.Center.popupKind(anchor))
-            for (legacy in listOf(GlassPlacement.Search, GlassPlacement.Page, GlassPlacement.Sheet))
+            for (dialog in listOf(GlassPlacement.Center, GlassPlacement.Search)) assertEquals("$dialog $role", PopupKind.Dialog, dialog.popupKind(anchor))
+            for (legacy in listOf(GlassPlacement.Page, GlassPlacement.Sheet))
                 assertEquals("$legacy $role", PopupKind.Legacy, legacy.popupKind(anchor))
         }
         // The navigation chrome's More menu is the bottom menu (CrossAxisSnap); every other menu keeps its own law.

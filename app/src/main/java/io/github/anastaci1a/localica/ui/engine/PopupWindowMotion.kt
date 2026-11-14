@@ -40,7 +40,8 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private val ranges = requireNotNull(clock.spec.geometry).maxViewportDiagonalPx.let { EdgeRanges(it, it, it, it) }
     private var rectangle by mutableStateOf<MotionRect?>(null)
     val bounds: MotionRectView? get() = rectangle
-    private var shown = false
+    /** The intent: what [show] last asked for. Foreground semantics follow it, so Hide releases them at its event. */
+    var shown by mutableStateOf(false); private set
     private var holding = false
     private var openingEnvelope: Rect? = null
     private var nativeWindow: java.lang.ref.WeakReference<Any>? = null

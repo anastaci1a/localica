@@ -164,12 +164,11 @@ private class TextEditingFocusState {
     val restingFocus = LocalRestingTextFocus.current
     val keyboard = LocalSoftwareKeyboardController.current
     val emptySearchBack by rememberUpdatedState(LocalEmptySearchBack.current)
-    val beginSearchReturn by rememberUpdatedState(LocalSearchReturnStart.current)
+    val popupDismiss by rememberUpdatedState(LocalPopupDismiss.current)
     val observe by rememberUpdatedState(LocalTextEditingObservation.current)
     fun endEditing(reason: String) {
         observe?.invoke("endEditing reason=$reason focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
-        if (emptySearchBack != null) beginSearchReturn?.invoke()
-        restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke()
+        restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.let { popupDismiss ?: it }?.invoke()
     }
     SideEffect { state.endEditing = { reason -> endEditing(reason) } }
     BackHandler(focused) { endEditing("backDispatcher") }
