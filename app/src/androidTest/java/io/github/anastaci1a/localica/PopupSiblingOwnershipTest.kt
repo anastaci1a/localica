@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.PopupTakeover
 import io.github.anastaci1a.localica.ui.engine.ShadowPlane
+import io.github.anastaci1a.localica.ui.engine.windowRetained
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -21,6 +22,7 @@ class PopupSiblingOwnershipTest {
 
     @Test fun disposingAClosedSiblingDoesNotRetireTheOpenPresentation() = overlap(false)
     @Test fun heldExitDoesNotRetireANewerPresentationOnTheSameTrigger() = overlap(true)
+    @Test fun disposingAWaitingSiblingNeverFollowsTheHeldPresentation() = overlap(true, true)
 
     private fun fieldHost(anchor: GlassAnchor): Any {
         val node = requireNotNull(anchor.surfaceNode)
@@ -28,10 +30,11 @@ class PopupSiblingOwnershipTest {
         return (owner.value as ShadowPlane).host.window
     }
 
-    private fun overlap(heldExit: Boolean) {
+    private fun overlap(heldExit: Boolean, disposeWaiting: Boolean = false) {
         var aOpen by mutableStateOf(false)
         var bOpen by mutableStateOf(false)
         var aMounted by mutableStateOf(true)
+        var bMounted by mutableStateOf(true)
         lateinit var anchor: GlassAnchor
         var aView: View? = null
         var bView: View? = null
@@ -49,7 +52,7 @@ class PopupSiblingOwnershipTest {
                         dismissA = LocalPopupDismiss.current
                         Text("Popup A", Modifier.height(220.dp))
                     }
-                    GlassMorphPopup(bOpen, anchor, { bOpen = false }, GlassPlacement.Search) {
+                    if (bMounted) GlassMorphPopup(bOpen, anchor, { bOpen = false }, GlassPlacement.Search) {
                         bView = LocalView.current
                         Text("Popup B", Modifier.height(180.dp))
                     }
@@ -78,6 +81,43 @@ class PopupSiblingOwnershipTest {
                 }
             }
             compose.runOnUiThread { bOpen = true }
+            if (heldExit) {
+                compose.advanceMorphOpening(160, anchor) { bView }
+                lateinit var waiting: GlassPopupFlight
+                compose.runOnUiThread {
+                    waiting = requireNotNull(anchor.popup)
+                    assertNotSame(a, waiting)
+                    assertEquals(PopupTakeover.Admitting, waiting.takeover)
+                    assertEquals(1f, requireNotNull(a).progress.value, 0f)
+                    assertTrue(requireNotNull(aView).isAttachedToWindow)
+                    assertSame("B waits without following A's physical surface", requireNotNull(aView).rootView, fieldHost(anchor))
+                    if (disposeWaiting) bMounted = false
+                }
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                compose.runOnUiThread {
+                    if (disposeWaiting) {
+                        assertEquals(PopupTakeover.Closed, waiting.takeover)
+                        assertNull(anchor.popup)
+                        assertSame(requireNotNull(aView).rootView, fieldHost(anchor))
+                        assertEquals(1f, requireNotNull(a).progress.value, 0f)
+                    }
+                    child.handedOff = true
+                }
+                if (disposeWaiting) {
+                    compose.advanceMorphOpening(2000, anchor) { aView }
+                    compose.runOnUiThread {
+                        assertEquals(PopupTakeover.Closed, requireNotNull(a).takeover)
+                        assertFalse(requireNotNull(aView).isAttachedToWindow)
+                        assertFalse(requireNotNull(bView).isAttachedToWindow)
+                        assertNull(anchor.popup)
+                        assertFalse(requireNotNull(anchor.surfaceNode).windowRetained())
+                        assertSame("The surface returns home after the waiting collector is cancelled", anchor.shadowPlane?.host?.window, fieldHost(anchor))
+                    }
+                    compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(0)
+                    return
+                }
+            }
             compose.advanceMorphOpening(2000, anchor) { bView }
             compose.onNodeWithText("Popup B").assertIsDisplayed()
             lateinit var b: GlassPopupFlight

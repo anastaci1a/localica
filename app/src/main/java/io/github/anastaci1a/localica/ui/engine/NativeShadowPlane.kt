@@ -76,7 +76,11 @@ internal fun Modifier.nativePlaneReceipt(plane: ShadowPlane): Modifier = this.dr
 /** Platform adapter intents accept the read-only identity; mutation stays Engine-private. */
 internal fun SurfaceView.windowRetained()=(this as SurfaceNode).windowRetained
 internal fun SurfaceView.retainNativeWindow()=(this as SurfaceNode).retainWindow()
-internal fun SurfaceView.followWindow(motion: PopupWindowMotion)=(this as SurfaceNode).follow(motion.expansion,Curve.constant(1f),requireNotNull(motion.bounds),motion.popupCurve)
+internal suspend fun SurfaceView.followWindow(motion: PopupWindowMotion) {
+    val node=this as SurfaceNode; val bounds=requireNotNull(motion.bounds)
+    snapshotFlow { node.canFollow(motion.expansion,bounds) }.first { it }
+    node.follow(motion.expansion,Curve.constant(1f),bounds,motion.popupCurve)
+}
 internal fun SurfaceView.transferWindow(plane: ShadowPlane)=(this as SurfaceNode).transfer(plane,motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
 internal fun SurfaceView.ownsWindow(plane: ShadowPlane)=(this as SurfaceNode).owns(plane)
 internal fun SurfaceView.returnPlane()=(this as SurfaceNode).sourceReturnPlane

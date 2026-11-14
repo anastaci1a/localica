@@ -93,14 +93,17 @@ internal class OwnedFieldRequest(val plane: ShadowPlane,val sourceGeneration: Lo
         val stamp=clock.stampNow; val edges=floatArrayOf(rect.left,rect.top,rect.right,rect.bottom); commitAtomic(listOf(ownOpacity to ownOpacity.prepare(target.opacity,profile,stamp,force=true)!!)+ownTransform.channels.mapIndexed { i,m -> m to m.prepare(edges[i],profile,stamp,force=true)!! })
         stratum=target.stratum; role=target.shadow; last=identity; if(dismissed && target.opacity>0f) revive()
     }
+    // A closed expansion whose native return hit its frame allowance leaves the field on the closed window plane. The next lifetime may reclaim it only for a live source host and only when every stale plane's window view is gone (never attached); otherwise the source return is still owed.
+    internal fun canFollow(expansion: ExpansionView,bounds: MotionRectView): Boolean {
+        val old=following ?: return true
+        return old.expansion===expansion && old.bounds===bounds || !old.expansion.expanded && old.expansion.retirementReady && (returned() || low!=null && stalePlanes().all { val v=it.view; v==null || !v.isAttachedToWindow })
+    }
     /** D30 amendment: borrow the expansion's bound physical edges and analytic opacity; no second trajectory. */
     internal fun follow(expansion: ExpansionView,opacity: Curve,bounds: MotionRectView,ownership: Curve=Curve.linear(0f,1f)) {
         clock.checkMutation(); check(!disposed); val owner=requireNotNull(expansion as? ExpandCollapse)
         require(owner.ownerClock===clock && owner.owns(bounds)) { "Follow the same clock and expansion-bound rectangle" }
         val old=following; val same=old!=null && old.expansion===owner && old.bounds===bounds
-        // A closed expansion whose native return hit its frame allowance leaves the field on the closed window plane. The next lifetime may reclaim it only for a live source host and only when every stale plane's window view is gone (never attached); otherwise the source return is still owed.
-        val settled=old!=null && !same && !old.expansion.expanded && old.expansion.retirementReady
-        require(old==null || same || settled && (returned() || low!=null && stalePlanes().all { val v=it.view; v==null || !v.isAttachedToWindow })) { "A live surface keeps its expansion until its source return completes (expanded=${old?.expansion?.expanded} retirementReady=${old?.expansion?.retirementReady} owner=${if(this.owner===low) "source" else "window"} high=${high!=null} pending=${pending!=null} source=${low!=null})" }
+        require(canFollow(owner,bounds)) { "A live surface keeps its expansion until its source return completes (expanded=${old?.expansion?.expanded} retirementReady=${old?.expansion?.retirementReady} owner=${if(this.owner===low) "source" else "window"} high=${high!=null} pending=${pending!=null} source=${low!=null})" }
         if(old!=null && !same) { old.expansion.lifecycle.remove(::followLifetime); if(!returned()) abandonReturn() }
         if(!same) { check(ownOpacity.settled && ownTransform.channels.all { it.settled } && ownOwnership.settled) { "Bind before starting standalone surface motion" }; following=SurfacePhase(owner,opacity,bounds,ownership); owner.lifecycle.add(::followLifetime) } else { old.curve=opacity; old.ownershipCurve=ownership }
         followLifetime(true)
