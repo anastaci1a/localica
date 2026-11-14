@@ -772,12 +772,15 @@ class SearchImeMotionTest {
     @Test fun reopeningWhileThePreviousKeyboardCollapsesStillPlacesItsNewEnvelope() = withDockedKeyboard {
         fixture(true, emptyImeBack = false)
         var callback: android.view.Choreographer.FrameCallback? = null
+        var inputThread: Thread? = null
+        val injected = java.util.concurrent.atomic.AtomicBoolean(false)
         try {
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
             opened()
             awaitDockedKeyboard()
             opened()
             val oldHeight = compose.runOnUiThread { samples.last().destination.height }
+            val pill = compose.runOnUiThread { anchor.bounds.center }
             compose.runOnUiThread {
                 samples.clear()
                 keyboardAllowed = false
@@ -785,9 +788,22 @@ class SearchImeMotionTest {
                 val choreographer = android.view.Choreographer.getInstance()
                 callback = object : android.view.Choreographer.FrameCallback {
                     override fun doFrame(time: Long) {
-                        if (samples.lastOrNull()?.let { !it.opening && it.imeSource > 0 && it.imeTarget == 0 } == true) {
-                            visible = true
+                        val sample = samples.lastOrNull()
+                        if (sample?.let { !it.opening && it.ime > 0 && it.imeSource > 0 && it.imeTarget == 0 } == true) {
+                            motionTimeline += "${SystemClock.uptimeMillis()} real-trigger-tap at=$pill previous=$sample"
                             extraContentHeight = 120
+                            inputThread = Thread {
+                                val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+                                val down = SystemClock.uptimeMillis()
+                                var accepted = true
+                                for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
+                                    val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, pill.x, pill.y, 0)
+                                    event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                                    accepted = automation.injectInputEvent(event, true) && accepted
+                                    event.recycle()
+                                }
+                                injected.set(accepted)
+                            }.also { it.start() }
                         } else choreographer.postFrameCallback(this)
                     }
                 }
@@ -798,10 +814,12 @@ class SearchImeMotionTest {
                 val first = samples.first { it.opening && it.imeSource > 0 && it.imeTarget == 0 && it.progress < 1f }
                 assertTrue("An opening cannot freeze on the previous keyboard's collapsing geometry: $first",
                     first.destination.height > oldHeight + 50f)
-                assertTrue(visible)
+                assertTrue("Real trigger input reopened the pill", visible)
+                assertTrue("Both native input events were accepted", injected.get())
             }
             opened()
         } finally {
+            inputThread?.join(5000)
             compose.runOnUiThread {
                 callback?.let { android.view.Choreographer.getInstance().removeFrameCallback(it) }
                 visible = false
