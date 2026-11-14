@@ -21,7 +21,7 @@ class QueueJourneyInsertPersistenceTest {
         val target = library()
         val queue = target.active!!
         val visits = queue.journey!!.visitRecords(queue.id)
-        val members = queue.journey.cycleRecords(queue.id)
+        val members = queue.journey.cycleRecords(queue.id).toList()
         try {
             db.queues().save(QueueLibrary(), target)
             val expected = snapshot(db)
@@ -58,7 +58,7 @@ class QueueJourneyInsertPersistenceTest {
                     assertForeignKeys(sql)
                     val writer = QueueJourneyWriter(sql::compileStatement)
                     writer.upsertVisits(visits)
-                    writer.upsertMembers(invalidMembers)
+                    writer.upsertMembers(invalidMembers.asSequence())
                 }
                 fail("Foreign-key failures must not become uniqueness repairs")
             } catch (error: SQLException) {
@@ -92,7 +92,7 @@ class QueueJourneyInsertPersistenceTest {
                 assertForeignKeys(sql)
                 val writer = QueueJourneyWriter(sql::compileStatement)
                 writer.upsertVisits(listOf(visit.copy(cycle = 99), newVisit, newVisit.copy(cycle = 3)))
-                writer.upsertMembers(listOf(member.copy(ordinal = 99), newMember, newMember.copy(visited = true)))
+                writer.upsertMembers(sequenceOf(member.copy(ordinal = 99), newMember, newMember.copy(visited = true)))
             }
             val after = db.queues().readQueues().single()
             assertEquals(before.visits.associateBy { it.token } + (newVisit.token to newVisit.copy(cycle = 3)),
@@ -109,11 +109,15 @@ class QueueJourneyInsertPersistenceTest {
     private fun library(): QueueLibrary {
         val track = Track("content://fixture", "Fixture", fileName = "fixture.mp3", relativePath = "fixture.mp3")
         val seed = QueueEdits.create(List(40) { track }, 10, "New-row repair")
-        val queue = seed.copy(journey = QueueJourney.start(seed.entries.map { it.id }, seed.currentEntryId, JourneyModes()))
+        val ids = seed.ids
+        val history = ids.take(20).map { QueueVisit(it, 0) }
+        val path = QueueJourney(history, history.lastIndex, visited = history.mapTo(hashSetOf()) { it.entryId },
+            plans = mapOf(0L to ids), modes = JourneyModes(shuffle = true), orderedTraversalId = "insert-fixture")
+        val queue = seed.copy(journey = path, currentEntryId = history.last().entryId)
         return QueueLibrary(listOf(queue), queue.id)
     }
 
-    private suspend fun snapshot(db: QueueDatabase) = Triple(db.queues().read(), db.queues().readActive(),
+    private suspend fun snapshot(db: QueueDatabase) = Pair(db.queues().readActive(),
         db.queues().readQueues().map { stored -> stored.copy(entries = stored.entries.sortedBy { it.id },
             journeys = stored.journeys.sortedBy { it.queueId }, visits = stored.visits.sortedBy { it.token },
             cycleMembers = stored.cycleMembers.sortedWith(compareBy<CycleMemberRecord> { it.cycle }.thenBy { it.entryId })) })

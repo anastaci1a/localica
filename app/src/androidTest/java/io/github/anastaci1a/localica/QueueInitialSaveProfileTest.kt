@@ -46,7 +46,7 @@ class QueueInitialSaveProfileTest {
                 Log.i("QueueSaveProfile", "trial=$trial entries=13000 stage=body-other nanos=${body - measured}")
                 assertEquals(13_000, stages.single { it.name == "entries-insert" }.rows)
                 assertEquals(13_000, stages.single { it.name == "tracks-encode" }.rows)
-                assertEquals(queue.journey!!.cycleRecords(queue.id).size,
+                assertEquals(queue.journey!!.cycleRecords(queue.id).count(),
                     stages.single { it.name == "cycle-write" }.rows)
                 assertTrue(total >= body)
                 assertTrue(body >= measured)

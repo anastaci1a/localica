@@ -29,7 +29,7 @@ class QueueSqlCountBenchmarkTest {
         repeat(3) { before = before.arrive(before.next!!.token, ids) }
         // A retained-row UPDATE diagnostic, not a mode transition: fresh shuffle deliberately
         // replaces planned tokens. Reverse concrete row order while keeping every existing key.
-        val after = before.copy(future = before.future.groupBy { it.cycle }.values.flatMap { it.reversed() },
+        val after = before.copy(history = before.history.reversed(),
             plans = before.plans.mapValues { (_, order) -> order.reversed() })
         val queue = seed.copy(journey = before, currentEntryId = before.current!!.entryId)
         val oldVisits = before.visitRecords(queue.id).associateBy { it.token }
@@ -41,13 +41,13 @@ class QueueSqlCountBenchmarkTest {
         val reverseVisits = forwardVisits.map { oldVisits.getValue(it.token) }
         val reverseMembers = forwardMembers.map { oldMembers.getValue(it.cycle to it.entryId) }
         val expected = forwardVisits.size + forwardMembers.size
-        assertEquals(2996, forwardVisits.size)
+        assertEquals(4, forwardVisits.size)
         assertEquals(3000, forwardMembers.size)
-        assertEquals(5996, expected)
+        assertEquals(3004, expected)
         suspend fun assertRows(journey: QueueJourney) {
             val stored = db.queues().read().active!!.journey!!
             assertEquals(journey.visitRecords(queue.id), stored.visitRecords(queue.id))
-            assertEquals(journey.cycleRecords(queue.id), stored.cycleRecords(queue.id))
+            assertEquals(journey.cycleRecords(queue.id).toList(), stored.cycleRecords(queue.id).toList())
             // Only the typed rows under comparison change; queue/journey metadata remains untouched.
             assertEquals(before.record(queue.id), stored.record(queue.id))
         }

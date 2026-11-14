@@ -10,7 +10,7 @@ class QueueJourneyWriterTest {
         val writer = QueueJourneyWriter { sql -> Statement(sql).also { statements += it } }
         val visits = List(6500) { VisitRecord("visit-$it", "queue", it, "entry-$it", it.toLong() - 2) }
         val members = List(13_000) { CycleMemberRecord("queue", it.toLong() - 2, "entry-$it", it, it % 2 == 0) }
-        writer.upsertVisits(visits); writer.upsertMembers(members)
+        writer.upsertVisits(visits); writer.upsertMembers(members.asSequence())
         assertEquals(2, statements.size)
         assertEquals("INSERT INTO `queue_visits` (`token`,`queueId`,`ordinal`,`entryId`,`cycle`) VALUES (?,?,?,?,?)", statements[0].sql)
         assertEquals(visits.map { listOf(it.token, it.queueId, it.ordinal.toLong(), it.entryId, it.cycle) }, statements[0].rows)
@@ -22,7 +22,7 @@ class QueueJourneyWriterTest {
     @Test fun emptyInsertsPrepareNothingAndNonSqlFailureClosesWithoutRepair() {
         val statements = mutableListOf<Statement>()
         val writer = QueueJourneyWriter { sql -> Statement(sql, failAt = 1).also { statements += it } }
-        writer.upsertVisits(emptyList()); writer.upsertMembers(emptyList())
+        writer.upsertVisits(emptyList()); writer.upsertMembers(emptySequence())
         assertTrue(statements.isEmpty())
         try { writer.upsertVisits(visits()); fail("The failure must propagate") } catch (_: IllegalStateException) { }
         assertEquals(1, statements.size)
@@ -43,16 +43,11 @@ class QueueJourneyWriterTest {
         val statements = mutableListOf<Statement>()
         val writer = QueueJourneyWriter { sql -> Statement(sql).also { statements += it } }
         val visits = List(13_000) { VisitRecord("visit-$it", "queue", it, "entry-${it % 2}", it.toLong() - 2) }
-        val members = List(13_000) { CycleMemberRecord("queue", it.toLong() - 2, "entry-${it % 2}", it, it % 2 == 0) }
         assertEquals(13_000, writer.updateVisits(visits))
-        assertEquals(13_000, writer.updateMembers(members))
-        assertEquals(2, statements.size)
+        assertEquals(1, statements.size)
         val visitStatement = statements[0]
         assertEquals("UPDATE OR ABORT `queue_visits` SET `token` = ?,`queueId` = ?,`ordinal` = ?,`entryId` = ?,`cycle` = ? WHERE `token` = ?", visitStatement.sql)
         assertEquals(visits.map { listOf(it.token, it.queueId, it.ordinal.toLong(), it.entryId, it.cycle, it.token) }, visitStatement.rows)
-        val memberStatement = statements[1]
-        assertEquals("UPDATE OR ABORT `queue_cycle_members` SET `queueId` = ?,`cycle` = ?,`entryId` = ?,`ordinal` = ?,`visited` = ? WHERE `queueId` = ? AND `cycle` = ? AND `entryId` = ?", memberStatement.sql)
-        assertEquals(members.map { listOf(it.queueId, it.cycle, it.entryId, it.ordinal.toLong(), if (it.visited) 1L else 0L, it.queueId, it.cycle, it.entryId) }, memberStatement.rows)
         assertTrue(statements.all { it.closed })
     }
 
@@ -61,7 +56,6 @@ class QueueJourneyWriterTest {
         var prepared = 0
         val writer = QueueJourneyWriter { prepared++; statement }
         assertEquals(0, writer.updateVisits(emptyList()))
-        assertEquals(0, writer.updateMembers(emptyList()))
         assertEquals(0, prepared)
         assertEquals(2, writer.updateVisits(visits()))
         assertEquals(1, prepared)

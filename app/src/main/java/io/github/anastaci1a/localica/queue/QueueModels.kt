@@ -19,7 +19,9 @@ data class ListeningQueue(
     val lastActivatedAt: Long = createdAt,
     val journey: QueueJourney? = null,
     val order: SavedOrder = SavedOrder(entries.map { it.id }),
-)
+) {
+    val ids: List<String> get() = entries.mapView(QueueEntry::id)
+}
 enum class QueueRepeat { Off, All, One }
 enum class SongEnd(val label: String) { Stop("Stop here"), NextPaused("Load next song and pause"), Next("Play next song"), Repeat("Repeat this song") }
 enum class QueueEnd(val label: String) { Stop("Stop here"), NextQueue("Go to next queue"), Repeat("Repeat this queue") }
@@ -53,7 +55,15 @@ data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val acti
 }
 data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?, val expandPlayer: Boolean = true, val sourceName: String = "All Songs", val playlistOrigins: List<String?> = emptyList())
 data class QueueUiState(val library: QueueLibrary = QueueLibrary(), val loading: Boolean = true,
-    val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null, val playerRequest: Long = 0, val browsedId: String? = null)
+    val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null, val playerRequest: Long = 0, val browsedId: String? = null) {
+    private fun fields() = listOf(loading, settings, pending, problem, playerRequest, browsedId)
+    override fun equals(other: Any?) = other === this || other is QueueUiState && library === other.library && fields() == other.fields()
+    override fun hashCode() = 31 * System.identityHashCode(library) + fields().hashCode()
+}
+
+// A new prepared journey must publish even when its durable fields equal a cold predecessor.
+internal fun QueueLibrary.reuse(previous: QueueLibrary): QueueLibrary = if (activeId == previous.activeId &&
+    queues.size == previous.queues.size && queues.indices.all { queues[it].journey === previous.queues[it].journey && queues[it] == previous.queues[it] }) previous else this
 
 /** Pure queue edits keep occurrence identity separate from the song's library identity. */
 object QueueEdits {

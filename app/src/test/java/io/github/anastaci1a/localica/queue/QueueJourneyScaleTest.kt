@@ -38,16 +38,16 @@ class QueueJourneyScaleTest {
             val modes = JourneyModes(shuffle = shuffle, loop = loop, reshuffle = true)
             var path = QueueJourney.start(ids, ids.first(), modes, Random(19))
             val plans = path.plans
-            assertEquals(if (loop) 3 else 1, plans.size)
+            assertEquals(if (loop && shuffle) 3 else 1, plans.size)
             plans.values.forEach { order ->
                 assertEquals(ids.size, order.size)
                 assertEquals(ids.toSet(), order.toSet())
                 if (!shuffle) assertEquals(ids, order)
             }
-            val tokens = path.future.associate { (it.cycle to it.entryId) to it.token }
+            val tokens = path.window().filterNot { it in path.history }.associate { (it.cycle to it.entryId) to it.token }
             path = path.reconcile(ids, path.current?.entryId, modes, Random(23))
             assertEquals(plans, path.plans)
-            path.future.forEach { assertEquals(tokens[it.cycle to it.entryId], it.token) }
+            path.window().filterNot { it in path.history }.forEach { assertEquals(tokens[it.cycle to it.entryId], it.token) }
             repeat(8) {
                 val next = path.next!!
                 path = path.arrive(next.token, ids, Random(29))

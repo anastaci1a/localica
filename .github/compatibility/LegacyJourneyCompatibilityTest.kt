@@ -41,7 +41,12 @@ class LegacyJourneyCompatibilityTest {
             setProjection(db)
             installHeaderCounter(db)
             val raw = snapshot(db)
-            assertEquals(original, db.queues().read())
+            val reopened = db.queues().read()
+            assertEquals(durable(original), reopened)
+            val loaded = reopened.active!!
+            assertEquals(original.active!!.journey!!.window().map { it.entryId to it.cycle },
+                loaded.journey!!.reconcile(loaded.entries.map { it.id }, loaded.currentEntryId, loaded.journey!!.modes)
+                    .window().map { it.entryId to it.cycle })
             assertEquals(raw, snapshot(db))
             assertEquals(0L, headerWrites(db))
             val renamed = original.update(original.active!!.copy(name = "Renamed", positionMs = 3456))
@@ -51,7 +56,7 @@ class LegacyJourneyCompatibilityTest {
             assertEquals(raw.first.single().visits, snapshot(db).first.single().visits)
             assertEquals(raw.first.single().cycleMembers, snapshot(db).first.single().cycleMembers)
             db.close(); db = open()
-            assertEquals(renamed, db.queues().read())
+            assertEquals(durable(renamed), db.queues().read())
             assertProjection(db, "candidate-generation", "removed-anchor")
 
             val journey = renamed.active!!.journey!!
@@ -63,12 +68,12 @@ class LegacyJourneyCompatibilityTest {
             db.queues().save(renamed, after)
             assertEquals(1L, headerWrites(db))
             assertProjection(db, null, null)
-            assertEquals(after, db.queues().read())
+            assertEquals(durable(after), db.queues().read())
             assertEquals(original.active!!.order, after.active!!.order)
             assertEquals(original.active!!.entries, after.active!!.entries)
             assertEquals(plays, statisticsRows(statistics))
             db.close(); db = open()
-            assertEquals(after, db.queues().read())
+            assertEquals(durable(after), db.queues().read())
             assertProjection(db, null, null)
         } finally {
             db.close(); statistics.close()
@@ -91,11 +96,11 @@ class LegacyJourneyCompatibilityTest {
             try { db.queues().save(before, after); fail("Header invalidation must roll back with visit failure") }
             catch (_: android.database.SQLException) { }
             assertEquals(raw, snapshot(db))
-            assertEquals(before, db.queues().read())
+            assertEquals(durable(before), db.queues().read())
             assertEquals(0L, headerWrites(db))
             db.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_legacy_visit")
             db.queues().save(before, after)
-            assertEquals(after, db.queues().read())
+            assertEquals(durable(after), db.queues().read())
             assertProjection(db, null, null)
             assertEquals(1L, headerWrites(db))
 
@@ -105,11 +110,16 @@ class LegacyJourneyCompatibilityTest {
             val modeChanged = after.update(after.active!!.copy(journey = shuffled))
             db.queues().save(after, modeChanged)
             assertProjection(db, null, null)
-            assertEquals(modeChanged, db.queues().read())
+            assertEquals(durable(modeChanged), db.queues().read())
             assertEquals(after.active!!.journey!!.current, shuffled.current)
             assertEquals(after.active!!.repeat, modeChanged.active!!.repeat)
         } finally { db.close() }
     }
+
+    // Schema 8 owns actual history and shuffled permutations; the bridge still derives a legacy future in memory.
+    private fun durable(library: QueueLibrary) = library.copy(queues = library.queues.map { queue ->
+        queue.copy(journey = queue.journey?.let { it.copy(future = emptyList(), plans = if (it.modes.shuffle) it.plans else emptyMap()) })
+    })
 
     private fun fixture(): QueueLibrary {
         val track = Track("same-track", "Duplicate", fileName = "same.mp3", relativePath = "same.mp3")

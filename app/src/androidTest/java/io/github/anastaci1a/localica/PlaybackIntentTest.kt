@@ -1343,7 +1343,13 @@ class PlaybackIntentTest {
         val arguments = InstrumentationRegistry.getArguments()
         val entries = arguments.getString("queueEntries", "13400")!!.toInt()
         val songs = arguments.getString("libraryTracks", "13400")!!.toInt()
-        fixture(attach = false, duplicateOccurrences = true, occurrences = entries, librarySize = songs, initialIndex = (entries - 10).coerceAtLeast(0), timeoutMs = 300000) {
+        fixture(attach = false, duplicateOccurrences = true, occurrences = entries, librarySize = songs, initialIndex = arguments.getString("initialIndex")?.toInt() ?: (entries - 10).coerceAtLeast(0), timeoutMs = 300000) {
+            val shuffle = arguments.getString("journeyShuffle", "false").toBoolean()
+            val loop = arguments.getString("journeyLoop", "false").toBoolean()
+            val reshuffle = arguments.getString("journeyReshuffle", "false").toBoolean()
+            queues.settings { it.copy(shuffle = shuffle, advancedRepeat = AdvancedRepeat(
+                queueEnd = if (loop) QueueEnd.Repeat else QueueEnd.Stop, reshuffle = reshuffle)) }
+            barrier()
             val runtime = Runtime.getRuntime()
             repeat(3) { runtime.gc(); delay(100) }
             val before = runtime.totalMemory() - runtime.freeMemory()
@@ -1369,7 +1375,7 @@ class PlaybackIntentTest {
             repeat(3) { runtime.gc(); delay(100) }
             val after = runtime.totalMemory() - runtime.freeMemory()
             val afterGc = android.os.Debug.getRuntimeStats()
-            val line = "entries=$entries tracks=$songs beforeBytes=$before peakBytes=${peak.get()} settledBytes=$after maxBytes=${runtime.maxMemory()} built=$built visits=${window.size} activationMs=$elapsed gcBefore=$beforeGc gcAfter=$afterGc"
+            val line = "entries=$entries tracks=$songs shuffle=$shuffle loop=$loop reshuffle=$reshuffle beforeBytes=$before peakBytes=${peak.get()} settledBytes=$after maxBytes=${runtime.maxMemory()} built=$built visits=${window.size} activationMs=$elapsed gcBefore=$beforeGc gcAfter=$afterGc"
             android.util.Log.i("Window957", line)
             File(nativeEvidenceDirectory("window-957", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)), "activation.txt").appendText(line + "\n")
             withContext(Dispatchers.Main) {
@@ -1396,13 +1402,13 @@ class PlaybackIntentTest {
                     override val size get() = queue.entries.size
                     override fun get(index: Int): QueueEntry { reads++; return queue.entries[index] }
                 }
-                val capture = QueueController::class.java.getDeclaredMethod("captureNativeState").apply { isAccessible = true }
+                val capture = QueueController::class.java.getDeclaredMethod("captureNativeState", kotlin.coroutines.Continuation::class.java).apply { isAccessible = true }
                 try {
                     player.engine.seekTo(2000)
                     state.value = before.copy(library = before.library.update(queue.copy(entries = counted, positionMs = 2001)))
                     assertSame(counted, state.value.library.active!!.entries)
                     reads = 0
-                    repeat(20) { capture.invoke(queues) }
+                    repeat(20) { kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> { capture.invoke(queues, it) } }
                     assertEquals("Routine capture must not inspect occurrence membership", 0, reads)
                     val captured = state.value.library.active!!
                     assertSame(queue.journey, captured.journey)
@@ -1423,8 +1429,8 @@ class PlaybackIntentTest {
             val before = state.value
             val queue = before.library.active!!
             val native = player.currentMediaItem!!
-            val capture = QueueController::class.java.getDeclaredMethod("capturedLibrary", Player::class.java).apply { isAccessible = true }
-            fun captureFrom(target: ListeningQueue, item: MediaItem, admitted: Boolean): QueueLibrary {
+            val capture = QueueController::class.java.getDeclaredMethod("capturedLibrary", Player::class.java, kotlin.coroutines.Continuation::class.java).apply { isAccessible = true }
+            suspend fun captureFrom(target: ListeningQueue, item: MediaItem, admitted: Boolean): QueueLibrary {
                 state.value = before.copy(library = before.library.update(target))
                 val source = object : ForwardingPlayer(player) {
                     override fun getCurrentMediaItem() = item
@@ -1433,7 +1439,7 @@ class PlaybackIntentTest {
                         return 4321
                     }
                 }
-                return capture.invoke(queues, source) as QueueLibrary
+                return kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn { capture.invoke(queues, source, it) }
             }
             try {
                 val extras = android.os.Bundle(native.mediaMetadata.extras).apply { putString("queueId", second.id) }
@@ -1595,19 +1601,33 @@ class PlaybackIntentTest {
         var database: androidx.room.RoomDatabase? = null
         try {
             fixture(attach = false, duplicateOccurrences = true, occurrences = entries, librarySize = songs,
-                initialIndex = entries - 10, timeoutMs = 300000, playbackStore = { tracks ->
+                initialIndex = arguments.getString("initialIndex")?.toInt() ?: entries - 10, timeoutMs = 300000, playbackStore = { tracks ->
                     val db = androidx.room.Room.inMemoryDatabaseBuilder(context, LibraryDatabase::class.java).build()
                     database = db
                     RoomLibraryStore(db.libraryDao()).also { store -> runBlocking {
                         store.replaceRoot(ScanResult(FolderSelection("file:///window-957", "Latency fixture"), tracks, 0))
                     } }
                 }) {
+                val shuffle = arguments.getString("journeyShuffle", "false").toBoolean()
+                val loop = arguments.getString("journeyLoop", "false").toBoolean()
+                val reshuffle = arguments.getString("journeyReshuffle", "false").toBoolean()
+                queues.settings { it.copy(shuffle = shuffle, advancedRepeat = AdvancedRepeat(
+                    queueEnd = if (loop) QueueEnd.Repeat else QueueEnd.Stop, reshuffle = reshuffle)) }
+                barrier()
                 queues.attach(player)
                 withTimeout(300000) {
                     while (!withContext(Dispatchers.Main) { player.engine.playbackState == Player.STATE_READY }) delay(10)
                 }
                 val captures = mutableListOf<Double>()
                 val acknowledgements = mutableListOf<Double>()
+                val runtime = Runtime.getRuntime()
+                val peak = java.util.concurrent.atomic.AtomicLong(runtime.totalMemory() - runtime.freeMemory())
+                val sampler = launch(Dispatchers.Default) {
+                    while (isActive) {
+                        peak.updateAndGet { maxOf(it, runtime.totalMemory() - runtime.freeMemory()) }
+                        delay(100)
+                    }
+                }
                 val gcBefore = android.os.Debug.getRuntimeStats()
                 val started = android.os.SystemClock.elapsedRealtimeNanos()
                 val done = CompletableDeferred<Unit>()
@@ -1629,17 +1649,17 @@ class PlaybackIntentTest {
                     }
                     queues.act(emptyList(), SongTap.Append) { done.complete(Unit) }
                 }
-                withTimeout(300000) { done.await() }
+                try { withTimeout(300000) { done.await() } } finally { sampler.cancelAndJoin() }
                 val elapsed = (android.os.SystemClock.elapsedRealtimeNanos() - started) / 1_000_000.0
                 withContext(Dispatchers.Main) {
                     assertEquals(20, acknowledgements.size)
                     assertEquals(20, captures.size)
                     assertNull(queues.state.value.problem)
-                    assertEquals("duplicate-" + (entries - 10), player.currentMediaItem!!.mediaId)
+                    assertEquals(first.currentEntryId, player.currentMediaItem!!.mediaId)
                 }
                 fun p95(values: List<Double>) = values.sorted()[kotlin.math.ceil(values.size * .95).toInt() - 1]
                 // The seek receipt immediately precedes capture(); its first native item-count read follows template publication.
-                val line = "entries=$entries tracks=$songs samples=20 queuedCommands=60 maxOutstandingSeeks=20 captureToPublishUpperP95Ms=${p95(captures)} acknowledgementP95Ms=${p95(acknowledgements)} drainMs=$elapsed captureSamples=$captures acknowledgementSamples=$acknowledgements gcBefore=$gcBefore gcAfter=${android.os.Debug.getRuntimeStats()}"
+                val line = "entries=$entries tracks=$songs shuffle=$shuffle loop=$loop reshuffle=$reshuffle peakBytes=${peak.get()} settledBytes=${runtime.totalMemory() - runtime.freeMemory()} maxBytes=${runtime.maxMemory()} samples=20 queuedCommands=60 maxOutstandingSeeks=20 captureToPublishUpperP95Ms=${p95(captures)} acknowledgementP95Ms=${p95(acknowledgements)} drainMs=$elapsed captureSamples=$captures acknowledgementSamples=$acknowledgements gcBefore=$gcBefore gcAfter=${android.os.Debug.getRuntimeStats()}"
                 android.util.Log.i("Latency957", line)
                 File(nativeEvidenceDirectory("window-957", context.getExternalFilesDir(null)), "latency.txt").appendText(line + "\n")
             }
@@ -1869,10 +1889,11 @@ class PlaybackIntentTest {
         override suspend fun clearJourney(id: String): Unit = error("save overridden")
         override suspend fun upsertVisits(visits: List<VisitRecord>): Unit = error("save overridden")
         override suspend fun updateVisits(visits: List<VisitRecord>): Int = error("save overridden")
-        override suspend fun upsertCycleMembers(members: List<CycleMemberRecord>): Unit = error("save overridden")
-        override suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int = error("save overridden")
+        override suspend fun upsertCycleMembers(members: Sequence<CycleMemberRecord>): Unit = error("save overridden")
+        override suspend fun updateVisited(id: String, cycle: Long, entries: List<String>, visited: Boolean): Int = error("save overridden")
+        override suspend fun clearCycle(id: String, cycle: Long): Unit = error("save overridden")
         override suspend fun deleteVisits(queueId: String, tokens: List<String>): Unit = error("save overridden")
-        override suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("save overridden")
+        override suspend fun deleteSparseMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("save overridden")
         override suspend fun insertEntries(entries: List<EntryRecord>): Unit = error("save overridden")
         override suspend fun clearEntries(id: String): Unit = error("save overridden")
         override suspend fun deleteQueue(id: String): Unit = error("save overridden")

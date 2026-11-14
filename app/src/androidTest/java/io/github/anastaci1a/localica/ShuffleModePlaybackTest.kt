@@ -85,6 +85,39 @@ class ShuffleModePlaybackTest {
         }
     }
 
+    @Test fun enablingShuffleAtTheMiddleSupportsPreviousAndSwipeThenRetracesAndExhausts() = fixture { f ->
+        f.queues.settings { it.copy(shuffle = false, repeat = QueueRepeat.Off) }
+        f.check { !f.queues.state.value.settings.shuffle }
+        f.committed()
+        val anchor = f.queues.state.value.library.active!!.journey!!.current!!
+        f.queues.shuffle()
+        f.check { f.queues.state.value.settings.shuffle }
+        f.committed()
+        val pending = f.queues.state.value.library.active!!.journey!!.window().filter { it.entryId in f.ids.drop(4) }
+            .associateBy { it.entryId }
+        assertEquals(listOf(anchor), f.queues.state.value.library.active!!.journey!!.history)
+        f.queues.previous(alwaysSong = true); f.at(2)
+        val previous = f.queues.state.value.library.active!!.journey!!.previous!!
+        val swiped = CompletableDeferred<Boolean>()
+        f.queues.swipeTo(previous.token) { swiped.complete(it) }
+        assertTrue(runBlocking { withTimeout(10000) { swiped.await() } })
+        f.at(1)
+        f.queues.previous(alwaysSong = true); f.at(0)
+        assertNull(f.queues.state.value.library.active!!.journey!!.previous)
+        for (index in 1..3) { f.queues.next(); f.at(index) }
+        assertEquals(anchor, f.queues.state.value.library.active!!.journey!!.current)
+        val remaining = mutableSetOf<String>()
+        repeat(3) {
+            val next = f.queues.state.value.library.active!!.journey!!.next!!
+            assertEquals(pending[next.entryId], next)
+            assertTrue(remaining.add(next.entryId))
+            f.queues.next(); f.at(f.ids.indexOf(next.entryId))
+        }
+        assertEquals(f.ids.drop(4).toSet(), remaining)
+        assertNull(f.queues.state.value.library.active!!.journey!!.next)
+        f.main { assertFalse(f.player.hasNextMediaItem()) }
+    }
+
     @Test fun offKeepsSimpleAndAdvancedRepeatPoliciesAndCurrentPosition() = fixture { f ->
         val choices = listOf(
             QueueSettings(shuffle = true),
@@ -525,10 +558,11 @@ private class ShuffleGateDao(private val delegate: QueueDao) : QueueDao() {
     override suspend fun clearJourney(id: String): Unit = error("Use save")
     override suspend fun upsertVisits(visits: List<VisitRecord>): Unit = error("Use save")
     override suspend fun updateVisits(visits: List<VisitRecord>): Int = error("Use save")
-    override suspend fun upsertCycleMembers(members: List<CycleMemberRecord>): Unit = error("Use save")
-    override suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int = error("Use save")
+    override suspend fun upsertCycleMembers(members: Sequence<CycleMemberRecord>): Unit = error("Use save")
+    override suspend fun updateVisited(id: String, cycle: Long, entries: List<String>, visited: Boolean): Int = error("Use save")
+    override suspend fun clearCycle(id: String, cycle: Long): Unit = error("Use save")
     override suspend fun deleteVisits(queueId: String, tokens: List<String>): Unit = error("Use save")
-    override suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("Use save")
+    override suspend fun deleteSparseMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("Use save")
     override suspend fun insertEntries(entries: List<EntryRecord>): Unit = error("Use save")
     override suspend fun clearEntries(id: String): Unit = error("Use save")
     override suspend fun deleteQueue(id: String): Unit = error("Use save")

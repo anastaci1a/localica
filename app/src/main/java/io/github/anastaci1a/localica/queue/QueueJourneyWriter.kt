@@ -7,20 +7,21 @@ import java.io.Closeable
 /** Uses the owning Room transaction and reuses typed statements without replacing existing rows. */
 internal class QueueJourneyWriter(private val compile: (String) -> SupportSQLiteStatement) {
     fun updateVisits(rows: List<VisitRecord>): Int = update(visits, rows)
-    fun updateMembers(rows: List<CycleMemberRecord>): Int = update(members, rows)
-    fun upsertVisits(rows: List<VisitRecord>) = upsert(visits, rows)
-    fun upsertMembers(rows: List<CycleMemberRecord>) = upsert(members, rows)
+    fun upsertVisits(rows: List<VisitRecord>) = upsert(visits, rows.asSequence())
+    fun upsertMembers(rows: Sequence<CycleMemberRecord>) = upsert(members, rows)
 
     private fun <T> update(sql: Rows<T>, rows: List<T>): Int {
         if (rows.isEmpty()) return 0
         return compile(sql.update).use { statement -> rows.sumOf { row -> statement.update(sql, row) } }
     }
 
-    private fun <T> upsert(sql: Rows<T>, rows: List<T>) {
-        if (rows.isEmpty()) return
+    private fun <T> upsert(sql: Rows<T>, rows: Sequence<T>) {
+        val iterator = rows.iterator()
+        if (!iterator.hasNext()) return
         compile(sql.insert).use { statement ->
             DeferredStatement { compile(sql.update) }.use { repair ->
-                for (row in rows) {
+                while (iterator.hasNext()) {
+                    val row = iterator.next()
                     sql.bind(statement, row)
                     try { statement.execute() } catch (error: SQLException) {
                         // Preserve pinned Room 2.7.2's uniqueness-only upsert repair, in the same row order.

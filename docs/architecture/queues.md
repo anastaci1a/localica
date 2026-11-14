@@ -51,7 +51,11 @@ Names are trimmed, case-insensitive and unique for create/rename/import without 
 
 ## Storage
 
-Traversal namespaces and real anchor tokens stabilize projected neighbours without inventing visits. Media3 receives a bounded window of tokened visits in traversal order. Legacy per-queue modes import once, then remain inert. Storage and compatibility tests own the migration cases.
+Traversal namespaces and real anchor tokens stabilize projected neighbours without inventing visits. Worker preparation derives one bounded window for Media3, transport and artwork from the physical order or retained shuffle permutations. Only actual and explicit visits belong to history.
+
+Schema 8 removes legacy generated visits before loading journeys, preserving real history, explicit forward requests and visited membership. Ordered traversal stores sparse membership; shuffled traversal retains at most three cycle permutations.
+
+Entries, history, membership and shuffle permutations still grow with the queue; pre-open migration still precedes usability. Legacy per-queue modes import once, then remain inert. Storage and compatibility tests own the migration cases.
 
 ## Tests
 

@@ -5,6 +5,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 
 internal val MediaItem.queueVisit: String? get() = mediaMetadata.extras?.getString("queueVisit")
+internal val MediaItem.visitReceipt: QueueVisit? get() = queueVisit?.let { QueueVisit(mediaId, mediaMetadata.extras!!.getLong("queueCycle"), it) }
 internal val MediaItem.listeningQueue: String? get() = mediaMetadata.extras?.getString("queueId")
 
 /** Resolved templates and visit decorations belong to the native window. */
@@ -43,6 +44,7 @@ internal class QueueTimeline {
             val extras = Bundle(item.mediaMetadata.extras ?: Bundle()).apply {
                 putString("queueId", queue.id)
                 putString("queueVisit", visit.token)
+                putLong("queueCycle", visit.cycle)
             }
             item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build()).build()
         } }
