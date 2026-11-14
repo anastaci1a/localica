@@ -1,6 +1,6 @@
-<!-- Release: v0.34.4 -->
+<!-- Release: v0.34.5 -->
 
-# Release v0.34.4
+# Release v0.34.5
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,38 +8,31 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
-- Keep a bottom-bar popup (search/…) above the mini player and tab bar for its whole plain close. Only a page takeover, such as opening Settings, hands the popup to its page.
-- Export each song's latest file modification time and the modification time first seen when Localica indexed it (library data version 1.2). Neither is ever imported; 1.0 and 1.1 files still import. Songs indexed before this release record the first-seen value from their stored modification time during the upgrade.
-- Make the scrollbar thumb active the moment a touch lands on it, with only two states (active and inactive). A row button under it, such as ⋯, keeps its plain taps, and dragging in a submenu no longer jumps to the top and back.
-- Remove glass sampling code left unused by the Single-Tone removal. Glass output is unchanged.
-- Restructure the documentation into model-first architecture, interface and development pages.
-- App Kotlin/Java source: 53,171 lines versus 53,357 in v0.34.3, a reduction of 186 lines.
-- Reduce inherited UI debt from 1,474 to 1,468: RawUiMotion 346 → 344, RawPresentationTransform 134 → 132, RawShadowOrZOrder 31 → 30 and NonPresetScreenLayout 282 → 281. No new overrides.
+- Album carousel tiles retain taps and holds when they overlap the scrollbar thumb. The scrollbar still drags.
+- A fresh single-song drag keeps its selection presentation stable through release and saving, avoiding the Queue's bottom-edge jump.
+- Remove redundant scrollbar keys and attachment checks. Keep existing UI debt anchors aligned with their unchanged constructs.
+- App Kotlin/Java source: 53,185 lines versus 53,171 in v0.34.4, an increase of 14 lines. The selection lease binds to the existing drag transaction without adding mutable state.
+- Inherited UI debt stays at 1,468, with zero new overrides: IndependentUiClock 86, LiteralUiSpacing 484, MotionReadInComposition 4, NonPresetScreenLayout 281, RawMotionMap 40, RawPresentationTransform 132, RawShadowOrZOrder 30, RawUiMotion 344, ReplacePersistentShape 7, UiLayerDependency 6, UnownedSurfaceLifetime 54. All other rule counts are zero.
 
 ## Resolved issues
 
-- [#926](https://github.com/anastaci1a/localica/issues/926): A bottom-bar popup's plain close no longer retracts behind the mini player and tab bar.
-- [#937](https://github.com/anastaci1a/localica/issues/937): Remove the glass sampling scaffolding left dead by the Single-Tone removal.
-- [#943](https://github.com/anastaci1a/localica/issues/943): Library export carries each file's modification time, and the first-seen record keeps the modification time at first sight.
-- [#950](https://github.com/anastaci1a/localica/issues/950): The scrollbar no longer steals plain taps on row buttons it overlaps.
-- [#951](https://github.com/anastaci1a/localica/issues/951): A scrollbar drag in a submenu no longer snaps to the top on drag start.
-- [#952](https://github.com/anastaci1a/localica/issues/952): The scrollbar activates immediately on press and has two states, active and inactive.
-- [#929](https://github.com/anastaci1a/localica/issues/929): Restructure the documentation into small model-first pages, with rules and architecture in the repository.
+- [#949](https://github.com/anastaci1a/localica/issues/949): A fresh one-song Queue drag no longer reveals a transient selection panel and jumps at release.
+- [#953](https://github.com/anastaci1a/localica/issues/953): Album carousel tiles under the scrollbar keep their normal tap and hold behavior.
+- [#954](https://github.com/anastaci1a/localica/issues/954): The prefetch probe did not reproduce thumb blocking; remove redundant scrollbar keys and attachment guards.
+- [#956](https://github.com/anastaci1a/localica/issues/956): The UI lint gate pairs repeated identical incidents in line order when existing anchors move.
 
 ## Known issues and follow-ups
 
-- [#895](https://github.com/anastaci1a/localica/issues/895): Existing UI architecture findings remain under a ratchet; new overrides are forbidden and inherited counts may only decrease.
-- [#938](https://github.com/anastaci1a/localica/issues/938): An API 36 CI shard can lose its shared app/instrumentation process; exit-reason capture is in place while the cause is investigated.
-- [#947](https://github.com/anastaci1a/localica/issues/947): QueueLibraryHeapTest can exhaust the 192 MB test heap when it runs late in a long shard process; release runs isolate it in its own process (the 192 MB limit is unchanged) while the cross-test retention is investigated.
-- [#738](https://github.com/anastaci1a/localica/issues/738): The API 36 CI emulator can disappear mid-instrumentation.
+- [#957](https://github.com/anastaci1a/localica/issues/957): Large queues can exhaust memory during activation, dragging or saving; the million-entry case remains unresolved. The completed matched drag fixture covers 30,000 queue occurrences and 13,400 library tracks.
+- [#904](https://github.com/anastaci1a/localica/issues/904): Popup capture admission can fail intermittently in API 26 instrumentation.
 - [#955](https://github.com/anastaci1a/localica/issues/955): TestProcessAccessibilityLaunchTest can fail on API 26 when a framework accessibility NullPointerException escapes its guard in CI.
-- [#787](https://github.com/anastaci1a/localica/issues/787): LastFmGroupListTest can fail to scroll at the largest font in RTL in full runs.
-- [#940](https://github.com/anastaci1a/localica/issues/940): Re-tapping Sort or View while its popup is closing is ignored instead of reopening it.
-- [#920](https://github.com/anastaci1a/localica/issues/920): Reversing the bottom popup during opening can exceed its cross-axis band; reversal work remains deferred.
+- [#920](https://github.com/anastaci1a/localica/issues/920): Popup opening reversal work remains pending; neither step is included in this release.
+- [#895](https://github.com/anastaci1a/localica/issues/895): Existing UI architecture findings remain under a ratchet; new overrides are forbidden and inherited counts may only decrease.
+- [#947](https://github.com/anastaci1a/localica/issues/947): QueueLibraryHeapTest can exhaust the test heap late in a shard; release runs isolate it while retention is investigated.
 - The 8.3 ms whole-frame performance objective remains unmet and unchanged. Functional acceptance does not qualify frame timing.
 
 ## Install
 
-1. Download `localica-v0.34.4-pre-release.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.34.5-pre-release.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
