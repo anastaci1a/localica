@@ -472,13 +472,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         !anchor.chromeTrigger
     SideEffect {
         motion.updateSpeed(speed)
-        if (departingHold) {
-            motion.hold()
-            motion.show(false)
-        } else {
-            motion.release()
-            motion.show(visible)
-        }
+        if (departingHold || !visible && !childHome.handedOff) motion.hold() else motion.release()
+        motion.show(visible)
     }
     var searchHeightLimit by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(Int.MAX_VALUE) }
     val dismissNow: () -> Unit = {
