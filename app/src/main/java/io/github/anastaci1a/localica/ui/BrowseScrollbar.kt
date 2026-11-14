@@ -95,9 +95,9 @@ private fun ListScrollbar(state: Any, scrollable: () -> Boolean, frame: () -> Sc
     LaunchedEffect(active, transit) {
         if (active && transit != null) transit.during(true) { awaitCancellation() }
     }
-    val slop = LocalViewConfiguration.current.touchSlop
-    // A shared button under the press keeps taps and holds; vertical travel before the hold lock is the bar's (#950).
-    fun claim(root: Offset) = if (owner?.buttonAt(root) != true) null else ControlGestureIntent(slop, ControlScrollDirection.Vertical)
+    val (slop, hold) = LocalViewConfiguration.current.run { touchSlop to longPressTimeoutMillis }
+    // A shared button under the press keeps taps and holds; vertical travel before its long-press is the bar's (#950, #959).
+    fun claim(root: Offset) = if (owner?.buttonAt(root) != true) null else ControlGestureIntent(slop, ControlScrollDirection.Vertical, hold)
         .let { i -> { t: Offset, ms: Long -> i.move(t.x, t.y, ms).takeIf { it != ControlGestureOwner.Pending }?.let { it == ControlGestureOwner.Scroll } } }
     // Read in the layout, draw and semantics phases, so scrolling never recomposes the scrollbar.
     fun fraction() = model.observe(frame())
