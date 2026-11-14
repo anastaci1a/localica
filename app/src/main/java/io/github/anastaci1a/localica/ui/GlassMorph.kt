@@ -641,7 +641,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         awaitReturnedPresentation()
                         if (!gateCurrent()) continue@gateLoop
                     }
-                    anchor.advance(PopupTakeover.Closed, PopupTakeover.Restoring)
+                    // A reopen keeps Restoring and its window; the opening gate admits it again (T11).
+                    if (!visible) anchor.advance(PopupTakeover.Closed, PopupTakeover.Restoring)
                 }
                 if (!gateCurrent()) continue@gateLoop
                 motion.expansion.acknowledgeNativeGate(generation)
