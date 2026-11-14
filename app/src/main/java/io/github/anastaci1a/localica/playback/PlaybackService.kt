@@ -47,8 +47,6 @@ class PlaybackService : MediaSessionService() {
                         super.onConnect(session, controller)
                     } else MediaSession.ConnectionResult.reject()
                 }
-                override fun onPlaybackResumption(session: MediaSession, controller: MediaSession.ControllerInfo, isForPlayback: Boolean) =
-                    PlaybackResumption.ownedByQueueController()
             }).build()
     }
 
@@ -88,19 +86,6 @@ class PlaybackService : MediaSessionService() {
             try { closingPlayer.release() } finally { afterRelease() }
         }
     }
-}
-
-/**
- * A MEDIA_BUTTON play key can cold-start this service before the saved queue is on the player. QueueController already restores
- * that queue (off Main, windowed at any scale) when it attaches in onCreate, and its actor orders the key's play() after the
- * restore. Handing Media3 a copy of the items would race that timeline, so resumption declines with
- * UnsupportedOperationException: Media3 then plays through the queue-owned transport, which activates the restored queue.
- */
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-internal object PlaybackResumption {
-    fun ownedByQueueController(): com.google.common.util.concurrent.ListenableFuture<MediaSession.MediaItemsWithStartPosition> =
-        com.google.common.util.concurrent.Futures.immediateFailedFuture(
-            UnsupportedOperationException("Queue restore is owned by QueueController; play() resumes it."))
 }
 
 /** Overrides route queue-owned transport commands through QueueController; other Player calls remain delegated. */

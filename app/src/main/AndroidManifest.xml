@@ -35,8 +35,7 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
-        <!-- Headset and Bluetooth keys, and launchers such as Samsung Sound Assistant's "Favourite media app" (#828),
-             resolve MEDIA_BUTTON; the receiver cold-starts PlaybackService, which resumes the last queue. -->
+        <!-- #828: Sound Assistant's Favourite media app lists MEDIA_BUTTON receivers; a cold play key resumes the queue QueueController restores. -->
         <receiver android:name="androidx.media3.session.MediaButtonReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
