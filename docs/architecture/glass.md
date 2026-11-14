@@ -6,7 +6,7 @@ Glass is one material drawn by one of two renderers: Normal (lens) or None (flat
 - Constant volume (Proposed): thickness is derived as resting volume divided by footprint area.
 - The optics formula is frozen. Only its inputs change over time.
 - The lens needs Android 13 or newer. Older versions draw the average colour.
-- Status: renderers and fallbacks are Implemented. Presence, constant volume and lensing in (#928) and touch light (#642) are Proposed.
+- Status: renderers and fallbacks are Implemented. Stage 1 finger-origin touch light (#642) is Implemented. Presence, constant volume and lensing in (#928) remain Proposed.
 
 A third renderer, Single-Tone Blur, existed up to v0.34.2 as a testing mode. Its removal (#919) is Released in v0.34.3, and stored choices migrate to Normal. This page does not describe it.
 
@@ -38,6 +38,8 @@ t = \frac{V_{\mathrm{rest}}}{A_{\mathrm{footprint}}}
 $$
 
 Spreading thins the material. Morphing changes resting volume between shapes; it is not a press deformation. Presence alone changes material quantity. Current press thickness/growth remain independent.
+
+A held glass surface adds a radial light centred on the initiating finger, including while it moves outside the control. The existing shared coating draws the fill and illuminated rim inside the silhouette; lens optics stay unchanged. The light rises over 100 ms and settles to zero over 270 ms. Reduce motion snaps it. Glass appearance controls its strength from Off to Full. Neighbour spread and other touch-response changes remain Proposed in #642.
 
 ## The lens model
 

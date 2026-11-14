@@ -27,6 +27,7 @@ Two/three-option choices use equal inline segments when labels fit; larger choic
 | Control | Range and default |
 | --- | --- |
 | Glass renderer | Normal (default) or None. Older stored values migrate to Normal. Single-Tone Blur, a testing mode, was removed in v0.34.3 (#919, Released). |
+| Touch light | Finger-origin illumination, Off to Full (default Full). |
 | Blur, white tint | Clear through frosted. Defaults are light. |
 | Shape damping | 2–40, default 8. |
 | Resting depth | 0.6–2, default 1.35. |

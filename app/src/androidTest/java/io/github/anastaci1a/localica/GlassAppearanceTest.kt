@@ -75,7 +75,7 @@ class GlassAppearanceTest {
         val original = prefs.read()
         try {
             val glass = GlassAppearance(.73f, .18f, .04f, .91f, .35f, TabLensStyle.Overlay, .81f, .23f, 3f, 1.7f, 1.4f, .22f,
-                controlExpansion = 1.9f, overlayDarkening = .2f, overlayForeground = true)
+                controlExpansion = 1.9f, overlayDarkening = .2f, overlayForeground = true, touchLight = .37f)
             prefs.write(original.copy(glass = glass))
             assertEquals(glass, InterfacePreferences(context).read().glass)
             prefs.write(original.copy(glass = GlassAppearance(-1f, 2f, Float.NaN, Float.POSITIVE_INFINITY)))

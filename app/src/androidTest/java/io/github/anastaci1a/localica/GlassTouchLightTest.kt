@@ -32,14 +32,14 @@ class GlassTouchLightTest {
     private fun pixels(image: ImageBitmap): IntArray = IntArray(image.width * image.height).also {
         image.asAndroidBitmap().getPixels(it, 0, image.width, 0, 0, image.width, image.height)
     }
-    private fun render(point: Offset, alpha: Float, radius: Float, circle: Boolean, cache: GlassRimCache = GlassRimCache()): IntArray {
+    private fun render(point: Offset, alpha: Float, radius: Float, circle: Boolean, cache: GlassRimCache = GlassRimCache(), rimGain: Float = 2f): IntArray {
         val image = ImageBitmap(width, height)
         try {
             CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
                 drawRect(background)
                 val path = Path().apply { if (circle) addOval(Rect(Offset(8f, 0f), Size(80f, 80f)))
                     else addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(18f))) }
-                clipPath(path) { if (alpha > 0f) drawContactLight(point, path, alpha, GlassTone(), cache, radius) }
+                clipPath(path) { if (alpha > 0f) drawContactLight(point, path, alpha, GlassTone(), cache, radius, rimGain) }
             }
             return pixels(image)
         } finally { image.asAndroidBitmap().recycle() }
@@ -51,15 +51,37 @@ class GlassTouchLightTest {
         val radius = extent.center.getDistance()
         val dark = render(extent.center, 0f, radius, true)
         val lit = render(extent.center, .12f, radius, true)
+        var realError = 0f; var byteError = 0; var worst = ""
         for (y in 0 until height) for (x in 0 until width) {
             val distance = (Offset(x + .5f, y + .5f) - extent.center).getDistance()
             if (distance > 41f) assertEquals("outside $x,$y", dark[y * width + x], lit[y * width + x])
             if (distance < 35f) for (shift in listOf(0, 8, 16)) {
                 val base = channel(dark[y * width + x], shift)
                 val expected = base + (255 - base) * .12f * (1 - distance / radius)
-                assertEquals("SrcOver $x,$y channel $shift", expected, channel(lit[y * width + x], shift).toFloat(), 1f)
+                val actual = channel(lit[y * width + x], shift)
+                val error = abs(expected - actual)
+                if (error > realError) { realError = error; worst = "$x,$y channel=$shift expected=$expected actual=$actual" }
+                byteError = max(byteError, abs(expected.roundToInt() - actual))
             }
         }
+        val fillOnly = render(extent.center, .12f, radius, false, rimGain = 0f)
+        val both = render(extent.center, .12f, radius, false)
+        val maxima = IntArray(3); val witnesses = Array(3) { "" }
+        for (y in 18 until height - 18) for (x in listOf(0, width - 1)) for (shift in listOf(0, 8, 16)) {
+            val falloff = 1 - (Offset(x + .5f, y + .5f) - extent.center).getDistance() / radius
+            val base = channel(background.toArgb(), shift)
+            val fill = channel(fillOnly[y * width + x], shift)
+            val actual = channel(both[y * width + x], shift)
+            val expected = listOf(base + (255 - base) * .12f * falloff,
+                fill + (255 - fill) * .24f * falloff,
+                255 - (255 - base) * (1 - .12f * falloff) * (1 - .24f * falloff))
+            for (i in 0..2) {
+                val error = abs(expected[i].roundToInt() - if (i == 0) fill else actual)
+                if (error > maxima[i]) { maxima[i] = error; witnesses[i] = "$x,$y channel=$shift expected=${expected[i]} fill=$fill actual=$actual" }
+            }
+        }
+        android.util.Log.i("Localica642", "analytic realMax=$realError roundedMax=$byteError worst=$worst; straightRim fill/second/composed=${maxima.toList()} witnesses=${witnesses.toList()}")
+        assertTrue("SrcOver realMax=$realError roundedMax=$byteError worst=$worst", realError <= 1f)
         val atCenter = diff(lit, dark, 48, 40, 16)
         val nearEdge = diff(lit, dark, 48, 4, 16)
         val atRim = diff(lit, dark, 48, 0, 16)
@@ -70,6 +92,7 @@ class GlassTouchLightTest {
 
     @Test fun centeredAndMirroredContactsKeepBothAxesSymmetricAndReusePreparation() {
         val radius = extent.center.getDistance()
+        val maxima = IntArray(3); val witnesses = Array(3) { "" }
         for (circle in listOf(false, true)) {
             val cache = GlassRimCache()
             val dark = render(extent.center, 0f, radius, circle)
@@ -78,14 +101,20 @@ class GlassTouchLightTest {
             val right = render(Offset(72f, 40f), .12f, radius, circle, cache)
             for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16)) {
                 val delta = diff(lit, dark, x, y, shift)
-                assertTrue(abs(delta - diff(lit, dark, width - 1 - x, y, shift)) <= 1)
-                assertTrue(abs(delta - diff(lit, dark, x, height - 1 - y, shift)) <= 1)
-                assertTrue(abs(diff(left, dark, x, y, shift) - diff(right, dark, width - 1 - x, y, shift)) <= 1)
+                val errors = listOf(abs(delta - diff(lit, dark, width - 1 - x, y, shift)),
+                    abs(delta - diff(lit, dark, x, height - 1 - y, shift)),
+                    abs(diff(left, dark, x, y, shift) - diff(right, dark, width - 1 - x, y, shift)))
+                for (i in 0..2) if (errors[i] > maxima[i]) {
+                    maxima[i] = errors[i]
+                    witnesses[i] = "circle=$circle channel=$shift ($x,$y) pairedWith=${if (i == 1) x else width - 1 - x},${if (i == 1) height - 1 - y else y} first=${if (i == 2) diff(left, dark, x, y, shift) else delta} second=${if (i == 0) diff(lit, dark, width - 1 - x, y, shift) else if (i == 1) diff(lit, dark, x, height - 1 - y, shift) else diff(right, dark, width - 1 - x, y, shift)} error=${errors[i]}"
+                }
             }
             assertSame(cache.light(Offset.Zero, radius, GlassTone()), cache.light(extent.center, radius * 2, GlassTone()))
             assertSame(cache.lightStroke(2.6f), cache.lightStroke(2.6f))
             assertNotSame(cache.light(Offset.Zero, radius, GlassTone()), cache.light(Offset.Zero, radius, GlassTone(.25f)))
         }
+        android.util.Log.i("Localica642", "symmetry x/y/mirrorMax=${maxima.toList()} worstPairs=${witnesses.toList()}")
+        for (i in 0..2) assertTrue("symmetry axis=$i max=${maxima[i]} pair=${witnesses[i]}", maxima[i] <= 1)
     }
 
     @Test fun actualSurfaceReturnsByteExactlyAfterReleaseAndStrengthZeroDrawsNothing() {
