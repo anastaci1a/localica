@@ -87,9 +87,9 @@ internal class GlassAnchor : PopupTakeoverOwner {
     fun admit(flight: GlassPopupFlight) { popup = flight }
     fun release(flight: GlassPopupFlight) { if (popup === flight) popup = null }
     // Derived views notify readers only when their own value changes, as the flags they replace did.
-    val present by derivedStateOf { takeover != PopupTakeover.Closed }
+    val present by derivedStateOf { popup?.present == true }
     val hidden by derivedStateOf { expanded }
-    val modalPresent by derivedStateOf { takeover >= PopupTakeover.InWindow }
+    val modalPresent by derivedStateOf { popup?.modalPresent == true }
     var surfaceNode: SurfaceView? by mutableStateOf(null)
     var returningNode: SurfaceView? = null
     var popupHome: GlassPopupHome? = null

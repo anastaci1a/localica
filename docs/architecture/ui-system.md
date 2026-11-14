@@ -18,7 +18,7 @@ Every screen is built from one shared UI system. `ui.engine` owns motion, clocks
 
 A screen passes a role and content. `TriggerRole` is content identity only: the shared components alone map a role to motion and rendering policy. `LocalicaEngineRoot` installs the engine once at the root.
 
-Each retained popup flight owns its takeover and expansion; its trigger exposes the current flight. A trigger has one live physical surface: a newer flight may be logically admitted, but binds that surface only after the previous expansion completes its existing return. Disposing the waiting flight cancels its admission without retiring the previous one.
+Each retained popup flight owns its takeover and expansion; its trigger exposes the current flight. A trigger has one live physical surface: a newer flight may be logically admitted, but binds that surface only after the previous expansion completes its existing return or detached-window retirement. Readiness observes engine changes and native window detachment; dismissing or disposing the waiting flight cancels its listeners without retiring the previous one.
 
 ## Rules for screens
 

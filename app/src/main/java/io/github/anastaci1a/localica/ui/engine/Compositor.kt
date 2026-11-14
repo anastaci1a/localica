@@ -34,7 +34,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     /** The host's draw-pass receipt writes plain fields only (no snapshot state in draw); true when a queued transfer waits for [admit] on the next frame. */
     internal fun receipt(): Boolean { generation++; return registered.values.any { it.waiting } }
     internal fun admit() { clock.checkMutation(); casters.forEach { it.advance() } }
-    internal var layout: LayoutCoordinates?=null; internal var view: android.view.View?=null; internal var revision by mutableIntStateOf(0)
+    internal var layout: LayoutCoordinates?=null; internal var view by mutableStateOf<android.view.View?>(null); internal var revision by mutableIntStateOf(0)
 }
 /** U04.01a foundation (no production caller before U04.01b/U11.00, D03). The field has one [owner] plane: the destination from the moment its transfer starts, the source again only once a reversal settles there (D27). w is the continuous exclusion weight of [high] against 1−w of [low] (D27/D29): at most {low, high, pending}; A→B→A reverses w, a third plane waits for w to settle and for its draw receipt (D28). */
 /** One return request, fenced to the actual host, source attachment and expansion gate.
@@ -43,7 +43,7 @@ internal class OwnedFieldRequest(val plane: ShadowPlane,val sourceGeneration: Lo
     var submitted by mutableStateOf(false); internal set
 }
 @Stable class SurfaceNode internal constructor(private val clock: UiClock,override val key: Any,override val shape: ShapeView,initial: SurfaceTarget,home: ShadowPlane): SurfaceView {
-    private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx.also { require(home.sameClock(clock)) { "A surface and its home share one clock" } }; private var low by mutableStateOf<ShadowPlane?>(home); private var owner by mutableStateOf(home); private var high: ShadowPlane?=null; private var pending: Triple<ShadowPlane,Long,MotionProfileId>?=null; private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false; internal val isDisposed get()=disposed
+    private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx.also { require(home.sameClock(clock)) { "A surface and its home share one clock" } }; private var low by mutableStateOf<ShadowPlane?>(home); private var owner by mutableStateOf(home); private var high by mutableStateOf<ShadowPlane?>(null); private var pending by mutableStateOf<Triple<ShadowPlane,Long,MotionProfileId>?>(null); private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false; internal val isDisposed get()=disposed
     override var stratum by mutableStateOf(initial.stratum); private set; internal var role by mutableStateOf(initial.shadow); private set
     private val ownOpacity=MotionFloat(clock,initial.opacity,1f,0.0..1.0,key to "opacity"); private var following by mutableStateOf<SurfacePhase?>(null)
     override val opacity: MotionValue get()=following?.opacity?:ownOpacity
@@ -111,6 +111,7 @@ internal class OwnedFieldRequest(val plane: ShadowPlane,val sourceGeneration: Lo
     /** The closed popup's window is gone: its plane and any queued transfer to it give the field back to the source host, which draws it again. */
     private fun returned()=owner===low && high==null && pending==null
     private fun stalePlanes()=listOfNotNull(high,pending?.first,owner).filter { it!==low }.distinct()
+    internal fun staleWindows()=stalePlanes().mapNotNull { it.view }
     private fun abandonReturn() { val home=low ?: return; val stale=stalePlanes(); fieldRequest=null; pending=null; high=null; owner=home; home.enter(this); stale.forEach { it.leave(this) }; home.requestDraw() }
     private fun revive() { dismissed=false; if(retired) { retired=false; listOfNotNull(low,high).forEach { it.enter(this) } } }
     private fun followLifetime(intent: Boolean=false) { if(disposed) return; if(intent) fieldRequest=null; val f=following?:return; if(f.opacity.target>0f) { if(intent && dismissed) revive() } else if(dismissed && f.opacity.settled && f.opacity.target==0f) retire(); if(!retired) advance() }
