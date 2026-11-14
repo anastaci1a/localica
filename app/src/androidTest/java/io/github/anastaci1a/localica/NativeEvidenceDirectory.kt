@@ -7,5 +7,6 @@ import java.io.File
 internal fun nativeEvidenceDirectory(name: String, fallback: File?): File {
     val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
         ?.takeIf { it.isNotBlank() } ?: return requireNotNull(fallback)
+    InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)
     return File(output, name).apply { mkdirs() }
 }

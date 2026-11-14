@@ -24,13 +24,11 @@ class LibraryPlaybackReadTest {
             override suspend fun updateMetadata(track: Track): Unit = error("No writes")
         }
         val original = store.playbackSnapshot(setOf("absent"))
-        assertSame(first, original.fullSnapshot)
         assertSame(first.tracks, original.tracks)
         assertEquals(2, original.totalTracks)
         val next = LibrarySnapshot(tracks = listOf(song("three")))
         stream.value = next
         val latest = store.playbackSnapshot(emptySet())
-        assertSame(next, latest.fullSnapshot)
         assertSame(next.tracks, latest.tracks)
         assertEquals(1, latest.totalTracks)
     }

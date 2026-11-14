@@ -213,27 +213,20 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, val 
             d.destinations = visualBounds()
             d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
             val saved = if (cancel) false else withTimeoutOrNull(5000) { result.await() } == true
-            if (!saved && !cancel) {
+            if (saved && !optimisticCommit) {
+                // Publish-before-acknowledgement controllers are authoritative. Never hide new
+                // identities (or resurrect removed ones) behind the pointer's original snapshot.
+                withFrameNanos { }; withFrameNanos { }
+            }
+            if ((!saved && !cancel) ||
+                (saved && !optimisticCommit && items.map { keyOf(it) } != expected.map { keyOf(it) })) {
                 d.returnFrom = d.destinations
                 d.landing.snapTo(0f)
                 d.dropItems = items
                 withFrameNanos { }; withFrameNanos { }
                 d.destinations = visualBounds()
                 d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
-            }
-            if (saved && !optimisticCommit) {
-                // Publish-before-acknowledgement controllers are authoritative. Never hide new
-                // identities (or resurrect removed ones) behind the pointer's original snapshot.
-                withFrameNanos { }; withFrameNanos { }
-                if (items.map { keyOf(it) } != expected.map { keyOf(it) }) {
-                    d.returnFrom = d.destinations
-                    d.landing.snapTo(0f)
-                    d.dropItems = items
-                    withFrameNanos { }; withFrameNanos { }
-                    d.destinations = visualBounds()
-                    d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
-                } else d.dropItems = items
-            }
+            } else if (saved && !optimisticCommit) d.dropItems = items
             if (saved && drag === d && optimisticCommit && items.map { keyOf(it) } != expected.map { keyOf(it) }) {
                 optimisticBase = items.map { keyOf(it) }
                 optimistic = expected

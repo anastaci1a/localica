@@ -203,6 +203,45 @@ class ScrollbarRowInputTest {
         compose.mainClock.autoAdvance = true
     }
 
+    /** #959: between the control hold lock and the button's long-press; event time drives the dispatcher's clock too. */
+    private fun midHold() = ((ControlHoldLockMillis + longPress) / 2)
+        .also { assertTrue("Fixture: the hold clears the control lock by two frames", it - ControlHoldLockMillis >= 32) }
+
+    @Test fun holdThenVerticalDragFromARowButtonUnderTheThumbBecomesAScrollbarDrag() {
+        host()
+        val at = thumbOverRowButton()
+        val index = compose.runOnIdle { state.firstVisibleItemIndex }
+        val hold = midHold()
+        bar().performTouchInput { down(at); advanceEventTime(hold); moveBy(Offset(0f, 130f)) }
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        compose.runOnIdle { assertTrue("The scrollbar owns a drag after a short hold (#959)", transit.active) }
+        bar().performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(400)
+        compose.runOnIdle {
+            assertTrue("The drag moved the list by the thumb", state.firstVisibleItemIndex > index + 5)
+            assertEquals(0, buttonTaps); assertEquals(0, buttonHolds); assertEquals(0, rowHolds)
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun movementAfterTheButtonLongPressStaysWithTheButton() {
+        host()
+        val at = thumbOverRowButton()
+        val before = compose.runOnIdle { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+        val rest = thumbColour()
+        bar().performTouchInput { down(at); advanceEventTime(longPress + 100); moveBy(Offset(0f, 130f)) }
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        assertEquals(rest, thumbColour())
+        compose.runOnIdle { assertFalse("The bar never takes travel after the long-press", transit.active) }
+        bar().performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(400)
+        compose.runOnIdle {
+            assertEquals("The button keeps its long-press", 1, buttonHolds)
+            assertEquals(before, state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset)
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun aPressWithNoButtonActivatesAtOnceAndEveryPixelMovesTheThumb() {
         host()
         compose.revealScrollbar(state)
@@ -312,6 +351,38 @@ class ScrollbarRowInputTest {
         compose.runOnIdle { assertTrue(transit.active); assertTrue(state.firstVisibleItemIndex > index); assertTrue(selections.isEmpty()) }
         bar().performTouchInput { up() }
         compose.runOnIdle { assertTrue(selections.isEmpty()) }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun holdThenVerticalDragFromAnAlbumTileUnderTheThumbBelongsToTheBar() {
+        val at = thumbOverAlbumTile()
+        val index = compose.runOnIdle { state.firstVisibleItemIndex }
+        val hold = midHold()
+        bar().performTouchInput { down(at); advanceEventTime(hold); moveBy(Offset(0f, 130f)) }
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        compose.runOnIdle { assertTrue("The bar owns a drag after a short tile hold (#959)", transit.active) }
+        bar().performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(400)
+        // The carousel row scrolls out with the list, so no carousel position is left to compare.
+        compose.runOnIdle { assertTrue(state.firstVisibleItemIndex > index); assertTrue(selections.isEmpty()) }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun holdThenHorizontalFromAnAlbumTileStaysWithTheTile() {
+        val at = thumbOverAlbumTile()
+        val before = compose.runOnIdle { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+        val rest = thumbColour()
+        val hold = midHold()
+        bar().performTouchInput { down(at); advanceEventTime(hold); moveBy(Offset(-130f, 0f)) }
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        assertEquals(rest, thumbColour())
+        bar().performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(400)
+        compose.runOnIdle {
+            assertFalse(transit.active)
+            assertEquals(before, state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset)
+            assertTrue(selections.isEmpty())
+        }
         compose.mainClock.autoAdvance = true
     }
 

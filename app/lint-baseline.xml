@@ -525,7 +525,7 @@
         errorLine2="                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="220"
+            line="226"
             column="17"/>
     </issue>
 
@@ -536,7 +536,7 @@
         errorLine2="                                    ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="220"
+            line="226"
             column="37"/>
     </issue>
 
@@ -547,7 +547,7 @@
         errorLine2="                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="227"
+            line="219"
             column="17"/>
     </issue>
 
@@ -558,30 +558,8 @@
         errorLine2="                                    ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="227"
+            line="219"
             column="37"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                    withFrameNanos { }; withFrameNanos { }"
-        errorLine2="                    ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="232"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                    withFrameNanos { }; withFrameNanos { }"
-        errorLine2="                                        ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="232"
-            column="41"/>
     </issue>
 
     <issue
@@ -13912,7 +13890,7 @@
         errorLine2="                          ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="218"
+            line="224"
             column="27"/>
     </issue>
 
@@ -13923,7 +13901,7 @@
         errorLine2="                          ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="222"
+            line="228"
             column="27"/>
     </issue>
 
@@ -13934,41 +13912,8 @@
         errorLine2="                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="222"
+            line="228"
             column="41"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    d.landing.snapTo(0f)"
-        errorLine2="                              ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="230"
-            column="31"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))"
-        errorLine2="                              ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="234"
-            column="31"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))"
-        errorLine2="                                            ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="234"
-            column="45"/>
     </issue>
 
     <issue
@@ -13978,7 +13923,7 @@
         errorLine2="                      ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="242"
+            line="235"
             column="23"/>
     </issue>
 
@@ -13989,7 +13934,7 @@
         errorLine2="                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="242"
+            line="235"
             column="37"/>
     </issue>
 

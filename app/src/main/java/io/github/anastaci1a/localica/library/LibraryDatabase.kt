@@ -272,7 +272,7 @@ interface LibraryStore {
     suspend fun current(): LibrarySnapshot
     suspend fun playbackSnapshot(trackIds: Set<String>): LibraryPlaybackRead {
         val full = snapshots.first()
-        return LibraryPlaybackRead(full.tracks, full.tracks.size, full)
+        return LibraryPlaybackRead(full.tracks, full.tracks.size)
     }
     suspend fun replaceRoot(result: ScanResult)
     suspend fun mergeRoot(result: ScanResult)

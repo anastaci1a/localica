@@ -18,7 +18,7 @@ Update the app version and name, and increment `versionCode`. Fill the [template
 
 Work through the [checklist](#checklist), then commit and push.
 
-Refresh `.github/test-evidence/class-durations.csv` from the preceding release's complete run before freezing the candidate. Download its `complete-verification` artifact and copy the generated profile. Record the source run in the commit. For older producers, run `refresh_durations.py` on the downloaded `device-reports-api-*` directories.
+Refresh `.github/test-evidence/class-durations.csv` before freezing the candidate. Use median per-class durations across the two preceding complete release producers, including risk-preflight XML. Record both source runs in the commit. Use `refresh_durations.py` on their downloaded `device-reports-api-*` directories.
 
 ### Step 3: the gate
 

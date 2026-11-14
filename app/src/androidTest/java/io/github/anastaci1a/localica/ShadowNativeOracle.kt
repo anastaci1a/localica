@@ -192,7 +192,6 @@ internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: Glass
     rule.waitForIdle()
     val scene = rule.onNodeWithTag("oracle-scene")
     ShadowNativeCapture(rule, scene) { clock.stampNow.sequence }.use { capture ->
-        capture.admitInitialFixtureWindow()
         for (caller in listOf("button", "filter", "settings", "bubble")) {
             rule.runOnIdle { kind = caller; available = true }
             rule.waitForIdle()
