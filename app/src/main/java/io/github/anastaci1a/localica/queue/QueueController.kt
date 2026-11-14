@@ -9,7 +9,6 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import io.github.anastaci1a.localica.library.LibraryRepository
-import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.playback.NativeReaders
 import io.github.anastaci1a.localica.playback.RecoveryAdmission
 import io.github.anastaci1a.localica.library.documentIdentity
@@ -66,11 +65,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private var player: Player? = null
     private val timeline = QueueTimeline()
     private data class ResolvedOccurrence(val track: Track, val sourcePlaylistId: String?, val item: MediaItem)
-    private data class ActivationCatalog(val snapshot: LibrarySnapshot?, val index: Map<String, Track>,
-        val queueId: String, val occurrences: Map<String, ResolvedOccurrence>)
-    // Actor-owned, bounded to the latest library index and one active queue. URI/grant
-    // resolution remains fresh; only exact immutable inputs authorize template reuse.
-    private var activationCatalog: ActivationCatalog? = null
+    private var resolved = emptyMap<String, ResolvedOccurrence>()
     private var syncingTimeline = false
     private data class Arrival(val queueId: String, val token: String)
     /** Only synchronous normalization may create this value; publication consumes its exact source state. */
@@ -471,7 +466,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val next = state.value.library.update(selected).copy(activeId = active.id)
         saveStartingPlayback(next) {
             val attached = player
-            if (attached != null && loadedQueueId == active.id && !holdsForEdit(selected) && !blocksCurrent(selected) && timeline.contains(selected)) {
+            if (attached != null && loadedQueueId == active.id && !holdsForEdit(selected) && !blocksCurrent(selected) && timeline.queueId == selected.id) {
                 intents.propose(commandRevision, true, currentSource(selected))
                 syncTimeline(seek = true)
                 applyNativeIntent(attached, commandRevision, true)
@@ -629,8 +624,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         updateSettings(value)
         configurePreloading()
         mutable.update { it.copy(library = reconcile(it.library)) }
-        syncTimeline()
         applyPlaybackModes()
+        syncTimeline()
         persist(state.value.library)
     }
     private fun updateSettings(value: QueueSettings) {
@@ -640,7 +635,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private fun applyPlaybackModes(timelineChanged: Boolean = false) {
         val attached = player ?: return
         val modes = state.value.settings
-        if (attached is ExoPlayer && (timelineChanged || attached.shuffleModeEnabled != modes.shuffle)) {
+        if (attached is ExoPlayer && timelineChanged) {
             // The saved journey already defines shuffle order. Native preloading must follow it exactly.
             attached.setShuffleOrder(androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(
                 IntArray(attached.mediaItemCount) { it }, 0L))
@@ -809,7 +804,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             if (it.id == queue.id) next else reconcileQueue(it)
         }))
         savePreparedPlayback(prepared) {
-            if (timeline.contains(next)) syncTimeline(seek = true)
+            if (timeline.queueId == next.id) syncTimeline(seek = true)
             else activate(play, seek = true, recordIntent = false)
         }
     }
@@ -1089,7 +1084,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         val queue = result.active ?: return result
         val item = source?.currentMediaItem ?: return result
-        if (item.listeningQueue != queue.id || queue.entries.none { it.id == item.mediaId }) return result
+        if (item.listeningQueue != queue.id) return result
         // A removed/branched visit must never overwrite a newer explicit selection.
         val captured = queue.captureVisit(item.queueVisit ?: return result) {
             source.currentPosition.coerceAtLeast(0) } ?: return result
@@ -1110,8 +1105,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
     private suspend fun capture(orderTiming: QueueOrderTiming? = null) {
+        val journey = state.value.library.active?.journey
         captureNativeState()
-        syncTimeline()
+        if (state.value.library.active?.journey !== journey) syncTimeline()
         orderTiming?.mark(QueueOrderTiming.Stage.CursorCaptured)
         persist(state.value.library)
     }
@@ -1195,17 +1191,45 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         var activated = false
         try { start(); activated = true } finally { persist(state.value.library, serviceTransport = activated) }
     }
-    private fun syncTimeline(seek: Boolean = false) {
-        val attached = player ?: return
-        val queue = state.value.library.active ?: return
-        if (holdForEdit(attached, queue) || holdForRecovery(attached, queue) || queue.entries.isEmpty() || !timeline.contains(queue)) return
+    private suspend fun syncTimeline(seek: Boolean = false, refreshLocations: Boolean = true,
+        orderTiming: QueueOrderTiming? = null): Boolean {
+        val attached = player ?: return false
+        val queue = state.value.library.active ?: return false
+        if (holdForEdit(attached, queue) || holdForRecovery(attached, queue) || queue.entries.isEmpty()) return false
         val recovery = readers.recovery()
-        // Normal playback retains its existing bounded-window path; do not scan/parse every song.
         val window = if (recovery == RecoveryAdmission.Clear) requireNotNull(queue.journey).window()
             else recoveryWindow(queue) { recovery.blocks(documentIdentity(it)) }
-        if (window.isEmpty()) return
+        if (window.isEmpty()) return false
+        val previous = resolved.takeIf { timeline.queueId == queue.id }.orEmpty()
+        val next = withContext(Dispatchers.IO) {
+            val wanted = window.mapTo(hashSetOf()) { it.entryId }
+            val entries = queue.entries.filter { it.id in wanted }
+            val read = if (refreshLocations) library.playbackSnapshot(entries.mapTo(linkedSetOf()) { it.track.id }) else null
+            if (read != null) {
+                orderTiming?.mark(QueueOrderTiming.Stage.FreshSnapshot)
+                orderTiming?.recordCounts(libraryTracks = read.totalTracks)
+            }
+            val current = read?.tracks?.associateBy { it.id }.orEmpty()
+            val tracks = library.playableTracks(entries.map { current[it.track.id] ?: it.track })
+            var reused = 0
+            entries.zip(tracks).associate { (entry, track) ->
+                val old = previous[entry.id]
+                entry.id to if (old != null && old.track == track && old.sourcePlaylistId == entry.sourcePlaylistId) {
+                    reused++; old
+                } else ResolvedOccurrence(track, entry.sourcePlaylistId, mediaItemFactory(entry.id, track, entry.sourcePlaylistId))
+            }.also {
+                orderTiming?.recordCounts(queueEntries = queue.entries.size, templatesReused = reused, templatesBuilt = it.size - reused)
+                orderTiming?.mark(QueueOrderTiming.Stage.GrantsTemplates)
+            }
+        }
+        if (player !== attached || state.value.library.active !== queue) return false
+        if (!seek && loadedQueueId == queue.id && attached.currentMediaItem?.queueVisit != queue.journey?.current?.token) {
+            mutable.update { it.copy(library = capturedLibrary(attached)) }
+            if (state.value.library.active !== queue) return syncTimeline(seek, refreshLocations, orderTiming)
+        }
+        resolved = next
+        timeline.resolve(queue.id, next.values.map { it.item })
         intents.preparing { pauseRequested ->
-            // Keep Pause pending through the suspended operation's final play decision.
             if (pauseRequested) attached.pause()
             syncingTimeline = true
             try {
@@ -1214,6 +1238,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 applyPlaybackModes(changed)
             } finally { syncingTimeline = false }
         }
+        return true
     }
     private suspend fun activate(play: Boolean?, seek: Boolean = false, refreshLocations: Boolean = true,
         recordIntent: Boolean = true, orderTiming: QueueOrderTiming? = null) {
@@ -1230,52 +1255,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             loadedQueueId = queue?.id
             attached.stop(); attached.clearMediaItems(); applyPlaybackModes(timelineChanged = true)
             // Saved queues keep their data; an empty native timeline needs no resolved templates.
-            activationCatalog = null
+            resolved = emptyMap()
             timeline.clear()
             return
         }
-        val previousCatalog = activationCatalog
-        val prepared = withContext(Dispatchers.IO) {
-            // Keep the original explicit PlayNow/tap bypass; ordinary activations still
-            // read current metadata for queued tracks; Room need not hydrate unrelated rows.
-            val read = if (refreshLocations) library.playbackSnapshot(queue.entries.mapTo(linkedSetOf()) { it.track.id }) else null
-            val snapshot = read?.fullSnapshot
-            if (read != null) {
-                orderTiming?.mark(QueueOrderTiming.Stage.FreshSnapshot)
-                orderTiming?.recordCounts(libraryTracks = read.totalTracks)
-            }
-            val currentLibrary = if (read == null) emptyMap()
-                else if (snapshot != null && previousCatalog != null && previousCatalog.snapshot === snapshot) previousCatalog.index
-                else read.tracks.associateBy { it.id }
-            val tracks = library.playableTracks(queue.entries.map { currentLibrary[it.track.id] ?: it.track })
-            val reusable = previousCatalog?.takeIf { it.queueId == queue.id }?.occurrences.orEmpty()
-            var reused = 0
-            var built = 0
-            val occurrences = queue.entries.zip(tracks).associate { (entry, track) ->
-                val old = reusable[entry.id]
-                entry.id to if (old != null && old.track == track && old.sourcePlaylistId == entry.sourcePlaylistId) {
-                    if (orderTiming != null) reused++
-                    old
-                } else {
-                    if (orderTiming != null) built++
-                    ResolvedOccurrence(track, entry.sourcePlaylistId, mediaItemFactory(entry.id, track, entry.sourcePlaylistId))
-                }
-            }
-            orderTiming?.recordCounts(queueEntries = queue.entries.size, templatesReused = reused, templatesBuilt = built)
-            orderTiming?.mark(QueueOrderTiming.Stage.GrantsTemplates)
-            val catalog = ActivationCatalog(if (read == null) previousCatalog?.snapshot else snapshot,
-                if (read != null) currentLibrary else previousCatalog?.index.orEmpty(), queue.id, occurrences)
-            catalog to queue.entries.map { occurrences.getValue(it.id).item }
-        }
-        if (player !== attached) return
-        activationCatalog = prepared.first
-        val items = prepared.second
-        // An ordinary edit may resolve locations while the decoder advances to its prepared next song.
         if (!seek && loadedQueueId == queue.id) mutable.update { it.copy(library = capturedLibrary(attached)) }
         val latest = state.value.library.active ?: return
         mutable.update { it.copy(library = it.library.update(latest.copy(journey = journey(latest)))) }
-        timeline.resolve(queue.id, items)
-        syncTimeline(seek)
+        if (!syncTimeline(seek, refreshLocations, orderTiming)) return
         if (play != null || intents.pending() != null) applyNativeIntent(attached, revision, play ?: nativePlayIntent(attached))
         orderTiming?.mark(QueueOrderTiming.Stage.MainNativeApiReturned)
     }

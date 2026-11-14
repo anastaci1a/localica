@@ -7,7 +7,7 @@ import androidx.media3.common.Player
 internal val MediaItem.queueVisit: String? get() = mediaMetadata.extras?.getString("queueVisit")
 internal val MediaItem.listeningQueue: String? get() = mediaMetadata.extras?.getString("queueId")
 
-/** Resolved locations stay reusable when a selection lies outside the bounded native timeline. */
+/** Resolved templates and visit decorations belong to the native window. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class QueueTimeline {
     var queueId: String? = null
@@ -32,8 +32,6 @@ internal class QueueTimeline {
         queueId = id
         templates = next
     }
-
-    fun contains(queue: ListeningQueue) = queueId == queue.id && queue.entries.all { it.id in templates }
 
     fun sync(player: Player, queue: ListeningQueue, seek: Boolean, replace: Boolean,
         window: List<QueueVisit> = requireNotNull(queue.journey).window()): Boolean {

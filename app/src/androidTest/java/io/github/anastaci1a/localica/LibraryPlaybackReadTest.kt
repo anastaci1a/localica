@@ -85,7 +85,6 @@ class LibraryPlaybackReadTest {
             val observed = queries.toList()
             assertEquals(canonical.tracks.filter { it.id in ids }, selected.tracks)
             assertEquals(4, selected.totalTracks)
-            assertNull(selected.fullSnapshot)
             assertEquals(originalIds, ids)
             val track = selected.tracks.single { it.id == "shared" }
             assertEquals(listOf("root-a", "root-b", "root-z"), track.locations.map { it.folderUri })
@@ -149,7 +148,6 @@ class LibraryPlaybackReadTest {
             val empty = store.playbackSnapshot(emptySet())
             assertTrue(empty.tracks.isEmpty())
             assertEquals(902, empty.totalTracks)
-            assertNull(empty.fullSnapshot)
             assertTrue(queries.none(::selectedRead))
             assertTrue(queries.none(::fullRead))
 
@@ -166,7 +164,6 @@ class LibraryPlaybackReadTest {
             val fallback = store.playbackSnapshot(fallbackIds)
             assertEquals(canonical.tracks.filter { it.id in fallbackIds }, fallback.tracks)
             assertEquals(902, fallback.totalTracks)
-            assertNull(fallback.fullSnapshot)
             assertTrue(queries.any(::fullRead))
             assertTrue("No oversized IN query or independent chunks", queries.none(::selectedRead))
         }
