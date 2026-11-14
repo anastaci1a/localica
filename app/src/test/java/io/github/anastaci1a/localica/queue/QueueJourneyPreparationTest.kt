@@ -100,6 +100,22 @@ class QueueJourneyPreparationTest {
         assertEquals("The bound is exercised with three distinct edited sequences", 3, path.plans.values.distinct().size)
     }
 
+    @Test fun identicalEditedLookaheadsShareTheirPermutationAfterTheRequiredRandomDraws() {
+        var ids = List(100) { "entry:$it" }
+        val modes = JourneyModes(true, true)
+        var path = QueueJourney.start(ids, ids.first(), modes, Random(2))
+        var original = OriginalQueueJourney.start(ids, ids.first(), modes, Random(2))
+        repeat(12) { edit ->
+            val added = listOf("insert:$edit")
+            ids = ids + added
+            path = path.playNext(added, ids, Random(edit))
+            original = original.playNext(added, ids, Random(edit))
+            assertEquals(original.plans, path.plans)
+            assertSame(path.plans.getValue(0), path.plans.getValue(1))
+            assertSame(path.plans.getValue(1), path.plans.getValue(2))
+        }
+    }
+
     @Test fun immutableOccurrenceRevisionsReusePreparationWithoutReadingAnElement() {
         val track = Track("content://same", "Same", fileName = "same.mp3", relativePath = "same.mp3")
         var reads = 0
