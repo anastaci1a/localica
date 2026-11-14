@@ -51,7 +51,7 @@ class PlayerInkArtworkClockTest {
 
     @Test fun aDestinationAfterExpansionSettlesUsesTheSharedValueClock() {
         EngineHarness().use { h ->
-            val motion = MotionFloat(h.clock, 1f, 1f)
+            val motion = MotionFloat(h.clock, 1f, 1f, 0.0..1.0)
             val binding = PhaseBinding(1f, motion)
             fun sample(target: Float) = binding.resolve(target, 1f, 1f, clock = 2).also(binding::present).value
             assertEquals(1f, sample(1f), 0f)
@@ -66,7 +66,7 @@ class PlayerInkArtworkClockTest {
 
     private fun ownerStartsDuringLateEase(owner: Int) {
         EngineHarness().use { h ->
-            val motion = MotionFloat(h.clock, 1f, 1f)
+            val motion = MotionFloat(h.clock, 1f, 1f, 0.0..1.0)
             val binding = PhaseBinding(1f, motion)
             fun sample(phase: Float, end: Float, clock: Int) = binding.resolve(0f, phase, end, clock).also(binding::present).value
             sample(0f, 0f, 2)
@@ -91,7 +91,7 @@ class PlayerInkArtworkClockTest {
 
     @Test fun aNormalPhaseBoundTransitionIsUnchangedWithTheValueChannel() {
         EngineHarness().use { h ->
-            val binding = PhaseBinding(0f, MotionFloat(h.clock, 0f, 1f))
+            val binding = PhaseBinding(0f, MotionFloat(h.clock, 0f, 1f, 0.0..1.0))
             (0..20).forEach {
                 h.advance(1.0 / 120)
                 val phase = it / 20f
@@ -101,9 +101,42 @@ class PlayerInkArtworkClockTest {
         }
     }
 
+    @Test fun aDestinationJustBeforeOwnerSettlementKeepsTheShownValueAndVelocity() {
+        for (owner in 0..2) EngineHarness().use { h ->
+            val motion = MotionFloat(h.clock, 0f, 1f, 0.0..1.0)
+            val binding = PhaseBinding(0f, motion)
+            fun sample(target: Float, phase: Float, clock: Int = owner) =
+                binding.resolve(target, phase, 1f, clock).also(binding::present).value
+            sample(1f, 0f, (owner + 1) % 3)
+            h.advance(.1); sample(1f, .5f, (owner + 1) % 3)
+            h.advance(.1); sample(1f, .99f)
+            h.advance(.1); sample(1f, .995f)
+            val before = motion.sample()
+            assertTrue(before.value in .1f..0.9f)
+            assertTrue(abs(before.velocity) > .01f)
+            assertEquals(before.value, sample(0f, .995f), .0001f)
+            assertEquals(before.velocity, motion.velocity(), .0001f)
+            h.advance(1.0 / 120)
+            val continued = motion.sample()
+            assertEquals("Owner settlement cannot shorten the late ease", continued.value, sample(0f, 1f), .0001f)
+            assertEquals(continued.velocity, motion.velocity(), .0001f)
+            assertTrue(continued.value > .1f)
+            var last = continued.value
+            repeat(80) {
+                h.advance(1.0 / 120)
+                val value = sample(0f, 1f)
+                assertTrue(value in 0f..1f)
+                assertTrue(abs(value - last) < .2f)
+                last = value
+            }
+            assertEquals(0f, last, 0f)
+            assertEquals(0, h.clock.activeCount)
+        }
+    }
+
     @Test fun aTrackChangeDuringALateEaseRetargetsTheSameValueAndVelocity() {
         EngineHarness().use { h ->
-            val motion = MotionFloat(h.clock, 1f, 1f)
+            val motion = MotionFloat(h.clock, 1f, 1f, 0.0..1.0)
             val binding = PhaseBinding(1f, motion)
             fun sample(target: Float, phase: Float = 1f, clock: Int = 2) = binding.resolve(target, phase, 1f, clock).also(binding::present)
             sample(0f); h.advance(.1)
@@ -120,7 +153,7 @@ class PlayerInkArtworkClockTest {
         for (reduced in listOf(false, true)) EngineHarness().use { h ->
             h.clock.configure(EngineContext(1f / 120, 1000f,
                 if (reduced) MotionAccess.Reduced else MotionAccess.Standard, if (reduced) 1f else 0f), StockUiSpec)
-            val binding = PhaseBinding(1f, MotionFloat(h.clock, 1f, 1f))
+            val binding = PhaseBinding(1f, MotionFloat(h.clock, 1f, 1f, 0.0..1.0))
             fun sample() = binding.resolve(0f, 1f, 1f, 2).also(binding::present).value
             sample(); h.advance(1.0 / 120)
             assertEquals(0f, sample(), 0f)
@@ -130,7 +163,7 @@ class PlayerInkArtworkClockTest {
 
     @Test fun disposingDuringALateEaseUnregistersTheValueChannel() {
         EngineHarness().use { h ->
-            val motion = MotionFloat(h.clock, 1f, 1f)
+            val motion = MotionFloat(h.clock, 1f, 1f, 0.0..1.0)
             val binding = PhaseBinding(1f, motion)
             binding.present(binding.resolve(0f, 1f, 1f, 2))
             h.advance(.1)

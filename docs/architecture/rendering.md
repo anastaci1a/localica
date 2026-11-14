@@ -41,7 +41,7 @@ One progress drives geometry and masks. Navigation observes thresholds only; Que
 
 One page-wide black/white decision follows the actual backing, including crossfades. A cover's prepared endpoint grade supplies its destination ink while minimized; partial measurements cannot replace it. Sample confidence still describes the actual backing. Ink changes do not retone the backing, and asynchronous presentation is not atomic.
 
-One binding eases text, glass and frost on the expansion, artwork or lyrics phase. Destinations arriving after those phases settle use the shared value clock. Active corrections retain that clock through owner starts. Expansion responds immediately. Lyric emphasis keeps its own clock. Brightness trim preserves brightness order by limiting applied trim to the reciprocal of weighting. [Settings](../interface/settings.md#glass-settings) owns ranges.
+One binding eases text, glass and frost on the expansion, artwork or lyrics phase. Destinations delivered after phase start use the shared value clock through completion and owner starts. Expansion responds immediately. Lyric emphasis keeps its own clock. Brightness trim preserves brightness order by limiting applied trim to the reciprocal of weighting. [Settings](../interface/settings.md#glass-settings) owns ranges.
 
 ## Shadows
 

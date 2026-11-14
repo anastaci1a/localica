@@ -3,9 +3,8 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.runtime.*
 import kotlin.math.abs
 
-/** U08.02a shared-phase binding: a polarity follows its owner's phase to that phase's end. A change at the phase's
- * origin rides the (already eased) phase linearly. A mid-flight changed target, reversal or restarted/replaced clock
- * rejoins from the shown value and its slope per unit of travel (C1), never a clamped remainder. */
+/** A destination known at the owner's origin follows its eased phase. Later destinations use the shared value
+ * channel until complete. Phase-only bindings rejoin from their shown value and slope per unit of travel (C1). */
 internal class PhaseBinding(initial: Float, private val motion: MotionFloat? = null) {
     @Immutable data class Step(val value: Float, val slope: Float, val target: Float, val from: Float, val fromSlope: Float,
         val toSlope: Float, val start: Float, val end: Float, val clock: Int, val last: Float) {
@@ -17,7 +16,7 @@ internal class PhaseBinding(initial: Float, private val motion: MotionFloat? = n
     /** Pure, so composition may call it; [phase] travels toward [end]. Publish the result with [present]. */
     fun resolve(target: Float, phase: Float, end: Float, clock: Int = 0): Step {
         val s = committed
-        val timed = motion?.kind == 1
+        val timed = motion != null && (motion.kind == 1 || target != s.target && abs(phase - (1f - end)) > SETTLED)
         if (timed || abs(phase - end) <= SETTLED) {
             val value = if (timed || target != s.target || abs(s.last - s.end) <= SETTLED && s.value != target) motion?.value() ?: target else target
             return Step(value, 0f, target, target, 0f, 0f, phase, phase, clock, phase)
@@ -44,6 +43,6 @@ internal class PhaseBinding(initial: Float, private val motion: MotionFloat? = n
 }
 
 @Composable internal fun rememberPhaseBinding(initial: Float): PhaseBinding {
-    val motion = rememberMotionFloat("player-ink", initial, 1f)
+    val motion = rememberMotionFloat("player-ink", initial, 1f, 0.0..1.0)
     return remember(motion) { PhaseBinding(initial, motion) }
 }
