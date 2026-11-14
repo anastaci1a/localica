@@ -1233,7 +1233,7 @@ class PlaybackIntentTest {
             assertEquals(second.entries.map { it.id }, active.entries.map { it.id })
             withContext(Dispatchers.Main) {
                 assertEquals(active.journey!!.window().map { it.entryId }, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId })
-                assertEquals(active.journey.current!!.token, player.currentMediaItem!!.queueVisit)
+                assertEquals(active.journey!!.current!!.token, player.currentMediaItem!!.queueVisit)
                 assertFalse(player.playWhenReady)
                 assertEquals(1, player.trueRequests)
                 assertFalse(player.preparedWhilePlaying)
