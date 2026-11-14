@@ -72,10 +72,11 @@ internal fun glassRimBrushes(center: Offset, tone: GlassTone): GlassRimBrushes {
 internal fun glassContactPoint(point: Offset, size: Size, shape: GlassShape, vertical: Boolean): Offset =
     Offset(size.width * (.5f + (point.x - .5f) / shape.scaleX(vertical)), size.height * (.5f + (point.y - .5f) / shape.scaleY(vertical)))
 
-internal fun DrawScope.drawContactLight(point: Offset, path: Path, alpha: Float, tone: GlassTone, cache: GlassRimCache,
+internal inline fun DrawScope.drawContactLight(point: () -> Offset, path: () -> Path, alpha: Float, tone: GlassTone, cache: GlassRimCache,
     radius: Float = size.center.getDistance(), rimGain: Float = 2f) {
     if (alpha == 0f) return
-    val brush = cache.light(point, radius, tone)
+    val silhouette = path()
+    val brush = cache.light(point(), radius, tone)
     drawRect(brush, alpha = alpha)
-    clipPath(path) { drawPath(path, brush, alpha = alpha * rimGain, style = cache.lightStroke(TouchLightRimWidth.toPx())) }
+    clipPath(silhouette) { drawPath(silhouette, brush, alpha = alpha * rimGain, style = cache.lightStroke(TouchLightRimWidth.toPx())) }
 }

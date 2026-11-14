@@ -39,7 +39,8 @@ class GlassTouchLightTest {
                 drawRect(background)
                 val path = Path().apply { if (circle) addOval(Rect(Offset(8f, 0f), Size(80f, 80f)))
                     else addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(18f))) }
-                clipPath(path) { if (alpha > 0f) drawContactLight(point, path, alpha, GlassTone(), cache, radius, rimGain) }
+                clipPath(path) { drawContactLight({ check(alpha > 0f) { "zero alpha read point" }; point },
+                    { check(alpha > 0f) { "zero alpha read path" }; path }, alpha, GlassTone(), cache, radius, rimGain) }
             }
             return pixels(image)
         } finally { image.asAndroidBitmap().recycle() }
@@ -203,7 +204,7 @@ class GlassTouchLightTest {
                         for (point in listOf(Offset(.5f, .5f), Offset(.25f, .7f))) Canvas(Modifier.size(96.dp, 80.dp)) {
                             drawRect(background)
                             val path = Path().apply { addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(20.dp.toPx()))) }
-                            clipPath(path) { drawContactLight(Offset(point.x * size.width, point.y * size.height), path, peak,
+                            clipPath(path) { drawContactLight({ Offset(point.x * size.width, point.y * size.height) }, { path }, peak,
                                 GlassTone(), GlassRimCache(), size.center.getDistance() * radius, rim) }
                         }
                     }
