@@ -18,6 +18,10 @@ data class BrowserItem(val ref: MediaRef, val title: String, val subtitle: Strin
     val addedAt get() = added ?: facts.addedAt
     val modifiedAt get() = modified ?: facts.modifiedAt
     val playCount get() = plays ?: facts.plays
+    // Songs compare by revision, never by contents (#957); a new constructor field joins [fields].
+    private fun fields() = listOf(ref, title, subtitle, row, groupHeading, added, modified, plays, coverUri)
+    override fun equals(other: Any?) = other === this || other is BrowserItem && songs.revision == other.songs.revision && fields() == other.fields()
+    override fun hashCode() = fields().hashCode()
 }
 
 /** One pass over a collection's songs; plays and listening count each library song once. */
@@ -63,16 +67,23 @@ data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: S
     val keys: List<String> = items.mapView(BrowserItem::key)) {
     /** The last occurrence, as the former key map kept. */
     fun indexOfKey(key: Any) = keys.indexOfLast { it == key }
+    override fun equals(other: Any?) = other is BrowseResult && scope == other.scope && artistAlbums == other.artistAlbums &&
+        items.revision == other.items.revision && rows.revision == other.rows.revision && keys.revision == other.keys.revision
+    override fun hashCode() = 31 * scope.hashCode() + items.size
 }
 /** A pure projection of [source], an immutable revision: queue edits replace `entries`, and results own their rows.
- * Equal only to a view of one projection over the same revision; elements are never read (#957). */
+ * It keeps the List contract; owners compare its [revision] instead, without reading an element (#957). */
 private class MappedList<S, T>(private val source: List<S>, private val f: (S) -> T) : AbstractList<T>(), RandomAccess {
+    val revision: Revision = Revision((source as? MappedList<*, *>)?.revision ?: source, f)
     override val size get() = source.size
     override fun get(index: Int) = f(source[index])
-    override fun equals(other: Any?) = other is MappedList<*, *> &&
-        (source === other.source || source is MappedList<*, *> && source == other.source) && f == other.f
-    override fun hashCode() = size
 }
+/** A view's source by reference (or the inner view's revision) and its projection. */
+private class Revision(val source: Any, val f: Any) {
+    override fun equals(other: Any?) = other is Revision && (source === other.source || source is Revision && source == other.source) && f == other.f
+    override fun hashCode(): Int = if (source is Revision) source.hashCode() else System.identityHashCode(source)
+}
+private val List<*>.revision: Any get() = (this as? MappedList<*, *>)?.revision ?: this
 internal fun <S, T> List<S>.mapView(f: (S) -> T): List<T> = MappedList(this, f)
 internal fun songItem(row: SongRow) = BrowserItem(MediaRef(MediaKind.Song, row.track.id), row.track.title,
     row.track.artist ?: row.track.albumArtist, listOf(row), row)
