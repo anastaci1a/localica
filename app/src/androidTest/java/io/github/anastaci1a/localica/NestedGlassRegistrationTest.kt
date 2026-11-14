@@ -383,7 +383,7 @@ class NestedGlassRegistrationTest {
         }
         val openingCorners = producerFootprint("initial")
         val logicalSize = compose.runOnIdle { anchor.bounds.size }
-        val expansionOwner = anchor.contact.expansion
+        val expansionValue = { anchor.contact.expansion.value }
         fun verifyDraws(label: String, opening: Boolean) = compose.runOnIdle {
             if (Build.VERSION.SDK_INT >= 33) {
                 // Observe all positive-weight choices after a fixed frame budget;
@@ -418,21 +418,22 @@ class NestedGlassRegistrationTest {
             var frames = 0
             do {
                 compose.advanceMorphOpening(1, anchor) { popupView }; frames++
-                val (ready, value) = compose.runOnIdle { (!opening || admitted()) to expansionOwner.value }
+                val (ready, value) = compose.runOnIdle { (!opening || admitted()) to expansionValue() }
                 assertTrue("$label: the law reached .5 before native admission ($value after $frames frames)", ready || value < .5f)
                 assertTrue("$label within 2 s", frames < 120)
             } while (!(ready && value > 0f && value < .5f))
-            android.util.Log.i("MorphHomeFootprint", "$label home weighted after $frames frames at ${compose.runOnIdle { expansionOwner.value }}")
+            android.util.Log.i("MorphHomeFootprint", "$label home weighted after $frames frames at ${compose.runOnIdle { expansionValue() }}")
         }
         compose.mainClock.autoAdvance = false
         try {
             compose.runOnIdle { open = true }
             stepUntilHomeWeighted("opening", opening = true)
-            compose.runOnIdle {
+            val expansionOwner = compose.runOnIdle {
                 val view = requireNotNull(popupView)
                 assertTrue("Actual native popup owns a ready window", view.isAttachedToWindow && view.isLaidOut && view.hasWindowFocus())
                 assertTrue(anchor.modalPresent && anchor.hidden)
-                assertTrue("Opening remains the real intermediate morph", expansionOwner.value > 0f && expansionOwner.value < 1f)
+                assertTrue("Opening remains the real intermediate morph", expansionValue() > 0f && expansionValue() < 1f)
+                anchor.contact.expansion
             }
             val window = requireNotNull(popupView)
             verifyDraws("opening", opening = true)

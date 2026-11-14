@@ -614,6 +614,50 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         from full_partition import UTILITY_DIAGNOSTIC_REASON
         self.run_case(1, **self.diagnostic_source('unregisteredDiagnostic'), SKIP_REASON=UTILITY_DIAGNOSTIC_REASON)
 
+    def measurement_identities(self):
+        return ('LastFmScrollStressTest#galleryFlingWithArchive', 'UiPerformanceTest#measurePureUiScenarios',
+                'ScrollPerformanceTest#galleryFiveColumnsFlingUpAndDown',
+                'ScrollPerformanceTest#scrollbarDragTopToBottomToTop',
+                'ScrollPerformanceTest#returnToTopFromDeepInLargeList')
+
+    def clear_measurement_evidence(self):
+        shutil.rmtree(self.root/'prototype-evidence')
+        shutil.rmtree(self.root/'app/build/outputs/androidTest-results')
+
+    def test_exact_measurement_assumptions_are_skips_on_both_apis(self):
+        from full_partition import PROFILE_ASSUMPTIONS
+        for identity in self.measurement_identities():
+            cls, method = identity.split('#')
+            for api in ('26', '36'):
+                with self.subTest(identity=identity, api=api):
+                    self.run_case(**self.skip_source('io.github.anastaci1a.localica.'+cls, method),
+                                  TEST_API=api, SKIP_REASON=PROFILE_ASSUMPTIONS[identity])
+                    evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+                    self.assertEqual('skipped', evidence['methods']['io.github.anastaci1a.localica.'+identity])
+                    self.clear_measurement_evidence()
+
+    def test_measurement_enrollment_does_not_waive_failure_missing_or_wrong_record(self):
+        from full_partition import PROFILE_ASSUMPTIONS
+        for identity in self.measurement_identities():
+            cls, method = identity.split('#')
+            for override in ({'SKIP_OUTCOME':'failure'}, {'SKIP_OUTCOME':'error'},
+                             {'SKIP_MISSING':'yes'}, {'SKIP_REASON':'Different assumption'}, {'SKIP_UTP_STATUS':'2'}):
+                with self.subTest(identity=identity, override=override):
+                    env=dict(self.skip_source('io.github.anastaci1a.localica.'+cls, method),
+                             SKIP_REASON=PROFILE_ASSUMPTIONS[identity])
+                    env.update(override)
+                    self.run_case(1, **env)
+                    self.clear_measurement_evidence()
+
+    def test_other_measurement_methods_cannot_borrow_an_enrolled_reason(self):
+        from full_partition import PROFILE_ASSUMPTIONS
+        for identity in self.measurement_identities():
+            cls, method = identity.split('#')
+            with self.subTest(identity=identity):
+                self.run_case(1, **self.skip_source('io.github.anastaci1a.localica.'+cls, method+'Unregistered'),
+                              SKIP_REASON=PROFILE_ASSUMPTIONS[identity])
+                self.clear_measurement_evidence()
+
     def test_deferred_filter_uses_complete_policy_and_excludes_only_its_method(self):
         policy=self.root/'.github/test-evidence/full_partition.py'
         policy.write_text(policy.read_text().replace('DEFERRED = {}',

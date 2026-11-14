@@ -64,6 +64,11 @@ DEFERRED = {}
 # Exact opt-in/profile assumption identities shared by complete and focused evidence.
 # These remain executed methods: failures and missing results are never waived.
 PROFILE_ASSUMPTIONS = {
+    'LastFmScrollStressTest#galleryFlingWithArchive': 'Opt-in stress measurement: pass -e lastfmScroll true',
+    'UiPerformanceTest#measurePureUiScenarios': 'Pass uiPerformance=true on an owned disposable test device',
+    'ScrollPerformanceTest#galleryFiveColumnsFlingUpAndDown': 'Scroll-performance measurement is opt-in: pass scrollPerformance=true (workflow_dispatch scroll_performance)',
+    'ScrollPerformanceTest#scrollbarDragTopToBottomToTop': 'Scroll-performance measurement is opt-in: pass scrollPerformance=true (workflow_dispatch scroll_performance)',
+    'ScrollPerformanceTest#returnToTopFromDeepInLargeList': 'Scroll-performance measurement is opt-in: pass scrollPerformance=true (workflow_dispatch scroll_performance)',
     'RepeatOptionsEnvelopeTest#native360x640Font2SectionsExposeEveryControlAndStageDrafts': 'Exact native window profile requires sufficient display space and actual Android font scale 2',
     'RepeatOptionsEnvelopeTest#native400x800Font2SectionsExposeEveryControlAndStageDrafts': 'Exact native window profile requires sufficient display space and actual Android font scale 2',
     'RepeatOptionsEnvelopeTest#native360x640PhoneFont2SectionsFitSafeInsetsWithoutWindowResize': 'Requires the lead-configured 360x640 phone/font2 focused run',
