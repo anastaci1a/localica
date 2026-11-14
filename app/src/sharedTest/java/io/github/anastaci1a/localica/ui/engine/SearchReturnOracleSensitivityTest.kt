@@ -44,18 +44,6 @@ class SearchReturnOracleSensitivityTest {
             place()
             assertEquals(envelope, motion.bounds!!.valueAt(h.clock.stampNow))
             assertEquals("Open rest is exactly 1", 1f, slot.fraction, 0f)
-            val row = io.github.anastaci1a.localica.ui.SearchSlotLayout()
-            row.place(false, row.measure(false, slot.fraction, 0, 98f))
-            assertEquals("The actual row witnesses the exact open endpoint", 1f, row.placedFraction, 0f)
-            owner.takeover = PopupTakeover.Closed
-            assertFalse(owner.expanded)
-            assertEquals("Unmount vacates nothing even with a retained open edge", 0f, slot.fraction, 0f)
-            row.place(true, row.measure(true, slot.fraction, 0, 98f))
-            assertEquals("Lookahead cannot publish an unplaced endpoint", 1f, row.placedFraction, 0f)
-            row.place(false, row.measure(false, slot.fraction, 0, 98f))
-            assertEquals("The actual restored row witnesses exactly zero", 0f, row.placedFraction, 0f)
-            owner.takeover = PopupTakeover.InWindow
-            assertEquals("Remount reads the live presentation", 1f, slot.fraction, 0f)
             val reference = SearchSlotTravel(1f, envelope.bottom, home.bottom, 0f)
             motion.show(false)
             place()
@@ -84,6 +72,28 @@ class SearchReturnOracleSensitivityTest {
             println("Search vacancy sensitivity: controls=60, one-frame-late rejected=$reds, tolerance=0.0001")
             motion.dispose()
         }
+    }
+
+    @Test fun unmountZerosVacancyAndOnlyActualRowPlacementPublishesTheExactEndpoint() = EngineHarness().use { h ->
+        val owner = Owner().also { it.takeover = PopupTakeover.InWindow }
+        val slot = SearchSlotMotion(owner)
+        val bottom = MotionFloat(h.clock, 500f, 1000f)
+        slot.bindBottom(bottom, 500f, 1f)
+        val row = io.github.anastaci1a.localica.ui.SearchSlotLayout()
+        row.place(false, row.measure(false, slot.fraction, 0, 98f))
+        assertEquals("Actual open row witnesses exactly one", 1f, row.placedFraction, 0f)
+        owner.takeover = PopupTakeover.Closed
+        assertFalse(owner.expanded)
+        assertEquals("Unmount vacates nothing with a retained open edge", 0f, slot.fraction, 0f)
+        row.place(true, row.measure(true, slot.fraction, 0, 98f))
+        assertEquals("Lookahead cannot publish an unplaced endpoint", 1f, row.placedFraction, 0f)
+        val restored = row.measure(false, slot.fraction, 0, 98f)
+        assertEquals("Measurement alone is no placement receipt", 1f, row.placedFraction, 0f)
+        row.place(false, restored)
+        assertEquals("Actual restored row witnesses exactly zero", 0f, row.placedFraction, 0f)
+        owner.takeover = PopupTakeover.InWindow
+        assertEquals("Reopen reads the live presentation", 1f, slot.fraction, 0f)
+        bottom.dispose()
     }
 
     @Test fun travelEndpointsAreExactAndBounded() {

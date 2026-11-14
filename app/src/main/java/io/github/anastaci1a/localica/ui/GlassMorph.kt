@@ -846,7 +846,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 // destination until the keyboard actually descends. A query rests on the final viewport.
                 val openingSearchTarget = visible && searchDismissOnImeBack
                 // IME-owned Back holds only an open resting window with its own placed keyboard.
-                val holdImeBack = placement == GlassPlacement.Search && searchDismissOnImeBack && anchor.expanded &&
+                fun holdImeBack() = placement == GlassPlacement.Search && searchDismissOnImeBack && anchor.expanded &&
                     motion.expansion.retirementReady && phase() == 1f && windowFocused && childPanels.intValue == 0 &&
                     imeTarget == 0 && searchMotion.lastIme > 0
                 fun surfaceOpacity() = if (!admittedDraw) 0f else if (detached) motion.detachedOpacity.at(phase()) else
@@ -1046,7 +1046,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             if (page) 0f else margin * 2), envelope.size) else start().translate(windowOrigin)
                         // Every layout retargets the one shared rectangle (position and velocity kept). A nested
                         // action menu freezes its parent until it has returned; IME-owned Back holds one layout.
-                        if (!holdImeBack && (placement != GlassPlacement.Search || childPanels.intValue == 0)) {
+                        if (!holdImeBack() && (placement != GlassPlacement.Search || childPanels.intValue == 0)) {
                             motion.place(home, envelope, density.density, detached = detached)
                             if (placement == GlassPlacement.Search) {
                                 searchMotion.target = envelope
