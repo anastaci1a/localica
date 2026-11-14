@@ -20,14 +20,20 @@ import io.github.anastaci1a.localica.ui.*
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import java.io.File
 import kotlin.math.abs
 
 /** Actual FolderSettings pages, native window and measured first content, not a replica layout. */
 @OptIn(ExperimentalTestApi::class)
 class SettingsRootSearchTest {
+    companion object {
+        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+    }
+
     @get:Rule val compose = localicaComposeRule()
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private lateinit var density: Density

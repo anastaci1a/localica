@@ -16,10 +16,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsProperties
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 class GlassPressureTest {
+    companion object {
+        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+    }
+
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     @org.junit.Before fun configureWindowLikeTheApp() {
         compose.activityRule.scenario.onActivity {

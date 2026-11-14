@@ -16,10 +16,16 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 class PopupHostNavigationTest {
+    companion object {
+        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+    }
+
     @get:Rule val compose = localicaComposeRule()
     private val markers = java.util.IdentityHashMap<View, FrameMarker>()
     private var frameViews: () -> List<View> = { emptyList() }
