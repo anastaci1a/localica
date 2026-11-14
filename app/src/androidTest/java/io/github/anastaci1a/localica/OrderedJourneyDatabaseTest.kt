@@ -5,7 +5,7 @@ import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.queue.*
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -119,23 +119,45 @@ class OrderedJourneyDatabaseTest {
     }
 
     @Test fun migrationRejectsMalformedHistoryAndRollsBackEarlierCleanupBeforeRetry() = runBlocking {
-        for (malformed in listOf(false, true)) {
-            val name = "journey-migration-failure-$malformed.db"
+        for (failure in listOf("cleanup", "size", "negative")) {
+            val name = "journey-migration-failure-$failure.db"
             seed(name, 7, true)
             context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { raw ->
-                if (malformed) raw.execSQL("UPDATE queue_journeys SET historySize = 999") else
-                    raw.execSQL("CREATE TRIGGER fail_cleanup BEFORE DELETE ON queue_cycle_members BEGIN SELECT RAISE(ABORT, 'injected migration'); END")
-                if (!malformed) raw.execSQL("UPDATE queue_journeys SET shuffle = 0")
+                when (failure) {
+                    "size" -> raw.execSQL("UPDATE queue_journeys SET historySize = 999")
+                    "negative" -> raw.execSQL("INSERT INTO queue_visits VALUES ('invalid-negative', 'legacy', -1, 'F', 0)")
+                    else -> {
+                        raw.execSQL("CREATE TRIGGER fail_cleanup BEFORE DELETE ON queue_cycle_members BEGIN SELECT RAISE(ABORT, 'injected migration'); END")
+                        raw.execSQL("UPDATE queue_journeys SET shuffle = 0")
+                    }
+                }
             }
             val failed = open(name)
             try { failed.queues().read(); fail("Invalid migration must fail atomically") }
             catch (_: Exception) { }
             finally { failed.close() }
+            val startup = open(name)
+            val actor = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+            try {
+                val controller = withContext(Dispatchers.Main) { QueueController(startup.queues(), QueuePreferences(context),
+                    (context.applicationContext as LocalicaApplication).library, actor) }
+                withTimeout(10000) { while (controller.state.value.loading) delay(10) }
+                assertEquals("Couldn’t restore queues. Reopen the app to retry.", controller.state.value.problem)
+                assertTrue(controller.state.value.library.queues.isEmpty())
+                assertNull(controller.state.value.library.activeId)
+                val rejected = CompletableDeferred<Boolean>()
+                controller.act(emptyList(), SongTap.Append) { rejected.complete(it) }
+                assertFalse(withTimeout(10000) { rejected.await() })
+            } finally { actor.coroutineContext[Job]!!.cancelAndJoin(); startup.close() }
             context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { raw ->
                 assertEquals(7, raw.version)
-                raw.rawQuery("SELECT COUNT(*) FROM queue_visits", null).use { it.moveToFirst(); assertEquals(20, it.getInt(0)) }
+                raw.rawQuery("SELECT COUNT(*) FROM queue_visits", null).use { it.moveToFirst(); assertEquals(if (failure == "negative") 21 else 20, it.getInt(0)) }
                 raw.rawQuery("SELECT orderedTraversalId FROM queue_journeys", null).use { it.moveToFirst(); assertTrue(it.isNull(0)) }
-                if (malformed) raw.execSQL("UPDATE queue_journeys SET historySize = 3") else raw.execSQL("DROP TRIGGER fail_cleanup")
+                when (failure) {
+                    "size" -> raw.execSQL("UPDATE queue_journeys SET historySize = 3")
+                    "negative" -> raw.execSQL("DELETE FROM queue_visits WHERE token = 'invalid-negative'")
+                    else -> raw.execSQL("DROP TRIGGER fail_cleanup")
+                }
             }
             val retry = open(name)
             try { assertEquals(history, retry.queues().read().active!!.journey!!.history) }

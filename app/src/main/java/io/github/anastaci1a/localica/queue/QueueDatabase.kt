@@ -239,6 +239,7 @@ abstract class QueueDatabase : RoomDatabase() {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.query("""SELECT queueId FROM queue_journeys j WHERE historySize < 0 OR
                     (historySize = 0 AND cursor != -1) OR (historySize > 0 AND (cursor < 0 OR cursor >= historySize)) OR
+                    EXISTS (SELECT 1 FROM queue_visits v WHERE v.queueId = j.queueId AND v.ordinal < 0) OR
                     historySize != (SELECT COUNT(*) FROM queue_visits v WHERE v.queueId = j.queueId AND v.ordinal >= 0 AND v.ordinal < j.historySize) OR
                     historySize != (SELECT COUNT(DISTINCT ordinal) FROM queue_visits v WHERE v.queueId = j.queueId AND v.ordinal >= 0 AND v.ordinal < j.historySize)""").use {
                     check(!it.moveToFirst()) { "Invalid legacy journey history boundary" }
