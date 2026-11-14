@@ -100,8 +100,8 @@ class GlassTouchLightTest {
         fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         assertEquals("1be7b81ccf3d1f869658d46341661c44004b4ff216c95f12a164eb41c4811d7c", sha(File(root, "LensRenderer.kt").readBytes()))
         val source = File(root, "LiquidGlass.kt").readText()
-        val effect = source.substring(source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect("), source.indexOf("\n        } else if", source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")))
-        assertEquals("b1470d8a790e70afaadf9d92d24b93d2b51cded496d5dc4f1b819d4a1260ee1a", sha(effect.toByteArray()))
+        val effect = source.substring(source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect("), source.indexOf("\n                else if", source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")))
+        assertEquals("20e598e80a1ac997cfb4d02c22a9c8ceffb5f152de28344c6e71ff53ef954892", sha(effect.toByteArray()))
         assertTrue(Regex("""if \(a > 0f\) drawContactLight\(glassContactPoint\(contact.point""").containsMatchIn(source))
         assertTrue(source.contains("MotionProfile.TouchLight, io.github.anastaci1a.localica.ui.spec.MotionProfile.ControlOff"))
         assertEquals(1f, GlassAppearance().touchLight, 0f)
