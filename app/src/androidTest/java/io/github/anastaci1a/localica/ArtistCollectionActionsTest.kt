@@ -48,12 +48,12 @@ class ArtistCollectionActionsTest {
             compose.runOnUiThread { controller = QueueController(db.queues(), preferences,
                 (context.applicationContext as LocalicaApplication).library, scope) }
             compose.waitUntil(5000) { !controller.state.value.loading }
-            compose.setContent { EngineTheme(reduced = true) {
+            compose.setContent { EngineTheme(reduced = !afterScroll) {
                 val queueState by controller.state.collectAsState()
                 CompositionLocalProvider(LocalSessionSelection provides session) {
                     BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(),
                         route, {}, {}, {}, { _, _, _ -> },
-                        controller, null, true, false, queueState = queueState, reducedMotion = true,
+                        controller, null, true, false, queueState = queueState, reducedMotion = !afterScroll,
                         queryDispatcher = Dispatchers.Unconfined)
                 }
             } }
@@ -69,10 +69,12 @@ class ArtistCollectionActionsTest {
                     }
                     compose.waitForIdle()
                     val after = carousel.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value()
+                    if (step == 0 || step == 4) assertTrue("Fixture: swipe $step moves the carousel", before != after)
                     val viewport = carousel.fetchSemanticsNode().boundsInRoot
                     val name = tracks.map { it.album }.distinct().firstOrNull { name ->
                         name != previous && compose.onAllNodesWithText(name).fetchSemanticsNodes().singleOrNull()?.boundsInRoot
-                            ?.let { it.width > 0f && it.left >= viewport.left && it.right <= viewport.right } == true
+                            ?.let { it.width >= 112f * compose.density.density && it.height >= 120f * compose.density.density &&
+                                it.left >= viewport.left && it.right <= viewport.right } == true
                     } ?: error("Fixture: no different fully visible album after swipe $step")
                     compose.onNodeWithText(name).assertIsDisplayed().performTouchInput { click() }
                     compose.runOnIdle {
