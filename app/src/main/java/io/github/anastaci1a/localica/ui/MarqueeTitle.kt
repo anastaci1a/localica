@@ -78,7 +78,8 @@ internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifi
         Layout(content = {
             Text(title, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
         }, modifier = Modifier
-            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .graphicsLayer { clip = true; compositingStrategy = if (textWidth > width || frame.phase != MarqueePhase.Rest)
+                CompositingStrategy.Offscreen else CompositingStrategy.Auto }
             .drawWithContent {
                 clipRect {
                     translate(if (rtl) frame.offset + size.width - fullTextWidth else -frame.offset) {
