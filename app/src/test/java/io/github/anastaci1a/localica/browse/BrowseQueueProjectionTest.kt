@@ -102,7 +102,10 @@ class BrowseQueueProjectionTest {
         val first = evaluate(library, detail(queue), listOf(queue))
         val checkpoint = queue.copy(positionMs = 1, currentEntryId = "e1")
         val second = evaluate(library, detail(checkpoint), listOf(checkpoint))
-        assertEquals(first, second)
+        // Independent producer calls (detail evaluation, opening projection) build equal projections of one revision.
+        val opening = BrowseQueries.openingQueue(library, checkpoint, detail(checkpoint), "e5")!!
+        assertTrue(first == second && second == first && first == opening && opening == first)
+        assertEquals(first.hashCode(), opening.hashCode())
         val (equal, bytes) = allocation { first == second }
         assertTrue(equal)
         assertTrue("checkpoint equality allocated $bytes B", bytes < 1024)
@@ -141,7 +144,6 @@ class BrowseQueueProjectionTest {
             assertEquals(plain.hashCode(), view.hashCode())
         }
         val queue = queue(library, 1_000_000)
-
         var reads = 0
         val counting: (QueueEntry) -> SongRow = { reads++; occurrence(it) }
         fun item() = BrowserItem(MediaRef(MediaKind.Queue, queue.id), queue.name, null, queue.entries.mapView(counting))
@@ -149,7 +151,7 @@ class BrowseQueueProjectionTest {
         val (a, b, c, d) = listOf(item(), item(), songs(), songs())
         reads = 0
         assertNotSame(a, b)
-        assertTrue(a == b && c == d)
+        assertTrue(a == b && b == a && c == d && d == c)
         assertEquals(a.hashCode(), b.hashCode())
         assertEquals(c.hashCode(), d.hashCode())
         assertEquals("elements read by owner equality", 0, reads)
@@ -159,6 +161,14 @@ class BrowseQueueProjectionTest {
             base.copy(groupHeading = null), base.copy(added = 9), base.copy(modified = 9), base.copy(plays = 9), base.copy(coverUri = null),
             base.copy(songs = listOf(SongRow("r", track(1))))).forEach { assertNotEquals(base, it) }
         assertEquals(base, base.copy(songs = ArrayList()))
+        val albums = List(1_000) { LibraryGroup("a$it", "A$it", null, emptyList()) }
+        val countingAlbum: (LibraryGroup) -> LibraryGroup = { reads++; it }
+        val (e, g) = List(2) { songResult(queue.entries.mapView(counting), SongListView.Artists, albums.mapView(countingAlbum)) }
+        reads = 0
+        assertTrue(e == g && g == e)
+        assertEquals(e.hashCode(), g.hashCode())
+        assertNotEquals(e, e.copy(artistAlbums = albums.toList().mapView(countingAlbum)))
+        assertEquals("elements read by artistAlbums equality", 0, reads)
         val songResult = songs()
         listOf(songResult.copy(scope = SongListView.Search), songResult.copy(artistAlbums = listOf(LibraryGroup("a", "A", null, emptyList()))),
             songResult.copy(items = emptyList()), songResult.copy(rows = emptyList()), songResult.copy(keys = emptyList())).forEach { assertNotEquals(songResult, it) }
