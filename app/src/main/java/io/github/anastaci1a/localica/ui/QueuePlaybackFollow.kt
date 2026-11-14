@@ -4,14 +4,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import io.github.anastaci1a.localica.browse.BrowserItem
+import io.github.anastaci1a.localica.browse.BrowseResult
 import kotlinx.coroutines.Job
 
 /** One exact occurrence, never a track-id or top-of-list fallback. */
 internal class QueuePlaybackFollowRequest(val occurrenceId: String, val owner: Any, val modalGeneration: Long?,
     val initialPosition: Boolean = false) {
-    fun targetIndex(items: List<BrowserItem>): Int? =
-        items.indexOfFirst { it.row?.id == occurrenceId }.takeIf { it >= 0 }?.plus(1)
+    fun targetIndex(result: BrowseResult): Int? =
+        result.indexOfKey(occurrenceId).takeIf { it >= 0 }?.plus(1)
 }
 
 /** Route-local UI state. Only occurrence changes and explicit Return admit new motion;

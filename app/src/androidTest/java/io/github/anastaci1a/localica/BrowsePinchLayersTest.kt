@@ -382,7 +382,7 @@ class BrowsePinchLayersTest {
             val keys = fixture.keys.value
             val indices = remember(keys) {
                 val shared = keys.withIndex().associate { it.value to it.index }
-                CountedIndices(retainedPinchItemIndices(keys, shared) { it })
+                CountedIndices(shared)
             }
             val empty = rememberTextMeasurer().measure(AnnotatedString(""))
             SideEffect {

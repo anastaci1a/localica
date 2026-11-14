@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.browse.BrowserItem
+import io.github.anastaci1a.localica.browse.BrowseResult
 import io.github.anastaci1a.localica.library.SongRow
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.navigation.MediaKind
@@ -309,11 +310,11 @@ class QueuePlaybackFollowTest {
         val first = item("first")
         val duplicate = item("duplicate")
         val request = QueuePlaybackFollowRequest("duplicate", owner, 0)
-        assertEquals(2, request.targetIndex(listOf(first, duplicate)))
-        assertEquals(1, request.targetIndex(listOf(duplicate, first)))
-        assertNull(request.targetIndex(listOf(first)))
-        assertNull(request.targetIndex(emptyList()))
-        assertNull(QueuePlaybackFollowRequest("song", owner, 0).targetIndex(listOf(first, duplicate)))
+        assertEquals(2, request.targetIndex(BrowseResult(listOf(first, duplicate))))
+        assertEquals(1, request.targetIndex(BrowseResult(listOf(duplicate, first))))
+        assertNull(request.targetIndex(BrowseResult(listOf(first))))
+        assertNull(request.targetIndex(BrowseResult()))
+        assertNull(QueuePlaybackFollowRequest("song", owner, 0).targetIndex(BrowseResult(listOf(first, duplicate))))
     }
 
     @Test fun internalScrollOwnershipIsNestedAndReleasedAfterFailure() = runTest {
