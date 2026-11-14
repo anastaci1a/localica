@@ -3,12 +3,11 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.runtime.*
 import kotlin.math.abs
 
-/** Read-only projection of the popup's bound bottom edge onto the list vacancy; no clock or trajectory.
- * Only an in-window presentation vacates the slot: Closed, Admitting and Restoring all rest at expansion 0. */
+/** Vacancy borrows the shared expanded presentation and its bound bottom edge. */
 internal class SearchSlotMotion(private val owner: PopupTakeoverOwner) {
     private var edge by mutableStateOf<MotionValue?>(null)
     var travel by mutableStateOf<SearchSlotTravel?>(null); private set
-    val fraction: Float get()=if(owner.takeover!=PopupTakeover.InWindow) 0f else edge?.let { travel?.fraction(it.value()) }?:0f
+    val fraction: Float get()=if(!owner.expanded) 0f else edge?.let { travel?.fraction(it.value()) }?:0f
     fun bindBottom(value: MotionValue,destination: Float,target: Float) {
         if(edge===value && travel?.toBottom==destination && travel?.toFraction==target) return
         travel=SearchSlotTravel(fraction,value.value(),destination,target); edge=value

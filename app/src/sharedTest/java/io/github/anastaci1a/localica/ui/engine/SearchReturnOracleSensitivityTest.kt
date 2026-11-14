@@ -7,7 +7,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.abs
 
-/** #960 D: the vacancy is a read of the takeover phase and the actual bound bottom edge of the shared popup
+/** #960 D: vacancy reads the shared expanded presentation and actual bound bottom edge of the shared popup
  * rectangle (Dialog law). It rests exactly on 0/1, follows a reversal from its current value, and a one-frame-late
  * producer is rejected. Native placement and IME behavior remain covered by the original instrumented tests. */
 class SearchReturnOracleSensitivityTest {
@@ -44,6 +44,18 @@ class SearchReturnOracleSensitivityTest {
             place()
             assertEquals(envelope, motion.bounds!!.valueAt(h.clock.stampNow))
             assertEquals("Open rest is exactly 1", 1f, slot.fraction, 0f)
+            val row = io.github.anastaci1a.localica.ui.SearchSlotLayout()
+            row.place(false, row.measure(false, slot.fraction, 0, 98f))
+            assertEquals("The actual row witnesses the exact open endpoint", 1f, row.placedFraction, 0f)
+            owner.takeover = PopupTakeover.Closed
+            assertFalse(owner.expanded)
+            assertEquals("Unmount vacates nothing even with a retained open edge", 0f, slot.fraction, 0f)
+            row.place(true, row.measure(true, slot.fraction, 0, 98f))
+            assertEquals("Lookahead cannot publish an unplaced endpoint", 1f, row.placedFraction, 0f)
+            row.place(false, row.measure(false, slot.fraction, 0, 98f))
+            assertEquals("The actual restored row witnesses exactly zero", 0f, row.placedFraction, 0f)
+            owner.takeover = PopupTakeover.InWindow
+            assertEquals("Remount reads the live presentation", 1f, slot.fraction, 0f)
             val reference = SearchSlotTravel(1f, envelope.bottom, home.bottom, 0f)
             motion.show(false)
             place()

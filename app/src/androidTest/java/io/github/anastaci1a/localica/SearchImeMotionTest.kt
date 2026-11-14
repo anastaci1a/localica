@@ -335,7 +335,7 @@ class SearchImeMotionTest {
         }
     }
 
-    private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false, initialExtraContentHeight: Int = 0) {
+    private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false, initialExtraContentHeight: Int = 0, onImeHide: (() -> Unit)? = null) {
         text = initialQuery
         extraContentHeight = initialExtraContentHeight
         keyboardAllowed = !deferKeyboard
@@ -388,6 +388,7 @@ class SearchImeMotionTest {
                     val source = WindowInsets.imeAnimationSource.getBottom(density)
                     val target = WindowInsets.imeAnimationTarget.getBottom(density)
                     val hiddenImeConsumed by rememberUpdatedState(ime == 0 && source == 0 && target == 0)
+                    LaunchedEffect(source, target) { if (source > 0 && target == 0) onImeHide?.invoke() }
                     SideEffect { popupView = view; keyboardSettled = ime == target && source == target }
                     LaunchedEffect(visible, focusedWindow) {
                         if (visible && focusedWindow) {
@@ -768,6 +769,41 @@ class SearchImeMotionTest {
     @Test fun independentOpeningAndEmptyNativeBackHaveOneDirectReturn() = exerciseDismissal(outside = false)
     @Test fun outsidePointerDismissalDoesNotFollowTheKeyboardDown() = exerciseDismissal(outside = true)
     @Test fun reducedMotionShapesImmediatelyThenAnchorsAndSnapsDirectlyHome() = exerciseDismissal(outside = false, reduced = true)
+
+    @Test fun reopeningWhileThePreviousKeyboardCollapsesStillPlacesItsNewEnvelope() = withDockedKeyboard {
+        var reopen = false
+        fixture(true, onImeHide = {
+            if (reopen) {
+                reopen = false
+                visible = true
+                extraContentHeight = 120
+            }
+        })
+        try {
+            compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
+            opened()
+            awaitDockedKeyboard()
+            opened()
+            val oldHeight = compose.runOnUiThread { samples.last().destination.height }
+            compose.runOnUiThread {
+                samples.clear()
+                keyboardAllowed = false
+                reopen = true
+                visible = false
+            }
+            advanceUntil { samples.any { it.opening && it.imeSource > 0 && it.imeTarget == 0 && it.progress < 1f } }
+            compose.runOnUiThread {
+                val first = samples.first { it.opening && it.imeSource > 0 && it.imeTarget == 0 && it.progress < 1f }
+                assertTrue("An opening cannot freeze on the previous keyboard's collapsing geometry: $first",
+                    first.destination.height > oldHeight + 50f)
+                assertTrue(visible)
+            }
+            opened()
+        } finally {
+            compose.runOnUiThread { reopen = false; visible = false }
+            compose.mainClock.autoAdvance = true
+        }
+    }
 
     @Test fun absentKeyboardOpeningCanBeCancelledAndReopenedWithoutStaleReadiness() {
         fixture(false)

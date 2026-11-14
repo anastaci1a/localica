@@ -79,4 +79,51 @@ class SearchDismissalLifecycleTest {
             compose.waitForIdle()
         }
     }
+    @Test fun dismissalWithoutAChildHandoffClearsSemanticsOnTheFirstFrame() = firstHideFrame(false)
+    @Test fun dismissalWithAChildHandoffClearsSemanticsOnTheFirstFrame() = firstHideFrame(true)
+
+    private fun firstHideFrame(handedOff: Boolean) {
+        var visible by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        lateinit var home: GlassPopupHome
+        var dismiss: (() -> Unit)? = null
+        var popupView: View? = null
+        var dismissals = 0
+        val child = GlassPopupFlight().also { it.handedOff = handedOff }
+        compose.setContent { LocalicaTheme {
+            Box(Modifier.fillMaxSize()) {
+                anchor = rememberGlassAnchor()
+                Box(Modifier.align(Alignment.BottomCenter).padding(24.dp).size(240.dp, 48.dp).glassAnchor(anchor))
+                GlassMorphPopup(visible, anchor, { visible = false; dismissals++ }, GlassPlacement.Search) {
+                    home = checkNotNull(LocalGlassPopupHome.current)
+                    dismiss = LocalPopupDismiss.current
+                    popupView = LocalView.current
+                    Text("Dismissal semantics witness", Modifier.height(220.dp))
+                }
+            }
+        } }
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnUiThread { visible = true }
+            compose.advanceMorphOpening(2000, anchor) { popupView }
+            compose.onNodeWithText("Dismissal semantics witness").assertExists()
+            compose.runOnUiThread {
+                home.flights.add(child)
+                assertEquals(handedOff, home.handedOff)
+                checkNotNull(dismiss).invoke()
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.onNodeWithText("Dismissal semantics witness").assertDoesNotExist()
+            compose.runOnUiThread {
+                assertEquals(1, dismissals)
+                assertEquals("Child retirement cannot delay Hide", handedOff, home.handedOff)
+            }
+        } finally {
+            compose.runOnUiThread { home.flights.remove(child); visible = false }
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+        }
+    }
+
 }

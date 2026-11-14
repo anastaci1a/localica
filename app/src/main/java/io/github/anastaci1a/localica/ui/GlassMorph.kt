@@ -86,7 +86,7 @@ internal class GlassAnchor : PopupTakeoverOwner {
     fun advance(to: PopupTakeover, vararg from: PopupTakeover) = (from.isEmpty() || takeover in from).also { if (it) takeover = to }
     // Derived views notify readers only when their own value changes, as the flags they replace did.
     val present by derivedStateOf { takeover != PopupTakeover.Closed }
-    val hidden by derivedStateOf { takeover == PopupTakeover.InWindow }
+    val hidden by derivedStateOf { expanded }
     val modalPresent by derivedStateOf { takeover >= PopupTakeover.InWindow }
     val shadowInModal get() = modalPresent
     var surfaceNode: SurfaceView? by mutableStateOf(null)
@@ -477,14 +477,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             motion.show(false)
         } else {
             motion.release()
-            if (visible || childHome.handedOff) motion.show(visible)
+            motion.show(visible)
         }
     }
     var searchHeightLimit by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(Int.MAX_VALUE) }
     val dismissNow: () -> Unit = {
-        // Hide, input and semantics turn in the dismissal event itself (R7). Waiting for the next
-        // composition can swallow a quick tap on a neighboring trigger. A refusing caller re-shows on its next composition.
-        if (childHome.handedOff) motion.show(false)
+        // Hide releases semantics at the event; a refusing caller re-shows on its next composition.
+        motion.show(false)
         modalWindow?.glassInput(false, event = true)
         gestures.deactivate()
         onDismiss()
@@ -846,11 +845,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 // An empty search owns the keyboard: its target keeps the keyboard's reported
                 // destination until the keyboard actually descends. A query rests on the final viewport.
                 val openingSearchTarget = visible && searchDismissOnImeBack
-                // Native IME-owned Back updates its target before the editor's
-                // effect runs. Hold that first layout at the pre-Back rectangle, while this
-                // window's own placed keyboard (lastIme) is collapsing, so the return cannot inherit it.
-                val holdImeBack = placement == GlassPlacement.Search && searchDismissOnImeBack && motion.shown &&
-                    windowFocused && childPanels.intValue == 0 && imeTarget == 0 && (imeSource > 0 || searchMotion.lastIme > 0)
+                // IME-owned Back holds only an open resting window with its own placed keyboard.
+                val holdImeBack = placement == GlassPlacement.Search && searchDismissOnImeBack && anchor.expanded &&
+                    motion.expansion.retirementReady && phase() == 1f && windowFocused && childPanels.intValue == 0 &&
+                    imeTarget == 0 && searchMotion.lastIme > 0
                 fun surfaceOpacity() = if (!admittedDraw) 0f else if (detached) motion.detachedOpacity.at(phase()) else
                     if (anchor.present && window != null && readyWindow === window) 1f else 0f
                 Box(Modifier.fillMaxSize().onGloballyPositioned {
