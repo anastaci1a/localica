@@ -44,7 +44,7 @@ permissions:
 
 env:
   # Native shards per API; keep the device-tests matrix `shard` list at indices 0..N-1.
-  LOCALICA_DEVICE_SHARDS: '8'
+  LOCALICA_DEVICE_SHARDS: '12'
 
 concurrency:
   group: android-${{ github.ref }}
@@ -268,14 +268,14 @@ jobs:
       LOCALICA_SCROLL_PERFORMANCE: ${{ github.event_name == 'workflow_dispatch' && inputs.scroll_performance && 'true' || '' }}
       LOCALICA_LIVE_EVIDENCE: 'true'
       LOCALICA_PREBUILT_TEST_APKS: 'true'
-      # One shared entry per train instead of sixteen shard entries (#681).
+      # One shared entry per train instead of per-shard entries (#681).
       GRADLE_BUILD_ACTION_CACHE_KEY_JOB: localica-device-tests
       GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE: shared
     strategy:
       fail-fast: false
       matrix:
         api: [26, 36]
-        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
