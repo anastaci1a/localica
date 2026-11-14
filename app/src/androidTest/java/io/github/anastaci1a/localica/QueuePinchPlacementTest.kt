@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -48,6 +50,11 @@ class QueuePinchPlacementTest {
             compose.waitForIdle()
             list.performScrollToIndex(200)
             compose.waitForIdle()
+            val listBounds = list.fetchSemanticsNode().boundsInRoot
+            val captured = compose.onAllNodes(SemanticsMatcher("Queue occurrence") {
+                it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("media-o") == true
+            }).fetchSemanticsNodes().filter { it.boundsInRoot.overlaps(listBounds) }
+                .associate { it.config[SemanticsProperties.TestTag].removePrefix("media-") to it.boundsInRoot }
             pinchDrawProbe = { frames += it }
             compose.mainClock.autoAdvance = false
             val begin = if (outward) 150f else 300f
@@ -73,10 +80,9 @@ class QueuePinchPlacementTest {
             compose.waitForIdle()
 
             val label = "${start.presentation}/${start.listSize}/${start.itemsPerRow} ${if (outward) "out" else "in"}"
-            val captured = frames.first()
             val final = frames.last()
             android.util.Log.i("QueuePinch957", "$label frames=${frames.size} held=${frames.count { it.held }} ready=${frames.count { it.destinationReady }} " +
-                "captured=${captured.items.size} retainedFrames=${frames.count { f -> f.items.values.any { it.retained } }} " +
+                "captured=${captured.size} firstDraw=${frames.first().items.size} retainedFrames=${frames.count { f -> f.items.values.any { it.retained } }} " +
                 "maxRetained=${frames.maxOf { f -> f.items.values.count { it.retained } }} final=${final.items.size} p=${final.progress}")
             assertTrue("$label settled at ${final.progress}", final.progress > .999f && !final.held)
             // Unclipped: a partly scrolled-off cell keeps its full extent.
@@ -90,13 +96,12 @@ class QueuePinchPlacementTest {
             val dy = pairs.map { it.third.top - it.second.top }.sorted()[pairs.size / 2]
             for ((key, drawn, cell) in pairs) assertTrue("$label: $key drew at $drawn but settles at $cell (offset $dx, $dy)",
                 abs(cell.left - drawn.left - dx) <= 2f && abs(cell.top - drawn.top - dy) <= 2f)
-            assertTrue("$label includes destination-only keys", pairs.any { it.first !in captured.items })
+            assertTrue("$label includes destination-only keys", pairs.any { it.first !in captured })
             val indices = pairs.map { (it.first as String).removePrefix("o").toInt() }
             assertTrue("$label stays mid-queue: $indices", indices.all { it in 100..300 })
             // The zoom anchor is the key under the fingers at capture; it is restored on screen.
-            val center = captured.viewport.center
-            val anchor = captured.items.entries.filter { !it.value.retained }.minBy { abs(it.value.bounds.center.y - center.y) }.key
-            val listBounds = list.fetchSemanticsNode().boundsInRoot
+            val center = listBounds.center
+            val anchor = captured.minBy { abs(it.value.center.y - center.y) }.key
             val anchorCell = settled(anchor)
             assertTrue("$label restores anchor $anchor: $anchorCell in $listBounds", anchorCell != null && anchorCell.overlaps(listBounds))
         } finally {
