@@ -43,6 +43,7 @@ class BrowseQueueHeapTest {
         }
         val lines = mutableListOf<String>()
         val gcBefore = gcCount(); val gcTimeBefore = gcTimeMs()
+        library.tracksById // The library's own lazy index, built by any first row projection, is not browse-owned.
         val closed = liveBytes()
         fun step(name: String, limit: Long, block: () -> Any?) {
             val started = SystemClock.elapsedRealtime()

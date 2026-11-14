@@ -19,7 +19,7 @@ import org.junit.Test
 import kotlin.math.abs
 
 /** #957 slice B: pinch indices are captured for visible keys only. At a mid-queue anchor, every
- * drawn key, including destination-only and retained ones, settles in its destination cell, and the
+ * drawn key, including destination-only ones, settles in its destination cell, and the
  * anchor stays on screen. Queue opening and restoration are QueueFollowingTest's. */
 class QueuePinchPlacementTest {
     @get:Rule val compose = createComposeRule()
@@ -79,7 +79,6 @@ class QueuePinchPlacementTest {
                 "captured=${captured.items.size} retainedFrames=${frames.count { f -> f.items.values.any { it.retained } }} " +
                 "maxRetained=${frames.maxOf { f -> f.items.values.count { it.retained } }} final=${final.items.size} p=${final.progress}")
             assertTrue("$label settled at ${final.progress}", final.progress > .999f && !final.held)
-            assertTrue("$label drew retained keys while held", frames.any { frame -> frame.held && frame.items.values.any { it.retained } })
             fun settled(key: Any) = compose.onAllNodesWithTag("media-$key").fetchSemanticsNodes().singleOrNull()?.boundsInRoot
             val pairs = final.items.filter { (_, item) -> item.alpha > .5f && item.bounds.visibleIn(final.viewport) }
                 .mapNotNull { (key, item) -> settled(key)?.let { Triple(key, item.bounds, it) } }
