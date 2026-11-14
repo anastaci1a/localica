@@ -65,12 +65,12 @@ data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: S
     fun indexOfKey(key: Any) = keys.indexOfLast { it == key }
 }
 /** A pure projection of [source], an immutable revision: queue edits replace `entries`, and results own their rows.
- * Views of one projection over the same revision are equal without reading an element (#957). */
+ * Equal only to a view of one projection over the same revision; elements are never read (#957). */
 private class MappedList<S, T>(private val source: List<S>, private val f: (S) -> T) : AbstractList<T>(), RandomAccess {
     override val size get() = source.size
     override fun get(index: Int) = f(source[index])
-    override fun equals(other: Any?) = if (other !is MappedList<*, *>) super.equals(other) else f == other.f &&
-        (source === other.source || source is MappedList<*, *> && source == other.source)
+    override fun equals(other: Any?) = other is MappedList<*, *> &&
+        (source === other.source || source is MappedList<*, *> && source == other.source) && f == other.f
     override fun hashCode() = size
 }
 internal fun <S, T> List<S>.mapView(f: (S) -> T): List<T> = MappedList(this, f)
