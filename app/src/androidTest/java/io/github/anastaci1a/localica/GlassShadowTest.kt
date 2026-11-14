@@ -337,11 +337,11 @@ class GlassShadowTest {
             return result
         }
         assertTrue(darkPixels() > 100)
-        compose.runOnIdle { anchor.modalPresent = true }
+        compose.runOnIdle { anchor.advance(PopupTakeover.Admitting) }
         assertTrue("The trigger keeps its shadow until the popup is ready", darkPixels() > 100)
-        compose.runOnIdle { anchor.shadowInModal = true }
+        compose.runOnIdle { anchor.advance(PopupTakeover.InWindow) }
         org.junit.Assert.assertEquals("The popup owns its shadow while away from the bottom group", 0, darkPixels())
-        compose.runOnIdle { anchor.modalPresent = false; anchor.shadowInModal = false }
+        compose.runOnIdle { anchor.advance(PopupTakeover.Closed) }
         assertTrue("The returning trigger rejoins the union", darkPixels() > 100)
     }
 

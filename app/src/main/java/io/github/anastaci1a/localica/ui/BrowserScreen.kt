@@ -180,12 +180,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide()
     }
     val panelReady = LocalGlassPanelReady.current
-    val reportSearchOpening = LocalSearchOpeningReady.current
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     val keyboardClosing by rememberImeClosing(WindowInsets.ime,
         WindowInsets.imeAnimationSource, WindowInsets.imeAnimationTarget, density)
     var restoreResultsFocus by remember(route.key) { mutableStateOf(route.search && route.queryCommitted) }
-    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing, reportSearchOpening, scopedEditor?.focused) {
+    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing, scopedEditor?.focused) {
         searchEditTrace?.invoke("autofocus decision key=${route.key.hashCode()} request=$focusRequest consumed=$focusedRequest once=$focusedOnce ready=$panelReady window=$windowFocused closing=$keyboardClosing player=$playerOpen editor=${scopedEditor?.let { System.identityHashCode(it) }} active=${scopedEditor?.active} focused=${scopedEditor?.focused}")
         // Dialog attachment and IME focus happen outside Compose's animation clock.
         // Do not consume an autofocus request while the returning window still owns input.
@@ -196,7 +195,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
             searchEditTrace?.invoke("autofocus requested key=${route.key.hashCode()} request=$focusRequest editor=${scopedEditor?.let { System.identityHashCode(it) }}")
             restoreResultsFocus = false
-            reportSearchOpening?.invoke(true)
         } else if (restoreResultsFocus && !playerOpen) {
             // Replacing a focused field can transfer focus to the restored field even without
             // requestFocus. Back restores results, so explicitly end that input session.
@@ -204,8 +202,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
             resultsFocus.requestFocus(); keyboard?.hide()
             restoreResultsFocus = false
-            reportSearchOpening?.invoke(false)
-        } else if (route.search && !playerOpen) reportSearchOpening?.invoke(scopedEditor?.focused == true)
+        }
     }
     LaunchedEffect(libraryFilters.visible, route.key, route.filter, selectionVisible) {
         if (selectionVisible && route.tab == MainTab.Library && route.collection == null && !route.globalSearch && route.filter != null && filters.none { it.kind == route.filter }) {
@@ -1428,9 +1425,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
     if (showSearchPill || localSearchOpen || searchAnchor.hidden) {
         fun closeSearch() { retireSearchEditor(); localSearchOpen = false }
-        fun backSearch() {
+        fun backSearch(): Boolean {
             val previous = if (localSearch.route.text.isNotBlank()) localSearch.back(false) else null
-            if (previous != null) { retireSearchEditor(); localSearch = previous } else closeSearch()
+            if (previous != null) { retireSearchEditor(); localSearch = previous }
+            return previous != null
         }
         LaunchedEffect(localSearchOpen, searchAnchor.modalPresent) {
             if (!localSearchOpen && !searchAnchor.modalPresent) {

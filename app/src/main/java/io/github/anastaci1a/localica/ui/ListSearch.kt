@@ -129,10 +129,12 @@ private class FadeBrushCache(private val band: Float) {
 
 @Composable
 internal fun ListSearchWindow(visible: Boolean, anchor: GlassAnchor, hasQuery: Boolean, onDismiss: () -> Unit,
-    onBack: (() -> Unit)? = null, content: @Composable () -> Unit) {
+    onBack: (() -> Boolean)? = null, content: @Composable () -> Unit) {
     GlassMorphPopup(visible, anchor, onDismiss, GlassPlacement.Search, searchDismissOnImeBack = !hasQuery) {
         // Register before the editor so ending text input remains the first Back action.
-        BackHandler(visible && onBack != null) { onBack?.invoke() }
+        // A Back that leaves no earlier query is the popup's one dismissal.
+        val dismiss = LocalPopupDismiss.current
+        BackHandler(visible && onBack != null) { if (onBack?.invoke() != true) dismiss?.invoke() }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             Box(Modifier.fillMaxWidth().then(if (hasQuery) Modifier.heightIn(max = maxHeight * .85f) else Modifier.wrapContentHeight())
                 .testTag("list-search-popup")) {

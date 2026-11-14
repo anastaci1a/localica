@@ -1,26 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.spring
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.lerp
-
-internal fun searchBottomSpring(speed: Float) = glassMorphSpring(speed).let {
-    spring(dampingRatio = it.dampingRatio, stiffness = it.stiffness, visibilityThreshold = .5f)
-}
-
-/** An attaching popup can briefly inherit the previous window's Compose IME value.
- * Start from its own focused native window; once acquired, position remains owned
- * through inset disappearance/retargeting until the opening hands off or cancels. */
-internal fun searchOpeningOwnsPosition(positioned: Boolean, ime: Int, nativeIme: Int,
-    windowFocused: Boolean, focusRequested: Boolean?, fallbackReady: Boolean): Boolean =
-    positioned || (ime > 0 && nativeIme > 0 && windowFocused) || focusRequested == false || fallbackReady
 
 /** Use the reported final IME viewport for both size and anchor, even while foreground
  * measurement still reflects the taller current viewport. */
@@ -36,37 +19,8 @@ internal fun searchPanelTarget(origin: Offset, availableWidth: Float, availableH
     return Rect(origin + Offset((availableWidth - width) / 2f, top), Size(width, height))
 }
 
-/** Complete window-space geometry; animated IME padding cannot move a captured flight. */
-internal data class SearchMorphFlight(val from: Rect, val startingProgress: Float, val opening: Boolean) {
-    internal fun fraction(progress: Float): Float {
-        val remaining = if (opening) 1f - startingProgress else startingProgress
-        val traveled = if (opening) progress - startingProgress else startingProgress - progress
-        return if (remaining <= .0001f) 1f else (traveled / remaining).coerceIn(0f, 1f)
-    }
-
-    fun rectangle(progress: Float, destination: Rect): Rect = lerp(from, destination, fraction(progress))
-
-    /** Shape growth and keyboard travel have independent owners. Before travel, grow
-     * down from the pill; after travel starts, the moving bottom supports upward growth. */
-    fun openingRectangle(progress: Float, destination: Rect, placementBottom: Float?,
-        maxHeight: Float = Float.POSITIVE_INFINITY): Rect {
-        val shaped = rectangle(progress, destination)
-        val height = shaped.height.coerceAtMost(maxHeight)
-        val top = placementBottom?.minus(height) ?: from.top
-        return Rect(shaped.left, top, shaped.right, top + height)
-    }
-}
-
-/** Live compatibility boundary: screens read vacancy without depending on Engine. */
-internal class SearchSlotMotion {
-    private val value=io.github.anastaci1a.localica.ui.engine.SearchSlotMotion()
-    val fraction get()=value.fraction
-    fun begin()=value.begin()
-    fun renew()=value.renew()
-    fun settle(token: Long,fraction: Float)=value.settle(token,fraction)
-    fun bind(token: Long,edge: io.github.anastaci1a.localica.ui.engine.MotionValue)=value.bind(token,edge)
-    fun bindBottom(token: Long,edge: io.github.anastaci1a.localica.ui.engine.MotionValue,destination: Float,target: Float)=value.bindBottom(token,edge,destination,target)
-}
+/** Test-observer record of where a placed flight began; nothing renders from it. */
+internal data class SearchMorphFlight(val from: Rect, val startingProgress: Float, val opening: Boolean)
 internal typealias SearchSlotTravel = io.github.anastaci1a.localica.ui.engine.SearchSlotTravel
 
 /** One grid traversal owns its anchor request and spacer measurement together. */
@@ -105,15 +59,17 @@ internal class SearchSlotLayout {
     }
 }
 
+/** Placement instrumentation plus the last placed IME height (the IME-Back hold's input). */
 internal class SearchMorphMotion {
     var rendered = Rect.Zero
     var lastIme = 0
+    var target = Rect.Zero
+    var flight: SearchMorphFlight? = null
     var observer: ((SearchMorphSample) -> Unit)? = null
 }
 
-/** The editor reports after its window-owned focus/show (or result restoration) request. */
-internal val LocalSearchOpeningReady = staticCompositionLocalOf<((Boolean) -> Unit)?> { null }
-internal val LocalSearchReturnStart = staticCompositionLocalOf<(() -> Unit)?> { null }
+/** The enclosing popup's one dismissal: Hide, input and semantics turn at this event (#960). */
+internal val LocalPopupDismiss = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 /** Observe actual placed frames without sampling a later animation-clock value. */
 internal data class SearchMorphSample(
@@ -135,7 +91,6 @@ internal data class SearchMorphSample(
     /** Same reader used by the underlying list, sampled with this placed geometry. */
     val slotFraction: Float = 0f,
     val slotTravel: SearchSlotTravel? = null,
-    val slotReturnFrom: Float = 0f,
     /** Same rectangle animation owns opening movement and size, before actual placement. */
     val openingOwnedBounds: Rect? = null,
     /** Bound bottom sampled in this placement callback, in both directions. */

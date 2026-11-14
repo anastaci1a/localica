@@ -101,10 +101,10 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
     fun unbind(owner: io.github.anastaci1a.localica.ui.engine.ExpandCollapse)=phase.unbind(owner)
 }
 
-@Stable internal class GlassContact {
+@Stable internal class GlassContact(private val inModal: () -> Boolean = { false }) {
     var pressed by mutableStateOf(false)
     var travel by mutableFloatStateOf(0f)
-    var modal by mutableStateOf(false)
+    val modal get() = inModal()
     var active by mutableStateOf(true)
     private var verticalAxis by mutableStateOf(false)
     var vertical: Boolean

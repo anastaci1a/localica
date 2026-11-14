@@ -45,11 +45,8 @@ class GlassMorphZeroConstraintsTest {
                     val view = LocalView.current
                     val owner = remember { Any() }
                     var draft by remember { mutableStateOf("") }
-                    val reportOpening = LocalSearchOpeningReady.current
                     SideEffect {
                         popupView = view; currentOwner = owner; currentDraft = draft
-                        // This fixture owns native constraints, not an asynchronous IME.
-                        reportOpening?.invoke(false)
                     }
                     DisposableEffect(owner) {
                         mounts++

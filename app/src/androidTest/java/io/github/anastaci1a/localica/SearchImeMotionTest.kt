@@ -382,7 +382,6 @@ class SearchImeMotionTest {
                     val focus = remember { FocusRequester() }
                     val keyboard = LocalSoftwareKeyboardController.current
                     val focusedWindow = LocalWindowInfo.current.isWindowFocused
-                    val ready = LocalSearchOpeningReady.current
                     val view = LocalView.current
                     val density = LocalDensity.current
                     val ime = WindowInsets.ime.getBottom(density)
@@ -390,10 +389,9 @@ class SearchImeMotionTest {
                     val target = WindowInsets.imeAnimationTarget.getBottom(density)
                     val hiddenImeConsumed by rememberUpdatedState(ime == 0 && source == 0 && target == 0)
                     SideEffect { popupView = view; keyboardSettled = ime == target && source == target }
-                    LaunchedEffect(visible, focusedWindow, ready) {
+                    LaunchedEffect(visible, focusedWindow) {
                         if (visible && focusedWindow) {
                             withFrameNanos { }
-                            ready?.invoke(true)
                             if (showKeyboard) {
                                 // The delayed fixture releases input only after observing
                                 // the fallback endpoint, independent of CI wall-clock load.
@@ -492,7 +490,7 @@ class SearchImeMotionTest {
     }
 
     private fun springDuration(from: Float, to: Float, velocity: Float = 0f, pixels: Boolean = false): Long =
-        (TargetBasedAnimation(if (pixels) searchBottomSpring(motionSpeed) else glassMorphSpring(motionSpeed), Float.VectorConverter, from, to,
+        (TargetBasedAnimation(glassMorphSpring(motionSpeed), Float.VectorConverter, from, to,
             AnimationVector1D(velocity)).durationNanos + 999_999L) / 1_000_000L
 
     private fun closed() = advanceUntil { !anchor.modalPresent }
@@ -770,6 +768,64 @@ class SearchImeMotionTest {
     @Test fun independentOpeningAndEmptyNativeBackHaveOneDirectReturn() = exerciseDismissal(outside = false)
     @Test fun outsidePointerDismissalDoesNotFollowTheKeyboardDown() = exerciseDismissal(outside = true)
     @Test fun reducedMotionShapesImmediatelyThenAnchorsAndSnapsDirectlyHome() = exerciseDismissal(outside = false, reduced = true)
+
+    @Test fun reopeningWhileThePreviousKeyboardCollapsesStillPlacesItsNewEnvelope() = withDockedKeyboard {
+        fixture(true)
+        var inputThread: Thread? = null
+        val injected = java.util.concurrent.atomic.AtomicBoolean(false)
+        try {
+            compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
+            opened()
+            awaitDockedKeyboard()
+            opened()
+            val oldHeight = compose.runOnUiThread { samples.last().destination.height }
+            val pill = compose.runOnUiThread { anchor.bounds.center }
+            compose.runOnUiThread { samples.clear(); keyboardAllowed = false; visible = false }
+            inputThread = Thread {
+                val deadline = SystemClock.uptimeMillis() + 5000
+                while (!Thread.currentThread().isInterrupted && SystemClock.uptimeMillis() < deadline) {
+                    val collapse = compose.runOnUiThread { samples.lastOrNull()?.takeIf {
+                        !it.opening && it.ime > 0 && it.imeSource > 0 && it.imeTarget == 0
+                    }?.also {
+                        motionTimeline += "${SystemClock.uptimeMillis()} real-trigger-tap at=$pill previous=$it"
+                        extraContentHeight = 120
+                    } }
+                    if (collapse != null) {
+                        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+                        val down = SystemClock.uptimeMillis()
+                        var accepted = true
+                        for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
+                            val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, pill.x, pill.y, 0)
+                            event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                            accepted = automation.injectInputEvent(event, true) && accepted
+                            event.recycle()
+                        }
+                        injected.set(accepted)
+                        return@Thread
+                    }
+                    SystemClock.sleep(1)
+                }
+            }.also { it.start() }
+            advanceUntil { samples.any { it.opening } }
+            inputThread.join(5000)
+            compose.runOnUiThread {
+                val first = samples.first { it.opening }
+                assertTrue("First real-input reopening places the fresh envelope: $first",
+                    first.destination.height > oldHeight + 50f)
+                assertTrue("Both native input events were accepted", injected.get())
+            }
+            opened()
+            compose.runOnUiThread {
+                assertTrue("Real trigger input reopens and retains its modal window", visible && anchor.modalPresent)
+                assertEquals(1f, anchor.contact.expansion.value, 0f)
+            }
+        } finally {
+            inputThread?.interrupt()
+            inputThread?.join(5000)
+            compose.runOnUiThread { visible = false }
+            compose.mainClock.autoAdvance = true
+        }
+    }
 
     @Test fun absentKeyboardOpeningCanBeCancelledAndReopenedWithoutStaleReadiness() {
         fixture(false)
