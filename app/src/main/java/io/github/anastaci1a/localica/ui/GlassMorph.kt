@@ -361,9 +361,10 @@ internal val LocalGlassMorphWorkObserver =
 internal val LocalModalBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
 private val LocalChildPanels = staticCompositionLocalOf<MutableIntState?> { null }
 
-/** Touch alone is released at a dismissal event; focus follows the commit, so an IME hiding into this window ends there (#545). */
-private fun android.view.Window.glassInput(enabled: Boolean, flags: Int = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) {
+/** At a dismissal event, a window showing an IME keeps focus until the commit, so the hiding IME ends there (#545). */
+private fun android.view.Window.glassInput(enabled: Boolean, event: Boolean = false) {
+    val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or if (event && ViewCompat.getRootWindowInsets(decorView)
+        ?.isVisible(WindowInsetsCompat.Type.ime()) == true) 0 else android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
     if (attributes.flags and flags == if (enabled) 0 else flags) return
     if (enabled) clearFlags(flags) else addFlags(flags)
 }
@@ -481,10 +482,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     }
     var searchHeightLimit by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(Int.MAX_VALUE) }
     val dismissNow: () -> Unit = {
-        // Hide, touch and semantics turn in the dismissal event itself (R7). Waiting for the next
+        // Hide, input and semantics turn in the dismissal event itself (R7). Waiting for the next
         // composition can swallow a quick tap on a neighboring trigger. A refusing caller re-shows on its next composition.
         if (childHome.handedOff) motion.show(false)
-        modalWindow?.glassInput(false, android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+        modalWindow?.glassInput(false, event = true)
         gestures.deactivate()
         onDismiss()
         dismissalAttempt++
