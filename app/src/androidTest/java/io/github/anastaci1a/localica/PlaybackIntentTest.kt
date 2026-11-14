@@ -1369,6 +1369,64 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun rapidTransportReportsCaptureAndBacklogLatencyAtOperatorScale() {
+        val arguments = InstrumentationRegistry.getArguments()
+        val entries = arguments.getString("queueEntries", "50000")!!.toInt()
+        val songs = arguments.getString("libraryTracks", "50000")!!.toInt()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        var database: androidx.room.RoomDatabase? = null
+        try {
+            fixture(attach = false, duplicateOccurrences = true, occurrences = entries, librarySize = songs,
+                initialIndex = entries - 10, timeoutMs = 300000, playbackStore = { tracks ->
+                    val db = androidx.room.Room.inMemoryDatabaseBuilder(context, LibraryDatabase::class.java).build()
+                    database = db
+                    RoomLibraryStore(db.libraryDao()).also { store -> runBlocking {
+                        store.replaceRoot(ScanResult(FolderSelection("file:///window-957", "Latency fixture"), tracks, 0))
+                    } }
+                }) {
+                queues.attach(player)
+                withTimeout(300000) {
+                    while (!withContext(Dispatchers.Main) { player.engine.playbackState == Player.STATE_READY }) delay(10)
+                }
+                val captures = mutableListOf<Double>()
+                val acknowledgements = mutableListOf<Double>()
+                val gcBefore = android.os.Debug.getRuntimeStats()
+                val started = android.os.SystemClock.elapsedRealtimeNanos()
+                val done = CompletableDeferred<Unit>()
+                withContext(Dispatchers.Main) {
+                    repeat(20) { index ->
+                        queues.next()
+                        val submitted = android.os.SystemClock.elapsedRealtimeNanos()
+                        queues.requestSeek(2000L + index, null) { applied, _ ->
+                            assertTrue(applied)
+                            val capture = android.os.SystemClock.elapsedRealtimeNanos()
+                            acknowledgements += (capture - submitted) / 1_000_000.0
+                            assertNull("Every earlier capture reached native sync", player.timelineRead)
+                            player.timelineRead = {
+                                captures += (android.os.SystemClock.elapsedRealtimeNanos() - capture) / 1_000_000.0
+                            }
+                        }
+                        queues.previous(alwaysSong = true)
+                    }
+                    queues.settings { done.complete(Unit); it }
+                }
+                withTimeout(300000) { done.await() }
+                val elapsed = (android.os.SystemClock.elapsedRealtimeNanos() - started) / 1_000_000.0
+                withContext(Dispatchers.Main) {
+                    assertEquals(20, acknowledgements.size)
+                    assertEquals(20, captures.size)
+                    assertNull(queues.state.value.problem)
+                    assertEquals("duplicate-" + (entries - 10), player.currentMediaItem!!.mediaId)
+                }
+                fun p95(values: List<Double>) = values.sorted()[kotlin.math.ceil(values.size * .95).toInt() - 1]
+                // The seek receipt immediately precedes capture(); its first native item-count read follows template publication.
+                val line = "entries=$entries tracks=$songs samples=20 queuedCommands=60 maxOutstandingSeeks=20 captureToPublishUpperP95Ms=${p95(captures)} acknowledgementP95Ms=${p95(acknowledgements)} drainMs=$elapsed captureSamples=$captures acknowledgementSamples=$acknowledgements gcBefore=$gcBefore gcAfter=${android.os.Debug.getRuntimeStats()}"
+                android.util.Log.i("Latency957", line)
+                File(nativeEvidenceDirectory("window-957", context.getExternalFilesDir(null)), "latency.txt").appendText(line + "\n")
+            }
+        } finally { database?.close() }
+    }
+
     private class CountingTracks(private val values: List<Track>) : AbstractList<Track>() {
         val reads = AtomicInteger()
         override val size get() = values.size
@@ -1388,7 +1446,7 @@ class PlaybackIntentTest {
     }
 
     private fun fixture(attach: Boolean = true, blockRestore: Boolean = false, rawPlayer: Boolean = false,
-        duplicateOccurrences: Boolean = false, occurrences: Int = 3, librarySize: Int = 1, initialIndex: Int = 0, timeoutMs: Long = 20000, noCurrent: Boolean = false, permissions: FolderPermissions? = null, test: suspend Fixture.() -> Unit) = runBlocking {
+        duplicateOccurrences: Boolean = false, occurrences: Int = 3, librarySize: Int = 1, initialIndex: Int = 0, timeoutMs: Long = 20000, playbackStore: ((List<Track>) -> LibraryStore)? = null, noCurrent: Boolean = false, permissions: FolderPermissions? = null, test: suspend Fixture.() -> Unit) = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val id = java.util.UUID.randomUUID().toString()
@@ -1404,7 +1462,7 @@ class PlaybackIntentTest {
         val second = ListeningQueue(name = "Second", entries = listOf(QueueEntry(track = track.copy(uri = secondUri, id = secondUri))))
         val dao = IntentDao(QueueLibrary(listOf(first, second), first.id), if (blockRestore) Gate() else null)
         val store = IntentStore().apply { if (librarySize > 1) snapshot = LibrarySnapshot(tracks = tracks) }
-        val library = LibraryRepository(store, TreeScanner(AndroidDocuments(context)), permissions ?: PersistedFolderPermissions(context.contentResolver))
+        val library = LibraryRepository(playbackStore?.invoke(tracks) ?: store, TreeScanner(AndroidDocuments(context)), permissions ?: PersistedFolderPermissions(context.contentResolver))
         val preferences = QueuePreferences(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences("intent-$id", mode)
         })
@@ -1488,6 +1546,11 @@ class PlaybackIntentTest {
     }
 
     private class RecordingPlayer(val engine: ExoPlayer) : ForwardingPlayer(engine) {
+        var timelineRead: (() -> Unit)? = null
+        override fun getMediaItemCount(): Int {
+            timelineRead?.also { timelineRead = null; it() }
+            return super.getMediaItemCount()
+        }
         val seekVisits = CopyOnWriteArrayList<String>()
         val positionSeeks = CopyOnWriteArrayList<Pair<String?, Long>>()
         override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
