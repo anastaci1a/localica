@@ -361,9 +361,9 @@ internal val LocalGlassMorphWorkObserver =
 internal val LocalModalBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
 private val LocalChildPanels = staticCompositionLocalOf<MutableIntState?> { null }
 
-private fun android.view.Window.glassInput(enabled: Boolean) {
-    val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-        android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+/** Touch alone is released at a dismissal event; focus follows the commit, so an IME hiding into this window ends there (#545). */
+private fun android.view.Window.glassInput(enabled: Boolean, flags: Int = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) {
     if (attributes.flags and flags == if (enabled) 0 else flags) return
     if (enabled) clearFlags(flags) else addFlags(flags)
 }
@@ -481,10 +481,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     }
     var searchHeightLimit by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(Int.MAX_VALUE) }
     val dismissNow: () -> Unit = {
-        // Hide, hit testing and semantics turn in the dismissal event itself (R7). Waiting for the next
+        // Hide, touch and semantics turn in the dismissal event itself (R7). Waiting for the next
         // composition can swallow a quick tap on a neighboring trigger. A refusing caller re-shows on its next composition.
         if (childHome.handedOff) motion.show(false)
-        modalWindow?.glassInput(false)
+        modalWindow?.glassInput(false, android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
         gestures.deactivate()
         onDismiss()
         dismissalAttempt++
@@ -868,18 +868,19 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (placement == GlassPlacement.Search) {
                             val bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
                             val placed = motion.bounds?.value()
-                            val moving = !motion.expansion.retirementReady
+                            val shown = motion.shown
+                            val moving = phase() != if (shown) 1f else 0f
                             // Observation only: record where each placed flight began; nothing renders from it.
-                            searchMotion.flight = if (!moving) null else searchMotion.flight?.takeIf { f -> f.opening == motion.shown }
-                                ?: SearchMorphFlight(searchMotion.rendered.takeIf { r -> r.width > 0f } ?: origin, phase(), motion.shown)
+                            searchMotion.flight = if (!moving) null else searchMotion.flight?.takeIf { f -> f.opening == shown }
+                                ?: SearchMorphFlight(searchMotion.rendered.takeIf { r -> r.width > 0f } ?: origin, phase(), shown)
                             searchMotion.rendered = bounds
                             searchMotion.lastIme = imeHeight
-                            searchMotion.observer?.invoke(SearchMorphSample(phase(), visible, bounds,
-                                searchMotion.flight, if (visible) searchMotion.target else anchor.presentedBounds,
-                                imeHeight, imeSource, imeTarget, placed?.bottom.takeIf { visible }, placed.takeIf { visible && moving }, availableHeight.toFloat(),
+                            searchMotion.observer?.invoke(SearchMorphSample(phase(), shown, bounds,
+                                searchMotion.flight, if (shown) searchMotion.target else anchor.presentedBounds,
+                                imeHeight, imeSource, imeTarget, placed?.bottom.takeIf { shown }, placed.takeIf { shown && moving }, availableHeight.toFloat(),
                                 surfaceOpacity = surfaceOpacity(), nativeIme = nativeIme, windowFocused = windowFocused,
                                 slotFraction = anchor.searchSlot.fraction, slotTravel = anchor.searchSlot.travel,
-                                openingOwnedBounds = placed.takeIf { visible && moving }, slotBottom = placed?.bottom))
+                                openingOwnedBounds = placed.takeIf { shown && moving }, slotBottom = placed?.bottom))
                         }
                     }.onPlaced { wellCoordinates[0] = it; windowPlane.layout=it }.drawWithContent {
                         if (!hasViewport) return@drawWithContent
