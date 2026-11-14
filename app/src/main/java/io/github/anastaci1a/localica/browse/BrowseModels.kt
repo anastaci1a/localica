@@ -67,7 +67,7 @@ data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: S
     val keys: List<String> = items.mapView(BrowserItem::key)) {
     /** The last occurrence, as the former key map kept. */
     fun indexOfKey(key: Any) = keys.indexOfLast { it == key }
-    override fun equals(other: Any?) = other is BrowseResult && scope == other.scope && artistAlbums == other.artistAlbums &&
+    override fun equals(other: Any?) = other is BrowseResult && scope == other.scope && artistAlbums.revision == other.artistAlbums.revision &&
         items.revision == other.items.revision && rows.revision == other.rows.revision && keys.revision == other.keys.revision
     override fun hashCode() = 31 * scope.hashCode() + items.size
 }
