@@ -107,12 +107,12 @@ class PopupKindOwnerTest {
         for (derived in PopupKind.entries) assertEquals(PopupKind.BottomMenu, latch.settle(derived, present = true))
     }
 
-    /** Source contract (checklist 48): GlassMorphPopup keys its owner on the settled kind, and the effects that use the owner
+    /** Source contract (checklist 48): each retained presentation settles its own kind, and the effects that use the owner
      * (the native gate adapter and the window attachment) are keyed on it. */
     @Test fun glassMorphPopupKeysItsOwnerAndItsEffectsOnTheSettledKind() {
         val source = File("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt").readText()
         val popup = source.substringAfter("internal fun GlassMorphPopup(").substringBefore("\n@Composable\ninternal fun ")
-        assertTrue(Regex("""val popupKind = settledPopupKind\(anchor, placement\.popupKind\(anchor\), anchor\.present\)""").containsMatchIn(popup))
+        assertTrue(Regex("""val popupKind = settledPopupKind\(anchor, placement\.popupKind\(anchor\), popupFlight\.present\)""").containsMatchIn(popup))
         assertTrue(Regex("""rememberPopupWindowMotion\(anchor, [^\n]*, popupKind\)""").containsMatchIn(popup))
         assertTrue("the native gate adapter restarts with its owner", Regex("""LaunchedEffect\(motion, visible, """).containsMatchIn(popup))
         assertEquals(1, Regex("""motion\.attached\(""").findAll(popup).count())

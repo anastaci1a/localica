@@ -22,3 +22,5 @@ internal data class SearchSlotTravel(val fromFraction: Float,val fromBottom: Flo
         return (toFraction-(toFraction-fromFraction)*(1f-traveled)).coerceIn(0f,1f)
     }
 }
+
+internal fun searchSlotFraction(slot: SearchSlotMotion?): Float = slot?.fraction ?: 0f

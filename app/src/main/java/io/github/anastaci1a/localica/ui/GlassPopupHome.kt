@@ -11,12 +11,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import io.github.anastaci1a.localica.ui.engine.drawPopupProjection
-import io.github.anastaci1a.localica.ui.engine.PopupTakeover
-import io.github.anastaci1a.localica.ui.engine.PopupTakeoverOwner
-import io.github.anastaci1a.localica.ui.engine.SearchSlotMotion
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -35,29 +31,6 @@ internal class GlassPopupHome(private val leaving: State<Boolean>) {
     var currentOrigin = Offset.Zero
     var registration: BackdropRegistration? = null
     var liveRegistration: BackdropRegistration? = null
-}
-
-internal class GlassPopupFlight(private val anchor: GlassAnchor? = null) : PopupTakeoverOwner {
-    override var takeover by mutableStateOf(PopupTakeover.Closed); private set
-    val present get() = takeover != PopupTakeover.Closed
-    val modalPresent get() = takeover >= PopupTakeover.InWindow
-    val progress = GlassExpansion()
-    val searchSlot = SearchSlotMotion(this)
-    var reclaimOpening: (() -> Unit)? = null
-    fun advance(to: PopupTakeover, vararg from: PopupTakeover): Boolean {
-        if (from.isNotEmpty() && takeover !in from) return false
-        if (!present && to != PopupTakeover.Closed) anchor?.admit(this)
-        takeover = to
-        if (!present) anchor?.release(this)
-        return true
-    }
-    var layer by mutableStateOf<GraphicsLayer?>(null)
-    var origin = Offset.Zero
-    var homeOrigin = Offset.Zero
-    var revision by mutableLongStateOf(0L)
-    var prepared by mutableStateOf(false)
-    var handedOff by mutableStateOf(false)
-    var wasProjected by mutableStateOf(false)
 }
 
 internal val LocalGlassPopupHome = staticCompositionLocalOf<GlassPopupHome?> { null }

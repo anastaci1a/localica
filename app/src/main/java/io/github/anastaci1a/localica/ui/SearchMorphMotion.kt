@@ -66,6 +66,11 @@ internal class SearchMorphMotion {
     var target = Rect.Zero
     var flight: SearchMorphFlight? = null
     var observer: ((SearchMorphSample) -> Unit)? = null
+    fun placed(bounds: Rect, origin: Rect, progress: Float, opening: Boolean, moving: Boolean, ime: Int) {
+        flight = if (!moving) null else flight?.takeIf { it.opening == opening }
+            ?: SearchMorphFlight(rendered.takeIf { it.width > 0f } ?: origin, progress, opening)
+        rendered = bounds; lastIme = ime
+    }
 }
 
 /** The enclosing popup's one dismissal: Hide, input and semantics turn at this event (#960). */

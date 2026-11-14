@@ -45,8 +45,8 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     val bounds: MotionRectView? get() = rectangle
     /** The intent: what [show] last asked for. Foreground semantics follow it, so Hide releases them at its event. */
     var shown by mutableStateOf(false); private set
-    val openAtRest get() = expansion.retirementReady && expansion.phase.value() == 1f
-    val moving get() = if (shown) expansion.phase.value() != 1f else !expansion.retirementReady
+    val openAtRest get() = expansion.retirementReady && expansion.boundedProgress(popupCurve) == 1f
+    val moving get() = if (shown) expansion.boundedProgress(popupCurve) != 1f else !expansion.retirementReady
     private var holding = false
     private var openingEnvelope: Rect? = null
     private var nativeWindow: java.lang.ref.WeakReference<Any>? = null

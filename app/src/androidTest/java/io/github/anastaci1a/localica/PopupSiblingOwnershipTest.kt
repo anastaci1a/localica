@@ -11,6 +11,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.PopupTakeover
+import io.github.anastaci1a.localica.ui.engine.ShadowPlane
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -20,6 +21,12 @@ class PopupSiblingOwnershipTest {
 
     @Test fun disposingAClosedSiblingDoesNotRetireTheOpenPresentation() = overlap(false)
     @Test fun heldExitDoesNotRetireANewerPresentationOnTheSameTrigger() = overlap(true)
+
+    private fun fieldHost(anchor: GlassAnchor): Any {
+        val node = requireNotNull(anchor.surfaceNode)
+        val owner = node.javaClass.getDeclaredField("owner\$delegate").apply { isAccessible = true }.get(node) as State<*>
+        return (owner.value as ShadowPlane).host.window
+    }
 
     private fun overlap(heldExit: Boolean) {
         var aOpen by mutableStateOf(false)
@@ -79,6 +86,7 @@ class PopupSiblingOwnershipTest {
                 assertNotSame(a, b)
                 assertSame("Trigger expansion belongs to the current presentation", b.progress, anchor.contact.expansion)
                 assertEquals(PopupTakeover.InWindow, b.takeover)
+                assertSame("The new presentation owns the physical source field", requireNotNull(bView).rootView, fieldHost(anchor))
                 if (heldExit) child.handedOff = true else aMounted = false
             }
             compose.advanceMorphOpening(2000, anchor) { bView }
@@ -92,6 +100,7 @@ class PopupSiblingOwnershipTest {
                 assertTrue(anchor.hidden && anchor.modalPresent)
                 assertEquals(1f, anchor.contact.expansion.value, 0f)
                 assertTrue(requireNotNull(bView).isAttachedToWindow)
+                assertSame("The old return cannot steal the new window field", requireNotNull(bView).rootView, fieldHost(anchor))
                 aMounted = false
             }
             compose.mainClock.advanceTimeByFrame()

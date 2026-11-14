@@ -103,7 +103,7 @@ internal class GlassAnchor : PopupTakeoverOwner {
     fun clearOriginPresentation(value: (Float)->GlassOriginPresentation) { if(originPresentation===value) originPresentation=null }
     val contact = GlassContact({ modalPresent }, { popup?.progress })
     val searchSlot get() = popup?.searchSlot
-    val searchSlotFraction get() = searchSlot?.fraction ?: 0f
+    val searchSlotFraction get() = searchSlotFraction(searchSlot)
     val samplingLocation = BackdropLocation()
     // Last physically measured basis, retained if the trigger leaves composition.
     var lastSamplingFootprint: HomeBackdropFootprint? = null
@@ -144,6 +144,29 @@ internal class GlassAnchor : PopupTakeoverOwner {
         contextPlacement?.invoke()
         contextPlacementTracked = true
     }
+}
+
+internal class GlassPopupFlight(private val anchor: GlassAnchor? = null) : PopupTakeoverOwner {
+    override var takeover by mutableStateOf(PopupTakeover.Closed); private set
+    val present get() = takeover != PopupTakeover.Closed
+    val modalPresent get() = takeover >= PopupTakeover.InWindow
+    val progress = GlassExpansion()
+    val searchSlot = SearchSlotMotion(this)
+    var reclaimOpening: (() -> Unit)? = null
+    fun advance(to: PopupTakeover, vararg from: PopupTakeover): Boolean {
+        if (from.isNotEmpty() && takeover !in from) return false
+        if (!present && to != PopupTakeover.Closed) anchor?.admit(this)
+        takeover = to
+        if (!present) anchor?.release(this)
+        return true
+    }
+    var layer by mutableStateOf<GraphicsLayer?>(null)
+    var origin = Offset.Zero
+    var homeOrigin = Offset.Zero
+    var revision by mutableLongStateOf(0L)
+    var prepared by mutableStateOf(false)
+    var handedOff by mutableStateOf(false)
+    var wasProjected by mutableStateOf(false)
 }
 
 @Composable
@@ -863,19 +886,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             val bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
                             val shown = motion.shown
                             val moving = motion.moving
-                            // Observation only: record where each placed flight began; nothing renders from it.
-                            searchMotion.flight = if (!moving) null else searchMotion.flight?.takeIf { f -> f.opening == shown }
-                                ?: SearchMorphFlight(searchMotion.rendered.takeIf { r -> r.width > 0f } ?: origin, phase(), shown)
-                            searchMotion.rendered = bounds
-                            searchMotion.lastIme = imeHeight
+                            searchMotion.placed(bounds, origin, phase(), shown, moving, imeHeight)
                             searchMotion.observer?.let { observer ->
-                            val placed = motion.bounds?.value()
-                            observer(SearchMorphSample(phase(), shown, bounds,
-                                searchMotion.flight, if (shown) searchMotion.target else anchor.presentedBounds,
-                                imeHeight, imeSource, imeTarget, placed?.bottom.takeIf { shown }, availableHeight.toFloat(),
-                                surfaceOpacity = surfaceOpacity(), nativeIme = nativeIme, windowFocused = windowFocused,
-                                slotFraction = popupFlight.searchSlot.fraction, slotTravel = popupFlight.searchSlot.travel,
-                                openingOwnedBounds = placed.takeIf { shown && moving }, slotBottom = placed?.bottom))
+                                val placed = motion.bounds?.value()
+                                observer(SearchMorphSample(phase(), shown, bounds,
+                                    searchMotion.flight, if (shown) searchMotion.target else anchor.presentedBounds,
+                                    imeHeight, imeSource, imeTarget, placed?.bottom.takeIf { shown }, availableHeight.toFloat(),
+                                    surfaceOpacity = surfaceOpacity(), nativeIme = nativeIme, windowFocused = windowFocused,
+                                    slotFraction = popupFlight.searchSlot.fraction, slotTravel = popupFlight.searchSlot.travel,
+                                    openingOwnedBounds = placed.takeIf { shown && moving }, slotBottom = placed?.bottom))
                             }
                         }
                     }.onPlaced { wellCoordinates[0] = it; windowPlane.layout=it }.drawWithContent {
