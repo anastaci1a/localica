@@ -335,7 +335,7 @@ class SearchImeMotionTest {
         }
     }
 
-    private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false, initialExtraContentHeight: Int = 0, onImeHide: (() -> Unit)? = null) {
+    private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false, initialExtraContentHeight: Int = 0, emptyImeBack: Boolean = true) {
         text = initialQuery
         extraContentHeight = initialExtraContentHeight
         keyboardAllowed = !deferKeyboard
@@ -388,7 +388,6 @@ class SearchImeMotionTest {
                     val source = WindowInsets.imeAnimationSource.getBottom(density)
                     val target = WindowInsets.imeAnimationTarget.getBottom(density)
                     val hiddenImeConsumed by rememberUpdatedState(ime == 0 && source == 0 && target == 0)
-                    LaunchedEffect(source, target) { if (source > 0 && target == 0) onImeHide?.invoke() }
                     SideEffect { popupView = view; keyboardSettled = ime == target && source == target }
                     LaunchedEffect(visible, focusedWindow) {
                         if (visible && focusedWindow) {
@@ -410,7 +409,7 @@ class SearchImeMotionTest {
                             } else keyboard?.hide()
                         }
                     }
-                    CompositionLocalProvider(LocalEmptySearchBack provides ({ visible = false }).takeIf { text.isBlank() }) {
+                    CompositionLocalProvider(LocalEmptySearchBack provides ({ visible = false }).takeIf { text.isBlank() && emptyImeBack }) {
                         Column {
                             GlassSearchField(text, { text = it }, "Search fixture", fieldModifier = Modifier.focusRequester(focus))
                             Spacer(Modifier.height(extraContentHeight.dp))
@@ -771,14 +770,8 @@ class SearchImeMotionTest {
     @Test fun reducedMotionShapesImmediatelyThenAnchorsAndSnapsDirectlyHome() = exerciseDismissal(outside = false, reduced = true)
 
     @Test fun reopeningWhileThePreviousKeyboardCollapsesStillPlacesItsNewEnvelope() = withDockedKeyboard {
-        var reopen = false
-        fixture(true, onImeHide = {
-            if (reopen) {
-                reopen = false
-                visible = true
-                extraContentHeight = 120
-            }
-        })
+        fixture(true, emptyImeBack = false)
+        var callback: android.view.Choreographer.FrameCallback? = null
         try {
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
             opened()
@@ -788,8 +781,17 @@ class SearchImeMotionTest {
             compose.runOnUiThread {
                 samples.clear()
                 keyboardAllowed = false
-                reopen = true
                 visible = false
+                val choreographer = android.view.Choreographer.getInstance()
+                callback = object : android.view.Choreographer.FrameCallback {
+                    override fun doFrame(time: Long) {
+                        if (samples.lastOrNull()?.let { !it.opening && it.imeSource > 0 && it.imeTarget == 0 } == true) {
+                            visible = true
+                            extraContentHeight = 120
+                        } else choreographer.postFrameCallback(this)
+                    }
+                }
+                choreographer.postFrameCallback(checkNotNull(callback))
             }
             advanceUntil { samples.any { it.opening && it.imeSource > 0 && it.imeTarget == 0 && it.progress < 1f } }
             compose.runOnUiThread {
@@ -800,7 +802,10 @@ class SearchImeMotionTest {
             }
             opened()
         } finally {
-            compose.runOnUiThread { reopen = false; visible = false }
+            compose.runOnUiThread {
+                callback?.let { android.view.Choreographer.getInstance().removeFrameCallback(it) }
+                visible = false
+            }
             compose.mainClock.autoAdvance = true
         }
     }
