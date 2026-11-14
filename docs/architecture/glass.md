@@ -39,7 +39,9 @@ $$
 
 Spreading thins the material. Morphing changes resting volume between shapes; it is not a press deformation. Presence alone changes material quantity. Current press thickness/growth remain independent.
 
-A held glass surface adds a radial light centred on the initiating finger, including while it moves outside the control. The existing shared coating draws the fill and illuminated rim inside the silhouette; lens optics stay unchanged. The light rises over 100 ms and settles to zero over 270 ms. Reduce motion snaps it. Glass appearance controls its strength from Off to Full. Neighbour spread and other touch-response changes remain Proposed in #642.
+A held glass surface adds a radial light centred on the initiating finger, including while it moves outside the control. The existing shared coating draws the fill and illuminated rim inside the silhouette; lens optics stay unchanged.
+
+The light rises over 100 ms and settles to zero over 270 ms. Reduce motion snaps it. Glass appearance controls its strength from Off to Full. Neighbour spread and other touch-response changes remain Proposed in #642.
 
 ## The lens model
 
