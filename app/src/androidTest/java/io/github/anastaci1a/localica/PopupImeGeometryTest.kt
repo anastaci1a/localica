@@ -33,7 +33,7 @@ import io.github.anastaci1a.localica.queue.QueueUiState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.ClassRule
-import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.After
@@ -45,7 +45,7 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 /** Diagnostic native callback + submitted-draw trace. Callbacks may affect timing; pair with optical evidence. */
 class PopupImeGeometryTest {
     companion object {
-        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+        @JvmField @ClassRule val nativeIme: TestRule = NativeImePolicy()
     }
 
     @get:Rule val compose = createComposeRule()

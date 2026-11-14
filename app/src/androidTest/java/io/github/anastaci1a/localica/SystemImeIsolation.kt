@@ -80,8 +80,7 @@ internal fun ComposeTestRule.awaitSystemImeHardKeyboardPolicy(
  * Own the docked system input view before fixture Activities exist. API 36 LatinIME can report
  * onShown and complete an inset animation while hardware-keyboard policy suppresses its input view;
  * every inset is then zero. A preceding keyboard fixture can mask that missing precondition.
- * Pair with [FreshSystemIme] inside this rule so the next bind reads the owned policy immediately.
- * Restore the exact setting after Activities retire, then discard this fixture's keyboard cache.
+ * Restore the exact setting after Activities retire; Android owns the IME process and binding.
  */
 internal class NativeImePolicy : TestRule {
     override fun apply(base: Statement, description: Description): Statement = object : Statement() {
@@ -94,7 +93,6 @@ internal class NativeImePolicy : TestRule {
             check(original == "null" || original.matches(Regex("-?[0-9]+"))) {
                 "Cannot restore native keyboard policy: $original"
             }
-            val selected = shell("settings get secure default_input_method")
             val events = mutableListOf<String>()
             var failure: Throwable? = null
             try {
@@ -110,13 +108,6 @@ internal class NativeImePolicy : TestRule {
                     else shell("settings put secure $key $original")
                     check(shell("settings get secure $key") == original) { "Restore native keyboard policy" }
                     events += "after-activities $key=$original"
-                } catch (caught: Throwable) {
-                    val primary = failure
-                    if (primary == null) failure = caught else primary.addSuppressed(caught)
-                }
-                try {
-                    restartSystemKeyboard(selected)
-                    events += "keyboard-cache-retired selected=$selected"
                 } catch (caught: Throwable) {
                     val primary = failure
                     if (primary == null) failure = caught else primary.addSuppressed(caught)

@@ -19,11 +19,11 @@ import org.junit.Assert.*
 import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 
 class PopupHostNavigationTest {
     companion object {
-        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+        @JvmField @ClassRule val nativeIme: TestRule = NativeImePolicy()
     }
 
     @get:Rule val compose = localicaComposeRule()

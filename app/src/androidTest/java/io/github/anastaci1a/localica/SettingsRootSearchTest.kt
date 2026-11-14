@@ -23,7 +23,7 @@ import org.junit.Assert.*
 import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 import java.io.File
 import kotlin.math.abs
 
@@ -31,7 +31,7 @@ import kotlin.math.abs
 @OptIn(ExperimentalTestApi::class)
 class SettingsRootSearchTest {
     companion object {
-        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+        @JvmField @ClassRule val nativeIme: TestRule = NativeImePolicy()
     }
 
     @get:Rule val compose = localicaComposeRule()
