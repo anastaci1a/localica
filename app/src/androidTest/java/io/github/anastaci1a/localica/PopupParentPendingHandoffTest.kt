@@ -146,7 +146,7 @@ class PopupParentPendingHandoffTest {
                 assertNotNull(home.flights.single().layer)
                 assertFalse(home.flights.single().prepared)
                 assertFalse("The fixture has a real pending descendant handoff", home.handedOff)
-                assertEquals("PENDING_CHILD_HANDOFF: parent target remains open", 1f, parentAnchor.contact.expansion.targetValue, 0f)
+                assertEquals("PENDING_CHILD_HANDOFF: parent target closes immediately", 0f, parentAnchor.contact.expansion.targetValue, 0f)
                 assertEquals("The existing parent phase is held", 1f, parentAnchor.contact.expansion.value, 0f)
                 assertSame(retainedOwner, owner(parentAnchor))
                 assertSame(retainedRectangle, rectangle(retainedOwner))
