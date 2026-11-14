@@ -8,13 +8,17 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
+- Localica appears in Samsung Sound Assistant’s Favourite media app list, and media play keys resume the restored queue.
+
 - Album carousel tiles retain taps and holds when they overlap the scrollbar thumb. The scrollbar still drags.
 - A fresh single-song drag keeps its selection presentation stable through release and saving, avoiding the Queue's bottom-edge jump.
 - Remove redundant scrollbar keys and attachment checks. Keep existing UI debt anchors aligned with their unchanged constructs.
-- App Kotlin/Java source: 53,185 lines versus 53,171 in v0.34.4, an increase of 14 lines. The selection lease binds to the existing drag transaction without adding mutable state.
+- App Kotlin/Java source: 53,185 lines versus 53,171 in v0.34.4, an increase of 14 lines. The media-button receiver adds six manifest lines; all app-source changes total +53/-33 (net +20). The selection lease binds to the existing drag transaction without adding mutable state.
 - Inherited UI debt stays at 1,468, with zero new overrides: IndependentUiClock 86, LiteralUiSpacing 484, MotionReadInComposition 4, NonPresetScreenLayout 281, RawMotionMap 40, RawPresentationTransform 132, RawShadowOrZOrder 30, RawUiMotion 344, ReplacePersistentShape 7, UiLayerDependency 6, UnownedSurfaceLifetime 54. All other rule counts are zero.
 
 ## Resolved issues
+
+- [#828](https://github.com/anastaci1a/localica/issues/828): Register the Media3 media-button receiver for Samsung Favourite media app discovery and existing playback resumption.
 
 - [#949](https://github.com/anastaci1a/localica/issues/949): A fresh one-song Queue drag no longer reveals a transient selection panel and jumps at release.
 - [#953](https://github.com/anastaci1a/localica/issues/953): Album carousel tiles under the scrollbar keep their normal tap and hold behavior.
@@ -22,6 +26,9 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#956](https://github.com/anastaci1a/localica/issues/956): The UI lint gate pairs repeated identical incidents in line order when existing anchors move.
 
 ## Known issues and follow-ups
+
+- [PR #829 / #826](https://github.com/anastaci1a/localica/pull/829): Shuffle Previous is deferred to v0.34.6 for a fresh port and acceptance on current main.
+- [PR #832 / #787](https://github.com/anastaci1a/localica/pull/832): The Last.fm test-readiness fix is deferred to v0.34.6 for a fresh port onto current main.
 
 - [#957](https://github.com/anastaci1a/localica/issues/957): Large queues can exhaust memory during activation, dragging or saving; the million-entry case remains unresolved. The completed matched drag fixture covers 30,000 queue occurrences and 13,400 library tracks.
 - [#904](https://github.com/anastaci1a/localica/issues/904): Popup capture admission can fail intermittently in API 26 instrumentation.
