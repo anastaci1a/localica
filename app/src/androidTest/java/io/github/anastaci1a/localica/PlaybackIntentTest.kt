@@ -19,7 +19,6 @@ import io.github.anastaci1a.localica.playback.NativeReaders
 import io.github.anastaci1a.localica.playback.RecoveryAdmission
 import io.github.anastaci1a.localica.playback.track
 import io.github.anastaci1a.localica.queue.*
-import io.github.anastaci1a.localica.ui.LocalicaTheme
 import io.github.anastaci1a.localica.ui.QueueScreen
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.flow
@@ -94,10 +93,10 @@ class PlaybackIntentTest {
         awaitMain { player.isPlaying }
         val request = queues.state.value.playerRequest
         localicaRunComposeUiTest {
-            setContent { LocalicaTheme {
+            setContent { FixtureTime.WithClock { EngineTheme {
                 val state by queues.state.collectAsState()
                 QueueScreen(state, queues, isPlaying = true)
-            } }
+            } } }
             waitUntil(timeoutMillis = 5000) { onAllNodesWithTag("media-duplicate-1").fetchSemanticsNodes().isNotEmpty() }
             runOnIdle { player.selectionCalls.clear() }
             onNodeWithTag("media-duplicate-1").performTouchInput { click() }
