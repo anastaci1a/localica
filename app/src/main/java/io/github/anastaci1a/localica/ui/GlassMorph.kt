@@ -869,7 +869,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             val bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
                             val placed = motion.bounds?.value()
                             val shown = motion.shown
-                            val moving = phase() != if (shown) 1f else 0f
+                            val moving = if (shown) phase() != 1f else !motion.expansion.retirementReady
                             // Observation only: record where each placed flight began; nothing renders from it.
                             searchMotion.flight = if (!moving) null else searchMotion.flight?.takeIf { f -> f.opening == shown }
                                 ?: SearchMorphFlight(searchMotion.rendered.takeIf { r -> r.width > 0f } ?: origin, phase(), shown)
