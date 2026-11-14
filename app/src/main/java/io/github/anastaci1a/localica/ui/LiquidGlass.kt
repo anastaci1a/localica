@@ -55,6 +55,10 @@ internal data class GlassSurfaceSourceDraw(
     val snapshotIdentity: Int?, val frostIdentity: Int?, val lensIdentity: Int?,
     val sourceToConsumer: List<Float>?, val consumerCornersInSource: List<Float>?,
 )
+/** A passive draw receipt (#920 step 3): a glass surface draw, a home projecting a popup's recorded layer, or a popup state step. */
+internal sealed interface GlassDrawReceipt
+internal data class GlassProjectionReceipt(val home: Int, val flight: Int, val layer: Int, val revision: Long, val offset: List<Float>) : GlassDrawReceipt
+internal data class GlassTransitionReceipt(val flight: Int, val gen: Int, val from: String, val event: String, val to: String) : GlassDrawReceipt
 internal data class GlassSurfaceDrawObservation(
     val uptime: Long, val surfaceIdentity: Int, val viewIdentity: Int, val windowIdentity: Int?, val tokenIdentity: Int?,
     val attached: Boolean, val focused: Boolean, val viewMatrixIdentity: Boolean, val visible: Boolean,
@@ -69,8 +73,14 @@ internal data class GlassSurfaceDrawObservation(
     val shadowGroupIdentity: Int?, val shadowInModal: Boolean?, val silhouettePresent: Boolean,
     /** Light-ink fraction of the tone and ink actually drawn (0 dark ink, 1 light ink); fractional while a polarity change eases. */
     val toneLightMix: Float = if (lightInk) 1f else 0f, val coatingLightMix: Float = if (coatingDark) 1f else 0f,
-)
-internal val LocalGlassSurfaceDrawObserver = staticCompositionLocalOf<((GlassSurfaceDrawObservation) -> Unit)?> { null }
+    /** Supplied home geometry and presentation, sampled at this draw. */
+    val homeBounds: List<Float>? = null, val homeFootprint: List<Float>? = null, val presented: List<Float>? = null,
+) : GlassDrawReceipt
+internal val LocalGlassSurfaceDrawObserver = staticCompositionLocalOf<((GlassDrawReceipt) -> Unit)?> { null }
+/** Tests only (like [pinchDrawProbe]): the default observer for compositions a test cannot wrap; compiled out of release. */
+internal var glassDrawProbe: ((GlassDrawReceipt) -> Unit)? = null
+@Composable internal fun glassDrawObserver() = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) LocalGlassSurfaceDrawObserver.current ?: glassDrawProbe else null
+internal fun io.github.anastaci1a.localica.ui.engine.UiClock?.diagnosticRead(block: () -> Unit) { this?.observe(block) }
 
 private fun surfaceDrawIdentity(value: Any?): Int? = value?.let(System::identityHashCode)
 private fun List<Offset>.surfaceDrawScalars(): List<Float>? =
@@ -212,10 +222,11 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val renderer = currentGlassRendererGeneration()
     val flat = renderer.backend == GlassBackend.FlatNone
     val flatColor = flatGlassColor()
-    val drawObserver = LocalGlassSurfaceDrawObserver.current
+    val drawObserver = glassDrawObserver()
     // Do not create diagnostic state, closures, geometry or modifiers for ordinary/null callers.
     val observedShadowGroup = if (drawObserver == null) null else LocalSurfaceShadows.current
     val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
+    val observedClock = if (drawObserver == null) null else io.github.anastaci1a.localica.ui.engine.LocalClockOwner.current
     val visible = LocalGlassVisible.current
     if (visible && renderer.backend == GlassBackend.AverageFallback) {
         BackdropLease(source)
@@ -334,9 +345,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             }
             // Reuse this existing coating Canvas and its computed outline: no extra draw node,
             // readback, invalidation or filter traversal. Diagnostic reads cannot subscribe drawing
-            // to new snapshot state; construction AND callback failures are isolated from rendering.
+            // to new snapshot state or mark a motion presented; construction AND callback failures are isolated from rendering.
             if (drawObserver != null) try {
-                androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                observedClock.diagnosticRead {
                     val shadows = requireNotNull(observedShadowAppearance)
                     val coordinates = location.coordinates?.takeIf { it.isAttached }
                     val localCorners = listOf(Offset.Zero, Offset(size.width, 0f),
@@ -359,7 +370,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                         homeWeight(), appearance.blur, appearance.whiteTint, appearance.depth, depthScale, refraction,
                         shadow, shadows.shadowStrength, shadows.shadowSpread,
                         surfaceDrawIdentity(observedShadowGroup),
-                        anchor?.modalPresent, silhouette != null, lightMix, coatingLightMix))
+                        anchor?.modalPresent, silhouette != null, lightMix, coatingLightMix, homeBounds?.invoke()?.surfaceDrawScalars(),
+                        homeFootprint?.invoke()?.let { f -> listOf(f.size.width, f.size.height) + f.localToScreen.let { listOf(it.xx, it.xy, it.yx, it.yy, it.tx, it.ty) } },
+                        presentation?.invoke()?.let { listOf(it.radius?.value ?: -1f, it.frost, it.panel, it.refraction) }))
                 }
             } catch (_: Throwable) { /* A diagnostic must never fail or change the drawing. */ }
 

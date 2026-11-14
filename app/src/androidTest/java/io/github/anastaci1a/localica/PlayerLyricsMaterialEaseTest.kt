@@ -52,8 +52,8 @@ class PlayerLyricsMaterialEaseTest {
         val visual = PlayerVisual(bitmap.asImageBitmap(), kotlinx.coroutines.runBlocking { playerPalette(bitmap) }, contentKey = "gray")
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalDensity provides Density(1f),
-                LocalPlayerInkCompositionObserver provides { inkComposition = it }, LocalGlassSurfaceDrawObserver provides {
-                if (it.source?.identity == outsideSourceIdentity && !it.inkOverridden) { tone = it.toneLightMix; coating = it.coatingLightMix } }) {
+                LocalPlayerInkCompositionObserver provides { inkComposition = it }, LocalGlassSurfaceDrawObserver provides { glassDrawProbe?.invoke(it); (it as? GlassSurfaceDrawObservation)?.let {
+                if (it.source?.identity == outsideSourceIdentity && !it.inkOverridden) { tone = it.toneLightMix; coating = it.coatingLightMix } } }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val mix = owner.lightMix
                     val backdrop = rememberFrostedBackdrop(Unit, enabled = false, dark = mix >= .5f, lightMix = mix, retainRaster = false)
