@@ -1027,7 +1027,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 // This host shares the viewport's origin and size, but not the hit
                 // paths of floating Return/Search/utility controls layered above it.
                 // A hold on those controls must never select the obscured song.
-                .selectionPanelRelease(session, route.key,
+                .selectionPanelRelease(session, reorder,
                     enabled && !queryPending && route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) { position ->
                     // Dots and rows share selection-on-hold; the panel waits for release.
                     val item = reorder.hit(position)

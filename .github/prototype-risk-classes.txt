@@ -168,6 +168,8 @@ io.github.anastaci1a.localica.LyricsReaderTest
 io.github.anastaci1a.localica.LyricsReturnBackdropTest
 io.github.anastaci1a.localica.LyricsViewportMotionTest
 io.github.anastaci1a.localica.MarqueeTitleTest
+io.github.anastaci1a.localica.MediaButtonColdProcessFixture
+io.github.anastaci1a.localica.MediaButtonResumptionTest
 io.github.anastaci1a.localica.MediaEditSinkLifecycleTest
 io.github.anastaci1a.localica.MetadataRefreshJournalTest
 io.github.anastaci1a.localica.MissingLyricsMotionTest

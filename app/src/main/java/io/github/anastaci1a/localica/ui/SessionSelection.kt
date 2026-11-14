@@ -24,19 +24,25 @@ private fun selectionOccurrence(source: MediaRef?, rowId: String): Pair<MediaRef
 
 /** Activity session only: configuration changes retain it; fresh sessions never restore it from disk. */
 internal class SessionSelection : ViewModel() {
-    var active by mutableStateOf(false)
-        private set
+    private var identity by mutableStateOf<Any?>(null)
+    val active: Boolean get() = identity != null
     var collapsed by mutableStateOf(false)
     private var presentationHold by mutableStateOf<Any?>(null)
     val panelVisible: Boolean get() = active && presentationHold == null
 
-    /** Membership starts at recognition; a new panel waits for its initiating pointer. */
-    fun beginPresentationHold(): Any? {
+    /** Membership starts at recognition; its contact or acquired drag owns the panel hold. */
+    fun beginPresentationHold(owner: Any = Any()): Any? {
         if (active || presentationHold != null) return null
-        return Any().also { presentationHold = it }
+        return owner.also { presentationHold = it }
     }
     fun endPresentationHold(token: Any?) {
         if (token != null && presentationHold === token) presentationHold = null
+    }
+    fun adoptPresentationHold(owner: Any): Pair<() -> Unit, () -> Unit> {
+        val selected = identity
+        val transaction = Any()
+        if (presentationHold == owner) presentationHold = transaction
+        return { if (identity === selected) clear() } to { endPresentationHold(transaction) }
     }
     val entries = mutableStateListOf<SelectedSong>()
     private val occurrences by derivedStateOf { entries.mapTo(hashSetOf()) { selectionOccurrence(it.source, it.row.id) } }
@@ -47,8 +53,7 @@ internal class SessionSelection : ViewModel() {
         item.row?.let { if (contains(containingSource, it.id)) 1 else 0 }
             ?: item.songs.count { contains(item.ref, it.id) }
     fun select(source: MediaRef?, rows: List<SongRow>) {
-        if (!active) collapsed = false
-        active = true
+        if (!active) { collapsed = false; identity = Any() }
         val known = occurrences.toMutableSet()
         entries.addAll(rows.mapNotNull { row ->
             if (known.add(selectionOccurrence(source, row.id))) SelectedSong(source = source, row = row) else null
@@ -63,7 +68,7 @@ internal class SessionSelection : ViewModel() {
         val indices = visible.indices.filter { contains(source, visible[it].id) }
         if (indices.isNotEmpty()) select(source, visible.subList(indices.first(), indices.last() + 1))
     }
-    fun clear() { entries.clear(); active = false; collapsed = false }
+    fun clear() { entries.clear(); identity = null; collapsed = false; presentationHold = null }
 }
 internal val LocalSessionSelection = staticCompositionLocalOf<SessionSelection?> { null }
 

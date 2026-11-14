@@ -448,7 +448,7 @@
         errorLine2="                            ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="172"
+            line="179"
             column="29"/>
     </issue>
 
@@ -459,7 +459,7 @@
         errorLine2="                                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="177"
+            line="184"
             column="33"/>
     </issue>
 
@@ -470,7 +470,7 @@
         errorLine2="                        ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="179"
+            line="186"
             column="25"/>
     </issue>
 
@@ -481,7 +481,7 @@
         errorLine2="                                    ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="190"
+            line="197"
             column="37"/>
     </issue>
 
@@ -492,7 +492,7 @@
         errorLine2="              ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="201"
+            line="208"
             column="15"/>
     </issue>
 
@@ -503,7 +503,7 @@
         errorLine2="            ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="205"
+            line="212"
             column="13"/>
     </issue>
 
@@ -514,7 +514,7 @@
         errorLine2="                                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="205"
+            line="212"
             column="33"/>
     </issue>
 
@@ -525,7 +525,7 @@
         errorLine2="                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="213"
+            line="220"
             column="17"/>
     </issue>
 
@@ -536,7 +536,7 @@
         errorLine2="                                    ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="213"
+            line="220"
             column="37"/>
     </issue>
 
@@ -547,7 +547,7 @@
         errorLine2="                ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="220"
+            line="227"
             column="17"/>
     </issue>
 
@@ -558,7 +558,7 @@
         errorLine2="                                    ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="220"
+            line="227"
             column="37"/>
     </issue>
 
@@ -569,7 +569,7 @@
         errorLine2="                    ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="225"
+            line="232"
             column="21"/>
     </issue>
 
@@ -580,7 +580,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="225"
+            line="232"
             column="41"/>
     </issue>
 
@@ -1621,7 +1621,7 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = &quot;all-albums&quot;, outline = albumOutline).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })"
+        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = &quot;all-albums&quot;, outline = albumOutline).ownButtonDrag().toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })"
         errorLine2="                                      ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/CollectionHeader.kt"
@@ -1676,7 +1676,7 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).combinedClickable("
+        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).ownButtonDrag().combinedClickable("
         errorLine2="                                      ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/CollectionHeader.kt"
@@ -6901,7 +6901,7 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = &quot;all-albums&quot;, outline = albumOutline).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })"
+        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = &quot;all-albums&quot;, outline = albumOutline).ownButtonDrag().toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })"
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/CollectionHeader.kt"
@@ -6923,7 +6923,7 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).combinedClickable("
+        errorLine1="                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).ownButtonDrag().combinedClickable("
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/CollectionHeader.kt"
@@ -13857,7 +13857,7 @@
         errorLine2="                  ~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="37"
+            line="38"
             column="19"/>
     </issue>
 
@@ -13868,7 +13868,7 @@
         errorLine2="                  ~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="38"
+            line="39"
             column="19"/>
     </issue>
 
@@ -13879,7 +13879,7 @@
         errorLine2="                                    ~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="185"
+            line="192"
             column="37"/>
     </issue>
 
@@ -13890,7 +13890,7 @@
         errorLine2="                      ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="207"
+            line="214"
             column="23"/>
     </issue>
 
@@ -13901,7 +13901,7 @@
         errorLine2="                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="207"
+            line="214"
             column="37"/>
     </issue>
 
@@ -13912,7 +13912,7 @@
         errorLine2="                          ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="211"
+            line="218"
             column="27"/>
     </issue>
 
@@ -13923,7 +13923,7 @@
         errorLine2="                          ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="215"
+            line="222"
             column="27"/>
     </issue>
 
@@ -13934,7 +13934,7 @@
         errorLine2="                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="215"
+            line="222"
             column="41"/>
     </issue>
 
@@ -13945,7 +13945,7 @@
         errorLine2="                              ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="223"
+            line="230"
             column="31"/>
     </issue>
 
@@ -13956,7 +13956,7 @@
         errorLine2="                              ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="227"
+            line="234"
             column="31"/>
     </issue>
 
@@ -13967,7 +13967,7 @@
         errorLine2="                                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="227"
+            line="234"
             column="45"/>
     </issue>
 
@@ -13978,7 +13978,7 @@
         errorLine2="                      ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="235"
+            line="242"
             column="23"/>
     </issue>
 
@@ -13989,7 +13989,7 @@
         errorLine2="                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragState.kt"
-            line="235"
+            line="242"
             column="37"/>
     </issue>
 

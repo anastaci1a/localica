@@ -35,6 +35,12 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+        <!-- #828: Sound Assistant's Favourite media app lists MEDIA_BUTTON receivers; a cold play key resumes the queue QueueController restores. -->
+        <receiver android:name="androidx.media3.session.MediaButtonReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
         <service android:name=".editing.TagEditService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync" tools:node="merge" />

@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.*
+import kotlinx.coroutines.Job
 
 /** Shared long-press ownership for every list drag owner (mutable songs, Queue, multi-select stacks,
  * queue selector). The gesture owns the drag haptics (#736): [pickupHaptic] gives the Strong pickup
@@ -17,15 +18,19 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
     reducedMotion: Boolean, ownerKey: Any? = null, acquisitionReady: Boolean = true, pickupHaptic: Boolean = false,
     itemAt: (Offset) -> T?,
     onHold: (T) -> Unit = {}, keysFor: (T) -> Set<String>? = { setOf(state.keyOf(it)) },
-    onCommitted: () -> Unit = {}, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier {
+    onAcquired: (PointerId) -> Pair<() -> Unit, () -> Unit>? = { null }, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier {
     val currentAcquisitionReady by rememberUpdatedState(acquisitionReady)
     val currentItemAt by rememberUpdatedState(itemAt)
     val currentOnHold by rememberUpdatedState(onHold)
     val currentKeysFor by rememberUpdatedState(keysFor)
-    val currentOnCommitted by rememberUpdatedState(onCommitted)
+    val currentOnAcquired by rememberUpdatedState(onAcquired)
     val currentCommit by rememberUpdatedState(commit)
     val haptics by rememberUpdatedState(rememberControlHaptics())
     val currentPickupHaptic by rememberUpdatedState(pickupHaptic)
+    DisposableEffect(state) {
+        val completion = state.scope.coroutineContext[Job]?.invokeOnCompletion { state.retire() }
+        onDispose { completion?.dispose(); state.retire() }
+    }
     return pointerInput(state, ownerKey, reducedMotion, enabled) {
         // Keep this ancestor node installed: removing it cancels every descendant's
         // hit path, including a pinch that temporarily makes the browse query pending.
@@ -63,7 +68,7 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
                         change.consume()
                         if (moving) {
                             if (!canceled) { state.move(change.position); haptics.dragReleased() }
-                            state.finish(canceled || state.drag?.overCancel == true, reducedMotion, currentOnCommitted, gestureCommit)
+                            state.finish(canceled || state.drag?.overCancel == true, reducedMotion, commit = gestureCommit)
                         }
                         break
                     }
@@ -71,7 +76,7 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
                     if (!moving && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
                         val selected = currentKeysFor(item)
                         if (selected != null) {
-                            moving = state.begin(item, selected, down.position)
+                            moving = state.begin(item, selected, down.position) { currentOnAcquired(down.id) }
                             // Freeze the adapter's source precondition, not the live insertion target.
                             if (moving) gestureCommit = currentCommit
                         }
@@ -80,7 +85,7 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
                 }
             } finally {
                 if (state.held == heldKey) state.held = null
-                if (moving && state.drag?.dropping == false) state.finish(true, reducedMotion, currentOnCommitted, gestureCommit)
+                if (moving && state.drag?.dropping == false) state.finish(true, reducedMotion, commit = gestureCommit)
             }
         }
     }
