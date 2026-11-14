@@ -417,6 +417,17 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         self.run_case(2,AFFECTED_CLASSES=AFFECTED+';touch PWNED')
         self.assertFalse((self.root/'PWNED').exists())
     def test_unknown(self): self.run_case(2,AFFECTED_CLASSES='io.github.anastaci1a.localica.UnknownTest')
+    def test_registered_nested_package_keeps_all_mandatory_regressions(self):
+        cls = 'io.github.anastaci1a.localica.ui.engine.SearchReturnOracleSensitivityTest'
+        with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
+            inventory.write(cls+'\n')
+        source = self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text('package io.github.anastaci1a.localica.ui.engine\nclass SearchReturnOracleSensitivityTest { @org.junit.Test fun regression() {} }\n')
+        self.run_case(AFFECTED_CLASSES=cls)
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({cls,REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+
     def test_twenty_distinct_affected_classes_keep_all_mandatory_regressions(self):
         classes = ['io.github.anastaci1a.localica.Additional%dTest' % i for i in range(20)]
         with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
