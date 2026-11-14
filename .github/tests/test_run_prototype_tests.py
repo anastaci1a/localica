@@ -1,6 +1,7 @@
 """Offline contract checks. No emulator, Gradle build or network required."""
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -1586,22 +1587,29 @@ while true; do sleep .05; done
 class RiskInventoryContract(unittest.TestCase):
     """The reviewed prototype inventory names only existing top-level test classes, once each."""
 
-    def assert_inventory(self, names, source):
+    def assert_inventory(self, names, *sources):
         self.assertEqual(sorted(set(names)), sorted(names), 'Duplicate inventory lines')
-        prefix = 'io.github.anastaci1a.localica.'
         declarations = []
-        for path in sorted(source.rglob('*')):
-            if path.is_file() and path.suffix in ('.kt', '.java'):
-                declarations.extend(entry[0] for entry in read_source(path).classes)
+        for source in sources:
+            for path in sorted(source.rglob('*')):
+                if path.is_file() and path.suffix in ('.kt', '.java'):
+                    declarations.extend(entry[0] for entry in read_source(path).classes)
         for name in names:
-            self.assertTrue(name.startswith(prefix) and '.' not in name[len(prefix):], name)
+            self.assertIsNotNone(re.fullmatch(r'io\.github\.anastaci1a\.localica(?:\.[A-Za-z_][A-Za-z0-9_]*)+', name), name)
             self.assertEqual(1, declarations.count(name),
                 'Require exactly one top-level source declaration for '+name)
 
     def test_every_listed_class_exists_once(self):
         lines = (ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()
         self.assert_inventory([line for line in lines if line.startswith('io.')],
-            ROOT/'app/src/androidTest/java')
+            ROOT/'app/src/androidTest/java', ROOT/'app/src/sharedTest/java')
+
+    def test_shared_nested_package_sources_are_admitted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            android, shared = Path(directory)/'android', Path(directory)/'shared'
+            android.mkdir(); shared.mkdir()
+            (shared/'Nested.kt').write_text('package io.github.anastaci1a.localica.ui.engine\nclass SharedTest {}\n')
+            self.assert_inventory(['io.github.anastaci1a.localica.ui.engine.SharedTest'], android, shared)
 
     def test_colocated_classes_are_admitted(self):
         with tempfile.TemporaryDirectory() as directory:
