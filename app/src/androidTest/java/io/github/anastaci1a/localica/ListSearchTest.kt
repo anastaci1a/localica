@@ -229,13 +229,14 @@ class ListSearchTest {
             fun beginReturn() {
                 // Empty search closes on the IME-owned Back itself. A second Back
                 // would target the underlying Activity after input ownership retires.
-                // Hide moves accessibility (merged) semantics off the window in its first frame (#960 condition B);
-                // the surrounding handoff still proves the hiding IME ends in this window (#545).
-                compose.awaitSearchImeHandoff(requireShownBeforeAction = true) {
-                    pressSystemBack()
-                    pumpUntil { last()?.opening == false }
-                    compose.onAllNodesWithTag("list-search-popup").assertCountEquals(0)
-                }
+                val popup = (compose.onNodeWithTag("list-search-popup").fetchSemanticsNode().root
+                    as androidx.compose.ui.platform.ViewRootForTest).view
+                compose.awaitSearchImeHandoff(requireShownBeforeAction = true) { pressSystemBack() }
+                // The first frame after Hide has no accessibility (merged) semantics while its window remains (#960 condition B).
+                advanceObservedFrame()
+                assertEquals(false, last()?.opening)
+                compose.onAllNodesWithTag("list-search-popup").assertCountEquals(0)
+                assertTrue("Hide precedes window retirement", compose.runOnUiThread { popup.isAttachedToWindow })
             }
             open()
             fun openingWitness() = frames.firstOrNull { frame -> frame.sample.let {
