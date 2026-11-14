@@ -1383,6 +1383,40 @@ class PlaybackIntentTest {
                 assertEquals("Only the native window may own occurrence templates", window.map { it.entryId }.distinct().size, built)
                 assertTrue(player.mediaItemCount <= 129)
             }
+            val edits = arguments.getString("permutationEdits", "0")!!.toInt()
+            if (edits > 0) {
+                require(shuffle && loop && !reshuffle)
+                val editPeak = java.util.concurrent.atomic.AtomicLong(runtime.totalMemory() - runtime.freeMemory())
+                val editGc = android.os.Debug.getRuntimeStats()
+                val editStarted = android.os.SystemClock.elapsedRealtime()
+                val editSampler = launch(Dispatchers.Default) {
+                    while (isActive) {
+                        editPeak.updateAndGet { maxOf(it, runtime.totalMemory() - runtime.freeMemory()) }
+                        delay(100)
+                    }
+                }
+                var retained = 0
+                var slots = 0L
+                try { repeat(edits) {
+                    val done = CompletableDeferred<Boolean>()
+                    queues.act(List(4) { track }, SongTap.PlayNext) { done.complete(it) }
+                    assertTrue(withTimeout(300000) { done.await() })
+                    val counts = withContext(Dispatchers.Default) {
+                        val queue = queues.state.value.library.active!!
+                        val permutations = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<List<String>, Boolean>())
+                        permutations.addAll(queue.journey!!.plans.values)
+                        assertEquals(3, queue.journey.plans.size)
+                        assertTrue(permutations.size <= 3)
+                        val references = permutations.sumOf { it.size.toLong() }
+                        assertTrue(references <= 3L * queue.entries.size)
+                        permutations.size to references
+                    }
+                    retained = maxOf(retained, counts.first); slots = maxOf(slots, counts.second)
+                } } finally { editSampler.cancelAndJoin() }
+                val result = "initialEntries=$entries finalEntries=${queues.state.value.library.active!!.entries.size} tracks=$songs edits=$edits maxPermutations=$retained retainedReferenceSlots=$slots peakBytes=${editPeak.get()} settledBytes=${runtime.totalMemory() - runtime.freeMemory()} maxBytes=${runtime.maxMemory()} elapsedMs=${android.os.SystemClock.elapsedRealtime() - editStarted} gcBefore=$editGc gcAfter=${android.os.Debug.getRuntimeStats()}"
+                android.util.Log.i("Permutation957", result)
+                File(nativeEvidenceDirectory("window-957", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)), "permutation-edits.txt").appendText(result + "\n")
+            }
         }
     }
 
