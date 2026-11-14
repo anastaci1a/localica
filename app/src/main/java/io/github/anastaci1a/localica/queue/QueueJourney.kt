@@ -29,7 +29,7 @@ data class QueueJourney(
     val orderedAnchorToken: String? = null,
 ) {
     private data class Neighbor(val visit: QueueVisit, val ordinal: Int, val sourceOrdinal: Int = -1)
-    private class Traversal(val ids: List<String>, val key: Any?, val rank: Int, val oldestRank: Int,
+    private class Traversal(val ids: List<String>, val key: Any?, val oldestRank: Int,
         val resume: Map<Long, Int>, val window: List<Neighbor>) {
         val visits = window.mapView(Neighbor::visit)
     }
@@ -259,7 +259,7 @@ data class QueueJourney(
             if (missing.isEmpty()) break
         }
         val visits = window.map { if (it.sourceOrdinal >= 0) it else it.copy(sourceOrdinal = positions[it.visit.entryId] ?: -1) }
-        return Traversal(ids, key, visits.firstOrNull { it.visit.token == current?.token }?.sourceOrdinal ?: rank, oldestRank, resume, visits)
+        return Traversal(ids, key, oldestRank, resume, visits)
     }
 
     private fun token(cycle: Long, entry: String) = UUID.nameUUIDFromBytes(
