@@ -524,3 +524,4 @@ io.github.anastaci1a.localica.ReleaseLintAdoptionTest
 io.github.anastaci1a.localica.ScrollbarBehaviourTest
 io.github.anastaci1a.localica.ScrollbarReducedRootTest
 io.github.anastaci1a.localica.RetainedListPixelsTest
+io.github.anastaci1a.localica.ListTopFadeParityTest
