@@ -229,15 +229,12 @@ class ListSearchTest {
             fun beginReturn() {
                 // Empty search closes on the IME-owned Back itself. A second Back
                 // would target the underlying Activity after input ownership retires.
+                // Hide moves accessibility (merged) semantics off the window in its first frame (#960 condition B);
+                // the surrounding handoff still proves the hiding IME ends in this window (#545).
                 compose.awaitSearchImeHandoff(requireShownBeforeAction = true) {
-                    val popup = (compose.onNodeWithTag("list-search-popup", useUnmergedTree = true).fetchSemanticsNode().root
-                        as androidx.compose.ui.platform.ViewRootForTest).view
                     pressSystemBack()
-                    // Hide moves semantics off the window in the same frame (#960 condition B; the merged tree is what accessibility reads);
-                    // the window keeps focus so the hiding IME still ends in it (#545).
                     pumpUntil { last()?.opening == false }
                     compose.onAllNodesWithTag("list-search-popup").assertCountEquals(0)
-                    assertTrue("The IME handoff keeps the popup window", compose.runOnUiThread { popup.isAttachedToWindow && popup.hasWindowFocus() })
                 }
             }
             open()
