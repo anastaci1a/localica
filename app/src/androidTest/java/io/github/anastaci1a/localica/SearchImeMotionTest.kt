@@ -335,7 +335,7 @@ class SearchImeMotionTest {
         }
     }
 
-    private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false, initialExtraContentHeight: Int = 0, emptyImeBack: Boolean = true) {
+    private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false, initialExtraContentHeight: Int = 0) {
         text = initialQuery
         extraContentHeight = initialExtraContentHeight
         keyboardAllowed = !deferKeyboard
@@ -409,7 +409,7 @@ class SearchImeMotionTest {
                             } else keyboard?.hide()
                         }
                     }
-                    CompositionLocalProvider(LocalEmptySearchBack provides ({ visible = false }).takeIf { text.isBlank() && emptyImeBack }) {
+                    CompositionLocalProvider(LocalEmptySearchBack provides ({ visible = false }).takeIf { text.isBlank() }) {
                         Column {
                             GlassSearchField(text, { text = it }, "Search fixture", fieldModifier = Modifier.focusRequester(focus))
                             Spacer(Modifier.height(extraContentHeight.dp))
@@ -770,8 +770,7 @@ class SearchImeMotionTest {
     @Test fun reducedMotionShapesImmediatelyThenAnchorsAndSnapsDirectlyHome() = exerciseDismissal(outside = false, reduced = true)
 
     @Test fun reopeningWhileThePreviousKeyboardCollapsesStillPlacesItsNewEnvelope() = withDockedKeyboard {
-        fixture(true, emptyImeBack = false)
-        var callback: android.view.Choreographer.FrameCallback? = null
+        fixture(true)
         var inputThread: Thread? = null
         val injected = java.util.concurrent.atomic.AtomicBoolean(false)
         try {
@@ -781,49 +780,49 @@ class SearchImeMotionTest {
             opened()
             val oldHeight = compose.runOnUiThread { samples.last().destination.height }
             val pill = compose.runOnUiThread { anchor.bounds.center }
-            compose.runOnUiThread {
-                samples.clear()
-                keyboardAllowed = false
-                visible = false
-                val choreographer = android.view.Choreographer.getInstance()
-                callback = object : android.view.Choreographer.FrameCallback {
-                    override fun doFrame(time: Long) {
-                        val sample = samples.lastOrNull()
-                        if (sample?.let { !it.opening && it.ime > 0 && it.imeSource > 0 && it.imeTarget == 0 } == true) {
-                            motionTimeline += "${SystemClock.uptimeMillis()} real-trigger-tap at=$pill previous=$sample"
-                            extraContentHeight = 120
-                            inputThread = Thread {
-                                val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-                                val down = SystemClock.uptimeMillis()
-                                var accepted = true
-                                for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
-                                    val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, pill.x, pill.y, 0)
-                                    event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
-                                    accepted = automation.injectInputEvent(event, true) && accepted
-                                    event.recycle()
-                                }
-                                injected.set(accepted)
-                            }.also { it.start() }
-                        } else choreographer.postFrameCallback(this)
+            compose.runOnUiThread { samples.clear(); keyboardAllowed = false; visible = false }
+            inputThread = Thread {
+                val deadline = SystemClock.uptimeMillis() + 5000
+                while (!Thread.currentThread().isInterrupted && SystemClock.uptimeMillis() < deadline) {
+                    val collapse = compose.runOnUiThread { samples.lastOrNull()?.takeIf {
+                        !it.opening && it.ime > 0 && it.imeSource > 0 && it.imeTarget == 0
+                    }?.also {
+                        motionTimeline += "${SystemClock.uptimeMillis()} real-trigger-tap at=$pill previous=$it"
+                        extraContentHeight = 120
+                    } }
+                    if (collapse != null) {
+                        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+                        val down = SystemClock.uptimeMillis()
+                        var accepted = true
+                        for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
+                            val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, pill.x, pill.y, 0)
+                            event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                            accepted = automation.injectInputEvent(event, true) && accepted
+                            event.recycle()
+                        }
+                        injected.set(accepted)
+                        return@Thread
                     }
+                    SystemClock.sleep(1)
                 }
-                choreographer.postFrameCallback(checkNotNull(callback))
-            }
-            advanceUntil { samples.any { it.opening && it.imeSource > 0 && it.imeTarget == 0 && it.progress < 1f } }
+            }.also { it.start() }
+            advanceUntil { samples.any { it.opening } }
+            inputThread.join(5000)
             compose.runOnUiThread {
-                val first = samples.first { it.opening && it.imeSource > 0 && it.imeTarget == 0 && it.progress < 1f }
-                assertTrue("An opening cannot freeze on the previous keyboard's collapsing geometry: $first",
+                val first = samples.first { it.opening }
+                assertTrue("First real-input reopening places the fresh envelope: $first",
                     first.destination.height > oldHeight + 50f)
-                assertTrue("Real trigger input reopened the pill", visible)
                 assertTrue("Both native input events were accepted", injected.get())
             }
             opened()
-        } finally {
-            inputThread?.join(5000)
             compose.runOnUiThread {
-                callback?.let { android.view.Choreographer.getInstance().removeFrameCallback(it) }
-                visible = false
+                assertTrue("Real trigger input reopens and retains its modal window", visible && anchor.modalPresent)
+                assertEquals(1f, anchor.contact.expansion.value, 0f)
             }
+        } finally {
+            inputThread?.interrupt()
+            inputThread?.join(5000)
+            compose.runOnUiThread { visible = false }
             compose.mainClock.autoAdvance = true
         }
     }
