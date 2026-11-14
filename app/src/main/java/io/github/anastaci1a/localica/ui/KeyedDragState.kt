@@ -22,7 +22,8 @@ internal class KeyedDrag<T : Any, P>(val original: List<T>, val moving: List<T>,
     val keyOf: (T) -> String,
     val initialBounds: Map<String, Rect>, val grab: Offset, point: Offset, val cardSize: androidx.compose.ui.geometry.Size, val presentation: P,
     /** Each item's hover lift when the drag began (#533), in its own coordinates. */
-    val lifts: Map<String, HoverGeometry> = emptyMap()) {
+    val lifts: Map<String, HoverGeometry> = emptyMap(),
+    val completion: Pair<() -> Unit, () -> Unit>? = null) {
     val keys = moving.map { keyOf(it) }.toSet()
     val remaining = original.filterNot { keyOf(it) in keys }
     val remainingPositions = remaining.withIndex().associate { keyOf(it.value) to it.index }
@@ -44,7 +45,7 @@ internal class KeyedDrag<T : Any, P>(val original: List<T>, val moving: List<T>,
 /** Shared transaction for stable, unique String keys; null rendered slots are the insertion gap.
  * Presentation is captured once at lift; adapters own activation and content rendering. */
 @Stable
-internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, private val scope: CoroutineScope,
+internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, val scope: CoroutineScope,
     val keyOf: (T) -> String, private val optimisticCommit: Boolean = true) {
     var items: List<T> = emptyList()
     /** The selection host's last drawn lift for an item key, so cards start from it. */
@@ -120,13 +121,19 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
     fun hit(point: Offset) = grid.layoutInfo.visibleItemsInfo.firstOrNull {
         point.x >= it.offset.x && point.x < it.offset.x + it.size.width && point.y >= it.offset.y && point.y < it.offset.y + it.size.height
     }?.key?.toString()?.let { key -> items.firstOrNull { keyOf(it) == key } }
-    fun begin(item: T, selected: Set<String>, point: Offset): Boolean {
+    fun retire(d: KeyedDrag<T, P>? = drag) {
+        if (drag === d) drag = null
+        d?.completion?.second?.invoke()
+    }
+    fun begin(item: T, selected: Set<String>, point: Offset,
+        acquire: () -> Pair<() -> Unit, () -> Unit>? = { null }): Boolean {
         val rects = visualBounds()
         val held = rects[keyOf(item)] ?: return false
         val moving = items.filter { keyOf(it) in selected }
         if (moving.isEmpty()) return false
         drag = KeyedDrag(items, moving, keyOf, rects.filterKeys { it in selected }, point - held.topLeft, point, held.size, capturePresentation(),
-            moving.mapNotNull { item -> keyOf(item).let { key -> hoverLift(key)?.let { key to it } } }.toMap())
+            moving.mapNotNull { item -> keyOf(item).let { key -> hoverLift(key)?.let { key to it } } }.toMap(), acquire())
+        if (!scope.isActive) { retire(); return false }
         onDragStarted()
         return true
     }
@@ -227,14 +234,13 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
                     d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
                 } else d.dropItems = items
             }
-            if (saved && optimisticCommit && items.map { keyOf(it) } != expected.map { keyOf(it) }) {
+            if (saved && drag === d && optimisticCommit && items.map { keyOf(it) } != expected.map { keyOf(it) }) {
                 optimisticBase = items.map { keyOf(it) }
                 optimistic = expected
             }
-            if (saved) { d.committed = true; onMoved() }
+            if (saved && drag === d) { d.committed = true; d.completion?.first?.invoke(); onMoved() }
             d.handoff.animateTo(1f, tween(if (reducedMotion) 0 else 220))
-            if (drag === d) drag = null
-        }
+        }.invokeOnCompletion { retire(d) }
     }
 }
 

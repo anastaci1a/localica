@@ -43,5 +43,5 @@ internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: M
         keysFor = {
             selection.entries.takeIf { entries -> entries.all { it.source == source && state.items.any { item -> item.key == it.row.id } } }
                 ?.map { it.row.id }?.toSet()
-        }, onCommitted = selection::clear, commit = commit)
+        }, onAcquired = { pointer -> selection.adoptPresentationHold(state to pointer) }, commit = commit)
 }

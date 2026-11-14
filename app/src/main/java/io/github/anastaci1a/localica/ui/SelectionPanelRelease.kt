@@ -19,7 +19,7 @@ internal fun Modifier.selectionPanelRelease(session: SessionSelection, owner: An
     pointerInput(session, owner) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            val token = if (currentEnabled && currentEligible(down.position)) session.beginPresentationHold() else null
+            val token = if (currentEnabled && currentEligible(down.position)) session.beginPresentationHold(owner to down.id) else null
             try {
                 do {
                     val event = awaitPointerEvent(PointerEventPass.Final)

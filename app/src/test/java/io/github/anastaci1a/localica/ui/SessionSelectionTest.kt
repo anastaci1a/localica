@@ -25,13 +25,13 @@ class SessionSelectionTest {
         assertTrue(state.panelVisible)
         assertTrue(state.collapsed)
     }
-    @Test fun clearingMembershipDoesNotReleaseAnOutstandingPointerOrALaterOwner() {
+    @Test fun clearingMembershipRevokesItsHoldWithoutReleasingALaterOwner() {
         val state = SessionSelection()
         val first = state.beginPresentationHold()
         state.select(null, listOf(SongRow("entry", track)))
         state.clear()
         state.select(null, listOf(SongRow("second", track)))
-        assertFalse(state.panelVisible)
+        assertTrue(state.panelVisible)
         state.endPresentationHold(first)
         state.clear()
         val second = state.beginPresentationHold()
@@ -39,6 +39,47 @@ class SessionSelectionTest {
         state.endPresentationHold(first)
         assertFalse(state.panelVisible)
         state.endPresentationHold(second)
+        assertTrue(state.panelVisible)
+    }
+    @Test fun acquisitionAdoptsOnlyItsContactAndRetiresWithoutInheritingSelection() {
+        val state = SessionSelection()
+        val owner = Any() to 1
+        val pointer = state.beginPresentationHold(owner)
+        val row = SongRow("entry", track)
+        state.select(null, listOf(row))
+        val foreign = state.adoptPresentationHold(Any() to 1)
+        foreign.second()
+        assertFalse(state.panelVisible)
+        val drag = state.adoptPresentationHold(owner)
+        state.endPresentationHold(pointer)
+        assertFalse(state.panelVisible)
+        drag.second()
+        assertTrue(state.panelVisible)
+        assertEquals(listOf(row), state.entries.map { it.row })
+        state.clear()
+        val newer = state.beginPresentationHold()
+        state.select(null, listOf(row))
+        drag.first(); drag.second()
+        assertTrue(state.active)
+        assertFalse(state.panelVisible)
+        state.endPresentationHold(newer)
+        assertTrue(state.panelVisible)
+    }
+    @Test fun successfulAcquisitionClearsOnlyItsSelectionAndPreselectionStaysVisible() {
+        val state = SessionSelection()
+        val owner = Any()
+        val pointer = state.beginPresentationHold(owner)
+        state.select(null, listOf(SongRow("entry", track)))
+        val drag = state.adoptPresentationHold(owner)
+        state.endPresentationHold(pointer)
+        drag.first()
+        assertFalse(state.active)
+        assertFalse(state.panelVisible)
+        drag.second()
+        state.select(null, listOf(SongRow("entry", track)))
+        val preselected = state.adoptPresentationHold(owner)
+        assertTrue(state.panelVisible)
+        preselected.second()
         assertTrue(state.panelVisible)
     }
     @Test fun collectionSelectionUsesItsOwnSourceInCatalogsSearchAndOtherCollections() {
