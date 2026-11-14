@@ -1278,31 +1278,38 @@ class PlaybackIntentTest {
         @Suppress("UNCHECKED_CAST")
         val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
         val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
+        val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
         for (differentQueue in listOf(false, true)) {
-            val before = withContext(Dispatchers.Main) { state.value }
-            val oldResolved = resolved.get(queues)
-            val oldTemplates = templates.get(timeline)
-            val oldNative = withContext(Dispatchers.Main) { player.currentMediaItem }
-            store.snapshot = LibrarySnapshot(tracks = listOf(track.copy(title = "Stale prepared title")))
-            val gate = store.gateNextSnapshot()
+            val gate = Gate()
             val pending = async(Dispatchers.Main) {
-                kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> { continuation ->
-                    sync.invoke(queues, false, true, null, continuation)
+                val action: suspend () -> Unit = {
+                    val before = state.value
+                    val oldResolved = resolved.get(queues)
+                    val oldTemplates = templates.get(timeline)
+                    val oldNative = player.currentMediaItem
+                    store.snapshot = LibrarySnapshot(tracks = listOf(track.copy(title = "Stale prepared title")))
+                    store.gateNextSnapshot(gate)
+                    val published = kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
+                        sync.invoke(queues, false, true, null, it)
+                    }
+                    assertFalse("A stale window must decline publication", published)
+                    assertSame(oldResolved, resolved.get(queues))
+                    assertSame(oldTemplates, templates.get(timeline))
+                    assertSame(oldNative, player.currentMediaItem)
+                    state.value = before
+                }
+                kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                    command.invoke(queues, false, {}, action, it)
                 }
             }
             gate.entered.await()
             withContext(Dispatchers.Main) {
+                val before = state.value
                 state.value = before.copy(library = if (differentQueue) before.library.copy(activeId = second.id)
                     else before.library.update(before.library.active!!.copy(name = "New owner")))
             }
             gate.release.complete(Unit)
-            assertFalse("A stale window must decline publication", pending.await())
-            withContext(Dispatchers.Main) {
-                assertSame(oldResolved, resolved.get(queues))
-                assertSame(oldTemplates, templates.get(timeline))
-                assertSame(oldNative, player.currentMediaItem)
-                state.value = before
-            }
+            pending.await()
         }
     }
 
@@ -1394,10 +1401,11 @@ class PlaybackIntentTest {
                 val started = android.os.SystemClock.elapsedRealtimeNanos()
                 val done = CompletableDeferred<Unit>()
                 withContext(Dispatchers.Main) {
+                    val seekVisit = queues.state.value.library.active!!.journey!!.next!!.token
                     repeat(20) { index ->
                         queues.next()
                         val submitted = android.os.SystemClock.elapsedRealtimeNanos()
-                        queues.requestSeek(2000L + index, null) { applied, _ ->
+                        queues.requestSeek(2000L + index, seekVisit) { applied, _ ->
                             assertTrue(applied)
                             val capture = android.os.SystemClock.elapsedRealtimeNanos()
                             acknowledgements += (capture - submitted) / 1_000_000.0
@@ -1408,7 +1416,7 @@ class PlaybackIntentTest {
                         }
                         queues.previous(alwaysSong = true)
                     }
-                    queues.settings { done.complete(Unit); it }
+                    queues.act(emptyList(), SongTap.Append) { done.complete(Unit) }
                 }
                 withTimeout(300000) { done.await() }
                 val elapsed = (android.os.SystemClock.elapsedRealtimeNanos() - started) / 1_000_000.0
@@ -1533,7 +1541,8 @@ class PlaybackIntentTest {
         }
         suspend fun barrier() {
             val done = CompletableDeferred<Unit>()
-            queues.settings { done.complete(Unit); it }
+            queues.settings { it }
+            queues.act(emptyList(), SongTap.Append) { done.complete(Unit) }
             withTimeout(5000) { done.await() }
         }
         suspend fun awaitMain(condition: () -> Boolean) = withTimeout(10000) {
@@ -1597,7 +1606,7 @@ class PlaybackIntentTest {
         val mainReads = AtomicInteger()
         private val next = AtomicReference<Gate?>()
         private val gates = mutableListOf<Gate>()
-        fun gateNextSnapshot() = Gate().also { check(next.compareAndSet(null, it)); gates.add(it) }
+        fun gateNextSnapshot(gate: Gate = Gate()) = gate.also { check(next.compareAndSet(null, it)); gates.add(it) }
         fun release() { gates.forEach { it.release.complete(Unit) } }
         override val snapshots = flow {
             collections.incrementAndGet()
