@@ -5,7 +5,6 @@ import io.github.anastaci1a.localica.ui.components.TriggerRole
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.*
@@ -36,7 +35,6 @@ import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.library.LibraryGroup
 
 internal fun collectionIsLight(visual: PlayerVisual): Boolean = visual.palette.isLight()
