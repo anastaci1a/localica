@@ -23,7 +23,10 @@ class ArtistCollectionActionsTest {
     @Test fun artistQueueActionsFollowOneSubsetAllAndChangedAlbumChoices() = actions(MediaKind.Artist, MainTab.Artists, SongListView.Artists)
     @Test fun albumArtistQueueActionsFollowOneSubsetAllAndChangedAlbumChoices() = actions(MediaKind.AlbumArtist, MainTab.AlbumArtists, SongListView.AlbumArtists)
 
-    private fun actions(kind: MediaKind, tab: MainTab, view: SongListView) {
+    @Test fun settledCarouselSwipesKeepPhysicalAlbumTapsFilteringSongs() =
+        actions(MediaKind.Artist, MainTab.Artists, SongListView.Artists, afterScroll = true)
+
+    private fun actions(kind: MediaKind, tab: MainTab, view: SongListView, afterScroll: Boolean = false) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         val preferences = QueuePreferences(context)
@@ -31,8 +34,8 @@ class ArtistCollectionActionsTest {
         val job = SupervisorJob()
         val scope = CoroutineScope(job + Dispatchers.Main.immediate)
         val session = SessionSelection()
-        val tracks = (0..5).map { Track("scope:$it", "Song $it", artist = "Artist", albumArtist = "Artist",
-            album = listOf("First album", "Second album", "Third album")[it / 2],
+        val tracks = (0 until if (afterScroll) 16 else 6).map { Track("scope:$it", "Song $it", artist = "Artist", albumArtist = "Artist",
+            album = if (afterScroll) "Album ${it / 2}" else listOf("First album", "Second album", "Third album")[it / 2],
             fileName = "$it.mp3", relativePath = "$it.mp3") }
         val snapshot = LibrarySnapshot(tracks = tracks)
         val artist = LibraryViews.groups(snapshot, view, LibraryQuery()).single()
@@ -54,6 +57,33 @@ class ArtistCollectionActionsTest {
                         queryDispatcher = Dispatchers.Unconfined)
                 }
             } }
+            if (afterScroll) {
+                val carousel = compose.onNode(hasScrollToIndexAction() and
+                    SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
+                carousel.performScrollTo()
+                var previous = ""
+                repeat(8) { step ->
+                    val before = carousel.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value()
+                    carousel.performTouchInput {
+                        if (step < 4) swipeLeft(durationMillis = 200) else swipeRight(durationMillis = 200)
+                    }
+                    compose.waitForIdle()
+                    val after = carousel.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value()
+                    val viewport = carousel.fetchSemanticsNode().boundsInRoot
+                    val name = tracks.map { it.album }.distinct().firstOrNull { name ->
+                        name != previous && compose.onAllNodesWithText(name).fetchSemanticsNodes().singleOrNull()?.boundsInRoot
+                            ?.let { it.width > 0f && it.left >= viewport.left && it.right <= viewport.right } == true
+                    } ?: error("Fixture: no different fully visible album after swipe $step")
+                    compose.onNodeWithText(name).assertIsDisplayed().performTouchInput { click() }
+                    compose.runOnIdle {
+                        assertEquals("Settled swipe $step ($before -> $after), tap $name filters songs",
+                            tracks.filter { it.album == name }.map { it.id }, session.visible.map { it.track.id })
+                    }
+                    android.util.Log.i("Carousel977", "swipe=$step before=$before after=$after selected=$name")
+                    previous = name
+                }
+                return
+            }
             fun albums(chosen: List<String>) {
                 compose.onNode(hasScrollToIndexAction() and
                     SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
