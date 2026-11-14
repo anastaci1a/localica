@@ -79,7 +79,9 @@ class QueuePinchPlacementTest {
                 "captured=${captured.items.size} retainedFrames=${frames.count { f -> f.items.values.any { it.retained } }} " +
                 "maxRetained=${frames.maxOf { f -> f.items.values.count { it.retained } }} final=${final.items.size} p=${final.progress}")
             assertTrue("$label settled at ${final.progress}", final.progress > .999f && !final.held)
-            fun settled(key: Any) = compose.onAllNodesWithTag("media-$key").fetchSemanticsNodes().singleOrNull()?.boundsInRoot
+            // Unclipped: a partly scrolled-off cell keeps its full extent.
+            fun settled(key: Any) = compose.onAllNodesWithTag("media-$key").fetchSemanticsNodes().singleOrNull()
+                ?.let { Rect(it.positionInRoot, androidx.compose.ui.geometry.Size(it.size.width.toFloat(), it.size.height.toFloat())) }
             val pairs = final.items.filter { (_, item) -> item.alpha > .5f && item.bounds.visibleIn(final.viewport) }
                 .mapNotNull { (key, item) -> settled(key)?.let { Triple(key, item.bounds, it) } }
             assertTrue("$label compares enough cells: ${pairs.size}", pairs.size >= 4)
