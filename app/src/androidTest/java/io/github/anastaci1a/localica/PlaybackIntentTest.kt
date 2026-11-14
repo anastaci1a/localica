@@ -1399,7 +1399,8 @@ class PlaybackIntentTest {
                 val capture = QueueController::class.java.getDeclaredMethod("captureNativeState").apply { isAccessible = true }
                 try {
                     player.engine.seekTo(2000)
-                    state.value = before.copy(library = before.library.update(queue.copy(entries = counted)))
+                    state.value = before.copy(library = before.library.update(queue.copy(entries = counted, positionMs = 2001)))
+                    assertSame(counted, state.value.library.active!!.entries)
                     reads = 0
                     repeat(20) { capture.invoke(queues) }
                     assertEquals("Routine capture must not inspect occurrence membership", 0, reads)
