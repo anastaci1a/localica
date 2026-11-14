@@ -45,7 +45,7 @@ class OrderedJourneyDatabaseTest {
             val columns = if (version == 6) "?,?,?,?,?,?,?" else "?,?,?,?,?,?,?,?,?"
             val header = arrayOf<Any?>(queue.id, history.size, 1, 0, if (shuffle) 1 else 0, 1, 0)
             old.execSQL("INSERT INTO queue_journeys VALUES ($columns)", if (version == 6) header else
-                header + arrayOf<Any?>(if (shuffle) null else "ordered-namespace", if (shuffle) null else "actual-D"))
+                arrayOf(*header, if (shuffle) null else "ordered-namespace", if (shuffle) null else "actual-D"))
             val future = listOf("F", "C", "E").map { QueueVisit(it, 0, "legacy-future-$it") } +
                 (1L..2L).flatMap { cycle -> ids.map { QueueVisit(it, cycle, "legacy-future-$cycle-$it") } }
             (history + future).forEachIndexed { ordinal, visit -> old.execSQL("INSERT INTO queue_visits VALUES (?,?,?,?,?)",
