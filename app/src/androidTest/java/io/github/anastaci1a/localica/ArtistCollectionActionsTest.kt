@@ -68,7 +68,7 @@ class ArtistCollectionActionsTest {
                 fun position() = carousel.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value()
                 fun visibleAlbum(previous: String = ""): String {
                     val viewport = carousel.fetchSemanticsNode().boundsInRoot
-                    return tracks.map { it.album }.distinct().firstOrNull { name ->
+                    return tracks.mapNotNull { it.album }.distinct().firstOrNull { name ->
                         name != previous && compose.onAllNodesWithText(name).fetchSemanticsNodes().singleOrNull()?.boundsInRoot
                             ?.let { it.width >= 112f * compose.density.density && it.height >= 120f * compose.density.density &&
                                 it.left >= viewport.left && it.right <= viewport.right } == true
