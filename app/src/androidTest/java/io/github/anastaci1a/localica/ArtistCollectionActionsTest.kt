@@ -89,7 +89,7 @@ class ArtistCollectionActionsTest {
                         compose.onNodeWithText(name).performTouchInput { click() }
                         repeat(4) { compose.mainClock.advanceTimeByFrame() }
                         compose.runOnIdle {
-                            assertEquals("The first tap stops the fling without selecting", tracks.sortedBy { it.title }.map { it.id },
+                            assertEquals("The first tap stops the fling without selecting", tracks.map { it.id },
                                 session.visible.map { it.track.id })
                         }
                         val stopped = position()
