@@ -15,6 +15,16 @@ name: Prototype (not release certified)
         default: 'off'
         type: choice
         options: ['off', build, generate, functional]
+      performance_apk_run:
+        description: Optional prior functional artifact run; app, benchmark, dependency and fixture sources must match
+        required: false
+        default: ''
+        type: string
+      performance_scenarios:
+        description: Optional JSON scenario ID array for functional diagnostics; blank selects the shared protocol
+        required: false
+        default: ''
+        type: string
       repeat:
         description: Independent iterations of the complete selected gate (1-30); stops on first failure
         required: false
@@ -55,6 +65,14 @@ name: Prototype (not release certified)
       performance:
         required: false
         default: 'off'
+        type: string
+      performance_apk_run:
+        required: false
+        default: ''
+        type: string
+      performance_scenarios:
+        required: false
+        default: ''
         type: string
       repeat:
         description: Independent iterations of the complete selected gate (1-30); stops on first failure
@@ -937,16 +955,21 @@ jobs:
       if: ${{ always() }}
 
   performance:
-    name: Baseline Profile and Macrobenchmark diagnostics
-    needs: identity
-    if: ${{ contains(fromJSON('["build", "generate", "functional"]'), inputs.performance) && inputs.runner != 'self-hosted' }}
+    name: Performance producer
+    permissions:
+      contents: read
+      actions: read
+    needs: [identity, performance_plan]
+    if: ${{ !cancelled() && needs.identity.result == 'success' && contains(fromJSON('["build", "generate", "functional"]'), inputs.performance) && inputs.runner != 'self-hosted' && (inputs.performance != 'functional' || needs.performance_plan.result == 'success') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: ${{ inputs.performance == 'generate' && 180 || 60 }}
+    timeout-minutes: ${{ inputs.performance == 'generate' && 180 || 40 }}
     env:
       GRADLE_BUILD_ACTION_CACHE_KEY_JOB: localica-static-checks
       GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE: shared
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
         with:
           distribution: temurin
@@ -963,25 +986,54 @@ jobs:
           printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/localica-debug.keystore"
           chmod 600 "$RUNNER_TEMP/localica-debug.keystore"
           echo "LOCALICA_DEBUG_KEYSTORE=$RUNNER_TEMP/localica-debug.keystore" >> "$GITHUB_ENV"
+      - name: Reuse the immutable app checkpoint
+        if: inputs.performance == 'functional' && inputs.performance_apk_run != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: performance-functional-diagnostic
+          run-id: ${{ inputs.performance_apk_run }}
+          github-token: ${{ github.token }}
+      - name: Verify unchanged app and compilation inputs
+        if: inputs.performance == 'functional' && inputs.performance_apk_run != ''
+        run: |
+          apk_source=$(cat performance-source.txt)
+          [[ $apk_source =~ ^[a-f0-9]{40}$ ]]
+          git diff --exit-code "$apk_source" HEAD -- app gradle gradle.properties build.gradle.kts settings.gradle.kts tools/performance/macrobenchmark/scenarios.json tools/performance/macrobenchmark/pinch-out.csv tools/performance/macrobenchmark/fixture.mjs tools/performance/macrobenchmark/seed-scale.cjs tools/performance/macrobenchmark/no-profile.init.gradle tools/performance/macrobenchmark/profile-metadata.mjs
+          sha256sum -c performance-profile-arms.sha256
+          rm -rf app/build/reports app/build/outputs/apk benchmark/build/reports benchmark/build/outputs
       - name: Compile selected performance targets and check source
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           PERFORMANCE_MODE: ${{ inputs.performance }}
+          PERFORMANCE_APK_RUN: ${{ inputs.performance_apk_run }}
         run: |
-          targets=(testDebugUnitTest lintDebug assembleRelease :app:assembleDebug :app:assembleDistribution :app:assembleBenchmarkDistribution :app:assembleNonMinifiedDistribution :benchmark:assembleBenchmarkDistribution :benchmark:assembleNonMinifiedDistribution)
-          apk=app/build/outputs/apk/distribution/app-distribution.apk
+          targets=(testDebugUnitTest lintDebug :app:assembleRelease :app:assembleDebug)
+          apk=app/build/outputs/apk/release/app-release-unsigned.apk
+          if [[ $PERFORMANCE_MODE == functional ]]; then
+            targets+=(:app:assembleDistribution :benchmark:assembleBenchmarkDistribution)
+            apk=app/build/outputs/apk/distribution/app-distribution.apk
+            if [[ -n $PERFORMANCE_APK_RUN ]]; then
+              targets=(:benchmark:assembleBenchmarkDistribution)
+              apk=performance-apks/candidate.apk
+            fi
+          fi
           if [[ $PERFORMANCE_MODE == generate ]]; then
             targets=(:app:assembleNonMinifiedDistribution :benchmark:assembleNonMinifiedDistribution)
             apk=app/build/outputs/apk/nonMinifiedDistribution/app-nonMinifiedDistribution.apk
           fi
           bash .github/gradle-transient-retry.sh ./gradlew "${targets[@]}" --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
-          node --test tools/performance/macrobenchmark/*.test.mjs
+          if [[ $PERFORMANCE_MODE != functional ]]; then node --test tools/performance/macrobenchmark/*.test.mjs; fi
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "$apk" > performance-badging.txt
           ! grep -q application-debuggable performance-badging.txt
+          shopt -s nullglob
           sha256sum app/build/outputs/apk/*/*.apk benchmark/build/outputs/apk/*/*.apk > performance-apks.sha256
-          git rev-parse HEAD > performance-source.txt
+          if [[ $PERFORMANCE_MODE != functional || -z $PERFORMANCE_APK_RUN ]]; then git rev-parse HEAD > performance-source.txt; fi
+          git rev-parse HEAD > performance-test-source.txt
+          if [[ $PERFORMANCE_MODE == functional ]]; then
+            sha256sum benchmark/build/outputs/apk/benchmarkDistribution/benchmark-benchmarkDistribution.apk > performance-test-apk.sha256
+          fi
       - name: Build no-profile control with the same source
-        if: inputs.performance == 'functional'
+        if: inputs.performance == 'functional' && inputs.performance_apk_run == ''
         run: |
           mkdir -p performance-apks
           cp app/build/outputs/apk/distribution/app-distribution.apk performance-apks/candidate.apk
@@ -992,20 +1044,20 @@ jobs:
           cp performance-apks/candidate.apk app/build/outputs/apk/distribution/app-distribution.apk
           sha256sum performance-apks/*.apk > performance-profile-arms.sha256
       - name: Enable emulator acceleration
-        if: inputs.performance != 'build'
+        if: inputs.performance == 'generate'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
           sudo rm -rf /usr/share/dotnet
       - uses: ./.github/actions/emulator-sdk-cache
-        if: inputs.performance != 'build'
+        if: inputs.performance == 'generate'
       - uses: ./.github/actions/system-image-cache
-        if: inputs.performance != 'build'
+        if: inputs.performance == 'generate'
         with:
           api: 36
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
-        if: inputs.performance != 'build'
+        if: inputs.performance == 'generate'
         with:
           api-level: 36
           target: default
@@ -1030,6 +1082,96 @@ jobs:
             benchmark/build/outputs/connected_android_test_additional_output/
             app/build/outputs/apk/distribution/*.apk
             app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
             app/build/outputs/apk/nonMinifiedDistribution/*.apk
             benchmark/build/outputs/apk/*/*.apk
+          if-no-files-found: error
+
+  performance_plan:
+    name: Plan functional performance scenarios
+    needs: identity
+    if: inputs.performance == 'functional' && inputs.runner != 'self-hosted'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - run: node --test tools/performance/macrobenchmark/*.test.mjs
+      - id: plan
+        env:
+          PERFORMANCE_SCENARIOS: ${{ inputs.performance_scenarios }}
+        run: node tools/performance/macrobenchmark/plan.mjs
+
+  performance_functional:
+    name: Functional Macrobenchmark (${{ matrix.scenario }})
+    needs: [identity, performance, performance_plan]
+    if: ${{ !cancelled() && inputs.performance == 'functional' && needs.identity.result == 'success' && needs.performance_plan.result == 'success' && needs.performance.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.performance_plan.outputs.matrix) }}
+    env:
+      BENCHMARK_SCENARIOS: ${{ matrix.scenario }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Download immutable producer checkpoint
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: performance-functional-diagnostic
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify compiled source and APK identities
+        run: |
+          apk_source=$(cat performance-source.txt)
+          [[ $apk_source =~ ^[a-f0-9]{40}$ ]]
+          test "$(cat performance-test-source.txt)" = "$(git rev-parse HEAD)"
+          git diff --exit-code "$apk_source" HEAD -- app gradle gradle.properties build.gradle.kts settings.gradle.kts tools/performance/macrobenchmark/scenarios.json tools/performance/macrobenchmark/pinch-out.csv tools/performance/macrobenchmark/fixture.mjs tools/performance/macrobenchmark/seed-scale.cjs tools/performance/macrobenchmark/no-profile.init.gradle tools/performance/macrobenchmark/profile-metadata.mjs
+          sha256sum -c performance-profile-arms.sha256
+          sha256sum -c performance-test-apk.sha256
+          git rev-parse HEAD > performance-proof-source.txt
+          rm -rf app/build/reports benchmark/build/reports benchmark/build/outputs/androidTest-results benchmark/build/outputs/connected_android_test_additional_output
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo rm -rf /usr/share/dotnet
+      - uses: ./.github/actions/emulator-sdk-cache
+      - uses: ./.github/actions/system-image-cache
+        with:
+          api: 36
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 36
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel
+          disable-animations: false
+          script: bash tools/performance/macrobenchmark/hosted.sh functional
+      - uses: ./.github/actions/upload-artifact-retry
+        if: always()
+        with:
+          name: performance-functional-${{ matrix.scenario }}-diagnostic
+          path: |-
+            performance-*.txt
+            performance-*.sha256
+            performance-results/**/*.json
           if-no-files-found: error

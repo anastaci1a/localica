@@ -33,3 +33,24 @@ test('Promoted scale seeder creates valid operator-scale Room data and refuses o
         assert.notEqual(run().status, 0);
     } finally { fs.rmSync(temp, {recursive: true}); }
 });
+
+test('Functional shard selection cannot silently omit or invent requested cases', () => {
+    const run = selection => spawnSync(process.execPath, [path.join(import.meta.dirname, 'plan.mjs')],
+        {encoding: 'utf8', env: {...process.env, GITHUB_OUTPUT: '', PERFORMANCE_SCENARIOS: selection}});
+    const all = run(''); assert.equal(all.status, 0, all.stderr);
+    assert.equal(JSON.parse(all.stdout.trim().slice(7)).scenario.length, 11);
+    const one = run('["cold-start"]'); assert.equal(one.status, 0, one.stderr);
+    assert.deepEqual(JSON.parse(one.stdout.trim().slice(7)).scenario, ['cold-start']);
+    for (const invalid of ['[]', '["missing"]', '["cold-start","cold-start"]']) assert.notEqual(run(invalid).status, 0);
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'localica-986-matrix-'));
+    try {
+        const output = path.join(temp, 'output');
+        const file = spawnSync(process.execPath, [path.join(import.meta.dirname, 'plan.mjs')],
+            {env: {...process.env, GITHUB_OUTPUT: output, PERFORMANCE_SCENARIOS: '["cold-start"]'}});
+        assert.equal(file.status, 0);
+        const text = fs.readFileSync(output, 'utf8');
+        assert(text.endsWith('\n'));
+        assert.deepEqual(JSON.parse(text.trim().slice(7)).scenario, ['cold-start']);
+    } finally { fs.rmSync(temp, {recursive: true}); }
+
+});

@@ -31,10 +31,14 @@ class CostMapBenchmark(private val id: String) {
             compilationMode = CompilationMode.Ignore(),
             startupMode = if (cold) StartupMode.COLD else null,
             iterations = InstrumentationRegistry.getArguments().getString("iterations", "5").toInt().also { require(it >= 5) },
-            setupBlock = { driver.prepare(this, scenario) },
+            setupBlock = {
+                driver.prepare(this, scenario)
+                if (iteration == 0) {
+                    driver.run(this, scenario); driver.verify(scenario); driver.prepare(this, scenario)
+                }
+            },
             measureBlock = { driver.run(this, scenario) }
         )
-        driver.verify(scenario)
     }
 
     companion object {

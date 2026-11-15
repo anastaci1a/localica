@@ -82,11 +82,15 @@ Dispatch `prototype.yml` with `performance=generate` on a distinct branch. Gener
 
 Generation builds only its non-minified target and producer. Final functional builds retain unit tests, lint and release assemblies.
 
-Use `performance=build` for compilation, unit tests and lint, or `performance=functional` for the diagnostic scenarios. Each dispatch has its own branch because same-branch dispatches cancel each other. Delete temporary branches after retaining receipts.
+Use `performance=build` for compilation, unit tests and lint. Functional runs separate the APK producer from one emulator job per shared-protocol scenario, each capped at 40 minutes. Each dispatch needs a distinct branch; delete temporary branches after retaining receipts.
+
+Resume diagnostics with `performance_apk_run` naming an earlier producer run. App, dependency and fixture inputs must match; the test APK is rebuilt once. `performance_scenarios` optionally selects a JSON array of scenario IDs. Empty, duplicate and unknown selections fail before building.
 
 The committed profiles cover startup, list/gallery fling and slow scroll, and tab swipe from hosted run `43686451671`. Player, lyrics, search and pinch profile generation is Incomplete and belongs with the qualified A35 follow-up. All eleven functional scenarios remain required.
 
-That run spent about five minutes building and 48 minutes collecting before an adapter preparation failure. Generation has a three-hour ceiling. Functional builds additionally produce the no-profile control. Record actual runner minutes for each refresh.
+That generation spent about five minutes building and 48 minutes collecting before an adapter preparation failure. Full generation sharding remains Incomplete and is deferred with the remaining profiles. The functional producer also builds the no-profile control; unused generation assemblies are excluded. Record actual minutes for each producer and scenario.
+
+Functional end states are verified in an unmeasured first-iteration preflight, then preparation resets the fixture before capture.
 
 Macrobenchmark reports `FrameTimingMetric`, cold-start `StartupTimingMetric` and the existing `Choreographer#doFrame` trace duration. That trace duration is supporting attribution, not Main CPU time. Emulator and profileable results remain diagnostic. Qualified comparisons use the manifest-only plain twin, identical speed-profile warm-up, physical A35 traces, health receipts and no screen recording.
 

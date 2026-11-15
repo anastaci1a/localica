@@ -20,7 +20,7 @@ done
 if [[ $mode == generate ]]; then
     target=app/build/outputs/apk/nonMinifiedDistribution/app-nonMinifiedDistribution.apk
 else
-    target=app/build/outputs/apk/benchmarkDistribution/app-benchmarkDistribution.apk
+    target=performance-apks/candidate.apk
 fi
 adb install -r "$target"
 node tools/performance/macrobenchmark/fixture.mjs "$RUNNER_TEMP/performance-fixture"
@@ -35,6 +35,19 @@ else
     adb shell am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE -n "$pkg/androidx.profileinstaller.ProfileInstallReceiver"
     adb shell cmd package compile -f -m speed-profile "$pkg"
     adb shell dumpsys package dexopt > performance-dexopt.txt
-    "${gradle[@]}" :benchmark:connectedBenchmarkDistributionAndroidTest -Pandroid.testInstrumentationRunnerArguments.scenario=library-list-fling -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.CostMapBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
-    "${gradle[@]}" :benchmark:connectedBenchmarkDistributionAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.CostMapBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
+    adb install -r benchmark/build/outputs/apk/benchmarkDistribution/benchmark-benchmarkDistribution.apk
+    adb shell pm list instrumentation > performance-instrumentation.txt
+    for scenario in ${BENCHMARK_SCENARIOS:?}; do
+        node -e 'const p=require("./tools/performance/macrobenchmark/scenarios.json");if(!p.scenarios.some(s=>s.id===process.argv[1]))process.exit(1)' "$scenario"
+        result="performance-result-$scenario.txt"
+        adb shell am instrument -w -r -e class io.github.anastaci1a.localica.benchmark.CostMapBenchmark -e scenario "$scenario" -e androidx.benchmark.suppressErrors EMULATOR -e androidx.benchmark.output.enable true io.github.anastaci1a.localica.benchmark/androidx.test.runner.AndroidJUnitRunner | tr -d '\r' | tee "$result"
+        grep -Fq 'OK (1 test)' "$result"
+        grep -Fq "INSTRUMENTATION_STATUS: test=scenario[$scenario]" "$result"
+        ! grep -Eq 'INSTRUMENTATION_STATUS_CODE: -[12]|INSTRUMENTATION_FAILED|FAILURES!!!|shortMsg=' "$result"
+        grep -Fq 'frameDurationCpuMs' "$result"
+        if [[ $scenario == cold-start ]]; then grep -Fq 'timeToInitialDisplayMs' "$result"; fi
+        mkdir -p "performance-results/$scenario"
+        adb pull /sdcard/Android/media/io.github.anastaci1a.localica.benchmark "performance-results/$scenario/"
+    done
+    rg --files performance-results -g '*.perfetto-trace' -0 | xargs -0 -r sha256sum > performance-traces.sha256
 fi
