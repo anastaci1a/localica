@@ -4,24 +4,31 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import io.github.anastaci1a.localica.ui.spec.TouchLightRimWidth
+import kotlin.math.roundToInt
 
 /** One draw owner's current preparation; paths are replaced, never rewritten after publication. */
 internal class GlassRimCache {
     private var lightTone: GlassTone? = null
-    private var lightShader: Shader? = null
-    private var lightBrush: ShaderBrush? = null
-    private val lightMatrix = android.graphics.Matrix()
-    private var lightStroke = Stroke(0f)
-    fun light(point: Offset, radius: Float, tone: GlassTone): Brush {
+    private val lightPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private var lightSource: Path? = null
+    private var lightRim: Path? = null
+    fun light(tone: GlassTone): android.graphics.Paint {
         if (lightTone != tone) {
-            lightShader = android.graphics.RadialGradient(0f, 0f, 1f, tone.color(Color.White).toArgb(), Color.Transparent.toArgb(), android.graphics.Shader.TileMode.CLAMP)
-            lightBrush = ShaderBrush(requireNotNull(lightShader)); lightTone = tone
+            lightPaint.shader = android.graphics.RadialGradient(0f, 0f, 1f, tone.color(Color.White).toArgb(), Color.Transparent.toArgb(), android.graphics.Shader.TileMode.CLAMP)
+            lightTone = tone
         }
-        lightMatrix.setScale(radius, radius); lightMatrix.postTranslate(point.x, point.y)
-        lightShader!!.setLocalMatrix(lightMatrix)
-        return lightBrush!!
+        return lightPaint
     }
-    fun lightStroke(width: Float): Stroke { if (lightStroke.width != width) lightStroke = Stroke(width); return lightStroke }
+    fun lightRim(source: Path, width: Float): Path {
+        if (lightSource !== source || lightPaint.strokeWidth != width) {
+            lightPaint.strokeWidth = width
+            lightPaint.style = android.graphics.Paint.Style.STROKE
+            lightRim = Path().also { lightPaint.getFillPath(source.asAndroidPath(), it.asAndroidPath()) }
+            lightPaint.style = android.graphics.Paint.Style.FILL
+            lightSource = source
+        }
+        return lightRim!!
+    }
     private var center: Offset? = null
     private var tone: GlassTone? = null
     private var brushes: GlassRimBrushes? = null
@@ -76,7 +83,25 @@ internal inline fun DrawScope.drawContactLight(point: () -> Offset, path: () -> 
     radius: Float = size.center.getDistance(), rimGain: Float = 2f) {
     if (alpha == 0f) return
     val silhouette = path()
-    val brush = cache.light(point(), radius, tone)
-    drawRect(brush, alpha = alpha)
-    clipPath(silhouette) { drawPath(silhouette, brush, alpha = alpha * rimGain, style = cache.lightStroke(TouchLightRimWidth.toPx())) }
+    val position = point()
+    val paint = cache.light(tone)
+    val rim = cache.lightRim(silhouette, TouchLightRimWidth.toPx())
+    with(drawContext.canvas.nativeCanvas) {
+        save()
+        clipRect(0f, 0f, size.width, size.height)
+        paintLight(position, radius, alpha, paint)
+        clipPath(silhouette.asAndroidPath())
+        clipPath(rim.asAndroidPath())
+        paintLight(position, radius, alpha * rimGain, paint)
+        restore()
+    }
+}
+
+private fun android.graphics.Canvas.paintLight(point: Offset, radius: Float, alpha: Float, paint: android.graphics.Paint) {
+    paint.alpha = (alpha * 255).roundToInt()
+    save()
+    translate(point.x, point.y)
+    scale(radius, radius)
+    drawPaint(paint)
+    restore()
 }
