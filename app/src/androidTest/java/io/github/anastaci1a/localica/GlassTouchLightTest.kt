@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.*
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.spec.TouchLightRimWidth
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -32,15 +33,19 @@ class GlassTouchLightTest {
     private fun pixels(image: ImageBitmap): IntArray = IntArray(image.width * image.height).also {
         image.asAndroidBitmap().getPixels(it, 0, image.width, 0, 0, image.width, image.height)
     }
-    private fun render(point: Offset, alpha: Float, radius: Float, circle: Boolean, cache: GlassRimCache = GlassRimCache(), rimGain: Float = 2f): IntArray {
+    private fun render(point: Offset, alpha: Float, radius: Float, circle: Boolean, cache: GlassRimCache = GlassRimCache(), rimGain: Float = 2f,
+        coverage: (DrawScope.(Path) -> Unit)? = null): IntArray {
         val image = ImageBitmap(width, height)
         try {
             CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
-                drawRect(background)
+                drawRect(if (coverage == null) background else Color.Black)
                 val path = Path().apply { if (circle) addOval(Rect(Offset(8f, 0f), Size(80f, 80f)))
                     else addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(18f))) }
-                clipPath(path) { drawContactLight({ check(alpha > 0f) { "zero alpha read point" }; point },
-                    { check(alpha > 0f) { "zero alpha read path" }; path }, alpha, GlassTone(), cache, radius, rimGain) }
+                clipPath(path) {
+                    if (coverage != null) coverage(path)
+                    else drawContactLight({ check(alpha > 0f) { "zero alpha read point" }; point },
+                        { check(alpha > 0f) { "zero alpha read path" }; path }, alpha, GlassTone(), cache, radius, rimGain)
+                }
             }
             return pixels(image)
         } finally { image.asAndroidBitmap().recycle() }
@@ -82,6 +87,15 @@ class GlassTouchLightTest {
             }
         }
         android.util.Log.i("Localica642", "analytic realMax=$realError roundedMax=$byteError worst=$worst; straightRim fill/second/composed=${maxima.toList()} witnesses=${witnesses.toList()}")
+        var increase = Int.MIN_VALUE; var adjacent = ""
+        for (x in 48..80) {
+            val first = diff(lit, dark, x, 40, 16); val second = diff(lit, dark, x + 1, 40, 16)
+            if (second - first > increase) {
+                increase = second - first
+                adjacent = "($x,40)/(${x + 1},40) first=$first second=$second"
+            }
+        }
+        android.util.Log.i("Localica642", "adjacent increaseMax=$increase worstPair=$adjacent")
         assertTrue("SrcOver realMax=$realError roundedMax=$byteError worst=$worst", byteError <= 1)
         for (i in 0..2) assertTrue("native op=$i error=${maxima[i]} witness=${witnesses[i]}", maxima[i] <= if (i == 2) 2 else 1)
         val atCenter = diff(lit, dark, 48, 40, 16)
@@ -95,6 +109,9 @@ class GlassTouchLightTest {
     @Test fun centeredAndMirroredContactsKeepBothAxesSymmetricAndReusePreparation() {
         val radius = extent.center.getDistance()
         val maxima = IntArray(6); val witnesses = Array(6) { "" }
+        val coverageMax = IntArray(6); val coveragePairs = Array(6) { "" }
+        val residualMax = IntArray(6); val residualPairs = Array(6) { "" }
+        val pixelMax = IntArray(4); val pixelRealMax = FloatArray(4); val pixelWitnesses = Array(4) { "" }
         for (circle in listOf(false, true)) {
             val cache = GlassRimCache()
             val dark = render(extent.center, 0f, radius, circle)
@@ -104,6 +121,16 @@ class GlassTouchLightTest {
             val fill = render(extent.center, .12f, radius, circle, rimGain = 0f)
             val fillLeft = render(Offset(24f, 40f), .12f, radius, circle, rimGain = 0f)
             val fillRight = render(Offset(72f, 40f), .12f, radius, circle, rimGain = 0f)
+            val fillCoverage = render(extent.center, 0f, radius, circle, coverage = { drawRect(Color.White) })
+            val rimCoverage = render(extent.center, 0f, radius, circle, coverage = { path ->
+                clipPath(path) { drawPath(path, Color.White, style = Stroke(TouchLightRimWidth.toPx())) }
+            })
+            fun reference(point: Offset, x: Int, y: Int, shift: Int, op: Int): Float {
+                val falloff = max(0f, 1 - (Offset(x + .5f, y + .5f) - point).getDistance() / radius)
+                val fillAlpha = .12f * falloff * channel(fillCoverage[y * width + x], 0) / 255
+                val rimAlpha = if (op == 0) 0f else .24f * falloff * channel(rimCoverage[y * width + x], 0) / 255
+                return 255 - (255 - channel(background.toArgb(), shift)) * (1 - fillAlpha) * (1 - rimAlpha)
+            }
             for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16)) {
                 for (op in 0..1) for (axis in 0..2) {
                     val centered = if (op == 0) fill else lit
@@ -115,9 +142,31 @@ class GlassTouchLightTest {
                     val second = diff(b, dark, px, py, shift)
                     val error = abs(first - second)
                     val i = op * 3 + axis
+                    val pointA = if (axis == 2) Offset(24f, 40f) else extent.center
+                    val pointB = if (axis == 2) Offset(72f, 40f) else extent.center
+                    val expectedA = reference(pointA, x, y, shift, op)
+                    val expectedB = reference(pointB, px, py, shift, op)
+                    val prediction = expectedA.roundToInt() - expectedB.roundToInt()
+                    val pair = "ops=${op + 1} circle=$circle channel=$shift ($x,$y)/($px,$py) actual=$first/$second expected=$expectedA/$expectedB predictedDelta=$prediction"
+                    val residual = abs(first - second - prediction)
+                    if (residual > residualMax[i]) { residualMax[i] = residual; residualPairs[i] = pair }
+                    val mask = if (op == 0) fillCoverage else rimCoverage
+                    val maskA = channel(mask[y * width + x], 0); val maskB = channel(mask[py * width + px], 0)
+                    if (shift == 0 && abs(maskA - maskB) > coverageMax[i]) {
+                        coverageMax[i] = abs(maskA - maskB); coveragePairs[i] = "$pair coverage=$maskA/$maskB"
+                    }
+                    if (axis != 1) {
+                        val full = channel(fillCoverage[y * width + x], 0) == 255 &&
+                            (op == 0 || channel(rimCoverage[y * width + x], 0) in listOf(0, 255))
+                        val group = op * 2 + if (full) 0 else 1
+                        val actual = channel(a[y * width + x], shift)
+                        val pixelError = abs(actual - expectedA.roundToInt())
+                        pixelRealMax[group] = max(pixelRealMax[group], abs(actual - expectedA))
+                        if (pixelError > pixelMax[group]) { pixelMax[group] = pixelError; pixelWitnesses[group] = pair }
+                    }
                     if (error > maxima[i]) {
                         maxima[i] = error
-                        witnesses[i] = "ops=${op + 1} circle=$circle channel=$shift ($x,$y) pairedWith=$px,$py first=$first second=$second error=$error"
+                        witnesses[i] = "$pair error=$error residual=$residual fillCoverage=${channel(fillCoverage[y * width + x], 0)}/${channel(fillCoverage[py * width + px], 0)} rimCoverage=${channel(rimCoverage[y * width + x], 0)}/${channel(rimCoverage[py * width + px], 0)}"
                     }
                 }
             }
@@ -125,6 +174,9 @@ class GlassTouchLightTest {
             assertSame(cache.lightStroke(2.6f), cache.lightStroke(2.6f))
             assertNotSame(cache.light(Offset.Zero, radius, GlassTone()), cache.light(Offset.Zero, radius, GlassTone(.25f)))
         }
+        android.util.Log.i("Localica642", "coverage masks fill/rim x/y/mirrorMax=${coverageMax.toList()} worstPairs=${coveragePairs.toList()}")
+        android.util.Log.i("Localica642", "coverage reference fill full/partial, composed full/partial roundedMax=${pixelMax.toList()} realMax=${pixelRealMax.toList()} worst=${pixelWitnesses.toList()}")
+        android.util.Log.i("Localica642", "coverage symmetry residualMax=${residualMax.toList()} worstPairs=${residualPairs.toList()}")
         android.util.Log.i("Localica642", "symmetry fill then composed x/y/mirrorMax=${maxima.toList()} worstPairs=${witnesses.toList()}")
         for (i in 0..5) assertTrue("symmetry axis=$i max=${maxima[i]} pair=${witnesses[i]}", maxima[i] <= if (i < 3) 2 else 4)
     }
@@ -195,12 +247,12 @@ class GlassTouchLightTest {
 
     @Test fun calibrationShowsThreeTokenSetsAndProductionHoldFollowRelease() {
         val capture = InstrumentationRegistry.getArguments().getString("localica642Calibrate") == "true"
-        compose.setContent { EngineTheme(clear = true) { Column(Modifier.background(Color(0xff303038)).padding(8.dp)) {
-            Text("Touch light calibration · 100 ms in / 270 ms out", color = Color.White)
+        compose.setContent { EngineTheme(clear = true) { Column(Modifier.fillMaxSize().background(Color(0xff303038)).padding(start = 8.dp, top = 32.dp, end = 8.dp, bottom = 8.dp)) {
+            Text("Touch light · 100 ms in / 270 ms out", color = Color.White, fontSize = 14.sp)
             Row {
                 listOf(Triple(.8f, .10f, 1.5f), Triple(1f, .12f, 2f), Triple(1.2f, .14f, 2.5f)).forEachIndexed { i, (radius, peak, rim) ->
                     Column(Modifier.width(104.dp)) {
-                        Text("${'A' + i}: r $radius\nα $peak · rim $rim", color = Color.White)
+                        Text("${'A' + i} · r $radius\npeak $peak\nrim $rim", Modifier.height(56.dp), color = Color.White, fontSize = 12.sp, lineHeight = 16.sp)
                         for (point in listOf(Offset(.5f, .5f), Offset(.25f, .7f))) Canvas(Modifier.size(96.dp, 80.dp)) {
                             drawRect(background)
                             val path = Path().apply { addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(20.dp.toPx()))) }
@@ -210,9 +262,9 @@ class GlassTouchLightTest {
                     }
                 }
             }
-            Text("Production B · direct follow · hold and move", color = Color.White)
+            Text("Production B · follow 0 ms · hold / move / release", color = Color.White, fontSize = 12.sp)
             LiquidGlassSurface(Modifier.size(280.dp, 120.dp).testTag("production"), source = null,
-                tint = background, cornerRadius = 24.dp, shadow = false) { Text("Finger-origin light", color = Color.White) }
+                tint = background, cornerRadius = 24.dp, shadow = false) { Text("Finger-origin light", Modifier.padding(16.dp), color = Color.White, fontSize = 14.sp) }
         } } }
         compose.waitForIdle()
         if (capture) Thread.sleep(4000)
@@ -225,6 +277,6 @@ class GlassTouchLightTest {
         if (capture) Thread.sleep(1500)
         node.performTouchInput { up() }
         compose.mainClock.advanceTimeBy(500)
-        if (capture) Thread.sleep(1000)
+        if (capture) Thread.sleep(8000)
     }
 }
