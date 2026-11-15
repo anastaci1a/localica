@@ -609,6 +609,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         snapshotFlow { motion.bounds != null || !popupFlight.present }.first { it }
         gateLoop@ while (true) {
             snapshotFlow { motion.expansion.awaitingNativeGate || motion.expansion.retirementReady }.first { it }
+            if (visible != motion.shown) break
             if (motion.expansion.awaitingNativeGate) {
                 val generation = motion.expansion.nativeGeneration
                 val opening = requireNotNull(motion.expansion.nativeOpening)
