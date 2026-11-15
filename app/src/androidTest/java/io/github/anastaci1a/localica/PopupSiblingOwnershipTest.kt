@@ -22,6 +22,29 @@ import org.junit.Test
 class PopupSiblingOwnershipTest {
     @get:Rule val compose = localicaComposeRule()
 
+    @Test fun disposingTheOwningHomeClosesItsRegisteredFlightsInThatApplyPass() {
+        var mounted by mutableStateOf(true)
+        lateinit var home: GlassPopupHome
+        val flight = GlassPopupFlight().testRun(PopupEvent.Admitted)
+        var firstAfterDisposal: PopupState? = null
+        compose.setContent { LocalicaTheme {
+            if (mounted) home = rememberGlassPopupHome(false)
+            SideEffect { if (!mounted && firstAfterDisposal == null) firstAfterDisposal = flight.state }
+            Text("Home lifetime")
+        } }
+        compose.runOnIdle { home.flights.add(flight) }
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnUiThread { mounted = false }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.runOnUiThread {
+                assertFalse(home.mounted)
+                assertEquals("the owning dispose, before a later popup composition", PopupState(gen = flight.gen), firstAfterDisposal)
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun disposingAClosedSiblingDoesNotRetireTheOpenPresentation() = overlap(false)
     @Test fun heldExitDoesNotRetireANewerPresentationOnTheSameTrigger() = overlap(true)
     @Test fun disposingAWaitingSiblingNeverFollowsTheHeldPresentation() = overlap(true, true)

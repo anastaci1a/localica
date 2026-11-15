@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui
 
 import android.app.Dialog
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.runtime.mutableStateOf
 import io.github.anastaci1a.localica.ui.PopupEvent.*
 import io.github.anastaci1a.localica.ui.PopupPresenter.*
 import io.github.anastaci1a.localica.ui.engine.PopupTakeover
@@ -54,6 +55,7 @@ class PopupEdgesTest {
         for (p in PopupPresenter.entries) {
             assertEquals(Restoring to p, PopupEdges[Triple(InWindow, p, AtHome)])
             assertEquals(Closed to null, PopupEdges[Triple(Restoring, p, Returned)])
+            assertNull("T11 uses Show, never admission", PopupEdges[Triple(Restoring, p, Admitted)])
         }
     }
 
@@ -107,5 +109,14 @@ class PopupEdgesTest {
         val before = b.state
         for (e in listOf(OfferTaken, OfferReleased, HomeLeft, HomeReturns)) a.receipt(e)
         assertEquals(before, b.state)
+    }
+    @Test fun removingAHomeRetiresAllItsFlightsAtTheEvent() {
+        val home = GlassPopupHome(mutableStateOf(false))
+        val flights = List(2) { GlassPopupFlight().apply { assertTrue(open(this@PopupEdgesTest.basis)); assertTrue(advance(state.gen, Admitted, this@PopupEdgesTest.window)) } }
+        home.flights.addAll(flights)
+        home.gone()
+        assertFalse(home.mounted)
+        for (flight in flights) assertEquals(PopupState(gen = flight.state.gen), flight.state)
+        assertEquals("registration cleanup is owned by disposal", flights, home.flights.toList())
     }
 }

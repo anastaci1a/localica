@@ -83,12 +83,18 @@ class GlassOriginPreparationTest {
 
     @Test fun reducedMotionPreparedOriginReclaimsRetainedReadyWindow() = retainedReadyReopen(true)
 
-    private fun retainedReadyReopen(reduced: Boolean) {
+    @Test fun preparedOriginSynchronouslyReclaimsTheSameExpansion() = retainedReadyReopen(false, true)
+    @Test fun reducedMotionPreparedOriginSynchronouslyReclaimsTheSameExpansion() = retainedReadyReopen(true, true)
+
+    private fun retainedReadyReopen(reduced: Boolean, synchronous: Boolean = false) {
         fixture(reduced)
         try {
             compose.runOnIdle { open = true }
             advanceWithNativeFrames(4000)
             val firstWindow = requireNotNull(popupWindow)
+            val firstFlight = requireNotNull(anchor.popup)
+            val firstPreparation = preparation
+            val firstContact = anchor.contact
             compose.runOnIdle {
                 assertTrue(anchor.hidden && anchor.modalPresent)
                 assertEquals(1f, preparation.progress, 0f)
@@ -105,11 +111,26 @@ class GlassOriginPreparationTest {
                 assertTrue("Observe the draw handoff before logical disposal", anchor.modalPresent)
             }
             assertTrue("Return must acknowledge the restored trigger", acknowledged)
-            compose.runOnIdle { open = true }
+            compose.runOnIdle {
+                val basis = firstFlight.basis
+                val gen = firstFlight.gen
+                val value = firstFlight.progress.value
+                val velocity = firstFlight.progress.velocity
+                open = true
+                if (synchronous) {
+                    requireNotNull(anchor.reclaimOpening).invoke()
+                    assertEquals("T11 is synchronous for prepared origins", io.github.anastaci1a.localica.ui.engine.PopupTakeover.InWindow, firstFlight.takeover)
+                }
+                assertSame(basis, firstFlight.basis); assertEquals(gen, firstFlight.gen)
+                assertSame(firstPreparation, preparation); assertSame(firstContact, anchor.contact)
+                assertEquals("$reduced: no expansion reset at Show", value, firstFlight.progress.value, 0f)
+                assertEquals("$reduced: no velocity reset at Show", velocity, firstFlight.progress.velocity, 0f)
+            }
             repeat(2) {
                 frame()
                 compose.runOnIdle {
                     assertSame("Reopen must reuse the ready native window", firstWindow, popupWindow)
+                    assertSame("Reopen retains its presentation", firstFlight, anchor.popup)
                     assertEquals("Preparation cannot allocate a replacement popup", 1, nativeMounts)
                     // Reversal retains velocity: it may continue toward the trigger before
                     // turning. Ownership must follow the actual seam, not requested intent.
