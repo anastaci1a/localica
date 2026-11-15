@@ -119,8 +119,9 @@ class PlaybackIntentTest {
         val actor = Gate()
         queues.settings { it.copy(previousThresholdSeconds = 6) }
         worker.entered.await()
+        val fixtureScope = this
         val held = withContext(Dispatchers.Main) {
-            async(start = CoroutineStart.UNDISPATCHED) { command { actor.await() } }.also {
+            fixtureScope.async(Dispatchers.Main, start = CoroutineStart.UNDISPATCHED) { command { actor.await() } }.also {
                 readers.publishRecovery(RecoveryAdmission.Clear)
             }
         }
@@ -134,6 +135,10 @@ class PlaybackIntentTest {
             }
             awaitMain { player.engine.playbackState == Player.STATE_ENDED }
             actor.release.complete(Unit); held.await(); command {}
+            withContext(Dispatchers.Main) {
+                android.util.Log.i("Recovery1004Boundary", "state=" + player.playbackState + " repeat=" + player.repeatMode +
+                    " playWhenReady=" + player.playWhenReady + " playing=" + player.isPlaying + " problem=" + queues.state.value.problem)
+            }
             awaitMain { player.isPlaying }
             withContext(Dispatchers.Main) {
                 assertTrue("Recovery reconciliation must preserve the playing intent across the stale OFF boundary", player.playWhenReady)
