@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.pilotComposeRule as createComposeRule
+import io.github.anastaci1a.localica.pilotCaptureToImage as captureToImage
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*

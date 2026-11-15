@@ -21,6 +21,8 @@ Test in proportion to the change. While implementing, run focused checks that co
 
 The tab-slide, pinch-fade and pinch-retarget classes share their assertions between JVM and device tests. The JVM fixture uses Robolectric native graphics, hardware PixelCopy and the existing Flat None appearance and renderer. Native window receipts and glass recordings remain device checks.
 
+Isolated JVM fixtures use a plain Application. Their pixel assertions capture through Roborazzi because Compose 1.10 waits for a native redraw callback unavailable in Robolectric. Device assertions retain Compose capture.
+
 Structure and existing assertions retain their tolerances. Screenshot interiors and dimensions are exact. Only pixels in a reference's nonuniform 3×3 neighbourhood permit channel differences up to 3/255; at most 0.5% of those pixels may differ. Images cannot shift.
 
 Reference PNGs are stored as Base64 text and decoded into build reports. Verification is the default in `testDebugUnitTest`. Record explicitly with `-Proborazzi.test.record=true`, then review changes before updating references. Runtime equivalence and device-test retirement remain pilot acceptance requirements.
