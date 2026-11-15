@@ -8,7 +8,7 @@ android {
     namespace = "io.github.anastaci1a.localica.benchmark"
     compileSdk = 36
     defaultConfig {
-        minSdk = 28
+        minSdk = 35
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

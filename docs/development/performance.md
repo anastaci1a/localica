@@ -74,7 +74,7 @@ The [startup controller](../../tools/startup-diagnostics/run.py) runs in the tes
 
 ## Baseline Profiles and Macrobenchmark
 
-The `:benchmark` module runs outside the app process. Its [shared protocol](../../tools/performance/macrobenchmark/scenarios.json) covers list/gallery flings and slow scrolls, tabs, player expansion, lyrics, search, pinch and process-cold startup. Both profile generation and metrics use the same journeys and existing shell input injectors.
+The `:benchmark` module runs outside the app process on API 35 or later, matching the existing shell driver's clock API. Its [shared protocol](../../tools/performance/macrobenchmark/scenarios.json) covers list/gallery flings and slow scrolls, tabs, player expansion, lyrics, search, pinch and process-cold startup. Both profile generation and metrics use the same journeys and existing shell input injectors.
 
 The fixture promotes the existing scale generator: 13,400 synthetic tracks and Queue entries, one tone, no artwork and empty lyrics. It establishes scale and empty-lyrics costs; representative artwork and populated lyrics require separate fixtures.
 
