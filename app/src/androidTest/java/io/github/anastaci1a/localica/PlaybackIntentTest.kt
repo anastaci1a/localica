@@ -1858,6 +1858,67 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun generationLossDuringEditMembershipPreparationRejectsTheLibraryAndAnswer() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        withHeldEdit("absent") {
+            val save = QueueController::class.java.declaredMethods.single { it.name == "saveStartingPlayback" }.apply { isAccessible = true }
+            val held = QueueController::class.java.getDeclaredMethod("holdsForEdit").apply { isAccessible = true }
+            val replacement = newPlayer()
+            val gate = Gate()
+            val firstRead = java.util.concurrent.atomic.AtomicBoolean(true)
+            val starts = AtomicInteger()
+            var detached: Deferred<Unit>? = null
+            val saving = async { command {
+                val before = queues.state.value.library
+                val active = before.active!!
+                assertNotNull(active.journey)
+                val rows = active.entries + QueueEntry(id = "edited-source", track = track.copy(id = "absent"))
+                val entries = object : AbstractList<QueueEntry>() {
+                    override val size = rows.size
+                    override fun get(index: Int): QueueEntry {
+                        if (firstRead.getAndSet(false)) {
+                            assertFalse(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+                            assertTrue("Gate must suspend membership, not journey reconciliation", Thread.currentThread().stackTrace.any {
+                                it.className.contains("QueueController") && it.className.contains("membership")
+                            })
+                            runBlocking { gate.await() }
+                        }
+                        return rows[index]
+                    }
+                }
+                // A null journey bypasses reconciliation reads; membership owns the first entry read.
+                val next = before.update(active.copy(name = "Preparing membership", entries = entries,
+                    currentEntryId = null, journey = null, order = SavedOrder(rows.map { it.id })))
+                val start: suspend () -> Unit = { starts.incrementAndGet(); replacement.setPlayWhenReady(true) }
+                assertFalse(kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> { save.invoke(queues, next, start, it) })
+                assertSame(before, queues.state.value.library)
+                assertFalse(held.invoke(queues) as Boolean)
+                assertEquals(0, starts.get())
+                assertTrue(replacement.selectionCalls.isEmpty())
+                assertNull(replacement.currentMediaItem)
+            } }
+            try {
+                gate.entered.await()
+                withContext(Dispatchers.Main) {
+                    assertFalse(held.invoke(queues) as Boolean)
+                    detached = queues.detach(player)
+                    queues.attach(replacement)
+                    assertNull(replacement.currentMediaItem)
+                }
+                gate.release.complete(Unit)
+                saving.await()
+                detached?.await(); barrier()
+                withContext(Dispatchers.Main) {
+                    assertSame(first.entries, queues.state.value.library.active!!.entries)
+                    assertFalse(held.invoke(queues) as Boolean)
+                    assertEquals(first.currentEntryId, replacement.currentMediaItem!!.mediaId)
+                    assertFalse(replacement.playWhenReady)
+                    assertEquals(0, starts.get())
+                }
+            } finally { gate.release.complete(Unit); saving.cancelAndJoin() }
+        }
+    }
+
     @Test fun rejectedCreationReportsFalseAndKeepsItsPendingRequest() {
         val gate = Gate()
         val armed = java.util.concurrent.atomic.AtomicBoolean(false)
