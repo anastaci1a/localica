@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
+import io.github.anastaci1a.localica.ui.FrostedBackdrop
 import io.github.anastaci1a.localica.ui.engine.*
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -37,6 +38,15 @@ internal fun ComposeContentTestRule.onPopupAction(matcher: SemanticsMatcher, sho
 }
 
 internal fun ComposeContentTestRule.awaitPopupGone(matcher: SemanticsMatcher) = awaitPopup(matcher, 0)
+
+internal fun ComposeContentTestRule.awaitGlassBackingSnapshot(backing: FrostedBackdrop) {
+    fun receipt(phase: String) = android.util.Log.i("GlassBackdropReadiness",
+        "$phase api=${android.os.Build.VERSION.SDK_INT} required=${android.os.Build.VERSION.SDK_INT < 33} recorded=${backing.recorded} snapshotReady=${backing.snapshot != null} request=${backing.readbackRequest} published=${backing.snapshotReadbackRequest}")
+    receipt("before")
+    try { if (android.os.Build.VERSION.SDK_INT < 33) waitUntil(10000) { backing.snapshot != null } }
+    finally { receipt("after") }
+}
+
 
 /** The running test's virtual time, for Engine owners in fixture hosts (PlayerSurfaceHarness); real-app owner tests pass it
  * to their own UiClock. The theme clock would stamp an idle intent at its last presented frame instead. */

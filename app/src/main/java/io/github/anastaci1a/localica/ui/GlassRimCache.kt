@@ -2,6 +2,9 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.*
+import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.spec.FlexGlow
 
 /** One draw owner's current preparation; paths are replaced, never rewritten after publication. */
 internal class GlassRimCache {
@@ -31,7 +34,7 @@ internal class GlassRimCache {
     }
 }
 
-internal data class GlassRimBrushes(val shine: Brush, val shade: Brush)
+internal data class GlassRimBrushes(val shine: Brush, val shade: Brush, val light: Lazy<Brush>)
 
 internal fun glassRimBrushes(center: Offset, tone: GlassTone): GlassRimBrushes {
     val white = tone.color(Color.White)
@@ -49,5 +52,19 @@ internal fun glassRimBrushes(center: Offset, tone: GlassTone): GlassRimBrushes {
         .375f to black.copy(alpha = .11f), .5f to Color.Transparent,
         .625f to Color.Transparent, .75f to Color.Transparent, .875f to black.copy(alpha = .11f),
         1f to Color.Transparent, center = center)
-    return GlassRimBrushes(shine, shade)
+    return GlassRimBrushes(shine, shade, lazy {
+        Brush.radialGradient(*FlexGlow.Falloff.map { (position, alpha) -> position to white.copy(alpha = alpha) }.toTypedArray(), center = Offset.Zero, radius = 1f)
+    })
+}
+
+internal fun DrawScope.drawContactGlow(glow: GlassGlow, shape: GlassShape, vertical: Boolean, tone: GlassTone, cache: GlassRimCache) {
+    if (glow.big == 0f && glow.little == 0f) return
+    if (glow.big != 0f) drawRect(tone.color(Color.White), alpha = glow.big * FlexGlow.Gain)
+    if (glow.little != 0f) {
+        val point = Offset(size.width * (.5f + (glow.point.x - .5f) / shape.scaleX(vertical)),
+            size.height * (.5f + (glow.point.y - .5f) / shape.scaleY(vertical)))
+        val radius = minOf(size.minDimension * FlexGlow.ExtentScale, FlexGlow.ExtentCap.dp.toPx())
+        val brush = cache.brushes(size.center, tone).light.value
+        translate(point.x, point.y) { scale(radius, radius, pivot = Offset.Zero) { drawCircle(brush, 1f, Offset.Zero, alpha = glow.little * FlexGlow.Gain) } }
+    }
 }

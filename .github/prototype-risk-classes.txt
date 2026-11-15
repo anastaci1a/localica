@@ -530,3 +530,5 @@ io.github.anastaci1a.localica.PopupPeakOvershootPortraitTest
 io.github.anastaci1a.localica.PopupShadowFrameExportTest
 io.github.anastaci1a.localica.PopupSiblingOwnershipTest
 io.github.anastaci1a.localica.ui.engine.SearchReturnOracleSensitivityTest
+
+io.github.anastaci1a.localica.GlassTouchLightTest

@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.geometry.Offset
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.*
@@ -21,6 +22,7 @@ internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.sp
 /** One interruptible shape clock; live tuning preserves its current displacement and velocity. */
 @Stable internal class GlassBodyState {
     val output = mutableStateOf(GlassShape())
+    val glow = mutableStateOf(GlassGlow())
     val momentum = GlassMomentum()
     var impulseScale = 1f
     var previous = 0f
@@ -29,7 +31,7 @@ internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.sp
 
 @Composable
 internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 0f }, contact: () -> Float = { 0f },
-    state: GlassBodyState = remember { GlassBodyState() }, active: () -> Boolean = { true }): State<GlassShape> {
+    state: GlassBodyState = remember { GlassBodyState() }, active: () -> Boolean = { true }, point: (() -> Offset)? = null): State<GlassShape> {
     val result = state.output
     val reduced = LocalReducedMotion.current
     val speed by rememberUpdatedState(LocalMotionSpeed.current)
@@ -37,14 +39,16 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
     val input by rememberUpdatedState(position)
     val force by rememberUpdatedState(pressure)
     val touch by rememberUpdatedState(contact)
+    val glowPoint by rememberUpdatedState(point)
+    val strength by rememberUpdatedState(LocalGlassAppearance.current.touchLight)
     val ownsClock by rememberUpdatedState(active)
     LaunchedEffect(state, reduced) {
         val body = state.momentum
         var runner: Job? = null
-        snapshotFlow { listOf(input(), force(), touch(), damping, if (ownsClock()) 1f else 0f) }.collect {
+        snapshotFlow { listOf(input(), force(), touch(), damping, ownsClock(), if (strength > 0f) glowPoint?.invoke() else null, strength) }.collect {
             if (!ownsClock()) { runner?.cancel(); runner = null; return@collect }
             if (!state.initialized) { state.previous = input(); state.initialized = true }
-            if (reduced) { body.reset(); result.value = GlassShape(); state.previous = input(); return@collect }
+            if (reduced) { body.reset(); body.targetGlow(glowPoint?.invoke(), touch(), strength, snap = true); state.glow.value = body.glow; result.value = GlassShape(); state.previous = input(); return@collect }
             if (runner?.isActive != true) runner = launch {
                 var last = 0L
                 do {
@@ -56,15 +60,13 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
                     last = frame
                     val current = input()
                     body.damping = damping
+                    body.targetGlow(glowPoint?.invoke(), touch(), strength)
                     body.advance(((current - state.previous) / dt / speed).coerceIn(-20f, 20f), dt * speed, force(), touch(), state.impulseScale)
                     state.previous = current
+                    body.finishSettlement()
                     result.value = body.shape
+                    state.glow.value = body.glow
                 } while (!body.settled)
-                // Epsilon convergence ends the clock, but must not leave a residual
-                // shape across an integer-layout rounding boundary. Cancellation or
-                // ownership handoff exits above without changing the shared body.
-                body.finishSettlement()
-                result.value = body.shape
             }
         }
     }

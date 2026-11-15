@@ -126,7 +126,7 @@ class LiquidGlassTest {
         compose.onNodeWithText("Below the control").assertIsDisplayed()
         compose.runOnIdle {
             contacts.forEachIndexed { index, contact ->
-                val expected = io.github.anastaci1a.localica.ui.spec.FlexSpec.dynamic(listOf(119f, 120f, 160f)[index % 3])
+                val expected = io.github.anastaci1a.localica.ui.spec.FlexSpec.dynamic(listOf(119f, 120f, 160f)[index % 3], 40f)
                 assertEquals("Surface long side is resolved in dp in either axis", expected, contact.state.momentum.spec)
                 if (index % 3 > 0) assertNotEquals(io.github.anastaci1a.localica.ui.spec.FlexSpec.Small, contact.state.momentum.spec)
             }
