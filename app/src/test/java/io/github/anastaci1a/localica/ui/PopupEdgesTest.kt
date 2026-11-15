@@ -34,12 +34,14 @@ class PopupEdgesTest {
             Triple(Restoring, Window, Show) to (InWindow to Window), // T11
             Triple(InWindow, Offered, HomeReturns) to (InWindow to Window), // T12
             Triple(InWindow, Taken, HomeReturns) to (InWindow to Releasing), // T13, T15
-            Triple(InWindow, Releasing, OfferReleased) to (InWindow to Window), // T14
+            Triple(InWindow, Releasing, WindowDrew) to (InWindow to Reclaimed), // C1
+            Triple(Restoring, Releasing, WindowDrew) to (Restoring to Reclaimed),
+            Triple(InWindow, Reclaimed, OfferReleased) to (InWindow to Window), // T14
             Triple(Restoring, Taken, HomeLeft) to (Restoring to Window),
             Triple(InWindow, Offered, WindowGone) to (InWindow to Offered),
             Triple(Restoring, Offered, Gone) to (Closed to null)) // T17
         for ((key, to) in rows) assertEquals("$key", to, PopupEdges[key])
-        for (key in listOf(Triple(InWindow, Window, SampleLost), Triple(InWindow, Window, Show), Triple(InWindow, Releasing, OfferTaken),
+        for (key in listOf(Triple(InWindow, Window, SampleLost), Triple(InWindow, Window, Show), Triple(InWindow, Releasing, OfferTaken), Triple(InWindow, Releasing, OfferReleased), Triple(InWindow, Taken, WindowDrew), Triple(InWindow, Window, WindowDrew),
             Triple(Admitting, null, HomeLeft), Triple<PopupTakeover, PopupPresenter?, PopupEvent>(Closed, null, Gone))) assertNull("$key", PopupEdges[key])
         for (p in PopupPresenter.entries) {
             assertEquals(Restoring to p, PopupEdges[Triple(InWindow, p, AtHome)])
