@@ -9,8 +9,9 @@ mode=${1:?generate or functional}
 pkg=io.github.anastaci1a.localica.debug
 # Preserve the seeded fixture across isolated and aggregate connected-test tasks.
 gradle=(./gradlew -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true --no-daemon --max-workers=2)
-adb root
+adb root || true
 adb wait-for-device
+[[ $(adb shell id -u | tr -d '\r') == 0 ]]
 adb shell wm size 720x1280
 adb shell wm density 280
 python3 .github/emulator-readiness.py --normalize-navigation
@@ -49,5 +50,5 @@ else
         mkdir -p "performance-results/$scenario"
         adb pull /sdcard/Android/media/io.github.anastaci1a.localica.benchmark "performance-results/$scenario/"
     done
-    rg --files performance-results -g '*.perfetto-trace' -0 | xargs -0 -r sha256sum > performance-traces.sha256
+    find performance-results -type f -name '*.perfetto-trace' -print0 | xargs -0 -r sha256sum > performance-traces.sha256
 fi
