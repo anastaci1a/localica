@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.*
@@ -24,7 +26,7 @@ class GlassTouchLightTest {
     private val width = 96
     private val height = 80
     private val extent = Size(width.toFloat(), height.toFloat())
-    private val background = Color(0xff405060)
+    private var background = Color(0xff405060)
     private fun pixels(image: ImageBitmap) = IntArray(image.width * image.height).also {
         image.asAndroidBitmap().getPixels(it, 0, image.width, 0, 0, image.width, image.height)
     }
@@ -62,7 +64,8 @@ class GlassTouchLightTest {
         val maxima = IntArray(3)
         val residuals = IntArray(6)
         val sensitivity = IntArray(5)
-        for (circle in listOf(false, true)) {
+        for (backdrop in listOf(Color(0xff101418), Color(0xff405060), Color(0xffd0d8e0))) for (circle in listOf(false, true)) {
+            background = backdrop
             val cache = GlassRimCache()
             val prepared = cache.brushes(extent.center, GlassTone())
             render(GlassGlow(), circle, cache)
@@ -79,7 +82,7 @@ class GlassTouchLightTest {
                     maxima[op] = max(maxima[op], abs(value - oracle))
                     if (channel(mask[y * width + x], 0) == 0)
                         assertEquals("outside op=$op point=$point ($x,$y)", background.toArgb(), actual[p][y * width + x])
-                    for (axis in 0..2) {
+                    if (p == 0) for (axis in 0..2) {
                         val px = if (axis == 1) x else width - 1 - x
                         val py = if (axis == 1) height - 1 - y else y
                         val a = if (axis == 2) actual[1] else actual[0]
@@ -105,8 +108,9 @@ class GlassTouchLightTest {
             val local = render(GlassGlow(0f, 1f, Offset(.5f, .5f)), circle, cache)
             assertTrue(channel(local[40 * width + 48], 16) > channel(local[40 * width + 80], 16))
             for (x in 48..80) {
-                val idealA = 64 + 191 * .12f * (1 - abs(x + .5f - 48) / 60)
-                val idealB = 64 + 191 * .12f * (1 - abs(x + 1.5f - 48) / 60)
+                val red = channel(background.toArgb(), 16)
+                val idealA = red + (255 - red) * .12f * (1 - abs(x + .5f - 48) / 60)
+                val idealB = red + (255 - red) * .12f * (1 - abs(x + 1.5f - 48) / 60)
                 assertTrue(idealA >= idealB)
                 assertTrue(idealA.roundToInt() >= idealB.roundToInt())
                 assertTrue(channel(local[40 * width + x + 1], 16) - channel(local[40 * width + x], 16) <= 2)
@@ -139,9 +143,9 @@ class GlassTouchLightTest {
         val contact = GlassContact()
         val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
         lateinit var source: FrostedBackdrop
-        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { EngineTheme(clear = true) {
+        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f, touchLight = strength)) {
-                source = rememberFrostedBackdrop(Unit)
+                source = rememberFrostedBackdrop(Unit, dark = true)
                 Box(Modifier.size(240.dp, 160.dp).testTag("frame")) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                         drawRect(background)
@@ -152,7 +156,7 @@ class GlassTouchLightTest {
                         cornerRadius = 24.dp, shadow = false, sharedContact = contact, contactPresentation = { GlassShape() })
                 }
             }
-        } } }
+        } } } }
         compose.awaitGlassBackingSnapshot(source)
         val node = compose.onNodeWithTag("light")
         val frame = compose.onNodeWithTag("frame")
@@ -259,7 +263,15 @@ class GlassTouchLightTest {
         compose.mainClock.advanceTimeBy(500)
         assertEquals("disabled point changes do not wake either owner", 0, reads.get())
         compose.runOnIdle { strength = 1f; held = true }
-        compose.mainClock.advanceTimeBy(600)
+        compose.mainClock.advanceTimeBy(1200)
+        compose.runOnIdle { assertTrue(shared.momentum.settled); point = Offset(.6f, .4f) }
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle {
+            assertTrue("point alone wakes the settled clock", shared.glow.value.point.x in .6f.. .9f && shared.glow.value.point.x != .9f)
+            assertTrue("centre follows rather than snapping on MOVE", shared.glow.value.point.x != .6f)
+        }
+        compose.mainClock.advanceTimeBy(1200)
+        compose.runOnIdle { assertEquals(Offset(.6f, .4f), shared.glow.value.point) }
         val model = compose.runOnIdle { GlassMomentum().also { it.blendFrom(shared.momentum) } }
         val before = compose.runOnIdle { shared.glow.value }
         compose.runOnIdle { modal = !modal; point = Offset(.1f, .9f) }
