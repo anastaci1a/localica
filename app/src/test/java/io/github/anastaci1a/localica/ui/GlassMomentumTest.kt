@@ -105,9 +105,11 @@ class GlassMomentumTest {
                     peak = maxOf(peak, axial)
                     assertEquals(1f, body.scaleX * body.scaleY * body.shape.thickness, .00001f)
                 }
-                assertTrue("Held acceleration/braking must survive target projection", peak > if (damping == 40f) .0005f else .004f)
+                assertTrue("Held acceleration/braking retains a visible impulse", peak > if (damping == 40f) .0005f else .004f)
                 assertTrue("Held impulse remains bounded", peak < .02f)
                 if (damping == 8f) assertTrue("Default tracking rebound <= 8.1%", -trough <= peak * .081f)
+                if (damping == 2f) assertTrue("Stored-2 tracking rebound <= 62%", -trough <= peak * .62f)
+                if (damping == 40f) assertTrue("Stored-40 tracking does not cross rest", trough >= -.000001f)
                 // The slowest tracking envelope decays at 3.127/s; 3 s keeps the original tolerance.
                 repeat(fps * 2) { body.advance(nextVelocity, 1f / fps, contact = 1f) }
                 assertEquals("Steady tracking dissipates the impulse", 0f, body.strain, .00001f)
@@ -134,14 +136,17 @@ class GlassMomentumTest {
     @Test fun heldAccelerationIsSymmetricAndConvergesToTheStationaryContactDepth() {
         val forward = GlassMomentum(); val backward = GlassMomentum(); val stationary = GlassMomentum()
         repeat(180) { for (body in listOf(forward, backward, stationary)) body.advance(0f, 1f / 60, contact = 1f) }
+        var depthImpulse = 0f
         repeat(60) {
             forward.advance(4f, 1f / 60, contact = 1f)
             backward.advance(-4f, 1f / 60, contact = 1f)
             stationary.advance(0f, 1f / 60, contact = 1f)
             assertEquals(forward.shape, backward.shape)
-            assertTrue("Transient depth stays inside the shipped cap", abs(forward.shape.depth) < .24f)
+            depthImpulse = maxOf(depthImpulse, abs(forward.shape.depth - stationary.shape.depth))
+            assertTrue("Acceleration adds bounded contact depth", abs(forward.shape.depth - stationary.shape.depth) < .002f)
             assertEquals(1f, forward.scaleX * forward.scaleY * forward.shape.thickness, .00001f)
         }
+        assertTrue("Acceleration retains a nonzero depth impulse", depthImpulse > 0f)
         repeat(120) { forward.advance(4f, 1f / 60, contact = 1f) }
         assertEquals("Steady travel returns to the contact target", stationary.shape.depth, forward.shape.depth, .00001f)
     }

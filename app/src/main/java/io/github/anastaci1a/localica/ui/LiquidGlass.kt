@@ -244,11 +244,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             addPath(outline.frame(extent).path)
         } } ?: cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape
     }
-    val flex = remember(surfaceSize, view.resources.displayMetrics.density) {
-        FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density)
-    }
     SideEffect {
-        contact.state.momentum.spec = flex
+        contact.state.momentum.spec = FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density)
         if (anchor != null) {
             anchor.depthScale = depthScale
             anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)

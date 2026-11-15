@@ -106,6 +106,7 @@ class LiquidGlassTest {
     }
 
     @Test fun paddedBackdropDoesNotExpandAContentSizedControl() {
+        val contacts = List(6) { GlassContact() }
         compose.setContent { ClearGlassTheme { Box(Modifier.fillMaxSize()) {
             val source = rememberFrostedBackdrop(Unit)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Blue) }
@@ -114,10 +115,22 @@ class LiquidGlassTest {
                     Box(Modifier.fillMaxWidth().height(40.dp))
                 }
                 androidx.compose.material3.Text("Below the control")
+                Box { contacts.forEachIndexed { index, contact ->
+                    val side = listOf(119, 120, 160)[index % 3].dp
+                    LiquidGlassSurface(Modifier.size(if (index < 3) side else 40.dp, if (index < 3) 40.dp else side),
+                        source, sharedContact = contact)
+                } }
             }
         } } }
         compose.onNodeWithTag("content-sized-lens").assertHeightIsEqualTo(40.dp)
         compose.onNodeWithText("Below the control").assertIsDisplayed()
+        compose.runOnIdle {
+            contacts.forEachIndexed { index, contact ->
+                val expected = io.github.anastaci1a.localica.ui.spec.FlexSpec.dynamic(listOf(119f, 120f, 160f)[index % 3])
+                assertEquals("Surface long side is resolved in dp in either axis", expected, contact.state.momentum.spec)
+                if (index % 3 > 0) assertNotEquals(io.github.anastaci1a.localica.ui.spec.FlexSpec.Small, contact.state.momentum.spec)
+            }
+        }
     }
 
     @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
