@@ -37,6 +37,32 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    private suspend fun Fixture.selectWithFrozenNativePath() = withContext(Dispatchers.Main) {
+        val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+        val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
+        val revision = QueueController::class.java.getDeclaredField("commandRevision").apply { isAccessible = true }
+        val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
+        val apply = QueueController::class.java.declaredMethods.single { it.name == "applyNativeIntent" }.apply { isAccessible = true }
+        val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
+        val action: suspend () -> Unit = {
+            val active = state.value.library.active!!
+            val selected = withContext(Dispatchers.Default) { active.copy(currentEntryId = "duplicate-1", positionMs = 0,
+                journey = active.journey!!.select("duplicate-1", active.ids)) }
+            state.value = state.value.copy(library = state.value.library.update(selected))
+            val accepted = revision.getLong(queues)
+            intents.propose(accepted, true, documentIdentity(track.id))
+            kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
+                sync.invoke(queues, true, true, null, it)
+            }
+            apply.invoke(queues, player, accepted, true)
+        }
+        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+            command.invoke(queues, false, {}, action, it)
+        }
+    }
+
     @Test fun sameQueueSelectionMatchesPriorNativePathWithoutReloading() {
         for (playing in listOf(false, true)) {
             var reference: List<String>? = null
@@ -45,34 +71,7 @@ class PlaybackIntentTest {
                 queues.playbackRequested(playing)
                 barrier()
                 withContext(Dispatchers.Main) { player.selectionCalls.clear() }
-                if (oldPath) {
-                    // Frozen pre-consolidation selectEntry branch, after its prepared-library publication.
-                    val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
-                    @Suppress("UNCHECKED_CAST")
-                    val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
-                    val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
-                    val revision = QueueController::class.java.getDeclaredField("commandRevision").apply { isAccessible = true }
-                    val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
-                    val apply = QueueController::class.java.declaredMethods.single { it.name == "applyNativeIntent" }.apply { isAccessible = true }
-                    val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
-                    val action: suspend () -> Unit = {
-                        val active = state.value.library.active!!
-                        val selected = withContext(Dispatchers.Default) { active.copy(currentEntryId = "duplicate-1", positionMs = 0,
-                            journey = active.journey!!.select("duplicate-1", active.ids)) }
-                        state.value = state.value.copy(library = state.value.library.update(selected))
-                        val accepted = revision.getLong(queues)
-                        intents.propose(accepted, true, documentIdentity(track.id))
-                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
-                            sync.invoke(queues, true, true, null, it)
-                        }
-                        apply.invoke(queues, player, accepted, true)
-                    }
-                    withContext(Dispatchers.Main) {
-                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
-                            command.invoke(queues, false, {}, action, it)
-                        }
-                    }
-                } else queues.selectEntry("duplicate-1")
+                if (oldPath) selectWithFrozenNativePath() else queues.selectEntry("duplicate-1")
                 barrier()
                 withContext(Dispatchers.Main) {
                     assertEquals("duplicate-1", player.currentMediaItem!!.mediaId)
@@ -94,31 +93,7 @@ class PlaybackIntentTest {
             queues.playbackRequested(true); barrier()
             val gate = store.gateNextSnapshot()
             withContext(Dispatchers.Main) { player.selectionCalls.clear() }
-            val old = if (oldPath) async(Dispatchers.Main) {
-                val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
-                @Suppress("UNCHECKED_CAST")
-                val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
-                val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
-                val revision = QueueController::class.java.getDeclaredField("commandRevision").apply { isAccessible = true }
-                val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
-                val apply = QueueController::class.java.declaredMethods.single { it.name == "applyNativeIntent" }.apply { isAccessible = true }
-                val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
-                val action: suspend () -> Unit = {
-                    val active = state.value.library.active!!
-                    val selected = withContext(Dispatchers.Default) { active.copy(currentEntryId = "duplicate-1", positionMs = 0,
-                        journey = active.journey!!.select("duplicate-1", active.ids)) }
-                    state.value = state.value.copy(library = state.value.library.update(selected))
-                    val accepted = revision.getLong(queues)
-                    intents.propose(accepted, true, documentIdentity(track.id))
-                    kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
-                        sync.invoke(queues, true, true, null, it)
-                    }
-                    apply.invoke(queues, player, accepted, true)
-                }
-                kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
-                    command.invoke(queues, false, {}, action, it)
-                }
-            } else null
+            val old = if (oldPath) async { selectWithFrozenNativePath() } else null
             if (!oldPath) queues.selectEntry("duplicate-1")
             try {
                 gate.entered.await()
