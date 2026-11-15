@@ -91,7 +91,7 @@ class OrderedJourneyDatabaseTest {
 
     @Test fun oversizedLegacyJsonMigratesWithoutLosingEitherOrderAndReopens() = runBlocking {
         val arguments = InstrumentationRegistry.getArguments()
-        val count = arguments.getString("legacyEntries", "54000").toInt()
+        val count = arguments.getString("legacyEntries", "54000")!!.toInt()
         val name = "legacy-order-1012.db"
         largeLegacy(name, count)
         if (arguments.getString("require256MiB") == "true") assertEquals(268435456L, Runtime.getRuntime().maxMemory())
