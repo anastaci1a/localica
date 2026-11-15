@@ -160,7 +160,7 @@ if offline:
             self.assertEqual([], receipt['required_selectors'])
         self.assertEqual(3, (self.root/'lifecycle').read_text().count('setup'))
 
-    def test_green_method_repetition_is_accepted_by_the_delivery_decision(self):
+    def green_method_repetition_is_accepted_by_the_delivery_decision(self, affected=AFFECTED):
         # #657: the decision must accept the runner's own green repeat_methods evidence on both APIs.
         import yaml, hashlib
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
@@ -168,7 +168,7 @@ if offline:
                     if step.get('name') == 'Record passed, failed and not-run checks')
         decision=self.root/'decision'; evidence=decision/'evidence'
         for api in ('26','36'):
-            self.run_case(PROTOTYPE_REPEAT='2', PROTOTYPE_METHODS=AFFECTED+'#regression', TEST_API=api, _timeout=30)
+            self.run_case(AFFECTED_CLASSES=affected, PROTOTYPE_REPEAT='2', PROTOTYPE_METHODS=affected+'#regression', TEST_API=api, _timeout=30)
             shutil.move(str(self.root/'prototype-evidence'), evidence/f'prototype-focused-api-{api}'/'prototype-evidence')
             (self.root/'lifecycle').unlink()
             compatibility=evidence/f'prototype-compatibility-api-{api}'; compatibility.mkdir()
@@ -177,12 +177,18 @@ if offline:
         (canonical/'app-debug.apk').write_bytes(b'canonical')
         (canonical/'provenance.json').write_text(json.dumps({'sha':SHA,'apk_sha256':hashlib.sha256(b'canonical').hexdigest(),'run_id':'1','run_attempt':'1','signing_certificate':'verified-test-certificate'}))
         checks={k:{'result':'success'} for k in workflow['jobs']['evidence']['needs']}
-        env=dict(os.environ,PYTHONPATH=str(ROOT/'.github/test-evidence'),PROTOTYPE_METHODS=AFFECTED+'#regression',PROTOTYPE_REPEAT='2',CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT='1',GITHUB_STEP_SUMMARY=str(decision/'summary'))
+        env=dict(os.environ,PYTHONPATH=str(ROOT/'.github/test-evidence'),PROTOTYPE_METHODS=affected+'#regression',PROTOTYPE_REPEAT='2',CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=affected,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT='1',GITHUB_STEP_SUMMARY=str(decision/'summary'))
         result=subprocess.run(['bash','-c',script],cwd=decision,env=env,capture_output=True,text=True)
         manifest=json.loads((decision/'prototype-delivery/manifest.json').read_text())
         self.assertEqual([],manifest['validation_errors'],result.stdout+'\n'+result.stderr)
         self.assertTrue(manifest['ready_for_prototype_delivery'])
         self.assertEqual(0,result.returncode,result.stderr)
+
+    def test_green_method_repetition_is_accepted_by_the_delivery_decision(self):
+        self.green_method_repetition_is_accepted_by_the_delivery_decision()
+
+    def test_mandatory_method_repetition_is_accepted_by_the_delivery_decision(self):
+        self.green_method_repetition_is_accepted_by_the_delivery_decision(REQUIRED)
 
     def test_method_selection_rejects_unknown_source_method(self):
         self.run_case(1, PROTOTYPE_METHODS=AFFECTED+'#unknown')
@@ -413,7 +419,39 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
             with self.subTest(env=env):
                 self.run_case(2, **env)
                 self.assertFalse((self.root/'lifecycle').exists())
-    def test_mandatory_alone_is_not_affected_coverage(self): self.run_case(2,AFFECTED_CLASSES=REQUIRED)
+    def test_mandatory_only_selectors_deduplicate(self):
+        for classes in (REQUIRED, FOCUS, CONTRAST, ','.join([REQUIRED, FOCUS, CONTRAST, REQUIRED])):
+            with self.subTest(classes=classes):
+                self.rerun(AFFECTED_CLASSES=classes)
+                receipt=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+                self.assertEqual(sorted([REQUIRED, FOCUS, CONTRAST]), receipt['selectors'])
+                self.assertEqual(3, len(receipt['methods']))
+
+    def test_mixed_mandatory_selectors_deduplicate(self):
+        self.run_case(AFFECTED_CLASSES=','.join([REQUIRED, AFFECTED, FOCUS, AFFECTED, CONTRAST]))
+        receipt=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual(sorted([REQUIRED, FOCUS, CONTRAST, AFFECTED]), receipt['selectors'])
+        self.assertEqual(4, len(receipt['methods']))
+
+    def test_dispatch_preflight_uses_runner_before_build_or_device_jobs(self):
+        import yaml
+        jobs=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
+        preflight=next(s for s in jobs['identity']['steps'] if s.get('name')=='Validate prototype selection')
+        self.assertEqual('${{ inputs.affected_classes }}', preflight['env']['AFFECTED_CLASSES'])
+        self.assertEqual('${{ inputs.repeat }}', preflight['env']['PROTOTYPE_REPEAT'])
+        for name in ('build', 'focused_26'):
+            self.assertEqual('identity', jobs[name]['needs'])
+        for classes, status in ((REQUIRED, 0), (REQUIRED+','+AFFECTED, 0), ('', 2), (AFFECTED+';touch PWNED', 2), ('io.github.anastaci1a.localica.UnknownTest', 2)):
+            with self.subTest(classes=classes):
+                env=dict(self.env, AFFECTED_CLASSES=classes, PROTOTYPE_METHODS=REQUIRED+'#regression', PROTOTYPE_REPEAT='10', TEST_API='', GITHUB_SHA='', GITHUB_ACTIONS='false')
+                result=subprocess.run(['bash', '-c', preflight['run']], cwd=self.root, env=env, capture_output=True, text=True)
+                self.assertEqual(status, result.returncode, result.stdout+'\n'+result.stderr)
+                if not classes:
+                    self.assertIn('affected_classes must not be empty', result.stderr)
+                self.assertFalse((self.root/'prototype-evidence').exists())
+                self.assertFalse((self.root/'prototype-iterations').exists())
+                self.assertFalse((self.root/'lifecycle').exists())
+                self.assertFalse((self.root/'PWNED').exists())
     def test_injection(self):
         self.run_case(2,AFFECTED_CLASSES=AFFECTED+';touch PWNED')
         self.assertFalse((self.root/'PWNED').exists())
