@@ -2035,53 +2035,56 @@ class PlaybackIntentTest {
     }
 
     @Test fun finishResetKeepsItsOriginalOwnerThroughSourceLookupAndRestartPlanning() {
-        for (read in listOf(1, 2)) for (sourceChange in listOf(false, true)) fixture(duplicateOccurrences = true) {
-            queues.settings { it.copy(switching = QueueSwitch.Resume) }; barrier()
-            repeat(2) { queues.next(); barrier() }
-            awaitMain { player.engine.playbackState == Player.STATE_READY }
-            val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
-            @Suppress("UNCHECKED_CAST")
-            val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
-            val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
-            val finish = QueueController::class.java.declaredMethods.single { it.name == "finishQueue" }.apply { isAccessible = true }
+        for (worker in listOf(1, 2)) for (sourceChange in listOf(false, true)) {
             val gate = Gate()
-            val reads = AtomicInteger()
-            val entries = object : AbstractList<QueueEntry>() {
-                override val size = first.entries.size
-                override fun get(index: Int): QueueEntry {
-                    if (reads.incrementAndGet() == read) runBlocking { gate.await() }
-                    return first.entries[index]
+            val armed = java.util.concurrent.atomic.AtomicBoolean(false)
+            val workers = AtomicInteger()
+            val checkpoint = object : ThreadContextElement<Unit> {
+                override val key = object : kotlin.coroutines.CoroutineContext.Key<ThreadContextElement<Unit>> {}
+                override fun updateThreadContext(context: kotlin.coroutines.CoroutineContext) {
+                    if (armed.get() && context[kotlin.coroutines.ContinuationInterceptor] == Dispatchers.Default && workers.incrementAndGet() == worker)
+                        runBlocking { gate.await() }
                 }
+                override fun restoreThreadContext(context: kotlin.coroutines.CoroutineContext, oldState: Unit) = Unit
             }
-            withContext(Dispatchers.Main) {
-                state.value = state.value.copy(library = state.value.library.update(state.value.library.active!!.copy(entries = entries)))
-                player.selectionCalls.clear()
-            }
-            val pending = async { command {
-                val before = state.value.library
-                val failure = runCatching { kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
-                    finish.invoke(queues, AdvancedRepeat(queueEnd = QueueEnd.Stop, resetToFirst = true), false, it)
-                } }.exceptionOrNull()
-                if (failure != null) assertTrue(failure is IllegalStateException)
-                assertSame(before, state.value.library)
-                assertEquals("duplicate-2", state.value.library.active!!.currentEntryId)
-                assertTrue(player.selectionCalls.isEmpty())
-            } }
-            try {
-                gate.entered.await()
+            fixture(duplicateOccurrences = true, actorContext = checkpoint) {
+                queues.settings { it.copy(switching = QueueSwitch.Resume) }; barrier()
+                repeat(2) { queues.next(); barrier() }
+                awaitMain { player.engine.playbackState == Player.STATE_READY }
+                val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+                @Suppress("UNCHECKED_CAST")
+                val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+                val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
+                val finish = QueueController::class.java.declaredMethods.single { it.name == "finishQueue" }.apply { isAccessible = true }
+                withContext(Dispatchers.Main) { player.selectionCalls.clear() }
+                val pending = async { command {
+                    val before = state.value.library
+                    armed.set(true)
+                    val failure = runCatching { kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                        finish.invoke(queues, AdvancedRepeat(queueEnd = QueueEnd.Stop, resetToFirst = true), false, it)
+                    } }.also { armed.set(false) }.exceptionOrNull()
+                    if (failure != null) assertTrue(failure is IllegalStateException)
+                    assertSame(before, state.value.library)
+                    assertEquals("duplicate-2", state.value.library.active!!.currentEntryId)
+                    assertTrue(player.selectionCalls.isEmpty())
+                } }
+                try {
+                    gate.entered.await()
+                    assertEquals(worker, workers.get())
+                    withContext(Dispatchers.Main) {
+                        if (sourceChange) {
+                            intents.accept(true, documentIdentity(second.entries.single().track.id))
+                            queues.switchTo(second.id)
+                        } else queues.attach(player)
+                    }
+                } finally { gate.release.complete(Unit) }
+                pending.await(); barrier()
                 withContext(Dispatchers.Main) {
-                    if (sourceChange) {
-                        intents.accept(true, documentIdentity(second.entries.single().track.id))
-                        queues.switchTo(second.id)
-                    } else queues.attach(player)
+                    val active = state.value.library.active!!
+                    assertEquals(if (sourceChange) second.id else first.id, active.id)
+                    assertEquals(active.journey!!.current!!.token, player.currentMediaItem!!.queueVisit)
+                    if (!sourceChange) assertEquals("duplicate-2", active.currentEntryId)
                 }
-            } finally { gate.release.complete(Unit) }
-            pending.await(); barrier()
-            withContext(Dispatchers.Main) {
-                val active = state.value.library.active!!
-                assertEquals(if (sourceChange) second.id else first.id, active.id)
-                assertEquals(active.journey!!.current!!.token, player.currentMediaItem!!.queueVisit)
-                if (!sourceChange) assertEquals("duplicate-2", active.currentEntryId)
             }
         }
     }
