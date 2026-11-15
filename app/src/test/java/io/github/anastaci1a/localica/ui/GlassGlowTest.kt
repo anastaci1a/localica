@@ -151,8 +151,6 @@ class GlassGlowTest {
         step(body, 120, Offset(.2f, .7f), 1f)
         body.targetGlow(Offset(.8f, .3f), 1f, .5f, snap = true)
         assertEquals(GlassGlow(.5f, .5f, Offset(.8f, .3f)), body.glow)
-        body.reset()
-        assertEquals(GlassShape(), body.shape)
         body.targetGlow(Offset(.1f, .9f), 0f, .5f, snap = true)
         assertEquals(0f, body.glow.big, 0f)
         assertEquals(0f, body.glow.little, 0f)

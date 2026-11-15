@@ -92,6 +92,7 @@ class GlassTouchLightTest {
         } finally { probe.asAndroidBitmap().recycle() }
         assertArrayEquals("negative optical energy draws nothing", render(GlassGlow(), false), render(GlassGlow(-.22f, -.03f), false))
         val maxima = IntArray(3)
+        val worst = Array(3) { "" }
         val residuals = IntArray(6)
         val sensitivity = IntArray(5)
         for (backdrop in listOf(Color(0xff101418), Color(0xff405060), Color(0xffd0d8e0))) for (circle in listOf(false, true)) {
@@ -109,7 +110,11 @@ class GlassTouchLightTest {
                 for ((p, point) in points.withIndex()) for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16)) {
                     val value = channel(actual[p][y * width + x], shift)
                     val oracle = expected(mask, point, x, y, shift, alphas.first, alphas.second)
-                    maxima[op] = max(maxima[op], abs(value - oracle))
+                    val error = abs(value - oracle)
+                    if (error > maxima[op]) {
+                        maxima[op] = error
+                        worst[op] = "backdrop=$backdrop circle=$circle point=$point x=$x y=$y shift=$shift coverage=${channel(mask[y * width + x], 0)} actual=$value expected=$oracle"
+                    }
                     if (channel(mask[y * width + x], 0) == 0)
                         assertEquals("outside op=$op point=$point ($x,$y)", background.toArgb(), actual[p][y * width + x])
                     if (p == 0) for (axis in 0..2) {
@@ -162,8 +167,8 @@ class GlassTouchLightTest {
                         expected(mask, point, x, y, shift, 1f, 1f, shape, vertical)) <= 2)
             }
         }
-        println("two-fill maxima=${maxima.toList()} symmetry=${residuals.toList()} sensitivity=${sensitivity.toList()}")
-        for (op in maxima.indices) assertTrue("oracle op=$op max=${maxima[op]}", maxima[op] <= if (op == 2) 2 else 1)
+        println("two-fill maxima=${maxima.toList()} worst=${worst.toList()} symmetry=${residuals.toList()} sensitivity=${sensitivity.toList()}")
+        for (op in maxima.indices) assertTrue("oracle op=$op max=${maxima[op]} ${worst[op]}", maxima[op] <= if (op == 2) 2 else 1)
         for (i in residuals.indices) assertTrue("symmetry $i max=${residuals[i]}", residuals[i] <= if (i < 3) 2 else 4)
         for (i in sensitivity.indices) assertTrue("wrong-channel/support $i witness=${sensitivity[i]}", sensitivity[i] > 4)
     }
