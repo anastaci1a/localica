@@ -94,7 +94,6 @@ internal fun unitTarget(shown: Boolean)=if (shown) 1f else 0f
     return motion
 }
 @Composable private fun ProfileIntent(motion: MotionFloat, target: () -> Float, profile: MotionProfile, offProfile: MotionProfile) {
-    ownerClock()
     val requested = target()
     SideEffect { motion.retarget(requested, motionProfileId(if (requested == 0f) offProfile else profile)) }
 }

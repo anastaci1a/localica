@@ -264,11 +264,17 @@ class GlassTouchLightTest {
         compose.waitForIdle()
         val idle = pixels(frame.captureToImage())
         assertArrayEquals(idle, pixels(frame.captureToImage()))
+        compose.mainClock.autoAdvance = false
         node.performTouchInput { down(Offset(width * .25f, height * .5f)) }
-        compose.mainClock.advanceTimeBy(200)
-        assertFalse("a held surface lights", idle.contentEquals(pixels(frame.captureToImage())))
+        compose.mainClock.advanceTimeBy(150)
+        val held = pixels(frame.captureToImage())
+        assertFalse("a held surface lights", idle.contentEquals(held))
+        compose.mainClock.advanceTimeBy(170)
+        assertArrayEquals("rise settles by 150 ms", held, pixels(frame.captureToImage()))
         node.performTouchInput { up() }
-        compose.mainClock.advanceTimeBy(320)
+        compose.mainClock.advanceTimeBy(150)
+        assertFalse("fall remains lit after 150 ms", idle.contentEquals(pixels(frame.captureToImage())))
+        compose.mainClock.advanceTimeBy(170)
         compose.waitForIdle()
         assertArrayEquals("release is byte exact", idle, pixels(frame.captureToImage()))
         compose.runOnIdle { strength = 0f }
