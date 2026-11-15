@@ -24,6 +24,8 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class SettingsSearchTest {
     @get:Rule val compose = localicaComposeRule()
@@ -38,6 +40,38 @@ class SettingsSearchTest {
                     playbackContent = { section -> QueueSettingsControls(QueueSettings(), section) {} })
             }
         } }
+    }
+
+    @Test fun emptyResultDoesNotLabelPendingMatchingQueryAsEmpty() {
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val missing = "zzzz-no-setting"
+        var query by mutableStateOf(missing)
+        compose.setContent { LocalicaTheme {
+            Column {
+                SettingsSearchResults(query, emptyMap(), search = { input ->
+                    if (input == "queue") { started.countDown(); check(release.await(10, TimeUnit.SECONDS)) }
+                    SettingsCatalog.search(input)
+                }) {}
+            }
+        } }
+        try {
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithText("No settings match \"$missing\"").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.runOnIdle { query = "queue" }
+            compose.waitForIdle()
+            assertTrue(started.await(5, TimeUnit.SECONDS))
+            compose.onNodeWithText("No settings match \"queue\"").assertDoesNotExist()
+            compose.onNodeWithText("No settings match \"$missing\"").assertDoesNotExist()
+            compose.onNodeWithText("Try a different word, like blur, queue or tabs").assertDoesNotExist()
+            compose.onNodeWithTag("search-result:Preload next track").assertDoesNotExist()
+            release.countDown()
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("search-result:Preload next track").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("No settings match \"queue\"").assertDoesNotExist()
+        } finally { release.countDown() }
     }
 
     @Test fun deepSearchFindsOptionsAndValuesFromEveryPage() {
