@@ -62,10 +62,10 @@ class GalleryArtworkSemanticsTest {
             compose.onNodeWithTag("cell").assertTextContains("Recording title").assertTextContains("Recording artist")
                 .assertHasClickAction().assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
         }
-        fun census(label: String) {
+        fun census(label: String, number: String? = null) {
             metadata()
             val slot = compose.onNodeWithTag("browse-art-${item.key}", true).fetchSemanticsNode()
-            assertTrue("Decorative art has one clearing owner: $label", slot.config.isClearingSemantics)
+            if (number == null) assertTrue("Decorative art has one clearing owner: $label", slot.config.isClearingSemantics)
             assertFalse(slot.config.contains(SemanticsProperties.ContentDescription))
             fun debugCount(node: SemanticsNode): Int = 1 + node.children.sumOf(::debugCount)
             fun find(node: AccessibilityNodeInfo, id: String): AccessibilityNodeInfo? {
@@ -99,16 +99,17 @@ class GalleryArtworkSemanticsTest {
                         try {
                             val exposedCellNodes = count(cell)
                             val exposedSlotNodes = count(art)
-                            Log.i("GalleryArtCensus", "$label debugCellNodes=${debugCount(compose.onNodeWithTag("cell", true).fetchSemanticsNode())} debugSlotNodes=${debugCount(slot)} exposedCellNodes=$exposedCellNodes exposedSlotNodes=$exposedSlotNodes bounds=${slot.boundsInRoot}")
-                            assertEquals("Image internals cannot grow the exposed slot: $label", 1, exposedSlotNodes)
+                            Log.i("GalleryArtCensus", "$label debugCellNodes=${debugCount(compose.onNodeWithTag("cell", true).fetchSemanticsNode())} debugSlotNodes=${debugCount(slot)} exposedCellNodes=$exposedCellNodes exposedSlotNodes=$exposedSlotNodes bounds=${slot.boundsInRoot} nativeText=$nativeText")
+                            if (number == null) assertEquals("Image internals cannot grow the exposed slot: $label", 1, exposedSlotNodes)
                         } finally { art.recycle() }
                         assertTrue(nativeText.any { it.contains("Recording title") })
                         assertTrue(nativeText.any { it.contains("Recording artist") })
                         assertTrue(cell.isClickable && cell.isLongClickable)
+                        if (number != null) assertTrue("Visible transition number remains in the public projection: $label", number in nativeText)
                     } finally { cell.recycle() }
                 } finally { root.recycle() }
             } finally { original.flags = flags; automation.serviceInfo = original }
-            compose.onNodeWithTag("cell").assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.ContentDescription))
+            if (number == null) compose.onNodeWithTag("cell").assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.ContentDescription))
         }
         for (key in listOf("missing", "corrupt", "red", "blue")) {
             compose.runOnIdle { item = item.copy(coverUri = key) }
@@ -135,6 +136,7 @@ class GalleryArtworkSemanticsTest {
                 compose.mainClock.advanceTimeByFrame()
                 metadata()
                 compose.onNodeWithTag("cell").assertTextContains("7")
+                census("transition $progress", "7")
             }
             compose.runOnIdle { runBlocking { motion.progress.snapTo(1f) }; motion.source = null }
             compose.mainClock.advanceTimeBy(400)
