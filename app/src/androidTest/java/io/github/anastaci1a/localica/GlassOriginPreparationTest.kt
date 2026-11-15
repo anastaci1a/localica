@@ -104,6 +104,9 @@ class GlassOriginPreparationTest {
 
     @Test fun reducedMotionPreparedOriginReclaimsRetainedReadyWindow() = retainedReadyReopen(true)
 
+    @Test fun preparedOriginSynchronouslyReclaimsTheSameExpansion() = retainedReadyReopen(false, true)
+    @Test fun reducedMotionPreparedOriginSynchronouslyReclaimsTheSameExpansion() = retainedReadyReopen(true, true)
+
     @Test fun anOrdinaryReplacementCannotBorrowThePreviousWindowsAdmission() = replacement(false)
     @Test fun aPreparedReplacementCannotBorrowThePreviousWindowsAdmission() = replacement(true)
 
@@ -148,7 +151,7 @@ class GlassOriginPreparationTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
-    private fun retainedReadyReopen(reduced: Boolean) {
+    private fun retainedReadyReopen(reduced: Boolean, synchronous: Boolean = false) {
         fixture(reduced)
         try {
             compose.runOnIdle { open = true }
@@ -179,8 +182,10 @@ class GlassOriginPreparationTest {
                 val value = firstFlight.progress.value
                 val velocity = firstFlight.progress.velocity
                 open = true
-                requireNotNull(anchor.reclaimOpening).invoke()
-                assertEquals("T11 is synchronous for prepared origins", io.github.anastaci1a.localica.ui.engine.PopupTakeover.InWindow, firstFlight.takeover)
+                if (synchronous) {
+                    requireNotNull(anchor.reclaimOpening).invoke()
+                    assertEquals("T11 is synchronous for prepared origins", io.github.anastaci1a.localica.ui.engine.PopupTakeover.InWindow, firstFlight.takeover)
+                }
                 assertSame(basis, firstFlight.basis); assertEquals(gen, firstFlight.gen)
                 assertSame(firstPreparation, preparation); assertSame(firstContact, anchor.contact)
                 assertEquals("$reduced: no expansion reset at Show", value, firstFlight.progress.value, 0f)
