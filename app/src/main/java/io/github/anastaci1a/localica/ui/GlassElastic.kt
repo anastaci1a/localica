@@ -48,7 +48,7 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
         snapshotFlow { listOf(input(), force(), touch(), damping, ownsClock(), if (strength > 0f) glowPoint?.invoke() else null, strength) }.collect {
             if (!ownsClock()) { runner?.cancel(); runner = null; return@collect }
             if (!state.initialized) { state.previous = input(); state.initialized = true }
-            if (reduced) { body.reset(); body.targetGlow(glowPoint?.invoke(), touch(), strength, snap = true); state.glow.value = body.glow; result.value = GlassShape(); state.previous = input(); return@collect }
+            if (reduced) { body.resetShape(); body.targetGlow(glowPoint?.invoke(), touch(), strength, snap = true); state.glow.value = body.glow; result.value = GlassShape(); state.previous = input(); return@collect }
             if (runner?.isActive != true) runner = launch {
                 var last = 0L
                 do {

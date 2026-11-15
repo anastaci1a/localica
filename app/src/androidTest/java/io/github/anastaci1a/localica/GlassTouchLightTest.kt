@@ -142,9 +142,12 @@ class GlassTouchLightTest {
         var strength by mutableFloatStateOf(1f)
         val contact = GlassContact()
         val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+        var ownerSpeed = 1f
         lateinit var source: FrostedBackdrop
         compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f, touchLight = strength)) {
+                val speed = LocalMotionSpeed.current
+                SideEffect { ownerSpeed = speed }
                 source = rememberFrostedBackdrop(Unit, dark = true)
                 Box(Modifier.size(240.dp, 160.dp).testTag("frame")) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -167,6 +170,24 @@ class GlassTouchLightTest {
             val idle = pixels(frame.captureToImage())
             assertArrayEquals(idle, pixels(frame.captureToImage()))
             node.performTouchInput { down(Offset(width * .25f, height * .5f)) }
+            var firstPublication = -1L
+            repeat(5) { sample ->
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnIdle {
+                    val glow = contact.state.glow.value
+                    if (glow.big > 0f) {
+                        if (firstPublication < 0) firstPublication = compose.mainClock.currentTime
+                        val seconds = (1.0 / 60 + (compose.mainClock.currentTime - firstPublication) / 1000.0) * ownerSpeed
+                        val w = 2 * PI / .1
+                        val gain = (1 - (1 + w * seconds) * exp(-w * seconds)).toFloat()
+                        val smallToLarge = (80f - 44f) / 116f
+                        assertEquals("production broad response mode=$mode sample=$sample", gain, glow.big / (1 - smallToLarge), .09f)
+                        assertEquals("production local response mode=$mode sample=$sample", gain,
+                            glow.little / (.3f * (1 - smallToLarge) + .2f * smallToLarge), .09f)
+                    } else assertTrue("owner publishes within two frames mode=$mode", sample < 2)
+                }
+            }
+            assertTrue("production intermediate response was observed mode=$mode", firstPublication >= 0)
             compose.mainClock.advanceTimeBy(150)
             assertFalse("held mode=$mode", idle.contentEquals(pixels(frame.captureToImage())))
             compose.mainClock.advanceTimeBy(1500)
@@ -294,15 +315,23 @@ class GlassTouchLightTest {
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
             assertEquals("re-press keeps the running owner's delta and energy", repressed.glow, shared.glow.value)
-            reduced = true
+            held = false
         }
+        compose.mainClock.advanceTimeBy(3000)
+        compose.runOnIdle { assertTrue(shared.momentum.settled); reads.set(0) }
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals("enabled fully released owner suspends", 0, reads.get())
+        compose.runOnIdle { held = true }
+        compose.mainClock.advanceTimeBy(1200)
+        compose.runOnIdle { reduced = true }
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
             assertEquals(GlassShape(), shared.output.value)
             assertEquals(GlassGlow(1f, 1f, Offset(.7f, .4f)), shared.glow.value)
             held = false
+            point = Offset(.1f, .9f)
         }
         compose.mainClock.advanceTimeByFrame()
-        compose.runOnIdle { assertEquals(0f, shared.glow.value.big, 0f); assertEquals(0f, shared.glow.value.little, 0f) }
+        compose.runOnIdle { assertEquals(GlassGlow(0f, 0f, Offset(.7f, .4f)), shared.glow.value) }
     }
 }

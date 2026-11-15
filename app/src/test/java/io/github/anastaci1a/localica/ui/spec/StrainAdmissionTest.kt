@@ -15,6 +15,11 @@ class StrainAdmissionTest {
         fun get(field: String)=spring.javaClass.getDeclaredField(field).apply { isAccessible=true }.getFloat(spring).toDouble()
         return get("value") to get("velocity")
     }
+    @Test fun publishedAdmissionSpansRemainExact() {
+        assertEquals(.24f, StrainMotionSpan, 0f)
+        assertEquals(.34f, StrainPressureSpan, 0f)
+        assertEquals(.48f, StrainDepthSpan, 0f)
+    }
     @Test fun pressureDampingTwoPreservesTheActualBodyRelease() {
         val body=GlassMomentum(2f)
         repeat(360) { body.advance(0f,1f/120,-.22f,1f) }

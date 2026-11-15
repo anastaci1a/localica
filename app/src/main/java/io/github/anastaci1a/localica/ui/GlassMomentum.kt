@@ -62,14 +62,13 @@ internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_
     private val pressure = Spring()
     private val depth = Spring()
     private val light = List(4) { Spring() }
-    private val springs = listOf(motion, pressure, depth) + light
     private var travelVelocity = 0f
     val strain get() = .12f * tanh(motion.value / .12f) + pressure.value
     val shape get() = GlassShape(strain, .24f * tanh(depth.value / .24f))
     val scaleX get() = shape.scaleX()
     val scaleY get() = shape.scaleY()
     val glow get() = GlassGlow(light[0].value, light[1].value, Offset(light[2].value, light[3].value))
-    val settled get() = springs.all { it.settled }
+    val settled get() = motion.settled && pressure.settled && depth.settled && light.all { it.settled }
 
     /** Each output finishes independently while the shared clock waits for all channels. */
     fun finishSettlement(): Boolean {
@@ -78,7 +77,8 @@ internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_
         return settled
     }
 
-    fun reset() { springs.forEach { it.reset() }; travelVelocity = 0f }
+    fun resetShape() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f }
+    fun reset() { resetShape(); light.forEach { it.reset() } }
 
     fun targetGlow(point: Offset?, contact: Float, strength: Float, snap: Boolean = false) {
         if (point == null || strength == 0f) { light.forEach { it.reset() }; return }
