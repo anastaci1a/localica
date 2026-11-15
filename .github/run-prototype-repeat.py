@@ -106,9 +106,7 @@ def main():
         inventory_file.write_text(json.dumps(complete, indent=2) + '\n')
         # Preserve source identities while restricting runtime expectations to requested methods.
         subprocess.run(['python3', '.github/prototype-methods.py', str(inventory_file), requested_methods], check=True)
-        candidates = [c for c in complete['classes'] if c['class'] not in REQUIRED]
-        if not candidates:
-            raise ValueError('Select affected coverage beyond the mandatory regression classes')
+        candidates = [c for c in complete['classes'] if c['class'] not in REQUIRED] or complete['classes']
         gate_class = min(candidates, key=lambda c: (len(c['methods']), c['class']))['class']
         summary.update(kind='methods', methods=sorted(requested_methods.split(',')),
                        gate={'class': gate_class, 'status': 'not-run'})

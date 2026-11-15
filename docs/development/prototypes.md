@@ -19,6 +19,8 @@ A failed check does not skip later checks in its chain. Build, JVM tests, lint, 
 
 Select up to 73 behaviour classes, 4096 characters at most, and describe coverage and limits. Three regression classes are mandatory and count toward that limit: search keyboard, search focus and contrast coverage run on both APIs. Focused jobs time out after 35 minutes.
 
+Mandatory classes may be named explicitly; duplicate classes run once. Empty or invalid class selections fail preflight before builds start. `repeat_methods` may select methods of mandatory classes; the complete mandatory gate runs once before those repetitions.
+
 The build job compiles debug and release Kotlin in one daemon, so it uses the static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner (#636). Focused instrumentation builds give Kotlin 6 GB while keeping Gradle at 2 GB and two workers.
 
 ## Runners

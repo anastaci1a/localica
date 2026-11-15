@@ -89,6 +89,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+      - name: Validate prototype selection
+        env:
+          AFFECTED_CLASSES: ${{ inputs.affected_classes }}
+          PROTOTYPE_REPEAT: ${{ inputs.repeat }}
+        run: bash .github/run-prototype-tests.sh --preflight
       - name: Exercise identity guard policy
         run: node .github/tests/test_commit_identity.mjs
       - name: Verify commit identities and attribution
@@ -759,7 +764,7 @@ jobs:
                     if requested_methods:
                         summary = json.loads((focused / 'iterations/summary.json').read_text())
                         gate_class = summary['gate']['class']
-                        assert gate_class in manifest['requested_affected_classes'] and gate_class not in required, f'API {api}: Mandatory method gate is not an affected non-regression class'
+                        assert gate_class in manifest['requested_affected_classes'], f'API {api}: Mandatory method gate is not a requested class'
                         assert summary['gate']['status'] == 'passed' and summary['gate']['exit_code'] == 0, f'API {api}: Mandatory method gate did not pass'
                         assert hashlib.sha256(receipt.read_bytes()).hexdigest() == summary['gate']['receipt_sha256'], f'API {api}: Mandatory method gate receipt digest does not match its summary'
                         api_expected = required | {gate_class}

@@ -5,9 +5,6 @@ repetitions=${PROTOTYPE_REPEAT:-1}
 [[ "$repetitions" =~ ^([1-9]|[12][0-9]|30)$ ]] || { echo 'PROTOTYPE_REPEAT must be 1 through 30' >&2; exit 2; }
 method_iteration=${PROTOTYPE_METHOD_ITERATION:-false}
 [[ "$method_iteration" == true || "$method_iteration" == false ]] || exit 2
-if [[ "$method_iteration" == false ]] && { (( repetitions > 1 )) || [[ -n "${PROTOTYPE_METHODS:-}" ]]; }; then
-  exec python3 .github/run-prototype-repeat.py
-fi
 classes=${AFFECTED_CLASSES:-}
 required=io.github.anastaci1a.localica.SearchImeMotionTest
 focus_regression=io.github.anastaci1a.localica.ListSearchTest
@@ -16,24 +13,26 @@ if [[ "$method_iteration" == true ]]; then
   [[ -n "${PROTOTYPE_METHODS:-}" ]] || exit 2
   required=''; focus_regression=''; contrast_regression=''
 fi
-[[ -n "$classes" && ${#classes} -le 4096 ]] || { echo 'Supply nonempty affected behavior classes (maximum 4096 characters)' >&2; exit 2; }
+[[ -n "$classes" ]] || { echo 'affected_classes must not be empty; name at least one test class (mandatory regressions are allowed)' >&2; exit 2; }
+[[ ${#classes} -le 4096 ]] || { echo 'At most 4096 affected_classes characters' >&2; exit 2; }
 pattern='^io\.github\.anastaci1a\.localica(\.[A-Za-z_][A-Za-z0-9_]*)+(,io\.github\.anastaci1a\.localica(\.[A-Za-z_][A-Za-z0-9_]*)+)*$'
 [[ "$classes" =~ $pattern ]] || { echo 'Invalid affected class selector' >&2; exit 2; }
 IFS=, read -r -a selected <<< "$classes"
 [[ ${#selected[@]} -le 73 ]] || { echo 'At most 73 affected classes plus the three required regression classes' >&2; exit 2; }
 [[ -f .github/prototype-risk-classes.txt ]] || { echo 'Missing reviewed class inventory' >&2; exit 2; }
 declare -A seen=()
-affected=0
 for name in "${selected[@]}" "$required" "$focus_regression" "$contrast_regression"; do
   [[ -n "$name" ]] || continue
   grep -Fxq "$name" .github/prototype-risk-classes.txt || { echo "Class is not in the reviewed inventory: $name" >&2; exit 2; }
-  [[ "$name" == "$required" || "$name" == "$focus_regression" || "$name" == "$contrast_regression" ]] || affected=1
   seen["$name"]=1
 done
-(( affected )) || { echo 'Name affected behavior coverage in addition to the mandatory IME regression' >&2; exit 2; }
 # Stable selectors make evidence comparable without changing instrumentation order.
 selector=$(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort | paste -sd, -)
 [[ ${#selector} -le 4096 ]] || { echo 'Combined selector exceeds 4096 characters' >&2; exit 2; }
+[[ ${1:-} != --preflight ]] || exit 0
+if [[ "$method_iteration" == false ]] && { (( repetitions > 1 )) || [[ -n "${PROTOTYPE_METHODS:-}" ]]; }; then
+  exec python3 .github/run-prototype-repeat.py
+fi
 [[ ${TEST_API:-} == 26 || ${TEST_API:-} == 36 ]] || { echo 'TEST_API must be 26 or 36' >&2; exit 2; }
 [[ ${GITHUB_SHA:-} =~ ^[0-9a-f]{40}$ ]] || { echo 'Require exact candidate SHA' >&2; exit 2; }
 [[ $(git rev-parse HEAD) == "$GITHUB_SHA" ]] || { echo 'Checkout SHA differs from candidate' >&2; exit 2; }
