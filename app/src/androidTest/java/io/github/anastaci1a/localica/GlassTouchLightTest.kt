@@ -58,7 +58,14 @@ class GlassTouchLightTest {
         val falloff = max(0f, 1 - radial)
         val coverageByte = channel(mask[y * width + x], 0)
         val coverage = coverageByte / 255f
-        val first = (channel(background.toArgb(), shift) + (white - channel(background.toArgb(), shift)) * .12f * big * coverage).roundToInt()
+        val first = if (android.os.Build.VERSION.SDK_INT == 36) {
+            // Android 16 solid-fill SkARGB32_Blitter; the radial reference below stays continuous.
+            val paint = (.12f * big * 255).roundToInt()
+            val scale = coverageByte + 1
+            val alpha = paint * scale ushr 8
+            val source = ((white.roundToInt() * paint + 127) / 255) * scale ushr 8
+            source + (channel(background.toArgb(), shift) * (256 - alpha) ushr 8)
+        } else (channel(background.toArgb(), shift) + (white - channel(background.toArgb(), shift)) * .12f * big * coverage).roundToInt()
         if (android.os.Build.VERSION.SDK_INT == 26) {
             // Android 8 SkGradientShader::Build32bitCache and byte SrcOver, independent of production.
             val paint = (.12f * little * 255).roundToInt()
@@ -110,6 +117,7 @@ class GlassTouchLightTest {
         assertArrayEquals("negative optical energy draws nothing", render(GlassGlow(), false), render(GlassGlow(-.22f, -.03f), false))
         val maxima = IntArray(3)
         val worst = Array(3) { "" }
+        var toneMaximum = 0
         val residuals = IntArray(6)
         val sensitivity = IntArray(5)
         for (backdrop in listOf(Color(0xff101418), Color(0xff405060), Color(0xffd0d8e0))) for (circle in listOf(false, true)) {
@@ -176,6 +184,7 @@ class GlassTouchLightTest {
             for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16)) {
                 val actual = channel(toned[y * width + x], shift)
                 val oracle = expected(mask, Offset(.5f, .5f), x, y, shift, 1f, 1f, white = 255f * .75f)
+                toneMaximum = max(toneMaximum, abs(actual - oracle))
                 assertTrue("tone-mapped two-fill oracle ($x,$y) shift=$shift actual=$actual expected=$oracle backdrop=$backdrop circle=$circle coverage=${channel(mask[y * width + x], 0)}", abs(actual - oracle) <= 2)
             }
             for (vertical in listOf(false, true)) for (point in listOf(Offset(.2f, .7f), Offset(1.25f, -.25f))) {
@@ -186,7 +195,7 @@ class GlassTouchLightTest {
                         expected(mask, point, x, y, shift, 1f, 1f, shape, vertical)) <= 2)
             }
         }
-        println("two-fill maxima=${maxima.toList()} worst=${worst.toList()} symmetry=${residuals.toList()} sensitivity=${sensitivity.toList()}")
+        println("two-fill maxima=${maxima.toList()} worst=${worst.toList()} symmetry=${residuals.toList()} sensitivity=${sensitivity.toList()} toneMaximum=$toneMaximum")
         for (op in maxima.indices) assertTrue("oracle op=$op max=${maxima[op]} ${worst[op]}", maxima[op] <= if (op == 2) 2 else 1)
         for (i in residuals.indices) assertTrue("symmetry $i max=${residuals[i]}", residuals[i] <= if (i < 3) 2 else 4)
         for (i in sensitivity.indices) assertTrue("wrong-channel/support $i witness=${sensitivity[i]}", sensitivity[i] > 4)
