@@ -781,7 +781,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 if (modalWindow === window) modalWindow = null
             }
         }
-        DisposableEffect(window, visible, dismissalAttempt, originOwnsInput) {
+        DisposableEffect(window, visible, dismissalAttempt, popupFlight.expanded) {
             // A busy editor may refuse dismissal; Settings Back may only change
             // the page. Reconcile with the actual state after that callback.
             window?.glassInput(visible && popupFlight.expanded && popupFlight.admitted(window))

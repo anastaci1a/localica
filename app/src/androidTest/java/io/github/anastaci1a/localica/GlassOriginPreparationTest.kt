@@ -127,13 +127,17 @@ class GlassOriginPreparationTest {
             val first = requireNotNull(popupWindow)
             val gen = flight.gen
             val originalScreen = admittedScreenCorners
-            compose.runOnIdle { if (prepared) reportOrigin = false; fontScale = 1.01f }
+            val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            compose.runOnIdle {
+                assertTrue("initial window is admitted", flight.admitted(first))
+                assertEquals("admitted window enables native input and focus", 0, first.attributes.flags and flags)
+                if (prepared) reportOrigin = false; fontScale = 1.01f
+            }
             frame()
             compose.runOnIdle {
                 assertTrue("observe the replacement event", replacementSamples.isNotEmpty())
                 assertTrue("the first observable admission has zero expansion and no old window: $replacementSamples",
                     replacementSamples.all { it.first == 0f && it.second == null })
-                val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                 assertEquals("the old window loses input synchronously", flags, first.attributes.flags and flags)
                 assertSame("same presentation", flight, anchor.popup)
                 assertEquals(gen, flight.gen)
@@ -146,7 +150,6 @@ class GlassOriginPreparationTest {
                 compose.onNodeWithTag("prepared-menu-content").assertDoesNotExist()
                 compose.runOnIdle {
                     assertFalse("no admission before the new origin receipt", flight.modalPresent)
-                    val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                     assertEquals("the replacement also owns no input", flags, requireNotNull(popupWindow).attributes.flags and flags)
                 }
                 heldPixels = screenSamples(regions)
@@ -157,6 +160,7 @@ class GlassOriginPreparationTest {
             advanceWithNativeFrames(4000)
             compose.runOnIdle {
                 assertTrue("replacement eventually admits", flight.admitted(popupWindow))
+                assertEquals("readmitted window enables native input and focus", 0, requireNotNull(popupWindow).attributes.flags and flags)
                 assertEquals(1f, flight.progress.value, 0f)
                 assertTrue(open)
             }
