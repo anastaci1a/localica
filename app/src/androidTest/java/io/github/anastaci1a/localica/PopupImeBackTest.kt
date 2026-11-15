@@ -27,6 +27,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -40,6 +41,10 @@ import java.io.File
  * No callback invocation, repeated Back, semantic dismissal or screenshot readiness. */
 @OptIn(ExperimentalLayoutApi::class)
 class PopupImeBackTest {
+    companion object {
+        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+    }
+
     private val compose = localicaAndroidComposeRule<ComponentActivity>()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val device get() = UiDevice.getInstance(instrumentation)
@@ -52,13 +57,10 @@ class PopupImeBackTest {
         instrumentation.uiAutomation.executeShellCommand(command)
     ).bufferedReader().use { it.readText().trim() }
 
-    // Apply native policy before Activity creation; restore after Activity disposal.
-    private val nativePolicy = object : TestRule {
+    // Apply navigation policy before Activity creation; restore after Activity disposal.
+    private val navigationPolicy = object : TestRule {
         override fun apply(base: Statement, description: Description) = object : Statement() {
             override fun evaluate() {
-                val keyboardKey = "show_ime_with_hard_keyboard"
-                val originalKeyboard = shell("settings get secure $keyboardKey")
-                check(originalKeyboard == "null" || originalKeyboard.matches(Regex("-?[0-9]+")))
                 val gesture = "com.android.internal.systemui.navbar.gestural"
                 fun activeNavigation() = Regex("(?m)^\\[x] (com\\.android\\.internal\\.systemui\\.navbar\\.[A-Za-z0-9_.]+)$")
                     .find(shell("cmd overlay list --user 0"))?.groupValues?.get(1)
@@ -67,8 +69,6 @@ class PopupImeBackTest {
                 val originalMode = shell("settings get secure navigation_mode")
                 var failure: Throwable? = null
                 try {
-                    shell("settings put secure $keyboardKey 1")
-                    assertEquals("1", shell("settings get secure $keyboardKey"))
                     if (Build.VERSION.SDK_INT >= 29) {
                         shell("cmd overlay enable-exclusive --user 0 --category $gesture")
                         val deadline = SystemClock.uptimeMillis() + 5000
@@ -96,17 +96,12 @@ class PopupImeBackTest {
                             assertEquals(originalMode, shell("settings get secure navigation_mode"))
                         }
                     }
-                    restore {
-                        if (originalKeyboard == "null") shell("settings delete secure $keyboardKey")
-                        else shell("settings put secure $keyboardKey $originalKeyboard")
-                        assertEquals(originalKeyboard, shell("settings get secure $keyboardKey"))
-                    }
                 }
                 failure?.let { throw it }
             }
         }
     }
-    @get:Rule val rules: TestRule = RuleChain.outerRule(nativePolicy).around(compose)
+    @get:Rule val rules: TestRule = RuleChain.outerRule(navigationPolicy).around(compose)
 
     @Test fun systemBackAfterHiddenSearchImeDismissesBothPopupTypes() = exercise(edgeGesture = false)
     @Test fun edgeBackAfterHiddenSearchImeDismissesBothPopupTypes() = exercise(edgeGesture = true)

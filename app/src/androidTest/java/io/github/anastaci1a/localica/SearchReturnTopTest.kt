@@ -18,11 +18,17 @@ import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.queue.*
 import org.junit.Assert.*
 import org.junit.After
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 /** Actual scoped popup, native IME and measured return geometry. */
 class SearchReturnTopTest {
+    companion object {
+        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+    }
+
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     @get:Rule val name = org.junit.rules.TestName()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
@@ -88,12 +94,10 @@ class SearchReturnTopTest {
     }
 
     private fun withKeyboard(block: () -> Unit) {
-        val original = shell("settings get secure show_ime_with_hard_keyboard")
         val scales = listOf("animator_duration_scale", "transition_animation_scale", "window_animation_scale")
             .associateWith { shell("settings get global $it") }
         try {
             scales.keys.forEach { shell("settings put global $it 1") }
-            shell("settings put secure show_ime_with_hard_keyboard 1")
             compose.activityRule.scenario.onActivity {
                 androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it.window, false)
                 it.window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
@@ -101,9 +105,6 @@ class SearchReturnTopTest {
             prepareNativeDockedKeyboard(compose, mutableListOf(), ::shell)
             block()
         } finally {
-            if (original == "null") shell("settings delete secure show_ime_with_hard_keyboard")
-            else shell("settings put secure show_ime_with_hard_keyboard $original")
-            compose.awaitSystemImeHardKeyboardPolicy(::shell, (original.toIntOrNull() ?: 0) != 0)
             scales.forEach { (key, value) ->
                 if (value == "null") shell("settings delete global $key") else shell("settings put global $key $value")
             }
