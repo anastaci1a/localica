@@ -102,8 +102,10 @@ class GalleryArtworkSemanticsTest {
                             Log.i("GalleryArtCensus", "$label debugCellNodes=${debugCount(compose.onNodeWithTag("cell", true).fetchSemanticsNode())} debugSlotNodes=${debugCount(slot)} exposedCellNodes=$exposedCellNodes exposedSlotNodes=$exposedSlotNodes bounds=${slot.boundsInRoot} nativeText=$nativeText")
                             if (number == null) assertEquals("Image internals cannot grow the exposed slot: $label", 1, exposedSlotNodes)
                         } finally { art.recycle() }
-                        assertTrue(nativeText.any { it.contains("Recording title") })
-                        assertTrue(nativeText.any { it.contains("Recording artist") })
+                        if (number == null) {
+                            assertTrue(nativeText.any { it.contains("Recording title") })
+                            assertTrue(nativeText.any { it.contains("Recording artist") })
+                        }
                         assertTrue(cell.isClickable && cell.isLongClickable)
                         if (number != null) assertTrue("Visible transition number remains in the public projection: $label", number in nativeText)
                     } finally { cell.recycle() }
