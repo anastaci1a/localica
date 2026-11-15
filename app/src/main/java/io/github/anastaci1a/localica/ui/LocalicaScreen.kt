@@ -100,7 +100,7 @@ fun LocalicaScreen(
     val presentationCache = remember { BrowsePresentationCache() }
     val queuePresentation = rememberQueuePresentation(queues, library.snapshot)
     val prepared = queuePresentation.value
-    val playerPresentation = prepared?.takeIf { playback.trackId == null || it.tracks.current?.id == playback.trackId }
+    val playerPresentation = prepared?.takeIf { (playback.trackId == null && playback.trackUri == null) || (it.tracks.current?.id == playback.trackId && it.tracks.current?.uri == playback.trackUri) }
     val queues = prepared?.state ?: queues
     val warmRoutes = remember(navigation.stacks, settings.tabs, prepared) {
         val pages = settings.tabs.map { navigation.stacks[it]?.lastOrNull() ?: BrowseRoute(it) }
@@ -248,8 +248,8 @@ fun LocalicaScreen(
     LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false } }
     val dragHost = remember { SongDragHost() }
     val playerVisual = rememberPlayerVisual(player.trackUri)
-    PreloadPlayerArtwork(queueController?.artworkPreloadUris(playerPresentation?.active?.queue).orEmpty())
-    val neighbors = queueController?.artworkNeighbors(playerPresentation?.active?.queue).orEmpty()
+    PreloadPlayerArtwork(playerPresentation?.preload.orEmpty())
+    val neighbors = playerPresentation?.neighbors.orEmpty()
     val journey = playerPresentation?.active?.queue?.journey
     val nextVisual = rememberNeighborArtwork(neighbors.getOrNull(0))
     val previousVisual = rememberNeighborArtwork(neighbors.getOrNull(1))

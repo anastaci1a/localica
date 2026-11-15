@@ -777,15 +777,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         if (!accepted) complete(false, playbackSample())
     }
 
-    /** Artwork and decoder preparation follow the same durable visit sequence. */
-    fun artworkNeighbors(queue: ListeningQueue? = state.value.library.active): List<String?> {
-        queue ?: return emptyList()
+    fun artworkNeighbors(): List<String?> {
+        val queue = state.value.library.active ?: return emptyList()
         return listOf(queue.journey?.next, queue.journey?.previous).map { visit ->
             visitTrack(queue, visit?.entryId)?.uri
         }
     }
-    fun artworkPreloadUris(queue: ListeningQueue? = state.value.library.active): List<String> {
-        queue ?: return emptyList()
+    fun artworkPreloadUris(): List<String> {
+        val queue = state.value.library.active ?: return emptyList()
         return queue.journey?.artworkWindow().orEmpty().mapNotNull { visitTrack(queue, it.entryId)?.uri }.distinct()
     }
     fun next() = submitCursor {
@@ -852,8 +851,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             queue?.entries?.any { identities.getOrPut(it.track.id) { documentIdentity(it.track.id) } == trackId } == true
         }
 
-    private fun visitTrack(queue: ListeningQueue, entryId: String?): Track? =
-        queue.journey?.sourceOrdinal(queue.ids, entryId)?.let { queue.entries.getOrNull(it)?.track }
+    private fun visitTrack(queue: ListeningQueue, entryId: String?): Track? = queue.visitTrack(entryId)
             ?: resolved.takeIf { timeline.queueId == queue.id }?.get(entryId)?.track
     private fun currentSource(queue: ListeningQueue?): String? = queue?.let { visitTrack(it, it.currentEntryId)?.id }?.let(::documentIdentity)
     private fun blocksSource(identity: String): Boolean {

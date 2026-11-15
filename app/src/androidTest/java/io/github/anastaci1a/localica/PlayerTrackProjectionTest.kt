@@ -4,7 +4,7 @@ import android.os.Debug
 import android.os.Looper
 import android.os.SystemClock
 import androidx.compose.runtime.*
-import androidx.compose.material3.Text
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -57,14 +57,14 @@ class PlayerTrackProjectionTest {
             val result by rememberQueuePresentation(source, library)
             SideEffect { observed = result?.tracks; publishedPosition = result?.active?.queue?.positionMs ?: -1 }
         }
-        compose.waitUntil(5000) { observed != null }
+        compose.waitUntil(5000) { compose.waitForIdle(); observed != null }
         compose.waitForIdle()
         val initial = requireNotNull(observed)
         compose.runOnIdle { tracks.reads = 0; entries.reads = 0 }
         repeat(10) { index ->
             val position = (index + 1) * 250L
             compose.runOnIdle { state.value = QueueLibrary(listOf(queue.copy(positionMs = position)), queue.id) }
-            compose.waitUntil(5000) { publishedPosition == position }
+            compose.waitUntil(5000) { compose.waitForIdle(); publishedPosition == position }
             compose.waitForIdle()
             compose.runOnIdle {
                 assertEquals(position, publishedPosition)
@@ -91,7 +91,7 @@ class PlayerTrackProjectionTest {
             SideEffect { observed = result?.tracks }
         }
         fun assertProjection(current: Track?, indexed: Track?, lyrics: Track?) {
-            compose.waitUntil(5000) { observed == PlayerTrackProjection(current, indexed, lyrics) }
+            compose.waitUntil(5000) { compose.waitForIdle(); observed == PlayerTrackProjection(current, indexed, lyrics) }
             compose.waitForIdle()
             compose.runOnIdle { assertEquals(PlayerTrackProjection(current, indexed, lyrics), observed) }
         }
@@ -119,11 +119,103 @@ class PlayerTrackProjectionTest {
         assertProjection(null, null, null)
     }
 
+    @Test fun queueScreenColdLoadingBecomesTheActualReadyHeaderAndRows() {
+        val songs = List(3) { track("ready-$it").copy(durationMs = 1000) }
+        val entries = Counted(songs.mapIndexed { index, song -> QueueEntry("ready-$index", song) })
+        val queue = ListeningQueue(id = "ready", name = "Ready", entries = entries, currentEntryId = "ready-1")
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val hook = AtomicReference<(() -> Unit)?>({ started.countDown(); check(release.await(30, TimeUnit.SECONDS)) })
+        entries.beforeRead = { hook.getAndSet(null)?.invoke() }
+        var source by mutableStateOf(QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false))
+        compose.setContent { EngineTheme(reduced = true) { QueueScreen(source, null, reducedMotion = true) } }
+        try {
+            assertTrue(started.await(10, TimeUnit.SECONDS))
+            compose.onNodeWithTag("async-section-loading").assertExists()
+            compose.onNodeWithText("2 / 3").assertDoesNotExist()
+            release.countDown()
+            compose.waitUntil(15_000) { compose.onAllNodesWithText("2 / 3").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("1. Ready").assertExists()
+            compose.onNodeWithText("0:03").assertExists()
+            compose.onNodeWithText(songs[0].title).assertExists()
+            compose.runOnIdle { source = source.copy(library = QueueLibrary(listOf(queue.copy(currentEntryId = "ready-2")), queue.id)) }
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("3 / 3").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("0:03").assertExists()
+        } finally { release.countDown(); hook.set(null) }
+    }
+
+    @Test fun nativeIdentityOwnsArtworkActionsAndLyricsWhileTheReplacementPrepares() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.getSharedPreferences("interface", 0).edit().clear().commit()
+        context.getSharedPreferences("player-actions", 0).edit().clear().commit()
+        val file = File.createTempFile("projection-old-", ".opus", context.cacheDir)
+        val replacement = File.createTempFile("projection-native-", ".opus", context.cacheDir)
+        copyTestAsset(instrumentation.context.assets, "lyrics.opus", file)
+        copyTestAsset(instrumentation.context.assets, "queue-tone.mp3", replacement)
+        val old = Track(android.net.Uri.fromFile(file).toString(), "Saved old occurrence", id = "projection-old",
+            fileName = file.name, relativePath = file.name)
+        val fresh = old.copy(id = "projection-new", uri = android.net.Uri.fromFile(replacement).toString(), title = "New native")
+        val oldQueue = ListeningQueue(id = "old", name = "Old", entries = listOf(QueueEntry("old", old)))
+        val blocked = Counted(listOf(QueueEntry("new", old.copy(title = "Replacement occurrence"))))
+        val pending = ListeningQueue(id = "pending", name = "Pending", entries = blocked)
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val hook = AtomicReference<(() -> Unit)?>(null)
+        blocked.beforeRead = { hook.getAndSet(null)?.invoke() }
+        var source by mutableStateOf(QueueUiState(QueueLibrary(listOf(oldQueue), oldQueue.id), loading = false))
+        var native by mutableStateOf(io.github.anastaci1a.localica.playback.PlaybackState(connected = true,
+            trackId = old.id, trackUri = old.uri, title = "Audible old", durationMs = 125000))
+        compose.setContent { EngineTheme(reduced = true) {
+            LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, {}, queues = source)
+        } }
+        fun information(expected: String) {
+            compose.onNodeWithContentDescription("Information").performClick()
+            compose.onNodeWithTag("song-information").assertExists()
+            compose.onNodeWithText(expected).assertExists()
+            compose.onNodeWithText("Done").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("song-information").fetchSemanticsNodes().isEmpty() }
+        }
+        try {
+            compose.waitUntil(10_000) { PlayerVisualCache.peek(old.uri) != null }
+            compose.onNodeWithTag("player-surface").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Information").fetchSemanticsNodes().isNotEmpty() }
+            information(old.title)
+            compose.onNodeWithTag("player-lyrics-title-target", true).performSemanticsAction(SemanticsActions.OnClick)
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isNotEmpty() }
+            hook.set { started.countDown(); check(release.await(30, TimeUnit.SECONDS)) }
+            compose.runOnIdle { source = QueueUiState(QueueLibrary(listOf(pending), pending.id), loading = false) }
+            assertTrue(started.await(10, TimeUnit.SECONDS))
+            // Same audible identity retains the completed occurrence's actions and lyrics until publication.
+            information(old.title)
+            compose.onNodeWithTag("lyric-lines", true).assertExists()
+            for ((id, uri, title) in listOf(Triple(fresh.id, fresh.uri, fresh.title),
+                Triple(old.id, fresh.uri + "?same-id", "Same ID, different URI"), Triple(null, fresh.uri + "?uri-only", "URI only"))) {
+                compose.runOnIdle { native = native.copy(trackId = id, trackUri = uri, title = title) }
+                compose.onNodeWithTag("player-title", true).assertTextEquals(title)
+                compose.waitUntil(10_000) { PlayerVisualCache.peek(uri) != null }
+                compose.onNodeWithContentDescription("Information").performClick()
+                compose.onNodeWithTag("song-information").assertDoesNotExist()
+                compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isEmpty() }
+            }
+            compose.runOnIdle { native = native.copy(trackId = old.id, trackUri = old.uri, title = "Audible old") }
+            information(old.title)
+            release.countDown()
+            compose.waitUntil(10_000) { !source.loading && blocked.reads > 0 }
+            compose.onNodeWithContentDescription("Information").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Replacement occurrence").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Replacement occurrence").assertExists()
+        } finally { release.countDown(); hook.set(null); file.delete(); replacement.delete() }
+    }
+
     @Test fun millionEntryPreparationIsOffMainAndNativeMetadataDoesNotWaitForIt() {
         val residentTracks = List(50_000) { track("$it").copy(durationMs = 1000L) }
         val tracks = Counted(residentTracks)
         val entries = Counted(List(1_000_000) { QueueEntry("entry-$it", residentTracks[it % residentTracks.size]) })
-        val queue = ListeningQueue(id = "scale", name = "Scale", entries = entries, currentEntryId = "entry-999999")
+        val queue = runBlocking { withContext(Dispatchers.Default) {
+            val saved = ListeningQueue(id = "scale", name = "Scale", entries = entries, currentEntryId = "entry-999999")
+            saved.copy(journey = QueueJourney().reconcile(saved.ids, saved.currentEntryId, JourneyModes(loop = true)))
+        } }
         val empty = ListeningQueue(id = "other", name = "Other", entries = emptyList())
         val catalog = Counted(object : AbstractList<ListeningQueue>() {
             override val size = 50_000
@@ -149,6 +241,10 @@ class PlayerTrackProjectionTest {
         assertEquals(1_000_000_000L, pure.browsed!!.duration)
         assertEquals(50_000, pure.number)
         assertSame(residentTracks.last(), pure.tracks.indexed)
+        val expectedNeighbors = listOf(residentTracks[0].uri, residentTracks[49_998].uri)
+        val expectedPreload = listOf(0, 49_998, 1, 49_997, 2, 49_996, 3, 49_995).map { residentTracks[it].uri }
+        assertEquals(expectedNeighbors, pure.neighbors)
+        assertEquals(expectedPreload, pure.preload)
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
         val hook = AtomicReference<(() -> Unit)?>(null)
@@ -164,7 +260,6 @@ class PlayerTrackProjectionTest {
                 val result = rememberQueuePresentation(source, snapshot)
                 val ready = result.value
                 if (ready == null) QueueScreen(source, null, LibraryUiState(snapshot, loading = false), presentation = result)
-                else Text("${ready.active?.index} / ${ready.active?.queue?.entries?.size}")
                 SideEffect { observed = ready }
             }
         } }
@@ -172,20 +267,24 @@ class PlayerTrackProjectionTest {
             assertTrue(started.await(10, TimeUnit.SECONDS))
             compose.onNodeWithTag("async-section-loading").assertExists()
             release.countDown()
-            compose.waitUntil(30_000) { observed?.state === initial }
+            compose.waitUntil(30_000) { compose.waitForIdle(); observed?.state === initial }
             compose.runOnIdle {
                 assertEquals(999_999, observed!!.active!!.index)
                 assertSame(residentTracks.last(), observed!!.tracks.current)
+                assertEquals(expectedNeighbors, observed!!.neighbors)
+                assertEquals(expectedPreload, observed!!.preload)
                 entries.reads = 0
                 tracks.reads = 0
             }
             repeat(4) { iteration ->
                 val next = initial.copy(library = QueueLibrary(listOf(queue.copy(positionMs = iteration + 1L)), queue.id))
                 compose.runOnIdle { source = next }
-                compose.waitUntil(10_000) { observed?.state === next }
+                compose.waitUntil(10_000) { compose.waitForIdle(); observed?.state === next }
                 compose.runOnIdle {
                     assertEquals(iteration + 1L, observed!!.active!!.queue.positionMs)
                     assertEquals(1_000_000_000L, observed!!.browsed!!.duration)
+                    assertEquals(expectedNeighbors, observed!!.neighbors)
+                    assertEquals(expectedPreload, observed!!.preload)
                     assertEquals(0, entries.reads)
                     assertEquals(0, tracks.reads)
                 }
@@ -211,8 +310,8 @@ class PlayerTrackProjectionTest {
                 native = io.github.anastaci1a.localica.playback.PlaybackState(connected = true, trackId = old.id, trackUri = old.uri, title = old.title)
                 root = true
             }
-            compose.waitUntil(10_000) { compose.onAllNodesWithTag("player-title").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("player-title").assertTextEquals(old.title)
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("player-title", true).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("player-title", true).assertTextEquals(old.title)
             val pending = CountDownLatch(1)
             val continuePreparation = CountDownLatch(1)
             hook.set { pending.countDown(); check(continuePreparation.await(30, TimeUnit.SECONDS)) }
@@ -222,7 +321,7 @@ class PlayerTrackProjectionTest {
                     native = native.copy(trackId = fresh.id, trackUri = fresh.uri, title = fresh.title)
                 }
                 assertTrue(pending.await(10, TimeUnit.SECONDS))
-                compose.onNodeWithTag("player-title").assertTextEquals(fresh.title)
+                compose.onNodeWithTag("player-title", true).assertTextEquals(fresh.title)
                 assertEquals(0, entries.mainReads.get())
                 assertEquals(0, tracks.mainReads.get())
                 assertEquals(0, catalog.mainReads.get())

@@ -22,6 +22,7 @@ data class ListeningQueue(
 ) {
     val ids: List<String> get() = entries.mapView(QueueEntry::id)
 }
+internal fun ListeningQueue.visitTrack(entryId: String?): Track? = journey?.sourceOrdinal(ids, entryId)?.let { entries.getOrNull(it)?.track }
 enum class QueueRepeat { Off, All, One }
 enum class SongEnd(val label: String) { Stop("Stop here"), NextPaused("Load next song and pause"), Next("Play next song"), Repeat("Repeat this song") }
 enum class QueueEnd(val label: String) { Stop("Stop here"), NextQueue("Go to next queue"), Repeat("Repeat this queue") }
