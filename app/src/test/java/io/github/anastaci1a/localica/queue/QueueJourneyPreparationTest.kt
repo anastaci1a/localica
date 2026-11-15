@@ -137,6 +137,36 @@ class QueueJourneyPreparationTest {
         }
     }
 
+    @Test fun sourceCoordinatesRejectNegativeOrdinalsAndDifferentRevisionsAndResolveTheShufflePredecessor() {
+        val projection: (String) -> String = { it }
+        val ids = listOf("A", "B", "C").mapView(projection)
+        val ordered = QueueJourney.start(ids, "B", JourneyModes(loop = true), Random(9))
+        val shuffled = ordered.reconcile(ids, "B", JourneyModes(true, true), Random(9))
+        assertEquals("A", shuffled.previous!!.entryId)
+        assertEquals(0, shuffled.sourceOrdinal(ids, shuffled.previous!!.entryId))
+        val revision = ids.toList().mapView(projection)
+        assertEquals(ids, revision)
+        assertNull(shuffled.sourceOrdinal(revision, "B"))
+        val repaired = shuffled.reconcile(revision, "B", shuffled.modes)
+        assertEquals(1, repaired.sourceOrdinal(revision, "B"))
+        assertEquals(shuffled.window(), repaired.window())
+
+        // Deliberately bypass repair to exercise the defensive negative-coordinate read itself.
+        val malformed = QueueJourney(history = listOf(QueueVisit("removed", 0), QueueVisit("B", 0)), cursor = 1,
+            visited = setOf("B"), plans = mapOf(0L to ids), modes = JourneyModes(shuffle = true), orderedTraversalId = "fixture")
+        val prepare = QueueJourney::class.java.declaredMethods.single { it.name == "prepare" }.apply { isAccessible = true }
+        val exposed = prepare.invoke(malformed, ids, Random(9), null, null, null, null) as QueueJourney
+        assertEquals("removed", exposed.previous!!.entryId)
+        assertNull(exposed.sourceOrdinal(ids, "removed"))
+        val normalized = exposed.copy().reconcile(ids, "B", exposed.modes)
+        assertTrue(normalized.window().none { it.entryId == "removed" })
+        normalized.window().forEach { visit ->
+            val ordinal = normalized.sourceOrdinal(ids, visit.entryId)
+            assertNotNull(ordinal)
+            assertEquals(visit.entryId, ids[ordinal!!])
+        }
+    }
+
     @Test fun mutableInputsAreIsolatedAndColdCopiesAndRestoresNormalizeBeforePublication() {
         val ids = mutableListOf("A", "B", "C")
         for (modes in listOf(JourneyModes(loop = true), JourneyModes(true, true, true))) {

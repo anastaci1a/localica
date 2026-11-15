@@ -166,8 +166,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             QueueEnd.Repeat -> {
                 val next = queue.journey?.next
                 if (blocksVisit(queue, next)) { reportRecovery(); return }
-                if (next != null) moveTo(next)
-                else savePreparedPlayback(prepared.copy(library = reset() ?: return)) { syncTimeline(seek = true) }
+                if (next != null) { if (!moveTo(next)) return }
+                else if (!savePreparedPlayback(prepared.copy(library = reset() ?: return)) { syncTimeline(seek = true) }) return
                 if (!prepared.ownsPlayer(currentSource(state.value.library.active))) return
                 applyNativeIntent(attached, commandRevision, play)
                 capture()
@@ -179,10 +179,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 if (next != null && blocksCurrent(next)) { reportRecovery(); return }
                 val base = if (policy.resetToFirst) reset() ?: return else prepared.library
                 val target = next ?: base.active?.takeIf { policy.resetToFirst } ?: return
-                savePreparedPlayback(prepared.copy(library = base.update(
+                if (!savePreparedPlayback(prepared.copy(library = base.update(
                     if (next != null) target.copy(lastActivatedAt = nextActivation()) else target).copy(activeId = target.id))) {
                     activate(play.takeIf { next != null }, seek = true, recordIntent = false)
-                }
+                }) return
                 if (next != null) mutable.update { if (it.browsedId == null || it.browsedId == queue.id) it.copy(browsedId = next.id) else it }
             }
         }
@@ -383,11 +383,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val current = state.value.library.active
         val expand = action == SongTap.NewQueue || action == SongTap.PlayNow
         if (action == SongTap.NewQueue || current == null) {
-            if (reuse(tracks, selectedIndex, expand, sourceName, playlistOrigins)) return true
+            reuse(tracks, selectedIndex, expand, sourceName, playlistOrigins)?.let { return it }
             if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, emptySet())) {
                 mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand, sourceName, playlistOrigins)) }
                 return false
-            } else create(tracks, selectedIndex, emptySet(), expand, sourceName, playlistOrigins)
+            } else return create(tracks, selectedIndex, emptySet(), expand, sourceName, playlistOrigins)
         } else {
             var inserted = withContext(Dispatchers.Default) { QueueEdits.insert(current, if (batch) tracks else listOf(selected), action, if (batch) playlistOrigins else listOf(playlistOrigins.getOrNull(selectedIndex))) }
             if (action == SongTap.PlayNow) {
@@ -409,7 +409,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 }
             }
             val next = state.value.library.update(inserted)
-            if (action == SongTap.PlayNow) saveStartingPlayback(next) { activate(true, seek = true, refreshLocations = false) }
+            if (action == SongTap.PlayNow) { if (!saveStartingPlayback(next) { activate(true, seek = true, refreshLocations = false) }) return false }
             else { save(next); activate(null) }
             if (action == SongTap.PlayNow) requestPlayer()
         }
@@ -419,29 +419,29 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun confirmCreation(removals: Set<String>) = submit {
         val pending = state.value.pending ?: return@submit
         capture()
-        if (reuse(pending.tracks, pending.selectedIndex, pending.expandPlayer, pending.sourceName, pending.playlistOrigins)) {
-            pendingComplete?.invoke(true); pendingComplete = null
+        reuse(pending.tracks, pending.selectedIndex, pending.expandPlayer, pending.sourceName, pending.playlistOrigins)?.let {
+            pendingComplete?.invoke(it); pendingComplete = null
             return@submit
         }
         if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, removals)) {
             reportProblem("Select enough inactive queues to make room. The current queue is protected.")
             return@submit
         }
-        create(pending.tracks, pending.selectedIndex, removals, pending.expandPlayer, pending.sourceName, pending.playlistOrigins)
-        pendingComplete?.invoke(true); pendingComplete = null
+        val created = create(pending.tracks, pending.selectedIndex, removals, pending.expandPlayer, pending.sourceName, pending.playlistOrigins)
+        pendingComplete?.invoke(created); pendingComplete = null
     }
     fun cancelCreation() = submit {
         mutable.update { it.copy(pending = null, problem = problemAfterSuccess(it)) }
         pendingComplete?.invoke(false); pendingComplete = null
     }
     private suspend fun reuse(tracks: List<Track>, selectedIndex: Int, expandPlayer: Boolean,
-        sourceName: String, playlistOrigins: List<String?>): Boolean {
-        val queue = QueueEdits.equivalent(state.value.library, tracks, sourceName, playlistOrigins) ?: return false
-        selectEntry(queue, queue.entries[selectedIndex].id, expandPlayer)
-        mutable.update { it.copy(pending = null) }
-        return true
+        sourceName: String, playlistOrigins: List<String?>): Boolean? {
+        val queue = QueueEdits.equivalent(state.value.library, tracks, sourceName, playlistOrigins) ?: return null
+        val selected = selectEntry(queue, queue.entries[selectedIndex].id, expandPlayer)
+        if (selected) mutable.update { it.copy(pending = null) }
+        return selected
     }
-    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean, sourceName: String, playlistOrigins: List<String?>) {
+    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean, sourceName: String, playlistOrigins: List<String?>): Boolean {
         // A library-sized tap mints one random occurrence ID per song (SecureRandom); keep that
         // pure construction off Main. Queue state is read only after it returns.
         val created = withContext(Dispatchers.Default) { QueueEdits.create(tracks, selectedIndex, sourceName, playlistOrigins) }
@@ -449,9 +449,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val next = QueueLibrary(state.value.library.queues.filterNot { it.id in removals } + queue, queue.id)
         // These tracks came from the visible list. Start the decoder before serializing a
         // potentially large queue, and avoid re-reading the entire library on every song tap.
-        saveStartingPlayback(next) { activate(play = true, refreshLocations = false) }
+        if (!saveStartingPlayback(next) { activate(play = true, refreshLocations = false) }) return false
         mutable.update { it.copy(pending = null, browsedId = queue.id) }
         if (expandPlayer) requestPlayer()
+        return true
     }
 
     private fun requestPlayer() { mutable.update { it.copy(playerRequest = it.playerRequest + 1) } }
@@ -478,13 +479,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val active = withContext(Dispatchers.Default) { source.queues.firstOrNull { queue -> queue.entries.any { it.id == id } } } ?: return@submit
         selectEntry(active, id, expandPlayer = true)
     }
-    private suspend fun selectEntry(active: ListeningQueue, id: String, expandPlayer: Boolean) {
+    private suspend fun selectEntry(active: ListeningQueue, id: String, expandPlayer: Boolean): Boolean {
         val selected = active.copy(currentEntryId = id, positionMs = 0, lastActivatedAt = nextActivation(),
             journey = journey(active) { path, ids -> path.select(id, ids) })
         val next = state.value.library.update(selected).copy(activeId = active.id)
-        saveStartingPlayback(next) { activate(play = true, seek = true) }
+        if (!saveStartingPlayback(next) { activate(play = true, seek = true) }) return false
         mutable.update { it.copy(browsedId = active.id) }
         if (expandPlayer) requestPlayer()
+        return true
     }
     private fun nextActivation() = maxOf(System.currentTimeMillis(), (state.value.library.queues.maxOfOrNull { it.lastActivatedAt } ?: 0) + 1)
     fun rename(id: String, name: String) = submit {
@@ -768,12 +770,12 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun artworkNeighbors(): List<String?> {
         val queue = state.value.library.active ?: return emptyList()
         return listOf(queue.journey?.next, queue.journey?.previous).map { visit ->
-            resolved[visit?.entryId]?.track?.uri
+            visitTrack(queue, visit?.entryId)?.uri
         }
     }
     fun artworkPreloadUris(): List<String> {
         val queue = state.value.library.active ?: return emptyList()
-        return queue.journey?.artworkWindow().orEmpty().mapNotNull { resolved[it.entryId]?.track?.uri }.distinct()
+        return queue.journey?.artworkWindow().orEmpty().mapNotNull { visitTrack(queue, it.entryId)?.uri }.distinct()
     }
     fun next() = submitCursor {
         capture()
@@ -786,7 +788,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             val journey = state.value.library.active?.journey
             val visit = listOfNotNull(journey?.previous, journey?.next).firstOrNull { it.token == token }
             if (visit == null) complete(false)
-            else { moveTo(visit); complete(true) }
+            else complete(moveTo(visit))
         } catch (failure: Exception) { complete(false); throw failure }
     }
     fun previous(alwaysSong: Boolean = false) = submitCursor {
@@ -801,13 +803,13 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         capture()
     }
-    private suspend fun moveTo(visit: QueueVisit) {
+    private suspend fun moveTo(visit: QueueVisit): Boolean {
         val prepared = preparation()
-        val queue = prepared.library.active ?: return
+        val queue = prepared.library.active ?: return false
         val play = desiredPlayIntent()
         val arrived = journey(queue) { path, ids -> path.arrive(visit.token, ids) }
         val next = queue.copy(journey = arrived, currentEntryId = arrived.current?.entryId, positionMs = 0)
-        savePreparedPlayback(prepared.copy(library = prepared.library.update(next))) { activate(play, seek = true, recordIntent = false) }
+        return savePreparedPlayback(prepared.copy(library = prepared.library.update(next))) { activate(play, seek = true, recordIntent = false) }
     }
 
     fun dismissProblem() { mutable.update { it.copy(problem = null) } }
@@ -1213,13 +1215,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     private suspend fun saveStartingPlayback(next: QueueLibrary, start: suspend () -> Unit) =
         savePreparedPlayback(preparation().copy(library = next), start)
-    private suspend fun savePreparedPlayback(prepared: PreparedPlayback, start: suspend () -> Unit) {
+    private suspend fun savePreparedPlayback(prepared: PreparedPlayback, start: suspend () -> Unit): Boolean {
         val ready = reconcile(prepared.library)
-        if (!prepared.isCurrent(currentSource(ready.active))) return
+        if (!prepared.isCurrent(currentSource(ready.active))) return false
         mutable.update { it.copy(library = ready, problem = problemAfterSuccess(it, ready)) }
         // Audio starts before persistence; failed writes remain retryable from the durable snapshot.
         var activated = false
         try { start(); activated = true } finally { persist(state.value.library, serviceTransport = activated) }
+        return true
     }
     private suspend fun syncTimeline(seek: Boolean = false, refreshLocations: Boolean = true,
         orderTiming: QueueOrderTiming? = null): Boolean {
