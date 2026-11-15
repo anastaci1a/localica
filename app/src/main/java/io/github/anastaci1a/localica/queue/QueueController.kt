@@ -94,7 +94,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private var observedRecovery = readers.recovery()
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
-            if (!holdsForEdit(state.value.library.active)) intents.observe(nativePlayIntent(player))
+            if (!holdsForEdit()) intents.observe(nativePlayIntent(player))
             val ended = pausedAtEnd || (events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) &&
                 player.playbackState == Player.STATE_ENDED && player.playWhenReady)
             val requestedAtEnd = pausedAtEnd || player.playWhenReady
@@ -672,7 +672,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         source.playerError == null && source.playbackState != Player.STATE_ENDED
 
     private fun desiredPlayIntent(): Boolean = intents.choose(fallback =
-        if (holdsForEdit(state.value.library.active) && editing?.suspendedPlayback == true)
+        if (holdsForEdit() && editing?.suspendedPlayback == true)
             editPlayRequest ?: editing!!.resume else nativePlayIntent(player)).play
 
     /** Publish before enqueueing, so a Pause can supersede activation suspended inside the actor. */
@@ -693,7 +693,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         intents.bindSource(revision, currentSource(state.value.library.active))
         val choice = intents.choose(revision, desiredPlayIntent())
-        if (holdsForEdit(state.value.library.active)) { editPlayRequest = choice.play; return }
+        if (holdsForEdit()) { editPlayRequest = choice.play; return }
         val attached = player ?: return
         if (holdForRecovery(attached, state.value.library.active)) return
         if (choice.play) {
@@ -819,6 +819,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         var queueId: String? = null
         var resume = false
         var suspendedPlayback = false
+        var holdsActive = false
         @Volatile var readers: NativeReaders.Block? = null
             private set
         fun blockReaders(registry: NativeReaders): Boolean = synchronized(this) {
@@ -832,8 +833,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
 
-    private fun holdsForEdit(queue: ListeningQueue?) =
-        editing?.let { edit -> queue?.entries?.any { documentIdentity(it.track.id) == edit.trackId } == true } == true
+    private fun holdsForEdit() = editing?.holdsActive == true
+    private suspend fun EditPlayback.membership(queue: ListeningQueue?) =
+        if (this === editing && queue?.entries === state.value.library.active?.entries) holdsActive
+        else withContext(Dispatchers.Default) { queue?.entries?.any { documentIdentity(it.track.id) == trackId } == true }
 
     private fun visitTrack(queue: ListeningQueue, entryId: String?): Track? =
         queue.journey?.sourceOrdinal(queue.ids, entryId)?.let { queue.entries.getOrNull(it)?.track }
@@ -904,7 +907,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         observedRecovery = recovery
         val attached = player ?: return
         val queue = state.value.library.active ?: return
-        if (holdsForEdit(queue)) return
+        if (holdsForEdit()) return
         if (holdForRecovery(attached, queue)) return
         clearInapplicableRecoveryProblem()
         val held = recoveryHeld
@@ -917,7 +920,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     /** A later queue switch or service attachment must not prepare the temporarily blocked source. */
     private fun holdForEdit(attached: Player, queue: ListeningQueue?, play: Boolean? = null): Boolean {
         val token = editing ?: return false
-        if (!holdsForEdit(queue)) return false
+        if (!holdsForEdit()) return false
         if (!token.suspendedPlayback) {
             token.queueId = queue?.id
             token.entryId = queue?.currentEntryId
@@ -975,6 +978,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                     if (token.abandoned.get()) return@editCommand
                     // Registration precedes every native open. Any open that raced during capture
                     // is included by this atomic block; later opens are rejected without provider IO.
+                    token.holdsActive = token.membership(state.value.library.active)
                     if (!token.blockReaders(readers)) return@editCommand
                     editing = token
                     token.recoveryRevision?.let { cutoff ->
@@ -1010,7 +1014,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
 
     private suspend fun endFileEdit(token: EditPlayback) {
         if (editing !== token) return
-        val affected = holdsForEdit(state.value.library.active)
+        val affected = holdsForEdit()
         token.recoveryRevision?.let { cutoff ->
             intents.discardForRecovery(token.trackId, cutoff,
                 bindUnassigned = currentSource(state.value.library.active) == token.trackId)
@@ -1147,7 +1151,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     private suspend fun save(next: QueueLibrary) {
         val reconciled = reconcile(next)
+        val edit = editing
+        val held = edit?.membership(reconciled.active) == true
         persist(reconciled)
+        edit?.holdsActive = held
         mutable.update { it.copy(library = reconciled, problem = problemAfterSuccess(it, reconciled)) }
     }
     private fun checkpointCursor(next: QueueLibrary): Boolean = synchronized(checkpointLock) {
@@ -1181,7 +1188,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         fun eligible(): Boolean = attached != null && player === attached && generation == expectedGeneration &&
             queueId != null && loadedQueueId == queueId && state.value.library.activeId == queueId &&
             attached.currentMediaItem?.listeningQueue == queueId && attached.playerError == null &&
-            !holdsForEdit(state.value.library.active) && readers.recovery() == RecoveryAdmission.Clear
+            !holdsForEdit() && readers.recovery() == RecoveryAdmission.Clear
         while (!receipt.isCompleted && eligible()) {
             // Prefer the receipt when both clauses are ready. No transport crosses a structural head.
             val command = select<QueuedCommand?> {
@@ -1217,7 +1224,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         savePreparedPlayback(preparation().copy(library = next), start)
     private suspend fun savePreparedPlayback(prepared: PreparedPlayback, start: suspend () -> Unit): Boolean {
         val ready = reconcile(prepared.library)
+        val edit = editing
+        val held = edit?.membership(ready.active) == true
         if (!prepared.isCurrent(currentSource(ready.active))) return false
+        edit?.holdsActive = held
         mutable.update { it.copy(library = ready, problem = problemAfterSuccess(it, ready)) }
         // Audio starts before persistence; failed writes remain retryable from the durable snapshot.
         var activated = false
