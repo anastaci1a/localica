@@ -16,8 +16,6 @@ Category rows use icons, summaries and chevrons. PreferenceFrames supplies every
 
 The root page has global search; sub-pages omit it. Selecting a result scrolls to its row and briefly highlights it. A hidden option leads to the control that reveals it. There is no typo correction. Reduced motion scrolls immediately and shows a static highlight.
 
-Search runs in the background against a catalog normalized once. Results stay visible while the next query computes; only its completed replacement is shown.
-
 ## Controls
 
 Two/three-option choices use equal inline segments when labels fit; larger choices stage a draft until Select. Sliders expose accessible ranges and discrete increments; switches preview then commit once on release. All share the [seek touch model](player.md#seeking), coordinate geometry and cancellation target. Hovering X previews the original value; release keeps it. Control tests specify touch, accessibility and restoration.

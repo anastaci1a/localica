@@ -59,43 +59,6 @@ class AsyncSectionTest {
         } finally { release.countDown() }
     }
 
-    @Test fun replacementKeepsPreviousValueOnlyWhenRequested() = replacement(true)
-    @Test fun replacementClearsPreviousValueByDefault() = replacement(false)
-
-    private fun replacement(retainPrevious: Boolean) {
-        val started = CountDownLatch(1)
-        val release = CountDownLatch(1)
-        val finished = CountDownLatch(1)
-        var request by mutableStateOf("old")
-        compose.setContent { LocalicaTheme {
-            val input = request
-            val result by rememberAsyncValue(input, retainPrevious = retainPrevious) {
-                if (input == "middle") {
-                    started.countDown()
-                    try { check(release.await(10, TimeUnit.SECONDS)) } finally { finished.countDown() }
-                }
-                input
-            }
-            Text(result ?: "pending")
-        } }
-        try {
-            compose.waitUntil(5000) { compose.onAllNodesWithText("old").fetchSemanticsNodes().isNotEmpty() }
-            compose.runOnIdle { request = "middle" }
-            compose.waitForIdle()
-            assertTrue(started.await(5, TimeUnit.SECONDS))
-            compose.onNodeWithText(if (retainPrevious) "old" else "pending").assertExists()
-            compose.onNodeWithText("middle").assertDoesNotExist()
-            compose.runOnIdle { request = "latest" }
-            compose.waitUntil(5000) { compose.onAllNodesWithText("latest").fetchSemanticsNodes().isNotEmpty() }
-            release.countDown()
-            assertTrue(finished.await(5, TimeUnit.SECONDS))
-            compose.waitForIdle()
-            compose.onNodeWithText("latest").assertExists()
-            compose.onNodeWithText("middle").assertDoesNotExist()
-            compose.onNodeWithText("old").assertDoesNotExist()
-        } finally { release.countDown() }
-    }
-
     @Test fun loadingSpinnerFinishesBeforeRowsAndReducedMotionPreservesFinalState() {
         var value by mutableStateOf<String?>(null)
         var reduced by mutableStateOf(false)

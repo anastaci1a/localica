@@ -20,10 +20,10 @@ private class AsyncIdentity(private val value: Any?) {
 
 /** Cancels superseded requests; no stale value can become the result of a newer request. */
 @Composable
-internal fun <T : Any> rememberAsyncValue(vararg inputs: Any?, retainPrevious: Boolean = false, compute: () -> T): State<T?> {
+internal fun <T : Any> rememberAsyncValue(vararg inputs: Any?, compute: () -> T): State<T?> {
     val keys = inputs.map(::AsyncIdentity).toTypedArray()
-    val result = remember(*(if (retainPrevious) emptyArray() else keys)) { mutableStateOf<T?>(null) }
-    LaunchedEffect(result, *keys) {
+    val result = remember(*keys) { mutableStateOf<T?>(null) }
+    LaunchedEffect(result) {
         result.value = withContext(Dispatchers.Default) {
             if (BuildConfig.DEBUG && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
                 StrictMode.noteSlowCall("Async section preparation on main")

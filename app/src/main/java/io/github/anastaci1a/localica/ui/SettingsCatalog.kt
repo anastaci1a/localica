@@ -150,37 +150,38 @@ internal object SettingsCatalog {
         }
         return entries.firstOrNull { it.page == page && it.id == alias }
     }
+    fun normalize(text: String): String = Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "").replace("grey", "gray")
+        .split(Regex("[^\\p{L}\\p{N}]+" )).filter { it.isNotBlank() }.joinToString(" ")
+
     data class Result(val title: String, val page: String, val setting: SettingSpec?, val score: Int)
-    private data class SearchEntry(val result: Result, val name: String, val extra: String, val trail: String,
-        val words: List<String> = name.split(' '))
-    private object Index {
-        private val marks = Regex("\\p{M}+")
-        private val separators = Regex("[^\\p{L}\\p{N}]+")
-        fun normalize(text: String): String = Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD)
-            .replace(marks, "").replace("grey", "gray").split(separators).filter { it.isNotBlank() }.joinToString(" ")
-        val entries = (SettingsCatalog.entries.map { Result(it.title, it.page, it, 0) } +
-            parents.keys.filterNot { page -> SettingsCatalog.entries.any { it.id == page && it.page == page } }
-                .map { Result(it, it, null, -1) }).map { result ->
-            val keywords = result.setting?.let { it.keywords + " " + it.values.joinToString(" ") } ?:
-                SettingsCatalog.entries.filter { it.page == result.page }.joinToString(" ") { it.title + " " + it.keywords }
-            SearchEntry(result, normalize(result.title), normalize(keywords), normalize(breadcrumb(result.page)))
-        }
-    }
     fun search(query: String, limit: Int = 30): List<Result> {
-        val normalized = Index.normalize(query)
+        val normalized = normalize(query)
         if (normalized.isEmpty()) return emptyList()
         val tokens = normalized.split(' ')
-        return Index.entries.mapNotNull { (result, name, extra, trail, words) ->
-            val score = tokens.fold(0) { total, token -> total + when {
+        fun score(title: String, keywords: String, page: String): Int? {
+            val name = normalize(title)
+            val extra = normalize(keywords)
+            val trail = normalize(breadcrumb(page))
+            val scores = tokens.map { token -> when {
                 name == token -> 100
                 name.startsWith(token) -> 80
-                words.any { it.startsWith(token) } -> 60
+                name.split(' ').any { it.startsWith(token) } -> 60
                 token in name -> 45
                 token in extra -> 35
                 token in trail -> 25
-                else -> return@mapNotNull null
+                else -> return null
             } }
-            result.copy(score = result.score + score + if (name == normalized) 100 else 0)
-        }.sortedByDescending { it.score }.take(limit)
+            return scores.sum() + if (name == normalized) 100 else 0
+        }
+        val settings = entries.mapNotNull { spec ->
+            score(spec.title, spec.keywords + " " + spec.values.joinToString(" "), spec.page)
+                ?.let { Result(spec.title, spec.page, spec, it) }
+        }
+        val pages = parents.keys.filterNot { page -> entries.any { it.id == page && it.page == page } }.mapNotNull { page ->
+            val summary = entries.filter { it.page == page }.joinToString(" ") { it.title + " " + it.keywords }
+            score(page, summary, page)?.let { Result(page, page, null, it - 1) }
+        }
+        return (settings + pages).sortedByDescending { it.score }.take(limit)
     }
 }

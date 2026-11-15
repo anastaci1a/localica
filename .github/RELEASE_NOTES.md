@@ -10,24 +10,24 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 - Use extracted shared contact springs and separate broad/local glow channels, preserving verified resting glass optics ([#1002](https://github.com/anastaci1a/localica/issues/1002), slices 1 and 2).
 - Prepare active file-edit membership on the worker and reuse each distinct document identity during the scan.
-- Prepare the Settings search index off Main. Keep completed query identity with results while replacement work runs.
 - Initialize WorkManager when needed. Publish requested playback modes promptly while native preparation and committed settings retain their owner.
 - Add AndroidX benchmark/profile tooling and recorded startup plus five journey profiles. Full profile generation and qualified A35 comparison remain follow-ups ([#986](https://github.com/anastaci1a/localica/issues/986)).
 - Reuse shared playback test fixtures and pin local build-image inputs.
 - Preserve the dynamic device-test inventory, refresh shard timing from complete producer 43717322169 attempt 2, and improve CI dependency reliability.
 - Keep operator-authored GitHub merge commits within the identity policy ([#789](https://github.com/anastaci1a/localica/issues/789)).
-- App Kotlin/Java source changes from 53,274 to 53,376 lines: 222 added, 120 removed, net +102. Accepted contact glow and playback/edit ownership account for growth.
+- App Kotlin/Java source changes from 53,274 to 53,376 lines: 192 added, 90 removed, net +102. Accepted contact glow and playback/edit ownership account for growth.
 
 ## Resolved issues
 
 - [#980](https://github.com/anastaci1a/localica/issues/980): Move repeated active edit-membership work off Main and retain publication ownership.
-- [#1016](https://github.com/anastaci1a/localica/issues/1016): Prepare Settings search off Main and associate completed results with their query.
 - [#1017](https://github.com/anastaci1a/localica/issues/1017): Remove eager WorkManager startup initialization.
 - [#1001](https://github.com/anastaci1a/localica/issues/1001): Remove the IO-wide repeat/shuffle publication stall.
 - [#679](https://github.com/anastaci1a/localica/issues/679): Remove unused release assembly from the prototype build critical path.
 - [#1018](https://github.com/anastaci1a/localica/issues/1018): Retry Maven HTTP 429 responses using Retry-After.
 
 ## Known issues and follow-ups
+
+- [#1016](https://github.com/anastaci1a/localica/issues/1016): Worker-owned Settings search is deferred after its release preflight failed to find a matching result; this release retains the previous search implementation.
 
 - [#1002](https://github.com/anastaci1a/localica/issues/1002) and [#642](https://github.com/anastaci1a/localica/issues/642): This release includes contact spring/glow slices 1 and 2 only; later adoption and firmware-optics work remain open.
 - [#986](https://github.com/anastaci1a/localica/issues/986): Player, lyrics, search and pinch profiles, complete generation/sharding, qualified plain-build A35 comparison and initial performance-ratchet adoption remain incomplete. Emulator metrics are diagnostic.
