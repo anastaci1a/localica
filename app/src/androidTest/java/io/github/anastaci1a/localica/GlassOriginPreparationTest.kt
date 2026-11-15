@@ -31,6 +31,7 @@ class GlassOriginPreparationTest {
     private val replacementSamples = mutableListOf<Pair<Float, android.view.Window?>>()
     private val popupWindows = mutableSetOf<Int>()
     private val admissionViolations = mutableListOf<String>()
+    private var admittedScreenCorners: List<Float>? = null
 
     private fun fixture(reduced: Boolean = false, prepared: Boolean = true) {
         compose.setContent { EngineTheme(reduced = reduced) {
@@ -45,6 +46,9 @@ class GlassOriginPreparationTest {
                     if (receipt is GlassTransitionReceipt && receipt.event == "WindowReplaced") {
                         replacementSamples += requireNotNull(anchor.popup).let { it.progress.value to it.window }
                     }
+                    if (receipt is GlassSurfaceDrawObservation && receipt.windowIdentity in popupWindows &&
+                        anchor.popup?.modalPresent == true && receipt.windowIdentity == System.identityHashCode(anchor.popup?.window))
+                        admittedScreenCorners = receipt.screenCorners
                     if (receipt is GlassSurfaceDrawObservation && receipt.windowIdentity in popupWindows &&
                         (anchor.popup?.modalPresent != true || receipt.windowIdentity != System.identityHashCode(anchor.popup?.window))) {
                         admissionViolations += "draw without current admission: ${receipt.windowIdentity}, ${anchor.popup?.state}"
@@ -118,6 +122,7 @@ class GlassOriginPreparationTest {
             val flight = requireNotNull(anchor.popup)
             val first = requireNotNull(popupWindow)
             val gen = flight.gen
+            val originalScreen = admittedScreenCorners
             compose.runOnIdle { if (prepared) reportOrigin = false; fontScale = 1.01f }
             frame()
             compose.runOnIdle {
@@ -136,8 +141,17 @@ class GlassOriginPreparationTest {
                     assertFalse("no admission before the new origin receipt", flight.modalPresent)
                     val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                     assertEquals("the replacement also owns no input", flags, requireNotNull(popupWindow).attributes.flags and flags)
-                    reportOrigin = true
                 }
+                val shot = requireNotNull(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                try {
+                    val regions = listOf(compose.runOnUiThread { anchor.bounds }, requireNotNull(originalScreen).let {
+                        androidx.compose.ui.geometry.Rect(it[0], it[1], it[4], it[5]) })
+                    android.util.Log.i("PopupAdmissionPixels", "oldWindow ${System.identityHashCode(first)} newWindow ${System.identityHashCode(popupWindow)} state ${flight.state} recordings ${admissionViolations.size}")
+                    regions.forEach { r -> android.util.Log.i("PopupAdmissionPixels", "region $r pixels " +
+                        (1..3).flatMap { y -> (1..3).map { x -> Integer.toHexString(shot.getPixel(
+                            (r.left + r.width * x / 4).toInt(), (r.top + r.height * y / 4).toInt())) } }) }
+                } finally { shot.recycle() }
+                compose.runOnIdle { reportOrigin = true }
             }
             advanceWithNativeFrames(4000)
             compose.runOnIdle {
