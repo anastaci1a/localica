@@ -18,7 +18,7 @@ done
 if [[ $mode == generate ]]; then
     target=app/build/outputs/apk/nonMinifiedDistribution/app-nonMinifiedDistribution.apk
 else
-    target=app/build/outputs/apk/distribution/app-distribution.apk
+    target=app/build/outputs/apk/benchmarkDistribution/app-benchmarkDistribution.apk
 fi
 adb install -r "$target"
 node tools/performance/macrobenchmark/fixture.mjs "$RUNNER_TEMP/performance-fixture"
