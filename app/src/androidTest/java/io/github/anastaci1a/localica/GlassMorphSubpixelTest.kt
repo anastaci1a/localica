@@ -43,7 +43,7 @@ class GlassMorphSubpixelTest {
             }
         } }
         fun bounds(): Rect {
-            val semantics = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode()
+            val semantics = compose.onNodeWithTag("glass-morph-surface", useUnmergedTree = true).fetchSemanticsNode()
             val view = (semantics.root as ViewRootForTest).view
             val location = IntArray(2)
             compose.runOnUiThread { view.getLocationOnScreen(location) }
@@ -69,6 +69,8 @@ class GlassMorphSubpixelTest {
                     if (!anchor.contact.expansion.isRunning) expanded = bounds()
                 }
             }
+            assertTrue("Settled popup is admitted", anchor.hidden)
+            compose.onNodeWithTag("glass-morph-surface").assertExists()
             assertTrue("Actual expansion has intermediate native frames", opening >= 3)
             val end = requireNotNull(expanded)
             // Keep the independent 101-position quantization corpus; it no longer

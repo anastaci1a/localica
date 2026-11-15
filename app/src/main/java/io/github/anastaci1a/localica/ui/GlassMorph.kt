@@ -549,7 +549,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var modalWindow by remember { mutableStateOf<android.view.Window?>(null) }
     var dismissalAttempt by remember { mutableIntStateOf(0) }
     val gestures = rememberModalGestureScope()
-    val originOwnsInput = popupFlight.expanded
+    val originOwnsInput = popupFlight.present
     DisposableEffect(gestures, visible, dismissalAttempt, originOwnsInput) {
         if (visible && originOwnsInput) gestures.activate() else gestures.deactivate()
         onDispose { gestures.deactivate() }
