@@ -2,7 +2,8 @@ package io.github.anastaci1a.localica.ui
 
 import org.junit.Assert.*
 import org.junit.Test
-import kotlin.math.abs
+import io.github.anastaci1a.localica.ui.spec.FlexSpec
+import kotlin.math.*
 
 class GlassMomentumTest {
     @Test fun normalConvergencePublishesExactTargetsInsteadOfResidualLayoutRounding() {
@@ -89,23 +90,26 @@ class GlassMomentumTest {
         assertTrue(joined.settled)
     }
 
-    @Test fun heldAccelerationAndBrakingRemainVisibleWithoutRinging() {
+    @Test fun heldAccelerationAndBrakingRemainVisibleWithBoundedTrackingRebound() {
         for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f))
             for (direction in listOf(-1f, 1f)) for (braking in listOf(false, true)) {
                 val body = GlassMomentum(damping)
                 val initialVelocity = if (braking) direction * 4f else 0f
                 repeat(fps * 3) { body.advance(initialVelocity, 1f / fps, contact = 1f) }
                 val nextVelocity = if (braking) 0f else direction * 4f
-                var peak = 0f
+                var peak = 0f; var trough = 0f
                 repeat(fps) {
                     body.advance(nextVelocity, 1f / fps, contact = 1f)
                     val axial = body.strain * if (braking) -1f else 1f
-                    assertTrue("Held impulse cannot ring across rest at $fps fps", axial >= -.000001f)
+                    trough = minOf(trough, axial)
                     peak = maxOf(peak, axial)
                     assertEquals(1f, body.scaleX * body.scaleY * body.shape.thickness, .00001f)
                 }
-                assertTrue("Held acceleration/braking must survive target projection", peak > .004f)
+                assertTrue("Held acceleration/braking must survive target projection", peak > if (damping == 40f) .0005f else .004f)
                 assertTrue("Held impulse remains bounded", peak < .02f)
+                if (damping == 8f) assertTrue("Default tracking rebound <= 8.1%", -trough <= peak * .081f)
+                // The slowest tracking envelope decays at 3.127/s; 3 s keeps the original tolerance.
+                repeat(fps * 2) { body.advance(nextVelocity, 1f / fps, contact = 1f) }
                 assertEquals("Steady tracking dissipates the impulse", 0f, body.strain, .00001f)
             }
     }
@@ -127,7 +131,7 @@ class GlassMomentumTest {
         }
     }
 
-    @Test fun heldAccelerationIsSymmetricAndDoesNotChangeStationaryContactDepth() {
+    @Test fun heldAccelerationIsSymmetricAndConvergesToTheStationaryContactDepth() {
         val forward = GlassMomentum(); val backward = GlassMomentum(); val stationary = GlassMomentum()
         repeat(180) { for (body in listOf(forward, backward, stationary)) body.advance(0f, 1f / 60, contact = 1f) }
         repeat(60) {
@@ -135,24 +139,75 @@ class GlassMomentumTest {
             backward.advance(-4f, 1f / 60, contact = 1f)
             stationary.advance(0f, 1f / 60, contact = 1f)
             assertEquals(forward.shape, backward.shape)
-            assertEquals("Pressure/contact depth constraints stay independent", stationary.shape.depth, forward.shape.depth, .00001f)
+            assertTrue("Transient depth stays inside the shipped cap", abs(forward.shape.depth) < .24f)
+            assertEquals(1f, forward.scaleX * forward.scaleY * forward.shape.thickness, .00001f)
+        }
+        repeat(120) { forward.advance(4f, 1f / 60, contact = 1f) }
+        assertEquals("Steady travel returns to the contact target", stationary.shape.depth, forward.shape.depth, .00001f)
+    }
+
+    @Test fun trackingPressAndFreeReleaseMatchS323BandsWithoutChangingVolume() {
+        for (fps in listOf(30, 60, 120)) {
+            val body = GlassMomentum()
+            var peak = 0f; var peakTime = 0f
+            repeat(fps * 3) {
+                body.advance(0f, 1f / fps, contact = 1f)
+                val displacement = atanh(-body.shape.depth / .24f)
+                if (displacement > peak) { peak = displacement; peakTime = (it + 1f) / fps }
+                assertEquals(1f, body.scaleX * body.scaleY * body.shape.thickness, .00001f)
+            }
+            assertTrue("Tracking overshoot <= 8.1% and inside S323 0..15%", peak > 1f && peak <= 1.081f)
+            assertTrue("S323 growth peak 133..167 +/-33 ms: $peakTime", peakTime in .1f.. .2f)
+            var minimum = 0f; var minimumTime = 0f
+            repeat(fps * 2) {
+                body.advance(0f, 1f / fps)
+                val displacement = atanh(-body.shape.depth / .24f)
+                if (displacement < minimum) { minimum = displacement; minimumTime = (it + 1f) / fps }
+                assertEquals(1f, body.scaleX * body.scaleY * body.shape.thickness, .00001f)
+            }
+            assertTrue("S323 release undershoot 26 +/-8%: $minimum", minimum in -.34f..-.18f)
+            assertTrue("S323 release minimum 183 +/-33 ms: $minimumTime", minimumTime in .15f.. .2167f)
         }
     }
 
-    @Test fun pressingStoresStrainWithoutAnyBounceAndReleaseOscillatesDepth() {
-        val body = GlassMomentum(2f)
-        var previous = 1f
-        repeat(180) {
-            body.advance(0f, 1f / 120, contact = 1f)
-            assertTrue("Contact must not rebound under the finger", body.shape.thickness <= previous + .000001f)
-            previous = body.shape.thickness
+    @Test fun dynamicSpringsUseTheExtractedLongSideBoundaryAndInterpolation() {
+        for (side in listOf(0f, 44f, 102f, 119.999f)) assertEquals(FlexSpec.Small, FlexSpec.dynamic(side))
+        for (side in listOf(120f, 140f, 160f, 320f)) {
+            val spec = FlexSpec.dynamic(side)
+            val t = ((side - 44f) / 116f).coerceIn(0f, 1f)
+            assertEquals(.375f * (1 - t) + .6f * t, spec.damping, .000001f)
+            assertEquals(.4f * (1 - t) + .36f * t, spec.response, .000001f)
+            assertEquals(.625f, spec.trackingDamping, 0f)
+            assertEquals(.262f * (1 - t) + .314f * t, spec.trackingResponse, .000001f)
         }
-        var roseAboveRest = false
-        repeat(120) {
-            body.advance(0f, 1f / 120)
-            roseAboveRest = roseAboveRest || body.shape.thickness > 1.01f
-        }
-        assertTrue("Release returns stored strain through depth", roseAboveRest)
+    }
+
+    @Test fun springStepsFollowIndependentClosedFormAcrossSizesAndDampingSettings() {
+        for (side in listOf(44f, 120f, 140f, 160f)) for (damping in listOf(2f, 8f, 40f))
+            for (fps in listOf(30, 60, 120)) for (held in listOf(false, true)) {
+                val body = GlassMomentum(damping).apply { spec = FlexSpec.dynamic(side) }
+                // Pressure exposes a channel directly and its nonzero target selects tracking.
+                repeat(fps * 8) { body.advance(0f, 1f / fps, pressure = -.1f) }
+                body.finishSettlement()
+                val omega = 2 * PI / if (held) body.spec.trackingResponse else body.spec.response
+                val zeta = (if (held) body.spec.trackingDamping else body.spec.damping) * damping / 8
+                fun response(t: Double): Double {
+                    val a = zeta * omega
+                    return when {
+                        zeta < 1 -> { val b = omega * sqrt(1 - zeta * zeta)
+                            exp(-a * t) * (cos(b * t) + a / b * sin(b * t)) }
+                        zeta > 1 -> { val b = omega * sqrt(zeta * zeta - 1)
+                            ((1 + a / b) * exp((-a + b) * t) + (1 - a / b) * exp((-a - b) * t)) / 2 }
+                        else -> exp(-a * t) * (1 + a * t)
+                    }
+                }
+                repeat(fps * 2) {
+                    body.advance(0f, 1f / fps, pressure = if (held) -.2f else 0f)
+                    val q = body.strain / -.1f
+                    val expected = if (held) 2 - response((it + 1.0) / fps) else response((it + 1.0) / fps)
+                    assertEquals("side=$side damping=$damping fps=$fps held=$held frame=$it", expected, q.toDouble(), .055)
+                }
+            }
     }
 
     @Test fun magneticWellsAreContinuousOrderedAndStrongNearEachOption() {

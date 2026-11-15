@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.FlexSpec
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.tanh
@@ -34,20 +36,15 @@ internal fun glassMotionSpeedChange(previous: Float, current: Float): Float {
 
 /** Position is owned by the gesture; acceleration, contact and pressure drive its shape. */
 internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_DAMPING) {
+    var spec = FlexSpec.Small
     private class Spring {
         var value = 0f
         var velocity = 0f
         var target = 0f
         val settled get() = abs(value - target) < GlassSpringParameters.SETTLED_DISPLACEMENT && abs(velocity) < GlassSpringParameters.SETTLED_VELOCITY
-        fun advance(dt: Float, damping: Float, held: Boolean = false) {
-            val before = value
-            velocity += (GlassSpringParameters.STIFFNESS * (target - value) - damping * velocity) * dt
+        fun advance(dt: Float, stiffness: Float, damping: Float) {
+            velocity += (stiffness * (target - value) - damping * velocity) * dt
             value += velocity * dt
-            // A held finger constrains the surface: it stores strain, never rings.
-            if (held) {
-                value = value.coerceIn(minOf(before, target), maxOf(before, target))
-                if (value == target || value == before) velocity = 0f
-            }
         }
         fun finish() { value = if (target == 0f) 0f else target; velocity = 0f }
         fun reset() { value = 0f; velocity = 0f; target = 0f }
@@ -108,14 +105,12 @@ internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_
         val held = contact.isFinite() && contact > 0f || abs(this.pressure.target) > .0001f
         depth.target = -.24f * (if (contact.isFinite()) contact.coerceIn(0f, 1f) else 0f) - abs(this.pressure.target) * .3f
         val drag = if (damping.isFinite()) damping.coerceIn(GlassSpringParameters.MIN_DAMPING, GlassSpringParameters.MAX_DAMPING) else GlassSpringParameters.DEFAULT_DAMPING
+        val omega = (2 * PI).toFloat() / if (held) spec.trackingResponse else spec.response
+        val resistance = 2f * omega * (if (held) spec.trackingDamping else spec.damping) * drag / GlassSpringParameters.DEFAULT_DAMPING
         var remaining = seconds.coerceAtMost(.1f)
         while (remaining > 0f) {
             val dt = minOf(remaining, 1f / 240f)
-            val resistance = if (held) maxOf(40f, drag) else drag
-            // Motion is driven by velocity impulses around a zero target. Projecting
-            // it into [before, target] would erase acceleration at rest; held
-            // critical damping already prevents an unforced ringing response.
-            motion.advance(dt, resistance); this.pressure.advance(dt, resistance, held); depth.advance(dt, resistance, held)
+            motion.advance(dt, omega * omega, resistance); this.pressure.advance(dt, omega * omega, resistance); depth.advance(dt, omega * omega, resistance)
             remaining -= dt
         }
     }

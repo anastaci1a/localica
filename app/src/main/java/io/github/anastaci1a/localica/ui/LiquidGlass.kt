@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import android.os.Build
+import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -243,10 +244,16 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             addPath(outline.frame(extent).path)
         } } ?: cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape
     }
-    SideEffect { if (anchor != null) {
-        anchor.depthScale = depthScale
-        anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
-    } }
+    val flex = remember(surfaceSize, view.resources.displayMetrics.density) {
+        FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density)
+    }
+    SideEffect {
+        contact.state.momentum.spec = flex
+        if (anchor != null) {
+            anchor.depthScale = depthScale
+            anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
+        }
+    }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
     val rim = remember { GlassRimCache() }
     val popupRim = if ((panel > 0f || presentation != null) && silhouette == null) remember { PopupGlassRimCache() } else null
