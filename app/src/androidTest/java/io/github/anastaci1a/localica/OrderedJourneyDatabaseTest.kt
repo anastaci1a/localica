@@ -97,8 +97,18 @@ class OrderedJourneyDatabaseTest {
         if (arguments.getString("require256MiB") == "true") assertEquals(268435456L, Runtime.getRuntime().maxMemory())
         val before = android.os.Debug.getRuntimeStats()
         val peak = java.util.concurrent.atomic.AtomicLong()
+        val nativePeak = java.util.concurrent.atomic.AtomicLong()
+        val pssPeak = java.util.concurrent.atomic.AtomicLong()
         val sampler = launch(Dispatchers.Default) {
-            while (isActive) { val runtime = Runtime.getRuntime(); peak.updateAndGet { maxOf(it, runtime.totalMemory() - runtime.freeMemory()) }; delay(10) }
+            var samples = 0
+            while (isActive) {
+                val runtime = Runtime.getRuntime(); peak.updateAndGet { maxOf(it, runtime.totalMemory() - runtime.freeMemory()) }
+                if (++samples % 10 == 0) {
+                    nativePeak.updateAndGet { maxOf(it, android.os.Debug.getNativeHeapAllocatedSize()) }
+                    pssPeak.updateAndGet { maxOf(it, android.os.Debug.getPss().toLong()) }
+                }
+                delay(10)
+            }
         }
         val started = android.os.SystemClock.elapsedRealtime()
         var db = open(name)
@@ -118,7 +128,7 @@ class OrderedJourneyDatabaseTest {
             }
             verify()
             db.close(); db = open(name); verify()
-            android.util.Log.i("Order1012", "entries=$count elapsedMs=${android.os.SystemClock.elapsedRealtime() - started} peakBytes=${peak.get()} maxBytes=${Runtime.getRuntime().maxMemory()} gcBefore=$before gcAfter=${android.os.Debug.getRuntimeStats()}")
+            android.util.Log.i("Order1012", "entries=$count elapsedMs=${android.os.SystemClock.elapsedRealtime() - started} peakBytes=${peak.get()} maxBytes=${Runtime.getRuntime().maxMemory()} nativePeakBytes=${nativePeak.get()} pssPeakKiB=${pssPeak.get()} gcBefore=$before gcAfter=${android.os.Debug.getRuntimeStats()}")
         } finally { sampler.cancelAndJoin(); db.close(); context.deleteDatabase(name) }
     }
 
