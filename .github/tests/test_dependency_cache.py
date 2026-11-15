@@ -395,6 +395,8 @@ class TransientRetryContract(unittest.TestCase):
     def test_429_retry_after_beyond_budget_fails_without_retrying_early(self):
         self.gradlew([["> Could not download x.pom",
                        '> Received status code 429 from server: Too Many Requests',
+                       'Retry-After: 30', '> Could not download y.pom',
+                       '> Received status code 429 from server: Too Many Requests',
                        'Retry-After: 121'], 'ok'])
         result = self.run_wrapper()
         self.assertEqual(1, result.returncode, result.stdout)
@@ -439,6 +441,27 @@ class TransientRetryContract(unittest.TestCase):
         self.assertEqual(1, result.returncode, result.stdout)
         self.assertEqual(1, self.calls())
         self.assertFalse((self.root / 'waits').exists())
+
+    def test_429_honors_the_maximum_of_all_logged_retry_after_values(self):
+        future = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=75)
+        headers = ['Retry-After: 2', 'retry-after: 45',
+                   'Retry-After: ' + future.strftime('%a, %d %b %Y %H:%M:%S GMT')]
+        for values in (headers, list(reversed(headers))):
+            with self.subTest(headers=values):
+                (self.root / 'waits').unlink(missing_ok=True)
+                self.gradlew([["> Could not download x.pom", '> Received status code 429 from server'] + values, 'ok'])
+                result = self.run_wrapper()
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertEqual(2, self.calls())
+                self.assertTrue(70 <= int((self.root / 'waits').read_text()) <= 75)
+
+    def test_429_leading_zeros_do_not_turn_a_short_delay_into_a_budget_failure(self):
+        self.gradlew([["> Could not download x.pom", '> Received status code 429 from server',
+                       'Retry-After: 000000000000000000000000000000002'], 'ok'])
+        result = self.run_wrapper()
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(2, self.calls())
+        self.assertEqual('2\n', (self.root / 'waits').read_text())
 
     def test_429_probe_failure_falls_back_to_bounded_backoff(self):
         curl = self.root / 'curl'

@@ -12,7 +12,7 @@ download='Could not (GET|HEAD|download|get resource|resolve all)'
 never='There were failing tests|tests completed, [0-9]+ failed|Compilation error|^e: |Lint found|Execution failed for task .*:(test|lint)[A-Za-z]*'
 
 retry_after() {
-  awk 'tolower($0) ~ /^[<>[:space:]]*retry-after:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit }'
+  awk 'tolower($0) ~ /^[<>[:space:]]*retry-after:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print }'
 }
 
 mkdir -p ci-infrastructure/dependency-attempts
@@ -27,22 +27,26 @@ for ((attempt = 1; attempt <= attempts; attempt++)); do
   if (( attempt < attempts )) && grep -Eq "$transient" "$log" && grep -Eq "$download" "$log" && ! grep -Eq "$never" "$log"; then
     wait=${waits[attempt - 1]:-${waits[-1]}}
     if grep -q 'Received status code 429 from server' "$log"; then
-      after=$(retry_after < "$log")
+      headers=$(retry_after < "$log")
       # Gradle omits response headers; one bounded HEAD probe can recover the server's requested delay.
-      if [[ -z "$after" ]]; then
+      if [[ -z "$headers" ]]; then
         url=$(sed -nE "/Received status code 429/s/.*Could not (GET|HEAD) '(https?:\/\/[^']+)'.*/\2/p" "$log" | head -n 1)
         if [[ -n "$url" ]]; then
-          after=$(curl --silent --head --connect-timeout 5 --max-time 10 "$url" | retry_after)
+          headers=$(curl --silent --head --connect-timeout 5 --max-time 10 "$url" | retry_after)
         fi
       fi
-      delay=0
-      if [[ "$after" =~ ^[0-9]+$ ]]; then
-        delay=121
-        (( ${#after} > 9 )) || delay=$((10#$after))
-      elif [[ -n "$after" ]] && epoch=$(LC_ALL=C date -d "$after" +%s 2>/dev/null); then
-        delay=$((epoch - $(date +%s)))
-      fi
-      (( delay <= wait )) || wait=$delay
+      while IFS= read -r after; do
+        delay=0
+        if [[ "$after" =~ ^[0-9]+$ ]]; then
+          after=${after#"${after%%[!0]*}"}
+          after=${after:-0}
+          delay=121
+          (( ${#after} > 9 )) || delay=$((10#$after))
+        elif [[ -n "$after" ]] && epoch=$(LC_ALL=C date -d "$after" +%s 2>/dev/null); then
+          delay=$((epoch - $(date +%s)))
+        fi
+        (( delay <= wait )) || wait=$delay
+      done <<< "$headers"
       if (( wait > 120 )); then
         echo "::warning title=Dependency retry budget exceeded::Retry-After requires $wait s; stopping without an early retry (#1018)"
         break
