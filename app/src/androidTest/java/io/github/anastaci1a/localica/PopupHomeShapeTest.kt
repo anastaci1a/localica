@@ -40,6 +40,7 @@ class PopupHomeShapeTest {
     private lateinit var anchor: GlassAnchor
     private var rootView: android.view.View? = null
     private var popupView: android.view.View? = null
+    private var firstAdmittedBounds: Rect? = null
     private var selected by mutableStateOf(false)
     private var open by mutableStateOf(false)
     private var itemHeight by mutableStateOf(72.dp)
@@ -50,7 +51,13 @@ class PopupHomeShapeTest {
             anchor = rememberGlassAnchor(deferContextPlacement = false)
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(0xFF808080)) }
-            CompositionLocalProvider(LocalFrostedBackdrop provides source) {
+            CompositionLocalProvider(LocalFrostedBackdrop provides source,
+                LocalGlassSurfaceDrawObserver provides { receipt ->
+                    glassDrawProbe?.invoke(receipt)
+                    if (firstAdmittedBounds == null && receipt is GlassSurfaceDrawObservation &&
+                        anchor.popup?.modalPresent == true && receipt.windowIdentity == System.identityHashCode(anchor.popup?.window))
+                        receipt.screenCorners?.let { firstAdmittedBounds = Rect(it[0], it[1], it[4], it[5]) }
+                }) {
                 ConnectedSelectionHost(Modifier.fillMaxSize()) {
                     Column(Modifier.padding(horizontal = 24.dp, vertical = 120.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.fillMaxWidth().height(itemHeight).testTag("item")
@@ -87,7 +94,7 @@ class PopupHomeShapeTest {
 
     /** Open, sampling the first frames; returns them. */
     private fun openFrames(count: Int): List<Rect> {
-        compose.runOnIdle { open = true }
+        compose.runOnIdle { firstAdmittedBounds = null; open = true }
         val frames = mutableListOf<Rect>()
         var guard = 0
         while (frames.isEmpty() && guard++ < 400) { frame(); surface()?.let { frames += it } }
@@ -131,8 +138,11 @@ class PopupHomeShapeTest {
             } else assertEquals("An unselected trigger is presented where it is laid out", rest, presented)
             val first = openFrames(2)
             log("$id first", first)
-            assertTrue("Expansion starts at the presented trigger, not the resting one: ${first.first()} presented=$presented rest=$rest",
-                distance(first.first(), presented) <= distance(first.first(), rest) + .5f)
+            val initial = compose.runOnUiThread { requireNotNull(firstAdmittedBounds) }
+            log("$id first-admitted", listOf(initial))
+            compose.onNodeWithTag("glass-morph-surface").assertExists()
+            assertTrue("Expansion starts at the presented trigger, not the resting one: $initial presented=$presented rest=$rest",
+                distance(initial, presented) <= distance(initial, rest) + .5f)
             repeat(40) { frame() }
             val back = closeFrames()
             log("$id back", back)
