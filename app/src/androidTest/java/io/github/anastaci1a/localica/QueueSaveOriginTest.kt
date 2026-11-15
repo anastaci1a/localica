@@ -87,20 +87,9 @@ class QueueSaveOriginTest {
     }
 
     @Test fun millionEntrySaveDialogAdmissionDoesNotEnumerateTracksOnMain() {
-        val catalog = List(50_000) { index -> Track("test:$index", "Song $index", id = "track:$index",
-            fileName = "$index.mp3", relativePath = "$index.mp3", durationMs = 1000) }
-        val rows = List(1_000_000) { QueueEntry(id = "entry:$it", track = catalog[it % catalog.size]) }
         val watching = java.util.concurrent.atomic.AtomicBoolean(false)
         val mainReads = java.util.concurrent.atomic.AtomicInteger()
-        val entries = object : AbstractList<QueueEntry>() {
-            override val size = rows.size
-            override fun get(index: Int): QueueEntry {
-                if (watching.get() && android.os.Looper.myLooper() == android.os.Looper.getMainLooper() &&
-                    Thread.currentThread().stackTrace.any { it.className == "io.github.anastaci1a.localica.ui.QueueScreenKt" && it.methodName == "QueueScreen" })
-                    mainReads.incrementAndGet()
-                return rows[index]
-            }
-        }
+        val entries = millionSaveEntries(watching, mainReads, java.util.concurrent.atomic.AtomicInteger())
         val drawer = showDrawer(entries = entries)
         try {
             // Initial header preparation is #1021; observe only the subsequent Save admission.
@@ -113,7 +102,69 @@ class QueueSaveOriginTest {
                 "gcBefore=$before gcAfter=${android.os.Debug.getRuntimeStats()}")
             tap(compose.onNodeWithText("Cancel", substring = false))
             awaitReturned(drawer, opened)
+            assertEquals("The entire dialog and return must not enumerate the captured source on Main", 0, mainReads.get())
         } finally { watching.set(false); dispose(drawer) }
+    }
+
+    @Test fun millionEntrySaveConsumesCapturedSourceOffMainThroughCommittedCompletion() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val controller = PlaylistController(database.playlists(), scope)
+        val watching = java.util.concurrent.atomic.AtomicBoolean(false)
+        val mainReads = java.util.concurrent.atomic.AtomicInteger()
+        val workerReads = java.util.concurrent.atomic.AtomicInteger()
+        val entries = millionSaveEntries(watching, mainReads, workerReads)
+        var drawer: Drawer? = null
+        val before = android.os.Debug.getRuntimeStats()
+        try {
+            runBlocking { withTimeout(5000) { controller.state.first { !it.loading } } }
+            val fixture = showDrawer(controller, entries).also { drawer = it }
+            watching.set(true)
+            val opened = openSave(fixture)
+            compose.onNode(hasSetTextAction()).performTextInput("Million captured queue")
+            pump(fixture, predicateOnUiThread = false) {
+                try { compose.onNodeWithText("Add", substring = false).assertIsEnabled(); true }
+                catch (_: AssertionError) { false }
+            }
+            tap(compose.onNodeWithText("Add", substring = false).assertIsEnabled())
+            val saved = runBlocking { withTimeout(120_000) {
+                controller.state.first { it.playlists.singleOrNull()?.entries?.size == entries.size }.playlists.single()
+            } }
+            awaitReturned(fixture, opened)
+            assertEquals("Admission, dialog, confirmation and callbacks share one whole-flow counter", 0, mainReads.get())
+            assertEquals("The real PlaylistController worker consumes every captured occurrence", entries.size, workerReads.get())
+            watching.set(false)
+            for (index in entries.indices) assertSame(entries[index].track, saved.entries[index].track)
+            val committed = runBlocking(Dispatchers.IO) {
+                database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM playlist_entries").use { cursor ->
+                    assertTrue(cursor.moveToFirst()); cursor.getInt(0)
+                }
+            }
+            assertEquals(entries.size, committed)
+        } finally {
+            android.util.Log.i("QueueMaintenance1026", "operation=save-completion catalog=50000 entries=1000000 mainReads=${mainReads.get()} workerReads=${workerReads.get()} " +
+                "maxHeap=${Runtime.getRuntime().maxMemory()} heap=${Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }} " +
+                "gcBefore=$before gcAfter=${android.os.Debug.getRuntimeStats()}")
+            watching.set(false); drawer?.let(::dispose); scope.cancel(); database.close()
+        }
+    }
+
+    private fun millionSaveEntries(watching: java.util.concurrent.atomic.AtomicBoolean,
+        mainReads: java.util.concurrent.atomic.AtomicInteger, workerReads: java.util.concurrent.atomic.AtomicInteger): List<QueueEntry> {
+        val catalog = List(50_000) { index -> Track("test:$index", "Song $index", id = "track:$index",
+            fileName = "$index.mp3", relativePath = "$index.mp3", durationMs = 1000) }
+        val rows = List(1_000_000) { QueueEntry(id = "entry:$it", track = catalog[it % catalog.size]) }
+        return object : AbstractList<QueueEntry>() {
+            override val size = rows.size
+            override fun get(index: Int): QueueEntry {
+                if (watching.get()) {
+                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) mainReads.incrementAndGet()
+                    else workerReads.incrementAndGet()
+                }
+                return rows[index]
+            }
+        }
     }
 
     @Test fun restoredSaveReopensBeforeBodyRestWithoutCompetingOwners() {

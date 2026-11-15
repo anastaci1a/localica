@@ -42,25 +42,88 @@ class QueueFileEditTest {
                 QueueLibrary(listOf(active, active.copy(id = "other")), active.id)
             }) {
                 val source = queues.state.value.library
-                val requested = entries.mapView { entry ->
-                    if (entry.id == "occ:${size - 1}") entry.track.copy(id = "missing") else entry.track
-                }
                 val origins = object : AbstractList<String?>() {
                     override val size = entries.size
                     override fun get(index: Int) = if (index % 2 == 0) "playlist" else null
                 }
                 val reuse = QueueController::class.java.declaredMethods.single { it.name == "reuse" }.apply { isAccessible = true }
+                for (mismatch in listOf(0, size / 2, size - 1)) {
+                    val requested = entries.mapView { entry ->
+                        if (entry.id == "occ:$mismatch") entry.track.copy(id = "missing") else entry.track
+                    }
+                    entries.mainReads.set(0); entries.workerReads.set(0)
+                    measureMaintenance("reuse-mismatch-$mismatch", catalogSize, size) {
+                        val answer = withContext(Dispatchers.Main) {
+                            kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean?> {
+                                reuse.invoke(queues, requested, 0, false, "Original", origins, it)
+                            }
+                        }
+                        assertNull(answer)
+                        assertSame(source, queues.state.value.library)
+                        assertEquals("Active-first and both saved candidates reach the mismatch", 6 * (mismatch + 1), entries.workerReads.get())
+                        assertEquals(0, entries.mainReads.get())
+                    }
+                }
                 entries.mainReads.set(0); entries.workerReads.set(0)
-                measureMaintenance("reuse", catalogSize, size) {
+                measureMaintenance("reuse-match", catalogSize, size) {
                     val answer = withContext(Dispatchers.Main) {
                         kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean?> {
-                            reuse.invoke(queues, requested, 0, false, "Original", origins, it)
+                            reuse.invoke(queues, entries.mapView(QueueEntry::track), size - 1, false, "Original", origins, it)
                         }
                     }
-                    assertNull(answer)
-                    assertSame(source, queues.state.value.library)
-                    assertEquals("Active-first and both saved candidates reach the last mismatch", 6 * size, entries.workerReads.get())
+                    assertEquals(true, answer)
+                    assertEquals("One selected-entry read plus one existing prepared-source read", 2, entries.mainReads.get())
+                    assertEquals("occ:${size - 1}", queues.state.value.library.active!!.currentEntryId)
+                }
+            }
+        }
+    }
+
+    @Test fun millionEntryRefreshPublicationDoesNotCompareValueEqualPrefixesOnMain() {
+        val size = 1_000_000
+        for (scenario in listOf("no-match", "unchanged", "late-difference")) {
+            lateinit var entries: EditEntries
+            lateinit var replacement: Track
+            fixture(attachPlayer = false, timeoutMs = 60_000, initial = { queue ->
+                val catalog = List(50_000) { queue.entries.first().track.copy(id = "refresh:$it", title = "Track $it") }
+                entries = EditEntries(List(size) { index -> QueueEntry(id = "occ:$index",
+                    track = catalog[if (index == size - 1) catalog.lastIndex else index % (catalog.size - 1)]) })
+                replacement = when (scenario) {
+                    "no-match" -> catalog.last().copy(id = "absent")
+                    "unchanged" -> catalog.last()
+                    else -> catalog.last().copy(title = "Only the last occurrence changes")
+                }
+                val active = queue.copy(entries = entries, currentEntryId = "occ:0",
+                    order = io.github.anastaci1a.localica.library.SavedOrder(emptyList()))
+                QueueLibrary(listOf(active, queue.copy(id = "other")), active.id)
+            }) {
+                val source = queues.state.value.library
+                val updates = EditEntries(listOf(QueueEntry(track = replacement)))
+                entries.mainReads.set(0); entries.workerReads.set(0)
+                val receipts = AtomicInteger()
+                measureMaintenance("refresh-publication-$scenario", 50_000, size) {
+                    val complete = CompletableDeferred<Boolean>()
+                    queues.refreshTracks(updates.mapView(QueueEntry::track)) { receipts.incrementAndGet(); complete.complete(it) }
+                    assertTrue(complete.await())
+                    assertEquals(1, receipts.get())
                     assertEquals(0, entries.mainReads.get())
+                    assertEquals(0, updates.mainReads.get())
+                    assertEquals(1, updates.workerReads.get())
+                }
+                val result = queues.state.value.library
+                assertSame(result, dao.read())
+                if (scenario != "late-difference") assertSame(source, result)
+                for (q in source.queues.indices) {
+                    val before = source.queues[q]
+                    val after = result.queues[q]
+                    assertEquals(before.copy(entries = after.entries), after)
+                    for (index in before.entries.indices) {
+                        val original = before.entries[index]
+                        val actual = after.entries[index]
+                        assertEquals(original.id, actual.id)
+                        assertEquals(original.sourcePlaylistId, actual.sourcePlaylistId)
+                        assertSame(if (scenario == "late-difference" && q == 0 && index == size - 1) replacement else original.track, actual.track)
+                    }
                 }
             }
         }
