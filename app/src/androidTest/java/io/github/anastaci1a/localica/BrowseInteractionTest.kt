@@ -1,6 +1,13 @@
 package io.github.anastaci1a.localica
 
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.LookaheadScope
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -17,6 +24,44 @@ import org.junit.Test
 
 class BrowseInteractionTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun listAndGalleryKeepRowLabelsAndIndependentActions() {
+        var style by mutableStateOf(BrowseStyle(listSize = ListSize.Small, extraInfo = ExtraInfo.Count))
+        val items = listOf("First", "Second").map { BrowserItem(MediaRef(MediaKind.Playlist, it), it, null, emptyList()) }
+        val clicks = mutableListOf<String>()
+        val holds = mutableListOf<String>()
+        val menus = mutableListOf<String>()
+        compose.setContent { LocalicaTheme { LookaheadScope { Column(Modifier.width(320.dp)) {
+            items.forEach { item ->
+                Column(Modifier.testTag("media-${item.key}").combinedClickable(
+                    onClick = { clicks += item.title }, onLongClickLabel = "Collection actions",
+                    onLongClick = { holds += item.title })) {
+                    BrowseItemLayout(item, style, BrowseCellGeometry(1), this@LookaheadScope, true,
+                        menu = { shown -> if (shown) ActionIcon(AppIcon.ActionEllipsis, "Actions for ${item.title}",
+                            role = io.github.anastaci1a.localica.ui.components.TriggerRole.PlainIcon,
+                            onLongClickLabel = "Collection actions", onLongClick = { holds += "menu-${item.title}" }) { menus += item.title } })
+                }
+            }
+        } } } }
+        for (presentation in listOf(Presentation.List, Presentation.Standard)) {
+            compose.runOnIdle { style = style.copy(presentation = presentation) }
+            compose.waitForIdle()
+            items.forEach { item ->
+                val row = compose.onNodeWithTag("media-${item.key}")
+                row.assertTextContains(item.title).assertTextContains("0 songs").assertHasClickAction()
+                    .assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+                row.performClick().performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
+                if (presentation == Presentation.List) {
+                    compose.onNodeWithContentDescription("Actions for ${item.title}").assertHasClickAction()
+                        .performClick().performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
+                } else compose.onNodeWithContentDescription("Actions for ${item.title}").assertDoesNotExist()
+            }
+        }
+        compose.runOnIdle {
+            assertEquals(listOf("First", "Second", "First", "Second"), clicks)
+            assertEquals(listOf("First", "Second"), menus)
+            assertEquals(listOf("First", "menu-First", "Second", "menu-Second", "First", "Second"), holds)
+        }
+    }
     @Test fun longPressStartsSelectionAndCanceledPlaylistDialogKeepsIt() {
         val track = Track("missing", "Repeated", fileName = "tone.mp3", relativePath = "tone.mp3")
         val playlist = PlaylistEdits.append(ManualPlaylist(name = "Mix"), listOf(track, track))

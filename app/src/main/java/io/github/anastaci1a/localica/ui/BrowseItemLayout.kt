@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.anastaci1a.localica.BuildConfig
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.ui.engine.motionPixelRect
 
@@ -55,6 +56,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     val loadingInformation = showInformation && style.extraInfo != ExtraInfo.None
     val infoLine = MaterialTheme.typography.bodySmall.lineHeight
     val galleryLoadingText = if (gallery && loadingReveal != null) rememberGalleryLoadingTextMetrics(style, geometry.columns) else null
+    fun Modifier.partTag(value: String) = if (BuildConfig.DEBUG) testTag(value) else this
     fun Modifier.reveal() = if (loadingReveal == null) this else graphicsLayer { alpha = loadingReveal.alpha }
     fun Modifier.artShape() = graphicsLayer {
         shape = RoundedCornerShape(browseLoadingArtCorner(artCorner.floatValue, size.minDimension,
@@ -89,7 +91,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     Layout(modifier = Modifier.fillMaxWidth().then(if (pinch != null) Modifier.retainPinchText(item.key, pinch) else Modifier)
         .graphicsLayer { alpha = incomingAlpha }, content = {
         Box(Modifier.morph().then(if (gallery && artworkAnchor != null) Modifier.contextMenuAnchor(artworkAnchor,
-            item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist, io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)) else Modifier).testTag("browse-art-${item.key}")) {
+            item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist, io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)) else Modifier).partTag("browse-art-${item.key}")) {
             if (numberAlpha > 0f) Text(numberLabel ?: retainedNumberLabel.orEmpty(), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha * (loadingReveal?.alpha ?: 1f) }.wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             if (artworkAlpha > 0f || artwork(style) || from?.let(::artwork) == true)
@@ -104,13 +106,13 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         // Lazy reuse retains animateBounds' previous dimensions. Applying that tween to a
         // paragraph reveals/reflows it across successive widths when a new row enters.
         // Measure ordinary text at its final width; explicit pinch text owns its own motion.
-        Box(Modifier.reveal().artworkTextReveal(gatedText, { titleLayout }, { artCorner.floatValue }).testTag("browse-text-${item.key}")) {
+        Box(Modifier.reveal().artworkTextReveal(gatedText, { titleLayout }, { artCorner.floatValue }).partTag("browse-text-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, geometryProgress)
             else Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
                 fontWeight = if (numbered(style)) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
                 maxLines = style.browseTitleLines(), overflow = TextOverflow.Ellipsis, onTextLayout = { titleLayout = it })
         }
-        Box(Modifier.reveal().artworkTextReveal(gatedText, { informationLayout }, { artCorner.floatValue }, loadingInformation).testTag("browse-info-${item.key}")) {
+        Box(Modifier.reveal().artworkTextReveal(gatedText, { informationLayout }, { artCorner.floatValue }, loadingInformation).partTag("browse-info-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(informationParagraph,
                 if (showInformation) item.information(style, inheritedInformation) else null, geometryProgress,
                 if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified)
@@ -129,13 +131,13 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         Box(Modifier.morph().reveal().then(if (menuDrawn) Modifier.graphicsLayer { alpha = menuAlpha * textReveal.menuAlpha(artworkAlpha) } else Modifier).then(if (gallery)
             // Keep the layout witness inside the clear boundary; a later testTag
             // modifier would be cleared along with the outgoing action semantics.
-            Modifier.clearAndSetSemantics { testTag = menuTag } else Modifier.testTag(menuTag))) { menu(menuDrawn && menuAlpha > 0f && menuRevealed) }
+            Modifier.clearAndSetSemantics { if (BuildConfig.DEBUG) testTag = menuTag } else Modifier.partTag(menuTag))) { menu(menuDrawn && menuAlpha > 0f && menuRevealed) }
         if (loadingReveal != null) {
-        Box(Modifier.artShape().testTag("browse-loading-art-${item.key}")) {
+        Box(Modifier.artShape().partTag("browse-loading-art-${item.key}")) {
             BrowseLoadingShape(Modifier.fillMaxSize(), { 0f }) { 1f - (loadingReveal?.alpha ?: 1f) }
         }
-        BrowseLoadingShape(Modifier.testTag("browse-loading-title-${item.key}"), { artCorner.floatValue }) { 1f - (loadingReveal?.alpha ?: 1f) }
-        BrowseLoadingShape(Modifier.testTag("browse-loading-info-${item.key}"), { artCorner.floatValue }) { if (loadingInformation) 1f - (loadingReveal?.alpha ?: 1f) else 0f }
+        BrowseLoadingShape(Modifier.partTag("browse-loading-title-${item.key}"), { artCorner.floatValue }) { 1f - (loadingReveal?.alpha ?: 1f) }
+        BrowseLoadingShape(Modifier.partTag("browse-loading-info-${item.key}"), { artCorner.floatValue }) { if (loadingInformation) 1f - (loadingReveal?.alpha ?: 1f) else 0f }
         }
     }) { children, constraints ->
         if (measureEndpoints != null) {
