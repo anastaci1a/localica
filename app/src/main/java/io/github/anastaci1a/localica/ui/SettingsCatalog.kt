@@ -171,7 +171,7 @@ internal object SettingsCatalog {
         if (normalized.isEmpty()) return emptyList()
         val tokens = normalized.split(' ')
         return Index.entries.mapNotNull { (result, name, extra, trail, words) ->
-            val score = tokens.sumOf { token -> when {
+            val score = tokens.fold(0) { total, token -> total + when {
                 name == token -> 100
                 name.startsWith(token) -> 80
                 words.any { it.startsWith(token) } -> 60
