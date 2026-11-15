@@ -76,9 +76,13 @@ class GalleryArtworkSemanticsTest {
                 }
                 return null
             }
-            fun count(node: AccessibilityNodeInfo): Int = 1 + (0 until node.childCount).sumOf { index ->
-                val child = requireNotNull(node.getChild(index))
-                try { count(child) } finally { child.recycle() }
+            val nativeText = mutableSetOf<String>()
+            fun count(node: AccessibilityNodeInfo): Int {
+                nativeText += node.text?.toString().orEmpty()
+                return 1 + (0 until node.childCount).sumOf { index ->
+                    val child = requireNotNull(node.getChild(index))
+                    try { count(child) } finally { child.recycle() }
+                }
             }
             val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
             val original = automation.serviceInfo
@@ -93,11 +97,13 @@ class GalleryArtworkSemanticsTest {
                     try {
                         val art = requireNotNull(find(cell, "browse-art-${item.key}")) { "Public accessibility tree must expose the art owner" }
                         try {
-                            Log.i("GalleryArtCensus", "$label debugCellNodes=${debugCount(compose.onNodeWithTag("cell", true).fetchSemanticsNode())} debugSlotNodes=${debugCount(slot)} exposedCellNodes=${count(cell)} exposedSlotNodes=${count(art)} bounds=${slot.boundsInRoot}")
-                            assertEquals("Image internals cannot grow the exposed slot: $label", 1, count(art))
+                            val exposedCellNodes = count(cell)
+                            val exposedSlotNodes = count(art)
+                            Log.i("GalleryArtCensus", "$label debugCellNodes=${debugCount(compose.onNodeWithTag("cell", true).fetchSemanticsNode())} debugSlotNodes=${debugCount(slot)} exposedCellNodes=$exposedCellNodes exposedSlotNodes=$exposedSlotNodes bounds=${slot.boundsInRoot}")
+                            assertEquals("Image internals cannot grow the exposed slot: $label", 1, exposedSlotNodes)
                         } finally { art.recycle() }
-                        assertTrue(cell.text.toString().contains("Recording title"))
-                        assertTrue(cell.text.toString().contains("Recording artist"))
+                        assertTrue(nativeText.any { it.contains("Recording title") })
+                        assertTrue(nativeText.any { it.contains("Recording artist") })
                         assertTrue(cell.isClickable && cell.isLongClickable)
                     } finally { cell.recycle() }
                 } finally { root.recycle() }
