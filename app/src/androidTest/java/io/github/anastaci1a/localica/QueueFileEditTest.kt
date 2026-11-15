@@ -5,6 +5,7 @@ import android.content.ContextWrapper
 import android.net.Uri
 import android.os.Debug
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
@@ -12,6 +13,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.library.mapView
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.playback.NativeReaders
 import kotlinx.coroutines.*
@@ -30,6 +32,113 @@ import java.util.concurrent.TimeUnit
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class QueueFileEditTest {
+    @Test fun millionEntryReuseComparesEveryCandidateOffMainWithoutCopyingItsSources() {
+        for (catalogSize in listOf(13_400, 50_000)) for (size in listOf(10_000, 100_000, 1_000_000)) {
+            lateinit var entries: EditEntries
+            fixture(attachPlayer = false, timeoutMs = 60_000, initial = { queue ->
+                entries = maintenanceEntries(queue.entries.first().track, catalogSize, size)
+                val active = queue.copy(entries = entries, currentEntryId = "occ:0",
+                    order = io.github.anastaci1a.localica.library.SavedOrder(emptyList()))
+                QueueLibrary(listOf(active, active.copy(id = "other")), active.id)
+            }) {
+                val source = queues.state.value.library
+                val requested = entries.mapView { entry ->
+                    if (entry.id == "occ:${size - 1}") entry.track.copy(id = "missing") else entry.track
+                }
+                val reuse = QueueController::class.java.declaredMethods.single { it.name == "reuse" }.apply { isAccessible = true }
+                entries.mainReads.set(0); entries.workerReads.set(0)
+                measureMaintenance("reuse", catalogSize, size) {
+                    val answer = withContext(Dispatchers.Main) {
+                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean?> {
+                            reuse.invoke(queues, requested, 0, false, "Original", emptyList<String?>(), it)
+                        }
+                    }
+                    assertNull(answer)
+                    assertSame(source, queues.state.value.library)
+                    assertEquals("Active-first and both saved candidates reach the last mismatch", 6 * size, entries.workerReads.get())
+                    assertEquals(0, entries.mainReads.get())
+                }
+            }
+        }
+    }
+
+    @Test fun millionEntryMetadataRefreshSharesExactTracksAndPublishesOffMain() {
+        for (catalogSize in listOf(13_400, 50_000)) for (size in listOf(10_000, 100_000, 1_000_000)) {
+            lateinit var entries: EditEntries
+            fixture(attachPlayer = false, timeoutMs = 60_000, initial = { queue ->
+                entries = maintenanceEntries(queue.entries.first().track, catalogSize, size)
+                val active = queue.copy(entries = entries, currentEntryId = "occ:0",
+                    order = io.github.anastaci1a.localica.library.SavedOrder(emptyList()))
+                QueueLibrary(listOf(active, active.copy(id = "other", positionMs = 1234)), active.id)
+            }) {
+                val source = queues.state.value.library
+                val updates = EditEntries(List(catalogSize) { index ->
+                    val track = entries[index % size].track
+                    QueueEntry(track = track.copy(title = "Edited $index"))
+                }.drop(1).let { it + it.last().copy(track = it.last().track.copy(title = "Last duplicate wins")) })
+                val byId = updates.associate { it.track.id to it.track }
+                entries.mainReads.set(0); entries.workerReads.set(0)
+                updates.mainReads.set(0); updates.workerReads.set(0)
+                val receipts = AtomicInteger()
+                measureMaintenance("refresh", catalogSize, size) {
+                    val completed = CompletableDeferred<Boolean>()
+                    queues.refreshTracks(updates.mapView(QueueEntry::track)) { receipts.incrementAndGet(); completed.complete(it) }
+                    assertTrue(completed.await())
+                    assertEquals(1, receipts.get())
+                    assertEquals(0, entries.mainReads.get())
+                    assertEquals(0, updates.mainReads.get())
+                    assertEquals(updates.size, updates.workerReads.get())
+                }
+                val result = queues.state.value.library
+                assertSame(result, dao.read())
+                assertEquals(source.activeId, result.activeId)
+                for (q in source.queues.indices) {
+                    val before = source.queues[q]
+                    val after = result.queues[q]
+                    assertEquals(before.copy(entries = after.entries), after)
+                    for (index in 0 until size) {
+                        val original = entries[index]
+                        val actual = after.entries[index]
+                        assertEquals(original.id, actual.id)
+                        assertEquals(original.sourcePlaylistId, actual.sourcePlaylistId)
+                        assertSame(byId[original.track.id] ?: original.track, actual.track)
+                        if (original.track.id !in byId) assertSame(original, actual)
+                    }
+                }
+                val failed = CompletableDeferred<Boolean>()
+                dao.failNextSave = true
+                queues.refreshTrack(entries.last().track.copy(title = "Must not publish")) { failed.complete(it) }
+                assertFalse(failed.await())
+                assertSame(result, queues.state.value.library)
+                assertSame(result, dao.read())
+            }
+        }
+    }
+
+    private fun maintenanceEntries(track: Track, catalogSize: Int, size: Int): EditEntries {
+        val catalog = List(catalogSize) { track.copy(id = "content://maintenance/document/$it", title = "Track $it") }
+        return EditEntries(List(size) { index -> QueueEntry(id = "occ:$index", track = catalog[index % catalogSize],
+            sourcePlaylistId = if (index % 2 == 0) "playlist" else null) })
+    }
+
+    private suspend fun measureMaintenance(operation: String, catalogSize: Int, size: Int, action: suspend () -> Unit) = coroutineScope {
+        val runtime = Runtime.getRuntime()
+        fun heap() = runtime.totalMemory() - runtime.freeMemory()
+        val before = Debug.getRuntimeStats()
+        val initial = heap()
+        val peak = java.util.concurrent.atomic.AtomicLong(initial)
+        val sampler = launch(Dispatchers.Default) { while (isActive) { peak.updateAndGet { maxOf(it, heap()) }; delay(5) } }
+        val started = SystemClock.elapsedRealtime()
+        try { action() } finally {
+            sampler.cancelAndJoin()
+            val memory = Debug.MemoryInfo().also(Debug::getMemoryInfo)
+            Log.i("QueueMaintenance1026", "operation=$operation catalog=$catalogSize entries=$size maxHeap=${runtime.maxMemory()} " +
+                "heapBefore=$initial heapPeak=${peak.get()} heapAfter=${heap()} pssKb=${memory.totalPss} " +
+                "nativeHeap=${Debug.getNativeHeapAllocatedSize()} elapsedMs=${SystemClock.elapsedRealtime() - started} " +
+                "gcBefore=$before gcAfter=${Debug.getRuntimeStats()}")
+        }
+    }
+
     @Test fun millionEntryEditMembershipReadsNoEntriesOnMain() {
         lateinit var entries: EditEntries
         fixture(attachPlayer = false, timeoutMs = 60000, initial = { queue ->

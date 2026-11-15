@@ -436,7 +436,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     private suspend fun reuse(tracks: List<Track>, selectedIndex: Int, expandPlayer: Boolean,
         sourceName: String, playlistOrigins: List<String?>): Boolean? {
-        val queue = QueueEdits.equivalent(state.value.library, tracks, sourceName, playlistOrigins) ?: return null
+        val prepared = preparation()
+        val queue = withContext(Dispatchers.Default) { QueueEdits.equivalent(prepared.library, tracks, sourceName, playlistOrigins) }
+        if (!prepared.isCurrent()) return false
+        queue ?: return null
         val selected = selectEntry(queue, queue.entries[selectedIndex].id, expandPlayer)
         if (selected) mutable.update { it.copy(pending = null) }
         return selected
@@ -1060,12 +1063,15 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = refreshTracks(listOf(track), complete)
     fun refreshTracks(tracks: List<Track>, complete: (Boolean) -> Unit) = submit(reject = { complete(false) }) {
-        val byId = tracks.associateBy { it.id }
         try {
             capture()
-            save(state.value.library.copy(queues = state.value.library.queues.map { queue ->
-                queue.copy(entries = queue.entries.map { entry -> byId[entry.track.id]?.let { entry.copy(track = it) } ?: entry })
-            }))
+            val source = state.value.library
+            save(withContext(Dispatchers.Default) {
+                val byId = tracks.associateBy { it.id }
+                source.copy(queues = source.queues.map { queue ->
+                    queue.copy(entries = queue.entries.map { entry -> byId[entry.track.id]?.let { entry.copy(track = it) } ?: entry })
+                })
+            })
             activate(null); complete(true)
         } catch (failure: Exception) { complete(false); throw failure }
     }

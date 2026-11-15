@@ -61,6 +61,57 @@ class QueueSaveOriginTest {
         } finally { dispose(drawer) }
     }
 
+    @Test fun anOpenSaveKeepsItsCapturedQueueWhenTheBrowsedQueueChanges() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val controller = PlaylistController(database.playlists(), scope)
+        var drawer: Drawer? = null
+        try {
+            runBlocking { withTimeout(5000) { controller.state.first { !it.loading } } }
+            val fixture = showDrawer(controller).also { drawer = it }
+            val opened = openSave(fixture)
+            compose.runOnUiThread { fixture.state = fixture.state.copy(browsedId = fixture.playing.id) }
+            compose.onNode(hasSetTextAction()).performTextInput("Captured queue")
+            tap(compose.onNodeWithText("Add", substring = false).assertIsEnabled())
+            pump(fixture) { controller.state.value.playlists.singleOrNull()?.entries?.size == fixture.browsed.entries.size }
+            awaitReturned(fixture, opened)
+            val saved = runBlocking { database.playlists().read() }.single()
+            assertEquals(fixture.browsed.entries.map { it.track }, saved.entries.map { it.track })
+            assertEquals(fixture.playing.id, fixture.state.browsedId)
+        } finally { drawer?.let(::dispose); scope.cancel(); database.close() }
+    }
+
+    @Test fun millionEntrySaveDialogAdmissionDoesNotEnumerateTracksOnMain() {
+        val catalog = List(50_000) { index -> Track("test:$index", "Song $index", id = "track:$index",
+            fileName = "$index.mp3", relativePath = "$index.mp3", durationMs = 1000) }
+        val rows = List(1_000_000) { QueueEntry(id = "entry:$it", track = catalog[it % catalog.size]) }
+        val watching = java.util.concurrent.atomic.AtomicBoolean(false)
+        val mainReads = java.util.concurrent.atomic.AtomicInteger()
+        val entries = object : AbstractList<QueueEntry>() {
+            override val size = rows.size
+            override fun get(index: Int): QueueEntry {
+                if (watching.get() && android.os.Looper.myLooper() == android.os.Looper.getMainLooper() &&
+                    Thread.currentThread().stackTrace.any { it.className == "io.github.anastaci1a.localica.ui.QueueScreenKt" && it.methodName == "QueueScreen" })
+                    mainReads.incrementAndGet()
+                return rows[index]
+            }
+        }
+        val drawer = showDrawer(entries = entries)
+        try {
+            // Initial header preparation is #1021; observe only the subsequent Save admission.
+            val before = android.os.Debug.getRuntimeStats()
+            watching.set(true)
+            val opened = openSave(drawer)
+            assertEquals("The real QueueScreen must borrow the source instead of mapping it in composition", 0, mainReads.get())
+            android.util.Log.i("QueueMaintenance1026", "operation=save catalog=50000 entries=1000000 mainReads=${mainReads.get()} " +
+                "maxHeap=${Runtime.getRuntime().maxMemory()} heap=${Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }} " +
+                "gcBefore=$before gcAfter=${android.os.Debug.getRuntimeStats()}")
+            tap(compose.onNodeWithText("Cancel", substring = false))
+            awaitReturned(drawer, opened)
+        } finally { watching.set(false); dispose(drawer) }
+    }
+
     @Test fun restoredSaveReopensBeforeBodyRestWithoutCompetingOwners() {
         val drawer = showDrawer()
         try {
@@ -152,12 +203,15 @@ class QueueSaveOriginTest {
         } finally { drawer?.let(::dispose); scope.cancel(); database.close() }
     }
 
-    private class Drawer {
+    private class Drawer(entries: List<QueueEntry>? = null) {
         private fun song(id: String) = Track("test:$id", id, fileName = "$id.mp3", relativePath = "$id.mp3")
         private val repeated = song("Repeated")
         val playing = QueueEdits.create(listOf(song("Playing only")), 0, "Playing queue")
-        val browsed = QueueEdits.create(listOf(repeated, song("Middle"), repeated), 1, "Browsed queue")
-        val state = QueueUiState(QueueLibrary(listOf(playing, browsed), playing.id), loading = false, browsedId = browsed.id)
+        val browsed = QueueEdits.create(listOf(repeated, song("Middle"), repeated), 1, "Browsed queue").let {
+            if (entries == null) it else it.copy(entries = entries, currentEntryId = entries[1].id,
+                order = io.github.anastaci1a.localica.library.SavedOrder(emptyList()))
+        }
+        var state by mutableStateOf(QueueUiState(QueueLibrary(listOf(playing, browsed), playing.id), loading = false, browsedId = browsed.id))
         val originalQueue = state.copy()
         val selection = SessionSelection().apply {
             select(MediaRef(MediaKind.Queue, browsed.id), listOf(browsed.entries[1].let { SongRow(it.id, it.track) }))
@@ -179,8 +233,8 @@ class QueueSaveOriginTest {
         val anchor: GlassAnchor get() = entry.anchor
     }
 
-    private fun showDrawer(controller: PlaylistController? = null): Drawer {
-        val drawer = Drawer()
+    private fun showDrawer(controller: PlaylistController? = null, entries: List<QueueEntry>? = null): Drawer {
+        val drawer = Drawer(entries)
         compose.setContent { if (drawer.present) LocalicaTheme {
             val host = requireNotNull(LocalGlassDialogs.current)
             val sourceView = LocalView.current

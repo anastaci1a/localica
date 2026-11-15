@@ -1858,6 +1858,42 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun playerReplacementDuringReuseRejectsBothMatchAndNoMatchWithoutCreating() {
+        for (matches in listOf(true, false)) fixture {
+            val gate = Gate()
+            val armed = java.util.concurrent.atomic.AtomicBoolean(true)
+            val requested = object : AbstractList<Track>() {
+                override val size = first.entries.size
+                override fun get(index: Int): Track {
+                    if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper() && armed.getAndSet(false))
+                        runBlocking { gate.await() }
+                    val value = first.entries[index].track
+                    return if (!matches && index == size - 1) value.copy(id = "mismatch") else value
+                }
+            }
+            val replacement = newPlayer()
+            var detached: Deferred<Unit>? = null
+            try {
+                queues.tap(requested, 0, sourceName = first.name)
+                gate.entered.await()
+                withContext(Dispatchers.Main) {
+                    detached = queues.detach(player)
+                    queues.attach(replacement)
+                }
+                gate.release.complete(Unit)
+                detached?.await(); barrier()
+                withContext(Dispatchers.Main) {
+                    assertEquals(listOf(first.id, second.id), queues.state.value.library.queues.map { it.id })
+                    assertEquals(first.currentEntryId, queues.state.value.library.active!!.currentEntryId)
+                    assertEquals(0L, queues.state.value.playerRequest)
+                    assertNull(queues.state.value.pending)
+                    assertNull(queues.state.value.problem)
+                    assertFalse(replacement.playWhenReady)
+                }
+            } finally { gate.release.complete(Unit) }
+        }
+    }
+
     @Test fun generationLossDuringEditMembershipPreparationRejectsTheLibraryAndAnswer() = fixture(duplicateOccurrences = true) {
         awaitMain { player.engine.playbackState == Player.STATE_READY }
         withHeldEdit("absent") {
