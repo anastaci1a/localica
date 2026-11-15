@@ -172,7 +172,7 @@ class BrowseQueueProjectionTest {
         val songResult = songs()
         listOf(BrowseResult(songResult.items, SongListView.Search, rows = songResult.rows, keys = songResult.keys),
             BrowseResult(songResult.items, artistAlbums = listOf(LibraryGroup("a", "A", null, emptyList())), rows = songResult.rows, keys = songResult.keys),
-            BrowseResult(), BrowseResult(songResult.items, rows = emptyList(), keys = songResult.keys),
+            BrowseResult(emptyList(), rows = songResult.rows, keys = songResult.keys), BrowseResult(songResult.items, rows = emptyList(), keys = songResult.keys),
             BrowseResult(songResult.items, rows = songResult.rows, keys = emptyList())).forEach { assertNotEquals(songResult, it) }
         assertEquals("elements read by owner equality", 0, reads)
     }
