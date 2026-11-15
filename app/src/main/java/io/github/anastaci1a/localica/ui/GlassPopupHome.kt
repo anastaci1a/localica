@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
@@ -93,8 +94,8 @@ internal fun Modifier.glassPopupHome(home: GlassPopupHome): Modifier {
 
 private fun ContentDrawScope.projectFlights(home: GlassPopupHome, receipts: ((GlassDrawReceipt) -> Unit)?) {
     home.flights.forEach { flight ->
-        // wasProjected is this frame's receipt: only a frame without the flight releases its presenter's source latch.
-        if (!flight.prepared) flight.wasProjected = false
+        // Receipts of this draw (S1): a frame without the flight releases it; a frame with it takes the offer.
+        if (!flight.prepared) Snapshot.withoutReadObservation { flight.receipt(PopupEvent.OfferReleased) }
         flight.revision
         val layer = flight.layer
         // prepared is published only after the native presenter selected the
@@ -103,9 +104,8 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome, receipts: ((Gl
             if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
             val offset = flight.origin - flight.homeOrigin
             drawPopupProjection(layer, offset)
-            flight.handedOff = true
-            flight.wasProjected = true
-            try { receipts?.invoke(GlassProjectionReceipt(System.identityHashCode(home), System.identityHashCode(flight), System.identityHashCode(layer), flight.revision, listOf(offset.x, offset.y))) } catch (_: Throwable) { }
+            Snapshot.withoutReadObservation { flight.receipt(PopupEvent.OfferTaken) }
+            reportGlass(receipts) { GlassProjectionReceipt(System.identityHashCode(home), System.identityHashCode(flight), System.identityHashCode(layer), flight.revision, listOf(offset.x, offset.y)) }
         }
     }
 }

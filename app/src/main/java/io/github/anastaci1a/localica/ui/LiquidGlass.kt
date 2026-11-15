@@ -79,8 +79,10 @@ internal data class GlassSurfaceDrawObservation(
 internal val LocalGlassSurfaceDrawObserver = staticCompositionLocalOf<((GlassDrawReceipt) -> Unit)?> { null }
 /** Tests only (like [pinchDrawProbe]): the default observer for compositions a test cannot wrap; compiled out of release. */
 internal var glassDrawProbe: ((GlassDrawReceipt) -> Unit)? = null
-@Composable internal fun glassDrawObserver() = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) LocalGlassSurfaceDrawObserver.current ?: glassDrawProbe else null
-internal fun io.github.anastaci1a.localica.ui.engine.UiClock?.diagnosticRead(block: () -> Unit) { this?.observe(block) }
+@Composable internal fun glassDrawObserver() = glassReceipts(LocalGlassSurfaceDrawObserver.current)
+/** The one receipt sink: [local] or the test probe, and null in release. [reportGlass] keeps a failing observer out of drawing and state steps. */
+internal fun glassReceipts(local: ((GlassDrawReceipt) -> Unit)? = null) = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) local ?: glassDrawProbe else null
+internal fun reportGlass(sink: ((GlassDrawReceipt) -> Unit)?, receipt: () -> GlassDrawReceipt) { if (sink != null) try { sink(receipt()) } catch (_: Throwable) { } }
 
 private fun surfaceDrawIdentity(value: Any?): Int? = value?.let(System::identityHashCode)
 private fun List<Offset>.surfaceDrawScalars(): List<Float>? =
@@ -347,7 +349,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             // readback, invalidation or filter traversal. Diagnostic reads cannot subscribe drawing
             // to new snapshot state or mark a motion presented; construction AND callback failures are isolated from rendering.
             if (drawObserver != null) try {
-                observedClock.diagnosticRead {
+                observedClock?.observe {
                     val shadows = requireNotNull(observedShadowAppearance)
                     val coordinates = location.coordinates?.takeIf { it.isAttached }
                     val localCorners = listOf(Offset.Zero, Offset(size.width, 0f),
