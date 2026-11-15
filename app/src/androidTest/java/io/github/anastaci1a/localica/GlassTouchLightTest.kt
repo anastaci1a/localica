@@ -116,6 +116,8 @@ class GlassTouchLightTest {
         val residualMax = IntArray(6); val residualPairs = Array(6) { "" }
         val rimWitnessMax = IntArray(3); val rimWitnesses = Array(3) { "" }
         val pixelMax = IntArray(4); val pixelRealMax = FloatArray(4); val pixelWitnesses = Array(4) { "" }
+        val stagedMax = IntArray(4); val stagedWitnesses = Array(4) { "" }
+        val secondMax = IntArray(2); val secondWitnesses = Array(2) { "" }
         for (circle in listOf(false, true)) {
             val cache = GlassRimCache()
             val dark = render(extent.center, 0f, radius, circle)
@@ -133,11 +135,33 @@ class GlassTouchLightTest {
                 clipPath(path) { drawPath(path, Color.White, style = Stroke(5.2f)) }
             })
             val doubledRim = render(extent.center, .12f, radius, circle, rimGain = 4f)
-            fun reference(point: Offset, x: Int, y: Int, shift: Int, op: Int, rimMask: IntArray = rimCoverage): Float {
+            fun reference(point: Offset, x: Int, y: Int, shift: Int, op: Int, rimMask: IntArray = rimCoverage, quantized: Boolean = false): Float {
                 val falloff = max(0f, 1 - (Offset(x + .5f, y + .5f) - point).getDistance() / radius)
                 val fillAlpha = .12f * falloff * channel(fillCoverage[y * width + x], 0) / 255
                 val rimAlpha = if (op == 0) 0f else .24f * falloff * channel(rimMask[y * width + x], 0) / 255
+                if (quantized) {
+                    val first = (255 - (255 - channel(background.toArgb(), shift)) * (1 - fillAlpha)).roundToInt()
+                    return 255 - (255 - first) * (1 - rimAlpha)
+                }
                 return 255 - (255 - channel(background.toArgb(), shift)) * (1 - fillAlpha) * (1 - rimAlpha)
+            }
+            if (circle) {
+                val tokenCoverage = render(extent.center, 0f, radius, circle, coverage = { path ->
+                    clipPath(path) { drawPath(path, Color.White, style = Stroke(io.github.anastaci1a.localica.ui.spec.TouchLightRimWidth.toPx())) }
+                })
+                for (side in 0..1) {
+                    val point = Offset(if (side == 0) 24f else 72f, 40f)
+                    val x = if (side == 0) 76 else 19; val y = 66; val index = y * width + x
+                    val actual = if (side == 0) left else right
+                    val first = if (side == 0) fillLeft else fillRight
+                    val explicit = render(point, .12f, radius, circle, rimGain = 2f)
+                    val rimAlpha = .24f * max(0f, 1 - (Offset(x + .5f, y + .5f) - point).getDistance() / radius) * channel(rimCoverage[index], 0) / 255
+                    for (shift in listOf(0, 8, 16)) {
+                        val fillByte = channel(first[index], shift); val composed = channel(actual[index], shift)
+                        val second = 255 - (255 - fillByte) * (1 - rimAlpha)
+                        android.util.Log.i("Localica642", "pin ($x,$y) contact=$point channel=$shift nativeFill=$fillByte composed=$composed explicit=${channel(explicit[index], shift)} defaultExplicitEqual=${actual.contentEquals(explicit)} fillMask=${channel(fillCoverage[index], 0)} rimMask=${channel(rimCoverage[index], 0)} tokenMask=${channel(tokenCoverage[index], 0)} masksEqual=${rimCoverage.contentEquals(tokenCoverage)} idealFill=${reference(point, x, y, shift, 0)} idealFinal=${reference(point, x, y, shift, 1)} secondFromActual=$second stagedFinal=${reference(point, x, y, shift, 1, quantized = true)}")
+                    }
+                }
             }
             if (!circle) for (x in 0 until width) for (shift in listOf(0, 8, 16)) {
                 val expected = reference(extent.center, x, 40, shift, 1).roundToInt()
@@ -183,6 +207,18 @@ class GlassTouchLightTest {
                         val group = op * 2 + if (full) 0 else 1
                         val actual = channel((if (endpoint == 0) a else b)[index], shift)
                         val pixelError = abs(actual - expected.roundToInt())
+                        val point = if (endpoint == 0) pointA else pointB
+                        val sx = if (endpoint == 0) x else px; val sy = if (endpoint == 0) y else py
+                        val staged = reference(point, sx, sy, shift, op, quantized = true)
+                        val stagedError = abs(actual - staged.roundToInt())
+                        if (stagedError > stagedMax[group]) { stagedMax[group] = stagedError; stagedWitnesses[group] = "$pair endpoint=$endpoint staged=$staged" }
+                        if (op == 1) {
+                            val first = if (axis == 2) (if (endpoint == 0) fillLeft else fillRight) else fill
+                            val rimAlpha = .24f * max(0f, 1 - (Offset(sx + .5f, sy + .5f) - point).getDistance() / radius) * channel(rimCoverage[index], 0) / 255
+                            val second = 255 - (255 - channel(first[index], shift)) * (1 - rimAlpha)
+                            val error = abs(actual - second.roundToInt()); val partial = if (full) 0 else 1
+                            if (error > secondMax[partial]) { secondMax[partial] = error; secondWitnesses[partial] = "$pair endpoint=$endpoint secondFromActual=$second" }
+                        }
                         pixelRealMax[group] = max(pixelRealMax[group], abs(actual - expected))
                         if (pixelError > pixelMax[group]) { pixelMax[group] = pixelError; pixelWitnesses[group] = "$pair endpoint=$endpoint" }
                     }
@@ -196,6 +232,7 @@ class GlassTouchLightTest {
             assertSame(cache.lightStroke(2.6f), cache.lightStroke(2.6f))
             assertNotSame(cache.light(Offset.Zero, radius, GlassTone()), cache.light(Offset.Zero, radius, GlassTone(.25f)))
         }
+        android.util.Log.i("Localica642", "quantized staged roundedMax=${stagedMax.toList()} worst=${stagedWitnesses.toList()}; isolated second full/partial=${secondMax.toList()} worst=${secondWitnesses.toList()}")
         android.util.Log.i("Localica642", "rim sensitivity omitted/native doubled gain/ideal doubled width roundedError=${rimWitnessMax.toList()} witnesses=${rimWitnesses.toList()}")
         android.util.Log.i("Localica642", "coverage masks fill/rim x/y/mirrorMax=${coverageMax.toList()} worstPairs=${coveragePairs.toList()}")
         android.util.Log.i("Localica642", "coverage reference fill full/partial, composed full/partial roundedMax=${pixelMax.toList()} realMax=${pixelRealMax.toList()} worst=${pixelWitnesses.toList()}")
