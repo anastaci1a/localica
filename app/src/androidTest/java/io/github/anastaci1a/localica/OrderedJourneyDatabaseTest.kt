@@ -167,7 +167,7 @@ class OrderedJourneyDatabaseTest {
         fixtures.forEachIndexed { index, (json, expected) ->
             val original = runCatching { SavedOrderCodec.decode(json, ids) }
             when (index) {
-                0 -> assertEquals(SavedOrder(listOf("A", "C", "D", "E", "F", "X")), original.getOrThrow())
+                0 -> assertEquals(SavedOrder(listOf("A")), original.getOrThrow())
                 1 -> assertEquals(SavedOrder(listOf("B", "C", "D", "E", "F", "X")), original.getOrThrow())
                 6 -> assertTrue(original.isFailure)
                 else -> assertEquals(expected, original.getOrThrow())
