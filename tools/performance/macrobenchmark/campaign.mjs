@@ -1,23 +1,26 @@
 // Consume the accepted #971 plain runner's text metrics; never substitute emulator JSON.
 import fs from 'node:fs';
 import path from 'node:path';
-import {median} from './ratchet.mjs';
+import {median, metricsFor, protocol} from './ratchet.mjs';
 const [mode, directory, identityFile, output] = process.argv.slice(2);
 if (!['pack', 'anchor'].includes(mode) || !output) throw new Error('Use pack|anchor RUN_DIRECTORY IDENTITY_JSON OUTPUT_JSON');
 if (fs.existsSync(output)) throw new Error('Refuse to overwrite an accepted campaign or anchor');
-const protocol = JSON.parse(fs.readFileSync(new URL('./scenarios.json', import.meta.url)));
 const identity = JSON.parse(fs.readFileSync(identityFile));
 const surfaces = {}, inventory = [];
-const metrics = ['p50_ms', 'p95_ms', 'main_cpu_ms', 'java_allocated_mb', 'gc_count'];
 for (const scenario of protocol.scenarios) {
     const dir = path.join(directory, scenario.id), runs = [];
     for (const name of fs.readdirSync(dir).filter(name => /^run-\d+$/.test(name)).sort()) {
-        const raw = JSON.parse(fs.readFileSync(path.join(dir, name, 'metrics.json')));
+        const runDir = path.join(dir, name), raw = JSON.parse(fs.readFileSync(path.join(runDir, 'metrics.json')));
         inventory.push({surface: scenario.id, run: name, qualified: raw.qualified, error: raw.error});
         if (raw.qualified !== true) continue;
         if (raw.arm !== 'plain' || raw.compilation !== 'speed-profile' || raw.fixture?.tracks !== 13400 ||
             raw.fixture?.queueEntries !== 13400 || raw.error || !(raw.frames > 0)) throw new Error('Invalid plain runner qualification: ' + dir + '/' + name);
-        const selected = scenario.id === 'cold-start' ? [...metrics, 'cold_start_first_frame_ms'] : metrics;
+        for (const phase of ['pre', 'post']) if (JSON.parse(fs.readFileSync(path.join(runDir, phase + '.json'))).rejections.length)
+            throw new Error('Rejected device health: ' + runDir);
+        if (fs.readFileSync(path.join(runDir, 'screenrecord.txt'), 'utf8').trim() ||
+            JSON.parse(fs.readFileSync(path.join(runDir, 'background-qualification.json'))).rejected.length)
+            throw new Error('Recording or background contamination: ' + runDir);
+        const selected = metricsFor(scenario.id);
         const values = Object.fromEntries(selected.map(key => [key, raw[key]]));
         for (const value of Object.values(values)) if (!Number.isFinite(value) || value < 0) throw new Error('Missing metric: ' + dir + '/' + name);
         runs.push({qualified: true, metrics: values});

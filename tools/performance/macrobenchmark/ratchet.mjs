@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
+export const protocol = JSON.parse(fs.readFileSync(new URL('./scenarios.json', import.meta.url)));
+export const metricsFor = id => ['p50_ms', 'p95_ms', 'main_cpu_ms', 'java_allocated_mb', 'gc_count',
+    ...(id === 'cold-start' ? ['cold_start_first_frame_ms'] : [])];
 
 export function median(values) {
     if (values.length < 5 || values.some(value => !Number.isFinite(value) || value < 0)) throw new Error('Need at least five finite nonnegative samples');
@@ -13,6 +16,8 @@ export function check(anchor, candidate) {
     }
     if (candidate.qualification !== 'plain' || candidate.compilation !== 'speed-profile' || candidate.screenrecord !== false)
         throw new Error('Only qualified plain speed-profile captures can pass');
+    for (const {id} of protocol.scenarios) for (const metric of metricsFor(id))
+        if (!anchor.bars?.[id]?.[metric]) throw new Error('Incomplete anchor: ' + id + '/' + metric);
     const results = [];
     for (const [surface, metrics] of Object.entries(anchor.bars)) {
         const runs = candidate.surfaces[surface];
@@ -32,7 +37,7 @@ export function check(anchor, candidate) {
 }
 
 export function tighten(anchor, first, second) {
-    if (!first.runId || first.runId === second.runId) throw new Error('Two independent confirmations required');
+    if (!first.runId || !second.runId || first.runId === second.runId) throw new Error('Two independent confirmations required');
     const a = check(anchor, first), b = check(anchor, second);
     if (!a.pass || !b.pass) throw new Error('Cannot tighten with a failing campaign');
     const next = structuredClone(anchor);
@@ -51,6 +56,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const result = command === 'check' ? check(read(anchorFile), read(firstFile)) :
         command === 'tighten' ? tighten(read(anchorFile), read(firstFile), read(secondFile)) :
         (() => { throw new Error('Use check ANCHOR CANDIDATE OUTPUT or tighten ANCHOR FIRST SECOND OUTPUT'); })();
+    if (command === 'tighten' && fs.existsSync(outputFile)) throw new Error('Refuse to overwrite an anchor');
     fs.writeFileSync(command === 'check' ? secondFile : outputFile, JSON.stringify(result, null, 2) + '\n');
     if (result.pass === false) process.exitCode = 1;
 }
