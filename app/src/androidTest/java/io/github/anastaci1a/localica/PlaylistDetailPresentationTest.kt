@@ -65,7 +65,7 @@ class PlaylistDetailPresentationTest {
         val plays = mutableListOf<List<SongRow>>()
     }
     private fun fixture(initial: ManualPlaylist = playlist, controller: PlaylistController? = null,
-        queues: QueueController? = null): Fixture {
+        queues: QueueController? = (context.applicationContext as LocalicaApplication).queues): Fixture {
         val f = Fixture(initial, tracks)
         BrowsePreferences(context).write(f.route, BrowseStyle(quickSearch = true), true)
         compose.setContent { EngineTheme(reduced = true) {

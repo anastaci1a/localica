@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
  * With Group by album off (#694), the sort orders the songs themselves and the carousel keeps album order. */
 class ArtistAlbumSortOrderTest {
     @get:Rule val compose = createComposeRule()
+    private val queues get() = (InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as LocalicaApplication).queues
     private var detail = ""
 
     /** The shared choice must not leak into other suites on the same device. */
@@ -61,7 +62,7 @@ class ArtistAlbumSortOrderTest {
         compose.setContent { LocalicaTheme {
             Box(Modifier.requiredWidth(1400.dp).height(900.dp)) {
                 BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route,
-                    {}, {}, {}, { rows, _, _ -> played = rows.map { it.track } }, null, null, true, false,
+                    {}, {}, {}, { rows, _, _ -> played = rows.map { it.track } }, queues, null, true, false,
                     queryDispatcher = Dispatchers.Unconfined)
             }
         } }

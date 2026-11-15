@@ -78,7 +78,10 @@ class CollectionHeaderPinchFrameTest {
                 queues = QueueController(queueDb.queues(), queuePreferences,
                     (context.applicationContext as LocalicaApplication).library, queueScope)
                 queueScope.launch {
-                    queues.state.map { it.library.activeId }.filterNotNull().distinctUntilChanged().collect { playbackCalls++ }
+                    queues.state.map { it.playerRequest }.distinctUntilChanged().collect {
+                        if (it > 0 && !allowPlayback) fail("A pinch must not start playback")
+                        playbackCalls = it.toInt()
+                    }
                 }
             }
             compose.waitUntil(5000) { !queues.state.value.loading }
@@ -90,7 +93,7 @@ class CollectionHeaderPinchFrameTest {
                     LocalCollectionHeaderActionSamplingObserver provides { sampling += it }) {
                     Box(Modifier.fillMaxSize()) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route, {}, {}, {},
-                            { _, _, _ -> if (!allowPlayback) fail("A pinch must not start playback") else playbackCalls++ }, queues, null, true, false,
+                            { rows, index, scope -> if (!allowPlayback) fail("A pinch must not start playback") else queues.tap(rows, index, scope, route) }, queues, null, true, false,
                             queryDispatcher = Dispatchers.Unconfined)
                     }
                 }
@@ -264,6 +267,7 @@ class CollectionHeaderPinchFrameTest {
             val play = if (artist) "Play selected albums" else "Play album"
             compose.onAllNodesWithContentDescription(play).assertCountEquals(1)
             compose.onNodeWithContentDescription(play).performTouchInput { click() }
+            compose.waitUntil(5000) { playbackCalls == 1 }
             compose.runOnIdle { assertEquals("The original action still receives coordinate input once", 1, playbackCalls) }
             if (artist) {
                 compose.onAllNodesWithContentDescription("Shuffle selected albums").assertCountEquals(1)

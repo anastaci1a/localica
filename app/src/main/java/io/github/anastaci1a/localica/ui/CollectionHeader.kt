@@ -73,7 +73,7 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
 
 @Composable
 internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVisual, artist: Boolean,
-    enabled: Boolean, onPlay: () -> Unit, onShuffle: (() -> Unit)?, playlist: Boolean = false,
+    enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit, playlist: Boolean = false,
     pinchHeader: CollectionPinchHeader? = null, onActionBottom: (Float) -> Unit = {}) {
     var headerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val headerDensity = androidx.compose.ui.platform.LocalDensity.current
@@ -113,7 +113,7 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ActionIconButton(onPlay, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(appIconPainter(AppIcon.TransportPlay), if (playlist) "Play playlist" else "Play selected albums", Modifier.size(30.dp)) }
                         GlassPillDivider()
-                        ActionIconButton(onShuffle ?: {}, Modifier.size(72.dp, 64.dp), enabled = enabled && onShuffle != null) { Icon(appIconPainter(AppIcon.ActionShuffle), if (playlist) "Shuffle playlist" else "Shuffle selected albums", Modifier.size(30.dp)) }
+                        ActionIconButton(onShuffle, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(appIconPainter(AppIcon.ActionShuffle), if (playlist) "Shuffle playlist" else "Shuffle selected albums", Modifier.size(30.dp)) }
                     }
                 } else LiquidGlassSurface(Modifier.size(64.dp)) {
                     describeAction()

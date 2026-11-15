@@ -1126,10 +1126,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             CompositionLocalProvider(LocalFrostedBackdrop provides collectionSource) {
                                 CollectionHeader(detailPlaylist?.name ?: route.title ?: seededCollection?.title.orEmpty(), if (playlistDetail) songCountLabel(detailPlaylist?.entries?.size ?: 0)
                                     else if (artistDetail) null else (sourceResult.rows.firstOrNull()?.track ?: seededCollection?.songs?.firstOrNull()?.track)?.let { it.albumArtist ?: it.artist },
-                                    hero, artistDetail, enabled && result.rows.isNotEmpty(),
-                                    onPlay = { onPlay(result.rows, 0, result.scope) }, onShuffle = queues?.let { owner ->
-                                        { owner.randomizedQueue(result.rows.mapView { it.track }, route.title ?: "Collection", result.rows.mapView { it.sourcePlaylistId }) }
-                                    }, playlist = playlistDetail, pinchHeader = pinchHeader,
+                                    hero, artistDetail, enabled && result.rows.isNotEmpty() && queues != null,
+                                    onPlay = { onPlay(result.rows, 0, result.scope) }, onShuffle = { queues!!.randomizedQueue(result.rows.mapView(SongRow::track),
+                                        route.title ?: "Collection", result.rows.mapView(SongRow::sourcePlaylistId)) }, playlist = playlistDetail, pinchHeader = pinchHeader,
                                     onActionBottom = { collectionActionBottom = it })
                                 if (artistDetail) ArtistAlbumChoices(albums, validAlbums, ::chooseArtistAlbums)
                                 if ((artistDetail || playlistDetail) && showSearchPill) Box(Modifier.fillMaxWidth().then(searchSlotLayout)
