@@ -90,11 +90,13 @@ internal fun unitTarget(shown: Boolean)=if (shown) 1f else 0f
 @Composable internal fun rememberNormalizedMotionFloat(key: Any, initial: Float, target: () -> Float,
     profile: MotionProfile, offProfile: MotionProfile): MotionValue {
     val motion = rememberNormalizedMotionFloat(key, initial)
-    val request by rememberUpdatedState(target)
-    LaunchedEffect(motion, profile, offProfile) { snapshotFlow { request() }.collect {
-        motion.retarget(it, motionProfileId(if (it == 0f) offProfile else profile))
-    } }
+    ProfileIntent(motion, target, profile, offProfile)
     return motion
+}
+@Composable private fun ProfileIntent(motion: MotionFloat, target: () -> Float, profile: MotionProfile, offProfile: MotionProfile) {
+    ownerClock()
+    val requested = target()
+    SideEffect { motion.retarget(requested, motionProfileId(if (requested == 0f) offProfile else profile)) }
 }
 
 internal fun commitAtomic(entries: List<Pair<MotionFloat,MotionIntent>>,drive: Boolean=false) { require(entries.isNotEmpty() && entries.map { it.first }.distinct().size==entries.size); val clock=entries.first().first.clock; val stamp=entries.first().second.stamp; require(entries.all { it.first.clock===clock && it.second.stamp===stamp }); val plans=entries.mapNotNull { it.second.next.let { t -> (t as? Eased)?.plan?.let { p -> p to p.stamp } ?: (t as? Damped)?.plan?.let { p -> p to p.stamp } } }; require(plans.isEmpty() || plans.first().second===stamp && plans.all { it.first===plans.first().first } && entries.all { it.second.descriptor===plans.first().first }) { "Atomic channels require one source plan" }; entries.forEach { (m,i) -> m.validate(i) }; entries.forEach { (m,i) -> if(drive) m.commitDrive(i,false) else m.commit(i,false) }; entries.forEach { (m,i) -> if(drive) m.emitDrive(i) else m.emit(i) } }

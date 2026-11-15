@@ -105,7 +105,6 @@ class GlassTouchLightTest {
         val draw = File(root, "GlassRimCache.kt").readText().substringAfter("internal inline fun DrawScope.drawContactLight")
         val zero = draw.indexOf("if (alpha == 0f) return")
         assertTrue(zero >= 0 && zero < draw.indexOf("path()") && zero < draw.indexOf("point()"))
-        assertTrue(source.contains("MotionProfile.TouchLight, io.github.anastaci1a.localica.ui.spec.MotionProfile.ControlOff"))
         assertEquals(1f, GlassAppearance().touchLight, 0f)
         for (strength in listOf(Float.NaN, Float.POSITIVE_INFINITY)) assertEquals(1f, GlassAppearance(touchLight = strength).normalized().touchLight, 0f)
         assertEquals(0f, GlassAppearance(touchLight = -1f).normalized().touchLight, 0f)

@@ -128,7 +128,8 @@ data class GlassAppearance(
     val overlayForeground: Boolean = false,
     val renderer: GlassRendererMode = GlassRendererMode.Normal,
     /** Lift shadow strength under selected and floating items, as a multiple of [shadowStrength] (#553). */
-    val liftShadowStrength: Float = LiftShadowDefault, val touchLight: Float = 1f,
+    val liftShadowStrength: Float = LiftShadowDefault,
+    val touchLight: Float = 1f,
 ) {
     fun normalized() = GlassAppearance(blur.unit(.2f), whiteTint.unit(.06f),
         shadowStrength.unit(.12f), shadowSpread.unit(.6f), contrast.unit(.25f).coerceAtMost(.5f), tabStyle,

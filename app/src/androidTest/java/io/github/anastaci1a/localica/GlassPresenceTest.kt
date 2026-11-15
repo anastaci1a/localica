@@ -12,13 +12,99 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.components.rememberProfileValue
+import io.github.anastaci1a.localica.ui.engine.*
+import io.github.anastaci1a.localica.ui.spec.*
+import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
 class GlassPresenceTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun profileAdapterSelectsRiseAndFallAndRetainsScalarTargets() {
+        lateinit var harness: EngineHarness
+        lateinit var producer: MotionValue
+        lateinit var scalar: MotionValue
+        var requested by mutableFloatStateOf(0f)
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { harness = EngineHarness() }
+        try {
+            compose.setContent { ProfileRecord(harness) {
+                producer = rememberProfileValue("producer", { requested }, MotionProfile.TouchLight, MotionProfile.ControlOff)
+                scalar = rememberProfileValue("scalar", requested, MotionProfile.Control)
+            } }
+            compose.runOnIdle { requested = 1f }
+            compose.mainClock.advanceTimeByFrame()
+            compose.runOnIdle {
+                assertEquals(1f, producer.target, 0f); assertEquals(1f, scalar.target, 0f)
+                harness.advance(.099); assertFalse(producer.settled)
+                harness.advance(.001); assertTrue(producer.settled); assertEquals(1f, producer.value(), 0f)
+                harness.advance(.079); assertFalse(scalar.settled)
+                harness.advance(.001); assertTrue(scalar.settled)
+                requested = 0f
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.runOnIdle {
+                assertEquals(0f, producer.target, 0f); assertEquals(0f, scalar.target, 0f)
+                harness.advance(.179); assertFalse(scalar.settled)
+                harness.advance(.001); assertTrue(scalar.settled)
+                harness.advance(.089); assertFalse(producer.settled)
+                harness.advance(.001); assertTrue(producer.settled); assertEquals(0f, producer.value(), 0f)
+            }
+        } finally { compose.runOnIdle { harness.close() } }
+    }
+
+    @Test fun unchangedScalarTargetJoinsLiveLawAndSpeedContinuously() {
+        lateinit var harness: EngineHarness
+        lateinit var motion: MotionFloat
+        var requested by mutableFloatStateOf(0f)
+        var duration by mutableIntStateOf(180)
+        var speed by mutableFloatStateOf(1f)
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { harness = EngineHarness() }
+        try {
+            compose.setContent { ProfileRecord(harness, duration, speed) {
+                motion = rememberProfileValue("scalar", requested, MotionProfile.Control) as MotionFloat
+            } }
+            for (changeLaw in listOf(true, false)) {
+                compose.runOnIdle { requested = 1f - requested }
+                compose.mainClock.advanceTimeByFrame()
+                lateinit var owner: MotionFloat
+                lateinit var stamp: FrameStamp
+                lateinit var before: Kinematic
+                var epoch = 0
+                compose.runOnIdle {
+                    harness.advance(.04)
+                    owner = motion; stamp = harness.clock.stampNow; before = motion.sampleAt(stamp); epoch = motion.epoch.intValue
+                    assertTrue(kotlin.math.abs(before.velocity) > .01f)
+                    if (changeLaw) duration = 360 else speed = 1.5f
+                }
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnIdle {
+                    assertSame(owner, motion); assertEquals(epoch + 1, motion.epoch.intValue)
+                    assertEquals(requested, motion.target, 0f)
+                    val after = motion.sampleAt(stamp)
+                    assertEquals(before.value, after.value, .00001f); assertEquals(before.velocity, after.velocity, .0001f)
+                    harness.advance(duration / speed.toDouble() / 1000 - .001); assertFalse(motion.settled)
+                    harness.advance(.001); assertTrue(motion.settled); assertEquals(requested, motion.value(), 0f)
+                }
+            }
+        } finally { compose.runOnIdle { harness.close() } }
+    }
+
+    @Composable private fun ProfileRecord(harness: EngineHarness, duration: Int = 180, speed: Float = 1f, content: @Composable () -> Unit) {
+        val spec = remember(duration, speed) {
+            val law = StockUiSpec.motion.getValue(MotionProfile.Control) as MotionProfileSpec
+            ResolvedUiSpec((uiSpec(InterfaceSettings(), UiSpecData(motion = mapOf(MotionProfile.Control to law.copy(durationMs = duration)), speed = speed),
+                ExpansionGeometryDomain(1000f, 3000f, 1f / 60)) as SpecResult.Accepted).spec, Density(1f))
+        }
+        CompositionLocalProvider(LocalUiClock provides harness.clock, LocalEngineContext provides EngineContext(1f / 120, 1000f, MotionAccess.Standard, speed = speed),
+            LocalUiSpec provides spec, content = content)
+    }
 
     @Test fun hiddenFootprintIsStableAndRetainedExitReleasesInputImmediately() {
         var visible by mutableStateOf(false)
