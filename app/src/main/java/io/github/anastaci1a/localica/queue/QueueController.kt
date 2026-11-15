@@ -634,8 +634,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         changeSettings(value.copy(repeat = value.advancedRepeat?.repeat ?: value.repeat))
     }
     private suspend fun changeSettings(value: QueueSettings) {
-        val ready = reconcile(state.value.library, JourneyModes.from(value))
-        val suppressRepeat = withContext(Dispatchers.Default) { suppressRecoveryRepeat(ready.active, value, readers.recovery()) }
+        val (ready, suppressRepeat) = withContext(Dispatchers.Default) {
+            reconcile(state.value.library, JourneyModes.from(value)).let { it to suppressRecoveryRepeat(it.active, value, readers.recovery()) }
+        }
         updateSettings(value, ready)
         configurePreloading()
         applyPlaybackModes(suppressRepeat)
@@ -1082,11 +1083,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 ?: QueueJourney.start(ids, queue.currentEntryId, modes), ids)
         }
     }
-    private suspend fun reconcile(value: QueueLibrary, modes: JourneyModes = JourneyModes.from(state.value.settings)): QueueLibrary {
+    private fun reconcile(value: QueueLibrary, modes: JourneyModes = JourneyModes.from(state.value.settings)): QueueLibrary {
         val previous = state.value.library
-        return withContext(Dispatchers.Default) { value.reuse(previous).let { shared -> shared.copy(queues = shared.queues.map { queue ->
+        return value.reuse(previous).let { shared -> shared.copy(queues = shared.queues.map { queue ->
             if (queue.journey == null) queue else queue.copy(journey = queue.journey.reconcile(queue.ids, queue.currentEntryId, modes))
-        }).reuse(previous) } }
+        }).reuse(previous) }
     }
     private suspend fun capturedLibrary(source: Player?): QueueLibrary {
         val state = state.value
@@ -1137,7 +1138,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 (modes.shuffle != attached.shuffleModeEnabled || (modes.advancedRepeat == null && !recoveryRepeatSuppressed && modes.repeat != repeat))) {
                 val next = modes.copy(shuffle = attached.shuffleModeEnabled,
                     repeat = if (modes.advancedRepeat == null && !recoveryRepeatSuppressed) repeat else modes.repeat)
-                updateSettings(next, reconcile(state.value.library, JourneyModes.from(next)))
+                updateSettings(next, withContext(Dispatchers.Default) { reconcile(state.value.library, JourneyModes.from(next)) })
             }
         }
     }
@@ -1149,7 +1150,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         persist(state.value.library)
     }
     private suspend fun save(next: QueueLibrary) {
-        val reconciled = reconcile(next)
+        val reconciled = withContext(Dispatchers.Default) { reconcile(next) }
         persist(reconciled)
         mutable.update { it.copy(library = reconciled, problem = problemAfterSuccess(it, reconciled)) }
     }
@@ -1219,7 +1220,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private suspend fun saveStartingPlayback(next: QueueLibrary, start: suspend () -> Unit) =
         savePreparedPlayback(preparation().copy(library = next), start)
     private suspend fun savePreparedPlayback(prepared: PreparedPlayback, start: suspend () -> Unit): Boolean {
-        val ready = reconcile(prepared.library)
+        val ready = withContext(Dispatchers.Default) { reconcile(prepared.library) }
         if (!prepared.isCurrent(currentSource(ready.active))) return false
         mutable.update { it.copy(library = ready, problem = problemAfterSuccess(it, ready)) }
         // Audio starts before persistence; failed writes remain retryable from the durable snapshot.

@@ -45,8 +45,8 @@ class PlaybackIntentTest {
         val apply = QueueController::class.java.declaredMethods.single { it.name == "applyPlaybackModes" }.apply { isAccessible = true }
         // Keep the witness executable against the frozen base's one-argument native applier.
         val prepare = QueueController::class.java.declaredMethods.singleOrNull { it.name == "suppressRecoveryRepeat" }?.apply { isAccessible = true }
-        val safe = QueueEntry("safe", track)
-        val blocked = QueueEntry("blocked", track.copy(id = "content://recovery/blocked"))
+        val safe = QueueEntry("safe", track.copy(id = "content://recovery/document/safe"))
+        val blocked = QueueEntry("blocked", track.copy(id = "content://recovery/document/blocked"))
         val mainReads = AtomicInteger()
         val workerReads = AtomicInteger()
         val entries = object : AbstractList<QueueEntry>() {
@@ -60,7 +60,7 @@ class PlaybackIntentTest {
         val queue = ListeningQueue(name = "Recovery scale", entries = entries, currentEntryId = safe.id, order = SavedOrder(emptyList()))
         val modes = QueueSettings(repeat = QueueRepeat.All)
         for (present in listOf(true, false)) {
-            val recovery = RecoveryAdmission.Pending(if (present) blocked.track.id else "content://recovery/absent")
+            val recovery = RecoveryAdmission.Pending(if (present) blocked.track.id else "content://recovery/document/absent")
             mainReads.set(0); workerReads.set(0)
             val gcBefore = android.os.Debug.getRuntimeStat("art.gc.gc-count")
             val suppressed = withContext(Dispatchers.Default) { prepare?.invoke(queues, queue, modes, recovery) as? Boolean ?: false }
