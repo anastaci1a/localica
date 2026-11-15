@@ -420,7 +420,7 @@ class PopupRetainedTriggerRetirementTest {
             compose.runOnIdle {
                 assertFalse("The closing gate must release the modal within six frames", anchor.modalPresent)
                 assertFalse(anchor.hidden)
-                assertFalse(anchor.shadowInModal)
+                assertFalse(anchor.modalPresent)
                 assertTrue("Retirement does not dispose the retained origin", anchor.triggerMounted)
                 if (hide && !adjacentTab) assertFalse("The restored page retains no modal input ownership", anchor.contact.modal)
                 if (!hide || !adjacentTab) assertEquals("The drawable path keeps the posted receipt", anchor.restoredDrawRequest, anchor.restoredPresentedReceipt)

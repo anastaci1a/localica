@@ -1,6 +1,7 @@
 """Offline contract checks. No emulator, Gradle build or network required."""
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -417,6 +418,17 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         self.run_case(2,AFFECTED_CLASSES=AFFECTED+';touch PWNED')
         self.assertFalse((self.root/'PWNED').exists())
     def test_unknown(self): self.run_case(2,AFFECTED_CLASSES='io.github.anastaci1a.localica.UnknownTest')
+    def test_registered_nested_package_keeps_all_mandatory_regressions(self):
+        cls = 'io.github.anastaci1a.localica.ui.engine.SearchReturnOracleSensitivityTest'
+        with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
+            inventory.write(cls+'\n')
+        source = self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text('package io.github.anastaci1a.localica.ui.engine\nclass SearchReturnOracleSensitivityTest { @org.junit.Test fun regression() {} }\n')
+        self.run_case(AFFECTED_CLASSES=cls)
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({cls,REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+
     def test_twenty_distinct_affected_classes_keep_all_mandatory_regressions(self):
         classes = ['io.github.anastaci1a.localica.Additional%dTest' % i for i in range(20)]
         with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
@@ -601,6 +613,50 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_unregistered_diagnostic_method_cannot_borrow_registered_reason(self):
         from full_partition import UTILITY_DIAGNOSTIC_REASON
         self.run_case(1, **self.diagnostic_source('unregisteredDiagnostic'), SKIP_REASON=UTILITY_DIAGNOSTIC_REASON)
+
+    def measurement_identities(self):
+        return ('LastFmScrollStressTest#galleryFlingWithArchive', 'UiPerformanceTest#measurePureUiScenarios',
+                'ScrollPerformanceTest#galleryFiveColumnsFlingUpAndDown',
+                'ScrollPerformanceTest#scrollbarDragTopToBottomToTop',
+                'ScrollPerformanceTest#returnToTopFromDeepInLargeList')
+
+    def clear_measurement_evidence(self):
+        shutil.rmtree(self.root/'prototype-evidence')
+        shutil.rmtree(self.root/'app/build/outputs/androidTest-results')
+
+    def test_exact_measurement_assumptions_are_skips_on_both_apis(self):
+        from full_partition import PROFILE_ASSUMPTIONS
+        for identity in self.measurement_identities():
+            cls, method = identity.split('#')
+            for api in ('26', '36'):
+                with self.subTest(identity=identity, api=api):
+                    self.run_case(**self.skip_source('io.github.anastaci1a.localica.'+cls, method),
+                                  TEST_API=api, SKIP_REASON=PROFILE_ASSUMPTIONS[identity])
+                    evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+                    self.assertEqual('skipped', evidence['methods']['io.github.anastaci1a.localica.'+identity])
+                    self.clear_measurement_evidence()
+
+    def test_measurement_enrollment_does_not_waive_failure_missing_or_wrong_record(self):
+        from full_partition import PROFILE_ASSUMPTIONS
+        for identity in self.measurement_identities():
+            cls, method = identity.split('#')
+            for override in ({'SKIP_OUTCOME':'failure'}, {'SKIP_OUTCOME':'error'},
+                             {'SKIP_MISSING':'yes'}, {'SKIP_REASON':'Different assumption'}, {'SKIP_UTP_STATUS':'2'}):
+                with self.subTest(identity=identity, override=override):
+                    env=dict(self.skip_source('io.github.anastaci1a.localica.'+cls, method),
+                             SKIP_REASON=PROFILE_ASSUMPTIONS[identity])
+                    env.update(override)
+                    self.run_case(1, **env)
+                    self.clear_measurement_evidence()
+
+    def test_other_measurement_methods_cannot_borrow_an_enrolled_reason(self):
+        from full_partition import PROFILE_ASSUMPTIONS
+        for identity in self.measurement_identities():
+            cls, method = identity.split('#')
+            with self.subTest(identity=identity):
+                self.run_case(1, **self.skip_source('io.github.anastaci1a.localica.'+cls, method+'Unregistered'),
+                              SKIP_REASON=PROFILE_ASSUMPTIONS[identity])
+                self.clear_measurement_evidence()
 
     def test_deferred_filter_uses_complete_policy_and_excludes_only_its_method(self):
         policy=self.root/'.github/test-evidence/full_partition.py'
@@ -937,7 +993,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False, infrastructure_jobs=(), failed_jobs=(), historical_infrastructure=False, diagnostic_skip=None):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False, infrastructure_jobs=(), failed_jobs=(), historical_infrastructure=False, diagnostic_skip=None, focused_api='both'):
         import yaml, hashlib
         affected_classes=affected_classes or (['io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest'] if diagnostic_skip else [AFFECTED])
         selected=[REQUIRED,FOCUS,CONTRAST]+affected_classes
@@ -950,6 +1006,9 @@ class WorkflowContract(unittest.TestCase):
             (canonical/'app-debug.apk').write_bytes(b'canonical')
             (canonical/'provenance.json').write_text(json.dumps({'sha':'a'*40 if wrong_sha else SHA,'apk_sha256':hashlib.sha256(b'wrong' if wrong_digest else b'canonical').hexdigest(),'run_id':build_run,'run_attempt':build_attempt,'signing_certificate':'verified-test-certificate'}))
             checks={k:{'result':'success'} for k in workflow['jobs']['evidence']['needs']}
+            for api in ('26', '36'):
+                if focused_api not in ('both', api):
+                    checks[f'focused_{api}']['result'] = 'skipped'
             if failed:checks['focused_36']['result']='failure'
             for job in failed_jobs:
                 checks[job]['result'] = 'failure'
@@ -964,6 +1023,8 @@ class WorkflowContract(unittest.TestCase):
                     'sha': SHA, 'run_id': '1', 'run_attempt': decision_attempt, 'job': job, 'issue': 752}))
             if not missing:
                 for api in (26,36):
+                    if focused_api not in ('both', str(api)):
+                        continue
                     focused=evidence/f'prototype-focused-api-{api}'/'prototype-evidence';focused.mkdir(parents=True)
                     inventory={'selectors':selected,'runtime_methods':[c+'#regression' for c in selected]}
                     inventory_bytes=json.dumps(inventory).encode()
@@ -1045,11 +1106,41 @@ class WorkflowContract(unittest.TestCase):
                         (iterations/'summary.json').write_text(json.dumps(summary))
                     compatibility=evidence/f'prototype-compatibility-api-{api}';compatibility.mkdir()
                     (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
-            env=dict(os.environ,PYTHONPATH=str(ROOT/'.github/test-evidence'),PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=','.join(affected_classes),COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
+            env=dict(os.environ,PYTHONPATH=str(ROOT/'.github/test-evidence'),PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),FOCUSED_API=focused_api,CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=','.join(affected_classes),COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
             result=subprocess.run(['bash','-c',script],cwd=root,env=env,capture_output=True,text=True)
             out=root/'prototype-delivery'
             manifest=json.loads((out/'manifest.json').read_text()) if (out/'manifest.json').exists() else None
             return result,manifest,list(out.glob('*.apk'))
+
+    def test_single_api_selection_remains_explicitly_incomplete(self):
+        for api in ('26', '36'):
+            with self.subTest(api=api):
+                result, manifest, apks = self.decision(focused_api=api)
+                other = '36' if api == '26' else '26'
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(api, manifest['focused_api'])
+                self.assertEqual([other], manifest['not_run_focused_apis'])
+                self.assertEqual('not-run', manifest['checks']['focused_'+other])
+                self.assertFalse(manifest['ready_for_prototype_delivery'])
+                self.assertEqual([], apks)
+                self.assertEqual({api}, set(manifest['focused_evidence']))
+                self.assertEqual([], manifest['validation_errors'])
+
+    def test_focused_api_input_is_bounded_and_invalid_values_fail_closed(self):
+        import yaml
+        workflow = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
+        for event in ('workflow_dispatch', 'workflow_call'):
+            self.assertEqual('both', workflow['on'][event]['inputs']['focused_api']['default'])
+        self.assertEqual(['both', '26', '36'], workflow['on']['workflow_dispatch']['inputs']['focused_api']['options'])
+        for api in ('26', '36'):
+            condition = workflow['jobs']['focused_'+api]['if']
+            self.assertIn("inputs.focused_api == 'both'", condition)
+            self.assertIn("inputs.focused_api == '"+api+"'", condition)
+            self.assertNotIn("inputs.focused_api == '"+('36' if api == '26' else '26')+"'", condition)
+        result, manifest, apks = self.decision(focused_api='invalid')
+        self.assertNotEqual(0, result.returncode)
+        self.assertIsNone(manifest)
+        self.assertEqual([], apks)
 
     def test_delivery_records_registered_skip_only_class_on_both_apis(self):
         result, manifest, apks=self.decision(diagnostic_skip='registered')
@@ -1089,7 +1180,7 @@ class WorkflowContract(unittest.TestCase):
                     if step.get('name') == 'Record passed, failed and not-run checks')
         tree=ast.parse('\n'.join(script.splitlines()[1:-1]))
         assertions=[node for node in ast.walk(tree) if isinstance(node,ast.Assert)]
-        self.assertEqual(51,len(assertions))
+        self.assertEqual(52,len(assertions))
         self.assertTrue(all(node.msg is not None for node in assertions))
 
     def test_method_delivery_requires_gate_and_exact_repeated_methods(self):
@@ -1357,7 +1448,7 @@ class WorkflowContract(unittest.TestCase):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
-        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner'},set(workflow['on']['workflow_call']['inputs']))
+        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner','focused_api'},set(workflow['on']['workflow_call']['inputs']))
         self.assertEqual({'ANDROID_DEBUG_KEYSTORE','LASTFM_API_KEY'},set(workflow['on']['workflow_call']['secrets']))
         self.assertFalse(workflow['on']['workflow_call']['secrets']['LASTFM_API_KEY']['required'])
         self.assertEqual({'contents':'read'},workflow['permissions'])
@@ -1590,22 +1681,29 @@ while true; do sleep .05; done
 class RiskInventoryContract(unittest.TestCase):
     """The reviewed prototype inventory names only existing top-level test classes, once each."""
 
-    def assert_inventory(self, names, source):
+    def assert_inventory(self, names, *sources):
         self.assertEqual(sorted(set(names)), sorted(names), 'Duplicate inventory lines')
-        prefix = 'io.github.anastaci1a.localica.'
         declarations = []
-        for path in sorted(source.rglob('*')):
-            if path.is_file() and path.suffix in ('.kt', '.java'):
-                declarations.extend(entry[0] for entry in read_source(path).classes)
+        for source in sources:
+            for path in sorted(source.rglob('*')):
+                if path.is_file() and path.suffix in ('.kt', '.java'):
+                    declarations.extend(entry[0] for entry in read_source(path).classes)
         for name in names:
-            self.assertTrue(name.startswith(prefix) and '.' not in name[len(prefix):], name)
+            self.assertIsNotNone(re.fullmatch(r'io\.github\.anastaci1a\.localica(?:\.[A-Za-z_][A-Za-z0-9_]*)+', name), name)
             self.assertEqual(1, declarations.count(name),
                 'Require exactly one top-level source declaration for '+name)
 
     def test_every_listed_class_exists_once(self):
         lines = (ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()
         self.assert_inventory([line for line in lines if line.startswith('io.')],
-            ROOT/'app/src/androidTest/java')
+            ROOT/'app/src/androidTest/java', ROOT/'app/src/sharedTest/java')
+
+    def test_shared_nested_package_sources_are_admitted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            android, shared = Path(directory)/'android', Path(directory)/'shared'
+            android.mkdir(); shared.mkdir()
+            (shared/'Nested.kt').write_text('package io.github.anastaci1a.localica.ui.engine\nclass SharedTest {}\n')
+            self.assert_inventory(['io.github.anastaci1a.localica.ui.engine.SharedTest'], android, shared)
 
     def test_colocated_classes_are_admitted(self):
         with tempfile.TemporaryDirectory() as directory:

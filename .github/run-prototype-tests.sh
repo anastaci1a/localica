@@ -17,7 +17,7 @@ if [[ "$method_iteration" == true ]]; then
   required=''; focus_regression=''; contrast_regression=''
 fi
 [[ -n "$classes" && ${#classes} -le 4096 ]] || { echo 'Supply nonempty affected behavior classes (maximum 4096 characters)' >&2; exit 2; }
-pattern='^io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*(,io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*)*$'
+pattern='^io\.github\.anastaci1a\.localica(\.[A-Za-z_][A-Za-z0-9_]*)+(,io\.github\.anastaci1a\.localica(\.[A-Za-z_][A-Za-z0-9_]*)+)*$'
 [[ "$classes" =~ $pattern ]] || { echo 'Invalid affected class selector' >&2; exit 2; }
 IFS=, read -r -a selected <<< "$classes"
 [[ ${#selected[@]} -le 73 ]] || { echo 'At most 73 affected classes plus the three required regression classes' >&2; exit 2; }

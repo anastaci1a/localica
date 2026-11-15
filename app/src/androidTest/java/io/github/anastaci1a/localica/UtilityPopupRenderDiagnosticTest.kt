@@ -172,17 +172,17 @@ class UtilityPopupRenderDiagnosticTest {
             assertTrue("Reopen immediately restores modal body ownership", anchor.contact.modal)
             assertSame("Acknowledgement reopen retains the original dialog", firstWindow, popupWindow)
             assertTrue("The first reopened frame immediately hides the restored trigger", anchor.hidden)
-            assertTrue("The retained modal immediately reclaims shadow ownership", anchor.shadowInModal)
+            assertTrue("The retained modal immediately reclaims shadow ownership", anchor.modalPresent)
             assertEquals("Reopening leaves only the mini-player and tabs in the bottom group", 2,
-                group.casters.count { (it.key as? GlassAnchor)?.shadowInModal != true })
+                group.casters.count { (it.key as? GlassAnchor)?.modalPresent != true })
             advanceFrame()
             capture("reopen-second-frame", save = false)
             assertSame("The second reopened frame retains the original dialog", firstWindow, popupWindow)
             assertTrue("The second reopened frame retains modal body ownership", anchor.modalPresent && anchor.contact.modal)
             assertTrue("The trigger stays hidden on the second reopened frame", anchor.hidden)
-            assertTrue("The modal keeps shadow ownership on the second reopened frame", anchor.shadowInModal)
+            assertTrue("The modal keeps shadow ownership on the second reopened frame", anchor.modalPresent)
             assertEquals("No duplicate bottom-group body appears on the second reopened frame", 2,
-                group.casters.count { (it.key as? GlassAnchor)?.shadowInModal != true })
+                group.casters.count { (it.key as? GlassAnchor)?.modalPresent != true })
             settleEndpoint(beforeOpenRequest)
 
             compose.runOnIdle { open = false }
@@ -192,9 +192,9 @@ class UtilityPopupRenderDiagnosticTest {
             advanceFrame()
             assertFalse("Acknowledged trigger takes over on the next frame", anchor.modalPresent)
             assertFalse("The acknowledged trigger owns its visible surface", anchor.hidden)
-            assertFalse("The acknowledged trigger owns its shadow", anchor.shadowInModal)
+            assertFalse("The acknowledged trigger owns its shadow", anchor.modalPresent)
             assertEquals("Normal handoff restores all three bottom-group bodies", 3,
-                group.casters.count { (it.key as? GlassAnchor)?.shadowInModal != true })
+                group.casters.count { (it.key as? GlassAnchor)?.modalPresent != true })
             val after = anchor.contact.body.value
             trace.put(stateJson().put("observation", "first-trigger-owned-frame"))
             assertTrue("Actual pill keeps its depth through handoff", abs(after.depth - before.depth) < .03f)
@@ -597,8 +597,8 @@ class UtilityPopupRenderDiagnosticTest {
             .put("scaleX", body.scaleX(anchor.contact.vertical)).put("scaleY", body.scaleY(anchor.contact.vertical))
             .put("vertical", anchor.contact.vertical).put("settled", anchor.contact.state.momentum.settled)
             .put("hidden", anchor.hidden).put("modalPresent", anchor.modalPresent).put("restoredDrawn", anchor.restoredDrawn)
-            .put("shadowInModal", anchor.shadowInModal).put("appShadowStrength", strength)
-            .put("groupEntries", group.casters.size).put("activeGroupBodies", group.casters.count { (it.key as? GlassAnchor)?.shadowInModal != true })
+            .put("shadowInModal", anchor.modalPresent).put("appShadowStrength", strength)
+            .put("groupEntries", group.casters.size).put("activeGroupBodies", group.casters.count { (it.key as? GlassAnchor)?.modalPresent != true })
             .put("browseRecorded", browseSource.recorded).put("modalRecorded", modalSource.recorded)
             .put("browseRevision", browseSource.revision).put("modalRevision", modalSource.revision)
             .put("browseRasterReady", browseSource.snapshot != null).put("modalRasterReady", modalSource.snapshot != null)

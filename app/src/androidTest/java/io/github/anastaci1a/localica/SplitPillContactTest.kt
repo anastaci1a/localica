@@ -138,7 +138,7 @@ class SplitPillContactTest {
             compose.mainClock.advanceTimeByFrame()
             compose.runOnIdle {
                 assertFalse(anchor.hidden)
-                assertFalse(anchor.shadowInModal)
+                assertFalse(anchor.modalPresent)
                 assertFalse(anchor.contact.modal)
                 assertFalse(anchor.contact.pressed)
             }

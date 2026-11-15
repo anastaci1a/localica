@@ -5,6 +5,14 @@ import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 
+/** #920: a popup's one stored takeover phase (SPEC.md section 2); every takeover flag is a view of it. */
+internal enum class PopupTakeover { Closed, Admitting, InWindow, Restoring }
+/** A retained presentation owns takeover; its trigger and shared content borrow the current view. */
+internal interface PopupTakeoverOwner {
+    val takeover: PopupTakeover
+    val expanded: Boolean get() = takeover == PopupTakeover.InWindow
+}
+
 /** #854: the surface kind of the enclosing popup; retained faces inside it (rememberFaceExpansion) inherit its motion. */
 internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
 
@@ -35,7 +43,10 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private val ranges = requireNotNull(clock.spec.geometry).maxViewportDiagonalPx.let { EdgeRanges(it, it, it, it) }
     private var rectangle by mutableStateOf<MotionRect?>(null)
     val bounds: MotionRectView? get() = rectangle
-    private var shown = false
+    /** The intent: what [show] last asked for. Foreground semantics follow it, so Hide releases them at its event. */
+    var shown by mutableStateOf(false); private set
+    val openAtRest get() = expansion.retirementReady && expansion.boundedProgress(popupCurve) == 1f
+    val moving get() = if (shown) expansion.boundedProgress(popupCurve) != 1f else !expansion.retirementReady
     private var holding = false
     private var openingEnvelope: Rect? = null
     private var nativeWindow: java.lang.ref.WeakReference<Any>? = null

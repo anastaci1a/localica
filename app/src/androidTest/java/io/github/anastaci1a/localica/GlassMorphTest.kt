@@ -691,7 +691,7 @@ class GlassMorphTest {
             probeClock.observe { expansion = anchor.contact.expansion.value }
             return "$event iteration=$awaitIteration clock=${compose.mainClock.currentTime} " +
                 "window=${popupWindow?.let { System.identityHashCode(it) }} " +
-                "hidden=${anchor.hidden} shadowInModal=${anchor.shadowInModal} " +
+                "hidden=${anchor.hidden} shadowInModal=${anchor.modalPresent} " +
                 "expansion=$expansion laidOut=$laidOut"
         }
         fun flushProbe() {
@@ -708,7 +708,7 @@ class GlassMorphTest {
             probeClock.observe {
                 preparationPoints.add(PreparationPoint(System.nanoTime(), compose.mainClock.currentTime,
                     popupWindow, popupView?.isLaidOut == true, anchor.hidden,
-                    anchor.shadowInModal, anchor.contact.expansion.value))
+                    anchor.modalPresent, anchor.contact.expansion.value))
             }
         }
         val deliveredClosures = java.util.concurrent.ConcurrentLinkedQueue<PreparationPoint>()
@@ -744,7 +744,7 @@ class GlassMorphTest {
                     DisposableEffect(window) {
                         popupWindow = window
                         mounts += Mount(window, compose.mainClock.currentTime,
-                            anchor.hidden, anchor.shadowInModal, anchor.contact.expansion.value, System.nanoTime())
+                            anchor.hidden, anchor.modalPresent, anchor.contact.expansion.value, System.nanoTime())
                         probeLines.add(probeState("mount", view.isLaidOut) + " nativeNanos=${mounts.last().nativeNanos}")
                         capturePreparationPoint()
                         onDispose {
@@ -777,7 +777,7 @@ class GlassMorphTest {
         }
         fun assertUnready(reason: String) {
             assertFalse("$reason: the trigger stays visible during preparation", anchor.hidden)
-            assertFalse("$reason: the trigger still owns its shadow", anchor.shadowInModal)
+            assertFalse("$reason: the trigger still owns its shadow", anchor.modalPresent)
             assertEquals("$reason: expansion cannot precede preparation", 0f, anchor.contact.expansion.value, 0f)
         }
         fun assertAdmissionOrdering(window: android.view.Window, mount: Mount) {
@@ -803,7 +803,7 @@ class GlassMorphTest {
             }
             assertSame("Preparation belongs to this native window", window, popupWindow)
             assertTrue("The prepared window hides its trigger", anchor.hidden)
-            assertTrue("The prepared window takes its shadow", anchor.shadowInModal)
+            assertTrue("The prepared window takes its shadow", anchor.modalPresent)
             assertEquals("Reduced motion expands only after preparation", 1f, anchor.contact.expansion.value, 0f)
         }
         try {
@@ -891,7 +891,7 @@ class GlassMorphTest {
             assertEquals(listOf(firstWindow, reopenedWindow), disposed)
             assertFalse(anchor.modalPresent)
             assertFalse(anchor.hidden)
-            assertFalse(anchor.shadowInModal)
+            assertFalse(anchor.modalPresent)
 
             compose.runOnIdle { open = true }
             val replacement = awaitWindow()

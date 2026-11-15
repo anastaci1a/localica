@@ -523,3 +523,10 @@ io.github.anastaci1a.localica.ReleaseLintAdoptionTest
 # Scrollbar behaviour on the shared owner: lockstep, visibility, fades, hit area, relative drag, bounds (#704).
 io.github.anastaci1a.localica.ScrollbarBehaviourTest
 io.github.anastaci1a.localica.ScrollbarReducedRootTest
+io.github.anastaci1a.localica.PopupBrowseReturnReferenceTest
+io.github.anastaci1a.localica.PopupKindNativeTest
+io.github.anastaci1a.localica.PopupPeakOvershootLandscapeTest
+io.github.anastaci1a.localica.PopupPeakOvershootPortraitTest
+io.github.anastaci1a.localica.PopupShadowFrameExportTest
+io.github.anastaci1a.localica.PopupSiblingOwnershipTest
+io.github.anastaci1a.localica.ui.engine.SearchReturnOracleSensitivityTest

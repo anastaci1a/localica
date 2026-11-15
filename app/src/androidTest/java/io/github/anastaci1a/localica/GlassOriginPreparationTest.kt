@@ -90,7 +90,7 @@ class GlassOriginPreparationTest {
             advanceWithNativeFrames(4000)
             val firstWindow = requireNotNull(popupWindow)
             compose.runOnIdle {
-                assertTrue(anchor.hidden && anchor.modalPresent && anchor.shadowInModal)
+                assertTrue(anchor.hidden && anchor.modalPresent)
                 assertEquals(1f, preparation.progress, 0f)
                 open = false
             }
@@ -114,7 +114,6 @@ class GlassOriginPreparationTest {
                     // Reversal retains velocity: it may continue toward the trigger before
                     // turning. Ownership must follow the actual seam, not requested intent.
                     assertEquals("Modal body and shadow change ownership together", anchor.modalPresent, anchor.contact.modal)
-                    assertEquals("Modal surface and shadow change ownership together", anchor.modalPresent, anchor.shadowInModal)
                     if (anchor.hidden) assertTrue(anchor.modalPresent)
                     else {
                         val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -129,13 +128,13 @@ class GlassOriginPreparationTest {
             compose.runOnIdle {
                 assertEquals("Reopened flight reaches its menu endpoint", 1f, anchor.contact.expansion.value, 0f)
                 assertEquals(1f, preparation.progress, 0f)
-                assertTrue(anchor.hidden && anchor.modalPresent && anchor.contact.modal && anchor.shadowInModal)
+                assertTrue(anchor.hidden && anchor.modalPresent && anchor.contact.modal)
                 open = false
             }
             advanceWithNativeFrames(4000)
             compose.runOnIdle {
                 assertNull(popupWindow)
-                assertFalse(anchor.hidden || anchor.modalPresent || anchor.shadowInModal)
+                assertFalse(anchor.hidden || anchor.modalPresent)
                 assertEquals(0f, preparation.progress, 0f)
             }
         } finally { compose.mainClock.autoAdvance = true }
@@ -181,7 +180,7 @@ class GlassOriginPreparationTest {
                     if (!anchor.modalPresent && preparation.progress > 0f) {
                         preAdmission = true
                         assertFalse(anchor.hidden)
-                        assertFalse(anchor.shadowInModal)
+                        assertFalse(anchor.modalPresent)
                         popupWindow?.let { window ->
                             observedPrewarmWindow = true
                             val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -266,7 +265,7 @@ class GlassOriginPreparationTest {
             compose.runOnIdle {
                 assertFalse(anchor.modalPresent)
                 assertFalse(anchor.hidden)
-                assertFalse(anchor.shadowInModal)
+                assertFalse(anchor.modalPresent)
                 popupWindow?.let { window ->
                     val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                         android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -298,7 +297,7 @@ class GlassOriginPreparationTest {
             compose.runOnIdle {
                 assertNull("Disposal retires unready premeasurement", popupWindow)
                 assertEquals(0f, preparation.progress, 0f)
-                assertFalse(anchor.modalPresent || anchor.hidden || anchor.shadowInModal || anchor.contact.modal)
+                assertFalse(anchor.modalPresent || anchor.hidden || anchor.contact.modal)
             }
         } finally { compose.mainClock.autoAdvance = true }
     }

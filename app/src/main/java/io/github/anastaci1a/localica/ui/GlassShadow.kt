@@ -48,7 +48,7 @@ internal fun Modifier.shadowViewportOutset(inset: Dp, horizontal: Boolean = fals
 
 /** The drawn, shape-deformed body in [rect]'s space, or null when it casts nothing. */
 internal fun glassCasterBody(rect: Rect, density: Density, radius: Dp?, anchor: GlassAnchor?, opacity: Float = 1f): RoundRect? {
-    if (opacity <= .001f || anchor?.shadowInModal == true && anchor.surfaceNode?.windowRetained() != true) return null
+    if (opacity <= .001f || anchor?.modalPresent == true && anchor.surfaceNode?.windowRetained() != true) return null
     val corner = (radius?.let { with(density) { it.toPx() } } ?: minOf(rect.width, rect.height) / 2)
         .coerceIn(0f, minOf(rect.width, rect.height) / 2)
     // Anchored controls deform in draw space. Their coordinates alone
@@ -88,7 +88,7 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     val host = if (group == null) Modifier.shadowPlaneHost(plane, appearance.shadowStrength, appearance.shadowSpread) else Modifier
     return this.then(host).glassCaster(plane, key, if (group == null) ({ 1f }) else opacity, onNode = registration, retained = (anchor?.surfaceNode) ?: anchor?.returningNode?.takeIf { it.windowRetained() }, inheritsBodyScale = group == null) {
             if (group != null) glassCasterBody(it, density, radius, anchor, opacity())
-            else if (anchor?.shadowInModal == true && anchor.surfaceNode?.windowRetained() != true) null else glassCasterBody(it, density, radius, null)
+            else if (anchor?.modalPresent == true && anchor.surfaceNode?.windowRetained() != true) null else glassCasterBody(it, density, radius, null)
         }
 }
 

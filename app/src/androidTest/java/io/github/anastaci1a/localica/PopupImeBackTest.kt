@@ -158,17 +158,15 @@ class PopupImeBackTest {
                     val focus = remember { FocusRequester() }
                     val keyboard = LocalSoftwareKeyboardController.current
                     val focused = LocalWindowInfo.current.isWindowFocused
-                    val ready = LocalSearchOpeningReady.current
                     val view = LocalView.current
                     val density = LocalDensity.current
                     val ime = WindowInsets.ime.getBottom(density)
                     val source = WindowInsets.imeAnimationSource.getBottom(density)
                     val target = WindowInsets.imeAnimationTarget.getBottom(density)
                     SideEffect { searchView = view; keyboardSettled = focused && ime > 0 && ime == source && ime == target }
-                    LaunchedEffect(searchOpen, focused, ready) {
+                    LaunchedEffect(searchOpen, focused) {
                         if (searchOpen && focused) {
                             withFrameNanos { }
-                            ready?.invoke(true)
                             focus.requestFocus(); keyboard?.show()
                         }
                     }

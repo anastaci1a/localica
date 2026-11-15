@@ -60,7 +60,7 @@ internal class MorphHost(val slots: MorphSlots) {
     private val ends = listOf(0f, 1f).map { end -> object : SharedScope { override val progress = { end }; override val endpoint = end.toInt() } }
     private val instances = mutableMapOf<Any, @Composable (@Composable SharedScope.(Any) -> Unit) -> Unit>()
     @Composable fun Copy(key: Any, face: Int) = shared(ends[face], key)
-    @Composable fun Slot(key: Any, face: Int, modifier: Modifier) {
+    @Composable fun Slot(key: Any, face: Int, modifier: Modifier, expanded: Boolean = this.expanded) {
         val content = shared
         val instance = instances.getOrPut(key) { movableContentOf { c: @Composable SharedScope.(Any) -> Unit -> c(live, key) } }
         slots.Slot(key, face, (face == 1) == expanded, LocalContentColor.current, modifier, { content(ends[face], key) }) { instance(content) }

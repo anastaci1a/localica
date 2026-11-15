@@ -11,7 +11,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import io.github.anastaci1a.localica.ui.engine.drawPopupProjection
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -32,16 +31,6 @@ internal class GlassPopupHome(private val leaving: State<Boolean>) {
     var currentOrigin = Offset.Zero
     var registration: BackdropRegistration? = null
     var liveRegistration: BackdropRegistration? = null
-}
-
-internal class GlassPopupFlight {
-    var layer by mutableStateOf<GraphicsLayer?>(null)
-    var origin = Offset.Zero
-    var homeOrigin = Offset.Zero
-    var revision by mutableLongStateOf(0L)
-    var prepared by mutableStateOf(false)
-    var handedOff by mutableStateOf(false)
-    var wasProjected by mutableStateOf(false)
 }
 
 internal val LocalGlassPopupHome = staticCompositionLocalOf<GlassPopupHome?> { null }

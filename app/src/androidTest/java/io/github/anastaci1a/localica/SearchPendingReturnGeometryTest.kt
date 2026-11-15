@@ -20,9 +20,9 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** A real pending Search return must keep its captured physical envelope while
- * its caller's visibility commit catches up. Uses the existing absent-editor
- * readiness report and shared test clock, without native-inset injection. */
+/** A Search return starts at its dismissal event (#960 B) and keeps its captured physical envelope while
+ * the foreground remeasures in that same interval. Uses the shared popup dismissal
+ * and shared test clock, without native-inset injection. */
 class SearchPendingReturnGeometryTest {
     @get:Rule val compose = localicaComposeRule()
     private data class Measurement(val generation: Long, val height: Int, val clock: Long)
@@ -57,23 +57,20 @@ class SearchPendingReturnGeometryTest {
                     ActionIcon(AppIcon.ActionEllipsis, "Root action", glass = false) { rootActions++ }
                     GlassMorphPopup(visible, anchor, { visible = false }, GlassPlacement.Search) {
                         val view = LocalView.current
-                        val ready = LocalSearchOpeningReady.current
-                        val beginReturn = LocalSearchReturnStart.current
+                        val dismiss = LocalPopupDismiss.current
                         val density = LocalDensity.current
                         SideEffect {
                             popupView = view
                             grownHeight = with(density) { 320.dp.roundToPx() }
-                            ready?.invoke(false)
                         }
                         Column(Modifier.fillMaxWidth().height(bodyHeight).onSizeChanged {
                             if (measurement.height != it.height)
                                 measurement = Measurement(measurement.generation + 1, it.height, compose.mainClock.currentTime)
                         }) {
                             ActionTextButton({
-                                checkNotNull(beginReturn).invoke()
-                                // Model the interval between the editor's return intent
-                                // and its caller committing visibility. Change real
-                                // foreground measurement during that same interval.
+                                checkNotNull(dismiss).invoke()
+                                // The return intent is the dismissal itself; change real
+                                // foreground measurement in the same event, after Hide.
                                 bodyHeight = 320.dp
                                 returnIntents++
                             }) { Text("Begin pending return") }
@@ -155,26 +152,22 @@ class SearchPendingReturnGeometryTest {
                 physical += observed
             }
             compose.runOnUiThread {
-                assertTrue("The caller has not committed visibility yet", visible)
+                assertFalse("The dismissal committed visibility in its event", visible)
                 assertSame(token, nativeWindow.windowToken)
-                val pending = placements.drop(index).filter { it.sample.opening && it.sample.flight?.opening == false }
-                assertTrue("Observe the real pending return before visibility commits", pending.isNotEmpty())
+                val pending = placements.drop(index).filter { !it.sample.opening && it.sample.flight?.opening == false }
+                assertTrue("Observe the real return from the dismissal event", pending.isNotEmpty())
                 val postMeasurement = physical.filter {
                     it.measurement.generation == requireNotNull(admitted).generation &&
                         it.measurement.height == grownHeight && it.clock >= requireNotNull(admitted).clock
                 }
                 assertEquals("Four actual post-measurement physical observations are retained", 4, postMeasurement.size)
                 postMeasurement.forEach { observed ->
-                    assertEquals(1f, observed.phase, 0f)
+                    assertTrue("Hide runs from the dismissal event: ${observed.phase}", observed.phase < 1f)
                     assertEquals(originalToken, observed.windowToken)
-                    sameRect("PENDING_SEARCH_RETURN: captured physical envelope", requireNotNull(captured), observed.bounds)
                 }
                 pending.map { it.sample }.forEach { sample ->
-                    assertEquals(1f, sample.progress, 0f)
-                    sameRect("Captured pending flight", requireNotNull(captured), requireNotNull(sample.flight).from)
-                    sameRect("Pending return keeps its physical envelope", requireNotNull(captured), sample.bounds)
+                    sameRect("Captured return flight", requireNotNull(captured), requireNotNull(sample.flight).from)
                 }
-                visible = false
             }
             compose.waitUntil(5_000) {
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()

@@ -26,8 +26,8 @@ class PopupKindOwnerTest {
             val anchor = anchor(role, contextual)
             val menu = if (contextual) PopupKind.RowMenu else if (role == TriggerRole.Navigation) PopupKind.BottomMenu else PopupKind.Menu
             assertEquals("$role contextual=$contextual", menu, GlassPlacement.Menu.popupKind(anchor))
-            assertEquals(PopupKind.Dialog, GlassPlacement.Center.popupKind(anchor))
-            for (legacy in listOf(GlassPlacement.Search, GlassPlacement.Page, GlassPlacement.Sheet))
+            for (dialog in listOf(GlassPlacement.Center, GlassPlacement.Search)) assertEquals("$dialog $role", PopupKind.Dialog, dialog.popupKind(anchor))
+            for (legacy in listOf(GlassPlacement.Page, GlassPlacement.Sheet))
                 assertEquals("$legacy $role", PopupKind.Legacy, legacy.popupKind(anchor))
         }
         // The navigation chrome's More menu is the bottom menu (CrossAxisSnap); every other menu keeps its own law.
@@ -48,8 +48,9 @@ class PopupKindOwnerTest {
     @Test fun sharedContentRunsOnlyACentredPopupsKind() {
         for (role in roles) for (contextual in listOf(false, true)) {
             val anchor = anchor(role, contextual)
-            assertEquals("$role", SharedContentKind, GlassPlacement.Center.popupKind(anchor))
-            for (placement in GlassPlacement.entries - GlassPlacement.Center)
+            // Search is the Dialog row (#960): it runs the same kind as the centred popup.
+            for (dialog in listOf(GlassPlacement.Center, GlassPlacement.Search)) assertEquals("$dialog $role", SharedContentKind, dialog.popupKind(anchor))
+            for (placement in GlassPlacement.entries - GlassPlacement.Center - GlassPlacement.Search)
                 assertNotEquals("the guard rejects shared content in $placement", SharedContentKind, placement.popupKind(anchor))
         }
     }
@@ -106,13 +107,12 @@ class PopupKindOwnerTest {
         for (derived in PopupKind.entries) assertEquals(PopupKind.BottomMenu, latch.settle(derived, present = true))
     }
 
-    /** Source contract (checklist 48): GlassMorphPopup keys its owner on the settled kind, and the effects that use the owner
+    /** Source contract (checklist 48): each retained presentation settles its own kind, and the effects that use the owner
      * (the native gate adapter and the window attachment) are keyed on it. */
     @Test fun glassMorphPopupKeysItsOwnerAndItsEffectsOnTheSettledKind() {
         val source = File("src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt").readText()
         val popup = source.substringAfter("internal fun GlassMorphPopup(").substringBefore("\n@Composable\ninternal fun ")
-        assertTrue(Regex("""val popupKind = settledPopupKind\(anchor, placement\.popupKind\(anchor\), present\)""").containsMatchIn(popup))
-        assertTrue("present is declared before the kind", popup.indexOf("var present by remember") in 0 until popup.indexOf("settledPopupKind("))
+        assertTrue(Regex("""val popupKind = settledPopupKind\(anchor, placement\.popupKind\(anchor\), popupFlight\.present\)""").containsMatchIn(popup))
         assertTrue(Regex("""rememberPopupWindowMotion\(anchor, [^\n]*, popupKind\)""").containsMatchIn(popup))
         assertTrue("the native gate adapter restarts with its owner", Regex("""LaunchedEffect\(motion, visible, """).containsMatchIn(popup))
         assertEquals(1, Regex("""motion\.attached\(""").findAll(popup).count())

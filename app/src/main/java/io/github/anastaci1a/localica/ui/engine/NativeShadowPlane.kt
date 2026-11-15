@@ -9,11 +9,14 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalView
+import android.view.View
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.selects.select
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.*
 
 /** The canonical field is projected into physical host coordinates. Shared source
  * fields deform the body and keep ring widths in device pixels; private fields
@@ -76,7 +79,21 @@ internal fun Modifier.nativePlaneReceipt(plane: ShadowPlane): Modifier = this.dr
 /** Platform adapter intents accept the read-only identity; mutation stays Engine-private. */
 internal fun SurfaceView.windowRetained()=(this as SurfaceNode).windowRetained
 internal fun SurfaceView.retainNativeWindow()=(this as SurfaceNode).retainWindow()
-internal fun SurfaceView.followWindow(motion: PopupWindowMotion)=(this as SurfaceNode).follow(motion.expansion,Curve.constant(1f),requireNotNull(motion.bounds),motion.popupCurve)
+private fun View.detachments()=callbackFlow {
+    val listener=object: View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) {}
+        override fun onViewDetachedFromWindow(v: View) { trySend(Unit) }
+    }
+    addOnAttachStateChangeListener(listener); if(!isAttachedToWindow) trySend(Unit)
+    awaitClose { removeOnAttachStateChangeListener(listener) }
+}
+@OptIn(ExperimentalCoroutinesApi::class)
+internal suspend fun SurfaceView.followWindow(motion: PopupWindowMotion) {
+    val node=this as SurfaceNode; val bounds=requireNotNull(motion.bounds)
+    merge(snapshotFlow { node.canFollow(motion.expansion,bounds) }.map { Unit },
+        snapshotFlow { node.staleWindows() }.flatMapLatest { views -> merge(*views.map { it.detachments() }.toTypedArray()) }).first { node.canFollow(motion.expansion,bounds) }
+    node.follow(motion.expansion,Curve.constant(1f),bounds,motion.popupCurve)
+}
 internal fun SurfaceView.transferWindow(plane: ShadowPlane)=(this as SurfaceNode).transfer(plane,motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
 internal fun SurfaceView.ownsWindow(plane: ShadowPlane)=(this as SurfaceNode).owns(plane)
 internal fun SurfaceView.returnPlane()=(this as SurfaceNode).sourceReturnPlane

@@ -156,7 +156,7 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             if (names.size != 1) missing += "$stage:${names.size}"
             val native = window?.takeIf { it.decorView.isAttachedToWindow }
             val phase = anchor.contact.expansion.value
-            log.append("$frame $stage phase=$phase hidden=${anchor.hidden} modal=${anchor.modalPresent} inModal=${anchor.shadowInModal} native=${native != null} labels=${names.map { System.identityHashCode(it.layoutInfo) }}\n")
+            log.append("$frame $stage phase=$phase hidden=${anchor.hidden} modal=${anchor.modalPresent} inModal=${anchor.modalPresent} native=${native != null} labels=${names.map { System.identityHashCode(it.layoutInfo) }}\n")
             val input = if (field && stage == "return" && phase <= .002f && !anchor.hidden)
                 captureHomeField(anchor, native, frame) else null
             val bitmap = input?.capture?.image?.asAndroidBitmap() ?: screenshot(native)
