@@ -32,6 +32,7 @@ internal class GlassPopupHome(private val leaving: State<Boolean>) {
     var currentOrigin = Offset.Zero
     var registration: BackdropRegistration? = null
     var liveRegistration: BackdropRegistration? = null
+    fun gone() { mounted = false; flights.forEach { it.advance(it.state.gen, PopupEvent.Gone) } }
 }
 
 internal val LocalGlassPopupHome = staticCompositionLocalOf<GlassPopupHome?> { null }
@@ -42,7 +43,7 @@ internal fun rememberGlassPopupHome(departing: Boolean, parent: GlassPopupHome? 
     val home = remember { GlassPopupHome(leaving) }
     DisposableEffect(home, parent) {
         parent?.children?.add(home)
-        onDispose { home.mounted = false; parent?.children?.remove(home) }
+        onDispose { home.gone(); parent?.children?.remove(home) }
     }
     return home
 }

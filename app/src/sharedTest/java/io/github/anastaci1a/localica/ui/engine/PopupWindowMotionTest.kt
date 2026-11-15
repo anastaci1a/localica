@@ -124,4 +124,55 @@ class PopupWindowMotionTest {
         motion.dispose()
     }
 
+    @Test fun replacementInitializesEveryExistingChannelAndRejectsBothSupersededGates() {
+        for (kind in listOf(PopupKind.Legacy, PopupKind.Menu, PopupKind.Dialog)) for (prepared in listOf(false, true)) {
+            EngineHarness(spec = spec).use { h ->
+                val motion = PopupWindowMotion(h.clock, spec.expansion, "replacement", prepared, false, kind)
+                val first = Any()
+                assertFalse(motion.attached(first, ShadowPlane(h.clock, HostKey.next(Any()))))
+                motion.show(true); motion.place(home, envelope, 1f); h.advance(2.0)
+                val e = motion.expansion
+                assertTrue(e.acknowledgeNativeGate(e.nativeGeneration)); h.advance(2.0)
+                motion.show(false); h.advance(2.0)
+                assertTrue(e.awaitingNativeGate)
+                val old = e.nativeGeneration
+                val rectangle = requireNotNull(motion.bounds)
+                val phase = e.phase
+                val second = Any()
+                assertTrue(motion.attached(second, ShadowPlane(h.clock, HostKey.next(Any()))))
+                e.restartNativeAdmission()
+                assertSame(phase, e.phase); assertSame(rectangle, motion.bounds)
+                assertEquals("$kind/$prepared: first observable phase", 0f, phase.valueAt(h.clock.stampNow), 0f)
+                assertEquals(0f, phase.velocityAt(h.clock.stampNow), 0f)
+                assertEquals("$kind/$prepared: edges reset in the same transaction", home, rectangle.valueAt(h.clock.stampNow))
+                listOf(rectangle.left, rectangle.top, rectangle.right, rectangle.bottom).forEach { assertEquals(0f, it.velocityAt(h.clock.stampNow), 0f) }
+                assertFalse(e.acknowledgeNativeGate(old))
+                motion.show(true); h.advance(2.0)
+                val superseded = e.nativeGeneration
+                assertTrue(e.awaitingNativeGate)
+                assertTrue(motion.attached(Any(), ShadowPlane(h.clock, HostKey.next(Any()))))
+                e.restartNativeAdmission(); motion.show(motion.shown); h.advance(2.0)
+                assertFalse(e.acknowledgeNativeGate(old)); assertFalse(e.acknowledgeNativeGate(superseded))
+                assertTrue(e.acknowledgeNativeGate(e.nativeGeneration)); h.advance(2.0)
+                assertEquals(envelope, rectangle.valueAt(h.clock.stampNow))
+                motion.dispose()
+            }
+        }
+    }
+
+    @Test fun aSpringReversalRetainsValueAndVelocityOnTheSameExpansion() = EngineHarness(spec = spec).use { h ->
+        val motion = PopupWindowMotion(h.clock, spec.expansion, "reverse", true, false, PopupKind.Menu)
+        motion.show(true); motion.place(home, envelope, 1f); h.advance(2.0)
+        val e = motion.expansion
+        assertTrue(e.acknowledgeNativeGate(e.nativeGeneration)); h.advance(2.0)
+        motion.show(false); h.advance(.04)
+        val phase = e.phase
+        val before = phase.sampleAt(h.clock.stampNow)
+        assertNotEquals(0f, before.velocity)
+        motion.show(true)
+        assertSame(phase, e.phase)
+        assertEquals(before.value, phase.valueAt(h.clock.stampNow), 0f)
+        assertEquals(before.velocity, phase.velocityAt(h.clock.stampNow), 0f)
+        motion.dispose()
+    }
 }

@@ -53,12 +53,14 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private var firstNativeMeasurement = false
     private var nativeHost: java.lang.ref.WeakReference<ShadowPlane>? = null
     init { expansion.nativeGate(gate) }
-    fun attached(window: Any, host: ShadowPlane) {
+    fun attached(window: Any, host: ShadowPlane): Boolean {
+        val replaced = nativeWindow != null && nativeWindow?.get() !== window
         nativeHost = java.lang.ref.WeakReference(host)
         if (nativeWindow?.get() !== window) {
             firstNativeMeasurement = rectangle != null
             nativeWindow = java.lang.ref.WeakReference(window)
         }
+        return replaced
     }
     fun show(visible: Boolean) { shown = visible; if (rectangle != null) expansion.target(visible) }
     fun hold() { holding = true; if (rectangle != null) expansion.hold() }

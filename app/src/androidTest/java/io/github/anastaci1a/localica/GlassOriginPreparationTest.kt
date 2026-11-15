@@ -6,9 +6,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -25,10 +27,29 @@ class GlassOriginPreparationTest {
     private var popupWindow: android.view.Window? = null
     private var nativeMounts = 0
     private var preAdmissionFocusLosses = 0
+    private var fontScale by mutableFloatStateOf(1f)
+    private val replacementSamples = mutableListOf<Pair<Float, android.view.Window?>>()
+    private val popupWindows = mutableSetOf<Int>()
+    private val admissionViolations = mutableListOf<String>()
 
-    private fun fixture(reduced: Boolean = false) {
+    private fun fixture(reduced: Boolean = false, prepared: Boolean = true) {
         compose.setContent { EngineTheme(reduced = reduced) {
-            CompositionLocalProvider(LocalReducedMotion provides reduced) {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalReducedMotion provides reduced,
+                LocalDensity provides Density(density.density, fontScale),
+                LocalGlassMorphWorkObserver provides { kind, window, _ ->
+                    if (kind == "dialog" && window != null) popupWindows += System.identityHashCode(window)
+                },
+                LocalGlassSurfaceDrawObserver provides { receipt ->
+                    glassDrawProbe?.invoke(receipt)
+                    if (receipt is GlassTransitionReceipt && receipt.event == "WindowReplaced") {
+                        replacementSamples += requireNotNull(anchor.popup).let { it.progress.value to it.window }
+                    }
+                    if (receipt is GlassSurfaceDrawObservation && receipt.windowIdentity in popupWindows &&
+                        (anchor.popup?.modalPresent != true || receipt.windowIdentity != System.identityHashCode(anchor.popup?.window))) {
+                        admissionViolations += "draw without current admission: ${receipt.windowIdentity}, ${anchor.popup?.state}"
+                    }
+                }) {
                 preparation = rememberGlassOriginPreparation()
                 anchor = rememberGlassAnchor()
                 val sourceView = LocalView.current
@@ -42,7 +63,7 @@ class GlassOriginPreparationTest {
                 Box(Modifier.fillMaxSize().background(Color(0xFF143A5F))) {
                     Box(Modifier.padding(24.dp).size(48.dp).then(if (reportOrigin) Modifier.preparedOrigin(preparation, preparation.progress) else Modifier).glassAnchor(anchor))
                     if (mounted) GlassMenu(open, anchor, { open = false },
-                        originPreparation = preparation) {
+                        originPreparation = preparation.takeIf { prepared }) {
                         val view = androidx.compose.ui.platform.LocalView.current
                         val window = (view.parent as androidx.compose.ui.window.DialogWindowProvider).window
                         DisposableEffect(window) {
@@ -83,12 +104,59 @@ class GlassOriginPreparationTest {
 
     @Test fun reducedMotionPreparedOriginReclaimsRetainedReadyWindow() = retainedReadyReopen(true)
 
+    @Test fun anOrdinaryReplacementCannotBorrowThePreviousWindowsAdmission() = replacement(false)
+    @Test fun aPreparedReplacementCannotBorrowThePreviousWindowsAdmission() = replacement(true)
+
+    private fun replacement(prepared: Boolean) {
+        fixture(prepared = prepared)
+        try {
+            compose.runOnIdle { open = true }
+            advanceWithNativeFrames(4000)
+            val flight = requireNotNull(anchor.popup)
+            val first = requireNotNull(popupWindow)
+            val gen = flight.gen
+            compose.runOnIdle { if (prepared) reportOrigin = false; fontScale = 1.01f }
+            frame()
+            compose.runOnIdle {
+                assertTrue("observe the replacement event", replacementSamples.isNotEmpty())
+                assertTrue("the first observable admission has zero expansion and no old window: $replacementSamples",
+                    replacementSamples.all { it.first == 0f && it.second == null })
+                val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                assertEquals("the old window loses input synchronously", flags, first.attributes.flags and flags)
+                assertSame("same presentation", flight, anchor.popup)
+                assertEquals(gen, flight.gen)
+                assertNotSame("force a real Compose Dialog replacement", first, popupWindow)
+            }
+            if (prepared) {
+                compose.onNodeWithTag("prepared-menu-content").assertDoesNotExist()
+                compose.runOnIdle {
+                    assertFalse("no admission before the new origin receipt", flight.modalPresent)
+                    val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    assertEquals("the replacement also owns no input", flags, requireNotNull(popupWindow).attributes.flags and flags)
+                    reportOrigin = true
+                }
+            }
+            advanceWithNativeFrames(4000)
+            compose.runOnIdle {
+                assertTrue("replacement eventually admits", flight.admitted(popupWindow))
+                assertEquals(1f, flight.progress.value, 0f)
+                assertTrue(open)
+                assertTrue("ordered native draws belong only to the admitted window: $admissionViolations", admissionViolations.isEmpty())
+                open = false
+            }
+            advanceWithNativeFrames(4000)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     private fun retainedReadyReopen(reduced: Boolean) {
         fixture(reduced)
         try {
             compose.runOnIdle { open = true }
             advanceWithNativeFrames(4000)
             val firstWindow = requireNotNull(popupWindow)
+            val firstFlight = requireNotNull(anchor.popup)
+            val firstPreparation = preparation
+            val firstContact = anchor.contact
             compose.runOnIdle {
                 assertTrue(anchor.hidden && anchor.modalPresent)
                 assertEquals(1f, preparation.progress, 0f)
@@ -105,11 +173,24 @@ class GlassOriginPreparationTest {
                 assertTrue("Observe the draw handoff before logical disposal", anchor.modalPresent)
             }
             assertTrue("Return must acknowledge the restored trigger", acknowledged)
-            compose.runOnIdle { open = true }
+            compose.runOnIdle {
+                val basis = firstFlight.basis
+                val gen = firstFlight.gen
+                val value = firstFlight.progress.value
+                val velocity = firstFlight.progress.velocity
+                open = true
+                requireNotNull(anchor.reclaimOpening).invoke()
+                assertEquals("T11 is synchronous for prepared origins", io.github.anastaci1a.localica.ui.engine.PopupTakeover.InWindow, firstFlight.takeover)
+                assertSame(basis, firstFlight.basis); assertEquals(gen, firstFlight.gen)
+                assertSame(firstPreparation, preparation); assertSame(firstContact, anchor.contact)
+                assertEquals("$reduced: no expansion reset at Show", value, firstFlight.progress.value, 0f)
+                assertEquals("$reduced: no velocity reset at Show", velocity, firstFlight.progress.velocity, 0f)
+            }
             repeat(2) {
                 frame()
                 compose.runOnIdle {
                     assertSame("Reopen must reuse the ready native window", firstWindow, popupWindow)
+                    assertSame("Reopen retains its presentation", firstFlight, anchor.popup)
                     assertEquals("Preparation cannot allocate a replacement popup", 1, nativeMounts)
                     // Reversal retains velocity: it may continue toward the trigger before
                     // turning. Ownership must follow the actual seam, not requested intent.

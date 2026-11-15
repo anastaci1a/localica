@@ -106,4 +106,28 @@ class PopupStateWindowTest {
         assertNull(flight.state.window)
         assertEquals(PopupTakeover.InWindow, flight.takeover)
     }
+
+    @Test fun replacementClearsEveryPresentersAdmissionAndSurvivesASecondReplacement() {
+        for (restoring in listOf(false, true)) for (presenter in PopupPresenter.entries) {
+            val old = newTestWindow(); val next = newTestWindow()
+            val flight = GlassPopupFlight().testRun(Admitted, window = old)
+            if (presenter != PopupPresenter.Window) flight.testStep(OfferReady, window = old)
+            if (presenter in listOf(PopupPresenter.Taken, PopupPresenter.Releasing, PopupPresenter.Reclaimed)) flight.testStep(OfferTaken)
+            if (presenter in listOf(PopupPresenter.Releasing, PopupPresenter.Reclaimed)) flight.testStep(HomeReturns)
+            if (presenter == PopupPresenter.Reclaimed) flight.testStep(WindowDrew, window = old)
+            if (restoring) flight.testStep(AtHome)
+            val basis = flight.basis; val gen = flight.gen
+            assertTrue(flight.admitted(old))
+            flight.testStep(WindowReplaced)
+            assertEquals(PopupTakeover.Admitting to null, flight.at)
+            assertNull(flight.window)
+            assertFalse("old admission never authorizes either window", flight.admitted(old) || flight.admitted(next))
+            assertFalse(flight.prepared || flight.handedOff || flight.wasProjected)
+            assertSame(basis, flight.basis); assertEquals(gen, flight.gen)
+            assertTrue("replacement while Admitting", flight.advance(gen, WindowReplaced))
+            assertTrue(flight.advance(gen, Admitted, next))
+            assertFalse("late old detach", flight.receipt(WindowGone, old))
+            assertTrue(flight.admitted(next)); assertFalse(flight.admitted(old))
+        }
+    }
 }

@@ -219,6 +219,12 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     }
     private fun apply(value: Prepared,q: Boolean,stamp: FrameStamp) { value.sigma?.let { flightSigma=it }; if(pendingNative!=value.gate && value.gate!=null) nativeGeneration++; pendingNative=value.gate; logical=q; flightSpec=value.spec; lastStamp=stamp; identity=listOf(q,spec,basis,context(),timeScale()); commitAtomic(value.entries); notifyLifecycle(true) }
     fun target(expanded: Boolean,reason: ExpansionReason=ExpansionReason.Programmatic) { val stamp=clock.stampNow; guard(stamp); if(held) { logical=expanded; identity=null; lastStamp=stamp; return }; if(touching) { pendingTarget=expanded; lastStamp=stamp; return }; val current=requireNotNull(basis) { "Measure an expansion basis before target" }; if(identity==listOf(expanded,spec,current,context(),timeScale()) && pendingBasis==null) return; val initialize=reason==ExpansionReason.Restore && !motion.presented && bound?.channels?.any { it.presented }!=true; val prepared=prepare(expanded,stamp,current,bound,initialize=initialize); apply(prepared,expanded,stamp) }
+    /** A replacement native window has no admitted motion to inherit. Initialize the existing channels atomically. */
+    internal fun restartNativeAdmission() {
+        val stamp=clock.stampNow; guard(stamp); check(!touching)
+        nativeGeneration++; pendingNative=null; nativeSide=false
+        basis?.let { apply(prepare(false,stamp,it,bound,initialize=true),false,stamp) }
+    }
     /** The departing home owns presentation until disposal. Preserve the same phase and edges. */
     internal fun hold() {
         val stamp=clock.stampNow; guard(stamp); check(!touching) { "Contact and departing-home ownership cannot overlap" }

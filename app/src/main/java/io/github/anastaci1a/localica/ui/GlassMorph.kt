@@ -154,7 +154,7 @@ internal class GlassAnchor : PopupTakeoverOwner {
 internal enum class PopupPresenter { Window, Offered, Taken, Releasing, Reclaimed }
 /** #920 SPEC section 2 events. A window receipt must name the presentation's admitted window. */
 internal enum class PopupEvent(val setsWindow: Boolean = false, val windowReceipt: Boolean = setsWindow) { Hide, Admitted(true), AtHome, Show, Returned, Retired,
-    Gone, HomeReturns, HomeLeft, WindowGone(windowReceipt = true), OfferReady(windowReceipt = true), SampleLost(windowReceipt = true), OfferTaken, OfferReleased, WindowReplaced(true), Rebind, WindowDrew(windowReceipt = true) }
+    Gone, HomeReturns, HomeLeft, WindowGone(windowReceipt = true), OfferReady(windowReceipt = true), SampleLost(windowReceipt = true), OfferTaken, OfferReleased, WindowReplaced, Rebind, WindowDrew(windowReceipt = true) }
 /** A presentation's sampling basis (SPEC G4): captured at T1, re-captured at T2 and rebound only through [GlassPopupFlight.advance]. */
 internal data class SamplingBasis(val source: FrostedBackdrop?, val bounds: Rect, val footprint: HomeBackdropFootprint?, val measured: Boolean)
 /** One presentation's stored value. [gen] counts its opens, so a writer registered for an earlier open is refused. */
@@ -167,10 +167,12 @@ internal val PopupEdges: Map<Triple<PopupTakeover, PopupPresenter?, PopupEvent>,
     edge(Admitting, null, Admitted, InWindow, Window) // T2
     for (e in listOf(Hide, Retired, Gone)) edge(Admitting, null, e, Closed, null) // T3, T17
     edge(Admitting, null, Rebind, Admitting, null)
+    edge(Admitting, null, WindowReplaced, Admitting, null) // T16 before admission
     for (t in listOf(InWindow, Restoring)) {
         for (p in PopupPresenter.entries) {
-            for (e in listOf(Retired, Gone, WindowReplaced)) edge(t, p, e, Closed, null) // T17, T16
-            edge(t, p, Admitted, InWindow, p) // T2 again at a reclaimed gate
+            for (e in listOf(Retired, Gone)) edge(t, p, e, Closed, null) // T17
+            edge(t, p, WindowReplaced, Admitting, null) // T16
+            if (t == InWindow) edge(t, p, Admitted, InWindow, p) // T2 again at a reclaimed gate
             for (e in listOf(Rebind, WindowGone)) edge(t, p, e, t, p)
             edge(t, p, HomeLeft, t, Window) // the home registration left
         }
@@ -196,6 +198,7 @@ internal class GlassPopupFlight(private val anchor: GlassAnchor? = null, private
     val modalPresent get() = takeover >= InWindow
     val gen by derivedStateOf(structuralEqualityPolicy()) { state.gen }
     val window by derivedStateOf(referentialEqualityPolicy()) { state.window }
+    fun admitted(window: android.view.Window?) = window != null && window === this.window && modalPresent
     val basis by derivedStateOf(referentialEqualityPolicy()) { state.basis }
     val progress = GlassExpansion()
     val searchSlot = SearchSlotMotion(this)
@@ -208,7 +211,7 @@ internal class GlassPopupFlight(private val anchor: GlassAnchor? = null, private
         if (gen != now.gen || event.windowReceipt && window == null || window != null && !event.setsWindow && window !== now.window) return false
         val (to, presenter) = PopupEdges[Triple(now.takeover, now.presenter, event)] ?: return false
         step(if (to == Closed) PopupState(gen = now.gen) else PopupState(to, presenter, now.gen,
-            if (event == WindowGone) null else window ?: now.window, basis ?: now.basis), event.name)
+            if (to == Admitting || event == WindowGone) null else window ?: now.window, basis ?: now.basis), event.name)
         return true
     }
     /** A receipt of the current open's draw pass (S1). */
@@ -546,7 +549,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var modalWindow by remember { mutableStateOf<android.view.Window?>(null) }
     var dismissalAttempt by remember { mutableIntStateOf(0) }
     val gestures = rememberModalGestureScope()
-    val originOwnsInput = continuousOrigin == null || popupFlight.expanded
+    val originOwnsInput = popupFlight.expanded
     DisposableEffect(gestures, visible, dismissalAttempt, originOwnsInput) {
         if (visible && originOwnsInput) gestures.activate() else gestures.deactivate()
         onDispose { gestures.deactivate() }
@@ -571,11 +574,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val ambientSource = LocalModalBackdrop.current
     androidx.activity.compose.BackHandler(visible && originPreparation != null && (if (continuousOrigin != null) !popupFlight.expanded else !popupFlight.present)) { dismissNow() }
     val transitionJob = remember { arrayOfNulls<Job>(1) }
-    val reclaimOpening = remember(anchor, gen, continuousOrigin, placement.takeIf { continuousOrigin != null }) { {
+    val reclaimOpening = remember(anchor, gen) { {
         // A click updates its conditional caller before the next composition can
         // remount the retained entry. Stop the old return at that admission point,
         // otherwise its restored-draw acknowledgment can dispose this same window.
-        if (continuousOrigin == null && modalWindow != null && modalWindow === popupFlight.window &&
+        if (popupFlight.admitted(modalWindow) &&
             popupFlight.advance(gen, PopupEvent.Show)) {
             transitionJob[0]?.cancel()
             transitionJob[0] = null
@@ -637,7 +640,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     if (continuousOrigin == null) {
                         window.glassInput(true); gestures.activate()
                     }
-                } else if (motion.expansion.nativeOpening == false && visible && continuousOrigin == null &&
+                } else if (motion.expansion.nativeOpening == false && visible &&
                     popupFlight.expanded && popupFlight.modalPresent && modalWindow != null && modalWindow === popupFlight.window) {
                     // A reopen reclaimed this window at its return gate (#858). Pass the gate
                     // without restoring the trigger; the reversed expansion then admits it again.
@@ -678,7 +681,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         awaitReturnedPresentation()
                         if (!gateCurrent()) continue@gateLoop
                     }
-                    // A reopen keeps Restoring and its window; the opening gate admits it again (T11).
                     if (!visible) popupFlight.advance(gen, PopupEvent.Returned)
                 }
                 if (!gateCurrent()) continue@gateLoop
@@ -690,13 +692,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     searchMotion.rendered = Rect.Zero; searchMotion.lastIme = 0
                 }
                 searchMotion.flight = null
-                break
+                if (!visible) break
+                snapshotFlow { !motion.expansion.retirementReady }.first { it }
             }
         }
     }
     DisposableEffect(anchor) { onDispose { popupFlight.advance(popupFlight.state.gen, PopupEvent.Gone) } }
-    // The home is gone: the popup is Closed at the event, whatever it was doing (T17).
-    if (popupHome?.mounted == false) SideEffect { popupFlight.advance(gen, PopupEvent.Gone) }
     val basis = popupFlight.basis
     if (!popupFlight.present || popupHome?.mounted == false || basis == null) return
     // Flat None retires the optical descriptor without retiring this window.
@@ -754,24 +755,22 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val workObserver = LocalGlassMorphWorkObserver.current
         if (workObserver != null) SideEffect { workObserver("dialog", window, null) }
         if (placement == GlassPlacement.Search) PreserveSearchImeState(window)
-        // Attachment follows the current owner, never one captured with an earlier window (#854 review).
         DisposableEffect(window, motion) {
-            window?.let { motion.attached(it, windowPlane) }
-            onDispose { }
-        }
-        DisposableEffect(window) {
             modalWindow = window
-            if (continuousOrigin != null && (!popupFlight.modalPresent || popupFlight.window !== window)) {
-                window?.glassInput(false)
-                // A replacement window cannot borrow the old window's admission.
-                // Its old frozen surface is gone; restore the trigger and close.
-                if (popupFlight.advance(gen, PopupEvent.WindowReplaced, window)) dismissNow()
+            window?.let {
+                if (motion.attached(it, windowPlane) && popupFlight.present) {
+                    popupFlight.window?.glassInput(false); it.glassInput(false)
+                    motion.expansion.restartNativeAdmission()
+                    popupFlight.advance(popupFlight.state.gen, PopupEvent.WindowReplaced)
+                    motion.show(motion.shown)
+                } else it.glassInput(visible && popupFlight.admitted(it))
             }
             // We draw our own animated scrim. A zero-alpha native dim layer still
             // blocks touches as an untrusted occluder during return on Android 16.
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             window?.setWindowAnimations(0)
             onDispose {
+                window?.glassInput(false)
                 if (measuredOriginWindow === window) measuredOriginWindow = null
                 popupFlight.advance(popupFlight.state.gen, PopupEvent.WindowGone, window)
                 if (nativePlane === windowPlane) {
@@ -784,7 +783,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         DisposableEffect(window, visible, dismissalAttempt, originOwnsInput) {
             // A busy editor may refuse dismissal; Settings Back may only change
             // the page. Reconcile with the actual state after that callback.
-            window?.glassInput(visible && (continuousOrigin == null || popupFlight.expanded && popupFlight.window === window))
+            window?.glassInput(visible && popupFlight.expanded && popupFlight.admitted(window))
             onDispose { }
         }
         @Suppress("DEPRECATION")
@@ -806,7 +805,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
-        val admittedDraw = continuousOrigin == null || popupFlight.modalPresent && popupFlight.window === window
+        fun admittedDraw() = popupFlight.admitted(window)
         var foregroundReady by remember { mutableStateOf(false) }
         var panelReady by remember { mutableStateOf(false) }
         LaunchedEffect(motion) {
@@ -818,6 +817,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             .onGloballyPositioned { popupFlight.origin = it.backdropPosition(view) }
             .nativePlaneReceipt(windowPlane)
             .drawWithContent {
+                if (!admittedDraw()) return@drawWithContent
                 if (popupHome == null || !returningInline && !popupFlight.wasProjected) drawContent()
                 else {
                     flightLayer.record { this@drawWithContent.drawContent() }
@@ -832,12 +832,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 }
             }
             .then(if (returningInline) Modifier.clearAndSetSemantics { } else Modifier)
-            .then(if (continuousOrigin != null) Modifier
-                .drawWithContent { if (admittedDraw) drawContent() }
-                .then(if (!admittedDraw) Modifier.clearAndSetSemantics { } else Modifier)
-                else Modifier)
+            .then(if (!admittedDraw()) Modifier.clearAndSetSemantics { } else Modifier)
             .drawBehind { drawRect(Color.Black.copy(alpha = .16f * progress.value)) }
-            .pointerInput(visible, admittedDraw) { detectTapGestures { if (visible && admittedDraw) dismissNow() } }) {
+            .pointerInput(visible, admittedDraw()) { detectTapGestures { if (visible && admittedDraw()) dismissNow() } }) {
             CompositionLocalProvider(LocalSliderCancelHost provides sliderCancel) {
             val viewportSized = heightSizing is GlassDialogHeight.ViewportFraction
             PopupViewportSlot(heightSizing, when {
@@ -920,7 +917,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 fun holdImeBack() = placement == GlassPlacement.Search && searchDismissOnImeBack && popupFlight.expanded &&
                     motion.openAtRest && windowFocused && childPanels.intValue == 0 &&
                     imeTarget == 0 && searchMotion.lastIme > 0
-                fun surfaceOpacity() = if (!admittedDraw) 0f else if (detached) motion.detachedOpacity.at(phase()) else
+                fun surfaceOpacity() = if (!admittedDraw()) 0f else if (detached) motion.detachedOpacity.at(phase()) else
                     if (popupFlight.present && window != null && popupFlight.window === window) 1f else 0f
                 Box(Modifier.fillMaxSize().onGloballyPositioned {
                     if (hasViewport) windowOrigin = it.backdropPosition(view)
@@ -970,7 +967,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         val coordinates = wellCoordinates[0]
                         shadowReceiver[0] = null
                         if (wellStrength > 0f && !page && !detached && !anchor.contextual &&
-                            popupFlight.expanded && admittedDraw &&
+                            popupFlight.expanded && admittedDraw() &&
                             coordinates?.isAttached == true) {
                             val home = (returningHome ?: anchor.presentedBounds).translate(-coordinates.backdropPosition(view))
                             val caster = glassWellCaster(size, radius().toPx(), shape.scaleX(vertical),
@@ -983,7 +980,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         // The trigger's window keeps drawing its neighbors' shared shadow.
                         // At home this field must equal that union, not stack over it.
                         shadowExclusion[0] = null
-                        if (!page && !detached && popupFlight.modalPresent && admittedDraw && coordinates?.isAttached == true) {
+                        if (!page && !detached && popupFlight.modalPresent && admittedDraw() && coordinates?.isAttached == true) {
                             val surfaceOrigin = coordinates.backdropPosition(view)
                             val extent = (4f + shadowSpread * 28f + 2f).dp.toPx()
                             val sx = shape.scaleX(vertical)
@@ -1061,7 +1058,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 LocalGlassOrigin provides null,
                                 LocalGlassPopupHome provides childHome,
                                 LocalPopupDismiss provides dismissNow,
-                                LocalGlassPanelReady provides (visible && admittedDraw && (placement == GlassPlacement.Search || panelReady))) {
+                                LocalGlassPanelReady provides (visible && admittedDraw() && (placement == GlassPlacement.Search || panelReady))) {
                                 GlassPanelTheme(dark, content)
                             }
                         }
