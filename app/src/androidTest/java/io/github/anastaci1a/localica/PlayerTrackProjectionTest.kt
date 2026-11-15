@@ -57,14 +57,14 @@ class PlayerTrackProjectionTest {
             val result by rememberQueuePresentation(source, library)
             SideEffect { observed = result?.tracks; publishedPosition = result?.active?.queue?.positionMs ?: -1 }
         }
-        compose.waitUntil(5000) { compose.waitForIdle(); observed != null }
+        compose.waitUntil(5000) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); observed != null }
         compose.waitForIdle()
         val initial = requireNotNull(observed)
         compose.runOnIdle { tracks.reads = 0; entries.reads = 0 }
         repeat(10) { index ->
             val position = (index + 1) * 250L
             compose.runOnIdle { state.value = QueueLibrary(listOf(queue.copy(positionMs = position)), queue.id) }
-            compose.waitUntil(5000) { compose.waitForIdle(); publishedPosition == position }
+            compose.waitUntil(5000) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); publishedPosition == position }
             compose.waitForIdle()
             compose.runOnIdle {
                 assertEquals(position, publishedPosition)
@@ -91,7 +91,7 @@ class PlayerTrackProjectionTest {
             SideEffect { observed = result?.tracks }
         }
         fun assertProjection(current: Track?, indexed: Track?, lyrics: Track?) {
-            compose.waitUntil(5000) { compose.waitForIdle(); observed == PlayerTrackProjection(current, indexed, lyrics) }
+            compose.waitUntil(5000) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); observed == PlayerTrackProjection(current, indexed, lyrics) }
             compose.waitForIdle()
             compose.runOnIdle { assertEquals(PlayerTrackProjection(current, indexed, lyrics), observed) }
         }
@@ -185,21 +185,24 @@ class PlayerTrackProjectionTest {
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isNotEmpty() }
             hook.set { started.countDown(); check(release.await(30, TimeUnit.SECONDS)) }
             compose.runOnIdle { source = QueueUiState(QueueLibrary(listOf(pending), pending.id), loading = false) }
+            compose.waitForIdle()
             assertTrue(started.await(10, TimeUnit.SECONDS))
-            // Same audible identity retains the completed occurrence's actions and lyrics until publication.
-            information(old.title)
-            compose.onNodeWithTag("lyric-lines", true).assertExists()
+            // A replacement raw owner cannot expose the retained occurrence’s actions or lyrics.
+            compose.onNodeWithContentDescription("Information").performClick()
+            compose.onNodeWithTag("song-information").assertDoesNotExist()
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isEmpty() }
             for ((id, uri, title) in listOf(Triple(fresh.id, fresh.uri, fresh.title),
                 Triple(old.id, fresh.uri + "?same-id", "Same ID, different URI"), Triple(null, fresh.uri + "?uri-only", "URI only"))) {
                 compose.runOnIdle { native = native.copy(trackId = id, trackUri = uri, title = title) }
-                compose.onNodeWithTag("player-title", true).assertTextEquals(title)
+                compose.onNode(hasText(title) and (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title"))), true).assertTextEquals(title)
                 compose.waitUntil(10_000) { PlayerVisualCache.peek(uri) != null }
                 compose.onNodeWithContentDescription("Information").performClick()
                 compose.onNodeWithTag("song-information").assertDoesNotExist()
                 compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isEmpty() }
             }
             compose.runOnIdle { native = native.copy(trackId = old.id, trackUri = old.uri, title = "Audible old") }
-            information(old.title)
+            compose.onNodeWithContentDescription("Information").performClick()
+            compose.onNodeWithTag("song-information").assertDoesNotExist()
             release.countDown()
             compose.waitUntil(10_000) { !source.loading && blocked.reads > 0 }
             compose.onNodeWithContentDescription("Information").performClick()
@@ -311,7 +314,7 @@ class PlayerTrackProjectionTest {
                 root = true
             }
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("player-title", true).fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("player-title", true).assertTextEquals(old.title)
+            compose.onNode(hasText(old.title) and (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title"))), true).assertTextEquals(old.title)
             val pending = CountDownLatch(1)
             val continuePreparation = CountDownLatch(1)
             hook.set { pending.countDown(); check(continuePreparation.await(30, TimeUnit.SECONDS)) }
@@ -320,8 +323,9 @@ class PlayerTrackProjectionTest {
                     source = initial
                     native = native.copy(trackId = fresh.id, trackUri = fresh.uri, title = fresh.title)
                 }
+                compose.waitForIdle()
                 assertTrue(pending.await(10, TimeUnit.SECONDS))
-                compose.onNodeWithTag("player-title", true).assertTextEquals(fresh.title)
+                compose.onNode(hasText(fresh.title) and (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title"))), true).assertTextEquals(fresh.title)
                 assertEquals(0, entries.mainReads.get())
                 assertEquals(0, tracks.mainReads.get())
                 assertEquals(0, catalog.mainReads.get())
