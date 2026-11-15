@@ -393,11 +393,14 @@ test('chrome reopen holds the browse departure lease until the home stops projec
 
 test('chrome reopen resumes modal sampling only after the home clears projection',()=>{
  const source=popupDepartureSource();
- assert.match(source,/SideEffect \{ if \(!returningInline\) \{ popupFlight.prepared = false; popupFlight.handedOff = false \} \}/);
+ assert.match(source,/SideEffect \{ if \(!returningInline\) popupFlight\.advance\(gen, PopupEvent\.HomeReturns\) \}/);
+ assert.match(source,/edge\(t, Taken, HomeReturns, t, Releasing\)/);
+ assert.match(source,/edge\(t, Releasing, WindowDrew, t, Reclaimed\)/);
+ assert.match(source,/edge\(t, Reclaimed, OfferReleased, t, Window\)/);
  assert.equal(actualPopupDeparture(source,true,false,true).sampling.name,'browse',
   'resetting the handoff cannot release the source while the home still projects it');
  const home=fs.readFileSync(new URL('../../app/src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt',import.meta.url),'utf8');
- assert.match(home,/if \(!flight.prepared\) flight.wasProjected = false[\s\S]*?drawPopupProjection/,
+ assert.match(home,/if \(!flight.prepared\) Snapshot\.withoutReadObservation \{ flight\.receipt\(PopupEvent\.OfferReleased\) \}[\s\S]*?drawPopupProjection/,
   'the home releases projection before filtering its next draw pass');
  assert.equal(actualPopupDeparture(source,true,false,false).sampling.name,'modal',
   'modal sampling resumes after the home commits a frame without the flight');
