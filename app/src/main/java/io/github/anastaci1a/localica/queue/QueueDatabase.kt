@@ -266,7 +266,7 @@ abstract class QueueDatabase : RoomDatabase() {
                         override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
                             if (length == 0) return 0
                             val bytes = db.query("SELECT substr(CAST(orderState AS BLOB), ?, ?) FROM queues WHERE id = ?",
-                                arrayOf(position, minOf(length, 8192), id)).use { it.moveToFirst(); it.getBlob(0) }
+                                arrayOf(position, minOf(length, 8192), id)).use { it.moveToFirst(); it.getBlob(0) } ?: return -1
                             if (bytes.isEmpty()) return -1
                             bytes.copyInto(buffer, offset); position += bytes.size; return bytes.size
                         }
