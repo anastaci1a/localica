@@ -1693,8 +1693,8 @@ class PlaybackIntentTest {
                     val active = state.value.library.active!!
                     assertEquals(before.activeId, active.id)
                     assertSame(before.active!!.entries, active.entries)
-                    assertEquals(before.active.currentEntryId, active.currentEntryId)
-                    assertEquals(before.active.positionMs, active.positionMs)
+                    assertEquals(before.active!!.currentEntryId, active.currentEntryId)
+                    assertEquals(before.active!!.positionMs, active.positionMs)
                     assertEquals(active.currentEntryId, active.journey!!.current!!.entryId)
                     assertEquals(0, active.journey.cursor)
                 }
@@ -1751,7 +1751,7 @@ class PlaybackIntentTest {
             withContext(Dispatchers.Main) { player.selectionCalls.clear() }
             val pending = async { command {
                 val before = state.value.library
-                val next = before.update(before.active!!.copy(entries = entries, currentEntryId = "duplicate-1", journey = before.active.journey!!.copy()))
+                val next = before.update(before.active!!.copy(entries = entries, currentEntryId = "duplicate-1", journey = before.active!!.journey!!.copy()))
                 val start: suspend () -> Unit = { starts.incrementAndGet(); player.setPlayWhenReady(true) }
                 val failure = runCatching { kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
                     save.invoke(queues, next, start, it)
