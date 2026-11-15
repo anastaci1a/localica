@@ -778,14 +778,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     /** Artwork and decoder preparation follow the same durable visit sequence. */
-    fun artworkNeighbors(): List<String?> {
-        val queue = state.value.library.active ?: return emptyList()
+    fun artworkNeighbors(queue: ListeningQueue? = state.value.library.active): List<String?> {
+        queue ?: return emptyList()
         return listOf(queue.journey?.next, queue.journey?.previous).map { visit ->
             visitTrack(queue, visit?.entryId)?.uri
         }
     }
-    fun artworkPreloadUris(): List<String> {
-        val queue = state.value.library.active ?: return emptyList()
+    fun artworkPreloadUris(queue: ListeningQueue? = state.value.library.active): List<String> {
+        queue ?: return emptyList()
         return queue.journey?.artworkWindow().orEmpty().mapNotNull { visitTrack(queue, it.entryId)?.uri }.distinct()
     }
     fun next() = submitCursor {

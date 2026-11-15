@@ -1,6 +1,12 @@
 package io.github.anastaci1a.localica
 
+import android.os.Debug
+import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.runtime.*
+import androidx.compose.material3.Text
+import androidx.compose.ui.test.*
+import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.queue.*
@@ -8,6 +14,15 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 class PlayerTrackProjectionTest {
     @get:Rule val compose = createComposeRule()
@@ -16,8 +31,15 @@ class PlayerTrackProjectionTest {
 
     private class Counted<T>(private val values: List<T>) : AbstractList<T>() {
         var reads = 0
+        val mainReads = AtomicInteger()
+        var beforeRead: (() -> Unit)? = null
         override val size get() = values.size
-        override fun get(index: Int): T { reads++; return values[index] }
+        override fun get(index: Int): T {
+            reads++
+            if (Looper.myLooper() == Looper.getMainLooper()) mainReads.incrementAndGet()
+            beforeRead?.invoke()
+            return values[index]
+        }
     }
 
     @Test fun positionOnlyPublicationsReuseOccurrenceAndLibraryLookups() {
@@ -31,15 +53,18 @@ class PlayerTrackProjectionTest {
         var observed: PlayerTrackProjection? = null
         compose.setContent {
             val current = state.value
-            val result = rememberPlayerTrackProjection(current, library)
-            SideEffect { observed = result; publishedPosition = current.active!!.positionMs }
+            val source = remember(current) { QueueUiState(current, loading = false) }
+            val result by rememberQueuePresentation(source, library)
+            SideEffect { observed = result?.tracks; publishedPosition = result?.active?.queue?.positionMs ?: -1 }
         }
+        compose.waitUntil(5000) { observed != null }
         compose.waitForIdle()
         val initial = requireNotNull(observed)
         compose.runOnIdle { tracks.reads = 0; entries.reads = 0 }
         repeat(10) { index ->
             val position = (index + 1) * 250L
             compose.runOnIdle { state.value = QueueLibrary(listOf(queue.copy(positionMs = position)), queue.id) }
+            compose.waitUntil(5000) { publishedPosition == position }
             compose.waitForIdle()
             compose.runOnIdle {
                 assertEquals(position, publishedPosition)
@@ -61,10 +86,12 @@ class PlayerTrackProjectionTest {
         val library = mutableStateOf(LibrarySnapshot(trackPlays = mapOf("same" to 4L)))
         var observed: PlayerTrackProjection? = null
         compose.setContent {
-            val result = rememberPlayerTrackProjection(queues.value, library.value)
-            SideEffect { observed = result }
+            val source = remember(queues.value) { QueueUiState(queues.value, loading = false) }
+            val result by rememberQueuePresentation(source, library.value)
+            SideEffect { observed = result?.tracks }
         }
         fun assertProjection(current: Track?, indexed: Track?, lyrics: Track?) {
+            compose.waitUntil(5000) { observed == PlayerTrackProjection(current, indexed, lyrics) }
             compose.waitForIdle()
             compose.runOnIdle { assertEquals(PlayerTrackProjection(current, indexed, lyrics), observed) }
         }
@@ -90,5 +117,116 @@ class PlayerTrackProjectionTest {
         assertProjection(null, null, null)
         compose.runOnIdle { queues.value = QueueLibrary(listOf(queue), "absent") }
         assertProjection(null, null, null)
+    }
+
+    @Test fun millionEntryPreparationIsOffMainAndNativeMetadataDoesNotWaitForIt() {
+        val residentTracks = List(50_000) { track("$it").copy(durationMs = 1000L) }
+        val tracks = Counted(residentTracks)
+        val entries = Counted(List(1_000_000) { QueueEntry("entry-$it", residentTracks[it % residentTracks.size]) })
+        val queue = ListeningQueue(id = "scale", name = "Scale", entries = entries, currentEntryId = "entry-999999")
+        val empty = ListeningQueue(id = "other", name = "Other", entries = emptyList())
+        val catalog = Counted(object : AbstractList<ListeningQueue>() {
+            override val size = 50_000
+            override fun get(index: Int) = if (index == lastIndex) queue else empty
+        })
+        val initial = QueueUiState(QueueLibrary(catalog, queue.id), loading = false)
+        val snapshot = LibrarySnapshot(tracks = tracks)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { assertEquals(999_999, entries.indexOfFirst { it.id == queue.currentEntryId }) }
+        assertEquals(1_000_000, entries.mainReads.get())
+        entries.mainReads.set(0)
+        val runtime = Runtime.getRuntime()
+        val heapBefore = runtime.totalMemory() - runtime.freeMemory()
+        val gcBefore = Debug.getRuntimeStat("art.gc.gc-count")
+        var prepareNanos = 0L
+        val pure = runBlocking {
+            withContext(Dispatchers.Default) {
+                val start = SystemClock.elapsedRealtimeNanos()
+                prepareQueuePresentation(initial, snapshot, null).also { prepareNanos = SystemClock.elapsedRealtimeNanos() - start }
+            }
+        }
+        assertEquals(999_999, pure.active!!.index)
+        assertEquals(1_000_000_000L, pure.browsed!!.duration)
+        assertEquals(50_000, pure.number)
+        assertSame(residentTracks.last(), pure.tracks.indexed)
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val hook = AtomicReference<(() -> Unit)?>(null)
+        entries.beforeRead = { hook.getAndSet(null)?.invoke() }
+        hook.set { started.countDown(); check(release.await(30, TimeUnit.SECONDS)) }
+        var source by mutableStateOf(initial)
+        var root by mutableStateOf(false)
+        var native by mutableStateOf(io.github.anastaci1a.localica.playback.PlaybackState())
+        var observed: QueuePresentation? = null
+        compose.setContent { EngineTheme(reduced = true) {
+            if (root) LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, {}, queues = source)
+            else {
+                val result = rememberQueuePresentation(source, snapshot)
+                val ready = result.value
+                if (ready == null) QueueScreen(source, null, LibraryUiState(snapshot, loading = false), presentation = result)
+                else Text("${ready.active?.index} / ${ready.active?.queue?.entries?.size}")
+                SideEffect { observed = ready }
+            }
+        } }
+        try {
+            assertTrue(started.await(10, TimeUnit.SECONDS))
+            compose.onNodeWithTag("async-section-loading").assertExists()
+            release.countDown()
+            compose.waitUntil(30_000) { observed?.state === initial }
+            compose.runOnIdle {
+                assertEquals(999_999, observed!!.active!!.index)
+                assertSame(residentTracks.last(), observed!!.tracks.current)
+                entries.reads = 0
+                tracks.reads = 0
+            }
+            repeat(4) { iteration ->
+                val next = initial.copy(library = QueueLibrary(listOf(queue.copy(positionMs = iteration + 1L)), queue.id))
+                compose.runOnIdle { source = next }
+                compose.waitUntil(10_000) { observed?.state === next }
+                compose.runOnIdle {
+                    assertEquals(iteration + 1L, observed!!.active!!.queue.positionMs)
+                    assertEquals(1_000_000_000L, observed!!.browsed!!.duration)
+                    assertEquals(0, entries.reads)
+                    assertEquals(0, tracks.reads)
+                }
+            }
+            assertEquals(0, entries.mainReads.get())
+            assertEquals(0, tracks.mainReads.get())
+            assertEquals(0, catalog.mainReads.get())
+            val metrics = JSONObject().put("api", android.os.Build.VERSION.SDK_INT).put("entries", 1_000_000)
+                .put("tracks", 50_000).put("catalog", 50_000).put("prepareNanos", prepareNanos)
+                .put("heapBefore", heapBefore).put("heapAfter", runtime.totalMemory() - runtime.freeMemory())
+                .put("gcBefore", gcBefore).put("gcAfter", Debug.getRuntimeStat("art.gc.gc-count"))
+                .put("mainEntryReads", entries.mainReads.get()).put("mainTrackReads", tracks.mainReads.get())
+                .put("mainCatalogReads", catalog.mainReads.get())
+            val evidence = nativeEvidenceDirectory("player-presentation-1020", instrumentation.targetContext.getExternalFilesDir(null))
+            File(evidence, "scale-api${android.os.Build.VERSION.SDK_INT}.json").writeText(metrics.toString(2))
+            println("PlayerPresentation1020 $metrics")
+
+            val old = track("native-old", "Old native")
+            val fresh = track("native-new", "New native")
+            val oldQueue = ListeningQueue(id = "old", name = "Old", entries = listOf(QueueEntry("old", old)))
+            compose.runOnIdle {
+                source = QueueUiState(QueueLibrary(listOf(oldQueue), oldQueue.id), loading = false)
+                native = io.github.anastaci1a.localica.playback.PlaybackState(connected = true, trackId = old.id, trackUri = old.uri, title = old.title)
+                root = true
+            }
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("player-title").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("player-title").assertTextEquals(old.title)
+            val pending = CountDownLatch(1)
+            val continuePreparation = CountDownLatch(1)
+            hook.set { pending.countDown(); check(continuePreparation.await(30, TimeUnit.SECONDS)) }
+            try {
+                compose.runOnIdle {
+                    source = initial
+                    native = native.copy(trackId = fresh.id, trackUri = fresh.uri, title = fresh.title)
+                }
+                assertTrue(pending.await(10, TimeUnit.SECONDS))
+                compose.onNodeWithTag("player-title").assertTextEquals(fresh.title)
+                assertEquals(0, entries.mainReads.get())
+                assertEquals(0, tracks.mainReads.get())
+                assertEquals(0, catalog.mainReads.get())
+            } finally { continuePreparation.countDown() }
+        } finally { release.countDown(); hook.set(null) }
     }
 }

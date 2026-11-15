@@ -1,27 +1,48 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import io.github.anastaci1a.localica.library.LibrarySnapshot
-import io.github.anastaci1a.localica.library.Track
-import io.github.anastaci1a.localica.queue.QueueLibrary
+import androidx.compose.runtime.*
+import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.queue.*
 
 internal data class PlayerTrackProjection(val current: Track?, val indexed: Track?, val lyrics: Track?)
+internal data class QueueRead(val queue: ListeningQueue, val index: Int, val duration: Long?, val current: Track?)
+class QueuePresentation internal constructor(internal val state: QueueUiState, internal val library: LibrarySnapshot,
+    internal val active: QueueRead?, internal val browsed: QueueRead?, internal val number: Int,
+    internal val tracks: PlayerTrackProjection, internal val available: Track?)
 
-/** Playback position does not change occurrence or metadata ownership. Inputs are immutable snapshots. */
+private fun ListeningQueue.read(previous: QueueRead?): QueueRead {
+    val unchanged = entries === previous?.queue?.entries
+    var index = if (unchanged && currentEntryId == previous?.queue?.currentEntryId) previous?.index ?: -1 else -1
+    var duration = if (unchanged) previous?.duration else null
+    if (!unchanged) entries.forEachIndexed { at, entry ->
+        if (index < 0 && entry.id == currentEntryId) index = at
+        entry.track.durationMs?.let { duration = (duration ?: 0L) + it }
+    } else if (currentEntryId != previous?.queue?.currentEntryId) index = entries.indexOfFirst { it.id == currentEntryId }
+    return QueueRead(this, index, duration, if (unchanged && index == previous?.index) previous?.current else entries.getOrNull(index)?.track)
+}
+
+internal fun prepareQueuePresentation(state: QueueUiState, library: LibrarySnapshot, previous: QueuePresentation?): QueuePresentation {
+    var active = -1
+    var browsed = -1
+    state.library.queues.forEachIndexed { index, queue ->
+        if (active < 0 && queue.id == state.library.activeId) active = index
+        if (browsed < 0 && queue.id == state.browsedId) browsed = index
+    }
+    if (browsed < 0) browsed = active
+    val playing = state.library.queues.getOrNull(active)?.read(previous?.active)
+    val reading = if (browsed == active) playing else state.library.queues.getOrNull(browsed)?.read(previous?.browsed)
+    val current = playing?.current
+    val available = if (library.tracks === previous?.library?.tracks && current?.id == previous?.tracks?.current?.id)
+        previous?.available else current?.let { saved -> library.tracks.firstOrNull { it.id == saved.id } }
+    val tracks = if (current === previous?.tracks?.current && library.trackPlays === previous?.library?.trackPlays && available === previous?.available)
+        previous?.tracks ?: PlayerTrackProjection(null, null, null)
+        else PlayerTrackProjection(current, available ?: current?.let { it.copy(playCount = library.trackPlays[it.id] ?: 0) }, available ?: current)
+    return QueuePresentation(state, library, playing, reading, browsed + 1, tracks, available)
+}
+
 @Composable
-internal fun rememberPlayerTrackProjection(queues: QueueLibrary, library: LibrarySnapshot): PlayerTrackProjection {
-    val active = remember(queues.queues, queues.activeId) { queues.active }
-    val current = remember(active?.entries, active?.currentEntryId) {
-        active?.let { queue -> queue.entries.firstOrNull { it.id == queue.currentEntryId }?.track }
-    }
-    // These callers historically choose the FIRST matching track, unlike associateBy's last match.
-    val available = remember(library.tracks, current?.id) {
-        current?.let { saved -> library.tracks.firstOrNull { it.id == saved.id } }
-    }
-    val indexed = remember(available, current, library.trackPlays) {
-        available ?: current?.let { it.copy(playCount = library.trackPlays[it.id] ?: 0) }
-    }
-    // Lyrics retain the saved track unchanged when unavailable; actions use current fallback statistics.
-    return remember(current, indexed, available) { PlayerTrackProjection(current, indexed, available ?: current) }
+internal fun rememberQueuePresentation(state: QueueUiState, library: LibrarySnapshot): State<QueuePresentation?> {
+    lateinit var result: State<QueuePresentation?>
+    result = rememberAsyncValue(state, library, retainPrevious = true) { prepareQueuePresentation(state, library, result.value) }
+    return result
 }
