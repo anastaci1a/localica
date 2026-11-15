@@ -1,6 +1,10 @@
 """Contract for the shared Gradle dependency cache and bounded dependency download retries (#681)."""
 import os
 import shlex
+import datetime
+import http.server
+import json
+import threading
 from pathlib import Path
 import subprocess
 import tempfile
@@ -319,6 +323,10 @@ class TransientRetryContract(unittest.TestCase):
         self.fake = self.root / 'fake-gradlew'
         self.counter = self.root / 'calls'
         self.env = dict(os.environ, RUNNER_TEMP=str(self.root), GRADLE_TRANSIENT_WAITS='0 0')
+        self.sleep = self.root / 'sleep'
+        self.sleep.write_text('#!/bin/sh\nprintf "%s\\n" "$1" >> "' + str(self.root / 'waits') + '"\n')
+        self.sleep.chmod(0o755)
+        self.env['PATH'] = str(self.root) + os.pathsep + self.env['PATH']
 
     def tearDown(self):
         self.temp.cleanup()
@@ -364,15 +372,100 @@ class TransientRetryContract(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertEqual(3, self.calls())
 
+    def test_429_retries_with_backoff_and_honors_numeric_and_http_date_retry_after(self):
+        rate_limit = ["> Could not GET 'https://repo.maven.apache.org/maven2/x/y.pom'."
+                      " Received status code 429 from server: Too Many Requests"]
+        future = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=90))
+        cases = [('Retry-After: 45', 45), ('retry-after: 075\r', 75),
+                 ('Retry-After: ' + future.strftime('%a, %d %b %Y %H:%M:%S GMT'), 90),
+                 ('Retry-After: invalid', 30), ('Retry-After: 0', 30),
+                 ('Retry-After: Sun, 06 Nov 1994 08:49:37 GMT', 30)]
+        self.env['GRADLE_TRANSIENT_WAITS'] = '30 60'
+        for header, expected in cases:
+            with self.subTest(header=header):
+                (self.root / 'waits').unlink(missing_ok=True)
+                self.gradlew([rate_limit + [header], rate_limit + [header], 'ok'])
+                result = self.run_wrapper()
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertEqual(3, self.calls())
+                waits = [int(s) for s in (self.root / 'waits').read_text().splitlines()]
+                self.assertTrue(expected - 5 <= waits[0] <= expected, waits)
+                self.assertTrue(max(60, expected - 5) <= waits[1] <= max(60, expected), waits)
+
+    def test_429_retry_after_beyond_budget_fails_without_retrying_early(self):
+        self.gradlew([["> Could not download x.pom",
+                       '> Received status code 429 from server: Too Many Requests',
+                       'Retry-After: 121'], 'ok'])
+        result = self.run_wrapper()
+        self.assertEqual(1, result.returncode, result.stdout)
+        self.assertEqual(1, self.calls())
+        self.assertFalse((self.root / 'waits').exists())
+        self.assertTrue((self.root / 'ci-infrastructure/dependencies.json').is_file())
+        receipt = json.loads((self.root / 'ci-infrastructure/dependencies.json').read_text())
+        self.assertEqual('infrastructure', receipt['classification'])
+        self.assertEqual(1, receipt['attempts'])
+
+    def test_429_without_logged_headers_probes_the_failed_resource(self):
+        requests = []
+        class Repository(http.server.BaseHTTPRequestHandler):
+            def do_HEAD(self):
+                requests.append(self.path)
+                self.send_response(429)
+                self.send_header('Retry-After', '2')
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        with http.server.ThreadingHTTPServer(('127.0.0.1', 0), Repository) as server:
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                self.gradlew([["> Could not GET 'http://127.0.0.1:%s/robolectric.pom'."
+                               ' Received status code 429 from server: Too Many Requests' % server.server_port], 'ok'])
+                result = self.run_wrapper()
+            finally:
+                server.shutdown()
+                thread.join()
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(2, self.calls())
+        self.assertEqual(['/robolectric.pom'], requests)
+        self.assertEqual('2\n', (self.root / 'waits').read_text())
+
+    def test_429_very_large_retry_after_does_not_overflow(self):
+        self.gradlew([["> Could not download x.pom", '> Received status code 429 from server',
+                       'Retry-After: 99999999999999999999'], 'ok'])
+        result = self.run_wrapper()
+        self.assertEqual(1, result.returncode, result.stdout)
+        self.assertEqual(1, self.calls())
+        self.assertFalse((self.root / 'waits').exists())
+
+    def test_429_probe_failure_falls_back_to_bounded_backoff(self):
+        curl = self.root / 'curl'
+        curl.write_text('#!/bin/sh\nexit 28\n')
+        curl.chmod(0o755)
+        self.env['GRADLE_TRANSIENT_WAITS'] = '30 60'
+        rate_limit = ["> Could not HEAD 'https://repo.maven.apache.org/maven2/x/y.pom'."
+                      ' Received status code 429 from server: Too Many Requests']
+        self.gradlew([rate_limit, rate_limit, rate_limit, 'ok'])
+        result = self.run_wrapper()
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(3, self.calls())
+        self.assertEqual('30\n60\n', (self.root / 'waits').read_text())
+        self.assertEqual('infrastructure', json.loads(
+            (self.root / 'ci-infrastructure/dependencies.json').read_text())['classification'])
+
     def test_test_failures_compile_errors_and_client_errors_never_retry(self):
         cases = {
             'tests': self.GATEWAY + ["> There were failing tests. See the report at: file:///w/app/build/reports/tests/index.html"],
             'compile': ["e: file:///w/app/src/main/java/Foo.kt:1:1 Unresolved reference: bar",
                         "> Compilation error. See log for more details"],
-            'client': ["> Could not GET 'https://repo.maven.apache.org/maven2/x/y/1/y-1.jar'."
-                       " Received status code 403 from server: Forbidden"],
+            **{str(code): ["> Could not GET 'https://repo.maven.apache.org/maven2/x/y/1/y-1.jar'."
+                          f" Received status code {code} from server: Client error"] for code in (400, 401, 403, 404)},
             'timeout-in-test-task': ["Execution failed for task ':app:testDebugUnitTest'.",
                                      "> Could not download x.jar", "> Read timed out"],
+            '429-in-test-task': ["Execution failed for task ':app:testDebugUnitTest'.",
+                                '> Could not download x.pom', '> Received status code 429 from server'],
         }
         for name, lines in cases.items():
             with self.subTest(case=name):

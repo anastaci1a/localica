@@ -68,7 +68,9 @@ Jobs stream guest kernel messages into the log and keep the emulator crash datab
 | SDK archive, emulator, system images | Keyed by exact revision and checksum, verified against the [official SDK repository](https://dl.google.com/android/repository/repository2-1.xml). Saved only from `main` (#681). AVD userdata and snapshots are not cached. |
 | Gradle dependencies | `localica-static-checks` and `localica-test-apks`, restored by compile jobs and saved only from `main`. |
 
-Each compile job records `dependency-downloads=N` and annotates the run when N is above zero. Compile steps run through `gradle-transient-retry.sh`: at most three attempts, and only after an HTTP 5xx, timeout, reset or unreachable network on a download. Failing tests, compile errors and lint findings are never retried. A failed SDK download is retried once.
+Each compile job records `dependency-downloads=N` and annotates the run when N is above zero. Compile steps use `gradle-transient-retry.sh`: at most three attempts after HTTP 429/5xx, timeout, reset or unreachable network. Tests, compile errors, lint and other 4xx never retry. A failed SDK download retries once.
+
+Dependency retries wait 30 then 60 seconds. For 429, a bounded HEAD request recovers `Retry-After` when Gradle omits headers. Numeric seconds and HTTP dates extend the wait. A delay above 120 seconds stops as infrastructure failure without retrying early (#1018).
 
 ## Distribution smoke
 
