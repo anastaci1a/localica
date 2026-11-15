@@ -56,6 +56,40 @@ class GlassTouchLightTest {
     private fun channel(pixel: Int, shift: Int) = pixel ushr shift and 255
     private fun diff(a: IntArray, b: IntArray, x: Int, y: Int, shift: Int) = channel(a[y * width + x], shift) - channel(b[y * width + x], shift)
 
+    @Test fun movingContactReusesNativeShaderRegistration() {
+        val cache = GlassRimCache()
+        val tone = GlassTone()
+        val image = ImageBitmap(width, height)
+        val path = Path().apply { addRoundRect(RoundRect(Rect(Offset.Zero, extent), CornerRadius(18f))) }
+        val shader = (cache.light(extent.center, extent.center.getDistance(), tone) as ShaderBrush).createShader(extent)
+        val registration = android.graphics.Shader::class.java.getDeclaredField("mCleaner").apply { isAccessible = true }
+        var stationary = 0; var moving = 0
+        try {
+            CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
+                fun frame(point: Offset) { drawContactLight({ point }, { path }, .12f, tone, cache) }
+                repeat(64) { frame(extent.center) }
+                var previous = registration.get(shader)
+                assertNotNull("native registration must be materialized by a real draw", previous)
+                repeat(64) {
+                    frame(extent.center)
+                    val current = registration.get(shader)
+                    if (current !== previous) stationary++
+                    previous = current
+                }
+                repeat(64) {
+                    frame(Offset(16f + it % 48, 24f + it % 32))
+                    val current = registration.get(shader)
+                    assertNotNull(current)
+                    if (current !== previous) moving++
+                    previous = current
+                }
+            }
+            android.util.Log.i("Localica642", "allocation api=${android.os.Build.VERSION.SDK_INT} warmup=64 stationaryFrames=64 stationaryRegistrations=$stationary movingFrames=64 movingRegistrations=$moving minimumMovingAllocations=$moving")
+            assertEquals("stationary control replaces no native registrations", 0, stationary)
+            assertEquals("moving light allocates no native shader registrations after warmup", 0, moving)
+        } finally { image.asAndroidBitmap().recycle() }
+    }
+
     @Test fun radialFillMatchesAnalyticSrcOverAndKeepsTheOutsideUntouched() {
         val radius = extent.center.getDistance()
         val dark = render(extent.center, 0f, true)
