@@ -26,7 +26,7 @@ class CostMapBenchmark(private val id: String) {
         val cold = id == "cold-start"
         benchmark.measureRepeated(
             packageName = PACKAGE,
-            metrics = listOf(FrameTimingMetric(), TraceSectionMetric("Choreographer#doFrame", TraceSectionMetric.Mode.Sum)) +
+            metrics = listOf(FrameTimingMetric(), TraceSectionMetric("Choreographer#doFrame%", TraceSectionMetric.Mode.Sum, "ChoreographerDoFrame")) +
                 if (cold) listOf(StartupTimingMetric()) else emptyList(),
             compilationMode = CompilationMode.Ignore(),
             startupMode = if (cold) StartupMode.COLD else null,
