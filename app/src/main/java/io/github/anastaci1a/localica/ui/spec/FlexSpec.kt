@@ -14,13 +14,16 @@ internal data class FlexSpec(val damping: Float, val response: Float,
     }
 }
 
-/** Responses are extracted iOS defaults; spatial values/filter (uniform SrcOver) are provisional. */
+/** Firmware responses/geometry; ideal Gaussian, Plus lift and polarity-selected dodge approximate backdrop-aware YCC (saturation omitted). */
 internal object FlexGlow {
     const val Show = .1f
     const val Hide = .5f
     const val Follow = .15f
-    const val Gain = .12f
+    const val Lift = .05f
+    const val Travel = 50f
+    val Dodge = listOf(.45f, .85f)
+    val Phase = listOf(1f to 1f, .5f to 2f, 0f to 4f)
     const val ExtentScale = .75f
     const val ExtentCap = 80f
-    val Falloff = listOf(0f to 1f, 1f to 0f)
+    val Falloff = listOf(.3935f, .3573f, .2671f, .1638f, .0819f, .0332f, .0108f, 0f).mapIndexed { i, alpha -> i / 7f to alpha }
 }

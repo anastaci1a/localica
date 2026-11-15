@@ -53,18 +53,19 @@ internal fun glassRimBrushes(center: Offset, tone: GlassTone): GlassRimBrushes {
         .625f to Color.Transparent, .75f to Color.Transparent, .875f to black.copy(alpha = .11f),
         1f to Color.Transparent, center = center)
     return GlassRimBrushes(shine, shade, lazy {
-        Brush.radialGradient(*FlexGlow.Falloff.map { (position, alpha) -> position to white.copy(alpha = alpha) }.toTypedArray(), center = Offset.Zero, radius = 1f)
+        val w = FlexGlow.Dodge[if (tone.lightInk) 1 else 0]
+        Brush.radialGradient(*FlexGlow.Falloff.map { (position, alpha) -> position to Color(w, w, w, alpha) }.toTypedArray(), center = Offset.Zero, radius = 1f)
     })
 }
 
 internal fun DrawScope.drawContactGlow(glow: GlassGlow, shape: () -> GlassShape, vertical: Boolean, tone: GlassTone, cache: GlassRimCache) {
-    if (glow.big > 0f) drawRect(tone.color(Color.White), alpha = glow.big * FlexGlow.Gain)
-    if (glow.little > 0f) {
+    if (glow.big > 0f) drawRect(Color.White, alpha = glow.big * FlexGlow.Lift, blendMode = BlendMode.Plus)
+    if (glow.little > 0f && BlendMode.ColorDodge.isSupported()) {
         val shape = shape()
         val point = Offset(size.width * (.5f + (glow.point.x - .5f) / shape.scaleX(vertical)),
             size.height * (.5f + (glow.point.y - .5f) / shape.scaleY(vertical)))
-        val radius = minOf(size.minDimension * FlexGlow.ExtentScale, FlexGlow.ExtentCap.dp.toPx())
+        val radius = minOf(size.minDimension * FlexGlow.ExtentScale, FlexGlow.ExtentCap.dp.toPx()) * 3.5f * glow.scale
         val brush = cache.brushes(size.center, tone).light.value
-        translate(point.x, point.y) { scale(radius, radius, pivot = Offset.Zero) { drawCircle(brush, 1f, Offset.Zero, alpha = glow.little * FlexGlow.Gain) } }
+        translate(point.x, point.y) { scale(radius, radius, pivot = Offset.Zero) { drawCircle(brush, 1f, Offset.Zero, alpha = glow.little.coerceAtMost(1f), blendMode = BlendMode.ColorDodge) } }
     }
 }

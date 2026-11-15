@@ -31,7 +31,7 @@ internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.sp
 
 @Composable
 internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 0f }, contact: () -> Float = { 0f },
-    state: GlassBodyState = remember { GlassBodyState() }, active: () -> Boolean = { true }, point: (() -> Offset)? = null): State<GlassShape> {
+    state: GlassBodyState = remember { GlassBodyState() }, active: () -> Boolean = { true }, point: (() -> Offset)? = null, far: () -> Boolean = { false }): State<GlassShape> {
     val result = state.output
     val reduced = LocalReducedMotion.current
     val speed by rememberUpdatedState(LocalMotionSpeed.current)
@@ -40,15 +40,16 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
     val force by rememberUpdatedState(pressure)
     val touch by rememberUpdatedState(contact)
     val glowPoint by rememberUpdatedState(point)
+    val glowFar by rememberUpdatedState(far)
     val strength by rememberUpdatedState(LocalGlassAppearance.current.touchLight)
     val ownsClock by rememberUpdatedState(active)
     LaunchedEffect(state, reduced) {
         val body = state.momentum
         var runner: Job? = null
-        snapshotFlow { listOf(input(), force(), touch(), damping, ownsClock(), if (strength > 0f) glowPoint?.invoke() else null, strength) }.collect {
+        snapshotFlow { listOf(input(), force(), touch(), damping, ownsClock(), if (strength > 0f) glowPoint?.invoke() else null, if (strength > 0f) glowFar() else false, strength) }.collect {
             if (!ownsClock()) { runner?.cancel(); runner = null; return@collect }
             if (!state.initialized) { state.previous = input(); state.initialized = true }
-            if (reduced) { body.reset(); body.targetGlow(glowPoint?.invoke(), touch(), strength, snap = true); state.glow.value = body.glow; result.value = GlassShape(); state.previous = input(); return@collect }
+            if (reduced) { body.reset(); body.targetGlow(glowPoint?.invoke(), touch(), strength, glowFar(), snap = true); state.glow.value = body.glow; result.value = GlassShape(); state.previous = input(); return@collect }
             if (runner?.isActive != true) runner = launch {
                 var last = 0L
                 do {
@@ -60,7 +61,7 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
                     last = frame
                     val current = input()
                     body.damping = damping
-                    body.targetGlow(glowPoint?.invoke(), touch(), strength)
+                    body.targetGlow(glowPoint?.invoke(), touch(), strength, glowFar())
                     body.advance(((current - state.previous) / dt / speed).coerceIn(-20f, 20f), dt * speed, force(), touch(), state.impulseScale)
                     state.previous = current
                     body.finishSettlement()

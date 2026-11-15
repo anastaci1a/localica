@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui
 
 import android.os.Build
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
+import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -106,6 +107,7 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
     private val presentedExpansion: () -> GlassExpansion? = { null }) {
     var pressed by mutableStateOf(false)
     var point by mutableStateOf(Offset(.5f, .5f))
+    var far by mutableStateOf(false)
     var travel by mutableFloatStateOf(0f)
     val modal get() = inModal()
     var active by mutableStateOf(true)
@@ -130,7 +132,7 @@ internal fun rememberGlassContact(shared: GlassContact? = null): GlassContact {
     val contact = shared ?: remember { GlassContact() }
     val visible = LocalGlassVisible.current
     rememberGlassBody({ contact.travel + contact.expansion.value }, contact = { if (contact.pressed) 1f else 0f },
-        state = contact.state, active = { visible && contact.active && !contact.modal }, point = { contact.point })
+        state = contact.state, active = { visible && contact.active && !contact.modal }, point = { contact.point }, far = { contact.far })
     return contact
 }
 
@@ -142,7 +144,7 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     return drawWithContent {
         val shape = presentation()
         scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
-    }.observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+    }.observeGlassContact(admit, yieldToParent = true, onPoint = { point, far -> contact.point = point; contact.far = far }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
 }
 
 /** Shared contact lifetime for ordinary buttons and independently draggable glass bodies.
@@ -150,7 +152,7 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
  * contact to a scrolling or moving ancestor, even while the finger stays on the control. */
 @Composable
 internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yieldToParent: Boolean = false,
-    onPoint: ((Offset) -> Unit)? = null, onPressed: (Boolean) -> Unit): Modifier {
+    onPoint: ((Offset, Boolean) -> Unit)? = null, onPressed: (Boolean) -> Unit): Modifier {
     val reportPoint by rememberUpdatedState(onPoint)
     val notify by rememberUpdatedState(onPressed)
     val admission by rememberUpdatedState(admit)
@@ -168,9 +170,10 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yield
                 down.consume()
                 return@awaitEachGesture
             }
-            reportPoint?.invoke(Offset(down.position.x / size.width, down.position.y / size.height))
+            reportPoint?.invoke(Offset((down.position.x / size.width).coerceIn(0f, 1f), (down.position.y / size.height).coerceIn(0f, 1f)), false)
             notify(true)
             var pressed = true
+            var far = false
             val intent = if (yieldToParent) ControlGestureIntent(viewConfiguration.touchSlop, parent.directions()) else null
             try {
                 // Visual pressure belongs to the initiating finger until it lifts or a
@@ -179,8 +182,9 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yield
                 do { val event = awaitPointerEvent(PointerEventPass.Final)
                     event.changes.firstOrNull { it.id == down.id }?.let { point ->
                         runCatching { trace?.invoke(name, if (point.pressed) "held" else "up", point.position, point.isConsumed) }
-                        if (pressed && point.pressed) reportPoint?.invoke(Offset(point.position.x / size.width, point.position.y / size.height))
                         val movement = point.position - down.position
+                        far = far || movement.getDistance() > FlexGlow.Travel.dp.toPx()
+                        if (pressed && point.pressed) reportPoint?.invoke(Offset((point.position.x / size.width).coerceIn(0f, 1f), (point.position.y / size.height).coerceIn(0f, 1f)), far)
                         if (pressed && point.pressed && intent != null) {
                             if (event.changes.count { it.pressed } > 1) intent.cancel()
                             val owner = intent.move(movement.x, movement.y, point.uptimeMillis - down.uptimeMillis)

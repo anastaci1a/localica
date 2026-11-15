@@ -27,6 +27,11 @@ class GlassTouchLightTest {
     private val height = 80
     private val extent = Size(width.toFloat(), height.toFloat())
     private var background = Color(0xff405060)
+    private val profile = floatArrayOf(.3935f, .3573f, .2671f, .1638f, .0819f, .0332f, .0108f, 0f)
+    private fun referenceProfile(radial: Float): Float {
+        val segment = min(6, (radial * 2).toInt())
+        return if (radial >= 3.5f) 0f else profile[segment] + (profile[segment + 1] - profile[segment]) * (radial * 2 - segment)
+    }
     private fun pixels(image: ImageBitmap) = IntArray(image.width * image.height).also {
         image.asAndroidBitmap().getPixels(it, 0, image.width, 0, 0, image.width, image.height)
     }
@@ -49,39 +54,19 @@ class GlassTouchLightTest {
         } finally { image.asAndroidBitmap().recycle() }
     }
     private fun expected(mask: IntArray, point: Offset, x: Int, y: Int, shift: Int, big: Float, little: Float,
-        shape: GlassShape = GlassShape(), vertical: Boolean = false, white: Float = 255f): Int {
+        shape: GlassShape = GlassShape(), vertical: Boolean = false, dodge: Float = .45f, scale: Float = 1f): Int {
         val sx = exp((if (vertical) -shape.strain else shape.strain) - shape.depth / 2)
         val sy = exp((if (vertical) shape.strain else -shape.strain) - shape.depth / 2)
         val center = Offset(width * (.5f + (point.x - .5f) / sx), height * (.5f + (point.y - .5f) / sy))
-        val radius = min(.75f * min(width, height), 80f)
+        val radius = min(.75f * min(width, height), 80f) * scale
         val radial = (Offset(x + .5f, y + .5f) - center).getDistance() / radius
-        val falloff = max(0f, 1 - radial)
+        // Independent declared piecewise Gaussian approximation, not production's table or brush.
+        val falloff = referenceProfile(radial)
         val coverageByte = channel(mask[y * width + x], 0)
         val coverage = coverageByte / 255f
-        val first = if (android.os.Build.VERSION.SDK_INT == 36) {
-            // Android 16 solid-fill SkARGB32_Blitter; the radial reference below stays continuous.
-            val paint = (.12f * big * 255).roundToInt()
-            val scale = coverageByte + 1
-            val alpha = paint * scale ushr 8
-            val source = ((white.roundToInt() * paint + 127) / 255) * scale ushr 8
-            source + (channel(background.toArgb(), shift) * (256 - alpha) ushr 8)
-        } else (channel(background.toArgb(), shift) + (white - channel(background.toArgb(), shift)) * .12f * big * coverage).roundToInt()
-        if (android.os.Build.VERSION.SDK_INT == 26) {
-            // Android 8 SkGradientShader::Build32bitCache and byte SrcOver, independent of production.
-            val paint = (.12f * little * 255).roundToInt()
-            val bias = when ((x and 1) or ((y and 1) shl 1)) {
-                0 -> 0x2000
-                1 -> 0xE000
-                2 -> 0x6000
-                else -> 0xA000
-            }
-            val alpha = (paint * 65536 + (radial * 255).toInt().coerceIn(0, 255) * (-paint * 65536 / 255) + bias) ushr 16
-            val scale = coverageByte + (coverageByte ushr 7)
-            val sourceAlpha = alpha * scale ushr 8
-            val source = ((white.roundToInt() * alpha + 127) / 255) * scale ushr 8
-            return source + (first * (256 - sourceAlpha) ushr 8)
-        }
-        return (first + (white - first) * .12f * little * falloff * coverage).roundToInt()
+        val first = min(255f, channel(background.toArgb(), shift) + 255f * .05f * big * coverage).roundToInt()
+        if (android.os.Build.VERSION.SDK_INT < 29) return first
+        return (first + (min(255f, first / (1 - dodge)) - first) * little.coerceAtMost(1f) * falloff * coverage).roundToInt()
     }
 
     @Test fun broadAndLocalFillsMatchIndependentCoverageAndRejectWrongChannels() {
@@ -107,7 +92,7 @@ class GlassTouchLightTest {
                             }
                             witness.drawContactGlow(GlassGlow(0f, 1f, Offset(x, y)), { shape }, vertical, GlassTone(), GlassRimCache())
                         }
-                        assertEquals(1, draws)
+                        assertEquals(if (android.os.Build.VERSION.SDK_INT >= 29) 1 else 0, draws)
                     }
             CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(probe), Size(1f, 1f)) {
                 for (glow in listOf(GlassGlow(), GlassGlow(1f, 0f), GlassGlow(-.22f, -.03f)))
@@ -120,7 +105,8 @@ class GlassTouchLightTest {
         var toneMaximum = 0
         val residuals = IntArray(6)
         val sensitivity = IntArray(5)
-        for (backdrop in listOf(Color(0xff101418), Color(0xff405060), Color(0xffd0d8e0))) for (circle in listOf(false, true)) {
+        val supported = android.os.Build.VERSION.SDK_INT >= 29
+        for (backdrop in listOf(Color.Black, Color(0xff101418), Color(0xff405060), Color(0xffd0d8e0), Color.White)) for (circle in listOf(false, true)) {
             background = backdrop
             val cache = GlassRimCache()
             val prepared = cache.brushes(extent.center, GlassTone())
@@ -157,20 +143,24 @@ class GlassTouchLightTest {
                     }
                 }
             }
-            val combined = render(GlassGlow(1f, 1f, Offset(.5f, .5f)), circle, cache)
-            val alternatives = listOf(GlassGlow(0f, 1f, Offset(.5f, .5f)), GlassGlow(1f, 0f, Offset(.5f, .5f)),
-                GlassGlow(2f, 1f, Offset(.5f, .5f)), GlassGlow(1f, 2f, Offset(.5f, .5f)))
-                .map { render(it, circle, cache) } + listOf(render(GlassGlow(1f, 1f, Offset(.5f, .5f)), circle, cache, density = .5f))
+            // Unsaturated alphas keep doubled-channel mutants observable after valid paint admission.
+            val combined = render(GlassGlow(.5f, .5f, Offset(.5f, .5f)), circle, cache)
+            val alternatives = listOf(GlassGlow(0f, .5f, Offset(.5f, .5f)), GlassGlow(.5f, 0f, Offset(.5f, .5f)),
+                GlassGlow(1f, .5f, Offset(.5f, .5f)), GlassGlow(.5f, 1f, Offset(.5f, .5f)))
+                .map { render(it, circle, cache) } + listOf(render(GlassGlow(.5f, .5f, Offset(.5f, .5f)), circle, cache, density = .25f))
             alternatives.forEachIndexed { index, alternative ->
                 for (i in combined.indices) for (shift in listOf(0, 8, 16))
                     sensitivity[index] = max(sensitivity[index], abs(channel(alternative[i], shift) - channel(combined[i], shift)))
             }
             val local = render(GlassGlow(0f, 1f, Offset(.5f, .5f)), circle, cache)
-            assertTrue(channel(local[40 * width + 48], 16) > channel(local[40 * width + 80], 16))
+            if (supported && backdrop != Color.Black && backdrop != Color.White)
+                assertTrue(channel(local[40 * width + 48], 16) > channel(local[40 * width + 80], 16))
+            if (!supported) assertArrayEquals("unsupported local fill is an exact no-op", render(GlassGlow(), circle), local)
             for (x in 48..80) {
                 val red = channel(background.toArgb(), 16)
-                val idealA = red + (255 - red) * .12f * (1 - abs(x + .5f - 48) / 60)
-                val idealB = red + (255 - red) * .12f * (1 - abs(x + 1.5f - 48) / 60)
+                val delta = if (supported) min(255f, red / .55f) - red else 0f
+                val idealA = red + delta * referenceProfile(abs(x + .5f - 48) / 60)
+                val idealB = red + delta * referenceProfile(abs(x + 1.5f - 48) / 60)
                 assertTrue(idealA >= idealB)
                 assertTrue(idealA.roundToInt() >= idealB.roundToInt())
                 assertTrue(channel(local[40 * width + x + 1], 16) - channel(local[40 * width + x], 16) <= 2)
@@ -183,9 +173,15 @@ class GlassTouchLightTest {
             val toned = render(GlassGlow(1f, 1f, Offset(.5f, .5f)), circle, tone = GlassTone(.25f, lightInk = true))
             for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16)) {
                 val actual = channel(toned[y * width + x], shift)
-                val oracle = expected(mask, Offset(.5f, .5f), x, y, shift, 1f, 1f, white = 255f * .75f)
+                val oracle = expected(mask, Offset(.5f, .5f), x, y, shift, 1f, 1f, dodge = .85f)
                 toneMaximum = max(toneMaximum, abs(actual - oracle))
                 assertTrue("tone-mapped two-fill oracle ($x,$y) shift=$shift actual=$actual expected=$oracle backdrop=$backdrop circle=$circle coverage=${channel(mask[y * width + x], 0)}", abs(actual - oracle) <= 2)
+            }
+            for (scale in listOf(1f, 2f, 4f)) {
+                val expanded = render(GlassGlow(.5f, .5f, Offset(.25f, .75f), scale), circle)
+                for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16))
+                    assertTrue("expanded clipped profile scale=$scale ($x,$y)", abs(channel(expanded[y * width + x], shift) -
+                        expected(mask, Offset(.25f, .75f), x, y, shift, .5f, .5f, scale = scale)) <= 2)
             }
             for (vertical in listOf(false, true)) for (point in listOf(Offset(.2f, .7f), Offset(1.25f, -.25f))) {
                 val shape = GlassShape(.2f, -.2f)
@@ -198,7 +194,10 @@ class GlassTouchLightTest {
         println("two-fill maxima=${maxima.toList()} worst=${worst.toList()} symmetry=${residuals.toList()} sensitivity=${sensitivity.toList()} toneMaximum=$toneMaximum")
         for (op in maxima.indices) assertTrue("oracle op=$op max=${maxima[op]} ${worst[op]}", maxima[op] <= if (op == 2) 2 else 1)
         for (i in residuals.indices) assertTrue("symmetry $i max=${residuals[i]}", residuals[i] <= if (i < 3) 2 else 4)
-        for (i in sensitivity.indices) assertTrue("wrong-channel/support $i witness=${sensitivity[i]}", sensitivity[i] > 4)
+        for (i in sensitivity.indices) {
+            if (supported || i == 0 || i == 2) assertTrue("wrong-channel/support $i witness=${sensitivity[i]}", sensitivity[i] > 4)
+            else assertEquals("unsupported local mutants cannot change pixels", 0, sensitivity[i])
+        }
     }
 
     @Test fun actualSurfaceHasVisibleHideAndByteExactIdleSettledAndDisabledPixels() {
@@ -292,15 +291,28 @@ class GlassTouchLightTest {
             assertTrue(contact.pressed)
             assertEquals(.25f, contact.point.x, .001f)
             assertEquals(.75f, contact.point.y, .001f)
+            assertFalse(contact.far)
         }
         node.performTouchInput { moveTo(Offset(width * 1.25f, height * -.25f)) }
         compose.runOnIdle {
             assertTrue(contact.pressed)
-            assertEquals(1.25f, contact.point.x, .001f)
-            assertEquals(-.25f, contact.point.y, .001f)
+            assertEquals(1f, contact.point.x, 0f)
+            assertEquals(0f, contact.point.y, 0f)
+            assertTrue(contact.far)
         }
         node.performTouchInput { up() }
         compose.runOnIdle { assertFalse(contact.pressed) }
+        node.performTouchInput { down(center); moveBy(Offset(width * 50f / 160f, 0f)) }
+        compose.runOnIdle { assertFalse("exactly 50 dp does not dissipate", contact.far) }
+        node.performTouchInput { moveBy(Offset(1f, 0f)) }
+        compose.runOnIdle { assertTrue("strictly over raw travel threshold", contact.far) }
+        node.performTouchInput { moveTo(center) }
+        compose.runOnIdle { assertTrue("return cannot restore a latched gesture", contact.far) }
+        node.performTouchInput { cancel() }
+        compose.runOnIdle { assertFalse("cancellation releases contact", contact.pressed) }
+        node.performTouchInput { down(center) }
+        compose.runOnIdle { assertFalse("next admitted DOWN clears latch", contact.far) }
+        node.performTouchInput { up() }
     }
 
     @Test fun oneOwnerSurvivesRepressAndHandoffWhileDisabledGlowSchedulesNothing() {
@@ -310,6 +322,7 @@ class GlassTouchLightTest {
         var held by mutableStateOf(false)
         var modal by mutableStateOf(false)
         var point by mutableStateOf(Offset(.2f, .7f))
+        var far by mutableStateOf(false)
         var strength by mutableFloatStateOf(0f)
         var reduced by mutableStateOf(false)
         var ownerSpeed = 1f
@@ -318,9 +331,9 @@ class GlassTouchLightTest {
                 val speed = LocalMotionSpeed.current
                 SideEffect { ownerSpeed = speed }
                 rememberGlassBody({ reads.incrementAndGet(); 0f }, contact = { if (held) 1f else 0f }, state = shared,
-                    active = { !modal }, point = { point })
+                    active = { !modal }, point = { point }, far = { far })
                 rememberGlassBody({ reads.incrementAndGet(); 0f }, contact = { if (held) 1f else 0f }, state = shared,
-                    active = { modal }, point = { point })
+                    active = { modal }, point = { point }, far = { far })
                 rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { !modal })
                 rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { modal })
                 Box(Modifier.size(40.dp))
@@ -334,6 +347,7 @@ class GlassTouchLightTest {
                 if (frame in listOf(17, 35, 91)) held = false
                 if (frame in listOf(23, 62)) modal = !modal
                 point = Offset((frame % 5) / 4f, .7f)
+                far = frame % 2 == 0
             }
             compose.mainClock.advanceTimeByFrame()
             compose.runOnIdle {
@@ -346,7 +360,7 @@ class GlassTouchLightTest {
         compose.runOnIdle { assertTrue(shared.momentum.settled); reads.set(0); point = Offset(.9f, .1f) }
         compose.mainClock.advanceTimeBy(500)
         assertEquals("disabled point changes do not wake either owner", 0, reads.get())
-        compose.runOnIdle { strength = 1f; held = true }
+        compose.runOnIdle { strength = 1f; held = true; far = false }
         compose.mainClock.advanceTimeBy(1200)
         compose.runOnIdle { assertTrue(shared.momentum.settled); point = Offset(.6f, .4f) }
         compose.mainClock.advanceTimeByFrame()
@@ -358,9 +372,9 @@ class GlassTouchLightTest {
         compose.runOnIdle { assertEquals(Offset(.6f, .4f), shared.glow.value.point) }
         val model = compose.runOnIdle { GlassMomentum().also { it.blendFrom(shared.momentum) } }
         val before = compose.runOnIdle { shared.glow.value }
-        compose.runOnIdle { modal = !modal; point = Offset(.1f, .9f) }
+        compose.runOnIdle { modal = !modal; point = Offset(.1f, .9f); far = true }
         compose.runOnIdle { assertEquals("handoff has no reset", before, shared.glow.value) }
-        model.targetGlow(Offset(.1f, .9f), 1f, 1f)
+        model.targetGlow(Offset(.1f, .9f), 1f, 1f, far = true)
         model.advance(0f, (1f / 60f) * ownerSpeed, contact = 1f)
         model.finishSettlement()
         compose.mainClock.advanceTimeByFrame()
@@ -371,7 +385,7 @@ class GlassTouchLightTest {
         }
         compose.mainClock.advanceTimeBy(32)
         val repressed = compose.runOnIdle { GlassMomentum().also { it.blendFrom(shared.momentum) } }
-        compose.runOnIdle { point = Offset(.7f, .4f); held = true }
+        compose.runOnIdle { point = Offset(.7f, .4f); held = true; far = false }
         repressed.targetGlow(Offset(.7f, .4f), 1f, 1f)
         repressed.advance(0f, .016f * ownerSpeed, contact = 1f)
         repressed.finishSettlement()

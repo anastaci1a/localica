@@ -472,7 +472,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val searchObserver = LocalSearchMorphObserver.current
     val body = rememberGlassBody({ anchor.contact.travel + progress.value },
         contact = { if (anchor.contact.pressed) 1f else 0f }, state = anchor.contact.state,
-        active = { anchor.contact.modal }, point = { anchor.contact.point })
+        active = { anchor.contact.modal }, point = { anchor.contact.point }, far = { anchor.contact.far })
     var nativePlane by remember { mutableStateOf<ShadowPlane?>(null) }
     var nativeNode by remember { mutableStateOf<SurfaceView?>(null) }
     var leasedNode: SurfaceView? by remember { mutableStateOf(null) }
