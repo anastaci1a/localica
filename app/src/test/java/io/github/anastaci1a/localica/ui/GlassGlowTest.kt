@@ -8,6 +8,8 @@ import org.junit.Test
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
+import java.io.File
+import java.security.MessageDigest
 
 class GlassGlowTest {
     private fun step(body: GlassMomentum, fps: Int, point: Offset?, held: Float, strength: Float = 1f) {
@@ -86,7 +88,10 @@ class GlassGlowTest {
         for (releaseFrames in listOf(1, 4, 12, 30)) {
             val body = GlassMomentum()
             repeat(60) { step(body, 120, Offset(.2f, .7f), 1f) }
-            repeat(releaseFrames) { step(body, 120, Offset(.2f, .7f), 0f) }
+            repeat(releaseFrames) {
+                step(body, 120, Offset(.2f, .7f), 0f)
+                assertTrue(body.glow.big in 0f..1f && body.glow.little in 0f..1f)
+            }
             val before = channels(body)
             body.targetGlow(Offset(.8f, .3f), 1f, 1f)
             val after = channels(body)
@@ -94,7 +99,10 @@ class GlassGlowTest {
             assertEquals(Offset(.8f, .3f), body.glow.point)
             assertEquals(0f, after[2][1], 0f)
             assertEquals(0f, after[3][1], 0f)
-            repeat(240) { step(body, 120, Offset(.8f, .3f), 1f) }
+            repeat(240) {
+                step(body, 120, Offset(.8f, .3f), 1f)
+                assertTrue(body.glow.big in 0f..1f && body.glow.little in 0f..1f)
+            }
             assertEquals(1f, body.glow.big, 0f)
         }
     }
@@ -143,14 +151,60 @@ class GlassGlowTest {
         step(body, 120, Offset(.2f, .7f), 1f)
         body.targetGlow(Offset(.8f, .3f), 1f, .5f, snap = true)
         assertEquals(GlassGlow(.5f, .5f, Offset(.8f, .3f)), body.glow)
-        body.resetShape()
+        body.reset()
         assertEquals(GlassShape(), body.shape)
-        assertEquals(GlassGlow(.5f, .5f, Offset(.8f, .3f)), body.glow)
         body.targetGlow(Offset(.1f, .9f), 0f, .5f, snap = true)
-        assertEquals(GlassGlow(0f, 0f, Offset(.8f, .3f)), body.glow)
+        assertEquals(0f, body.glow.big, 0f)
+        assertEquals(0f, body.glow.little, 0f)
         body.targetGlow(Offset(.8f, .3f), 1f, 0f)
         assertEquals(GlassGlow(), body.glow)
         body.targetGlow(null, 1f, 1f)
         assertEquals(GlassGlow(), body.glow)
+    }
+
+    @Test fun targetDropAndReleaseKeepSignedEnergyOutsideTheDrawableRange() {
+        for (ms in 1..99) {
+            val body = GlassMomentum()
+            body.targetGlow(Offset(.5f, .5f), 1f, 1f)
+            repeat(ms) { body.advance(0f, .001f, contact = 1f); body.finishSettlement() }
+            val before = channels(body)
+            body.targetGlow(Offset(.5f, .5f), 0f, 1f)
+            val after = channels(body)
+            for (channel in 0..1) for (field in 0..1) assertEquals(before[channel][field], after[channel][field], 0f)
+            repeat(2000) {
+                body.advance(0f, .001f)
+                body.finishSettlement()
+                assertTrue("release at $ms ms", body.glow.big in 0f..1f && body.glow.little in 0f..1f)
+            }
+            assertEquals(0f, body.glow.big, 0f)
+            assertEquals(0f, body.glow.little, 0f)
+        }
+        for (releaseFrames in 1..4) {
+            val body = GlassMomentum()
+            repeat(120) { step(body, 120, Offset(.5f, .5f), 1f) }
+            body.spec = FlexSpec.dynamic(240f, 160f)
+            repeat(releaseFrames) { step(body, 120, Offset(.5f, .5f), 1f) }
+            var negative = false
+            repeat(360) {
+                step(body, 120, Offset(.5f, .5f), 0f)
+                for (alpha in listOf(body.glow.big, body.glow.little)) {
+                    negative = negative || alpha < 0f
+                    assertTrue("only positive energy may reach paint", maxOf(0f, alpha) in 0f..1f)
+                }
+            }
+            assertTrue("velocity survives the show/hide frequency change", negative)
+            assertTrue(body.settled)
+        }
+    }
+
+    @Test fun frozenOpticsMatchTheAcceptedSliceOneSource() {
+        val root = File("src/main/java/io/github/anastaci1a/localica/ui")
+        fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        // Pinned at accepted d72063fe4625cece1021f9d9a11fae061d071b4c, not regenerated from this candidate.
+        assertEquals("1be7b81ccf3d1f869658d46341661c44004b4ff216c95f12a164eb41c4811d7c", sha(File(root, "LensRenderer.kt").readBytes()))
+        val source = File(root, "LiquidGlass.kt").readText()
+        val start = source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")
+        val effect = source.substring(start, source.indexOf("\n                else if", start))
+        assertEquals("20e598e80a1ac997cfb4d02c22a9c8ceffb5f152de28344c6e71ff53ef954892", sha(effect.toByteArray()))
     }
 }

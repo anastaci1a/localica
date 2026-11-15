@@ -330,7 +330,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val splitRim = outline?.description?.rimSplit ?: 0f
             val bounds = androidx.compose.ui.geometry.Rect(Offset.Zero, size)
             val radius = cornerRadius?.toPx() ?: size.minDimension / 2f
-            drawContactGlow(contact.state.glow.value, contactShape(), contact.vertical, tone, rim)
+            drawContactGlow(contact.state.glow.value, contactShape, contact.vertical, tone, rim)
             // Blend the control finish into the shared panel finish during the morph.
             // Flat panel walls have constant normals; diagonal glints stay on corners.
             val panelRimWeight = if (popupRim == null) 0f else panel

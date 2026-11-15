@@ -77,8 +77,7 @@ internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_
         return settled
     }
 
-    fun resetShape() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f }
-    fun reset() { resetShape(); light.forEach { it.reset() } }
+    fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f; light.forEach { it.reset() } }
 
     fun targetGlow(point: Offset?, contact: Float, strength: Float, snap: Boolean = false) {
         if (point == null || strength == 0f) { light.forEach { it.reset() }; return }

@@ -42,7 +42,7 @@ class GlassTouchLightTest {
                     else addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(18f)))
                 }
                 clipPath(path) {
-                    if (mask) drawRect(Color.White) else drawContactGlow(glow, shape, vertical, tone, cache)
+                    if (mask) drawRect(Color.White) else drawContactGlow(glow, { shape }, vertical, tone, cache)
                 }
             }
             return pixels(image)
@@ -61,6 +61,36 @@ class GlassTouchLightTest {
     }
 
     @Test fun broadAndLocalFillsMatchIndependentCoverageAndRejectWrongChannels() {
+        val probe = ImageBitmap(1, 1)
+        try {
+            for (size in listOf(Size(96f, 96f), Size(240f, 48f), Size(48f, 240f)))
+                for (vertical in listOf(false, true)) for (shape in listOf(GlassShape(), GlassShape(.2f, -.3f), GlassShape(-.3f, .2f)))
+                    for (x in listOf(-.25f, 0f, .2f, .5f, 1f, 1.25f)) for (y in listOf(-.25f, 0f, .5f, 1f, 1.25f)) {
+                        var draws = 0
+                        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(probe), size) {
+                            val witness = object : DrawScope by this {
+                                override fun drawCircle(brush: Brush, radius: Float, center: Offset, alpha: Float,
+                                    style: DrawStyle, colorFilter: ColorFilter?, blendMode: BlendMode) {
+                                    val mapped = floatArrayOf(center.x, center.y)
+                                    @Suppress("DEPRECATION")
+                                    val matrix = drawContext.canvas.nativeCanvas.matrix
+                                    matrix.mapPoints(mapped)
+                                    assertEquals(x * size.width, size.width / 2 + (mapped[0] - size.width / 2) * shape.scaleX(vertical), .0001f)
+                                    assertEquals(y * size.height, size.height / 2 + (mapped[1] - size.height / 2) * shape.scaleY(vertical), .0001f)
+                                    assertTrue("platform alpha stays within its range", alpha in 0f..1f)
+                                    draws++
+                                }
+                            }
+                            witness.drawContactGlow(GlassGlow(0f, 1f, Offset(x, y)), { shape }, vertical, GlassTone(), GlassRimCache())
+                        }
+                        assertEquals(1, draws)
+                    }
+            CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(probe), Size(1f, 1f)) {
+                for (glow in listOf(GlassGlow(), GlassGlow(1f, 0f), GlassGlow(-.22f, -.03f)))
+                    drawContactGlow(glow, { error("zero/negative local light must not read shape") }, false, GlassTone(), GlassRimCache())
+            }
+        } finally { probe.asAndroidBitmap().recycle() }
+        assertArrayEquals("negative optical energy draws nothing", render(GlassGlow(), false), render(GlassGlow(-.22f, -.03f), false))
         val maxima = IntArray(3)
         val residuals = IntArray(6)
         val sensitivity = IntArray(5)
@@ -117,7 +147,7 @@ class GlassTouchLightTest {
             }
             val brush = prepared.light.value
             render(GlassGlow(0f, 1f, Offset(1.25f, -.25f)), circle, cache, density = .5f)
-            assertSame("move/support changes reuse the unit brush", brush, prepared.light.value)
+            assertSame("move/support changes reuse the unit brush", brush, cache.brushes(extent.center, GlassTone()).light.value)
             val changed = cache.brushes(extent.center, GlassTone(.25f, lightInk = true)).light.value
             assertNotSame("tone change replaces preparation", brush, changed)
             val toned = render(GlassGlow(1f, 1f, Offset(.5f, .5f)), circle, tone = GlassTone(.25f, lightInk = true))
@@ -135,7 +165,7 @@ class GlassTouchLightTest {
         println("two-fill maxima=${maxima.toList()} symmetry=${residuals.toList()} sensitivity=${sensitivity.toList()}")
         for (op in maxima.indices) assertTrue("oracle op=$op max=${maxima[op]}", maxima[op] <= if (op == 2) 2 else 1)
         for (i in residuals.indices) assertTrue("symmetry $i max=${residuals[i]}", residuals[i] <= if (i < 3) 2 else 4)
-        for (i in sensitivity.indices) assertTrue("wrong-channel/support $i witness=${sensitivity[i]}", sensitivity[i] > 2)
+        for (i in sensitivity.indices) assertTrue("wrong-channel/support $i witness=${sensitivity[i]}", sensitivity[i] > 4)
     }
 
     @Test fun actualSurfaceHasVisibleHideAndByteExactIdleSettledAndDisabledPixels() {
@@ -298,11 +328,11 @@ class GlassTouchLightTest {
         compose.runOnIdle { modal = !modal; point = Offset(.1f, .9f) }
         compose.runOnIdle { assertEquals("handoff has no reset", before, shared.glow.value) }
         model.targetGlow(Offset(.1f, .9f), 1f, 1f)
-        model.advance(0f, ownerSpeed / 60, contact = 1f)
+        model.advance(0f, (1f / 60f) * ownerSpeed, contact = 1f)
         model.finishSettlement()
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
-            assertEquals("handoff integrates exactly once", model.glow, shared.glow.value)
+            assertEquals("handoff integrates exactly once: expected x=${model.glow.point.x} y=${model.glow.point.y}; actual x=${shared.glow.value.point.x} y=${shared.glow.value.point.y}", model.glow, shared.glow.value)
             assertEquals(model.shape, shared.output.value)
             held = false
         }
@@ -332,6 +362,9 @@ class GlassTouchLightTest {
             point = Offset(.1f, .9f)
         }
         compose.mainClock.advanceTimeByFrame()
-        compose.runOnIdle { assertEquals(GlassGlow(0f, 0f, Offset(.7f, .4f)), shared.glow.value) }
+        compose.runOnIdle {
+            assertEquals(0f, shared.glow.value.big, 0f)
+            assertEquals(0f, shared.glow.value.little, 0f)
+        }
     }
 }

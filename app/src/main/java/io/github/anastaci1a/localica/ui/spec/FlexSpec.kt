@@ -1,6 +1,6 @@
 package io.github.anastaci1a.localica.ui.spec
 
-/** iOS 26.6.2 _UIFlexInteraction dynamic springs; response is seconds, damping is a ratio. */
+/** iOS 26.6.2 _UIFlexInteraction springs/opacities; dp substitutes for pt. Small includes Ultra-small glow; response is seconds, damping is a ratio. */
 internal data class FlexSpec(val damping: Float, val response: Float,
     val trackingDamping: Float, val trackingResponse: Float, val bigOpacity: Float = 1f, val littleOpacity: Float = 1f) {
     companion object {

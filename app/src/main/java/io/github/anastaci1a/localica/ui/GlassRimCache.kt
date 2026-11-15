@@ -57,10 +57,10 @@ internal fun glassRimBrushes(center: Offset, tone: GlassTone): GlassRimBrushes {
     })
 }
 
-internal fun DrawScope.drawContactGlow(glow: GlassGlow, shape: GlassShape, vertical: Boolean, tone: GlassTone, cache: GlassRimCache) {
-    if (glow.big == 0f && glow.little == 0f) return
-    if (glow.big != 0f) drawRect(tone.color(Color.White), alpha = glow.big * FlexGlow.Gain)
-    if (glow.little != 0f) {
+internal fun DrawScope.drawContactGlow(glow: GlassGlow, shape: () -> GlassShape, vertical: Boolean, tone: GlassTone, cache: GlassRimCache) {
+    if (glow.big > 0f) drawRect(tone.color(Color.White), alpha = glow.big * FlexGlow.Gain)
+    if (glow.little > 0f) {
+        val shape = shape()
         val point = Offset(size.width * (.5f + (glow.point.x - .5f) / shape.scaleX(vertical)),
             size.height * (.5f + (glow.point.y - .5f) / shape.scaleY(vertical)))
         val radius = minOf(size.minDimension * FlexGlow.ExtentScale, FlexGlow.ExtentCap.dp.toPx())
