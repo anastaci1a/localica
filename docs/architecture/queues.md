@@ -55,6 +55,8 @@ Traversal namespaces and real anchor tokens stabilize projected neighbours witho
 
 Schema 8 removes legacy generated visits before loading journeys, preserving real history, explicit forward requests and visited membership. Ordered traversal stores sparse membership; shuffled traversal retains at most three cycle permutations.
 
+Schema 9 stores the Manual rank on each occurrence and keeps only sort settings in the queue header. Legacy JSON order converts through bounded reads in the migration transaction. Physical ranks share an index with the queue ID for paged restore.
+
 Entries, history, membership and shuffle permutations still grow with the queue; pre-open migration still precedes usability. Legacy per-queue modes import once, then remain inert. Storage and compatibility tests own the migration cases.
 
 ## Tests
