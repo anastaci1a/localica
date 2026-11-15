@@ -72,7 +72,7 @@ class QueueFileEditTest {
                         }
                     }
                     assertEquals(true, answer)
-                    assertEquals("One selected-entry read plus one existing prepared-source read", 2, entries.mainReads.get())
+                    assertEquals("One selected-entry read plus two existing prepared-source reads", 3, entries.mainReads.get())
                     assertEquals("occ:${size - 1}", queues.state.value.library.active!!.currentEntryId)
                 }
             }
