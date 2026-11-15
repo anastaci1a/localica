@@ -10,11 +10,14 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 - Move Search pill motion onto the shared popup model and Dialog motion law. Dismiss logically at the input event while retaining physical presentation through child handoff.
 - Deliver [#920](https://github.com/anastaci1a/localica/issues/920) steps 1 and 2: derive the lifecycle phase once and replace takeover flags with views. The issue remains open.
-- App Kotlin/Java source falls from 53,160 to 53,064 lines: 189 added, 285 removed, net -96. Release engineering adds no app state.
+- App Kotlin/Java source falls from 53,160 to 53,070 lines: 234 added, 324 removed, net -90. Release engineering adds no app state.
 - Inherited UI debt falls from 1,463 to 1,459 with zero new overrides. RawUiMotion falls from 341 to 337; all other rule counts stay unchanged.
+- Keep popup presentation ownership local to each flight, including cancellable waits for native-window detachment. The reviewed repair adds one current-flight reference and no flags.
 - Refresh shard scheduling from the preceding complete producer, 43597960541. Keep the current eight-shard Android workflow.
 
 ## Resolved issues
+
+- [#636](https://github.com/anastaci1a/localica/issues/636): Give focused hosted instrumentation prebuilds sufficient Kotlin heap.
 
 - [#960](https://github.com/anastaci1a/localica/issues/960): Unify Search / ⋯ pill expansion and retraction with the shared popup model.
 
