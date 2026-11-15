@@ -243,9 +243,10 @@ class GlassTouchLightTest {
     @Test fun actualSurfaceReturnsByteExactlyAfterReleaseAndStrengthZeroDrawsNothing() {
         var strength by mutableFloatStateOf(1f)
         var contact = GlassContact()
+        lateinit var source: FrostedBackdrop
         compose.setContent { EngineTheme(clear = true) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f, touchLight = strength)) {
-                val source = rememberFrostedBackdrop(Unit)
+                source = rememberFrostedBackdrop(Unit)
                 Box(Modifier.size(240.dp, 160.dp).testTag("frame")) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                         drawRect(background)
@@ -259,6 +260,7 @@ class GlassTouchLightTest {
         } }
         val frame = compose.onNodeWithTag("frame")
         val node = compose.onNodeWithTag("light")
+        compose.awaitGlassBackingSnapshot(source)
         compose.waitForIdle()
         val idle = pixels(frame.captureToImage())
         assertArrayEquals(idle, pixels(frame.captureToImage()))

@@ -103,7 +103,7 @@ class GlassSilhouetteTest {
                 }
             }
         } }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing.snapshot != null }
+        compose.awaitGlassBackingSnapshot(backing)
         fun capture(index: Int): ImageBitmap {
             compose.runOnIdle { phase = index }
             return compose.onNodeWithTag("optical-case").captureToImage().also { bitmap ->
