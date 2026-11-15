@@ -227,7 +227,7 @@ jobs:
     - name: Compile instrumentation APKs before starting emulator
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2
+      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx6g
     - name: Record downloaded dependency files
       if: ${{ !cancelled() && inputs.runner != 'self-hosted' }}
       run: bash .github/dependency-cache-audit.sh report
@@ -457,7 +457,7 @@ jobs:
     - name: Compile instrumentation APKs before starting emulator
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2
+      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx6g
     - name: Record downloaded dependency files
       if: ${{ !cancelled() && inputs.runner != 'self-hosted' }}
       run: bash .github/dependency-cache-audit.sh report

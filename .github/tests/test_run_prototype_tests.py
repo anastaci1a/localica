@@ -1326,6 +1326,21 @@ class WorkflowContract(unittest.TestCase):
         self.assertIn('--max-workers=4',build.split())
         self.assertNotIn('kotlin.daemon.jvmargs',build)
 
+    def test_focused_compiles_size_kotlin_without_growing_the_gradle_heap(self):
+        import shlex, yaml
+        jobs = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
+        for api in (26, 36):
+            with self.subTest(api=api):
+                steps = jobs[f'focused_{api}']['steps']
+                command = next(s['run'] for s in steps if s.get('name') == 'Compile instrumentation APKs before starting emulator')
+                args = shlex.split(command)
+                self.assertIn('-Pkotlin.daemon.jvmargs=-Xmx6g', args)
+                self.assertIn('--max-workers=2', args)
+                self.assertFalse(any(a.startswith('-Dorg.gradle.jvmargs=') for a in args))
+                for task in ('assembleDebug', 'assembleDebugAndroidTest', ':app:warmDeviceDependencies'):
+                    self.assertIn(task, args)
+        self.assertIn('org.gradle.jvmargs=-Xmx2g ', (ROOT/'gradle.properties').read_text())
+
     def test_full_shards_bound_hangs_and_summary_rejects_non_success(self):
         import yaml
         jobs = yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']
