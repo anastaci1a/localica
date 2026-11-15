@@ -28,6 +28,7 @@ internal class Journeys {
     private fun node(label: String): UiObject2 = checkNotNull(
         device.wait(Until.findObject(By.desc(label)), 10_000)
             ?: device.wait(Until.findObject(By.text(label)), 2_000)
+            ?: if (label == "Expand player") device.wait(Until.findObject(By.text("Scale song 13390")), 5_000) else null
     ) { "Missing release accessibility label: $label" }
     private fun tap(label: String) { node(label).click(); Thread.sleep(400) }
     private fun scaleX(x: Int) = x * device.displayWidth / 1080
@@ -42,6 +43,7 @@ internal class Journeys {
         tap("View options")
         tap(if (scenario.getString("view") == "gallery") "Gallery" else "List")
         if (scenario.getString("view") == "gallery") node("Items per row: 2")
+        else if (!device.hasObject(By.text("Normal"))) { tap("Large"); tap("Normal"); tap("Select") }
         tap("Save")
         val preparation = scenario.getString("prepare")
         if (preparation in listOf("player", "mini")) {

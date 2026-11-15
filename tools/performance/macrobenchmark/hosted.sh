@@ -22,7 +22,7 @@ else
 fi
 adb install -r "$target"
 node tools/performance/macrobenchmark/fixture.mjs "$RUNNER_TEMP/performance-fixture"
-tar -cf "$RUNNER_TEMP/performance-fixture.tar" -C "$RUNNER_TEMP/performance-fixture" .
+tar -cf "$RUNNER_TEMP/performance-fixture.tar" -C "$RUNNER_TEMP/performance-fixture/scale" .
 adb push "$RUNNER_TEMP/performance-fixture.tar" /data/local/tmp/localica-986-fixture.tar
 uid=$(adb shell dumpsys package "$pkg" | sed -n 's/.*userId=\([0-9]*\).*/\1/p' | head -1 | tr -d '\r')
 [[ $uid =~ ^[0-9]+$ ]]
