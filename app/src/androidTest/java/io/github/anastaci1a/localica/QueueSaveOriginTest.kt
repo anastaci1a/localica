@@ -73,6 +73,10 @@ class QueueSaveOriginTest {
             val opened = openSave(fixture)
             compose.runOnUiThread { fixture.state = fixture.state.copy(browsedId = fixture.playing.id) }
             compose.onNode(hasSetTextAction()).performTextInput("Captured queue")
+            pump(fixture, predicateOnUiThread = false) {
+                try { compose.onNodeWithText("Add", substring = false).assertIsEnabled(); true }
+                catch (_: AssertionError) { false }
+            }
             tap(compose.onNodeWithText("Add", substring = false).assertIsEnabled())
             pump(fixture) { controller.state.value.playlists.singleOrNull()?.entries?.size == fixture.browsed.entries.size }
             awaitReturned(fixture, opened)
