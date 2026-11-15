@@ -64,7 +64,8 @@ class GlassTouchLightTest {
         val falloff = referenceProfile(radial)
         val coverageByte = channel(mask[y * width + x], 0)
         val coverage = coverageByte / 255f
-        val first = min(255f, channel(background.toArgb(), shift) + 255f * .05f * big * coverage).roundToInt()
+        val lift = if (android.os.Build.VERSION.SDK_INT >= 29) Math.rint((.05f * big * 255f).toDouble()).toFloat() else 255f * .05f * big
+        val first = min(255f, channel(background.toArgb(), shift) + lift * coverage).roundToInt()
         if (android.os.Build.VERSION.SDK_INT < 29) return first
         return (first + (min(255f, first / (1 - dodge)) - first) * little.coerceAtMost(1f) * falloff * coverage).roundToInt()
     }
