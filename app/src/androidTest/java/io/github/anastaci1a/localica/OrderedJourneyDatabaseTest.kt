@@ -89,7 +89,7 @@ class OrderedJourneyDatabaseTest {
         }
     }
 
-    @Test fun oversizedLegacyJsonMigratesWithoutLosingEitherOrderAndReopens() = runBlocking {
+    @Test fun oversizedLegacyJsonMigratesWithoutLosingEitherOrderAndReopens() = runBlocking<Unit> {
         val arguments = InstrumentationRegistry.getArguments()
         val count = arguments.getString("legacyEntries", "54000")!!.toInt()
         val name = "legacy-order-1012.db"
