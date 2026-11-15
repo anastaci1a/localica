@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -37,37 +38,241 @@ class GlassTouchLightTest {
     }
     private fun channel(pixel: Int, shift: Int) = pixel ushr shift and 255
     private fun render(glow: GlassGlow, circle: Boolean, cache: GlassRimCache = GlassRimCache(), mask: Boolean = false,
-        tone: GlassTone = GlassTone(), shape: GlassShape = GlassShape(), vertical: Boolean = false, density: Float = 1f): IntArray {
-        val image = ImageBitmap(width, height)
+        tone: GlassTone = GlassTone(), shape: GlassShape = GlassShape(), vertical: Boolean = false, density: Float = 1f, inset: Float = 0f, painter: (DrawScope.() -> Unit)? = null): IntArray {
+        val image = ImageBitmap(width, height, ImageBitmapConfig.Argb8888, colorSpace = ColorSpaces.Srgb)
         try {
             CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(image), extent) {
                 drawRect(if (mask) Color.Black else background)
                 val path = Path().apply {
-                    if (circle) addOval(Rect(Offset(8f, 0f), Size(80f, 80f)))
-                    else addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(18f)))
+                    if (circle) addOval(Rect(Offset(8f + inset, inset), Size(80f - 2 * inset, 80f - 2 * inset)))
+                    else addRoundRect(RoundRect(Rect(Offset(inset, inset), Size(size.width - 2 * inset, size.height - 2 * inset)), CornerRadius(18f)))
                 }
                 clipPath(path) {
-                    if (mask) drawRect(Color.White) else drawContactGlow(glow, { shape }, vertical, tone, cache)
+                    if (mask) drawRect(Color.White) else if (painter != null) painter() else drawContactGlow(glow, { shape }, vertical, tone, cache)
                 }
             }
             return pixels(image)
         } finally { image.asAndroidBitmap().recycle() }
     }
-    private fun expected(mask: IntArray, point: Offset, x: Int, y: Int, shift: Int, big: Float, little: Float,
-        shape: GlassShape = GlassShape(), vertical: Boolean = false, dodge: Float = .45f, scale: Float = 1f): Int {
-        val sx = exp((if (vertical) -shape.strain else shape.strain) - shape.depth / 2)
-        val sy = exp((if (vertical) shape.strain else -shape.strain) - shape.depth / 2)
-        val center = Offset(width * (.5f + (point.x - .5f) / sx), height * (.5f + (point.y - .5f) / sy))
-        val radius = min(.75f * min(width, height), 80f) * scale
-        val radial = (Offset(x + .5f, y + .5f) - center).getDistance() / radius
-        // Independent declared piecewise Gaussian approximation, not production's table or brush.
-        val falloff = referenceProfile(radial)
-        val coverageByte = channel(mask[y * width + x], 0)
-        val coverage = coverageByte / 255f
+    private fun expectedBroad(mask: IntArray, x: Int, y: Int, shift: Int, big: Float): Int {
+        val coverage = channel(mask[y * width + x], 0) / 255f
         val lift = if (android.os.Build.VERSION.SDK_INT >= 29) Math.rint((.05f * big * 255f).toDouble()).toFloat() else 255f * .05f * big
-        val first = min(255f, channel(background.toArgb(), shift) + lift * coverage).roundToInt()
-        if (android.os.Build.VERSION.SDK_INT < 29) return first
-        return (first + (min(255f, first / (1 - dodge)) - first) * little.coerceAtMost(1f) * falloff * coverage).roundToInt()
+        return min(255f, channel(background.toArgb(), shift) + lift * coverage).roundToInt()
+    }
+    private fun referenceBrush(lightInk: Boolean, linear: Boolean = false): Brush {
+        val grey = if (lightInk) .85f else .45f
+        return Brush.radialGradient(*profile.mapIndexed { i, alpha ->
+            i / 7f to Color(grey, grey, grey, if (linear) .3935f * (1 - i / 7f) else alpha)
+        }.toTypedArray(), center = Offset.Zero, radius = 1f)
+    }
+    private fun reference(mask: IntArray, glow: GlassGlow, circle: Boolean, lightInk: Boolean = false,
+        shape: GlassShape = GlassShape(), vertical: Boolean = false, density: Float = 1f): IntArray {
+        if (android.os.Build.VERSION.SDK_INT < 29 || glow.little <= 0f) return IntArray(width * height) { i ->
+            (255 shl 24) or (expectedBroad(mask, i % width, i / width, 16, glow.big.coerceAtLeast(0f)) shl 16) or
+                (expectedBroad(mask, i % width, i / width, 8, glow.big.coerceAtLeast(0f)) shl 8) or
+                expectedBroad(mask, i % width, i / width, 0, glow.big.coerceAtLeast(0f))
+        }
+        return render(glow, circle, density = density, painter = {
+            if (glow.big > 0f) drawRect(Color.White, alpha = .05f * glow.big, blendMode = BlendMode.Plus)
+            val sx = exp((if (vertical) -shape.strain else shape.strain) - shape.depth / 2)
+            val sy = exp((if (vertical) shape.strain else -shape.strain) - shape.depth / 2)
+            val cx = width * (.5f + (glow.point.x - .5f) / sx)
+            val cy = height * (.5f + (glow.point.y - .5f) / sy)
+            val support = min(.75f * min(width, height), 80f * density) * 3.5f * glow.scale
+            val shader = referenceBrush(lightInk)
+            translate(cx, cy) { scale(support, support, pivot = Offset.Zero) {
+                drawCircle(shader, 1f, Offset.Zero, alpha = min(1f, glow.little), blendMode = BlendMode.ColorDodge)
+            } }
+        })
+    }
+    private fun inputs(probe: ImageBitmap, bounds: Size, glow: GlassGlow, shape: GlassShape = GlassShape(),
+        vertical: Boolean = false, lightInk: Boolean = false, density: Float = 1f, mutant: String = ""): Brush? {
+        val order = mutableListOf<String>()
+        var observed: Brush? = null
+        CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(probe), bounds) {
+            val witness = object : DrawScope by this {
+                override fun drawRect(color: Color, topLeft: Offset, size: Size, alpha: Float,
+                    style: DrawStyle, colorFilter: ColorFilter?, blendMode: BlendMode) {
+                    order += "broad"
+                    assertEquals("broad source", Color.White, color)
+                    assertEquals("broad origin", Offset.Zero, topLeft)
+                    assertEquals("broad bounds", bounds, size)
+                    assertEquals("broad blend", BlendMode.Plus, blendMode)
+                    assertEquals("broad primitive", Fill, style)
+                    assertNull("broad filter", colorFilter)
+                    assertEquals("broad alpha", .05f * glow.big, alpha, 0f)
+                    val paint = Paint().apply { this.color = color; this.alpha = alpha }
+                    assertEquals("native broad alpha", Math.rint((.05f * glow.big * 255f).toDouble()).toInt(), paint.asFrameworkPaint().alpha)
+                }
+                override fun drawCircle(brush: Brush, radius: Float, center: Offset, alpha: Float,
+                    style: DrawStyle, colorFilter: ColorFilter?, blendMode: BlendMode) {
+                    if (mutant == "order") order.add(0, "local") else order += "local"
+                    assertEquals("local blend", BlendMode.ColorDodge, if (mutant == "blend") BlendMode.SrcOver else blendMode)
+                    assertEquals("unit primitive", 1f, if (mutant == "support") radius * 2 else radius, 0f)
+                    assertEquals("unit origin", Offset.Zero, center)
+                    assertEquals("local primitive", Fill, style)
+                    assertNull("local filter", colorFilter)
+                    assertTrue("platform alpha stays within its range", alpha in 0f..1f)
+                    assertEquals("local alpha", min(1f, glow.little), alpha, 0f)
+                    val paint = Paint()
+                    brush.applyTo(bounds, paint, alpha)
+                    assertEquals("native local alpha", Math.rint((min(1f, glow.little) * 255f).toDouble()).toInt(), paint.asFrameworkPaint().alpha)
+                    @Suppress("DEPRECATION")
+                    val matrix = drawContext.canvas.nativeCanvas.matrix
+                    val mapped = floatArrayOf(center.x, center.y)
+                    matrix.mapPoints(mapped)
+                    assertEquals(glow.point.x * bounds.width, bounds.width / 2 + (mapped[0] - bounds.width / 2) * shape.scaleX(vertical), .0001f)
+                    assertEquals(glow.point.y * bounds.height, bounds.height / 2 + (mapped[1] - bounds.height / 2) * shape.scaleY(vertical), .0001f)
+                    val values = FloatArray(9).also { matrix.getValues(it) }
+                    if (mutant == "center") values[2] += 1f
+                    if (mutant == "scale") values[0] *= 2f
+                    val sx = exp((if (vertical) -shape.strain else shape.strain) - shape.depth / 2)
+                    val sy = exp((if (vertical) shape.strain else -shape.strain) - shape.depth / 2)
+                    val support = min(.75f * min(bounds.width, bounds.height), 80f * density) * 3.5f * glow.scale
+                    val expected = floatArrayOf(support, 0f, bounds.width * (.5f + (glow.point.x - .5f) / sx),
+                        0f, support, bounds.height * (.5f + (glow.point.y - .5f) / sy), 0f, 0f, 1f)
+                    assertArrayEquals("local matrix", expected, values, .0001f)
+                    observed = when (mutant) {
+                        "polarity" -> referenceBrush(!lightInk)
+                        "profile" -> referenceBrush(lightInk, linear = true)
+                        else -> brush
+                    }
+                }
+            }
+            witness.drawContactGlow(glow, { shape }, vertical, GlassTone(.25f, lightInk = lightInk), GlassRimCache())
+        }
+        val expectedOrder = buildList {
+            if (glow.big > 0f) add("broad")
+            if (glow.little > 0f && android.os.Build.VERSION.SDK_INT >= 29) add("local")
+        }
+        assertEquals("draw order/admission", expectedOrder, order)
+        return observed
+    }
+    private fun shader(brush: Brush, lightInk: Boolean, alpha: Float) {
+        for (backdrop in listOf(Color.Black, Color.White)) {
+            background = backdrop
+            fun image(shader: Brush) = render(GlassGlow(), false, painter = {
+                translate(48f, 40f) { scale(36f, 36f, pivot = Offset.Zero) {
+                    drawCircle(shader, 1f, Offset.Zero, alpha = alpha, blendMode = BlendMode.SrcOver)
+                } }
+            })
+            val actual = image(brush)
+            val expected = image(referenceBrush(lightInk))
+            var maximum = 0
+            for (i in actual.indices) for (shift in listOf(0, 8, 16))
+                maximum = max(maximum, abs(channel(actual[i], shift) - channel(expected[i], shift)))
+            println("neutral shader lightInk=$lightInk alpha=$alpha backdrop=$backdrop maximum=$maximum")
+            assertTrue("neutral shader maximum=$maximum", maximum <= 1)
+        }
+    }
+    private fun coverageReference(circle: Boolean): IntArray {
+        val bitmap = android.graphics.Bitmap.createBitmap(96, 80, android.graphics.Bitmap.Config.ARGB_8888)
+        try {
+            val canvas = android.graphics.Canvas(bitmap)
+            assertFalse("software coverage reference", canvas.isHardwareAccelerated)
+            canvas.drawColor(android.graphics.Color.BLACK)
+            val path = android.graphics.Path().apply {
+                if (circle) addOval(8f, 0f, 88f, 80f, android.graphics.Path.Direction.CW)
+                else addRoundRect(0f, 0f, 96f, 80f, 18f, 18f, android.graphics.Path.Direction.CW)
+            }
+            canvas.clipPath(path)
+            canvas.drawColor(android.graphics.Color.WHITE)
+            return IntArray(96 * 80).also { bitmap.getPixels(it, 0, 96, 0, 0, 96, 80) }
+        } finally { bitmap.recycle() }
+    }
+    private fun coverage(actual: IntArray, expected: IntArray, circle: Boolean) {
+        val counts = IntArray(3)
+        val maxima = IntArray(3)
+        var actualArea = 0L
+        var expectedArea = 0L
+        for (y in 0 until height) for (x in 0 until width) {
+            val i = y * width + x
+            val a = channel(actual[i], 0)
+            val e = channel(expected[i], 0)
+            val category = if (e == 0) 0 else if (e == 255) 2 else 1
+            counts[category]++
+            actualArea += a
+            expectedArea += e
+            for (shift in listOf(0, 8, 16)) maxima[category] = max(maxima[category], abs(channel(actual[i], shift) - channel(expected[i], shift)))
+            val qx = abs(x + .5f - 48f) - 30f
+            val qy = abs(y + .5f - 40f) - 22f
+            val distance = if (circle) hypot(x + .5f - 48f, y + .5f - 40f) - 40f
+                else hypot(max(qx, 0f), max(qy, 0f)) + min(max(qx, qy), 0f) - 18f
+            if (distance < -1f) assertEquals("coverage full footprint", 255, a)
+            if (distance > 1f) assertEquals("coverage empty footprint", 0, a)
+            if (e == 0) assertEquals("coverage outside identity", Color.Black.toArgb(), actual[i])
+        }
+        assertTrue("coverage categories", counts.all { it > 0 })
+        println("coverage circle=$circle counts=${counts.toList()} sums=$actualArea/$expectedArea areaDifference=${abs(actualArea - expectedArea) / 255.0} maxima=${maxima.toList()}")
+        assertTrue("coverage byte comparison", maxima.all { it <= 1 })
+    }
+    private fun rejects(label: String, assertion: String, block: () -> Unit) {
+        val failure = try { block(); null } catch (error: AssertionError) { error }
+        assertNotNull("mutant $label must fail", failure)
+        assertTrue("mutant $label failed its named assertion: $failure", failure!!.message.orEmpty().contains(assertion))
+        println("mutant=$label rejectedBy=$assertion")
+    }
+
+    @Test fun nativeInputsShaderCoverageAndRoundingMatchIndependentFixtures() {
+        val probe = ImageBitmap(1, 1, ImageBitmapConfig.Argb8888, colorSpace = ColorSpaces.Srgb)
+        try {
+            assertEquals(android.graphics.Bitmap.Config.ARGB_8888, probe.asAndroidBitmap().config)
+            assertTrue(probe.asAndroidBitmap().colorSpace!!.isSrgb)
+            assertFalse(Canvas(probe).nativeCanvas.isHardwareAccelerated)
+            println("glow bitmap software=true config=ARGB_8888 colorSpace=sRGB api=${android.os.Build.VERSION.SDK_INT}")
+            val alphas = mutableListOf(-.1f, 0f, .5f, 1f, 1.25f)
+            for (lower in listOf(0, 1, 126, 127, 128, 129)) {
+                val tie = (lower + .5f) / 255f
+                val below = Float.fromBits(tie.toRawBits() - 1)
+                val above = Float.fromBits(tie.toRawBits() + 1)
+                assertEquals("exact half-byte tie", lower + .5f, tie * 255f, 0f)
+                assertTrue(below * 255f < lower + .5f && above * 255f > lower + .5f)
+                alphas += listOf(below, tie, above)
+                if (lower % 2 == 0) rejects("half-up lower=$lower", "native tie alpha") {
+                    val paint = Paint().apply { alpha = tie }
+                    paint.asFrameworkPaint().alpha = (tie * 255f).roundToInt()
+                    assertEquals("native tie alpha", Math.rint((tie * 255f).toDouble()).toInt(), paint.asFrameworkPaint().alpha)
+                }
+            }
+            for (alpha in alphas) {
+                val paint = Paint().apply { this.alpha = alpha.coerceAtLeast(0f).coerceAtMost(1f) }
+                assertEquals("native paint alpha", Math.rint((alpha.coerceIn(0f, 1f) * 255f).toDouble()).toInt(), paint.asFrameworkPaint().alpha)
+                for (lightInk in listOf(false, true)) {
+                    val brush = inputs(probe, extent, GlassGlow(.5f, alpha), lightInk = lightInk)
+                    if (brush != null) shader(brush, lightInk, min(1f, alpha))
+                }
+            }
+            for (scale in listOf(1f, 2f, 4f)) for (density in listOf(.25f, 1f, 2.5f))
+                inputs(probe, extent, GlassGlow(.5f, .5f, Offset(.25f, .75f), scale), GlassShape(.2f, -.2f), density = density)
+            for (big in listOf(-.1f, 0f, .5f, 1f)) inputs(probe, extent, GlassGlow(big, 0f))
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                for ((mutant, assertion) in listOf("blend" to "local blend", "order" to "draw order/admission",
+                    "support" to "unit primitive", "center" to "local matrix", "scale" to "local matrix"))
+                    rejects(mutant, assertion) { inputs(probe, extent, GlassGlow(.5f, .5f), mutant = mutant) }
+                for (mutant in listOf("polarity", "profile")) rejects(mutant, "neutral shader") {
+                    shader(inputs(probe, extent, GlassGlow(.5f, .5f), mutant = mutant)!!, false, .5f)
+                }
+            }
+            for (circle in listOf(false, true)) {
+                val expected = coverageReference(circle)
+                coverage(render(GlassGlow(), circle, mask = true), expected, circle)
+                val changed = render(GlassGlow(), circle, mask = true, inset = 1f)
+                assertTrue("clipping mutant preserves categories", listOf(0, 255).all { value -> changed.any { channel(it, 0) == value } } && changed.any { channel(it, 0) in 1..254 })
+                rejects("clipping", "coverage") { coverage(changed, expected, circle) }
+                background = Color(0xff405060)
+                val mask = render(GlassGlow(), circle, mask = true)
+                for (alpha in alphas) for (big in listOf(0f, .5f)) {
+                    val glow = GlassGlow(big, alpha)
+                    val actual = render(glow, circle)
+                    val reference = reference(mask, glow, circle)
+                    var maximum = 0
+                    for (i in actual.indices) for (shift in listOf(0, 8, 16))
+                        maximum = max(maximum, abs(channel(actual[i], shift) - channel(reference[i], shift)))
+                    assertTrue("alpha boundary raster big=$big little=$alpha max=$maximum", maximum <= if (big == 0f) 1 else 2)
+                }
+            }
+            println("native alpha fixtures=${alphas.size} ties=6 adjacent=12 rounding mutants=3")
+        } finally { probe.asAndroidBitmap().recycle() }
     }
 
     @Test fun broadAndLocalFillsMatchIndependentCoverageAndRejectWrongChannels() {
@@ -76,24 +281,7 @@ class GlassTouchLightTest {
             for (size in listOf(Size(96f, 96f), Size(240f, 48f), Size(48f, 240f)))
                 for (vertical in listOf(false, true)) for (shape in listOf(GlassShape(), GlassShape(.2f, -.3f), GlassShape(-.3f, .2f)))
                     for (x in listOf(-.25f, 0f, .2f, .5f, 1f, 1.25f)) for (y in listOf(-.25f, 0f, .5f, 1f, 1.25f)) {
-                        var draws = 0
-                        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(probe), size) {
-                            val witness = object : DrawScope by this {
-                                override fun drawCircle(brush: Brush, radius: Float, center: Offset, alpha: Float,
-                                    style: DrawStyle, colorFilter: ColorFilter?, blendMode: BlendMode) {
-                                    val mapped = floatArrayOf(center.x, center.y)
-                                    @Suppress("DEPRECATION")
-                                    val matrix = drawContext.canvas.nativeCanvas.matrix
-                                    matrix.mapPoints(mapped)
-                                    assertEquals(x * size.width, size.width / 2 + (mapped[0] - size.width / 2) * shape.scaleX(vertical), .0001f)
-                                    assertEquals(y * size.height, size.height / 2 + (mapped[1] - size.height / 2) * shape.scaleY(vertical), .0001f)
-                                    assertTrue("platform alpha stays within its range", alpha in 0f..1f)
-                                    draws++
-                                }
-                            }
-                            witness.drawContactGlow(GlassGlow(0f, 1f, Offset(x, y)), { shape }, vertical, GlassTone(), GlassRimCache())
-                        }
-                        assertEquals(if (android.os.Build.VERSION.SDK_INT >= 29) 1 else 0, draws)
+                        inputs(probe, size, GlassGlow(0f, 1f, Offset(x, y)), shape, vertical)
                     }
             CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(probe), Size(1f, 1f)) {
                 for (glow in listOf(GlassGlow(), GlassGlow(1f, 0f), GlassGlow(-.22f, -.03f)))
@@ -102,6 +290,9 @@ class GlassTouchLightTest {
         } finally { probe.asAndroidBitmap().recycle() }
         assertArrayEquals("negative optical energy draws nothing", render(GlassGlow(), false), render(GlassGlow(-.22f, -.03f), false))
         val maxima = IntArray(3)
+        val coverageMaxima = Array(3) { IntArray(3) }
+        val comparedChannels = LongArray(3)
+        var fixturePairs = 0
         val worst = Array(3) { "" }
         var toneMaximum = 0
         val residuals = IntArray(6)
@@ -119,10 +310,16 @@ class GlassTouchLightTest {
             for ((op, alphas) in listOf(1f to 0f, 0f to 1f, 1f to 1f).withIndex()) {
                 val points = listOf(Offset(.5f, .5f), Offset(.25f, .5f), Offset(.75f, .5f))
                 val actual = points.map { render(GlassGlow(alphas.first, alphas.second, it), circle, cache) }
+                val references = points.map { reference(mask, GlassGlow(alphas.first, alphas.second, it), circle) }
+                fixturePairs += points.size
                 for ((p, point) in points.withIndex()) for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16)) {
                     val value = channel(actual[p][y * width + x], shift)
-                    val oracle = expected(mask, point, x, y, shift, alphas.first, alphas.second)
+                    val oracle = channel(references[p][y * width + x], shift)
                     val error = abs(value - oracle)
+                    val coverage = channel(mask[y * width + x], 0)
+                    val category = if (coverage == 0) 0 else if (coverage == 255) 2 else 1
+                    coverageMaxima[op][category] = max(coverageMaxima[op][category], error)
+                    comparedChannels[category]++
                     if (error > maxima[op]) {
                         maxima[op] = error
                         worst[op] = "backdrop=$backdrop circle=$circle point=$point x=$x y=$y shift=$shift coverage=${channel(mask[y * width + x], 0)} actual=$value expected=$oracle"
@@ -134,11 +331,12 @@ class GlassTouchLightTest {
                         val py = if (axis == 1) height - 1 - y else y
                         val a = if (axis == 2) actual[1] else actual[0]
                         val b = if (axis == 2) actual[2] else actual[0]
-                        val pa = if (axis == 2) points[1] else points[0]
-                        val pb = if (axis == 2) points[2] else points[0]
                         val observed = channel(a[y * width + x], shift) - channel(b[py * width + px], shift)
-                        val predicted = expected(mask, pa, x, y, shift, alphas.first, alphas.second) -
-                            expected(mask, pb, px, py, shift, alphas.first, alphas.second)
+                        val ra = if (axis == 2) references[1] else references[0]
+                        val rb = if (axis == 2) references[2] else references[0]
+                        val predicted = channel(ra[y * width + x], shift) - channel(rb[py * width + px], shift)
+                        assertTrue("independent actual symmetry", abs(observed) <= if (op == 2) 4 else 2)
+                        assertTrue("independent reference symmetry", abs(predicted) <= if (op == 2) 4 else 2)
                         val i = (if (op == 2) 3 else 0) + axis
                         residuals[i] = max(residuals[i], abs(observed - predicted))
                     }
@@ -172,26 +370,37 @@ class GlassTouchLightTest {
             val changed = cache.brushes(extent.center, GlassTone(.25f, lightInk = true)).light.value
             assertNotSame("tone change replaces preparation", brush, changed)
             val toned = render(GlassGlow(1f, 1f, Offset(.5f, .5f)), circle, tone = GlassTone(.25f, lightInk = true))
+            val toneReference = reference(mask, GlassGlow(1f, 1f, Offset(.5f, .5f)), circle, lightInk = true)
+            fixturePairs++
+            if (backdrop == Color.Black && !circle) for (point in listOf(Offset(17f, 0f), Offset(11f, 1f))) {
+                val i = point.y.toInt() * width + point.x.toInt()
+                println("historical coordinate=$point actual=${toned[i]} expected=${toneReference[i]} coverage=${channel(mask[i], 0)}")
+            }
             for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16)) {
                 val actual = channel(toned[y * width + x], shift)
-                val oracle = expected(mask, Offset(.5f, .5f), x, y, shift, 1f, 1f, dodge = .85f)
+                val oracle = channel(toneReference[y * width + x], shift)
                 toneMaximum = max(toneMaximum, abs(actual - oracle))
                 assertTrue("tone-mapped two-fill oracle ($x,$y) shift=$shift actual=$actual expected=$oracle backdrop=$backdrop circle=$circle coverage=${channel(mask[y * width + x], 0)}", abs(actual - oracle) <= 2)
             }
             for (scale in listOf(1f, 2f, 4f)) {
                 val expanded = render(GlassGlow(.5f, .5f, Offset(.25f, .75f), scale), circle)
+                val expandedReference = reference(mask, GlassGlow(.5f, .5f, Offset(.25f, .75f), scale), circle)
+                fixturePairs++
                 for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16))
                     assertTrue("expanded clipped profile scale=$scale ($x,$y)", abs(channel(expanded[y * width + x], shift) -
-                        expected(mask, Offset(.25f, .75f), x, y, shift, .5f, .5f, scale = scale)) <= 2)
+                        channel(expandedReference[y * width + x], shift)) <= 2)
             }
             for (vertical in listOf(false, true)) for (point in listOf(Offset(.2f, .7f), Offset(1.25f, -.25f))) {
                 val shape = GlassShape(.2f, -.2f)
                 val transformed = render(GlassGlow(1f, 1f, point), circle, shape = shape, vertical = vertical)
+                val transformedReference = reference(mask, GlassGlow(1f, 1f, point), circle, shape = shape, vertical = vertical)
+                fixturePairs++
                 for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16))
                     assertTrue("deformed mapping ($x,$y)", abs(channel(transformed[y * width + x], shift) -
-                        expected(mask, point, x, y, shift, 1f, 1f, shape, vertical)) <= 2)
+                        channel(transformedReference[y * width + x], shift)) <= 2)
             }
         }
+        println("raster fixturePairs=$fixturePairs comparedChannelsOutsidePartialFull=${comparedChannels.toList()} maximaOutsidePartialFull=${coverageMaxima.map { it.toList() }}")
         println("two-fill maxima=${maxima.toList()} worst=${worst.toList()} symmetry=${residuals.toList()} sensitivity=${sensitivity.toList()} toneMaximum=$toneMaximum")
         for (op in maxima.indices) assertTrue("oracle op=$op max=${maxima[op]} ${worst[op]}", maxima[op] <= if (op == 2) 2 else 1)
         for (i in residuals.indices) assertTrue("symmetry $i max=${residuals[i]}", residuals[i] <= if (i < 3) 2 else 4)
