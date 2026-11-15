@@ -116,6 +116,7 @@ class PopupKindOwnerTest {
         assertTrue(Regex("""rememberPopupWindowMotion\(anchor, [^\n]*, popupKind\)""").containsMatchIn(popup))
         assertTrue("the native gate adapter restarts with its owner", Regex("""LaunchedEffect\(motion, visible, """).containsMatchIn(popup))
         assertEquals(1, Regex("""motion\.attached\(""").findAll(popup).count())
-        assertTrue("attachment follows the owner", "motion.attached(" in popup.substringAfter("DisposableEffect(window, motion) {", "").substringBefore("onDispose {"))
+        assertTrue("attachment follows the owner", Regex("""window\?\.let\s*\{\s*if\s*\(motion\.attached\(it, windowPlane\) && popupFlight\.present\)""")
+            .containsMatchIn(popup.substringAfter("DisposableEffect(window, motion) {", "").substringBefore("onDispose {")))
     }
 }

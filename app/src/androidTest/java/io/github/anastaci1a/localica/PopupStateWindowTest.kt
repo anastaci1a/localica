@@ -7,6 +7,11 @@ import io.github.anastaci1a.localica.ui.GlassPopupFlight
 import io.github.anastaci1a.localica.ui.PopupEvent.*
 import io.github.anastaci1a.localica.ui.PopupPresenter
 import io.github.anastaci1a.localica.ui.engine.PopupTakeover
+import io.github.anastaci1a.localica.ui.engine.EngineHarness
+import io.github.anastaci1a.localica.ui.engine.ExpandCollapse
+import io.github.anastaci1a.localica.ui.engine.ExpansionBasis
+import io.github.anastaci1a.localica.ui.spec.StockUiSpec
+import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -128,6 +133,36 @@ class PopupStateWindowTest {
             assertTrue(flight.advance(gen, Admitted, next))
             assertFalse("late old detach", flight.receipt(WindowGone, old))
             assertTrue(flight.admitted(next)); assertFalse(flight.admitted(old))
+        }
+    }
+
+    /** The production producer checks this same suspending barrier immediately before Admitted, without another suspension. */
+    @Test(timeout = 10000) fun delayedOldWindowAdmissionCannotCrossTheReplacementGate() = runBlocking {
+        EngineHarness().use { h ->
+            val expansion = ExpandCollapse(h.clock, StockUiSpec.expansion, false)
+            expansion.nativeGate(0f)
+            expansion.setBasis(ExpansionBasis(androidx.compose.ui.geometry.Rect(0f, 0f, 100f, 100f),
+                androidx.compose.ui.geometry.Rect(0f, 0f, 800f, 900f), 1f))
+            expansion.target(true)
+            val old = newTestWindow(); val next = newTestWindow()
+            val flight = GlassPopupFlight().testRun(window = old)
+            val gen = flight.gen; val generation = expansion.nativeGeneration
+            val receipt = CompletableDeferred<Unit>()
+            val delayed = async(start = CoroutineStart.UNDISPATCHED) {
+                receipt.await()
+                expansion.awaitNativeGate(generation, true) && flight.advance(gen, Admitted, old)
+            }
+            assertFalse("the old producer is suspended before its final admission check", delayed.isCompleted)
+            expansion.restartNativeAdmission(); flight.testStep(WindowReplaced)
+            expansion.target(true); h.advance(2.0)
+            assertTrue(expansion.awaitNativeGate(expansion.nativeGeneration, true))
+            assertTrue(flight.advance(gen, Admitted, next))
+            assertTrue("the new gate has the same opening direction and is ready", expansion.awaitingNativeGate && expansion.nativeOpening == true)
+            receipt.complete(Unit)
+            assertFalse("the delayed old-window admission is refused by the producer barrier", delayed.await())
+            assertTrue(flight.admitted(next)); assertFalse(flight.admitted(old))
+            assertTrue(expansion.acknowledgeNativeGate(expansion.nativeGeneration))
+            expansion.dispose()
         }
     }
 }
