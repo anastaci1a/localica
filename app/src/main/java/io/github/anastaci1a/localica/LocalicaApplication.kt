@@ -9,6 +9,7 @@ import kotlinx.coroutines.*
 import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
 import androidx.room.Room
+import androidx.work.Configuration
 import io.github.anastaci1a.localica.library.AndroidDocuments
 import io.github.anastaci1a.localica.library.LibraryDatabase
 import io.github.anastaci1a.localica.library.LibraryRepository
@@ -16,7 +17,8 @@ import io.github.anastaci1a.localica.library.PersistedFolderPermissions
 import io.github.anastaci1a.localica.library.RoomLibraryStore
 import io.github.anastaci1a.localica.library.TreeScanner
 
-class LocalicaApplication : Application() {
+class LocalicaApplication : Application(), Configuration.Provider {
+    override val workManagerConfiguration get() = Configuration.Builder().build()
     private companion object {
         val STARTUP_PREFERENCES = listOf("interface", "queue-settings", "scanner", "scan-progress", "browse-style",
             "library-query", "library-filters", "pins", "player-actions", "tag-jobs", "cover-images", "listening-identity")
