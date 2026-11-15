@@ -105,6 +105,47 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun clearingRecoveryDuringHeldWindowIoPreservesPlayAtTheBoundary() = fixture {
+        val created = CompletableDeferred<Boolean>()
+        queues.act(listOf(track, second.entries.single().track), SongTap.NewQueue) { created.complete(it) }
+        assertTrue(created.await()); barrier()
+        controls.pause(); barrier()
+        val queue = queues.state.value.library.active!!
+        readers.publishRecovery(RecoveryAdmission.Pending(queue.entries[1].track.id))
+        queues.settings { it.copy(repeat = QueueRepeat.All, preloadNext = false) }; barrier()
+        controls.play(); barrier()
+        awaitMain { player.isPlaying && player.engine.playbackState == Player.STATE_READY }
+        val worker = store.gateNextSnapshot()
+        val actor = Gate()
+        queues.settings { it.copy(previousThresholdSeconds = 6) }
+        worker.entered.await()
+        val held = withContext(Dispatchers.Main) {
+            async(start = CoroutineStart.UNDISPATCHED) { command { actor.await() } }.also {
+                readers.publishRecovery(RecoveryAdmission.Clear)
+            }
+        }
+        try {
+            worker.release.complete(Unit)
+            actor.entered.await()
+            withContext(Dispatchers.Main) {
+                assertEquals(Player.REPEAT_MODE_OFF, player.repeatMode)
+                assertTrue(player.playWhenReady)
+                player.engine.seekTo(player.duration - 100)
+            }
+            awaitMain { player.engine.playbackState == Player.STATE_ENDED }
+            actor.release.complete(Unit); held.await(); command {}
+            awaitMain { player.isPlaying }
+            withContext(Dispatchers.Main) {
+                assertTrue("Recovery reconciliation must preserve the playing intent across the stale OFF boundary", player.playWhenReady)
+                assertEquals(Player.REPEAT_MODE_ALL, player.repeatMode)
+                assertEquals(QueueRepeat.All, queues.state.value.settings.repeat)
+                assertNull(player.playerError)
+            }
+        } finally {
+            worker.release.complete(Unit); actor.release.complete(Unit); held.cancelAndJoin()
+        }
+    }
+
     @Test fun sameQueueSelectionMatchesPriorNativePathWithoutReloading() {
         for (playing in listOf(false, true)) {
             var reference: List<String>? = null
