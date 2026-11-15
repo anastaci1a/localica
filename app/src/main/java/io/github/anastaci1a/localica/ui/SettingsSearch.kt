@@ -45,12 +45,12 @@ internal fun SettingsEntry(label: String, content: @Composable () -> Unit) {
 
 @Composable
 internal fun SettingsSearchResults(query: String, values: Map<String, String>, onSelect: (SettingsCatalog.Result) -> Unit) {
-    val results = remember(query) { SettingsCatalog.search(query) }
-    if (results.isEmpty()) {
+    val results by rememberAsyncValue(query, retainPrevious = true) { SettingsCatalog.search(query) }
+    if (results?.isEmpty() == true) {
         Text("No settings match \"$query\"")
         Text("Try a different word, like blur, queue or tabs", style = MaterialTheme.typography.bodyMedium)
     }
-    results.forEach { result ->
+    results.orEmpty().forEach { result ->
         SettingsLink(result.title, SettingsCatalog.breadcrumb(result.page) + (values[result.setting?.id]?.let { " · $it" } ?: "") +
             (result.setting?.revealedBy?.let { " · If hidden, open $it" } ?: ""),
             modifier = Modifier.testTag("search-result:${result.title}").semantics {
