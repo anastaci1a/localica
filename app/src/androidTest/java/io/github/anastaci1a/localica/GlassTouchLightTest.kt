@@ -54,9 +54,26 @@ class GlassTouchLightTest {
         val sy = exp((if (vertical) shape.strain else -shape.strain) - shape.depth / 2)
         val center = Offset(width * (.5f + (point.x - .5f) / sx), height * (.5f + (point.y - .5f) / sy))
         val radius = min(.75f * min(width, height), 80f)
-        val falloff = max(0f, 1 - (Offset(x + .5f, y + .5f) - center).getDistance() / radius)
-        val coverage = channel(mask[y * width + x], 0) / 255f
+        val radial = (Offset(x + .5f, y + .5f) - center).getDistance() / radius
+        val falloff = max(0f, 1 - radial)
+        val coverageByte = channel(mask[y * width + x], 0)
+        val coverage = coverageByte / 255f
         val first = (channel(background.toArgb(), shift) + (white - channel(background.toArgb(), shift)) * .12f * big * coverage).roundToInt()
+        if (android.os.Build.VERSION.SDK_INT == 26) {
+            // Android 8 SkGradientShader::Build32bitCache and byte SrcOver, independent of production.
+            val paint = (.12f * little * 255).roundToInt()
+            val bias = when ((x and 1) or ((y and 1) shl 1)) {
+                0 -> 0x2000
+                1 -> 0xE000
+                2 -> 0x6000
+                else -> 0xA000
+            }
+            val alpha = (paint * 65536 + (radial * 255).toInt().coerceIn(0, 255) * (-paint * 65536 / 255) + bias) ushr 16
+            val scale = coverageByte + (coverageByte ushr 7)
+            val sourceAlpha = alpha * scale ushr 8
+            val source = ((white.roundToInt() * alpha + 127) / 255) * scale ushr 8
+            return source + (first * (256 - sourceAlpha) ushr 8)
+        }
         return (first + (white - first) * .12f * little * falloff * coverage).roundToInt()
     }
 
