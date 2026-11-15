@@ -55,7 +55,7 @@ internal class Journeys {
         if (scenario.getString("view") == "gallery") node("Items per row: 2")
         else {
             val size = node("Size").visibleBounds
-            val value = checkNotNull(device.findObjects(By.textMatches(".+")).firstOrNull {
+            val value = checkNotNull(device.findObjects(By.text(".+".toPattern())).firstOrNull {
                 val bounds = it.visibleBounds
                 bounds.left == size.left && bounds.centerY() > size.centerY() && bounds.centerY() < size.centerY() + scaleY(120)
             }) { "Missing list size value" }
