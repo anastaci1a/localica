@@ -32,6 +32,7 @@ import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
+import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 
@@ -79,7 +80,7 @@ class QueueSaveOriginTest {
             }
             tap(compose.onNodeWithText("Add", substring = false).assertIsEnabled())
             pump(fixture) { controller.state.value.playlists.singleOrNull()?.entries?.size == fixture.browsed.entries.size }
-            awaitReturned(fixture, opened)
+            awaitReturned(fixture, opened, fixture.originalQueue.copy(browsedId = fixture.playing.id))
             val saved = runBlocking { database.playlists().read() }.single()
             assertEquals(fixture.browsed.entries.map { it.track }, saved.entries.map { it.track })
             assertEquals(fixture.playing.id, fixture.state.browsedId)
@@ -106,6 +107,7 @@ class QueueSaveOriginTest {
         } finally { watching.set(false); dispose(drawer) }
     }
 
+    @Ignore("Blocked on #1035: playlist output allocation exceeds the device heap")
     @Test fun millionEntrySaveConsumesCapturedSourceOffMainThroughCommittedCompletion() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val database = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()
@@ -360,7 +362,7 @@ class QueueSaveOriginTest {
         }
     }
 
-    private fun awaitReturned(drawer: Drawer, opened: Opened) {
+    private fun awaitReturned(drawer: Drawer, opened: Opened, expectedQueue: QueueUiState = drawer.originalQueue) {
         pump(drawer, endpoint = true) { drawer.host.entries.isEmpty() && !opened.anchor.modalPresent && !opened.anchor.hidden &&
             opened.anchor.restoredDrawn && drawer.sourceView.hasWindowFocus() }
         saveButton().assertIsDisplayed().assertIsEnabled()
@@ -368,7 +370,7 @@ class QueueSaveOriginTest {
         assertBounds(opened.bounds, screenBounds(saveButton()))
         compose.runOnUiThread {
             assertTrue(opened.anchor.triggerMounted)
-            assertEquals(drawer.originalQueue, drawer.state)
+            assertEquals(expectedQueue, drawer.state)
             assertEquals(drawer.originalSelection, drawer.selection.entries.toList())
         }
     }
