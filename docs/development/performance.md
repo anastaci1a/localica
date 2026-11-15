@@ -84,7 +84,9 @@ Generation builds only its non-minified target and producer. Final functional bu
 
 Use `performance=build` for compilation, unit tests and lint, or `performance=functional` for the diagnostic scenarios. Each dispatch has its own branch because same-branch dispatches cancel each other. Delete temporary branches after retaining receipts.
 
-Generation compilation took 4 minutes 35 seconds. Complete profile collection exceeded the initial one-hour job limit after five journeys; generation now has a three-hour ceiling. Functional builds additionally produce the no-profile control. Record actual runner minutes for every refresh pair.
+The committed profiles cover startup, list/gallery fling and slow scroll, and tab swipe from hosted run `43686451671`. Player, lyrics, search and pinch profile generation is Incomplete and belongs with the qualified A35 follow-up. All eleven functional scenarios remain required.
+
+That run spent about five minutes building and 48 minutes collecting before an adapter preparation failure. Generation has a three-hour ceiling. Functional builds additionally produce the no-profile control. Record actual runner minutes for each refresh.
 
 Macrobenchmark reports `FrameTimingMetric`, cold-start `StartupTimingMetric` and the existing `Choreographer#doFrame` trace duration. That trace duration is supporting attribution, not Main CPU time. Emulator and profileable results remain diagnostic. Qualified comparisons use the manifest-only plain twin, identical speed-profile warm-up, physical A35 traces, health receipts and no screen recording.
 

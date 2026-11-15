@@ -49,10 +49,18 @@ internal class Journeys {
         check(device.wait(Until.hasObject(By.textStartsWith("Scale song")), 120_000)) {
             "13,400-track fixture did not restore"
         }
+        tap("Songs")
         tap("View options")
         tap(if (scenario.getString("view") == "gallery") "Gallery" else "List")
         if (scenario.getString("view") == "gallery") node("Items per row: 2")
-        else if (!device.hasObject(By.text("Normal"))) { tap("Large"); tap("Normal"); tap("Select") }
+        else {
+            val size = node("Size").visibleBounds
+            val value = checkNotNull(device.findObjects(By.textMatches(".+")).firstOrNull {
+                val bounds = it.visibleBounds
+                bounds.left == size.left && bounds.centerY() > size.centerY() && bounds.centerY() < size.centerY() + scaleY(120)
+            }) { "Missing list size value" }
+            if (value.text != "Normal") { value.click(); tap("Normal"); tap("Select") }
+        }
         tap("Save")
         val preparation = scenario.getString("prepare")
         if (preparation in listOf("player", "mini")) {
