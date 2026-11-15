@@ -88,7 +88,7 @@ Macrobenchmark reports `FrameTimingMetric`, cold-start `StartupTimingMetric` and
 
 Before accepting a release, compare five or more qualified captures per surface with the accepted anchor. Preserve per-capture percentiles; compare their median. Track frame p50/p95, Main CPU milliseconds, allocated megabytes and GC count. Cold startup also tracks initial-display time.
 
-Pack the accepted plain runner’s per-surface `run-*/metrics.json` files with `campaign.mjs pack RUNS IDENTITY_JSON OUTPUT_JSON`. Use `anchor` instead of `pack` only when establishing a new, reviewed anchor. Both commands refuse to overwrite an existing output and require every scenario and metric.
+Pack the accepted plain runner’s per-surface `run-*/metrics.json` files with `campaign.mjs pack RUNS IDENTITY_JSON OUTPUT_JSON`. Identity includes `runId`, full `sourceSha` and `apkSha256`; each raw receipt must match that source, APK and fixture. Health, recording and background qualification receipts are required. Use `anchor` instead of `pack` only when establishing a new, reviewed anchor. Both commands refuse to overwrite an existing output and require every scenario and metric.
 
 The [ratchet checker](../../tools/performance/macrobenchmark/ratchet.mjs) takes an anchor and a campaign JSON file:
 

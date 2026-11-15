@@ -4,6 +4,7 @@ import { check, tighten, protocol, metricsFor } from './ratchet.mjs';
 const identity = {protocolSha256: 'protocol', fixtureSha256: 'fixture', device: 'A35', environmentSha256: 'settings'};
 const anchor = {...identity, bars: Object.fromEntries(protocol.scenarios.map(({id}) => [id, Object.fromEntries(metricsFor(id).map(key => [key, {median: key === 'gc_count' ? 2 : 10, tolerance: key === 'gc_count' ? 0 : 1}]))]))};
 const candidate = (values, runId = 'first') => ({...identity, runId, qualification: 'plain', compilation: 'speed-profile', screenrecord: false,
+    sourceSha: 'a'.repeat(40), apkSha256: 'b'.repeat(64),
     surfaces: Object.fromEntries(protocol.scenarios.map(({id}) => [id, values.map(value => ({qualified: true, metrics: Object.fromEntries(metricsFor(id).map(key => [key, key === 'gc_count' ? 2 : value]))}))]))});
 test('Uses the median of per-run percentiles and never recenters within noise', () => {
     const before = structuredClone(anchor);
@@ -14,7 +15,8 @@ test('Uses the median of per-run percentiles and never recenters within noise', 
 test('Rejects incomplete, unavailable, diagnostic and incomparable evidence', () => {
     for (const mutate of [c => c.surfaces['library-list-fling'].pop(), c => c.surfaces['library-list-fling'][0].qualified = false,
         c => c.surfaces['library-list-fling'][0].metrics.gc_count = undefined, c => c.fixtureSha256 = 'changed',
-        c => c.qualification = 'profileable', c => c.compilation = 'speed', c => c.screenrecord = true]) {
+        c => c.qualification = 'profileable', c => c.compilation = 'speed', c => c.screenrecord = true,
+        c => delete c.sourceSha, c => delete c.apkSha256, c => delete c.runId]) {
         const c = candidate([10, 10, 10, 10, 10]); mutate(c); assert.throws(() => check(anchor, c));
     }
 });

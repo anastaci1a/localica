@@ -15,6 +15,9 @@ for (const scenario of protocol.scenarios) {
         if (raw.qualified !== true) continue;
         if (raw.arm !== 'plain' || raw.compilation !== 'speed-profile' || raw.fixture?.tracks !== 13400 ||
             raw.fixture?.queueEntries !== 13400 || raw.error || !(raw.frames > 0)) throw new Error('Invalid plain runner qualification: ' + dir + '/' + name);
+        if (!identity.runId || !/^[a-f0-9]{40}$/.test(identity.sourceSha) || !/^[a-f0-9]{64}$/.test(identity.apkSha256) ||
+            raw.source !== identity.sourceSha || raw.apk?.sha256 !== identity.apkSha256 || raw.fixture.tarSha256 !== identity.fixtureSha256)
+            throw new Error('Source, APK or fixture receipt mismatch: ' + runDir);
         for (const phase of ['pre', 'post']) if (JSON.parse(fs.readFileSync(path.join(runDir, phase + '.json'))).rejections.length)
             throw new Error('Rejected device health: ' + runDir);
         if (fs.readFileSync(path.join(runDir, 'screenrecord.txt'), 'utf8').trim() ||

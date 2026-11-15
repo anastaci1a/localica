@@ -16,6 +16,8 @@ export function check(anchor, candidate) {
     }
     if (candidate.qualification !== 'plain' || candidate.compilation !== 'speed-profile' || candidate.screenrecord !== false)
         throw new Error('Only qualified plain speed-profile captures can pass');
+    if (!candidate.runId || !/^[a-f0-9]{40}$/.test(candidate.sourceSha) || !/^[a-f0-9]{64}$/.test(candidate.apkSha256))
+        throw new Error('Missing campaign source or APK identity');
     for (const {id} of protocol.scenarios) for (const metric of metricsFor(id))
         if (!anchor.bars?.[id]?.[metric]) throw new Error('Incomplete anchor: ' + id + '/' + metric);
     const results = [];

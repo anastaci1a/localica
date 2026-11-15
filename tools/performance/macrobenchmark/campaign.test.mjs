@@ -10,12 +10,14 @@ test('Packing requires raw health, recording and background receipts for every q
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'localica-campaign-'));
     const write = (file, data) => fs.writeFileSync(file, typeof data === 'string' ? data : JSON.stringify(data));
     try {
-        write(root + '/identity.json', {runId: 'test'});
+        const identity = {runId: 'test', sourceSha: 'a'.repeat(40), apkSha256: 'b'.repeat(64), fixtureSha256: 'fixture'};
+        write(root + '/identity.json', identity);
         for (const {id} of protocol.scenarios) for (let i = 1; i <= 5; i++) {
             const dir = root + '/' + id + '/run-' + i;
             fs.mkdirSync(dir, {recursive: true});
             write(dir + '/metrics.json', {qualified: true, arm: 'plain', compilation: 'speed-profile',
-                fixture: {tracks: 13400, queueEntries: 13400}, frames: 10,
+                fixture: {tracks: 13400, queueEntries: 13400, tarSha256: identity.fixtureSha256}, frames: 10,
+                source: identity.sourceSha, apk: {sha256: identity.apkSha256},
                 ...Object.fromEntries(metricsFor(id).map(key => [key, 1]))});
             for (const phase of ['pre', 'post']) write(dir + '/' + phase + '.json', {rejections: []});
             write(dir + '/screenrecord.txt', '');
