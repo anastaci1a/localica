@@ -43,7 +43,7 @@ fun LocalicaScreen(
     onRescan: (String) -> Unit,
     onCancelScan: () -> Unit,
     onRemoveFolder: (String) -> Unit = {},
-    queues: QueueUiState = QueueUiState(loading = false),
+    queues: QueueUiState = QueueUiState.Empty,
     queueController: QueueController? = null,
     onPrevious: () -> Unit = {},
     onNext: () -> Unit = {},

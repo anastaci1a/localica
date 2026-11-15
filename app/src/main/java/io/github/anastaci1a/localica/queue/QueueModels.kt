@@ -63,6 +63,7 @@ data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val acti
 data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?, val expandPlayer: Boolean = true, val sourceName: String = "All Songs", val playlistOrigins: List<String?> = emptyList())
 data class QueueUiState(val library: QueueLibrary = QueueLibrary(), val loading: Boolean = true,
     val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null, val playerRequest: Long = 0, val browsedId: String? = null) {
+    companion object { val Empty = QueueUiState(loading = false) }
     private fun fields() = listOf(loading, settings, pending, problem, playerRequest, browsedId)
     override fun equals(other: Any?) = other === this || other is QueueUiState && library === other.library && fields() == other.fields()
     override fun hashCode() = 31 * System.identityHashCode(library) + fields().hashCode()
