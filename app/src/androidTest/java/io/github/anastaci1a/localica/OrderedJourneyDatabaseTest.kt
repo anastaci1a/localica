@@ -142,12 +142,12 @@ class OrderedJourneyDatabaseTest {
                 val controller = withContext(Dispatchers.Main) { QueueController(startup.queues(), QueuePreferences(context),
                     (context.applicationContext as LocalicaApplication).library, actor) }
                 withTimeout(10000) { while (controller.state.value.loading) delay(10) }
-                assertEquals("Couldn’t restore queues. Reopen the app to retry.", controller.state.value.problem)
                 assertTrue(controller.state.value.library.queues.isEmpty())
                 assertNull(controller.state.value.library.activeId)
                 val rejected = CompletableDeferred<Boolean>()
                 controller.act(emptyList(), SongTap.Append) { rejected.complete(it) }
                 assertFalse(withTimeout(10000) { rejected.await() })
+                assertEquals("Queues are unavailable. Reopen the app to retry restoring them.", controller.state.value.problem)
             } finally { actor.coroutineContext[Job]!!.cancelAndJoin(); startup.close() }
             context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { raw ->
                 assertEquals(7, raw.version)
