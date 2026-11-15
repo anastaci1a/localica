@@ -37,6 +37,47 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    @Test fun recoveryRepeatPreparationKeepsMillionEntryReadsOffMain() = fixture {
+        actor.coroutineContext[Job]!!.cancelAndJoin()
+        val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+        val apply = QueueController::class.java.declaredMethods.single { it.name == "applyPlaybackModes" }.apply { isAccessible = true }
+        // Keep the witness executable against the frozen base's one-argument native applier.
+        val prepare = QueueController::class.java.declaredMethods.singleOrNull { it.name == "suppressRecoveryRepeat" }?.apply { isAccessible = true }
+        val safe = QueueEntry("safe", track)
+        val blocked = QueueEntry("blocked", track.copy(id = "content://recovery/blocked"))
+        val mainReads = AtomicInteger()
+        val workerReads = AtomicInteger()
+        val entries = object : AbstractList<QueueEntry>() {
+            override val size = 1_000_000
+            override fun get(index: Int): QueueEntry {
+                if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) mainReads.incrementAndGet()
+                else workerReads.incrementAndGet()
+                return if (index == lastIndex) blocked else safe
+            }
+        }
+        val queue = ListeningQueue(name = "Recovery scale", entries = entries, currentEntryId = safe.id, order = SavedOrder(emptyList()))
+        val modes = QueueSettings(repeat = QueueRepeat.All)
+        for (present in listOf(true, false)) {
+            val recovery = RecoveryAdmission.Pending(if (present) blocked.track.id else "content://recovery/absent")
+            mainReads.set(0); workerReads.set(0)
+            val gcBefore = android.os.Debug.getRuntimeStat("art.gc.gc-count")
+            val suppressed = withContext(Dispatchers.Default) { prepare?.invoke(queues, queue, modes, recovery) as? Boolean ?: false }
+            withContext(Dispatchers.Main) {
+                state.value = state.value.copy(library = QueueLibrary(listOf(queue), queue.id), settings = modes)
+                readers.publishRecovery(recovery)
+                if (prepare == null) apply.invoke(queues, false) else apply.invoke(queues, suppressed, false)
+                val runtime = Runtime.getRuntime()
+                android.util.Log.i("Recovery1004", "present=$present entries=${entries.size} mainReads=${mainReads.get()} workerReads=${workerReads.get()} heapBytes=${runtime.totalMemory() - runtime.freeMemory()} gcBefore=$gcBefore gcAfter=${android.os.Debug.getRuntimeStat("art.gc.gc-count")}")
+                assertEquals(if (present) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ALL, player.repeatMode)
+                assertEquals("Mode application must not enumerate the million-entry queue on Main", 0, mainReads.get())
+                assertEquals("The exact predicate must inspect the last entry or prove absence on a worker", entries.size, workerReads.get())
+                assertEquals(QueueRepeat.All, queues.state.value.settings.repeat)
+            }
+        }
+    }
+
     @Test fun sameQueueSelectionMatchesPriorNativePathWithoutReloading() {
         for (playing in listOf(false, true)) {
             var reference: List<String>? = null
