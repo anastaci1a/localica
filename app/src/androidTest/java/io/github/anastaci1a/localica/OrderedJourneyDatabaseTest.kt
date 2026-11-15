@@ -150,6 +150,42 @@ class OrderedJourneyDatabaseTest {
             assertEquals(baseline.reconcile(physical), restored.order)
             assertEquals(seed.positionMs, restored.positionMs)
         } finally { db.close(); context.deleteDatabase(name) }
+        val fixtures = listOf(
+            "{\"manual\":[\"A\",\"B\",\"A\"]}" to SavedOrder(ids),
+            "{\"manual\":[\"B\",\"A\",\"B\",\"C\"]}" to SavedOrder(listOf("B", "A", "C", "D", "E", "F", "X")),
+            "{\"manual\":[\"gone\",\"F\",\"X\",\"B\"]}" to SavedOrder(listOf("A", "F", "X", "B", "C", "D", "E")),
+            "{\"manual\":[\"gone\",\"B\",\"gone\",\"B\"]}" to SavedOrder(ids),
+            "{\"manual\":[]}" to SavedOrder(ids),
+            "" to SavedOrder(ids),
+            "{}" to SavedOrder(ids),
+            "{\"manual\":[],\"sort\":\"unknown\"}" to SavedOrder(ids),
+            "{\"manual\":[],\"ascending\":\"false\"}" to SavedOrder(ids, ascending = false),
+            "{\"manual\":[],\"sort\":null}" to SavedOrder(ids),
+            "{\"manual\":[],\"ascending\":\"FALSE\"}" to SavedOrder(ids, ascending = false),
+            "{\"manual\":[],\"ascending\":\"unrecognized\"}" to SavedOrder(ids)
+        )
+        fixtures.forEachIndexed { index, (json, expected) ->
+            val original = runCatching { SavedOrderCodec.decode(json, ids) }
+            when (index) {
+                0 -> assertEquals(SavedOrder(listOf("A", "C", "D", "E", "F", "X")), original.getOrThrow())
+                1 -> assertEquals(SavedOrder(listOf("B", "C", "D", "E", "F", "X")), original.getOrThrow())
+                6 -> assertTrue(original.isFailure)
+                else -> assertEquals(expected, original.getOrThrow())
+            }
+            seed(name, 8, false)
+            context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { old ->
+                for (table in listOf("queue_visits", "queue_cycle_members", "queue_journeys")) old.execSQL("DELETE FROM $table")
+                old.execSQL("UPDATE queues SET orderState = ?", arrayOf(json))
+            }
+            val migrated = open(name)
+            try {
+                val restored = migrated.queues().read().active!!
+                assertEquals(ids, restored.entries.map { it.id })
+                assertEquals("fixture $index", expected, restored.order)
+                assertEquals(ids.toSet(), restored.order.manual.toSet())
+                assertEquals(ids.size, restored.order.manual.size)
+            } finally { migrated.close(); context.deleteDatabase(name) }
+        }
     }
 
     @Test fun malformedLegacyJsonRollsBackRanksAndRetriesTheOriginalDatabase() = runBlocking {

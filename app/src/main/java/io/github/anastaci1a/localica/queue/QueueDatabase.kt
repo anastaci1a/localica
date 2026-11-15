@@ -275,10 +275,10 @@ abstract class QueueDatabase : RoomDatabase() {
                         json.beginObject()
                         while (json.hasNext()) when (json.nextName()) {
                             "manual" -> { var rank = stride; json.beginArray(); while (json.hasNext()) {
-                                db.execSQL("UPDATE queue_entries SET manualOrdinal = ? WHERE queueId = ? AND id = ?", arrayOf(rank, id, json.nextString())); rank += stride
+                                db.execSQL("UPDATE queue_entries SET manualOrdinal = ? WHERE queueId = ? AND id = ? AND manualOrdinal < 0", arrayOf(rank, id, json.nextString())); rank += stride
                             }; json.endArray() }
-                            "sort" -> sort = json.nextString()
-                            "ascending" -> ascending = json.nextBoolean()
+                            "sort" -> sort = if (json.peek() == android.util.JsonToken.NULL) { json.nextNull(); "Manual" } else json.nextString()
+                            "ascending" -> ascending = if (json.peek() == android.util.JsonToken.STRING) !json.nextString().equals("false", true) else json.nextBoolean()
                             else -> json.skipValue()
                         }
                         json.endObject()
