@@ -115,7 +115,7 @@ class PopupEdgesTest {
 
     @Test fun removingAHomeRetiresAllItsFlightsAtTheEvent() {
         val home = GlassPopupHome(mutableStateOf(false))
-        val flights = List(2) { GlassPopupFlight().apply { assertTrue(open(this@PopupEdgesTest.basis)); assertTrue(advance(state.gen, Admitted)) } }
+        val flights = List(2) { GlassPopupFlight().apply { assertTrue(open(this@PopupEdgesTest.basis)); assertTrue(advance(state.gen, Admitted, this@PopupEdgesTest.window)) } }
         home.flights.addAll(flights)
         home.gone()
         assertFalse(home.mounted)
