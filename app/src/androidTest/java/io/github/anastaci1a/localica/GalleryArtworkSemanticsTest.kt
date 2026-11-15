@@ -145,7 +145,7 @@ class GalleryArtworkSemanticsTest {
             metadata()
             assertFalse(compose.onNodeWithTag("browse-art-${item.key}", true).fetchSemanticsNode().config.isClearingSemantics)
             compose.onNodeWithContentDescription(context.getString(R.string.album_artwork), useUnmergedTree = true).assertExists()
-            compose.onNodeWithTag("cell").performClick().performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
+            compose.onNodeWithTag("cell").performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }.performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
             compose.runOnIdle { assertEquals(1, clicks); assertEquals(1, holds) }
         } finally { compose.mainClock.autoAdvance = true }
     }
