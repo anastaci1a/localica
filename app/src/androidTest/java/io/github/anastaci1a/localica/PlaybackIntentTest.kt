@@ -1662,6 +1662,16 @@ class PlaybackIntentTest {
 
     private fun coldPlayDuringActivation(differentSource: Boolean) = fixture(attach = false) {
         queues.settings { it.copy(switching = QueueSwitch.Resume) }; barrier()
+        val secondReads = AtomicInteger()
+        val secondMainReads = AtomicInteger()
+        val coldSecond = if (differentSource) second.copy(entries = object : AbstractList<QueueEntry>() {
+            override val size = second.entries.size
+            override fun get(index: Int): QueueEntry {
+                secondReads.incrementAndGet()
+                if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) secondMainReads.incrementAndGet()
+                return second.entries[index]
+            }
+        }) else second
         val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
         @Suppress("UNCHECKED_CAST")
         val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
@@ -1681,7 +1691,8 @@ class PlaybackIntentTest {
             }
         }
         val cold = withContext(Dispatchers.Default) { QueueJourney.start(first.ids, first.currentEntryId, JourneyModes()).copy() }
-        withContext(Dispatchers.Main) { state.value = state.value.copy(library = state.value.library.update(first.copy(entries = entries, journey = cold))) }
+        withContext(Dispatchers.Main) { state.value = state.value.copy(library = state.value.library
+            .update(first.copy(entries = entries, journey = cold)).update(coldSecond)) }
         val pending = async(Dispatchers.Main) {
             val action: suspend () -> Unit = {
                 val before = state.value.library
@@ -1724,6 +1735,7 @@ class PlaybackIntentTest {
             assertTrue(intents.pending()!!.play)
             if (differentSource) assertEquals(second.journey, state.value.library.active!!.journey)
             else assertNotNull(state.value.library.active!!.journey!!.current)
+            if (differentSource) { assertTrue(secondReads.get() > 0); assertEquals(0, secondMainReads.get()) }
             assertTrue(state.value.library.queues.any { it.id == first.id })
             assertNull(player.currentMediaItem)
         }
