@@ -94,6 +94,8 @@ The job retains R8 metadata for each arm, verifies its DEX checksums against the
 
 ### Release ratchet
 
+Status: Implemented tooling. Qualified A35 comparison and initial anchor adoption are pending follow-up. Release-gate activation requires that qualification and review.
+
 Before accepting a release, compare five or more qualified captures per surface with the accepted anchor. Preserve per-capture percentiles; compare their median. Track frame p50/p95, Main CPU milliseconds, allocated megabytes and GC count. Cold startup also tracks initial-display time.
 
 Pack the accepted plain runner’s per-surface `run-*/metrics.json` files with `campaign.mjs pack RUNS IDENTITY_JSON OUTPUT_JSON`. Identity includes `runId`, full `sourceSha` and `apkSha256`; each raw receipt must match that source, APK and fixture. Health, recording and background qualification receipts are required.

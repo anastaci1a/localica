@@ -30,7 +30,8 @@ Wait for a complete green Android run with exactly the release commit's Git tree
 | All device shards, API 26 and 36 | With complete inventory unions. |
 | Both compatibility jobs | See the gate below. |
 | Both distribution smoke jobs | On the exact APK to be published. |
-| A35 performance ratchet | Five qualified plain runs per shared cost-map surface; retain the [ratchet verdict](performance.md#release-ratchet), source/APK identities and anchor beside release evidence. Hosted frame timings cannot satisfy this check. |
+
+The [A35 performance ratchet](performance.md#release-ratchet) is Proposed as a release gate, pending qualified profile comparison and initial anchor adoption.
 
 A `main` push reuses retained exact-tree evidence when it exists; otherwise it runs normal verification. Release selection verifies the original run, attempt, tree, union receipts and artifact identity (`release-verification.py`). APK checksum, version and signing checks are mandatory. Missing, expired or changed inputs need a new complete run. Unfilled placeholders in the notes block publication.
 
