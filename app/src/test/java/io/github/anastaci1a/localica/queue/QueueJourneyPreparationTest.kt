@@ -169,6 +169,46 @@ class QueueJourneyPreparationTest {
         }
     }
 
+    @Test fun duplicatePlusMissingPlanCoversTheSourceButCannotBecomeWarmByCardinality() {
+        val ids = listOf("A", "B", "C", "D").mapView { it }
+        val raw = QueueJourney(history = listOf(QueueVisit("A", 0, "anchor")), cursor = 0,
+            visited = setOf("A"), plans = mapOf(0L to listOf("A", "B", "B", "D")),
+            modes = JourneyModes(shuffle = true))
+        val prepared = raw.reconcile(ids, "A", raw.modes, Random(9))
+        assertEquals(ids.toSet(), prepared.plans.getValue(0).toSet())
+        assertEquals(5, prepared.plans.getValue(0).size)
+        assertNotSame(prepared, prepared.reconcile(ids, "A", raw.modes, Random(9)))
+        assertEquals(2, prepared.plans.getValue(0).count { it == "B" })
+        assertEquals(1, prepared.plans.getValue(0).count { it == "C" })
+    }
+
+    @Test fun fixedSeedShufflePredecessorNeverBecomesAGeneratedVisitOrTruncatesForwardHistory() {
+        val ids = listOf("A", "B", "C", "D")
+        val initial = QueueJourney.start(ids, "D", JourneyModes()).reconcile(ids, "D",
+            JourneyModes(shuffle = true), Random(9))
+        assertEquals(listOf("D", "A", "C", "B"), initial.plans.getValue(0))
+        val predecessor = initial.previous!!
+        val generated = initial.window().single { it.entryId == "C" && it.token != predecessor.token }
+        val advanced = initial.arrive(initial.next!!.token, ids)
+        assertEquals("A", advanced.current!!.entryId)
+        assertEquals(advanced.window().size, advanced.window().map { it.token }.toSet().size)
+        assertEquals(generated, advanced.next)
+        val forward = advanced.arrive(generated.token, ids)
+        assertEquals("A", forward.previous!!.entryId)
+        assertEquals("B", forward.next!!.entryId)
+        val jumped = advanced.arrive(predecessor.token, ids, receipt = predecessor)
+        assertEquals(predecessor, jumped.current)
+        assertEquals(0, jumped.cursor)
+        assertEquals(advanced.history, jumped.history.drop(1))
+        assertEquals(jumped.window().size, jumped.window().map { it.token }.toSet().size)
+        var retraced = jumped
+        for (visit in advanced.history) {
+            assertEquals(visit, retraced.next)
+            retraced = retraced.arrive(visit.token, ids)
+        }
+        assertEquals("B", retraced.next!!.entryId)
+    }
+
     @Test fun shuffleEnablePredecessorsBecomeHistoryOnlyOnArrivalThenRetraceAndExhaust() {
         val ids = listOf("A", "B", "C", "D", "E")
         var path = QueueJourney.start(ids, "D", JourneyModes()).reconcile(ids, "D", JourneyModes(shuffle = true), Random(12))

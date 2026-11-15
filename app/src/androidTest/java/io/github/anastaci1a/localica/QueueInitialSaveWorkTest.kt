@@ -52,8 +52,11 @@ class QueueInitialSaveWorkTest {
                 assertEquals(target, db.queues().read())
                 val stored = db.queues().readQueues().single()
                 assertEquals(13_000, stored.entries.size)
-                assertEquals(if (includeJourney) 6500 else 0, stored.visits.size)
-                assertEquals(if (includeJourney) 13_000 else 0, stored.cycleMembers.size)
+                assertEquals(if (includeJourney) 1 else 0, stored.visits.size)
+                assertEquals(if (includeJourney) queue.journey!!.visitRecords(queue.id) else emptyList<VisitRecord>(), stored.visits)
+                assertEquals(if (includeJourney) 1 else 0, stored.cycleMembers.size)
+                assertEquals(if (includeJourney) queue.journey!!.visited else emptySet<String>(),
+                    stored.cycleMembers.filter { it.visited }.map { it.entryId }.toSet())
                 Log.i("QueueScale", "component=initial-save actualDao=true entries=13000 includeJourney=$includeJourney sample=$sample transactionMs=$elapsed warmedPages=true")
                 previous = target
             }

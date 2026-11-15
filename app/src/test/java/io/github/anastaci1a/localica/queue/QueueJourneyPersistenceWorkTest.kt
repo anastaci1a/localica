@@ -54,6 +54,31 @@ class QueueJourneyPersistenceWorkTest {
         dao.assertRows(after)
     }
 
+    @Test fun restoredEqualLookaheadsKeepTheirRowsAndOnlyUpdateActualVisitedFlags() = runBlocking {
+        val saved = queue(20, loop = true)
+        val stored = saved.journey!!
+        val restored = stored.record(saved.id).restore(stored.visitRecords(saved.id), stored.cycleRecords(saved.id).toList())
+        assertNotSame(restored.plans.getValue(0), restored.plans.getValue(1))
+        val before = saved.copy(journey = restored)
+        val prepared = restored.reconcile(before.ids, before.currentEntryId, restored.modes)
+        assertSame(prepared.plans.getValue(0), prepared.plans.getValue(1))
+        val arrived = prepared.arrive(prepared.next!!.token, before.ids)
+        val after = before.copy(journey = arrived, currentEntryId = arrived.current!!.entryId)
+        val dao = RecordingDao(before)
+        dao.save(library(before), library(after))
+        assertTrue(dao.memberUpserts.isEmpty())
+        assertTrue(dao.clearedCycles.isEmpty())
+        assertEquals(listOf(listOf(arrived.current!!.entryId) to true), dao.visitedUpdates)
+        dao.assertRows(after)
+        val reopened = arrived.record(after.id).restore(dao.visits.values.toList(), dao.members.values.toList())
+        assertEquals(restored.visited + arrived.current!!.entryId, reopened.visited)
+        assertEquals(arrived.history, reopened.history)
+        dao.save(library(after), library(after.copy(positionMs = 4321)))
+        assertTrue(dao.memberUpserts.isEmpty())
+        assertTrue(dao.clearedCycles.isEmpty())
+        assertEquals(1, dao.visitedUpdates.size)
+    }
+
     @Test fun missingActualVisitAndMembershipRepairWithoutProjectingUnchangedPermutations() = runBlocking {
         val before = queue(20, loop = true)
         val path = before.journey!!

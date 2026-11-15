@@ -118,6 +118,34 @@ class ShuffleModePlaybackTest {
         f.main { assertFalse(f.player.hasNextMediaItem()) }
     }
 
+    @Test fun nativeJumpToShufflePredecessorKeepsForwardHistoryAndUniqueVisitIdentity() = fixture { f ->
+        f.queues.settings { it.copy(shuffle = false, repeat = QueueRepeat.Off) }
+        f.check { !f.queues.state.value.settings.shuffle }; f.committed()
+        f.queues.shuffle()
+        f.check { f.queues.state.value.settings.shuffle }; f.committed()
+        f.queues.next()
+        f.check { f.queues.state.value.library.active!!.journey!!.cursor == 1 }; f.committed()
+        val before = f.queues.state.value.library.active!!.journey!!
+        val predecessor = before.window().first()
+        assertTrue(before.history.none { it.token == predecessor.token })
+        f.main {
+            assertEquals(predecessor.token, f.player.getMediaItemAt(0).queueVisit)
+            f.player.seekTo(0, 0)
+        }
+        f.check { f.queues.state.value.library.active!!.journey!!.current?.token == predecessor.token }
+        f.committed()
+        val arrived = f.queues.state.value.library.active!!.journey!!
+        assertEquals(0, arrived.cursor)
+        assertEquals(before.history, arrived.history.drop(1))
+        assertEquals(arrived.window().size, arrived.window().map { it.token }.toSet().size)
+        for (visit in before.history) {
+            f.queues.next()
+            f.check { f.player.currentMediaItem?.queueVisit == visit.token &&
+                f.queues.state.value.library.active!!.journey!!.current == visit }
+            f.committed()
+        }
+    }
+
     @Test fun offKeepsSimpleAndAdvancedRepeatPoliciesAndCurrentPosition() = fixture { f ->
         val choices = listOf(
             QueueSettings(shuffle = true),
@@ -458,7 +486,8 @@ class ShuffleModePlaybackTest {
             main { player.playerError?.let { throw AssertionError("Native playback failed", it) }; ready = condition() }
             ready
         }
-        fun committed() = await(timeoutMs = 10_000) { dao.committed == queues.state.value.library }
+        fun committed() = await(timeoutMs = 10_000) { queues.state.value.let {
+            it.library.active?.journey?.modes == JourneyModes.from(it.settings) && dao.committed == it.library } }
         fun at(index: Int) {
             check { player.currentMediaItem?.mediaId == ids[index] && queues.state.value.library.active?.currentEntryId == ids[index] && player.playbackState == Player.STATE_READY }
             committed()

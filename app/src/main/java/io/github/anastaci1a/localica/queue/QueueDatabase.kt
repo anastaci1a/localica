@@ -6,6 +6,7 @@ import io.github.anastaci1a.localica.library.TrackLocation
 import io.github.anastaci1a.localica.library.TrackSnapshot
 import io.github.anastaci1a.localica.library.SavedOrderCodec
 import io.github.anastaci1a.localica.library.enumNameOrNull
+import io.github.anastaci1a.localica.library.mapView
 
 @Entity(tableName = "queues")
 data class QueueRecord(@PrimaryKey val id: String, val name: String, val createdAt: Long,
@@ -144,9 +145,9 @@ abstract class QueueDao {
         val newCycles = if (after?.modes?.shuffle == true) after.plans else after?.let { mapOf(it.cycle to emptyList<String>()) }.orEmpty()
         for (number in oldCycles.keys + newCycles.keys) {
             if (number !in newCycles || number !in oldCycles || before?.modes?.shuffle != after?.modes?.shuffle ||
-                oldCycles[number] !== newCycles[number] && after?.modes?.shuffle == true) {
+                oldCycles[number] != newCycles[number] && after?.modes?.shuffle == true) {
                 clearCycle(id, number)
-                if (after != null && number in newCycles) measureSave("cycle-write") {
+                if (after != null && number in newCycles) measureSave("cycle-write", if (after.modes.shuffle) newCycles.getValue(number).size else after.visited.size) {
                     upsertCycleMembers(after.cycleRecords(id, number))
                 }
             } else {
@@ -157,7 +158,6 @@ abstract class QueueDao {
                         if (after?.modes?.shuffle != true && !visited) deleteSparseMembers(id, number, batch)
                         else {
                             val count = updateVisited(id, number, batch, visited)
-                            check(count in 0..batch.size) { "Unexpected saved journey row count" }
                             if (count != batch.size) upsertCycleMembers(batch.asSequence().map { entry ->
                                 CycleMemberRecord(id, number, entry, if (after?.modes?.shuffle == true) newCycles.getValue(number).indexOf(entry) else 0, visited)
                             })
@@ -222,7 +222,8 @@ private class QueueRestore {
         return ListeningQueue(queue.id, queue.name, queue.createdAt, entries, queue.currentEntryId, queue.positionMs, queue.shuffle,
             enumNameOrNull<QueueRepeat>(queue.repeat) ?: QueueRepeat.Off, queue.lastActivatedAt,
             journeys.singleOrNull()?.restore(visits.map { it.copy(entryId = shared(it.entryId)) },
-                members.map { it.copy(entryId = shared(it.entryId)) }),
+                members.map { it.copy(entryId = shared(it.entryId)) })?.let {
+                if (it.modes.shuffle) it else it.copy(plans = mapOf(it.cycle to entries.mapView(QueueEntry::id))) },
             order.copy(manual = order.manual.map(::shared)))
     }
 

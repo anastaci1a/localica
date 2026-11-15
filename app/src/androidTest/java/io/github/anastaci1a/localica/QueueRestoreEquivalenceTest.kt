@@ -51,8 +51,9 @@ class QueueRestoreEquivalenceTest {
         val order = SavedOrder(ids.reversed(), TrackSort.Title, ascending = false)
         val visits = ids.take(5).map { QueueVisit(it, 2) }
         return ListeningQueue(name = label, entries = entries, currentEntryId = ids[size / 2], positionMs = 4321, order = order,
-            journey = if (!journey) null else QueueJourney(visits.take(3), 2, 2, ids.take(3).toSet(),
-                mapOf(1L to ids.shuffled(java.util.Random(7)), 2L to ids.shuffled(java.util.Random(8))), JourneyModes(true, false, true), "traversal", visits[1].token))
+            journey = if (!journey) null else QueueJourney(history = visits.take(3), cursor = 2, cycle = 2, visited = ids.take(3).toSet(),
+                plans = mapOf(1L to ids.shuffled(java.util.Random(7)), 2L to ids.shuffled(java.util.Random(8))),
+                modes = JourneyModes(true, false, true), orderedTraversalId = "traversal", orderedAnchorToken = visits[1].token))
     }
 
     /** The restore before #774, unchanged: one relation read, a stable sort by ordinal, one decode per row. */
