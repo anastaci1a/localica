@@ -3,6 +3,12 @@ name: Prototype (not release certified)
 'on':
   workflow_dispatch:
     inputs:
+      focused_api:
+        description: Focused emulator API; unselected APIs remain not-run and block delivery
+        required: false
+        default: both
+        type: choice
+        options: [both, '26', '36']
       repeat:
         description: Independent iterations of the complete selected gate (1-30); stops on first failure
         required: false
@@ -36,6 +42,10 @@ name: Prototype (not release certified)
         - self-hosted
   workflow_call:
     inputs:
+      focused_api:
+        required: false
+        default: both
+        type: string
       repeat:
         description: Independent iterations of the complete selected gate (1-30); stops on first failure
         required: false
@@ -166,7 +176,7 @@ jobs:
     # runner=self-hosted (#592): the owner's locked-down single-job JIT runner, labelled with this
     # run id. Only an owner workflow_dispatch of this workflow may use it; anything else is skipped,
     # never rerouted to a hosted runner. The runner's job-started hook repeats every check.
-    if: ${{ needs.identity.result == 'success' && (inputs.runner != 'self-hosted' || (github.event_name == 'workflow_dispatch' && github.repository == 'anastaci1a/localica' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && startsWith(github.workflow_ref, 'anastaci1a/localica/.github/workflows/prototype.yml@refs/heads/'))) }}
+    if: ${{ needs.identity.result == 'success' && (inputs.focused_api == '' || inputs.focused_api == 'both' || inputs.focused_api == '26') && (inputs.runner != 'self-hosted' || (github.event_name == 'workflow_dispatch' && github.repository == 'anastaci1a/localica' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && startsWith(github.workflow_ref, 'anastaci1a/localica/.github/workflows/prototype.yml@refs/heads/'))) }}
     runs-on: ${{ inputs.runner == 'self-hosted' && fromJSON(format('["self-hosted","Linux","X64","localica-jit","ljit-{0}"]', github.run_id)) || 'ubuntu-24.04' }}
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
@@ -396,7 +406,7 @@ jobs:
   focused_36:
     needs: [identity, focused_26]
     # runner=self-hosted (#592): see focused_26; the same guard, never rerouted.
-    if: ${{ needs.identity.result == 'success' && (!cancelled() && (inputs.runner != 'self-hosted' || (github.event_name == 'workflow_dispatch' && github.repository == 'anastaci1a/localica' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && startsWith(github.workflow_ref, 'anastaci1a/localica/.github/workflows/prototype.yml@refs/heads/')))) }}
+    if: ${{ needs.identity.result == 'success' && (inputs.focused_api == '' || inputs.focused_api == 'both' || inputs.focused_api == '36') && (!cancelled() && (inputs.runner != 'self-hosted' || (github.event_name == 'workflow_dispatch' && github.repository == 'anastaci1a/localica' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && startsWith(github.workflow_ref, 'anastaci1a/localica/.github/workflows/prototype.yml@refs/heads/')))) }}
     runs-on: ${{ inputs.runner == 'self-hosted' && fromJSON(format('["self-hosted","Linux","X64","localica-jit","ljit-{0}"]', github.run_id)) || 'ubuntu-24.04' }}
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
@@ -676,6 +686,7 @@ jobs:
       env:
         PROTOTYPE_METHODS: ${{ inputs.repeat_methods }}
         PROTOTYPE_REPEAT: ${{ inputs.repeat }}
+        FOCUSED_API: ${{ inputs.focused_api }}
         CHECKS: ${{ toJSON(needs) }}
         KNOWN_ISSUES: ${{ inputs.known_issues }}
         AFFECTED_CLASSES: ${{ inputs.affected_classes }}
@@ -689,6 +700,9 @@ jobs:
         import shutil
         import sys
 
+        focused_api = os.environ.get('FOCUSED_API') or 'both'
+        assert focused_api in ('both', '26', '36'), 'Invalid focused API selection'
+        requested_apis = ('26', '36') if focused_api == 'both' else (focused_api,)
         checks = json.loads(os.environ['CHECKS'])
         status = {'success': 'passed', 'failure': 'failed', 'skipped': 'not-run', 'cancelled': 'cancelled'}
         results = {key: status.get(value['result'], 'incomplete') for key, value in checks.items()}
@@ -697,7 +711,8 @@ jobs:
             'schema_version': 1, 'lane': 'prototype', 'release_certified': False,
             'sha': os.environ['GITHUB_SHA'], 'ref': os.environ['GITHUB_REF'],
             'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
-            'checks': results,
+            'checks': results, 'focused_api': focused_api,
+            'not_run_focused_apis': [api for api in ('26', '36') if api not in requested_apis],
             'requested_affected_classes': os.environ['AFFECTED_CLASSES'].split(','),
             'required_regression_classes': ['io.github.anastaci1a.localica.SearchImeMotionTest', 'io.github.anastaci1a.localica.ListSearchTest', 'io.github.anastaci1a.localica.FrostedSurfaceTest'],
             'coverage_reason': os.environ['COVERAGE_REASON'], 'known_issues': os.environ['KNOWN_ISSUES'],
@@ -731,6 +746,8 @@ jobs:
         from full_partition import registered_skip_reason
         expected = set(manifest['requested_affected_classes']) | set(manifest['required_regression_classes'])
         for api in (26, 36):
+            if str(api) not in requested_apis and results[f'focused_{api}'] != 'not-run':
+                errors.append(f'Unselected focused API {api} was not reported as not-run')
             focused = root / f'prototype-focused-api-{api}' / 'prototype-evidence'
             receipt = focused / 'reconciled-tests.json'
             if receipt.exists():
@@ -892,6 +909,8 @@ jobs:
             summary.write('## Prototype — not release certified\n' + (
                 'Required checks passed; prototype APK attached.' if ready else
                 'Not ready: no delivery APK packaged. See per-job evidence.') + '\n')
+            for api in manifest['not_run_focused_apis']:
+                summary.write(f'Focused API {api}: not-run (not selected); delivery remains blocked.\n\n')
             for data in manifest['focused_evidence'].values():
                 for row in data.get('qualified_skips', []):
                     summary.write('Recorded skip API'+str(row['api'])+': '+row['id']+' — '+row['reason']+'\n\n')

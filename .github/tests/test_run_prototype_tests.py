@@ -993,7 +993,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False, infrastructure_jobs=(), failed_jobs=(), historical_infrastructure=False, diagnostic_skip=None):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False, infrastructure_jobs=(), failed_jobs=(), historical_infrastructure=False, diagnostic_skip=None, focused_api='both'):
         import yaml, hashlib
         affected_classes=affected_classes or (['io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest'] if diagnostic_skip else [AFFECTED])
         selected=[REQUIRED,FOCUS,CONTRAST]+affected_classes
@@ -1006,6 +1006,9 @@ class WorkflowContract(unittest.TestCase):
             (canonical/'app-debug.apk').write_bytes(b'canonical')
             (canonical/'provenance.json').write_text(json.dumps({'sha':'a'*40 if wrong_sha else SHA,'apk_sha256':hashlib.sha256(b'wrong' if wrong_digest else b'canonical').hexdigest(),'run_id':build_run,'run_attempt':build_attempt,'signing_certificate':'verified-test-certificate'}))
             checks={k:{'result':'success'} for k in workflow['jobs']['evidence']['needs']}
+            for api in ('26', '36'):
+                if focused_api not in ('both', api):
+                    checks[f'focused_{api}']['result'] = 'skipped'
             if failed:checks['focused_36']['result']='failure'
             for job in failed_jobs:
                 checks[job]['result'] = 'failure'
@@ -1020,6 +1023,8 @@ class WorkflowContract(unittest.TestCase):
                     'sha': SHA, 'run_id': '1', 'run_attempt': decision_attempt, 'job': job, 'issue': 752}))
             if not missing:
                 for api in (26,36):
+                    if focused_api not in ('both', str(api)):
+                        continue
                     focused=evidence/f'prototype-focused-api-{api}'/'prototype-evidence';focused.mkdir(parents=True)
                     inventory={'selectors':selected,'runtime_methods':[c+'#regression' for c in selected]}
                     inventory_bytes=json.dumps(inventory).encode()
@@ -1101,11 +1106,41 @@ class WorkflowContract(unittest.TestCase):
                         (iterations/'summary.json').write_text(json.dumps(summary))
                     compatibility=evidence/f'prototype-compatibility-api-{api}';compatibility.mkdir()
                     (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
-            env=dict(os.environ,PYTHONPATH=str(ROOT/'.github/test-evidence'),PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=','.join(affected_classes),COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
+            env=dict(os.environ,PYTHONPATH=str(ROOT/'.github/test-evidence'),PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),FOCUSED_API=focused_api,CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=','.join(affected_classes),COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
             result=subprocess.run(['bash','-c',script],cwd=root,env=env,capture_output=True,text=True)
             out=root/'prototype-delivery'
             manifest=json.loads((out/'manifest.json').read_text()) if (out/'manifest.json').exists() else None
             return result,manifest,list(out.glob('*.apk'))
+
+    def test_single_api_selection_remains_explicitly_incomplete(self):
+        for api in ('26', '36'):
+            with self.subTest(api=api):
+                result, manifest, apks = self.decision(focused_api=api)
+                other = '36' if api == '26' else '26'
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(api, manifest['focused_api'])
+                self.assertEqual([other], manifest['not_run_focused_apis'])
+                self.assertEqual('not-run', manifest['checks']['focused_'+other])
+                self.assertFalse(manifest['ready_for_prototype_delivery'])
+                self.assertEqual([], apks)
+                self.assertEqual({api}, set(manifest['focused_evidence']))
+                self.assertEqual([], manifest['validation_errors'])
+
+    def test_focused_api_input_is_bounded_and_invalid_values_fail_closed(self):
+        import yaml
+        workflow = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
+        for event in ('workflow_dispatch', 'workflow_call'):
+            self.assertEqual('both', workflow['on'][event]['inputs']['focused_api']['default'])
+        self.assertEqual(['both', '26', '36'], workflow['on']['workflow_dispatch']['inputs']['focused_api']['options'])
+        for api in ('26', '36'):
+            condition = workflow['jobs']['focused_'+api]['if']
+            self.assertIn("inputs.focused_api == 'both'", condition)
+            self.assertIn("inputs.focused_api == '"+api+"'", condition)
+            self.assertNotIn("inputs.focused_api == '"+('36' if api == '26' else '26')+"'", condition)
+        result, manifest, apks = self.decision(focused_api='invalid')
+        self.assertNotEqual(0, result.returncode)
+        self.assertIsNone(manifest)
+        self.assertEqual([], apks)
 
     def test_delivery_records_registered_skip_only_class_on_both_apis(self):
         result, manifest, apks=self.decision(diagnostic_skip='registered')
@@ -1145,7 +1180,7 @@ class WorkflowContract(unittest.TestCase):
                     if step.get('name') == 'Record passed, failed and not-run checks')
         tree=ast.parse('\n'.join(script.splitlines()[1:-1]))
         assertions=[node for node in ast.walk(tree) if isinstance(node,ast.Assert)]
-        self.assertEqual(51,len(assertions))
+        self.assertEqual(52,len(assertions))
         self.assertTrue(all(node.msg is not None for node in assertions))
 
     def test_method_delivery_requires_gate_and_exact_repeated_methods(self):
@@ -1398,7 +1433,7 @@ class WorkflowContract(unittest.TestCase):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
-        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner'},set(workflow['on']['workflow_call']['inputs']))
+        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner','focused_api'},set(workflow['on']['workflow_call']['inputs']))
         self.assertEqual({'ANDROID_DEBUG_KEYSTORE','LASTFM_API_KEY'},set(workflow['on']['workflow_call']['secrets']))
         self.assertFalse(workflow['on']['workflow_call']['secrets']['LASTFM_API_KEY']['required'])
         self.assertEqual({'contents':'read'},workflow['permissions'])
