@@ -77,7 +77,7 @@ A scrolled song list offers return-to-top without clearing filters. The active Q
 
 [PinchDepartureFadeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PinchDepartureFadeTest.kt).
 
-[PinchRetargetTest](../../app/src/sharedTest/java/io/github/anastaci1a/localica/PinchRetargetTest.kt).
+[PinchRetargetTest](../../app/src/sharedDebugTest/java/io/github/anastaci1a/localica/PinchRetargetTest.kt).
 
 [PinchReleaseHandoffTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PinchReleaseHandoffTest.kt).
 

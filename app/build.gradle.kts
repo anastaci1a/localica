@@ -63,8 +63,9 @@ android {
     }
     testOptions.unitTests.isIncludeAndroidResources = true
     // Test fixtures and contracts are shared by JVM and device callers.
-    sourceSets.getByName("testDebug").java.srcDir("src/sharedTest/java")
-    sourceSets.getByName("androidTest").java.srcDir("src/sharedTest/java")
+    sourceSets.getByName("test").java.srcDir("src/sharedTest/java")
+    sourceSets.getByName("testDebug").java.srcDir("src/sharedDebugTest/java")
+    sourceSets.getByName("androidTest").java.srcDirs("src/sharedTest/java", "src/sharedDebugTest/java")
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
