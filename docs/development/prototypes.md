@@ -25,7 +25,7 @@ Select up to 73 affected behaviour classes and describe coverage and limits. Cla
 
 `repeat_methods` accepts source-validated `Class#method` selectors, including nested packages. The mandatory gate runs once before method repetitions. This selects methods without promising execution order; strict shard-order replay is unsupported.
 
-The build job compiles debug and release Kotlin in one daemon, so it uses the static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner (#636). Focused APK compilation uses explicit 6 GB Gradle and Kotlin daemon heaps with two workers (#994).
+The build job compiles debug and release Kotlin in one daemon, so it uses the static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner (#636). Focused APK compilation keeps the default 2 GB Gradle heap and gives Kotlin 6 GB with two workers (#636).
 
 ## Runners
 

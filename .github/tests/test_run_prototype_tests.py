@@ -1185,13 +1185,13 @@ class WorkflowContract(unittest.TestCase):
         self.assertNotIn('if', upload)
         self.assertIn('prototype-signed-pair.sha256', upload['with']['path'].splitlines())
 
-    def test_focused_compile_has_explicit_gradle_and_kotlin_heaps(self):
+    def test_focused_compile_keeps_default_gradle_and_explicit_kotlin_heap(self):
         import yaml
         jobs = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
         for api in (26, 36):
             compile = next(s['run'] for s in jobs[f'focused_{api}']['steps']
                            if s.get('name') == 'Compile instrumentation APKs before starting emulator')
-            self.assertIn("-Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'", compile)
+            self.assertNotIn("-Dorg.gradle.jvmargs=", compile)
             self.assertIn('-Pkotlin.daemon.jvmargs=-Xmx6g', compile)
             self.assertIn('--max-workers=2', compile)
 

@@ -27,6 +27,10 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#985](https://github.com/anastaci1a/localica/issues/985): Provide opt-in Compose compiler stability reports and a ranked inventory.
 - [#974](https://github.com/anastaci1a/localica/issues/974): Consolidate native IME policy ownership in four device test classes.
 
+## Integration
+
+- Retain #636’s measured focused-build sizing: default 2 GB Gradle, 6 GB Kotlin and two workers. Adopt #990’s contradictory heap assertion without changing its coverage checks.
+
 ## Known issues and follow-ups
 
 - [#957](https://github.com/anastaci1a/localica/issues/957): Slice C is reserved for later acceptance before the release producer. Queue storage and restore limits remain tracked in [#963](https://github.com/anastaci1a/localica/issues/963), [#966](https://github.com/anastaci1a/localica/issues/966) and [#975](https://github.com/anastaci1a/localica/issues/975).
