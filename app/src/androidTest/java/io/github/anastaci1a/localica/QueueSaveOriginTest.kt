@@ -92,7 +92,7 @@ class QueueSaveOriginTest {
         val entries = millionSaveEntries(watching, mainReads, java.util.concurrent.atomic.AtomicInteger())
         val drawer = showDrawer(entries = entries)
         try {
-            // Initial header preparation is #1021; observe only the subsequent Save admission.
+            // Browser presentation remains unready to isolate the save boundary from #995.
             val before = android.os.Debug.getRuntimeStats()
             watching.set(true)
             val opened = openSave(drawer)
@@ -266,7 +266,7 @@ class QueueSaveOriginTest {
             if (entries == null) it else it.copy(entries = entries, currentEntryId = entries[1].id,
                 order = io.github.anastaci1a.localica.library.SavedOrder(emptyList()))
         }
-        var state by mutableStateOf(QueueUiState(QueueLibrary(listOf(playing, browsed), playing.id), loading = false, browsedId = browsed.id))
+        var state by mutableStateOf(QueueUiState(QueueLibrary(listOf(playing, browsed), playing.id), loading = entries != null, browsedId = browsed.id))
         val originalQueue = state.copy()
         val selection = SessionSelection().apply {
             select(MediaRef(MediaKind.Queue, browsed.id), listOf(browsed.entries[1].let { SongRow(it.id, it.track) }))
