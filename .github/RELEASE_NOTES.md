@@ -10,6 +10,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 - Browse queue songs through revision-owned views and derive future playback through a bounded native window. Accepted [#957](https://github.com/anastaci1a/localica/issues/957) slices B and C include 1,000,000-entry diagnostic acceptance at a 256 MiB Java heap cap; restore exclusions remain below.
 - Store one popup presentation state, replacing writable lifecycle flags and duplicated remembered values ([#920](https://github.com/anastaci1a/localica/issues/920), step 3a). Preserve the release frame until its window draws.
+- Prepare collection metadata facts on the worker before publishing catalog rows, avoiding a collection-wide fold on the first information read on Main ([#772](https://github.com/anastaci1a/localica/issues/772)).
 - Run twelve balanced device shards per API. Refresh scheduling from complete producers 43597960541 and 43672613455.
 - Derive focused test selectors from source inventory, and export signed app/test pairs for external proofs. Build-only runs keep device checks explicitly not-run.
 - Share native keyboard policy across IME tests and admit tag-editor navigation after the Library page reaches its endpoint.

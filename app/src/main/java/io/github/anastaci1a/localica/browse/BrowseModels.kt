@@ -224,7 +224,7 @@ object BrowseQueries {
                 val ref = MediaRef(kind, group.id)
                 val rows = group.tracks.map { SongRow(it.id, it) }
                 BrowserItem(ref, group.title, group.subtitle ?: songCountLabel(group.tracks.size),
-                    if (collection == null) sorts.rows(ref, rows, checkActive) else rows)
+                    if (collection == null) sorts.rows(ref, rows, checkActive) else rows).also { it.facts }
             }
         }
         fun playlistItems() = playlists.map { playlist -> BrowserItem(MediaRef(MediaKind.Playlist, playlist.id), playlist.name,
