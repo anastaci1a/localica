@@ -1887,7 +1887,7 @@ class PlaybackIntentTest {
                 }
             } finally { armed.set(false); gate.release.complete(Unit) }
             assertFalse(withTimeout(10000) { completed.await() })
-            barrier()
+            command {}
             withContext(Dispatchers.Main) {
                 val after = queues.state.value
                 assertSame(before.pending, after.pending)
