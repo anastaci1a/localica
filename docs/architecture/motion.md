@@ -40,7 +40,7 @@ Popups use shared springs. Finger-driven player, Queue, sheets, pinch and select
 
 One interruptible response couples footprint/depth to acceleration and pressure. Shared overdrag caps at 4 dp; held selectors keep cross-axis extent and concentric contact corners. Free corners flatten near contact; release couples width/height oppositely. Shape damping and Resting depth feed this response. Selector and pressure tests specify contours/rebound.
 
-The same owner integrates broad/local glow alpha and centre springs from admitted contact. Release fades at the last contact target; zero strength cannot extend the clock. Reduced motion snaps light, and shape can settle independently. The shared flex spec owns timing and variant opacity; [Glass](glass.md#presence-and-shape) identifies provisional optics.
+The same owner integrates broad/local glow alpha, centre and size springs. Raw travel beyond 50 dp latches half local opacity and double size; release fades toward quadruple size. The centre stays within bounds. Invisible geometry and zero strength cannot extend the clock. Reduced motion snaps all five channels. [Glass](glass.md#presence-and-shape) identifies provisional optics.
 
 ## Speed and Reduced motion
 

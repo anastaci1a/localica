@@ -29,7 +29,7 @@ The diagram separates material strength (presence, 0–1) from geometry (shape).
 
 Implemented appearance instead uses scale/opacity at full optical strength. It does not yet ramp lens inputs.
 
-Touch light shares the [contact response](motion.md#deformation). Its broad and local fills use provisional gain, support, falloff and filtering; this does not establish iOS spatial parity. [GlassTouchLightTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassTouchLightTest.kt) specifies the pixel and ownership contracts.
+Touch light shares the [contact response](motion.md#deformation). Firmware supplies timing, travel dissipation and expanding release. Broad additive lift and the sampled Gaussian/color-dodge local fill approximate backdrop-aware YCC; they do not establish iOS pixel parity. Below Android 10, only broad lift is available. [GlassTouchLightTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassTouchLightTest.kt) specifies the pixel and ownership contracts.
 
 ### Constant volume
 
