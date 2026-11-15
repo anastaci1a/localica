@@ -634,9 +634,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         changeSettings(value.copy(repeat = value.advancedRepeat?.repeat ?: value.repeat))
     }
     private suspend fun changeSettings(value: QueueSettings) {
-        updateSettings(value, reconcile(state.value.library, JourneyModes.from(value)))
+        val ready = reconcile(state.value.library, JourneyModes.from(value))
+        val suppressRepeat = withContext(Dispatchers.Default) { suppressRecoveryRepeat(ready.active, value, readers.recovery()) }
+        updateSettings(value, ready)
         configurePreloading()
-        applyPlaybackModes()
+        applyPlaybackModes(suppressRepeat)
         syncTimeline()
         persist(state.value.library)
     }
@@ -644,7 +646,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         preferences.write(value)
         mutable.update { it.copy(settings = value, library = ready, problem = problemAfterSuccess(it, ready)) }
     }
-    private fun applyPlaybackModes(timelineChanged: Boolean = false) {
+    private fun suppressRecoveryRepeat(queue: ListeningQueue?, modes: QueueSettings, recovery: RecoveryAdmission) =
+        modes.repeat == QueueRepeat.All && recovery != RecoveryAdmission.Clear &&
+            queue?.entries?.any { recovery.blocks(documentIdentity(it.track.id)) } == true
+    private fun applyPlaybackModes(suppressRepeat: Boolean, timelineChanged: Boolean = false) {
         val attached = player ?: return
         val modes = state.value.settings
         if (attached is ExoPlayer && timelineChanged) {
@@ -654,9 +659,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         val policy = modes.advancedRepeat
         (attached as? ExoPlayer)?.setPauseAtEndOfMediaItems(policy?.pausesEachSong == true)
-        val recovery = readers.recovery()
-        recoveryRepeatSuppressed = modes.repeat == QueueRepeat.All && recovery != RecoveryAdmission.Clear &&
-            state.value.library.active?.entries?.any { recovery.blocks(documentIdentity(it.track.id)) } == true
+        recoveryRepeatSuppressed = suppressRepeat
         attached.repeatMode = when (if (policy?.pausesEachSong == true || recoveryRepeatSuppressed) QueueRepeat.Off else modes.repeat) {
             QueueRepeat.Off -> Player.REPEAT_MODE_OFF
             QueueRepeat.All -> Player.REPEAT_MODE_ALL
@@ -1235,7 +1238,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             else withContext(Dispatchers.Default) { recoveryWindow(queue) { recovery.blocks(documentIdentity(it)) } }
         if (window.isEmpty()) return false
         val previous = resolved.takeIf { timeline.queueId == queue.id }.orEmpty()
-        val next = withContext(Dispatchers.IO) {
+        val (next, suppressRepeat) = withContext(Dispatchers.IO) {
             val entries = window.map { visit ->
                 queue.entries[checkNotNull(queue.journey?.sourceOrdinal(queue.ids, visit.entryId))] }.distinctBy { it.id }
             val read = if (refreshLocations) library.playbackSnapshot(entries.mapTo(linkedSetOf()) { it.track.id }) else null
@@ -1254,7 +1257,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             }.also {
                 orderTiming?.recordCounts(queueEntries = queue.entries.size, templatesReused = reused, templatesBuilt = it.size - reused)
                 orderTiming?.mark(QueueOrderTiming.Stage.GrantsTemplates)
-            }
+            } to suppressRecoveryRepeat(queue, prepared.source.settings, recovery)
         }
         if (!prepared.isCurrent()) return false
         if (!seek && loadedQueueId == queue.id && attached.currentMediaItem?.queueVisit != queue.journey?.current?.token) {
@@ -1270,7 +1273,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             try {
                 val changed = timeline.sync(attached, queue, seek, loadedQueueId != queue.id || attached.mediaItemCount == 0, window)
                 loadedQueueId = queue.id
-                applyPlaybackModes(changed)
+                applyPlaybackModes(suppressRepeat, changed)
             } finally { syncingTimeline = false }
         }
         return true
@@ -1296,7 +1299,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         clearInapplicableRecoveryProblem()
         if (queue == null || queue.entries.isEmpty()) {
             loadedQueueId = queue?.id
-            attached.stop(); attached.clearMediaItems(); applyPlaybackModes(timelineChanged = true)
+            attached.stop(); attached.clearMediaItems(); applyPlaybackModes(false, timelineChanged = true)
             // Saved queues keep their data; an empty native timeline needs no resolved templates.
             resolved = emptyMap()
             timeline.clear()
