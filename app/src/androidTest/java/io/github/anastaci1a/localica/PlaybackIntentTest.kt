@@ -9,6 +9,8 @@ import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -148,6 +150,65 @@ class PlaybackIntentTest {
             }
         } finally {
             worker.release.complete(Unit); actor.release.complete(Unit); held.cancelAndJoin()
+        }
+    }
+
+    @Test fun pendingRecoveryDuringHeldWindowIoCannotAdmitTheOldWindowsNextSource() {
+        val forbidden = AtomicReference<String?>()
+        val attempted = CompletableDeferred<Unit>()
+        val admit = CompletableDeferred<Unit>()
+        val opened = CopyOnWriteArrayList<String>()
+        fixture(playbackSource = { factory -> DataSource.Factory {
+            val source = factory.createDataSource()
+            object : DataSource by source {
+                override fun open(dataSpec: DataSpec): Long {
+                    val uri = dataSpec.uri.toString()
+                    if (uri == forbidden.get()) { attempted.complete(Unit); runBlocking { admit.await() } }
+                    return source.open(dataSpec).also { opened.add(uri) }
+                }
+            }
+        } }) {
+            val next = second.entries.single().track
+            forbidden.set(next.uri)
+            val created = CompletableDeferred<Boolean>()
+            queues.act(listOf(track, next), SongTap.NewQueue) { created.complete(it) }
+            assertTrue(created.await()); barrier()
+            queues.settings { it.copy(repeat = QueueRepeat.All, preloadNext = false) }; barrier()
+            controls.play(); barrier()
+            awaitMain { player.isPlaying && player.engine.playbackState == Player.STATE_READY }
+            val worker = store.gateNextSnapshot()
+            val actor = Gate()
+            var held: Deferred<Unit>? = null
+            try {
+                queues.settings { it.copy(previousThresholdSeconds = 6) }
+                worker.entered.await()
+                val fixtureScope = this
+                held = withContext(Dispatchers.Main) {
+                    fixtureScope.async(Dispatchers.Main, start = CoroutineStart.UNDISPATCHED) { command { actor.await() } }.also {
+                        readers.publishRecovery(RecoveryAdmission.Pending(next.id))
+                        admit.complete(Unit)
+                    }
+                }
+                worker.release.complete(Unit); actor.entered.await()
+                withContext(Dispatchers.Main) {
+                    assertEquals(Player.REPEAT_MODE_ALL, player.repeatMode)
+                    assertTrue((0 until player.mediaItemCount).any { player.getMediaItemAt(it).mediaMetadata.extras!!.getString("trackId") == next.id })
+                    player.engine.seekTo(player.duration - 100)
+                }
+                withTimeout(10000) { attempted.await() }
+                awaitMain { player.playerError != null }
+                assertTrue("The observer must see successful safe-source opens", opened.contains(track.uri))
+                assertFalse("The current recovery authority must deny the old window's source before provider open", opened.contains(next.uri))
+                actor.release.complete(Unit); held.await(); command {}
+                awaitMain { player.repeatMode == Player.REPEAT_MODE_OFF }
+                withContext(Dispatchers.Main) {
+                    assertEquals(QueueRepeat.All, queues.state.value.settings.repeat)
+                    assertTrue((0 until player.mediaItemCount).none { player.getMediaItemAt(it).mediaMetadata.extras!!.getString("trackId") == next.id })
+                }
+                assertFalse(opened.contains(next.uri))
+            } finally {
+                admit.complete(Unit); worker.release.complete(Unit); actor.release.complete(Unit); held?.cancelAndJoin()
+            }
         }
     }
 
@@ -2370,7 +2431,7 @@ class PlaybackIntentTest {
     }
 
     private fun fixture(attach: Boolean = true, blockRestore: Boolean = false, rawPlayer: Boolean = false,
-        duplicateOccurrences: Boolean = false, occurrences: Int = 3, librarySize: Int = 1, initialIndex: Int = 0, timeoutMs: Long = 20000, playbackStore: ((List<Track>) -> LibraryStore)? = null, noCurrent: Boolean = false, permissions: FolderPermissions? = null, actorContext: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext, test: suspend Fixture.() -> Unit) = runBlocking {
+        duplicateOccurrences: Boolean = false, occurrences: Int = 3, librarySize: Int = 1, initialIndex: Int = 0, timeoutMs: Long = 20000, playbackStore: ((List<Track>) -> LibraryStore)? = null, noCurrent: Boolean = false, permissions: FolderPermissions? = null, actorContext: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext, playbackSource: (DataSource.Factory) -> DataSource.Factory = { it }, test: suspend Fixture.() -> Unit) = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val id = java.util.UUID.randomUUID().toString()
@@ -2400,7 +2461,7 @@ class PlaybackIntentTest {
         val players = mutableListOf<RecordingPlayer>()
         suspend fun player() = withContext(Dispatchers.Main) {
             RecordingPlayer(ExoPlayer.Builder(context)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(readers.track(DefaultDataSource.Factory(context))))
+                .setMediaSourceFactory(DefaultMediaSourceFactory(playbackSource(readers.track(DefaultDataSource.Factory(context)))))
                 .build().apply { volume = 0f }).also(players::add)
         }
         val native = player()

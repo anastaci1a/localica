@@ -117,15 +117,17 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
 
+    private fun QueueSettings.endPolicy() = advancedRepeat ?: AdvancedRepeat(queueEnd = if (repeat == QueueRepeat.All) QueueEnd.Repeat else QueueEnd.Stop)
+
     private fun enqueueSongEnd(wasRequested: Boolean) {
         val attached = player ?: return
         val visit = attached.currentMediaItem?.queueVisit ?: return
         val expected = generation
         val position = attached.currentPosition
-        val policy = state.value.settings.advancedRepeat
+        val policy = state.value.settings.endPolicy()
         val requestedAtEnd = intents.choose(fallback = wasRequested && attached.playerError == null).play
         fun current() = player === attached && generation == expected && attached.currentMediaItem?.queueVisit == visit &&
-            attached.currentPosition >= position - 250 && state.value.settings.advancedRepeat == policy
+            attached.currentPosition >= position - 250 && state.value.settings.endPolicy() == policy
         attached.pause()
         submit {
             // A song tap/seek or service replacement queued ahead of this callback wins.
@@ -136,7 +138,6 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             val journey = queue.journey ?: return@submit
             val next = journey.next
             if (blocksVisit(queue, next)) { reportRecovery(); return@submit }
-            if (policy == null) return@submit
             // Historical and scheduled visits may cross labels while remaining in the active traversal.
             val withinTraversal = next != null && next.cycle <= journey.cycle
             if (policy.songEnd == SongEnd.Stop && withinTraversal) return@submit
