@@ -80,6 +80,8 @@ The fixture promotes the existing scale generator: 13,400 synthetic tracks and Q
 
 Dispatch `prototype.yml` with `performance=generate` on a distinct branch. Generation uses API 36 at 720 × 1280, 280 dpi and lavapipe. The `BaselineProfileGenerator` separates startup from later journeys. Commit both generated profiles from `app/src/main/generated/baselineProfiles/`; retain profileinstaller. Generation is explicit and never starts during ordinary assembly.
 
+Generation builds only its non-minified target and producer. Final functional builds retain unit tests, lint and release assemblies.
+
 Use `performance=build` for compilation, unit tests and lint, or `performance=functional` for the diagnostic scenarios. Each dispatch has its own branch because same-branch dispatches cancel each other. Delete temporary branches after retaining receipts.
 
 The first successful compilation took 25 minutes 30 seconds. Generation and functional jobs also include emulator execution; functional builds additionally produce the no-profile control. Budget at least an hour per refresh pair, with actual cost recorded in its receipts.

@@ -963,13 +963,20 @@ jobs:
           printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/localica-debug.keystore"
           chmod 600 "$RUNNER_TEMP/localica-debug.keystore"
           echo "LOCALICA_DEBUG_KEYSTORE=$RUNNER_TEMP/localica-debug.keystore" >> "$GITHUB_ENV"
-      - name: Compile release targets and check source
+      - name: Compile selected performance targets and check source
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          PERFORMANCE_MODE: ${{ inputs.performance }}
         run: |
-          bash .github/gradle-transient-retry.sh ./gradlew testDebugUnitTest lintDebug assembleRelease :app:assembleDebug :app:assembleDistribution :app:assembleBenchmarkDistribution :app:assembleNonMinifiedDistribution :benchmark:assembleBenchmarkDistribution :benchmark:assembleNonMinifiedDistribution --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
+          targets=(testDebugUnitTest lintDebug assembleRelease :app:assembleDebug :app:assembleDistribution :app:assembleBenchmarkDistribution :app:assembleNonMinifiedDistribution :benchmark:assembleBenchmarkDistribution :benchmark:assembleNonMinifiedDistribution)
+          apk=app/build/outputs/apk/distribution/app-distribution.apk
+          if [[ $PERFORMANCE_MODE == generate ]]; then
+            targets=(:app:assembleNonMinifiedDistribution :benchmark:assembleNonMinifiedDistribution)
+            apk=app/build/outputs/apk/nonMinifiedDistribution/app-nonMinifiedDistribution.apk
+          fi
+          bash .github/gradle-transient-retry.sh ./gradlew "${targets[@]}" --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
           node --test tools/performance/macrobenchmark/*.test.mjs
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging app/build/outputs/apk/distribution/app-distribution.apk > performance-badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "$apk" > performance-badging.txt
           ! grep -q application-debuggable performance-badging.txt
           sha256sum app/build/outputs/apk/*/*.apk benchmark/build/outputs/apk/*/*.apk > performance-apks.sha256
           git rev-parse HEAD > performance-source.txt
@@ -1019,8 +1026,10 @@ jobs:
             app/src/main/generated/baselineProfiles/
             app/build/reports/
             benchmark/build/reports/
+            benchmark/build/outputs/androidTest-results/
             benchmark/build/outputs/connected_android_test_additional_output/
             app/build/outputs/apk/distribution/*.apk
             app/build/outputs/apk/debug/*.apk
-            benchmark/build/outputs/apk/benchmarkDistribution/*.apk
+            app/build/outputs/apk/nonMinifiedDistribution/*.apk
+            benchmark/build/outputs/apk/*/*.apk
           if-no-files-found: error

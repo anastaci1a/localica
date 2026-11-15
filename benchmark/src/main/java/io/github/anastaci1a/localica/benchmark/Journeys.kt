@@ -1,9 +1,11 @@
 package io.github.anastaci1a.localica.benchmark
 
 import android.graphics.Point
+import android.os.ParcelFileDescriptor
 import androidx.benchmark.macro.MacrobenchmarkScope
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Condition
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
@@ -24,11 +26,18 @@ internal class Journeys {
     private var target: Point? = null
     private val classpath = context.applicationInfo.sourceDir
     private fun asset(name: String) = context.assets.open(name).bufferedReader().use { it.readText() }
-    private fun shell(command: String) = device.executeShellCommand(command)
+    private fun shell(command: String): String {
+        val pipes = instrumentation.uiAutomation.executeShellCommandRw("sh")
+        ParcelFileDescriptor.AutoCloseOutputStream(pipes[1]).use {
+            it.write("exec 2>&1\nset -e\n$command\n".toByteArray())
+        }
+        return ParcelFileDescriptor.AutoCloseInputStream(pipes[0]).bufferedReader().use { it.readText() }
+    }
     private fun node(label: String): UiObject2 = checkNotNull(
-        device.wait(Until.findObject(By.desc(label)), 10_000)
-            ?: device.wait(Until.findObject(By.text(label)), 2_000)
-            ?: if (label == "Expand player") device.wait(Until.findObject(By.text("Scale song 13390")), 5_000) else null
+        device.wait(Condition<UiDevice, UiObject2?> { d ->
+            d.findObject(By.desc(label)) ?: d.findObject(By.text(label))
+                ?: if (label == "Expand player") d.findObject(By.text("Scale song 13390")) else null
+        }, 10_000)
     ) { "Missing release accessibility label: $label" }
     private fun tap(label: String) { node(label).click(); Thread.sleep(400) }
     private fun scaleX(x: Int) = x * device.displayWidth / 1080
