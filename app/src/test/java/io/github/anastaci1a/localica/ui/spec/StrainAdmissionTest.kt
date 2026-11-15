@@ -45,6 +45,7 @@ class StrainAdmissionTest {
     @Test fun pressureDampingTwoIsPreservedWithoutAnyTwoSecondSnap() {
         val body=GlassMomentum(2f)
         repeat(360) { body.advance(0f,1f/120,-.22f,1f) }
+        assertTrue("Normal held convergence uses the owning clock completion", body.finishSettlement())
         val(x,v)=state(body,"pressure")
         assertEquals(-.22,x,.000001); assertEquals(0.0,v,0.0)
         val spec=SpringProfileSpec((1/sqrt(380.0)).toFloat(),380f,2)
