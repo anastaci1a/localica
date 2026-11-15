@@ -65,8 +65,8 @@ class PlatformDurationScaleTest {
             val rectB = MotionRect(control.clock, basis.startBounds, EdgeRanges(1200f, 1200f, 1200f, 1200f))
             expansionA.bind(rectA); expansionB.bind(rectB)
             a.retarget(1f, motionProfileId(MotionProfile.Control)); b.retarget(1f, motionProfileId(MotionProfile.Control))
-            springA.retargetSpring(1f, springProfileId(SpringProfile.Strain))
-            springB.retargetSpring(1f, springProfileId(SpringProfile.Strain))
+            springA.retargetSpring(1f, springProfileId(SpringProfile.Page))
+            springB.retargetSpring(1f, springProfileId(SpringProfile.Page))
             expansionA.target(true); expansionB.target(true)
             repeat(31) { frame ->
                 val stamp = actual.clock.stampNow

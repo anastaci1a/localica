@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
+import io.github.anastaci1a.localica.ui.spec.FlexGlow
+import androidx.compose.ui.geometry.Offset
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
@@ -12,6 +14,8 @@ internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f) {
     fun scaleY(vertical: Boolean = false) = exp((if (vertical) strain else -strain) - depth / 2)
     val thickness get() = exp(depth)
 }
+
+internal data class GlassGlow(val big: Float = 0f, val little: Float = 0f, val point: Offset = Offset.Zero)
 
 /** Compensation for center-based scaling: the contacting edge stays on its wall. */
 internal fun glassWallTranslation(extent: Float, scale: Float, wall: Float): Float =
@@ -57,21 +61,33 @@ internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_
     private val motion = Spring()
     private val pressure = Spring()
     private val depth = Spring()
+    private val light = List(4) { Spring() }
     private var travelVelocity = 0f
     val strain get() = .12f * tanh(motion.value / .12f) + pressure.value
     val shape get() = GlassShape(strain, .24f * tanh(depth.value / .24f))
     val scaleX get() = shape.scaleX()
     val scaleY get() = shape.scaleY()
-    val settled get() = motion.settled && pressure.settled && depth.settled
+    val glow get() = GlassGlow(light[0].value, light[1].value, Offset(light[2].value, light[3].value))
+    val settled get() = motion.settled && pressure.settled && depth.settled && light.all { it.settled }
 
-    /** Called only after the owning clock completes normally, never during cancellation. */
+    /** Each output finishes independently while the shared clock waits for all channels. */
     fun finishSettlement(): Boolean {
-        if (!settled) return false
-        motion.finish(); pressure.finish(); depth.finish()
-        return true
+        if (motion.settled && pressure.settled && depth.settled) { motion.finish(); pressure.finish(); depth.finish() }
+        light.forEach { if (it.settled) it.finish() }
+        return settled
     }
 
-    fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f }
+    fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f; light.forEach { it.reset() } }
+
+    fun targetGlow(point: Offset?, contact: Float, strength: Float, snap: Boolean = false) {
+        if (point == null || strength == 0f) { light.forEach { it.reset() }; return }
+        val down = contact > 0f && light[1].target == 0f
+        if (contact > 0f) { light[2].target = point.x; light[3].target = point.y }
+        if (down) { light[2].finish(); light[3].finish() } // Localica acquisition/re-press policy; U2 is deferred.
+        light[0].target = if (contact > 0f) spec.bigOpacity * strength else 0f
+        light[1].target = if (contact > 0f) spec.littleOpacity * strength else 0f
+        if (snap) light.forEach { it.finish() }
+    }
 
     /** A separating/rejoining body transfers stored energy as well as its shape.
      * Copying only the visible scale would discard the next frame's rebound. */
@@ -81,6 +97,7 @@ internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_
         motion.blendFrom(a.motion, b.motion, fraction, aAxis, bAxis)
         pressure.blendFrom(a.pressure, b.pressure, fraction, aAxis, bAxis)
         depth.blendFrom(a.depth, b.depth, fraction)
+        light.indices.forEach { light[it].blendFrom(a.light[it], b.light[it], fraction) }
         travelVelocity = a.travelVelocity + (b.travelVelocity - a.travelVelocity) * fraction
     }
 
@@ -107,10 +124,13 @@ internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_
         val drag = if (damping.isFinite()) damping.coerceIn(GlassSpringParameters.MIN_DAMPING, GlassSpringParameters.MAX_DAMPING) else GlassSpringParameters.DEFAULT_DAMPING
         val omega = (2 * PI).toFloat() / if (held) spec.trackingResponse else spec.response
         val resistance = 2f * omega * (if (held) spec.trackingDamping else spec.damping) * drag / GlassSpringParameters.DEFAULT_DAMPING
+        val alphaOmega = (2 * PI).toFloat() / if (light[1].target > 0f) FlexGlow.Show else FlexGlow.Hide
+        val centerOmega = (2 * PI).toFloat() / FlexGlow.Follow
         var remaining = seconds.coerceAtMost(.1f)
         while (remaining > 0f) {
             val dt = minOf(remaining, 1f / 240f)
             motion.advance(dt, omega * omega, resistance); this.pressure.advance(dt, omega * omega, resistance); depth.advance(dt, omega * omega, resistance)
+            for (i in light.indices) { val w = if (i < 2) alphaOmega else centerOmega; light[i].advance(dt, w * w, 2f * w) }
             remaining -= dt
         }
     }

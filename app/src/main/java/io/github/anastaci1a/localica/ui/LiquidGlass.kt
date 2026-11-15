@@ -117,6 +117,7 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
 @Stable internal class GlassContact(private val inModal: () -> Boolean = { false },
     private val presentedExpansion: () -> GlassExpansion? = { null }) {
     var pressed by mutableStateOf(false)
+    var point by mutableStateOf(Offset(.5f, .5f))
     var travel by mutableFloatStateOf(0f)
     val modal get() = inModal()
     var active by mutableStateOf(true)
@@ -141,7 +142,7 @@ internal fun rememberGlassContact(shared: GlassContact? = null): GlassContact {
     val contact = shared ?: remember { GlassContact() }
     val visible = LocalGlassVisible.current
     rememberGlassBody({ contact.travel + contact.expansion.value }, contact = { if (contact.pressed) 1f else 0f },
-        state = contact.state, active = { visible && contact.active && !contact.modal })
+        state = contact.state, active = { visible && contact.active && !contact.modal }, point = { contact.point })
     return contact
 }
 
@@ -153,7 +154,7 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     return drawWithContent {
         val shape = presentation()
         scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
-    }.observeGlassContact(admit, yieldToParent = true) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+    }.observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
 }
 
 /** Shared contact lifetime for ordinary buttons and independently draggable glass bodies.
@@ -161,7 +162,8 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
  * contact to a scrolling or moving ancestor, even while the finger stays on the control. */
 @Composable
 internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yieldToParent: Boolean = false,
-    onPressed: (Boolean) -> Unit): Modifier {
+    onPoint: ((Offset) -> Unit)? = null, onPressed: (Boolean) -> Unit): Modifier {
+    val reportPoint by rememberUpdatedState(onPoint)
     val notify by rememberUpdatedState(onPressed)
     val admission by rememberUpdatedState(admit)
     val trace by rememberUpdatedState(LocalGlassContactTrace.current)
@@ -178,6 +180,7 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yield
                 down.consume()
                 return@awaitEachGesture
             }
+            reportPoint?.invoke(Offset(down.position.x / size.width, down.position.y / size.height))
             notify(true)
             var pressed = true
             val intent = if (yieldToParent) ControlGestureIntent(viewConfiguration.touchSlop, parent.directions()) else null
@@ -188,6 +191,7 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yield
                 do { val event = awaitPointerEvent(PointerEventPass.Final)
                     event.changes.firstOrNull { it.id == down.id }?.let { point ->
                         runCatching { trace?.invoke(name, if (point.pressed) "held" else "up", point.position, point.isConsumed) }
+                        if (pressed && point.pressed) reportPoint?.invoke(Offset(point.position.x / size.width, point.position.y / size.height))
                         val movement = point.position - down.position
                         if (pressed && point.pressed && intent != null) {
                             if (event.changes.count { it.pressed } > 1) intent.cancel()
@@ -257,7 +261,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             addPath(outline.frame(extent).path)
         } } ?: cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape
     }
-    val flex = FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density)
+    val flex = FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density,
+        minOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density)
     SideEffect {
         contact.state.momentum.spec = flex
         if (anchor != null) {
@@ -338,6 +343,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val splitRim = outline?.description?.rimSplit ?: 0f
             val bounds = androidx.compose.ui.geometry.Rect(Offset.Zero, size)
             val radius = cornerRadius?.toPx() ?: size.minDimension / 2f
+            drawContactGlow(contact.state.glow.value, contactShape, contact.vertical, tone, rim)
             // Blend the control finish into the shared panel finish during the morph.
             // Flat panel walls have constant normals; diagonal glints stay on corners.
             val panelRimWeight = if (popupRim == null) 0f else panel

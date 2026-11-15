@@ -8,6 +8,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GlassBackendTest {
+    @Test fun touchLightStrengthRetainsItsDefaultAndNormalizedRange() {
+        assertEquals(1f, GlassAppearance().touchLight, 0f)
+        for (strength in listOf(Float.NaN, Float.POSITIVE_INFINITY))
+            assertEquals(1f, GlassAppearance(touchLight = strength).normalized().touchLight, 0f)
+        assertEquals(0f, GlassAppearance(touchLight = -1f).normalized().touchLight, 0f)
+        assertEquals(1f, GlassAppearance(touchLight = 2f).normalized().touchLight, 0f)
+    }
+
     @Test fun normalUsesPlatformSupportAndNoneIsAlwaysAvailable() {
         for (api in listOf(26, 28, 31, 32, 33, 36)) {
             val normal = if (api >= 33) GlassBackend.Normal else GlassBackend.AverageFallback

@@ -63,7 +63,7 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
     fun retargetSpring(target: Float,spring: SpringProfileId) {
         clock.checkMutation(); check(!disposed); require(target.isFinite()); val spec=clock.spec.spring.getValue(SpringProfile.valueOf(spring.name)); val context=context(); val sigma=context.sigma; val speed=(if(spec.speedExponent==2) 4.0/3 else 1.0)/sigma; val identity=listOf(spring,spec,sigma); val stamp=clock.stampNow; val x=rawValue(stamp); val v=rawVelocity(stamp)
         if(target==this.target && segment.kind!=3 && (target.toDouble()==x && v==0.0 || descriptor==identity)) return
-        require(context.access==MotionAccess.Reduced || spring.name==SpringProfile.Strain.name || abs(x-target)<=1.05*range && abs(v)<=vMax.toDouble()*range) { "Spring state exceeds its declared admitted range" }
+        require(context.access==MotionAccess.Reduced || abs(x-target)<=1.05*range && abs(v)<=vMax.toDouble()*range) { "Spring state exceeds its declared admitted range" }
         val next=if(context.access==MotionAccess.Reduced || target.toDouble()==x && v==0.0) Rest(target.toDouble()) else Damped(x,v,target.toDouble(),sqrt(spec.stiffness.toDouble())*speed,spec.dampingRatio.toDouble(),range.toDouble(),context.displayIntervalSeconds.toDouble()); commit(prepareSegment(next,target,stamp,identity,if(context.access==MotionAccess.Reduced) "Reduced" else "Continuous"))
     }
     fun drive(value: Float,stamp: FrameStamp) { commitDrive(prepareDrive(value,stamp)) }
