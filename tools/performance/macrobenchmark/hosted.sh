@@ -7,6 +7,8 @@ mode=${1:?generate or functional}
 [[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]]
 [[ $(adb shell getprop ro.kernel.qemu | tr -d '\r') == 1 ]]
 pkg=io.github.anastaci1a.localica.debug
+# Preserve the seeded fixture across isolated and aggregate connected-test tasks.
+gradle=(./gradlew -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true --no-daemon --max-workers=2)
 adb root
 adb wait-for-device
 adb shell wm size 720x1280
@@ -31,13 +33,13 @@ if [[ $mode == generate ]]; then
     task=:benchmark:connectedNonMinifiedDistributionAndroidTest
     # New methods run in isolation before the full generator. One scenario suffices
     # to establish the journey method and shell injector before the complete set.
-    ./gradlew "$task" -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.BaselineProfileGenerator#startup --no-daemon --max-workers=2
-    ./gradlew "$task" -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.BaselineProfileGenerator#journeys -Pandroid.testInstrumentationRunnerArguments.scenario=library-list-fling --no-daemon --max-workers=2
-    ./gradlew :app:generateDistributionBaselineProfile --no-daemon --max-workers=2
+    "${gradle[@]}" "$task" -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.BaselineProfileGenerator#startup
+    "${gradle[@]}" "$task" -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.BaselineProfileGenerator#journeys -Pandroid.testInstrumentationRunnerArguments.scenario=library-list-fling
+    "${gradle[@]}" :app:generateDistributionBaselineProfile
 else
     adb shell am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE -n "$pkg/androidx.profileinstaller.ProfileInstallReceiver"
     adb shell cmd package compile -f -m speed-profile "$pkg"
     adb shell dumpsys package dexopt > performance-dexopt.txt
-    ./gradlew :benchmark:connectedBenchmarkDistributionAndroidTest -Pandroid.testInstrumentationRunnerArguments.scenario=library-list-fling -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.CostMapBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR --no-daemon --max-workers=2
-    ./gradlew :benchmark:connectedBenchmarkDistributionAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.CostMapBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR --no-daemon --max-workers=2
+    "${gradle[@]}" :benchmark:connectedBenchmarkDistributionAndroidTest -Pandroid.testInstrumentationRunnerArguments.scenario=library-list-fling -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.CostMapBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
+    "${gradle[@]}" :benchmark:connectedBenchmarkDistributionAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.CostMapBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
 fi
