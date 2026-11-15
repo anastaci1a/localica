@@ -23,7 +23,7 @@ Run selected tests separately, and verify any other task graph before adopting t
 
 ## Compose compiler reports
 
-Run `./gradlew :app:compileReleaseKotlin -PcomposeCompilerReports=true` to write stability and skippability reports under `app/build/compose/reports` and metrics under `app/build/compose/metrics`. Normal builds leave both destinations unset. Reports describe compiler decisions; runtime measurements establish performance.
+Run `./gradlew :app:compileReleaseKotlin -PcomposeCompilerReports=true --rerun-tasks` to write stability and skippability reports under `app/build/compose/reports` and metrics under `app/build/compose/metrics`. The forced compile refreshes reports even when compilation was up to date. Normal builds leave both destinations unset. Reports describe compiler decisions; runtime measurements establish performance.
 
 Strong skipping is enabled, so unstable parameters compare by instance. Consult a cost-ranked compiler inventory if [macrobenchmarks](https://github.com/anastaci1a/localica/issues/986) identify recomposition cost on a surface.
 
