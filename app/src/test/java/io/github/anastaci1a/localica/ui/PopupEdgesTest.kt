@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import android.app.Dialog
 import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.ui.PopupEvent.*
 import io.github.anastaci1a.localica.ui.PopupPresenter.*
@@ -7,9 +8,16 @@ import io.github.anastaci1a.localica.ui.engine.PopupTakeover
 import io.github.anastaci1a.localica.ui.engine.PopupTakeover.*
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 
 /** #920 step 3: the one transition table (SPEC section 3), the one writer's open generation, and sibling presentations. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class PopupEdgesTest {
+    private val window by lazy { checkNotNull(Dialog(RuntimeEnvironment.getApplication()).window) }
     private val basis = SamplingBasis(null, Rect.Zero, null, false)
     private val states = listOf(Closed to null, Admitting to null) + listOf(InWindow, Restoring).flatMap { t -> PopupPresenter.entries.map { t to it } }
 
@@ -66,7 +74,10 @@ class PopupEdgesTest {
     @Test fun windowReceiptsMustNameAWindow() {
         val flight = GlassPopupFlight()
         assertTrue(flight.open(basis))
-        assertTrue(flight.advance(flight.state.gen, Admitted))
+        assertFalse("no takeover without its admitted window", flight.advance(flight.state.gen, Admitted))
+        assertEquals(Admitting, flight.takeover)
+        assertNull(flight.window)
+        assertTrue(flight.advance(flight.state.gen, Admitted, window))
         for (e in PopupEvent.entries.filter { it.windowReceipt }) assertFalse("$e without a window", flight.receipt(e))
         assertEquals(InWindow to Window, flight.state.takeover to flight.state.presenter)
     }
@@ -78,7 +89,7 @@ class PopupEdgesTest {
             val b = GlassPopupFlight(anchor)
             assertTrue(a.open(basis))
             assertTrue(b.open(basis))
-            assertTrue(b.advance(b.state.gen, Admitted))
+            assertTrue(b.advance(b.state.gen, Admitted, window))
             assertSame("the newer presentation is admitted", b, anchor.popup)
             val before = b.state
             assertTrue(a.advance(a.state.gen, close))
@@ -92,7 +103,7 @@ class PopupEdgesTest {
         val anchor = GlassAnchor()
         val a = GlassPopupFlight(anchor)
         val b = GlassPopupFlight(anchor)
-        for (f in listOf(a, b)) { assertTrue(f.open(basis)); assertTrue(f.advance(f.state.gen, Admitted)) }
+        for (f in listOf(a, b)) { assertTrue(f.open(basis)); assertTrue(f.advance(f.state.gen, Admitted, window)) }
         val before = b.state
         for (e in listOf(OfferTaken, OfferReleased, HomeLeft, HomeReturns)) a.receipt(e)
         assertEquals(before, b.state)

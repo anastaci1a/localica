@@ -167,11 +167,13 @@ class BrowseQueueProjectionTest {
         reads = 0
         assertTrue(e == g && g == e)
         assertEquals(e.hashCode(), g.hashCode())
-        assertNotEquals(e, e.copy(artistAlbums = albums.toList().mapView(countingAlbum)))
+        assertNotEquals(e, BrowseResult(e.items, e.scope, albums.toList().mapView(countingAlbum), e.rows, e.keys))
         assertEquals("elements read by artistAlbums equality", 0, reads)
         val songResult = songs()
-        listOf(songResult.copy(scope = SongListView.Search), songResult.copy(artistAlbums = listOf(LibraryGroup("a", "A", null, emptyList()))),
-            songResult.copy(items = emptyList()), songResult.copy(rows = emptyList()), songResult.copy(keys = emptyList())).forEach { assertNotEquals(songResult, it) }
+        listOf(BrowseResult(songResult.items, SongListView.Search, rows = songResult.rows, keys = songResult.keys),
+            BrowseResult(songResult.items, artistAlbums = listOf(LibraryGroup("a", "A", null, emptyList())), rows = songResult.rows, keys = songResult.keys),
+            BrowseResult(), BrowseResult(songResult.items, rows = emptyList(), keys = songResult.keys),
+            BrowseResult(songResult.items, rows = songResult.rows, keys = emptyList())).forEach { assertNotEquals(songResult, it) }
         assertEquals("elements read by owner equality", 0, reads)
     }
 

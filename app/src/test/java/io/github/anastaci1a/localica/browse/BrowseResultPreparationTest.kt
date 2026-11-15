@@ -22,8 +22,10 @@ class BrowseResultPreparationTest {
         assertEquals(0, result.indexOfKey("Album:a"))
         // One derivation per result: repeated reads return the same instance.
         assertSame(result.rows, result.rows)
-        // Data-class equality is unaffected; another result derives its own values.
-        assertEquals(rows, BrowseResult(items.drop(1)).rows)
+        // Construction from changed items derives fresh rows and keys; no generated copy can retain them.
+        val changed = BrowseResult(result.items.drop(1), result.scope, result.artistAlbums)
+        assertEquals(rows, changed.rows)
+        assertEquals(rows.map { it.id }, changed.keys)
         assertEquals(BrowseResult(items), result)
     }
 }

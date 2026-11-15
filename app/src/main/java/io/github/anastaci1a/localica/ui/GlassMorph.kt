@@ -153,7 +153,7 @@ internal class GlassAnchor : PopupTakeoverOwner {
 /** #920: who draws a presentation's pixels; set only in InWindow and Restoring. */
 internal enum class PopupPresenter { Window, Offered, Taken, Releasing, Reclaimed }
 /** #920 SPEC section 2 events. A window receipt must name the presentation's admitted window. */
-internal enum class PopupEvent(val setsWindow: Boolean = false, val windowReceipt: Boolean = false) { Hide, Admitted(true), AtHome, Show, Returned, Retired,
+internal enum class PopupEvent(val setsWindow: Boolean = false, val windowReceipt: Boolean = setsWindow) { Hide, Admitted(true), AtHome, Show, Returned, Retired,
     Gone, HomeReturns, HomeLeft, WindowGone(windowReceipt = true), OfferReady(windowReceipt = true), SampleLost(windowReceipt = true), OfferTaken, OfferReleased, WindowReplaced(true), Rebind, WindowDrew(windowReceipt = true) }
 /** A presentation's sampling basis (SPEC G4): captured at T1, re-captured at T2 and rebound only through [GlassPopupFlight.advance]. */
 internal data class SamplingBasis(val source: FrostedBackdrop?, val bounds: Rect, val footprint: HomeBackdropFootprint?, val measured: Boolean)

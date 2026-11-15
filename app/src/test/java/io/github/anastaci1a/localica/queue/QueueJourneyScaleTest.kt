@@ -44,10 +44,10 @@ class QueueJourneyScaleTest {
                 assertEquals(ids.toSet(), order.toSet())
                 if (!shuffle) assertEquals(ids, order)
             }
-            val tokens = path.window().filterNot { it in path.history }.associate { (it.cycle to it.entryId) to it.token }
+            val tokens = planTokens(path, ids)
             path = path.reconcile(ids, path.current?.entryId, modes, Random(23))
             assertEquals(plans, path.plans)
-            path.window().filterNot { it in path.history }.forEach { assertEquals(tokens[it.cycle to it.entryId], it.token) }
+            assertEquals(tokens, planTokens(path, ids))
             repeat(8) {
                 val next = path.next!!
                 path = path.arrive(next.token, ids, Random(29))
@@ -63,5 +63,26 @@ class QueueJourneyScaleTest {
             assertEquals(forward, path.current)
             assertEquals(9, path.visited.size)
         }
+    }
+    private fun planTokens(start: QueueJourney, ids: List<String>): Map<Pair<Long, String>, String> {
+        val expected = start.plans.flatMap { (cycle, order) -> order.map { cycle to it } }.toSet()
+        val tokens = mutableMapOf<Pair<Long, String>, String>()
+        var path = start
+        var steps = 0
+        while (tokens.size < expected.size) {
+            path.window().forEach { visit ->
+                val key = visit.cycle to visit.entryId
+                if (key in expected) tokens.put(key, visit.token)?.let { assertEquals("Stable token for $key", it, visit.token) }
+            }
+            if (tokens.size == expected.size) break
+            val next = checkNotNull(path.next) { "Missing planned visits after $steps transitions" }
+            path = path.arrive(next.token, ids, Random(29))
+            assertEquals(next, path.current)
+            assertTrue("Traversal must cover its finite plans", ++steps <= expected.size)
+        }
+        assertEquals(expected, tokens.keys)
+        assertEquals("Tokens are unique across occurrences and cycles", tokens.size, tokens.values.toSet().size)
+        println("RELEASE_REVIEW_TOKENS shuffle=${start.modes.shuffle} loop=${start.modes.loop} entries=${ids.size} cycles=${start.plans.size} tokens=${tokens.size} transitions=$steps")
+        return tokens
     }
 }

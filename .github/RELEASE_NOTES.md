@@ -16,7 +16,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - Add a JVM screenshot pilot for tabs, pinch fading and pinch retargeting, retaining all device tests and reviewed image assertions.
 - Add opt-in Compose compiler reports and metrics. No application stability changes or frame-time gains are claimed.
 - Add carousel witnesses for settled taps and fling-stop taps ([#977](https://github.com/anastaci1a/localica/issues/977)); the reported lost tap remains unconfirmed.
-- App Kotlin/Java source changes from 53,070 to 53,274 lines: 731 added, 527 removed, net +204. Accepted queue ownership and popup-state consolidation own this growth.
+- App Kotlin/Java source changes from 53,070 to 53,274 lines: 730 added, 526 removed, net +204. Accepted queue ownership and popup-state consolidation own this growth.
 
 ## Resolved issues
 

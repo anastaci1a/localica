@@ -62,7 +62,7 @@ internal fun BrowseResult.groupAlbumSongs(grouping: SongGrouping, checkActive: (
 }
 /** A song list is a view of its [rows]; only collection results hold built items. [keys] are the items'
  * keys, read without building an item or a row (#957). */
-data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: SongListView = SongListView.Songs,
+class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: SongListView = SongListView.Songs,
     val artistAlbums: List<LibraryGroup> = emptyList(), val rows: List<SongRow> = items.mapNotNull { it.row },
     val keys: List<String> = items.mapView(BrowserItem::key)) {
     /** The last occurrence, as the former key map kept. */
