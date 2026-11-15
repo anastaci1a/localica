@@ -653,7 +653,7 @@ class QueueFileEditTest {
                 nextGate.getAndSet(null)?.let { it.entered.complete(Unit); check(it.release.await(10, TimeUnit.SECONDS)) }
             }
             return if (size == entries.size) entries[index]
-                else entries[if (index >= size - 2) 1 else 0].copy(id = "entry:$index")
+                else entries[if (index == size - 1) 1 else 0].copy(id = "entry:$index")
         }
     }
 
