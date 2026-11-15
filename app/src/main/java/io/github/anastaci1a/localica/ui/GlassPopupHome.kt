@@ -101,8 +101,7 @@ private fun ContentDrawScope.projectFlights(home: GlassPopupHome, receipts: ((Gl
         // prepared is published only after the native presenter selected the
         // return source: the clean page for chrome, the complete home otherwise.
         if (flight.prepared && layer != null && !layer.isReleased) {
-            if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
-            val offset = flight.origin - flight.homeOrigin
+            val offset = flight.projectionOffset(home.currentOrigin)
             drawPopupProjection(layer, offset)
             Snapshot.withoutReadObservation { flight.receipt(PopupEvent.OfferTaken) }
             reportGlass(receipts) { GlassProjectionReceipt(System.identityHashCode(home), System.identityHashCode(flight), System.identityHashCode(layer), flight.revision, listOf(offset.x, offset.y)) }

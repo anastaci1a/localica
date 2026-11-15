@@ -151,10 +151,10 @@ internal class GlassAnchor : PopupTakeoverOwner {
 }
 
 /** #920: who draws a presentation's pixels; set only in InWindow and Restoring. */
-internal enum class PopupPresenter { Window, Offered, Taken, Releasing }
+internal enum class PopupPresenter { Window, Offered, Taken, Releasing, Reclaimed }
 /** #920 SPEC section 2 events. A window receipt must name the presentation's admitted window. */
 internal enum class PopupEvent(val setsWindow: Boolean = false, val windowReceipt: Boolean = false) { Hide, Admitted(true), AtHome, Show, Returned, Retired,
-    Gone, HomeReturns, HomeLeft, WindowGone(windowReceipt = true), OfferReady(windowReceipt = true), SampleLost(windowReceipt = true), OfferTaken, OfferReleased, WindowReplaced(true), Rebind }
+    Gone, HomeReturns, HomeLeft, WindowGone(windowReceipt = true), OfferReady(windowReceipt = true), SampleLost(windowReceipt = true), OfferTaken, OfferReleased, WindowReplaced(true), Rebind, WindowDrew(windowReceipt = true) }
 /** A presentation's sampling basis (SPEC G4): captured at T1, re-captured at T2 and rebound only through [GlassPopupFlight.advance]. */
 internal data class SamplingBasis(val source: FrostedBackdrop?, val bounds: Rect, val footprint: HomeBackdropFootprint?, val measured: Boolean)
 /** One presentation's stored value. [gen] counts its opens, so a writer registered for an earlier open is refused. */
@@ -179,7 +179,8 @@ internal val PopupEdges: Map<Triple<PopupTakeover, PopupPresenter?, PopupEvent>,
         for (p in listOf(Offered, Taken)) edge(t, p, SampleLost, t, Window) // the window lost the home sample
         edge(t, Offered, HomeReturns, t, Window) // T12
         edge(t, Taken, HomeReturns, t, Releasing) // T13, T15
-        edge(t, Releasing, OfferReleased, t, Window) // T14
+        edge(t, Releasing, WindowDrew, t, Reclaimed) // C1: this presentation's window drew the body
+        edge(t, Reclaimed, OfferReleased, t, Window) // T14
     }
     for (p in PopupPresenter.entries) {
         edge(InWindow, p, AtHome, Restoring, p) // T9
@@ -221,11 +222,14 @@ internal class GlassPopupFlight(private val anchor: GlassAnchor? = null, private
     }
     var layer by mutableStateOf<GraphicsLayer?>(null)
     var origin = Offset.Zero
-    var homeOrigin = Offset.Zero
+    private var homeOrigin = Offset.Zero
+    /** The home's projection offset: it tracks the home except while Taken, so the frame both presenters draw (C1) lines up. */
+    fun projectionOffset(home: Offset): Offset { if (!handedOff) homeOrigin = home; return origin - homeOrigin }
     var revision by mutableLongStateOf(0L)
-    val prepared by derivedStateOf(structuralEqualityPolicy()) { state.presenter == Offered || state.presenter == Taken }
+    /** The home projects until the window has drawn the body (C1), so no frame lacks the popup. */
+    val prepared by derivedStateOf(structuralEqualityPolicy()) { state.presenter == Offered || state.presenter == Taken || state.presenter == Releasing }
     val handedOff by derivedStateOf(structuralEqualityPolicy()) { state.presenter == Taken }
-    val wasProjected by derivedStateOf(structuralEqualityPolicy()) { state.presenter == Taken || state.presenter == Releasing }
+    val wasProjected by derivedStateOf(structuralEqualityPolicy()) { state.presenter == Taken || state.presenter == Releasing || state.presenter == Reclaimed }
 }
 
 @Composable
@@ -822,6 +826,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (returningInline) popupFlight.receipt(if (homeSampleReady && samplingSource === departingSource) PopupEvent.OfferReady else PopupEvent.SampleLost, window)
                     }
                     if (!returningInline || !popupFlight.handedOff) drawLayer(flightLayer)
+                    else return@drawWithContent
+                    // C1: reported only after this window drew the body.
+                    androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { popupFlight.receipt(PopupEvent.WindowDrew, window) }
                 }
             }
             .then(if (returningInline) Modifier.clearAndSetSemantics { } else Modifier)
