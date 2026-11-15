@@ -380,11 +380,51 @@ class WeightedClassShardsTest(unittest.TestCase):
                 'package io.github.anastaci1a.localica\nimport org.junit.Test\n'
                 'class '+name+' { @Test fun diagnostic() {} }')
         result = self.plan()
-        self.assertEqual(classes, result['routed_classes'])
+        self.assertEqual(partition.ROUTED_CLASSES, result['routed_classes'])
         self.assertFalse(any(name in result['class_seconds'] for name in classes))
         self.assertFalse(any(name in method for shard in result['shards'] for method in shard['methods'] for name in classes))
         for shard in result['shards']:
             self.assertTrue(set(classes) <= set(shard['excluded_classes']))
+
+    def test_union_requires_compatibility_evidence_and_reports_private_diagnostic_not_run(self):
+        package = 'io.github.anastaci1a.localica.'
+        folder = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica'
+        folder.mkdir(parents=True)
+        for name in ('ShuffleApkCompatibilityTest', 'PrivateQueueBoundaryTest'):
+            (folder/(name+'.kt')).write_text(
+                'package io.github.anastaci1a.localica\nimport org.junit.Test\n'
+                'class '+name+' { @Test fun diagnostic() {} }')
+        inv, _, expected = partition.expected_for(self.root, '26')
+        shard = self.root/'shard'; shard.mkdir()
+        suite = ET.Element('testsuite', tests=str(len(expected)), failures='0', errors='0', skipped='0')
+        for identity in sorted(expected):
+            cls, method = identity.split('#')
+            ET.SubElement(suite, 'testcase', classname=cls, name=method, time='0.1')
+        ET.ElementTree(suite).write(shard/'TEST.xml')
+        with self.assertRaisesRegex(ValueError, 'Missing routed destination evidence'):
+            partition.union(self.root, '26', [shard], 1)
+        unselected = partition.union(self.root, '26', [shard], 1, compatibility_not_selected=True)
+        self.assertEqual('NOT SELECTED',
+                         unselected['routed_classes'][package+'ShuffleApkCompatibilityTest']['status'])
+        self.assertEqual('NOT RUN',
+                         unselected['routed_classes'][package+'PrivateQueueBoundaryTest']['status'])
+
+        compatibility = self.root/'compatibility'; compatibility.mkdir()
+        method = 'diagnostic'
+        for phase in ('seed', 'bridge', 'verify'):
+            (compatibility/(phase+'-instrumentation.txt')).write_text(
+                'INSTRUMENTATION_STATUS: test='+method+'\n'
+                'INSTRUMENTATION_STATUS: class='+package+'ShuffleApkCompatibilityTest\n'
+                'INSTRUMENTATION_STATUS_CODE: 1\n'
+                'INSTRUMENTATION_STATUS: test='+method+'\n'
+                'INSTRUMENTATION_STATUS: class='+package+'ShuffleApkCompatibilityTest\n'
+                'INSTRUMENTATION_STATUS_CODE: 0\nOK (1 test)\nINSTRUMENTATION_CODE: -1\n')
+        result = partition.union(self.root, '26', [shard], 1, compatibility)
+        self.assertEqual('covered', result['routed_classes'][package+'ShuffleApkCompatibilityTest']['status'])
+        private = result['routed_classes'][package+'PrivateQueueBoundaryTest']
+        self.assertEqual('diagnostic_only', private['category'])
+        self.assertEqual('NOT RUN', private['status'])
+        self.assertIn('privateBoundaryInput', private['reason'])
 
 
 class SharedAssumptionPolicyTest(unittest.TestCase):
@@ -594,13 +634,19 @@ class SharedTestInventoryTest(unittest.TestCase):
     def test_announce_prints_each_deferral_and_the_workflow_uses_it_failing_closed(self):
         import contextlib, io
         good = self.root/'union.json'
-        good.write_text(json.dumps({'deferred': [{'id': 'x.Y#z', 'reason': 'DEFERRED v0.34.1 #815'}]}))
+        good.write_text(json.dumps({'deferred': [{'id': 'x.Y#z', 'reason': 'DEFERRED v0.34.1 #815'}],
+                                    'routed_classes': {'x.PrivateTest': {
+                                        'status': 'NOT RUN', 'reason': 'Requires private input'}}}))
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             partition.announce(good, '36')
-        self.assertEqual('DEFERRED v0.34.1 #815 API 36: x.Y#z\n', out.getvalue())
+        self.assertEqual('DEFERRED v0.34.1 #815 API 36: x.Y#z\n'
+                         'NOT RUN API 36: x.PrivateTest (Requires private input)\n', out.getvalue())
         workflow = (ROOT/'.github/workflows/android.yml').read_text()
         self.assertIn('full_partition.py announce --api "$api" --union-result "union-api-$api.json"', workflow)
+        self.assertIn('--compatibility-root "compatibility-reports/compatibility-reports-api-$api"', workflow)
+        self.assertIn('--compatibility-not-selected', workflow)
+        self.assertIn('test "${{ needs.compatibility.result }}" = success', workflow)
         self.assertNotIn('|| true\n          done', workflow)
 
 

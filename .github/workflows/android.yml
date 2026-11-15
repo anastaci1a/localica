@@ -303,6 +303,7 @@ jobs:
           sudo rm -rf /usr/share/dotnet
           df -h "$HOME"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: needs.compatibility.result == 'success'
         with:
           name: native-test-apks
           path: native-test-apks
@@ -399,10 +400,10 @@ jobs:
 
 
   device-tests-summary:
-    # Proves the shards ran every inventory test exactly once. The tag release job checks this job
-    # by name instead of the individual shard jobs.
+    # Proves native shard coverage and the named compatibility route. The tag release job checks
+    # this job by name instead of the individual shard jobs.
     if: ${{ needs.identity.result == 'success' && (always() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true') }}
-    needs: [identity, device-tests, test-apks, build, static-checks, verification-reuse]
+    needs: [identity, device-tests, test-apks, build, static-checks, compatibility, verification-reuse]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -411,12 +412,19 @@ jobs:
         with:
           pattern: '*-reports-api-*-shard-*'
           path: shard-reports
-      - name: Verify the shard union equals the source inventory
+      - name: Download compatibility evidence when that route is selected
+        if: needs.compatibility.result == 'success'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: 'compatibility-reports-api-*'
+          path: compatibility-reports
+      - name: Verify complete native and routed test coverage
         run: |
           set -uo pipefail
           status=0
           for api in 26 36; do
             args=()
+            if [[ "${{ needs.compatibility.result }}" == skipped ]]; then args+=(--compatibility-not-selected); fi
             count=0
             for dir in shard-reports/device-reports-api-$api-shard-*; do
               [ -d "$dir" ] || continue
@@ -424,7 +432,7 @@ jobs:
             done
             test "$count" = "$LOCALICA_DEVICE_SHARDS" || { echo "API $api: $count of $LOCALICA_DEVICE_SHARDS shard reports" >&2; status=1; continue; }
             while IFS= read -r dir; do args+=(--xml-root "$dir"); done < <(find shard-reports -type d -name androidTest-results -path "*-reports-api-$api-shard-*" | sort)
-            python3 .github/test-evidence/full_partition.py union --root "$PWD" --api "$api" --shards "$LOCALICA_DEVICE_SHARDS" "${args[@]}" | tee "union-api-$api.json" || status=1
+            python3 .github/test-evidence/full_partition.py union --root "$PWD" --api "$api" --shards "$LOCALICA_DEVICE_SHARDS" --compatibility-root "compatibility-reports/compatibility-reports-api-$api" "${args[@]}" | tee "union-api-$api.json" || status=1
             # Visible deferral (#815): list every deferred method in the log and the run summary.
             # An empty or invalid union result (rejected partition) fails with a clear message, never a traceback.
             python3 .github/test-evidence/full_partition.py announce --api "$api" --union-result "union-api-$api.json" | tee -a "$GITHUB_STEP_SUMMARY" || status=1
@@ -436,6 +444,7 @@ jobs:
         run: |
           test "${{ needs.device-tests.result }}" = success
           test "${{ needs.static-checks.result }}" = success
+          if [[ "${{ needs.compatibility.result }}" != skipped ]]; then test "${{ needs.compatibility.result }}" = success; fi
 
       - name: Refresh the timing profile for the next release
         run: python3 .github/test-evidence/refresh_durations.py --output class-durations.csv shard-reports

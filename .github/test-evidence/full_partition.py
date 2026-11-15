@@ -1,4 +1,4 @@
-"""Fail-closed source/XML union ledger for risk-first, exactly-once native suites.
+"""Fail-closed source/evidence ledger for exactly-once native and routed suites.
 
 Source discovery is restricted to the existing direct JUnit4 parser. No inheritance,
 generated tests or unknown SDK omission is inferred. Android runner assumptions remain
@@ -84,8 +84,12 @@ for _scene in ('light', 'dark', 'patterned'):
     PROFILE_ASSUMPTIONS['UtilityPopupRenderDiagnosticTest#'+_scene+'UtilityPopupRepeatedReturnDiagnostics'] = UTILITY_DIAGNOSTIC_REASON
 
 ROUTED_CLASSES = {
-    'io.github.anastaci1a.localica.ShuffleApkCompatibilityTest': 'Three-APK compatibility protocol',
-    'io.github.anastaci1a.localica.PrivateQueueBoundaryTest': 'Requires explicit privateBoundaryInput',
+    'io.github.anastaci1a.localica.ShuffleApkCompatibilityTest': {
+        'category': 'required', 'destination': 'android.yml compatibility job',
+    },
+    'io.github.anastaci1a.localica.PrivateQueueBoundaryTest': {
+        'category': 'diagnostic_only', 'reason': 'Requires explicit privateBoundaryInput',
+    },
 }
 
 
@@ -226,7 +230,7 @@ def expected_for(root, api):
     deferred = deferred_for(inv)
     for row in deferred:
         require(row['id'] in inv['runtime_methods'], 'Deferred method missing from source: ' + row['id'])
-    routed = {cls for cls in ROUTED_CLASSES if cls in inv['selectors']}
+    routed = set(ROUTED_CLASSES) & set(inv['selectors'])
     return inv, omissions, set(inv['runtime_methods']) - {x['id'] for x in omissions} - {x['id'] for x in deferred} - {
         identity for identity in inv['runtime_methods'] if identity.split('#')[0] in routed
     }
@@ -314,11 +318,52 @@ def reconcile(root, manifest, preflight_folder, remaining_folder=None, shard=Fal
     return receipt
 
 
-def union(root, api, folders, shards):
-    """Prove the shard XML is the complete once-only inventory for this API."""
+def compatibility_coverage(inv, folder):
+    cls = 'io.github.anastaci1a.localica.ShuffleApkCompatibilityTest'
+    identities = sorted(x for x in inv['runtime_methods'] if x.startswith(cls+'#'))
+    require(identities and len(identities) == 1, 'Compatibility class must have one runtime method')
+    _, method = identities[0].split('#')
+    phases = {}
+    for phase in ('seed', 'bridge', 'verify'):
+        path = folder / (phase+'-instrumentation.txt')
+        require(path.is_file() and not path.is_symlink() and path.stat().st_size <= 4*1024*1024,
+                'Missing compatibility '+phase+' evidence')
+        text = path.read_text()
+        records, record = [], {}
+        for line in text.splitlines():
+            match = re.fullmatch(r'INSTRUMENTATION_STATUS: ([^=]+)=(.*)', line)
+            if match:
+                record[match[1]] = match[2]
+            elif line.startswith('INSTRUMENTATION_STATUS_CODE: '):
+                records.append((record.get('class'), record.get('test'), line.partition(': ')[2]))
+                record = {}
+        require(records == [(cls, method, '1'), (cls, method, '0')] and
+                re.findall(r'^INSTRUMENTATION_CODE: (-?\d+)\s*$', text, re.M) == ['-1'] and
+                re.search(r'^OK \(1 tests?\)\s*$', text, re.M) and
+                not re.search(r'INSTRUMENTATION_(?:FAILED|ABORTED)|FAILURES!!!|Process crashed|shortMsg=|AssumptionViolatedException', text, re.I),
+                'Compatibility '+phase+' evidence did not pass the routed test')
+        phases[phase] = {'file': str(path), 'sha256': digest(path)}
+    return {'category': 'required', 'destination': ROUTED_CLASSES[cls]['destination'],
+            'status': 'covered', 'method': identities[0], 'phases': phases}
+
+
+def union(root, api, folders, shards, compatibility_root=None, compatibility_not_selected=False):
+    """Prove native shard coverage and every required named route for this API."""
     require(api in ('26', '36') and shards > 0, 'Invalid union request')
     inv, _, expected = expected_for(root, api)
     deferred = deferred_for(inv)
+    routed = {}
+    for cls, policy in ROUTED_CLASSES.items():
+        if cls not in inv['selectors']:
+            continue
+        if policy['category'] == 'diagnostic_only':
+            routed[cls] = {'category': policy['category'], 'status': 'NOT RUN', 'reason': policy['reason']}
+        elif compatibility_not_selected:
+            routed[cls] = {'category': policy['category'], 'destination': policy['destination'],
+                           'status': 'NOT SELECTED', 'reason': 'Compatibility job not selected for this workflow context'}
+        else:
+            require(compatibility_root is not None, 'Missing routed destination evidence: '+policy['destination'])
+            routed[cls] = compatibility_coverage(inv, compatibility_root)
     rows = {}
     for folder in folders:
         part, _ = outcomes(folder)
@@ -331,7 +376,7 @@ def union(root, api, folders, shards):
         require(row['id'] not in rows, 'Deferred method ran: ' + row['id'])
         print(row['reason'] + ' API ' + api + ': ' + row['id'], file=sys.stderr)
     return {'api': api, 'shards': shards, 'xml_roots': len(folders), 'expected': len(expected), 'executed_once': len(rows),
-            'deferred': deferred, **counts}
+            'routed_classes': routed, 'deferred': deferred, **counts}
 
 
 def announce(path, api):
@@ -349,6 +394,8 @@ def announce(path, api):
             'Union result for API ' + api + ' lacks the deferred list')
     for row in result['deferred']:
         print('%s API %s: %s' % (row['reason'], api, row['id']))
+    for cls, row in result.get('routed_classes', {}).items():
+        print('%s API %s: %s (%s)' % (row['status'], api, cls, row.get('reason', row.get('destination', ''))))
 
 
 def shards(root, api, count, durations, sha, risks=(), scroll_performance=False):
@@ -406,7 +453,7 @@ def shards(root, api, count, durations, sha, risks=(), scroll_performance=False)
         shard['methods'].sort()
         shard['excluded_methods'] = [x['id'] for x in deferred_for(inv)]
         shard['estimated_seconds'] = round(shard['estimated_seconds'], 6)
-    routed = {cls: reason for cls, reason in ROUTED_CLASSES.items() if cls in inv['selectors']}
+    routed = {cls: policy for cls, policy in ROUTED_CLASSES.items() if cls in inv['selectors']}
     return {'schema_version': 1, 'sha': sha, 'api': api, 'shard_count': count,
             'algorithm': 'longest measured class first, least estimated load, stable class/index ties',
             'inventory_sha256': hashlib.sha256(json.dumps(inv, sort_keys=True).encode()).hexdigest(),
@@ -427,6 +474,8 @@ def main():
     parser.add_argument('--shard', action='store_true')
     parser.add_argument('--shards', type=int)
     parser.add_argument('--xml-root', type=Path, action='append', default=[])
+    parser.add_argument('--compatibility-root', type=Path)
+    parser.add_argument('--compatibility-not-selected', action='store_true')
     parser.add_argument('--risk-classes')
     parser.add_argument('--sha')
     parser.add_argument('--api')
@@ -460,7 +509,8 @@ def main():
             return 0
         if args.action == 'union':
             require(args.api and args.shards and args.xml_root, 'Missing union inputs')
-            result = union(args.root.resolve(), args.api, args.xml_root, args.shards)
+            result = union(args.root.resolve(), args.api, args.xml_root, args.shards, args.compatibility_root,
+                           args.compatibility_not_selected)
             print(json.dumps(result, indent=2))
             return 0 if not (result['failure'] or result['error']) else 1
         require(args.plan is not None, 'Missing plan')
