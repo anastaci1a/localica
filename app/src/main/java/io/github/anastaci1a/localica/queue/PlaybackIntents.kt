@@ -1,8 +1,16 @@
 package io.github.anastaci1a.localica.queue
 
+import kotlinx.coroutines.flow.MutableStateFlow
+
 /** Only acceptance/intent crosses threads; queue and native-player mutations remain actor-owned. */
 internal class PlaybackIntents {
     data class Choice(val play: Boolean, val revision: Long? = null, val source: String? = null)
+    data class ModeChoice(val revision: Long, val settings: QueueSettings)
+    val modes = MutableStateFlow<ModeChoice?>(null)
+    @Synchronized fun requestModes(settings: () -> QueueSettings, change: (QueueSettings) -> QueueSettings) =
+        change(settings().withModes(modes.value?.settings)).let { ModeChoice(accept(), it.withModes(it)).also { modes.value = it } }
+    @Synchronized fun current(request: ModeChoice?) = request == null || modes.value === request
+    @Synchronized fun finishModes(request: ModeChoice?) { if (request != null && current(request)) modes.value = null }
     private var revision = 0L
     private var latest: Choice? = null
     private var applied = 0L
