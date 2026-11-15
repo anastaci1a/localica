@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica.benchmark
 
 import androidx.benchmark.macro.CompilationMode
+import androidx.benchmark.macro.ExperimentalMacrobenchmarkApi
+import androidx.benchmark.macro.ExperimentalMetricApi
 import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.StartupMode
 import androidx.benchmark.macro.StartupTimingMetric
@@ -14,6 +16,7 @@ import org.junit.runners.Parameterized
 
 /** Diagnostic only. Qualified A35 comparisons use the plain twin and the #971 runner. */
 @RunWith(Parameterized::class)
+@OptIn(ExperimentalMetricApi::class, ExperimentalMacrobenchmarkApi::class)
 class CostMapBenchmark(private val id: String) {
     @get:Rule val benchmark = MacrobenchmarkRule()
 
