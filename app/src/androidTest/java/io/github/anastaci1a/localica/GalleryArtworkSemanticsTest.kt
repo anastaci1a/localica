@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.graphics.Bitmap
+import android.view.accessibility.AccessibilityNodeInfo
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
@@ -46,6 +48,7 @@ class GalleryArtworkSemanticsTest {
                 motion.pixelDensity = LocalDensity.current.density
                 LookaheadScope {
                     Box(Modifier.width(180.dp).testTag("cell").semantics(mergeDescendants = true) {
+                        testTagsAsResourceId = true
                         onClick { clicks++; true }
                         onLongClick { holds++; true }
                     }) {
@@ -64,9 +67,41 @@ class GalleryArtworkSemanticsTest {
             val slot = compose.onNodeWithTag("browse-art-${item.key}", true).fetchSemanticsNode()
             assertTrue("Decorative art has one clearing owner: $label", slot.config.isClearingSemantics)
             assertFalse(slot.config.contains(SemanticsProperties.ContentDescription))
-            fun count(node: SemanticsNode): Int = 1 + node.children.sumOf(::count)
-            Log.i("GalleryArtCensus", "$label projectedSlotNodes=${count(slot)} bounds=${slot.boundsInRoot}")
-            assertEquals("Image internals cannot grow the exposed slot: $label", 1, count(slot))
+            fun debugCount(node: SemanticsNode): Int = 1 + node.children.sumOf(::debugCount)
+            fun find(node: AccessibilityNodeInfo, id: String): AccessibilityNodeInfo? {
+                if (node.viewIdResourceName == id) return AccessibilityNodeInfo.obtain(node)
+                for (index in 0 until node.childCount) {
+                    val child = node.getChild(index) ?: continue
+                    try { find(child, id)?.let { return it } } finally { child.recycle() }
+                }
+                return null
+            }
+            fun count(node: AccessibilityNodeInfo): Int = 1 + (0 until node.childCount).sumOf { index ->
+                val child = requireNotNull(node.getChild(index))
+                try { count(child) } finally { child.recycle() }
+            }
+            val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+            val original = automation.serviceInfo
+            val flags = original.flags
+            original.flags = flags or AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            automation.serviceInfo = original
+            try {
+                automation.waitForIdle(100, 5000)
+                val root = requireNotNull(automation.rootInActiveWindow)
+                try {
+                    val cell = requireNotNull(find(root, "cell")) { "Public accessibility tree must expose the cell" }
+                    try {
+                        val art = requireNotNull(find(cell, "browse-art-${item.key}")) { "Public accessibility tree must expose the art owner" }
+                        try {
+                            Log.i("GalleryArtCensus", "$label debugCellNodes=${debugCount(compose.onNodeWithTag("cell", true).fetchSemanticsNode())} debugSlotNodes=${debugCount(slot)} exposedCellNodes=${count(cell)} exposedSlotNodes=${count(art)} bounds=${slot.boundsInRoot}")
+                            assertEquals("Image internals cannot grow the exposed slot: $label", 1, count(art))
+                        } finally { art.recycle() }
+                        assertTrue(cell.text.toString().contains("Recording title"))
+                        assertTrue(cell.text.toString().contains("Recording artist"))
+                        assertTrue(cell.isClickable && cell.isLongClickable)
+                    } finally { cell.recycle() }
+                } finally { root.recycle() }
+            } finally { original.flags = flags; automation.serviceInfo = original }
             compose.onNodeWithTag("cell").assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.ContentDescription))
         }
         for (key in listOf("missing", "corrupt", "red", "blue")) {
