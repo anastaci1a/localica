@@ -45,12 +45,16 @@ class QueueFileEditTest {
                 val requested = entries.mapView { entry ->
                     if (entry.id == "occ:${size - 1}") entry.track.copy(id = "missing") else entry.track
                 }
+                val origins = object : AbstractList<String?>() {
+                    override val size = entries.size
+                    override fun get(index: Int) = if (index % 2 == 0) "playlist" else null
+                }
                 val reuse = QueueController::class.java.declaredMethods.single { it.name == "reuse" }.apply { isAccessible = true }
                 entries.mainReads.set(0); entries.workerReads.set(0)
                 measureMaintenance("reuse", catalogSize, size) {
                     val answer = withContext(Dispatchers.Main) {
                         kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean?> {
-                            reuse.invoke(queues, requested, 0, false, "Original", emptyList<String?>(), it)
+                            reuse.invoke(queues, requested, 0, false, "Original", origins, it)
                         }
                     }
                     assertNull(answer)
