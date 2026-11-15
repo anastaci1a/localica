@@ -148,11 +148,13 @@ class SlidingTabsFourTabSlideTest {
     @Test fun fittingFourTabsFollowTheFingerAcrossEveryBoundary() {
         fixture(.9f, four, MainTab.Home)
         slideAcrossEveryBoundary("fresh four tabs")
+        host.pilotScreenshot("tabs-fresh")
     }
 
     @Test fun fittingFourTabsFollowTheFingerAfterAScrolledSixTabBar() {
         fromScrolledSixTabs(.9f)
         slideAcrossEveryBoundary("six then four tabs")
+        host.pilotScreenshot("tabs-six-to-four")
     }
 
     @Test fun pressingTheLastTabThenMovingKeepsItAfterAScrolledSixTabBar() {
@@ -161,6 +163,7 @@ class SlidingTabsFourTabSlideTest {
         // The recording: press Album Artists, move right past slop, and the lens fell back to Playlists.
         slide(c * 3.5f, c * 3.5f + 3f * slop, width + 38f * a35)
         compose.runOnIdle { assertEquals(MainTab.AlbumArtists, active) }
+        host.pilotScreenshot("tabs-last-after-six")
     }
 
     @Test fun twiceFontFourTabsOverflowAtMeasuredWidthsAndKeepEveryTabReachable() {
@@ -178,6 +181,7 @@ class SlidingTabsFourTabSlideTest {
             compose.onNodeWithTag("tab-option-$index").performScrollTo().performClick()
             compose.runOnIdle { assertEquals(four[index], active) }
         }
+        host.pilotScreenshot("tabs-twice-font")
     }
 
     @Test fun twiceFontAfterAScrolledSixTabBarStillOverflowsConsistently() {
@@ -188,5 +192,6 @@ class SlidingTabsFourTabSlideTest {
         compose.runOnIdle { assertEquals(MainTab.AlbumArtists, active) }
         compose.onNodeWithTag("tab-option-0").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(MainTab.Home, active) }
+        host.pilotScreenshot("tabs-twice-after-six")
     }
 }

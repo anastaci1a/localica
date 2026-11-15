@@ -166,6 +166,7 @@ class PinchRetargetTest {
                         abs(coordinate(after) - coordinate(before)) <= limit)
                 }
             }
+            compose.onNodeWithTag("retarget-window").pilotScreenshot("pinch-retarget-$fromList-$reverse-$furtherPinches")
         } finally {
             try { if (held) compose.onNodeWithTag("browser-list").performTouchInput { cancel() } }
             finally { compose.mainClock.autoAdvance = true; prefs.write(route, saved, overridden); cover.delete() }
