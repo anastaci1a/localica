@@ -173,9 +173,11 @@ class GlassTouchLightTest {
             val changed = cache.brushes(extent.center, GlassTone(.25f, lightInk = true)).light.value
             assertNotSame("tone change replaces preparation", brush, changed)
             val toned = render(GlassGlow(1f, 1f, Offset(.5f, .5f)), circle, tone = GlassTone(.25f, lightInk = true))
-            for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16))
-                assertTrue("tone-mapped two-fill oracle ($x,$y)", abs(channel(toned[y * width + x], shift) -
-                    expected(mask, Offset(.5f, .5f), x, y, shift, 1f, 1f, white = 255f * .75f)) <= 2)
+            for (y in 0 until height) for (x in 0 until width) for (shift in listOf(0, 8, 16)) {
+                val actual = channel(toned[y * width + x], shift)
+                val oracle = expected(mask, Offset(.5f, .5f), x, y, shift, 1f, 1f, white = 255f * .75f)
+                assertTrue("tone-mapped two-fill oracle ($x,$y) shift=$shift actual=$actual expected=$oracle backdrop=$backdrop circle=$circle coverage=${channel(mask[y * width + x], 0)}", abs(actual - oracle) <= 2)
+            }
             for (vertical in listOf(false, true)) for (point in listOf(Offset(.2f, .7f), Offset(1.25f, -.25f))) {
                 val shape = GlassShape(.2f, -.2f)
                 val transformed = render(GlassGlow(1f, 1f, point), circle, shape = shape, vertical = vertical)
