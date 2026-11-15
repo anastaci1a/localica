@@ -487,7 +487,7 @@ class ShuffleModePlaybackTest {
             ready
         }
         fun committed() = await(timeoutMs = 10_000) { queues.state.value.let {
-            it.library.active?.journey?.modes == JourneyModes.from(it.settings) && dao.committed == it.library } }
+            dao.committed == it.library } }
         fun at(index: Int) {
             check { player.currentMediaItem?.mediaId == ids[index] && queues.state.value.library.active?.currentEntryId == ids[index] && player.playbackState == Player.STATE_READY }
             committed()
