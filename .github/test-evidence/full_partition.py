@@ -83,6 +83,11 @@ UTILITY_DIAGNOSTIC_REASON = (
 for _scene in ('light', 'dark', 'patterned'):
     PROFILE_ASSUMPTIONS['UtilityPopupRenderDiagnosticTest#'+_scene+'UtilityPopupRepeatedReturnDiagnostics'] = UTILITY_DIAGNOSTIC_REASON
 
+ROUTED_CLASSES = {
+    'io.github.anastaci1a.localica.ShuffleApkCompatibilityTest': 'Three-APK compatibility protocol',
+    'io.github.anastaci1a.localica.PrivateQueueBoundaryTest': 'Requires explicit privateBoundaryInput',
+}
+
 
 def registered_skip_reason(identity, api=None):
     package = 'io.github.anastaci1a.localica.'
@@ -221,7 +226,10 @@ def expected_for(root, api):
     deferred = deferred_for(inv)
     for row in deferred:
         require(row['id'] in inv['runtime_methods'], 'Deferred method missing from source: ' + row['id'])
-    return inv, omissions, set(inv['runtime_methods']) - {x['id'] for x in omissions} - {x['id'] for x in deferred}
+    routed = {cls for cls in ROUTED_CLASSES if cls in inv['selectors']}
+    return inv, omissions, set(inv['runtime_methods']) - {x['id'] for x in omissions} - {x['id'] for x in deferred} - {
+        identity for identity in inv['runtime_methods'] if identity.split('#')[0] in routed
+    }
 
 
 def outcomes(folder):
@@ -398,6 +406,7 @@ def shards(root, api, count, durations, sha, risks=(), scroll_performance=False)
         shard['methods'].sort()
         shard['excluded_methods'] = [x['id'] for x in deferred_for(inv)]
         shard['estimated_seconds'] = round(shard['estimated_seconds'], 6)
+    routed = {cls: reason for cls, reason in ROUTED_CLASSES.items() if cls in inv['selectors']}
     return {'schema_version': 1, 'sha': sha, 'api': api, 'shard_count': count,
             'algorithm': 'longest measured class first, least estimated load, stable class/index ties',
             'inventory_sha256': hashlib.sha256(json.dumps(inv, sort_keys=True).encode()).hexdigest(),
@@ -405,6 +414,7 @@ def shards(root, api, count, durations, sha, risks=(), scroll_performance=False)
             'class_seconds': {cls: round(costs[cls], 6) for cls in sorted(costs)},
             'preflight_partition': 'Existing AndroidJUnitRunner method shards; risks excluded from weighted remainder',
             'estimated_classes': sorted(estimated), 'unknown_seconds_per_method': fallback,
+            'routed_classes': routed,
             'opt_in_disabled_classes': opt_in, 'opt_in_assumption_seconds_per_method': 0.01,
             'sdk_omissions': omissions, 'deferred': deferred_for(inv), 'shards': result}
 

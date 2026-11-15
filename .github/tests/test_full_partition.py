@@ -367,6 +367,25 @@ class WeightedClassShardsTest(unittest.TestCase):
         self.assertEqual(500,self.plan(scroll_performance=True)['class_seconds'][cls])
         self.assertEqual(18,sum(len(s['methods']) for s in ordinary['shards']))
 
+    def test_compatibility_and_private_diagnostic_classes_are_routed_out(self):
+        folder = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica'
+        folder.mkdir(parents=True)
+        classes = {
+            'io.github.anastaci1a.localica.ShuffleApkCompatibilityTest': 'Three-APK compatibility protocol',
+            'io.github.anastaci1a.localica.PrivateQueueBoundaryTest': 'Requires explicit privateBoundaryInput',
+        }
+        for identity in classes:
+            name = identity.rsplit('.', 1)[-1]
+            (folder/(name+'.kt')).write_text(
+                'package io.github.anastaci1a.localica\nimport org.junit.Test\n'
+                'class '+name+' { @Test fun diagnostic() {} }')
+        result = self.plan()
+        self.assertEqual(classes, result['routed_classes'])
+        self.assertFalse(any(name in result['class_seconds'] for name in classes))
+        self.assertFalse(any(name in method for shard in result['shards'] for method in shard['methods'] for name in classes))
+        for shard in result['shards']:
+            self.assertTrue(set(classes) <= set(shard['excluded_classes']))
+
 
 class SharedAssumptionPolicyTest(unittest.TestCase):
     def test_diagnostic_registry_is_exact_on_both_apis(self):
