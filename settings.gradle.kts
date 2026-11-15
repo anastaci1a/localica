@@ -8,3 +8,4 @@ dependencyResolutionManagement {
 rootProject.name = "localica"
 include(":app")
 include(":lint")
+include(":benchmark")

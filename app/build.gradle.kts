@@ -2,6 +2,7 @@ import java.security.MessageDigest
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
+    alias(libs.plugins.androidx.baselineprofile)
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
@@ -80,6 +81,12 @@ composeCompiler {
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+
+baselineProfile {
+    mergeIntoMain = true
+    automaticGenerationDuringBuild = false
+    variants { create("distribution") { from(project(":benchmark")) } }
+}
 
 dependencies {
     lintChecks(project(":lint"))

@@ -31,6 +31,8 @@ Wait for a complete green Android run with exactly the release commit's Git tree
 | Both compatibility jobs | See the gate below. |
 | Both distribution smoke jobs | On the exact APK to be published. |
 
+The [A35 performance ratchet](performance.md#release-ratchet) is Proposed as a release gate, pending qualified profile comparison and initial anchor adoption.
+
 A `main` push reuses retained exact-tree evidence when it exists; otherwise it runs normal verification. Release selection verifies the original run, attempt, tree, union receipts and artifact identity (`release-verification.py`). APK checksum, version and signing checks are mandatory. Missing, expired or changed inputs need a new complete run. Unfilled placeholders in the notes block publication.
 
 ### Step 4: publish and tidy
