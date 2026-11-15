@@ -13,12 +13,13 @@ class QueuePresentation internal constructor(internal val state: QueueUiState, i
 private fun ListeningQueue.read(previous: QueueRead?): QueueRead {
     val unchanged = entries === previous?.queue?.entries
     var index = if (unchanged && currentEntryId == previous?.queue?.currentEntryId) previous?.index ?: -1 else -1
-    var duration = if (unchanged) previous?.duration else null
+    var duration = if (unchanged) previous?.duration ?: 0L else 0L
+    var knownDuration = unchanged && previous?.duration != null
     if (!unchanged) entries.forEachIndexed { at, entry ->
         if (index < 0 && entry.id == currentEntryId) index = at
-        entry.track.durationMs?.let { duration = (duration ?: 0L) + it }
+        entry.track.durationMs?.let { duration += it; knownDuration = true }
     } else if (currentEntryId != previous?.queue?.currentEntryId) index = entries.indexOfFirst { it.id == currentEntryId }
-    return QueueRead(this, index, duration, if (unchanged && index == previous?.index) previous?.current else entries.getOrNull(index)?.track)
+    return QueueRead(this, index, duration.takeIf { knownDuration }, if (unchanged && index == previous?.index) previous?.current else entries.getOrNull(index)?.track)
 }
 
 internal fun prepareQueuePresentation(state: QueueUiState, library: LibrarySnapshot, previous: QueuePresentation?): QueuePresentation {
@@ -43,6 +44,5 @@ internal fun prepareQueuePresentation(state: QueueUiState, library: LibrarySnaps
 @Composable
 internal fun rememberQueuePresentation(state: QueueUiState, library: LibrarySnapshot): State<QueuePresentation?> {
     lateinit var result: State<QueuePresentation?>
-    result = rememberAsyncValue(state, library, retainPrevious = true) { prepareQueuePresentation(state, library, result.value) }
-    return result
+    return rememberAsyncValue(state, library.tracks, library.trackPlays, retainPrevious = true) { prepareQueuePresentation(state, library, result.value) }.also { result = it }
 }
