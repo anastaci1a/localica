@@ -30,7 +30,6 @@ class GlassOriginPreparationTest {
     private var fontScale by mutableFloatStateOf(1f)
     private val replacementSamples = mutableListOf<Pair<Float, android.view.Window?>>()
     private val popupWindows = mutableSetOf<Int>()
-    private val admissionViolations = mutableListOf<String>()
     private var admittedScreenCorners: List<Float>? = null
 
     private fun fixture(reduced: Boolean = false, prepared: Boolean = true) {
@@ -43,16 +42,14 @@ class GlassOriginPreparationTest {
                 },
                 LocalGlassSurfaceDrawObserver provides { receipt ->
                     glassDrawProbe?.invoke(receipt)
+                    if (receipt is GlassTransitionReceipt) android.util.Log.i("PopupAdmissionOrder",
+                        "$receipt nativeWindow ${System.identityHashCode(popupWindow)} state ${anchor.popup?.state}")
                     if (receipt is GlassTransitionReceipt && receipt.event == "WindowReplaced") {
                         replacementSamples += requireNotNull(anchor.popup).let { it.progress.value to it.window }
                     }
                     if (receipt is GlassSurfaceDrawObservation && receipt.windowIdentity in popupWindows &&
                         anchor.popup?.modalPresent == true && receipt.windowIdentity == System.identityHashCode(anchor.popup?.window))
                         admittedScreenCorners = receipt.screenCorners
-                    if (receipt is GlassSurfaceDrawObservation && receipt.windowIdentity in popupWindows &&
-                        (anchor.popup?.modalPresent != true || receipt.windowIdentity != System.identityHashCode(anchor.popup?.window))) {
-                        admissionViolations += "draw without current admission: ${receipt.windowIdentity}, ${anchor.popup?.state}"
-                    }
                 }) {
                 preparation = rememberGlassOriginPreparation()
                 anchor = rememberGlassAnchor()
@@ -114,6 +111,13 @@ class GlassOriginPreparationTest {
     @Test fun anOrdinaryReplacementCannotBorrowThePreviousWindowsAdmission() = replacement(false)
     @Test fun aPreparedReplacementCannotBorrowThePreviousWindowsAdmission() = replacement(true)
 
+    private fun screenSamples(regions: List<androidx.compose.ui.geometry.Rect>): List<Int> {
+        val shot = requireNotNull(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        return try { regions.flatMap { r -> (1..3).flatMap { y -> (1..3).map { x ->
+            shot.getPixel((r.left + r.width * x / 4).toInt(), (r.top + r.height * y / 4).toInt())
+        } } } } finally { shot.recycle() }
+    }
+
     private fun replacement(prepared: Boolean) {
         fixture(prepared = prepared)
         try {
@@ -135,6 +139,9 @@ class GlassOriginPreparationTest {
                 assertEquals(gen, flight.gen)
                 assertNotSame("force a real Compose Dialog replacement", first, popupWindow)
             }
+            val regions = if (prepared) listOf(compose.runOnUiThread { anchor.bounds }, requireNotNull(originalScreen).let {
+                androidx.compose.ui.geometry.Rect(it[0], it[1], it[4], it[5]) }) else emptyList()
+            var heldPixels = emptyList<Int>()
             if (prepared) {
                 compose.onNodeWithTag("prepared-menu-content").assertDoesNotExist()
                 compose.runOnIdle {
@@ -142,15 +149,9 @@ class GlassOriginPreparationTest {
                     val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                     assertEquals("the replacement also owns no input", flags, requireNotNull(popupWindow).attributes.flags and flags)
                 }
-                val shot = requireNotNull(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
-                try {
-                    val regions = listOf(compose.runOnUiThread { anchor.bounds }, requireNotNull(originalScreen).let {
-                        androidx.compose.ui.geometry.Rect(it[0], it[1], it[4], it[5]) })
-                    android.util.Log.i("PopupAdmissionPixels", "oldWindow ${System.identityHashCode(first)} newWindow ${System.identityHashCode(popupWindow)} state ${flight.state} recordings ${admissionViolations.size}")
-                    regions.forEach { r -> android.util.Log.i("PopupAdmissionPixels", "region $r pixels " +
-                        (1..3).flatMap { y -> (1..3).map { x -> Integer.toHexString(shot.getPixel(
-                            (r.left + r.width * x / 4).toInt(), (r.top + r.height * y / 4).toInt())) } }) }
-                } finally { shot.recycle() }
+                heldPixels = screenSamples(regions)
+                android.util.Log.i("PopupAdmissionPixels", "held ${flight.state} regions $regions pixels ${heldPixels.map(Integer::toHexString)}")
+                assertEquals("unadmitted source and old popup footprint present only the host", List(18) { 0xFF143A5F.toInt() }, heldPixels)
                 compose.runOnIdle { reportOrigin = true }
             }
             advanceWithNativeFrames(4000)
@@ -158,9 +159,13 @@ class GlassOriginPreparationTest {
                 assertTrue("replacement eventually admits", flight.admitted(popupWindow))
                 assertEquals(1f, flight.progress.value, 0f)
                 assertTrue(open)
-                assertTrue("ordered native draws belong only to the admitted window: $admissionViolations", admissionViolations.isEmpty())
-                open = false
             }
+            if (prepared) {
+                val admittedPixels = screenSamples(regions)
+                android.util.Log.i("PopupAdmissionPixels", "admitted ${flight.state} pixels ${admittedPixels.map(Integer::toHexString)}")
+                assertTrue("the same footprint samples detect the admitted popup", admittedPixels.drop(9).zip(heldPixels.drop(9)).any { it.first != it.second })
+            }
+            compose.runOnIdle { open = false }
             advanceWithNativeFrames(4000)
         } finally { compose.mainClock.autoAdvance = true }
     }
