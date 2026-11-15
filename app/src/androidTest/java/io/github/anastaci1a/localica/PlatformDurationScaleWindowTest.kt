@@ -223,7 +223,7 @@ class PlatformDurationScaleWindowTest {
                             control.clock.configure(owners.engine.copy(durationScale = 1f), owners.clock.spec)
                             origin = harness.now
                             owners.scalar.retarget(1f, motionProfileId(MotionProfile.Control)); scalar.retarget(1f, motionProfileId(MotionProfile.Control))
-                            owners.spring.retargetSpring(1f, springProfileId(SpringProfile.Page)); spring.retargetSpring(1f, springProfileId(SpringProfile.Page))
+                            owners.spring.retargetSpring(1f, springProfileId(SpringProfile.GlassMorph)); spring.retargetSpring(1f, springProfileId(SpringProfile.GlassMorph))
                             owners.expansion.target(true); expansion.target(true)
                             owners.scrollbar.reveal(); owners.scrollbar.release(.3f)
                         }
