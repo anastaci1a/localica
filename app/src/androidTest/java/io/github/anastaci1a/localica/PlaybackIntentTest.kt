@@ -156,6 +156,7 @@ class PlaybackIntentTest {
     @Test fun pendingRecoveryDuringHeldWindowIoCannotAdmitTheOldWindowsNextSource() {
         val forbidden = AtomicReference<String?>()
         val attempted = CompletableDeferred<Unit>()
+        val denied = CompletableDeferred<IOException>()
         val admit = CompletableDeferred<Unit>()
         val opened = CopyOnWriteArrayList<String>()
         fixture(playbackSource = { factory -> DataSource.Factory {
@@ -164,7 +165,14 @@ class PlaybackIntentTest {
                 override fun open(dataSpec: DataSpec): Long {
                     val uri = dataSpec.uri.toString()
                     if (uri == forbidden.get()) { attempted.complete(Unit); runBlocking { admit.await() } }
-                    return source.open(dataSpec).also { opened.add(uri) }
+                    return try { source.open(dataSpec).also { opened.add(uri) } }
+                    catch (failure: IOException) {
+                        if (uri == forbidden.get()) {
+                            denied.complete(failure)
+                            android.util.Log.i("Recovery1004Admission", "Denied before provider open: " + failure.message)
+                        }
+                        throw failure
+                    }
                 }
             }
         } }) {
@@ -196,7 +204,8 @@ class PlaybackIntentTest {
                     player.engine.seekTo(player.duration - 100)
                 }
                 withTimeout(10000) { attempted.await() }
-                awaitMain { player.playerError != null }
+                val rejection = withTimeout(10000) { denied.await() }
+                assertEquals(readers.recovery().explanation(), rejection.message)
                 assertTrue("The observer must see successful safe-source opens", opened.contains(track.uri))
                 assertFalse("The current recovery authority must deny the old window's source before provider open", opened.contains(next.uri))
                 actor.release.complete(Unit); held.await(); command {}
