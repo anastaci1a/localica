@@ -257,11 +257,10 @@ abstract class QueueDatabase : RoomDatabase() {
                 db.execSQL("UPDATE queue_entries SET manualOrdinal = -1")
                 db.execSQL("DROP INDEX index_queue_entries_queueId")
                 db.execSQL("CREATE INDEX index_queue_entries_queueId_ordinal ON queue_entries(queueId, ordinal)")
-                db.query("SELECT id, length(trim(orderState)) FROM queues").use { queues -> while (queues.moveToNext()) {
+                db.query("SELECT id FROM queues").use { queues -> while (queues.moveToNext()) {
                     val id = queues.getString(0)
                     val stride = db.query("SELECT COUNT(*) + 1 FROM queue_entries WHERE queueId = ?", arrayOf(id)).use { it.moveToFirst(); it.getLong(0) }
-                    var sort = "Manual"; var ascending = true
-                    if (queues.getInt(1) > 0) android.util.JsonReader(object : java.io.InputStream() {
+                    val order = SavedOrderCodec.decode(object : java.io.InputStream() {
                         var position = 1
                         override fun read(): Int = ByteArray(1).let { if (read(it, 0, 1) < 0) -1 else it[0].toInt() and 255 }
                         override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
@@ -271,18 +270,9 @@ abstract class QueueDatabase : RoomDatabase() {
                             if (bytes.isEmpty()) return -1
                             bytes.copyInto(buffer, offset); position += bytes.size; return bytes.size
                         }
-                    }.reader(Charsets.UTF_8)).use { json ->
-                        json.beginObject()
-                        while (json.hasNext()) when (json.nextName()) {
-                            "manual" -> { var rank = stride; json.beginArray(); while (json.hasNext()) {
-                                db.execSQL("UPDATE queue_entries SET manualOrdinal = ? WHERE queueId = ? AND id = ? AND manualOrdinal < 0", arrayOf(rank, id, json.nextString())); rank += stride
-                            }; json.endArray() }
-                            "sort" -> sort = if (json.peek() == android.util.JsonToken.NULL) { json.nextNull(); "Manual" } else json.nextString()
-                            "ascending" -> ascending = if (json.peek() == android.util.JsonToken.STRING) !json.nextString().equals("false", true) else json.nextBoolean()
-                            else -> json.skipValue()
-                        }
-                        json.endObject()
-                    }
+                    }.reader(Charsets.UTF_8)) { manual -> manual.forEachIndexed { rank, entry ->
+                        db.execSQL("UPDATE queue_entries SET manualOrdinal = ? WHERE queueId = ? AND id = ? AND manualOrdinal < 0", arrayOf((rank + 1L) * stride, id, entry))
+                    } }
                     // Space legacy ranks to insert missing occurrences after their physical predecessor, as reconcile does.
                     db.query("SELECT id, manualOrdinal FROM queue_entries WHERE queueId = ? ORDER BY ordinal, rowid", arrayOf(id)).use { rows ->
                         var previous = 0L
@@ -295,8 +285,7 @@ abstract class QueueDatabase : RoomDatabase() {
                         var rank = 0
                         while (rows.moveToNext()) db.execSQL("UPDATE queue_entries SET manualOrdinal = ? WHERE id = ?", arrayOf(rank++, rows.getString(0)))
                     }
-                    db.execSQL("UPDATE queues SET orderState = ? WHERE id = ?", arrayOf(SavedOrderCodec.encode(
-                        SavedOrder(emptyList(), enumNameOrNull<TrackSort>(sort) ?: TrackSort.Manual, ascending)), id))
+                    db.execSQL("UPDATE queues SET orderState = ? WHERE id = ?", arrayOf(SavedOrderCodec.encode(order), id))
                 } }
             }
         }

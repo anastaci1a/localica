@@ -28,15 +28,32 @@ data class SavedOrder(val manual: List<String>, val sort: TrackSort = TrackSort.
         else LibraryQueries.rows(rows, LibraryQuery(sort = method, ascending = ascending)).map { it.id }
 }
 
-/** A single database column commits the baseline and applied method with the physical order. */
 internal object SavedOrderCodec {
     fun encode(value: SavedOrder): String = org.json.JSONObject().put("manual", org.json.JSONArray(value.manual))
         .put("sort", value.sort.name).put("ascending", value.ascending).toString()
-    fun decode(value: String, ids: List<String>): SavedOrder = if (value.isBlank()) SavedOrder(ids) else {
-        val json = org.json.JSONObject(value)
-        val manual = json.getJSONArray("manual")
-        SavedOrder((0 until manual.length()).map { manual.getString(it) },
-            enumNameOrNull<TrackSort>(json.optString("sort")) ?: TrackSort.Manual,
-            json.optBoolean("ascending", true)).reconcile(ids)
+    fun decode(value: String, ids: List<String>): SavedOrder = if (value.isBlank()) SavedOrder(ids) else try {
+        var manual: List<String>? = null
+        decode(value.reader()) { manual = it.toList() }.copy(manual = requireNotNull(manual)).reconcile(ids)
+    } catch (error: Exception) { throw org.json.JSONException(error.message) }
+    fun decode(input: java.io.Reader, manual: (Sequence<String>) -> Unit): SavedOrder = java.io.PushbackReader(input).use { source ->
+        var first = source.read()
+        while (first >= 0 && first.toChar().isWhitespace()) first = source.read()
+        if (first < 0) return SavedOrder(emptyList())
+        source.unread(first); android.util.JsonReader(source).apply { isLenient = true }.use { json ->
+            var sort = TrackSort.Manual; var ascending = true; json.beginObject()
+            while (json.hasNext()) when (json.nextName()) {
+                "manual" -> { json.beginArray(); manual(sequence { while (json.hasNext()) yield(scalar(json) ?: "null") }); json.endArray() }
+                "sort" -> sort = enumNameOrNull<TrackSort>(scalar(json)) ?: TrackSort.Manual
+                "ascending" -> ascending = !"false".equals(scalar(json), true)
+                else -> json.skipValue()
+            }
+            json.endObject(); SavedOrder(emptyList(), sort, ascending)
+        }
+    }
+    private fun scalar(json: android.util.JsonReader): String? = when (json.peek()) {
+        android.util.JsonToken.STRING -> json.nextString()
+        android.util.JsonToken.NUMBER -> org.json.JSONTokener(json.nextString()).nextValue().toString()
+        android.util.JsonToken.BOOLEAN -> json.nextBoolean().toString()
+        else -> { json.skipValue(); null }
     }
 }

@@ -162,8 +162,16 @@ class OrderedJourneyDatabaseTest {
             "{\"manual\":[],\"ascending\":\"false\"}" to SavedOrder(ids, ascending = false),
             "{\"manual\":[],\"sort\":null}" to SavedOrder(ids),
             "{\"manual\":[],\"ascending\":\"FALSE\"}" to SavedOrder(ids, ascending = false),
-            "{\"manual\":[],\"ascending\":\"unrecognized\"}" to SavedOrder(ids)
+            "{\"manual\":[],\"ascending\":\"unrecognized\"}" to SavedOrder(ids),
+            "{\"manual\":[],\"ascending\":null}" to SavedOrder(ids),
+            "{\"manual\":[],\"ascending\":0}" to SavedOrder(ids),
+            "{\"manual\":[],\"ascending\":1}" to SavedOrder(ids),
+            "\t\r\n\u2003\u00a0" to SavedOrder(ids),
+            "{\"manual\":[true,false,null,17,\"B\"]}" to SavedOrder(ids)
         )
+        SavedOrderCodec.decode("{\"manual\":[true,false,null,17,1e2]}".reader()) {
+            assertEquals(listOf("true", "false", "null", "17", "100.0"), it.toList())
+        }
         fixtures.forEachIndexed { index, (json, expected) ->
             val original = runCatching { SavedOrderCodec.decode(json, ids) }
             when (index) {
