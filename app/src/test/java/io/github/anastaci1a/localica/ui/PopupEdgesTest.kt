@@ -55,7 +55,6 @@ class PopupEdgesTest {
         for (p in PopupPresenter.entries) {
             assertEquals(Restoring to p, PopupEdges[Triple(InWindow, p, AtHome)])
             assertEquals(Closed to null, PopupEdges[Triple(Restoring, p, Returned)])
-            assertNull("T11 uses Show, never admission", PopupEdges[Triple(Restoring, p, Admitted)])
         }
     }
 

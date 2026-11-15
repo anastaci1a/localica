@@ -170,7 +170,7 @@ internal val PopupEdges: Map<Triple<PopupTakeover, PopupPresenter?, PopupEvent>,
     for (t in listOf(InWindow, Restoring)) {
         for (p in PopupPresenter.entries) {
             for (e in listOf(Retired, Gone, WindowReplaced)) edge(t, p, e, Closed, null) // T17, T16
-            if (t == InWindow) edge(t, p, Admitted, InWindow, p) // T2 again at a reclaimed gate
+            edge(t, p, Admitted, InWindow, p) // T2 again at a reclaimed gate
             for (e in listOf(Rebind, WindowGone)) edge(t, p, e, t, p)
             edge(t, p, HomeLeft, t, Window) // the home registration left
         }
