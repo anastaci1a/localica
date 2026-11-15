@@ -1,0 +1,15 @@
+// AGP 8.13 module switches for the combined no-profile control.
+gradle.beforeProject { project ->
+    project.plugins.withId('com.android.application') {
+        def android = project.extensions.getByName('android')
+        android.experimentalProperties['android.experimental.r8.dex-startup-optimization'] = false
+        android.experimentalProperties['android.experimental.art-profile-r8-rewriting'] = false
+        project.tasks.configureEach { task ->
+            if (task.name == 'minifyDistributionWithR8') task.doFirst {
+                assert !task.artProfileRewriting.get()
+                assert !task.inputProfileForDexStartupOptimization.present
+                println 'No-profile control: R8 baseline rewriting disabled; startup-layout input absent'
+            }
+        }
+    }
+}

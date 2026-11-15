@@ -76,10 +76,10 @@ ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 baselineProfile {
     mergeIntoMain = true
     automaticGenerationDuringBuild = false
+    variants { create("distribution") { from(project(":benchmark")) } }
 }
 
 dependencies {
-    baselineProfile(project(":benchmark"))
     lintChecks(project(":lint"))
     implementation(libs.jaudiotagger)
     implementation(libs.androidx.core)

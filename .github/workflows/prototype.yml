@@ -973,6 +973,15 @@ jobs:
           ! grep -q application-debuggable performance-badging.txt
           sha256sum app/build/outputs/apk/*/*.apk benchmark/build/outputs/apk/*/*.apk > performance-apks.sha256
           git rev-parse HEAD > performance-source.txt
+      - name: Build no-profile control with the same source
+        if: inputs.performance == 'functional'
+        run: |
+          mkdir -p performance-apks
+          cp app/build/outputs/apk/distribution/app-distribution.apk performance-apks/candidate.apk
+          ./gradlew :app:assembleDistribution --init-script tools/performance/macrobenchmark/no-profile.init.gradle --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8' | tee performance-control-build.txt
+          cp app/build/outputs/apk/distribution/app-distribution.apk performance-apks/control.apk
+          cp performance-apks/candidate.apk app/build/outputs/apk/distribution/app-distribution.apk
+          sha256sum performance-apks/*.apk > performance-profile-arms.sha256
       - name: Enable emulator acceleration
         if: inputs.performance != 'build'
         run: |
@@ -1003,6 +1012,7 @@ jobs:
           path: |-
             performance-*.txt
             performance-*.sha256
+            performance-apks/*.apk
             app/src/main/generated/baselineProfiles/
             app/build/reports/
             benchmark/build/reports/
