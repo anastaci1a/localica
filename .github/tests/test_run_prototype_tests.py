@@ -1372,9 +1372,7 @@ class WorkflowContract(unittest.TestCase):
         self.assertEqual(20,jobs['build']['timeout-minutes'])
         self.assertEqual(10,jobs['evidence']['timeout-minutes'])
 
-    def test_prototype_build_compiles_both_variants_with_the_android_static_checks_heap(self):
-        # #636: debug and release Kotlin compile concurrently in one Kotlin daemon,
-        # which inherits the Gradle heap; the 2g default ran out of memory.
+    def test_prototype_build_skips_unused_release_r8_and_keeps_the_android_static_checks_heap(self):
         import re, yaml
         prototype=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']['build']
         android=yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']['static-checks']
@@ -1382,8 +1380,10 @@ class WorkflowContract(unittest.TestCase):
         checks=next(s for s in android['steps'] if s.get('name')=='Unit tests, lint and release build')['run']
         # The step may run other Gradle invocations first (#600's :lint:test); compare the one that compiles the app.
         checks=next(line for line in checks.splitlines() if 'testDebugUnitTest' in line.split())
-        for task in ('testDebugUnitTest','lintDebug','assembleDebug','assembleRelease'):
+        for task in ('testDebugUnitTest','lintDebug','assembleDebug','assembleDebugAndroidTest'):
             self.assertIn(task,build.split())
+        self.assertNotIn('assembleRelease',build.split(), 'prototype exports only debug APKs (#679)')
+        self.assertIn('assembleRelease',checks.split(), 'Android retains the release R8 gate')
         heap=lambda run: re.search(r"(-Dorg\.gradle\.jvmargs='[^']*')",run).group(1)
         self.assertEqual("-Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'",heap(build))
         self.assertEqual(heap(checks),heap(build))

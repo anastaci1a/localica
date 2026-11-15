@@ -24,6 +24,16 @@ test('approved identities',good,true);
 test('bad author',commit('Invalid author','unrelated <invalid@example.invalid>',operator,[base]),false);
 test('bad committer',commit('Invalid committer',operator,'unrelated <invalid@example.invalid>',[base]),false);
 test('bad name with approved email',commit('Invalid name','Codex <48846277+anastaci1a@users.noreply.github.com>',operator,[base]),false);
+const github='GitHub <noreply@github.com>',side=commit('Side',operator,operator,[base]);
+test('operator-authored GitHub merge',commit('GitHub merge',operator,github,[good,side]),true);
+test('alternate operator identity GitHub merge',commit('GitHub merge','Ana Jahnel <anastaci1a@users.noreply.github.com>',github,[good,side]),true);
+test('GitHub ordinary commit',commit('GitHub commit',operator,github,[base]),false);
+test('GitHub root commit',commit('GitHub root',operator,github),false);
+test('GitHub-authored merge',commit('GitHub author',github,github,[good,side]),false);
+test('unapproved author GitHub merge',commit('Invalid author','unrelated <invalid@example.invalid>',github,[good,side]),false);
+test('unapproved author name GitHub merge',commit('Invalid author name','Codex <48846277+anastaci1a@users.noreply.github.com>',github,[good,side]),false);
+test('wrong GitHub committer name',commit('Invalid name',operator,'Other <noreply@github.com>',[good,side]),false);
+test('wrong GitHub committer email',commit('Invalid email',operator,'GitHub <invalid@example.invalid>',[good,side]),false);
 const forbiddenTrailers=[
  'Co-Authored-By: Claude <noreply@anthropic.com>',
  'co-authored-by: Codex <codex@openai.com>',
@@ -49,6 +59,8 @@ test('ordinary tool prose in commit',commit(prose,operator,operator,[base]),true
 test('ordinary tool prose in PR body',good,true,{pull_request:{base:{sha:base},head:{sha:good},body:prose}});
 const invalid=commit('Invalid middle','unrelated <invalid@example.invalid>',operator,[base]);test('invalid ancestor before good tip',commit('Good tip',operator,operator,[invalid]),false);
 const merge=commit('Merge',operator,operator,[good,invalid]);test('invalid merged side history',merge,false);
+test('GitHub merge retains ancestor checks',commit('GitHub merge',operator,github,[good,invalid]),false);
+test('GitHub merge retains trailer checks',commit('GitHub merge\n\nCo-authored-by: '+operator,operator,github,[good,side]),false);
 test('PR body trailer',good,false,{pull_request:{base:{sha:base},head:{sha:good},body:'Co-authored-by: Claude <noreply@anthropic.com>'}});
 test('valid PR body',good,true,{pull_request:{base:{sha:base},head:{sha:good},body:'Review the identity guard.'}});
 test('branch deletion event',good,true,{deleted:true,before:good,after:'0'.repeat(40)});
