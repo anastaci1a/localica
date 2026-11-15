@@ -317,7 +317,7 @@ function actualPopupReturnPolicy() {
  const source=fs.readFileSync(new URL('../../app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt',import.meta.url),'utf8');
  const semantics=source.match(/val returningSemantics = ([^\n]+)\n/)?.[1];
  const inline=source.match(/val returningInline = ([\s\S]*?)\n    @Suppress/)[1].trim();
- const clear=source.slice(source.indexOf('val admittedDraw')).match(/\.then\(if \((.*?)\) Modifier\.clearAndSetSemantics/)[1];
+ const clear=source.slice(source.indexOf('.then(if (returningInline)')).match(/\.then\(if \((.*?)\) Modifier\.clearAndSetSemantics/)[1];
  return Function('popupHome','requestedVisible','popupFlight','anchor',
   (semantics ? 'const returningSemantics = '+semantics+'; ' : '')+
   'const returningInline = '+inline+'; return {inline:returningInline, semantics:('+clear+')};');
