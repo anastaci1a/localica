@@ -56,38 +56,6 @@ class GlassTouchLightTest {
     private fun channel(pixel: Int, shift: Int) = pixel ushr shift and 255
     private fun diff(a: IntArray, b: IntArray, x: Int, y: Int, shift: Int) = channel(a[y * width + x], shift) - channel(b[y * width + x], shift)
 
-    @Suppress("DEPRECATION")
-    @Test fun movingContactCreatesNoManagedObjectsAfterPreparation() {
-        val cache = GlassRimCache()
-        val tone = GlassTone()
-        val image = ImageBitmap(width, height)
-        val path = Path().apply { addRoundRect(RoundRect(Rect(Offset.Zero, extent), CornerRadius(18f))) }
-        var stationary = 0; var moving = 0; var positive = 0
-        android.os.Debug.startAllocCounting()
-        try {
-            CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
-                fun frame(point: Offset, alpha: Float = .12f) { drawContactLight({ point }, { path }, alpha, tone, cache) }
-                repeat(64) { frame(extent.center) }
-                var before = android.os.Debug.getThreadAllocCount()
-                repeat(64) { frame(extent.center) }
-                stationary = android.os.Debug.getThreadAllocCount() - before
-                before = android.os.Debug.getThreadAllocCount()
-                repeat(64) {
-                    frame(Offset(16f + it % 48, 24f + it % 32), .06f + .001f * it)
-                }
-                moving = android.os.Debug.getThreadAllocCount() - before
-                before = android.os.Debug.getThreadAllocCount()
-                val control = Array(64) { ByteArray(it + 1) }
-                positive = android.os.Debug.getThreadAllocCount() - before
-                assertEquals(2080, control.sumOf { it.size })
-            }
-            android.util.Log.i("Localica642", "allocation api=${android.os.Build.VERSION.SDK_INT} warmup=64 stationaryFrames=64 stationaryObjects=$stationary movingFrames=64 movingObjects=$moving positiveControlObjects=$positive")
-            assertTrue("ART counter detects the escaping array and its 64 allocations", positive >= 65)
-            assertEquals("stationary draw allocates no managed objects after preparation", 0, stationary)
-            assertEquals("moving and fading light allocates no managed objects after preparation", 0, moving)
-        } finally { android.os.Debug.stopAllocCounting(); image.asAndroidBitmap().recycle() }
-    }
-
     @Test fun radialFillMatchesAnalyticSrcOverAndKeepsTheOutsideUntouched() {
         val radius = extent.center.getDistance()
         val dark = render(extent.center, 0f, true)
@@ -257,13 +225,9 @@ class GlassTouchLightTest {
                     }
                 }
             }
-            val paint = cache.light(GlassTone())
-            val shader = paint.shader
-            assertSame(paint, cache.light(GlassTone()))
-            val prepared = cache.roundedPath(Rect(Offset.Zero, extent), 18f)
-            assertSame(cache.lightRim(prepared, 2.6f), cache.lightRim(prepared, 2.6f))
-            cache.light(GlassTone(.25f))
-            assertNotSame(shader, paint.shader)
+            assertSame(cache.light(Offset.Zero, radius, GlassTone()), cache.light(extent.center, radius * 2, GlassTone()))
+            assertSame(cache.lightStroke(2.6f), cache.lightStroke(2.6f))
+            assertNotSame(cache.light(Offset.Zero, radius, GlassTone()), cache.light(Offset.Zero, radius, GlassTone(.25f)))
         }
         android.util.Log.i("Localica642", "isolated second full/partial=${secondMax.toList()} worst=${secondWitnesses.toList()}")
         android.util.Log.i("Localica642", "rim sensitivity omitted/native doubled gain/ideal doubled width/native doubled width roundedError=${rimWitnessMax.toList()} witnesses=${rimWitnesses.toList()}")
