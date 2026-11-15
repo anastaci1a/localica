@@ -11,12 +11,6 @@ Use the pinned Gradle wrapper, JDK 17 and Android SDK. Debug serves tests; distr
 
 Use JDK 17, Android platform 36 and build tools 35.0.0. Set `ANDROID_HOME`, or an untracked `local.properties` with the SDK path. The wrapper verifies its download checksum.
 
-Register the merge driver for `.github/prototype-risk-classes.txt` once per clone. It merges both sides' classes and drops duplicate lines, which the risk inventory contract rejects.
-
-```sh
-git config merge.union-dedupe.driver 'sh tools/git/merge-union-dedupe.sh %O %A %B'
-```
-
 For repeated compile or assemble runs, the configuration cache is an opt-in:
 
 ```sh

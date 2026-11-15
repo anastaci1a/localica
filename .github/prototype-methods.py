@@ -7,7 +7,7 @@ import sys
 
 def narrow(inventory, requested):
     methods = requested.split(',')
-    pattern = r'io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*#[A-Za-z_][A-Za-z0-9_]*'
+    pattern = r'io\.github\.anastaci1a\.localica\.([A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*#[A-Za-z_][A-Za-z0-9_]*'
     if not requested or len(requested) > 8192 or len(methods) > 100 or len(methods) != len(set(methods)):
         raise ValueError('Require 1..100 unique method selectors, maximum 8192 characters')
     if any(not re.fullmatch(pattern, method) for method in methods):

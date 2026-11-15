@@ -15,11 +15,17 @@ Prototype runs build development APKs and selected tests on API 26/36 for focuse
 | One | Build, then both preserved-data compatibility checks. |
 | Two | The focused device jobs for API 26 and API 36. |
 
-A failed check does not skip later checks in its chain. Build, JVM tests, lint, signature and both compatibility jobs are always required.
+A failed check does not skip later checks in its chain. Build, JVM tests, lint, signature and both compatibility jobs are required for delivery.
 
-Select up to 73 behaviour classes, 4096 characters at most, and describe coverage and limits. Three regression classes are mandatory and count toward that limit: search keyboard, search focus and contrast coverage run on both APIs. Focused jobs time out after 35 minutes.
+Select up to 73 affected behaviour classes and describe coverage and limits. Classes, including nested packages, must exist in the official Android test source inventory. The combined selector is limited to 4096 characters. The hand list contains only the three auto-added regressions: search keyboard, search focus and contrast. Focused jobs time out after 35 minutes.
 
-The build job compiles debug and release Kotlin in one daemon, so it uses the static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner (#636). Focused instrumentation builds give Kotlin 6 GB while keeping Gradle at 2 GB and two workers.
+`build_only=true` runs the build checks and exports the project-signed app/test APK pair with checksums as `prototype-signed-instrumentation-pair`. All device jobs remain not-run, and delivery stays blocked. These APKs are unvalidated inputs for external device proofs.
+
+`focused_api` accepts `both`, `26` or `36`, defaulting to `both`. It controls focused-job admission only. Unselected APIs are explicitly not-run in the manifest and block delivery; compatibility checks still run.
+
+`repeat_methods` accepts source-validated `Class#method` selectors, including nested packages. The mandatory gate runs once before method repetitions. This selects methods without promising execution order; strict shard-order replay is unsupported.
+
+The build job compiles debug and release Kotlin in one daemon, so it uses the static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner (#636). Focused APK compilation uses explicit 6 GB Gradle and Kotlin daemon heaps with two workers (#994).
 
 ## Runners
 
