@@ -836,7 +836,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private fun holdsForEdit() = editing?.holdsActive == true
     private suspend fun EditPlayback.membership(queue: ListeningQueue?) =
         if (this === editing && queue?.entries === state.value.library.active?.entries) holdsActive
-        else withContext(Dispatchers.Default) { queue?.entries?.any { documentIdentity(it.track.id) == trackId } == true }
+        else withContext(Dispatchers.Default) {
+            val identities = HashMap<String, String>()
+            queue?.entries?.any { identities.getOrPut(it.track.id) { documentIdentity(it.track.id) } == trackId } == true
+        }
 
     private fun visitTrack(queue: ListeningQueue, entryId: String?): Track? =
         queue.journey?.sourceOrdinal(queue.ids, entryId)?.let { queue.entries.getOrNull(it)?.track }
