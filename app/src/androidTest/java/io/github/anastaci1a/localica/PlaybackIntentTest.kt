@@ -524,6 +524,39 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun sourcePreparationCannotMoveAnAdmittedTapAfterTheFollowingPause() {
+        for (byId in listOf(false, true)) fixture(attach = false) {
+            val entered = CompletableDeferred<Unit>()
+            val release = java.util.concurrent.CountDownLatch(1)
+            val selected = track.copy(id = "admitted-tap", title = "Admitted tap")
+            val tracks = object : AbstractList<Track>() {
+                override val size get() = 2
+                override fun get(index: Int): Track {
+                    check(android.os.Looper.myLooper() != android.os.Looper.getMainLooper())
+                    entered.complete(Unit)
+                    check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    return if (index == 0) track else selected
+                }
+            }
+            try {
+                withContext(Dispatchers.Main) {
+                    if (byId) queues.tap(tracks, selected.id)
+                    else queues.tap(tracks.mapView { SongRow(it.id, it) }, 1, SongListView.Songs,
+                        io.github.anastaci1a.localica.navigation.BrowseRoute(io.github.anastaci1a.localica.navigation.MainTab.Songs))
+                }
+                withTimeout(5000) { entered.await() }
+                withContext(Dispatchers.Main) { controls.pause() }
+                release.countDown()
+                queues.attach(player)
+                barrier()
+                val active = queues.state.value.library.active!!
+                assertEquals(selected.id, active.entries.first { it.id == active.currentEntryId }.track.id)
+                assertPlayback(false)
+                assertEquals(0, player.trueRequests)
+            } finally { release.countDown() }
+        }
+    }
+
     @Test fun newerPauseDuringRestoreSuppressesAnOlderQueuedNewQueueRequest() = fixture(attach = false, blockRestore = true) {
         dao.restore!!.entered.await()
         val selected = track.copy(id = "new", title = "New")

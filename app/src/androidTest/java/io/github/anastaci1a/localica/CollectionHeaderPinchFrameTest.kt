@@ -18,7 +18,10 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import androidx.room.Room
+import io.github.anastaci1a.localica.queue.*
 import org.junit.Assert.*
 import org.junit.After
 import org.junit.Rule
@@ -63,7 +66,22 @@ class CollectionHeaderPinchFrameTest {
         var density = 0f
         var allowPlayback = false
         var playbackCalls = 0
+        val queueDb = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+        val queueJob = SupervisorJob()
+        val queueScope = CoroutineScope(queueJob + Dispatchers.Main.immediate)
+        val queuePreferences = QueuePreferences(context)
+        val originalQueuePreferences = queuePreferences.read()
+        lateinit var queues: QueueController
         try {
+            queuePreferences.write(QueueSettings())
+            compose.runOnUiThread {
+                queues = QueueController(queueDb.queues(), queuePreferences,
+                    (context.applicationContext as LocalicaApplication).library, queueScope)
+                queueScope.launch {
+                    queues.state.map { it.library.activeId }.filterNotNull().distinctUntilChanged().collect { playbackCalls++ }
+                }
+            }
+            compose.waitUntil(5000) { !queues.state.value.loading }
             compose.setContent { LocalicaTheme {
                 val currentDensity = LocalDensity.current.density
                 SideEffect { density = currentDensity }
@@ -72,7 +90,7 @@ class CollectionHeaderPinchFrameTest {
                     LocalCollectionHeaderActionSamplingObserver provides { sampling += it }) {
                     Box(Modifier.fillMaxSize()) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route, {}, {}, {},
-                            { _, _, _ -> if (!allowPlayback) fail("A pinch must not start playback") else playbackCalls++ }, null, null, true, false,
+                            { _, _, _ -> if (!allowPlayback) fail("A pinch must not start playback") else playbackCalls++ }, queues, null, true, false,
                             queryDispatcher = Dispatchers.Unconfined)
                     }
                 }
@@ -250,6 +268,7 @@ class CollectionHeaderPinchFrameTest {
             if (artist) {
                 compose.onAllNodesWithContentDescription("Shuffle selected albums").assertCountEquals(1)
                 compose.onNodeWithContentDescription("Shuffle selected albums").performTouchInput { click() }
+                compose.waitUntil(5000) { playbackCalls == 2 }
                 compose.runOnIdle { assertEquals(2, playbackCalls) }
             }
         } finally {
@@ -258,6 +277,9 @@ class CollectionHeaderPinchFrameTest {
             if (held) { compose.onNodeWithTag("browser-list").performTouchInput { cancel() }; held = false }
             compose.mainClock.autoAdvance = true
             preferences.write(route, original, overridden)
+            kotlinx.coroutines.runBlocking { queueJob.cancelAndJoin() }
+            queueDb.close()
+            queuePreferences.write(originalQueuePreferences)
         }
     }
 

@@ -1127,9 +1127,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 CollectionHeader(detailPlaylist?.name ?: route.title ?: seededCollection?.title.orEmpty(), if (playlistDetail) songCountLabel(detailPlaylist?.entries?.size ?: 0)
                                     else if (artistDetail) null else (sourceResult.rows.firstOrNull()?.track ?: seededCollection?.songs?.firstOrNull()?.track)?.let { it.albumArtist ?: it.artist },
                                     hero, artistDetail, enabled && result.rows.isNotEmpty(),
-                                    onPlay = { onPlay(result.rows, 0, result.scope) }, onShuffle = {
-                                        if (queues != null) queues.randomizedQueue(result.rows.map { it.track }, route.title ?: "Collection", result.rows.map { it.sourcePlaylistId })
-                                        else onPlay(result.rows.shuffled(), 0, result.scope)
+                                    onPlay = { onPlay(result.rows, 0, result.scope) }, onShuffle = queues?.let { owner ->
+                                        { owner.randomizedQueue(result.rows.mapView { it.track }, route.title ?: "Collection", result.rows.mapView { it.sourcePlaylistId }) }
                                     }, playlist = playlistDetail, pinchHeader = pinchHeader,
                                     onActionBottom = { collectionActionBottom = it })
                                 if (artistDetail) ArtistAlbumChoices(albums, validAlbums, ::chooseArtistAlbums)
