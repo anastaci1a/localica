@@ -1287,7 +1287,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val active = prepared.library.active
         val queue = if (active != null && active.entries.isNotEmpty() && (active.journey != null || prepared.player != null)) journey(active).let {
             if (it === active.journey) active else active.copy(journey = it) } else active
-        val source = currentSource(queue)
+        val source = currentSource(queue) ?: withContext(Dispatchers.Default) {
+            queue?.entries?.firstOrNull { it.id == queue.currentEntryId }?.track?.id?.let(::documentIdentity) }
         if (!prepared.isCurrent(source)) return
         if (queue !== active && queue != null) mutable.update { it.copy(library = it.library.update(queue)) }
         if (revision != null) intents.propose(revision, requireNotNull(play), source)

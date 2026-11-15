@@ -88,7 +88,8 @@ class PreparedQueuePlaybackTest {
                 queues.attach(player)
             }
             at(active.journey!!.current!!, "restore", restoreAt)
-            assertEquals(inactive.journey, queues.state.value.library.queues.last().journey)
+            assertEquals(inactive.journey!!.copy(plans = mapOf(inactive.journey.cycle to inactive.ids)),
+                queues.state.value.library.queues.last().journey)
             val firstNext = queues.state.value.library.active!!.journey!!.next!!
             move("next", firstNext) { queues.next() }
             val repaired = queues.state.value.library.queues.last().journey!!
