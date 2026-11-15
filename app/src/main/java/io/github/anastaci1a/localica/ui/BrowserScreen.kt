@@ -1316,9 +1316,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 localSearch = freshSearch(); localFocusRequest++; localSearchOpen = true
             }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = ListPillVerticalInset), anchor = searchAnchor)
             if (dragHost == null) SongDragOverlay(reorder, reducedMotion)
-            val playingIndex = remember(result.keys, playingEntryId) {
-                playingEntryId?.let(result::indexOfKey)?.takeIf { it >= 0 }?.plus(1)
-            }
+            val playingIndex = boundaryCurrent.takeIf { it >= 0 }?.plus(1)
             val returnTarget = playingIndex?.let { ListScrollTarget.below(it, latestTopInset) }
             val returnDirection by remember(returnTarget, gridState) { derivedStateOf {
                 returnTarget?.direction(gridState) ?: 0

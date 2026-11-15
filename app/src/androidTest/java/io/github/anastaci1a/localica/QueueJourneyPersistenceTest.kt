@@ -29,9 +29,7 @@ class QueueJourneyPersistenceTest {
         try {
             db.queues().save(QueueLibrary(), library(before))
             // Actual history is updated in place; changed permutations are streamed after cycle replacement.
-            for (table in listOf("queue_visits")) {
-                db.openHelper.writableDatabase.execSQL("CREATE TRIGGER no_insert_$table BEFORE INSERT ON $table BEGIN SELECT RAISE(ABORT, 'Retained row inserted'); END")
-            }
+            db.openHelper.writableDatabase.execSQL("CREATE TRIGGER no_insert_queue_visits BEFORE INSERT ON queue_visits BEGIN SELECT RAISE(ABORT, 'Retained row inserted'); END")
             val started = SystemClock.elapsedRealtime()
             db.queues().save(library(before), library(after))
             Log.i("QueueScale", "entries=13000 action=synthetic-retained-plan-reorder-room-save elapsedMs=${SystemClock.elapsedRealtime() - started}")

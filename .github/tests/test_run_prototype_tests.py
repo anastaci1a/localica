@@ -433,12 +433,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         self.run_case(AFFECTED_CLASSES=cls)
         receipt = json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
         self.assertEqual({cls, REQUIRED, FOCUS, CONTRAST}, set(receipt['selectors']))
-
-    def test_registered_nested_package_keeps_all_mandatory_regressions(self):
-        cls = self.nested_source()
-        self.run_case(AFFECTED_CLASSES=cls)
-        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual({cls,REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+        self.assertEqual({cls, REQUIRED, FOCUS, CONTRAST}, set(receipt['counts']))
 
     def test_nested_exact_methods_without_hand_registration_are_accepted(self):
         cls = self.nested_source()
