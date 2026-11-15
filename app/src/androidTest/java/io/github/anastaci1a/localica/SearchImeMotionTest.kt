@@ -907,20 +907,7 @@ class SearchImeMotionTest {
             assertEquals("The delayed IME has not appeared", 0, before.ime)
             assertNotNull("Accepted no-target fallback already moves while expanding", before.placementBottom)
             assertTrue("The same opening already moves away from the pill", before.bounds.top > home.top + 2f)
-            compose.runOnUiThread { keyboardAllowed = true }
-            compose.mainClock.advanceTimeByFrame()
-            compose.waitForIdle()
-            // Native insets advance on real time while the controlled morph is
-            // paused. Then one frame must let position start before p reaches one.
-            compose.waitUntil(5000) {
-                compose.runOnUiThread {
-                    popupView?.let(ViewCompat::getRootWindowInsets)
-                        ?.getInsets(WindowInsetsCompat.Type.ime())?.bottom?.let { it > 0 } == true
-                }
-            }
-            advanceUntil(virtualTimeoutMillis = 256) {
-                samples.any { it.ime > 0 && it.progress < 1f && it.placementBottom != null }
-            }
+            releaseDeferredKeyboard()
             val placed = compose.runOnUiThread { samples.last { it.placementBottom != null } }
             assertTrue("Travel starts while shape is incomplete", placed.progress < 1f)
             opened()
@@ -932,9 +919,12 @@ class SearchImeMotionTest {
     }
 
     @Test fun tallContentKeepsItsTargetBottomAboveTheArrivingNativeKeyboard() = withDockedKeyboard {
-        fixture(true, initialExtraContentHeight = 1000)
+        fixture(true, deferKeyboard = true, initialExtraContentHeight = 1000)
         try {
+            val home = compose.runOnUiThread { anchor.bounds }
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
+            advanceUntil { samples.any { it.progress in .05f.. .35f && it.bounds.height > home.height + 2f } }
+            releaseDeferredKeyboard()
             opened()
             awaitDockedKeyboard()
             opened()
@@ -1041,6 +1031,23 @@ class SearchImeMotionTest {
     }
 
     private fun shell(command: String): String = nativeShell(command)
+
+    private fun releaseDeferredKeyboard() {
+        compose.runOnUiThread { keyboardAllowed = true }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        // Native insets advance on real time while the controlled morph is
+        // paused. Then one frame must let position start before p reaches one.
+        compose.waitUntil(5000) {
+            compose.runOnUiThread {
+                popupView?.let(ViewCompat::getRootWindowInsets)
+                    ?.getInsets(WindowInsetsCompat.Type.ime())?.bottom?.let { it > 0 } == true
+            }
+        }
+        advanceUntil(virtualTimeoutMillis = 256) {
+            samples.any { it.ime > 0 && it.progress < 1f && it.placementBottom != null }
+        }
+    }
 
     private fun awaitDockedKeyboard() {
         advanceUntil {
