@@ -73,7 +73,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val command: Long, val library: QueueLibrary)
     private fun preparation() = state.value.let { PreparedPlayback(it, player, generation, commandRevision, it.library) }
     private fun PreparedPlayback.ownsPlayer(expectedSource: String? = currentSource(library.active)) = state.value.settings === source.settings &&
-        this@QueueController.player === player && this@QueueController.generation == generation && commandRevision == command &&
+        this@QueueController.player === player && this@QueueController.generation == generation &&
         intents.pending()?.takeIf { it.play && it.revision!! > command }?.source?.let { it == expectedSource } != false
     private fun PreparedPlayback.isCurrent(expectedSource: String? = currentSource(library.active)) = state.value.library === source.library && ownsPlayer(expectedSource)
     private val arrivals = ArrayDeque<Arrival>()
@@ -168,7 +168,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 if (blocksVisit(queue, next)) { reportRecovery(); return }
                 if (next != null) moveTo(next)
                 else savePreparedPlayback(prepared.copy(library = reset() ?: return)) { syncTimeline(seek = true) }
-                if (!prepared.ownsPlayer()) return
+                if (!prepared.ownsPlayer(currentSource(state.value.library.active))) return
                 applyNativeIntent(attached, commandRevision, play)
                 capture()
             }
@@ -632,16 +632,15 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         changeSettings(value.copy(repeat = value.advancedRepeat?.repeat ?: value.repeat))
     }
     private suspend fun changeSettings(value: QueueSettings) {
-        updateSettings(value)
+        updateSettings(value, reconcile(state.value.library, JourneyModes.from(value)))
         configurePreloading()
-        reconcile(state.value.library).let { ready -> mutable.update { it.copy(library = ready) } }
         applyPlaybackModes()
         syncTimeline()
         persist(state.value.library)
     }
-    private fun updateSettings(value: QueueSettings) {
+    private fun updateSettings(value: QueueSettings, ready: QueueLibrary) {
         preferences.write(value)
-        mutable.update { it.copy(settings = value, problem = problemAfterSuccess(it)) }
+        mutable.update { it.copy(settings = value, library = ready, problem = problemAfterSuccess(it, ready)) }
     }
     private fun applyPlaybackModes(timelineChanged: Boolean = false) {
         val attached = player ?: return
@@ -1078,53 +1077,48 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 ?: QueueJourney.start(ids, queue.currentEntryId, modes), ids)
         }
     }
-    private suspend fun reconcile(value: QueueLibrary): QueueLibrary {
-        val modes = JourneyModes.from(state.value.settings)
+    private suspend fun reconcile(value: QueueLibrary, modes: JourneyModes = JourneyModes.from(state.value.settings)): QueueLibrary {
         val previous = state.value.library
         return withContext(Dispatchers.Default) { value.reuse(previous).let { shared -> shared.copy(queues = shared.queues.map { queue ->
             if (queue.journey == null) queue else queue.copy(journey = queue.journey.reconcile(queue.ids, queue.currentEntryId, modes))
         }).reuse(previous) } }
     }
     private suspend fun capturedLibrary(source: Player?): QueueLibrary {
-        while (true) {
-            val state = state.value
-            val expected = generation
-            val attached = player
-            val command = commandRevision
-            val pending = arrivals.toList()
-            val item = source?.currentMediaItem
-            val recovery = readers.recovery()
-            val blocked = resolved.filterValues { recovery.blocks(documentIdentity(it.track.id)) }.keys
-            val active = state.library.active
-            if (pending.isEmpty() && active != null && item?.listeningQueue == active.id &&
-                item.queueVisit == active.journey?.current?.token && item.mediaId !in blocked) {
-                val captured = active.captureVisit(item.queueVisit!!) { source.currentPosition.coerceAtLeast(0) } ?: return state.library
-                return if (captured === active) state.library else state.library.update(captured)
-            }
-            var ready = withContext(Dispatchers.Default) {
-                var result = state.library
-                for (arrival in pending) {
-                    val queue = result.queues.firstOrNull { it.id == arrival.queueId } ?: continue
-                    if (arrival.visit.entryId in blocked) continue
-                    val captured = queue.captureVisit(arrival.visit.token, arrival.visit) { 0 } ?: continue
-                    if (captured !== queue) result = result.update(captured)
-                }
-                val queue = result.active
-                val captured = if (queue != null && item?.listeningQueue == queue.id && item.mediaId !in blocked)
-                    item.queueVisit?.let { queue.captureVisit(it, item.visitReceipt) { queue.positionMs } } else null
-                (if (captured == null || captured === queue) result else result.update(captured)).reuse(state.library)
-            }
-            if (generation != expected || player !== attached) return this.state.value.library
-            if (this.state.value.library !== state.library || this.state.value.settings !== state.settings || commandRevision != command) continue
-            val queue = ready.active
-            if (source != null && queue != null && item?.listeningQueue == queue.id &&
-                item.queueVisit == queue.journey?.current?.token && source.currentMediaItem?.queueVisit == item.queueVisit) {
-                val position = source.currentPosition.coerceAtLeast(0)
-                if (position != queue.positionMs) ready = ready.update(queue.copy(positionMs = position))
-            }
-            repeat(pending.size) { arrivals.removeFirst() }
-            return ready
+        val state = state.value
+        val expected = generation
+        val attached = player
+        val pending = arrivals.toList()
+        val item = source?.currentMediaItem
+        val recovery = readers.recovery()
+        val blocked = resolved.filterValues { recovery.blocks(documentIdentity(it.track.id)) }.keys
+        val active = state.library.active
+        if (pending.isEmpty() && active != null && item?.listeningQueue == active.id &&
+            item.queueVisit == active.journey?.current?.token && item.mediaId !in blocked) {
+            val captured = active.captureVisit(item.queueVisit!!) { source.currentPosition.coerceAtLeast(0) } ?: return state.library
+            return if (captured === active) state.library else state.library.update(captured)
         }
+        var ready = withContext(Dispatchers.Default) {
+            var result = state.library
+            for (arrival in pending) {
+                val queue = result.queues.firstOrNull { it.id == arrival.queueId } ?: continue
+                if (arrival.visit.entryId in blocked) continue
+                val captured = queue.captureVisit(arrival.visit.token, arrival.visit) { 0 } ?: continue
+                if (captured !== queue) result = result.update(captured)
+            }
+            val queue = result.active
+            val captured = if (queue != null && item?.listeningQueue == queue.id && item.mediaId !in blocked)
+                item.queueVisit?.let { queue.captureVisit(it, item.visitReceipt) { queue.positionMs } } else null
+            (if (captured == null || captured === queue) result else result.update(captured)).reuse(state.library)
+        }
+        if (generation != expected || player !== attached) return this.state.value.library
+        val queue = ready.active
+        if (source != null && queue != null && item?.listeningQueue == queue.id &&
+            item.queueVisit == queue.journey?.current?.token && source.currentMediaItem?.queueVisit == item.queueVisit) {
+            val position = source.currentPosition.coerceAtLeast(0)
+            if (position != queue.positionMs) ready = ready.update(queue.copy(positionMs = position))
+        }
+        repeat(pending.size) { arrivals.removeFirst() }
+        return ready
     }
     private suspend fun captureNativeState() {
         val ready = capturedLibrary(player)
@@ -1136,9 +1130,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 Player.REPEAT_MODE_ONE -> QueueRepeat.One; else -> QueueRepeat.Off }
             if (!blocked &&
                 (modes.shuffle != attached.shuffleModeEnabled || (modes.advancedRepeat == null && !recoveryRepeatSuppressed && modes.repeat != repeat))) {
-                updateSettings(modes.copy(shuffle = attached.shuffleModeEnabled,
-                    repeat = if (modes.advancedRepeat == null && !recoveryRepeatSuppressed) repeat else modes.repeat))
-                reconcile(state.value.library).let { normalized -> mutable.update { it.copy(library = normalized) } }
+                val next = modes.copy(shuffle = attached.shuffleModeEnabled,
+                    repeat = if (modes.advancedRepeat == null && !recoveryRepeatSuppressed) repeat else modes.repeat)
+                updateSettings(next, reconcile(state.value.library, JourneyModes.from(next)))
             }
         }
     }
@@ -1221,9 +1215,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         savePreparedPlayback(preparation().copy(library = next), start)
     private suspend fun savePreparedPlayback(prepared: PreparedPlayback, start: suspend () -> Unit) {
         val ready = reconcile(prepared.library)
-        check(prepared.isCurrent(currentSource(ready.active))) {
-            "Playback preparation no longer matches the queue state"
-        }
+        if (!prepared.isCurrent(currentSource(ready.active))) return
         mutable.update { it.copy(library = ready, problem = problemAfterSuccess(it, ready)) }
         // Audio starts before persistence; failed writes remain retryable from the durable snapshot.
         var activated = false

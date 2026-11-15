@@ -22,6 +22,7 @@ import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.QueueScreen
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import org.junit.Assert.*
@@ -1636,13 +1637,15 @@ class PlaybackIntentTest {
         }
     }
 
-    @Test fun restoredInvalidJourneyIsNormalizedBeforeNativeCaptureAdmission() = fixture(attach = false, blockRestore = true) {
+    @Test fun restoredInvalidJourneyIsNormalizedBeforeNativeCaptureAdmission() = fixture(attach = false, blockRestore = true, duplicateOccurrences = true, occurrences = 160) {
         dao.restore!!.entered.await()
         val invalid = first.copy(journey = QueueJourney(history = listOf(QueueVisit("removed", 0)), cursor = 0))
         IntentDao::class.java.getDeclaredField("saved").apply { isAccessible = true }
             .set(dao, QueueLibrary(listOf(invalid, second), first.id))
         dao.restore.release.complete(Unit)
         awaitMain { !queues.state.value.loading }
+        assertEquals(listOf(null, null), queues.artworkNeighbors())
+        assertTrue(queues.artworkPreloadUris().isEmpty())
         queues.attach(player)
         barrier()
         withContext(Dispatchers.Main) {
@@ -1650,11 +1653,63 @@ class PlaybackIntentTest {
             assertEquals(first.currentEntryId, active.journey!!.current!!.entryId)
             assertTrue(active.journey.history.none { it.entryId == "removed" })
             assertEquals(active.journey.current!!.token, player.currentMediaItem!!.queueVisit)
+            assertEquals(active.journey.window().map { it.token }, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueVisit })
+            active.journey.window().forEach { visit ->
+                val ordinal = active.journey.sourceOrdinal(active.ids, visit.entryId)
+                assertNotNull("Every exposed visit must have a prepared source ordinal", ordinal)
+                assertEquals(visit.entryId, active.entries[ordinal!!].id)
+            }
+            assertNull(queues.state.value.problem)
+            assertEquals(listOf(track.uri, null), queues.artworkNeighbors())
+            assertEquals(listOf(track.uri), queues.artworkPreloadUris())
         }
         queues.seek(1234)
         barrier()
         assertEquals(1234L, dao.read().active!!.positionMs)
         assertTrue(dao.read().active!!.journey!!.history.none { it.entryId == "removed" })
+    }
+
+    @Test fun settingsAndPreparedJourneyPublishTogetherAfterWorkerPreparation() = fixture(attach = false, duplicateOccurrences = true, occurrences = 160) {
+        val gate = Gate()
+        val firstRead = java.util.concurrent.atomic.AtomicBoolean(true)
+        val entries = object : AbstractList<QueueEntry>() {
+            override val size = first.entries.size
+            override fun get(index: Int): QueueEntry {
+                if (firstRead.getAndSet(false)) {
+                    assertNotEquals(android.os.Looper.getMainLooper(), android.os.Looper.myLooper())
+                    runBlocking { gate.await() }
+                }
+                return first.entries[index]
+            }
+        }
+        val warm = withContext(Dispatchers.Default) { QueueJourney.start(first.ids, first.currentEntryId, JourneyModes()) }
+        val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+        withContext(Dispatchers.Main) { state.value = state.value.copy(library = state.value.library.update(first.copy(entries = entries, journey = warm))) }
+        val before = state.value
+        val pairs = CopyOnWriteArrayList<Pair<JourneyModes, JourneyModes>>()
+        val observer = launch(Dispatchers.Unconfined) { queues.state.collect { snapshot ->
+            snapshot.library.active?.journey?.let { pairs += JourneyModes.from(snapshot.settings) to it.modes }
+        } }
+        try {
+            try {
+                queues.settings { it.copy(shuffle = true, repeat = QueueRepeat.All) }
+                gate.entered.await()
+                withContext(Dispatchers.Main) {
+                    assertSame(before.settings, state.value.settings)
+                    assertSame(before.library, state.value.library)
+                }
+            } finally { gate.release.complete(Unit) }
+            barrier()
+            withContext(Dispatchers.Main) {
+                assertTrue(state.value.settings.shuffle)
+                assertEquals(JourneyModes(shuffle = true, loop = true), state.value.library.active!!.journey!!.modes)
+                assertNull(state.value.problem)
+                assertTrue(pairs.isNotEmpty())
+                assertTrue("No publication may pair new settings with an old journey", pairs.all { it.first == it.second })
+            }
+        } finally { gate.release.complete(Unit); observer.cancelAndJoin() }
     }
 
     @Test fun transportOnlyPlayKeepsSuspendedColdSourcePreparationWithoutAPlayer() = coldPlayDuringActivation(false)
@@ -1742,7 +1797,7 @@ class PlaybackIntentTest {
     }
 
     @Test fun savePreparationRejectsOwnerLossBeforePublicationWithoutRestampingItsClosure() {
-        for (sourceChange in listOf(false, true)) fixture(duplicateOccurrences = true) {
+        for (ownerLoss in listOf("attach", "detach", "source")) fixture(duplicateOccurrences = true) {
             queues.settings { it.copy(switching = QueueSwitch.Resume) }; barrier()
             awaitMain { player.engine.playbackState == Player.STATE_READY }
             val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
@@ -1761,33 +1816,43 @@ class PlaybackIntentTest {
             }
             val starts = AtomicInteger()
             withContext(Dispatchers.Main) { player.selectionCalls.clear() }
-            val pending = async { command {
+            val finished = CompletableDeferred<Unit>()
+            var rejected: Throwable? = null
+            val submit = QueueController::class.java.declaredMethods.single { it.name == "submit" }.apply { isAccessible = true }
+            val action: suspend () -> Unit = { try {
                 val before = state.value.library
                 val next = before.update(before.active!!.copy(entries = entries, currentEntryId = "duplicate-1", journey = before.active!!.journey!!.copy()))
                 val start: suspend () -> Unit = { starts.incrementAndGet(); player.setPlayWhenReady(true) }
-                val failure = runCatching { kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
-                    save.invoke(queues, next, start, it)
-                } }.exceptionOrNull()
-                assertNotNull("Owner loss must reject, not mint a new owner", failure)
+                kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> { save.invoke(queues, next, start, it) }
+                assertNull(state.value.problem)
                 assertSame(before, state.value.library)
                 assertEquals(0, starts.get())
                 assertTrue(player.selectionCalls.isEmpty())
-            } }
+            } catch (failure: Throwable) { rejected = failure; throw failure } finally { finished.complete(Unit) } }
+            withContext(Dispatchers.Main) { submit.invoke(queues, intents.accept(), { _: Exception -> }, false, action) }
+            var detached: Deferred<Unit>? = null
             try {
                 gate.entered.await()
                 withContext(Dispatchers.Main) {
-                    if (sourceChange) {
+                    if (ownerLoss == "source") {
                         intents.accept(true, documentIdentity(second.entries.single().track.id))
                         queues.switchTo(second.id)
-                    } else queues.attach(player)
+                    } else {
+                        if (ownerLoss == "detach") detached = queues.detach(player)
+                        queues.attach(player)
+                    }
                 }
             } finally { gate.release.complete(Unit) }
-            pending.await(); barrier()
+            withTimeout(10000) { finished.await() }
+            assertNull("Supersession is not a persistence failure", rejected)
+            withContext(Dispatchers.Main) { assertNull("Supersession must not report a failed save", state.value.problem) }
+            detached?.await(); barrier()
             withContext(Dispatchers.Main) {
                 val active = state.value.library.active!!
-                assertEquals(if (sourceChange) second.id else first.id, active.id)
+                assertEquals(if (ownerLoss == "source") second.id else first.id, active.id)
                 assertEquals(active.journey!!.current!!.token, player.currentMediaItem!!.queueVisit)
                 assertEquals(0, starts.get())
+                assertNull(state.value.problem)
                 assertTrue(state.value.library.queues.any { it.id == first.id })
             }
         }
