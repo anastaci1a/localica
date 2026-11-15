@@ -324,8 +324,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val mutableQueue = queueState.library.queues.firstOrNull { route.collection?.kind == MediaKind.Queue && it.id == route.collection.id }
     val mutablePlaylist = playlists.playlists.firstOrNull { route.collection?.kind == MediaKind.Playlist && it.id == route.collection.id }
     val savedOrder = mutableQueue?.order ?: mutablePlaylist?.order
-    val physicalOrder = remember(mutableQueue?.entries, mutablePlaylist?.entries) {
-        mutableQueue?.entries?.map { it.id } ?: mutablePlaylist?.entries?.map { it.id }
+    val physicalOrder = remember(mutableQueue?.entries?.ownerRevision, mutablePlaylist?.entries?.ownerRevision) {
+        mutableQueue?.entries?.mapView { it.id } ?: mutablePlaylist?.entries?.mapView { it.id }
     }
     val mutablePositions = remember(physicalOrder) { physicalOrder.orEmpty().withIndex().associate { it.value to it.index + 1 } }
     val pinchMotion = remember(route.key) { BrowsePinchMotion() }
@@ -374,7 +374,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
         val mutableRows = remember(mutableQueue?.entries, mutablePlaylist?.entries) {
-            mutableQueue?.entries?.map { SongRow(it.id, it.track) } ?: mutablePlaylist?.entries
+            mutableQueue?.entries?.mapView { SongRow(it.id, it.track) } ?: mutablePlaylist?.entries
         }
         BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
         if (!changeViewInPlace(value) { preferences.write(route, value, override) }) {
