@@ -13,6 +13,7 @@ media3 = "1.10.1"
 coroutines = "1.10.2"
 
 [libraries]
+androidx-macrobenchmark = { module = "androidx.benchmark:benchmark-macro-junit4", version = "1.5.0" }
 snakeyaml = { module = "org.yaml:snakeyaml", version = "2.2" }
 lint-api = { module = "com.android.tools.lint:lint-api", version.ref = "lint" }
 lint-tests = { module = "com.android.tools.lint:lint-tests", version.ref = "lint" }
@@ -44,6 +45,8 @@ compose-test = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 
 [plugins]
+android-test = { id = "com.android.test", version.ref = "agp" }
+androidx-baselineprofile = { id = "androidx.baselineprofile", version = "1.5.0" }
 android-lint = { id = "com.android.lint", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "agp" }
