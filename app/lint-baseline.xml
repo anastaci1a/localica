@@ -6505,7 +6505,7 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="        Box(Modifier.reveal().artworkTextReveal(gatedText, { titleLayout }, { artCorner.floatValue }).testTag(&quot;browse-text-${item.key}&quot;)) {"
+        errorLine1="        Box(Modifier.reveal().artworkTextReveal(gatedText, { titleLayout }, { artCorner.floatValue }).partTag(&quot;browse-text-${item.key}&quot;)) {"
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowseItemLayout.kt"
@@ -6516,7 +6516,7 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="        Box(Modifier.reveal().artworkTextReveal(gatedText, { informationLayout }, { artCorner.floatValue }, loadingInformation).testTag(&quot;browse-info-${item.key}&quot;)) {"
+        errorLine1="        Box(Modifier.reveal().artworkTextReveal(gatedText, { informationLayout }, { artCorner.floatValue }, loadingInformation).partTag(&quot;browse-info-${item.key}&quot;)) {"
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowseItemLayout.kt"
@@ -6538,7 +6538,7 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="        Box(Modifier.artShape().testTag(&quot;browse-loading-art-${item.key}&quot;)) {"
+        errorLine1="        Box(Modifier.artShape().partTag(&quot;browse-loading-art-${item.key}&quot;)) {"
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowseItemLayout.kt"
