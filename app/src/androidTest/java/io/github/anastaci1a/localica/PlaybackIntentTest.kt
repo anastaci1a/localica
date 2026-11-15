@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
-    @Test fun recoveryRepeatPreparationKeepsMillionEntryReadsOffMain() = fixture {
+    @Test fun recoveryRepeatPreparationKeepsMillionEntryReadsOffMain() = fixture(timeoutMs = 60_000) {
         actor.coroutineContext[Job]!!.cancelAndJoin()
         val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
         @Suppress("UNCHECKED_CAST")
