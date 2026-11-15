@@ -69,7 +69,7 @@ class PlayerLyricsThemeEaseTest {
             CompositionLocalProvider(LocalDensity provides Density(1f),
                 LocalPlayerBackgroundPreparationBarrier provides preparationBarrier,
                 LocalPlayerInkCompositionObserver provides { inkComposition = it },
-                LocalGlassSurfaceDrawObserver provides { glassInk[it.surfaceIdentity] = GlassInk(Color(it.inkArgb).red, it.inkOverridden) }) {
+                LocalGlassSurfaceDrawObserver provides { glassDrawProbe?.invoke(it); (it as? GlassSurfaceDrawObservation)?.let { glassInk[it.surfaceIdentity] = GlassInk(Color(it.inkArgb).red, it.inkOverridden) } }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     BoxWithConstraints(Modifier.width(300.dp).height(minOf(560.dp, maxHeight))) {
                         PlayerSurface(PlaybackState(connected = true, title = "Region", artist = "Artwork", durationMs = 120000),

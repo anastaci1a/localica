@@ -438,9 +438,8 @@ def selected_methods(source, entry):
     return declarations, runtime
 
 
-# app/build.gradle.kts adds src/sharedTest/java to BOTH the unit-test and androidTest source sets, so
-# every class there compiles into the instrumentation APK and runs on the device (#870).
-INSTRUMENTATION_SOURCE_DIRS = ("app/src/androidTest/java", "app/src/sharedTest/java")
+# Shared test folders are compiled into androidTest as well as their unit-test variants (#870, #988).
+INSTRUMENTATION_SOURCE_DIRS = ("app/src/androidTest/java", "app/src/sharedTest/java", "app/src/sharedDebugTest/java")
 
 
 def instrumentation_source_dirs(root):

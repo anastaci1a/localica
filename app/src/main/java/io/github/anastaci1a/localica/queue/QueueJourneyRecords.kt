@@ -18,18 +18,19 @@ data class VisitRecord(@PrimaryKey val token: String, val queueId: String, val o
 data class CycleMemberRecord(val queueId: String, val cycle: Long, val entryId: String, val ordinal: Int, val visited: Boolean)
 
 internal fun QueueJourney.record(queueId: String) = JourneyRecord(queueId, history.size, cursor, cycle, modes.shuffle, modes.loop, modes.reshuffle, orderedTraversalId, orderedAnchorToken)
-internal fun QueueJourney.visitRecords(queueId: String) = (history + future).mapIndexed { index, visit ->
+internal fun QueueJourney.visitRecords(queueId: String) = history.mapIndexed { index, visit ->
     VisitRecord(visit.token, queueId, index, visit.entryId, visit.cycle)
 }
-internal fun QueueJourney.cycleRecords(queueId: String) = plans.flatMap { (number, order) ->
-    order.mapIndexed { index, entry -> CycleMemberRecord(queueId, number, entry, index, number == cycle && entry in visited) }
-}
+internal fun QueueJourney.cycleRecords(queueId: String, onlyCycle: Long? = null): Sequence<CycleMemberRecord> = if (modes.shuffle)
+    plans.asSequence().filter { onlyCycle == null || it.key == onlyCycle }.flatMap { (number, order) -> order.asSequence().mapIndexed { index, entry ->
+        CycleMemberRecord(queueId, number, entry, index, number == cycle && entry in visited) } }
+    else visited.asSequence().filter { onlyCycle == null || cycle == onlyCycle }.map { CycleMemberRecord(queueId, cycle, it, 0, true) }
 internal fun JourneyRecord.restore(visits: List<VisitRecord>, members: List<CycleMemberRecord>): QueueJourney {
     val ordered = visits.sortedBy { it.ordinal }.map { QueueVisit(it.entryId, it.cycle, it.token) }
     require(historySize in 0..ordered.size)
     require(if (historySize == 0) cursor == -1 else cursor in 0 until historySize)
-    return QueueJourney(ordered.take(historySize), cursor, ordered.drop(historySize), cycle,
+    return QueueJourney(ordered.take(historySize), cursor, cycle,
         members.filter { it.cycle == cycle && it.visited }.map { it.entryId }.toSet(),
-        members.groupBy { it.cycle }.mapValues { (_, items) -> items.sortedBy { it.ordinal }.map { it.entryId } },
+        (if (shuffle) members else emptyList()).groupBy { it.cycle }.mapValues { (_, items) -> items.sortedBy { it.ordinal }.map { it.entryId } },
         JourneyModes(shuffle, loop, reshuffle), orderedTraversalId, orderedAnchorToken)
 }

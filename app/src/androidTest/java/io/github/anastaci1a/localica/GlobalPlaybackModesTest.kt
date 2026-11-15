@@ -31,13 +31,22 @@ class GlobalPlaybackModesTest {
         lateinit var player: ExoPlayer
         lateinit var queues: QueueController
         fun verifyTraversal(startId: String) {
+            await {
+                var synchronized = false
+                instrumentation.runOnMainSync {
+                    synchronized = queues.state.value.library.active?.journey?.window()?.map { it.token } ==
+                        (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaMetadata.extras!!.getString("queueVisit") }
+                }
+                synchronized
+            }
             instrumentation.runOnMainSync {
                 val journey = queues.state.value.library.active!!.journey!!
                 assertEquals(startId, player.currentMediaItem?.mediaId)
                 assertEquals(journey.window().map { it.token }, (0 until player.mediaItemCount).map {
                     player.getMediaItemAt(it).mediaMetadata.extras!!.getString("queueVisit")
                 })
-                val remaining = journey.future.filter { it.cycle == journey.cycle }.map { it.entryId }
+                val remaining = journey.window().dropWhile { it.token != journey.current!!.token }.drop(1)
+                    .filterNot { it in journey.history }.filter { it.cycle == journey.cycle }.map { it.entryId }
                 assertEquals(tracks.size - journey.visited.size, remaining.size)
                 assertEquals(remaining.size, remaining.toSet().size)
                 assertTrue(remaining.none { it in journey.visited })

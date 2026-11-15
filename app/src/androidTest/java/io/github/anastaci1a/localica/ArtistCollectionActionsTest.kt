@@ -23,7 +23,14 @@ class ArtistCollectionActionsTest {
     @Test fun artistQueueActionsFollowOneSubsetAllAndChangedAlbumChoices() = actions(MediaKind.Artist, MainTab.Artists, SongListView.Artists)
     @Test fun albumArtistQueueActionsFollowOneSubsetAllAndChangedAlbumChoices() = actions(MediaKind.AlbumArtist, MainTab.AlbumArtists, SongListView.AlbumArtists)
 
-    private fun actions(kind: MediaKind, tab: MainTab, view: SongListView) {
+    @Test fun settledCarouselSwipesKeepPhysicalAlbumTapsFilteringSongs() =
+        actions(MediaKind.Artist, MainTab.Artists, SongListView.Artists, afterScroll = true)
+
+    @Test fun tapDuringCarouselFlingStopsItThenTheNextTapFiltersSongs() =
+        actions(MediaKind.Artist, MainTab.Artists, SongListView.Artists, afterScroll = true, duringFling = true)
+
+    private fun actions(kind: MediaKind, tab: MainTab, view: SongListView,
+        afterScroll: Boolean = false, duringFling: Boolean = false) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         val preferences = QueuePreferences(context)
@@ -31,8 +38,8 @@ class ArtistCollectionActionsTest {
         val job = SupervisorJob()
         val scope = CoroutineScope(job + Dispatchers.Main.immediate)
         val session = SessionSelection()
-        val tracks = (0..5).map { Track("scope:$it", "Song $it", artist = "Artist", albumArtist = "Artist",
-            album = listOf("First album", "Second album", "Third album")[it / 2],
+        val tracks = (0 until if (afterScroll) 16 else 6).map { Track("scope:$it", "Song $it", artist = "Artist", albumArtist = "Artist",
+            album = if (afterScroll) "Album ${it / 2}" else listOf("First album", "Second album", "Third album")[it / 2],
             fileName = "$it.mp3", relativePath = "$it.mp3") }
         val snapshot = LibrarySnapshot(tracks = tracks)
         val artist = LibraryViews.groups(snapshot, view, LibraryQuery()).single()
@@ -45,15 +52,78 @@ class ArtistCollectionActionsTest {
             compose.runOnUiThread { controller = QueueController(db.queues(), preferences,
                 (context.applicationContext as LocalicaApplication).library, scope) }
             compose.waitUntil(5000) { !controller.state.value.loading }
-            compose.setContent { EngineTheme(reduced = true) {
+            compose.setContent { EngineTheme(reduced = !afterScroll) {
                 val queueState by controller.state.collectAsState()
                 CompositionLocalProvider(LocalSessionSelection provides session) {
                     BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(),
                         route, {}, {}, {}, { _, _, _ -> },
-                        controller, null, true, false, queueState = queueState, reducedMotion = true,
+                        controller, null, true, false, queueState = queueState, reducedMotion = !afterScroll,
                         queryDispatcher = Dispatchers.Unconfined)
                 }
             } }
+            if (afterScroll) {
+                val carousel = compose.onNode(hasScrollToIndexAction() and
+                    SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
+                carousel.performScrollTo()
+                fun position() = carousel.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value()
+                fun visibleAlbum(previous: String = ""): String {
+                    val viewport = carousel.fetchSemanticsNode().boundsInRoot
+                    return tracks.mapNotNull { it.album }.distinct().firstOrNull { name ->
+                        name != previous && compose.onAllNodesWithText(name).fetchSemanticsNodes().singleOrNull()?.boundsInRoot
+                            ?.let { it.width >= 112f * compose.density.density && it.height >= 120f * compose.density.density &&
+                                it.left >= viewport.left && it.right <= viewport.right } == true
+                    } ?: error("Fixture: no different album with a substantial visible touch target")
+                }
+                if (duringFling) {
+                    compose.mainClock.autoAdvance = false
+                    try {
+                        carousel.performTouchInput {
+                            swipeWithVelocity(centerRight - androidx.compose.ui.geometry.Offset(10f, 0f),
+                                centerLeft + androidx.compose.ui.geometry.Offset(10f, 0f), endVelocity = 3000f)
+                        }
+                        compose.mainClock.advanceTimeByFrame()
+                        val before = position()
+                        compose.mainClock.advanceTimeByFrame()
+                        assertTrue("Fixture: the released carousel is still flinging", position() > before)
+                        val name = visibleAlbum()
+                        compose.onNodeWithText(name).performTouchInput { click() }
+                        repeat(4) { compose.mainClock.advanceTimeByFrame() }
+                        compose.runOnIdle {
+                            assertEquals("The first tap stops the fling without selecting", tracks.map { it.id },
+                                session.visible.map { it.track.id })
+                        }
+                        val stopped = position()
+                        repeat(4) { compose.mainClock.advanceTimeByFrame() }
+                        assertEquals("The stop tap ends carousel travel", stopped, position(), 0f)
+                        compose.onNodeWithText(name).performTouchInput { click() }
+                        compose.mainClock.advanceTimeByFrame()
+                        compose.runOnIdle {
+                            assertEquals("The next tap selects the album and filters songs",
+                                tracks.filter { it.album == name }.map { it.id }, session.visible.map { it.track.id })
+                        }
+                    } finally { compose.mainClock.autoAdvance = true }
+                    return
+                }
+                var previous = ""
+                repeat(8) { step ->
+                    val before = position()
+                    carousel.performTouchInput {
+                        if (step < 4) swipeLeft(durationMillis = 200) else swipeRight(durationMillis = 200)
+                    }
+                    compose.waitForIdle()
+                    val after = position()
+                    if (step == 0 || step == 4) assertTrue("Fixture: swipe $step moves the carousel", before != after)
+                    val name = visibleAlbum(previous)
+                    compose.onNodeWithText(name).assertIsDisplayed().performTouchInput { click() }
+                    compose.runOnIdle {
+                        assertEquals("Settled swipe $step ($before -> $after), tap $name filters songs",
+                            tracks.filter { it.album == name }.map { it.id }, session.visible.map { it.track.id })
+                    }
+                    android.util.Log.i("Carousel977", "swipe=$step before=$before after=$after selected=$name")
+                    previous = name
+                }
+                return
+            }
             fun albums(chosen: List<String>) {
                 compose.onNode(hasScrollToIndexAction() and
                     SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))

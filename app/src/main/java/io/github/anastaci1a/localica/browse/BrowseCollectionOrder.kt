@@ -18,7 +18,7 @@ internal fun orderCollectionItems(items: List<BrowserItem>, query: LibraryQuery,
         Key(item, title, item.key, when (query.sort) {
             TrackSort.Count -> item.songs.size.toLong()
             TrackSort.Duration -> item.duration()
-            TrackSort.Year -> item.songs.mapNotNull { it.track.year }.minOrNull()?.toLong()
+            TrackSort.Year -> item.facts.year?.toLong()
             TrackSort.Modified -> item.modifiedAt
             TrackSort.Added -> item.addedAt
             TrackSort.MostPlayed -> item.playCount

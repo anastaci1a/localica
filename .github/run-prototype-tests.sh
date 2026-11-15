@@ -9,25 +9,23 @@ if [[ "$method_iteration" == false ]] && { (( repetitions > 1 )) || [[ -n "${PRO
   exec python3 .github/run-prototype-repeat.py
 fi
 classes=${AFFECTED_CLASSES:-}
-required=io.github.anastaci1a.localica.SearchImeMotionTest
-focus_regression=io.github.anastaci1a.localica.ListSearchTest
-contrast_regression=io.github.anastaci1a.localica.FrostedSurfaceTest
+[[ -f .github/prototype-risk-classes.txt ]] || { echo 'Missing mandatory regression classes' >&2; exit 2; }
+mapfile -t regressions < <(sed '/^#/d;/^$/d' .github/prototype-risk-classes.txt)
 if [[ "$method_iteration" == true ]]; then
   [[ -n "${PROTOTYPE_METHODS:-}" ]] || exit 2
-  required=''; focus_regression=''; contrast_regression=''
+  regressions=()
 fi
 [[ -n "$classes" && ${#classes} -le 4096 ]] || { echo 'Supply nonempty affected behavior classes (maximum 4096 characters)' >&2; exit 2; }
-pattern='^io\.github\.anastaci1a\.localica(\.[A-Za-z_][A-Za-z0-9_]*)+(,io\.github\.anastaci1a\.localica(\.[A-Za-z_][A-Za-z0-9_]*)+)*$'
+pattern='^io\.github\.anastaci1a\.localica\.([A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*(,io\.github\.anastaci1a\.localica\.([A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*)*$'
 [[ "$classes" =~ $pattern ]] || { echo 'Invalid affected class selector' >&2; exit 2; }
 IFS=, read -r -a selected <<< "$classes"
 [[ ${#selected[@]} -le 73 ]] || { echo 'At most 73 affected classes plus the three required regression classes' >&2; exit 2; }
-[[ -f .github/prototype-risk-classes.txt ]] || { echo 'Missing reviewed class inventory' >&2; exit 2; }
-declare -A seen=()
+declare -A seen=() mandatory=()
+for name in "${regressions[@]}"; do mandatory["$name"]=1; done
 affected=0
-for name in "${selected[@]}" "$required" "$focus_regression" "$contrast_regression"; do
+for name in "${selected[@]}" "${regressions[@]}"; do
   [[ -n "$name" ]] || continue
-  grep -Fxq "$name" .github/prototype-risk-classes.txt || { echo "Class is not in the reviewed inventory: $name" >&2; exit 2; }
-  [[ "$name" == "$required" || "$name" == "$focus_regression" || "$name" == "$contrast_regression" ]] || affected=1
+  [[ ${mandatory[$name]:-} == 1 ]] || affected=1
   seen["$name"]=1
 done
 (( affected )) || { echo 'Name affected behavior coverage in addition to the mandatory IME regression' >&2; exit 2; }
@@ -44,7 +42,7 @@ selector=$(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort | paste -sd, -)
 [[ ! -e prototype-evidence ]] || { echo 'Refusing stale prototype evidence' >&2; exit 2; }
 mkdir prototype-evidence
 printf '%s\n' "$selector" > prototype-evidence/selectors.txt
-python3 .github/test-evidence/source_methods.py --classes "$selector" --api "$TEST_API" --output prototype-evidence/expected-methods.json
+python3 .github/test-evidence/source_methods.py --classes "$selector" --api "$TEST_API" --output prototype-evidence/expected-methods.json || exit 2
 deferred_methods=$(python3 - <<'PYDEFER'
 import json, pathlib, sys
 sys.path.insert(0, '.github/test-evidence')
@@ -61,7 +59,7 @@ PYDEFER
 runner_args=()
 [[ -z "$deferred_methods" ]] || runner_args+=("-Pandroid.testInstrumentationRunnerArguments.notClass=$deferred_methods")
 instrument_selector=$selector
-required_selector=$(printf '%s\n' "$required" "$focus_regression" "$contrast_regression" | sed '/^$/d' | paste -sd, -)
+required_selector=$(printf '%s\n' "${regressions[@]}" | sed '/^$/d' | paste -sd, -)
 if [[ "$method_iteration" == true ]]; then
   python3 .github/prototype-methods.py prototype-evidence/expected-methods.json "$PROTOTYPE_METHODS"
   instrument_selector=$PROTOTYPE_METHODS

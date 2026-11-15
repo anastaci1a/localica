@@ -339,11 +339,11 @@ class GlassShadowTest {
             return result
         }
         assertTrue(darkPixels() > 100)
-        compose.runOnIdle { flight.advance(PopupTakeover.Admitting) }
+        compose.runOnIdle { flight.testRun() }
         assertTrue("The trigger keeps its shadow until the popup is ready", darkPixels() > 100)
-        compose.runOnIdle { flight.advance(PopupTakeover.InWindow) }
+        compose.runOnIdle { flight.testStep(PopupEvent.Admitted) }
         org.junit.Assert.assertEquals("The popup owns its shadow while away from the bottom group", 0, darkPixels())
-        compose.runOnIdle { flight.advance(PopupTakeover.Closed) }
+        compose.runOnIdle { flight.testStep(PopupEvent.Gone) }
         assertTrue("The returning trigger rejoins the union", darkPixels() > 100)
     }
 

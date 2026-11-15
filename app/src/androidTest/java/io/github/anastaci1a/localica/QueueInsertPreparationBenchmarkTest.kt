@@ -28,7 +28,7 @@ class QueueInsertPreparationBenchmarkTest {
         val target = library(13_000, 6500)
         val queue = target.active!!
         val visits = queue.journey!!.visitRecords(queue.id)
-        val members = queue.journey.cycleRecords(queue.id)
+        val members = queue.journey.cycleRecords(queue.id).toList()
         assertEquals(6500, visits.size)
         assertEquals(13_000, members.size)
         try {
@@ -60,7 +60,7 @@ class QueueInsertPreparationBenchmarkTest {
         val target = library(40, 10)
         val queue = target.active!!
         val visits = queue.journey!!.visitRecords(queue.id)
-        val members = queue.journey.cycleRecords(queue.id)
+        val members = queue.journey.cycleRecords(queue.id).toList()
         try {
             db.queues().save(QueueLibrary(), target)
             val baseline = snapshot(db)
@@ -116,11 +116,15 @@ class QueueInsertPreparationBenchmarkTest {
     private fun library(count: Int, selected: Int): QueueLibrary {
         val track = Track("content://fixture", "Fixture", fileName = "fixture.mp3", relativePath = "fixture.mp3")
         val seed = QueueEdits.create(List(count) { track }, selected, "Insert diagnostic")
-        val queue = seed.copy(journey = QueueJourney.start(seed.entries.map { it.id }, seed.currentEntryId, JourneyModes()))
+        val ids = seed.ids
+        val history = ids.take(selected).map { QueueVisit(it, 0) }
+        val path = QueueJourney(history, history.lastIndex, visited = history.mapTo(hashSetOf()) { it.entryId },
+            plans = mapOf(0L to ids), modes = JourneyModes(shuffle = true), orderedTraversalId = "insert-fixture")
+        val queue = seed.copy(journey = path, currentEntryId = history.last().entryId)
         return QueueLibrary(listOf(queue), queue.id)
     }
 
-    private suspend fun snapshot(db: QueueDatabase) = Triple(db.queues().read(), db.queues().readActive(),
+    private suspend fun snapshot(db: QueueDatabase) = Pair(db.queues().readActive(),
         db.queues().readQueues().map { stored -> stored.copy(entries = stored.entries.sortedBy { it.id },
             journeys = stored.journeys.sortedBy { it.queueId }, visits = stored.visits.sortedBy { it.token },
             cycleMembers = stored.cycleMembers.sortedWith(compareBy<CycleMemberRecord> { it.cycle }.thenBy { it.entryId })) })

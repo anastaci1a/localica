@@ -27,12 +27,12 @@ import org.junit.Assert.*
 import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 
 class ListSearchTest {
     companion object {
-        // Keep the keyboard stable while Activities live; restore and retire after their disposal.
-        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+        // Own keyboard policy before Activities and restore it after their disposal.
+        @JvmField @ClassRule val nativeIme: TestRule = NativeImePolicy()
     }
 
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()

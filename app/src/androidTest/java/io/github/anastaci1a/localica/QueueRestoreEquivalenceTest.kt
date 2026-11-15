@@ -51,8 +51,9 @@ class QueueRestoreEquivalenceTest {
         val order = SavedOrder(ids.reversed(), TrackSort.Title, ascending = false)
         val visits = ids.take(5).map { QueueVisit(it, 2) }
         return ListeningQueue(name = label, entries = entries, currentEntryId = ids[size / 2], positionMs = 4321, order = order,
-            journey = if (!journey) null else QueueJourney(visits.take(3), 2, visits.drop(3), 2, ids.take(3).toSet(),
-                mapOf(1L to ids.shuffled(java.util.Random(7)), 2L to ids.shuffled(java.util.Random(8))), JourneyModes(true, false, true), "traversal", visits[1].token))
+            journey = if (!journey) null else QueueJourney(history = visits.take(3), cursor = 2, cycle = 2, visited = ids.take(3).toSet(),
+                plans = mapOf(1L to ids.shuffled(java.util.Random(7)), 2L to ids.shuffled(java.util.Random(8))),
+                modes = JourneyModes(true, false, true), orderedTraversalId = "traversal", orderedAnchorToken = visits[1].token))
     }
 
     /** The restore before #774, unchanged: one relation read, a stable sort by ordinal, one decode per row. */
@@ -135,10 +136,11 @@ private class DatabaseFreeDao(private val delegate: QueueDao) : QueueDao() {
     override suspend fun clearJourney(id: String): Unit = error("read only")
     override suspend fun upsertVisits(visits: List<VisitRecord>): Unit = error("read only")
     override suspend fun updateVisits(visits: List<VisitRecord>): Int = error("read only")
-    override suspend fun upsertCycleMembers(members: List<CycleMemberRecord>): Unit = error("read only")
-    override suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int = error("read only")
+    override suspend fun upsertCycleMembers(members: Sequence<CycleMemberRecord>): Unit = error("read only")
+    override suspend fun updateVisited(id: String, cycle: Long, entries: List<String>, visited: Boolean): Int = error("read only")
+    override suspend fun clearCycle(id: String, cycle: Long): Unit = error("read only")
     override suspend fun deleteVisits(queueId: String, tokens: List<String>): Unit = error("read only")
-    override suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("read only")
+    override suspend fun deleteSparseMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("read only")
     override suspend fun insertEntries(entries: List<EntryRecord>): Unit = error("read only")
     override suspend fun clearEntries(id: String): Unit = error("read only")
     override suspend fun deleteQueue(id: String): Unit = error("read only")

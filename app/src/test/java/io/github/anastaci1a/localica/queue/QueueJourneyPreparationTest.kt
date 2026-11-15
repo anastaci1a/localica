@@ -1,115 +1,282 @@
 package io.github.anastaci1a.localica.queue
 
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.library.mapView
 import kotlin.random.Random
 import org.junit.Assert.*
 import org.junit.Test
 
 class QueueJourneyPreparationTest {
-    private fun original(value: QueueJourney) = OriginalQueueJourney(value.history, value.cursor,
-        value.future, value.cycle, value.visited, value.plans, value.modes,
-        value.orderedTraversalId, value.orderedAnchorToken)
-    private fun current(value: OriginalQueueJourney) = QueueJourney(value.history, value.cursor,
-        value.future, value.cycle, value.visited, value.plans, value.modes,
-        value.orderedTraversalId, value.orderedAnchorToken)
-    private fun assertFixed(value: QueueJourney, ids: List<String>, selected: String?, modes: JourneyModes) {
-        val expected = current(original(value).reconcile(ids, selected, modes, Random(91)))
-        assertEquals(expected, value)
-        assertSame(value, value.reconcile(ids.toList(), selected, modes, Random(91)))
-    }
+    private fun identity(visit: QueueVisit?) = visit?.let { it.entryId to it.cycle }
 
-    @Test fun normalizedJourneysReuseExactTokensForEveryEffectiveModeAndCurrentSelection() {
-        val ids = listOf("A", "B", "C")
-        for (shuffle in listOf(false, true)) for (loop in listOf(false, true)) for (reshuffle in listOf(false, true)) {
-            val modes = JourneyModes(shuffle, loop, reshuffle)
-            for (selected in listOf(null, "A", "C", "absent")) {
-                val prepared = QueueJourney.start(ids, selected, modes, Random(17))
-                assertFixed(prepared, ids, selected, modes)
-                assertEquals(prepared.window(), prepared.reconcile(ids, selected, modes).window())
+    @Test fun seededTracesPreserveFrozenEntryCycleHistoryAndPermutationSemantics() {
+        for (seed in 0..31) {
+            val choices = Random(seed)
+            var serial = 7
+            var ids = List(serial) { "entry:$it" }
+            var modes = JourneyModes()
+            var path = QueueJourney.start(ids, ids[3], modes, Random(seed))
+            var original = OriginalQueueJourney.start(ids, ids[3], modes, Random(seed))
+            repeat(150) { step ->
+                val draw = seed * 1000 + step
+                when (choices.nextInt(9)) {
+                    0, 1 -> if (original.next != null) {
+                        path = path.arrive(path.next!!.token, ids, Random(draw))
+                        original = original.arrive(original.next!!.token, ids, Random(draw))
+                    }
+                    2 -> if (original.previous != null) {
+                        path = path.arrive(path.previous!!.token, ids, Random(draw))
+                        original = original.arrive(original.previous!!.token, ids, Random(draw))
+                    }
+                    3 -> {
+                        val selected = ids.random(choices)
+                        path = path.select(selected, ids, Random(draw))
+                        original = original.select(selected, ids, Random(draw))
+                    }
+                    4 -> ids = ids.shuffled(choices)
+                    5 -> modes = modes.copy(shuffle = !modes.shuffle)
+                    6 -> modes = modes.copy(loop = !modes.loop, reshuffle = choices.nextBoolean())
+                    7 -> {
+                        val added = listOf("entry:${serial++}", "entry:${serial++}")
+                        ids = ids + added
+                        path = path.playNext(added, ids, Random(draw))
+                        original = original.playNext(added, ids, Random(draw))
+                    }
+                    else -> if (ids.size > 1) ids = ids - ids.random(choices)
+                }
+                path = path.reconcile(ids, path.current?.entryId, modes, Random(draw))
+                original = original.reconcile(ids, original.current?.entryId, modes, Random(draw))
+                assertEquals("seed $seed step $step", identity(original.current), identity(path.current))
+                assertEquals(original.history.map(::identity), path.history.map(::identity))
+                assertEquals(original.visited, path.visited)
+                assertEquals(original.plans[original.cycle], path.plans[path.cycle])
+                assertEquals(identity(original.next), identity(path.next))
+                if (original.previous != null) assertEquals(identity(original.previous), identity(path.previous))
+                assertTrue(path.window().size <= 129)
+                assertEquals(path.window().size, path.window().map { it.token }.toSet().size)
             }
-            assertFixed(QueueJourney.start(emptyList(), null, modes), emptyList(), null, modes)
         }
     }
 
-    @Test fun changedOrderSelectionModesAndOrdinaryCopiesStillRunOriginalRepair() {
-        val ids = listOf("A", "B", "C")
-        val modes = JourneyModes()
-        val prepared = QueueJourney.start(ids, "A", modes)
-        val copied = prepared.copy()
-        val repairedCopy = copied.reconcile(ids, "A", modes)
-        assertNotSame(copied, repairedCopy)
-        assertEquals(current(original(copied).reconcile(ids, "A", modes)), repairedCopy)
-        for (nextIds in listOf(ids.reversed(), listOf("A", "C"), ids + "D")) {
-            val changed = prepared.reconcile(nextIds, "A", modes)
-            assertNotSame(prepared, changed)
-            assertFixed(changed, nextIds, "A", modes)
+    @Test fun repeatedPlayNowInsertionsRepairTheSelectedRevisionWithFrozenRandomDraws() {
+        var ids = List(12) { "entry:$it" }
+        val modes = JourneyModes(true, true)
+        var path = QueueJourney.start(ids, ids[3], modes, Random(9))
+        var original = OriginalQueueJourney.start(ids, ids[3], modes, Random(9))
+        repeat(24) { edit ->
+            val added = List(4) { "insert:$edit:$it" }
+            ids = ids + added
+            path = path.select(added[1], ids, Random(edit))
+            original = original.select(added[1], ids, Random(edit))
+            assertEquals(original.history.map(::identity), path.history.map(::identity))
+            assertEquals(original.plans, path.plans)
+            assertEquals(original.visited, path.visited)
+            assertEquals(identity(original.current), identity(path.current))
+            assertEquals(identity(original.next), identity(path.next))
+            val window = path.window()
+            val center = window.indexOf(path.current)
+            assertEquals(original.future.take(64).map(::identity), window.drop(center + 1).map(::identity))
+            assertEquals(path.current, window[center])
+            assertTrue(path.sourceOrdinal(ids, path.current!!.entryId)!! >= 0)
         }
-        val changedSelection = prepared.reconcile(ids, "B", modes)
-        assertNotSame(prepared, changedSelection)
-        assertEquals("B", changedSelection.current?.entryId)
-        assertFixed(changedSelection, ids, "B", modes)
-        for (nextModes in listOf(JourneyModes(true, true, true), JourneyModes(false, true, false))) {
-            val changed = prepared.reconcile(ids, "A", nextModes, Random(42))
-            assertNotSame(prepared, changed)
-            assertFixed(changed, ids, "A", nextModes)
+    }
+
+    @Test fun repeatedInsertionsRetainOnlyTheThreeLookaheadPermutations() {
+        var ids = List(50_000) { "entry:$it" }
+        var path = QueueJourney.start(ids, ids.first(), JourneyModes(true, true), Random(2))
+        assertSame(path.plans.getValue(0), path.plans.getValue(1))
+        assertSame(path.plans.getValue(1), path.plans.getValue(2))
+        repeat(12) { edit ->
+            val added = List(4) { "insert:$edit:$it" }
+            ids = ids + added
+            path = path.playNext(added, ids, Random(edit))
+            assertEquals((path.cycle..path.cycle + 2).toSet(), path.plans.keys)
+            val retained = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<List<String>, Boolean>())
+            retained.addAll(path.plans.values)
+            assertTrue(retained.size <= 3)
+            assertTrue(retained.sumOf { it.size.toLong() } <= 3L * ids.size)
+            path.plans.values.forEach { assertEquals(ids.toSet(), it.toSet()) }
+        }
+        assertEquals("The bound is exercised with three distinct edited sequences", 3, path.plans.values.distinct().size)
+    }
+
+    @Test fun identicalEditedLookaheadsShareTheirPermutationAfterTheRequiredRandomDraws() {
+        var ids = List(100) { "entry:$it" }
+        val modes = JourneyModes(true, true)
+        var path = QueueJourney.start(ids, ids.first(), modes, Random(2))
+        var original = OriginalQueueJourney.start(ids, ids.first(), modes, Random(2))
+        repeat(12) { edit ->
+            val added = listOf("insert:$edit")
+            ids = ids + added
+            path = path.playNext(added, ids, Random(edit))
+            original = original.playNext(added, ids, Random(edit))
+            assertEquals(original.plans, path.plans)
+            assertSame(path.plans.getValue(0), path.plans.getValue(1))
+            assertSame(path.plans.getValue(1), path.plans.getValue(2))
         }
     }
 
-    @Test fun duplicateOccurrenceIdsKeepTheOriginalRepeatedRepairTokenBehavior() {
-        val modes = JourneyModes(shuffle = true)
-        val ids = listOf("A", "B", "B")
-        val raw = QueueJourney(history = listOf(QueueVisit("A", 0, "anchor")), cursor = 0,
-            visited = setOf("A"), modes = modes)
-        val first = raw.reconcile(ids, "A", modes, Random(3))
-        assertEquals(2, first.future.size)
-        val second = first.reconcile(ids, "A", modes, Random(3))
-        assertNotSame(first, second)
-        assertEquals(current(original(first).reconcile(ids, "A", modes, Random(3))), second)
-        assertEquals(first.future.last().token, second.future[0].token)
-        assertEquals(second.future[0].token, second.future[1].token)
-        assertNotSame(second, second.reconcile(ids, "A", modes))
-    }
-
-    @Test fun duplicateRestoredPlanMembersRemainOnTheRepairPathEvenWithUniqueOccurrences() {
-        val ids = listOf("A", "B")
-        val modes = JourneyModes(shuffle = true)
-        val raw = QueueJourney(history = listOf(QueueVisit("A", 0, "anchor")), cursor = 0,
-            visited = setOf("A"), plans = mapOf(0L to listOf("A", "B", "B")), modes = modes)
-        val first = raw.reconcile(ids, "A", modes)
-        val second = first.reconcile(ids, "A", modes)
-        assertNotSame(first, second)
-        assertEquals(current(original(first).reconcile(ids, "A", modes)), second)
-        assertEquals(first.future.last().token, second.future.first().token)
-        assertNotSame(second, second.reconcile(ids, "A", modes))
-    }
-
-    @Test fun preparationOwnsItsInputIdsAndLegitimateRepeatedTracksKeepDistinctOccurrences() {
+    @Test fun immutableOccurrenceRevisionsReusePreparationWithoutReadingAnElement() {
         val track = Track("content://same", "Same", fileName = "same.mp3", relativePath = "same.mp3")
-        val entries = listOf(QueueEntry("occurrence-A", track), QueueEntry("occurrence-B", track))
-        val ids = entries.mapTo(mutableListOf()) { it.id }
-        val prepared = QueueJourney.start(ids, ids.first(), JourneyModes())
-        val queue = ListeningQueue(name = "Before", entries = entries, journey = prepared)
-        val renamed = queue.copy(name = "After", positionMs = 4500)
-        assertSame(prepared, renamed.journey?.reconcile(ids.toList(), ids.first(), JourneyModes()))
-        assertEquals(2, prepared.plans.getValue(0).size)
-        ids.reverse()
-        val changed = prepared.reconcile(ids, "occurrence-A", JourneyModes())
-        assertNotSame(prepared, changed)
-        assertEquals(ids, changed.plans.getValue(0))
-        assertFixed(changed, ids, "occurrence-A", JourneyModes())
+        var reads = 0
+        val entries = object : AbstractList<QueueEntry>() {
+            override val size = 50_000
+            override fun get(index: Int): QueueEntry { reads++; return QueueEntry("entry:$index", track) }
+        }
+        val queue = ListeningQueue(name = "Before", entries = entries)
+        for (shuffle in listOf(false, true)) {
+            val path = QueueJourney.start(queue.ids, "entry:25000", JourneyModes(shuffle, true), Random(7))
+            reads = 0
+            assertSame(path, path.reconcile(queue.copy(name = "After", positionMs = 4500).ids, "entry:25000", path.modes))
+            val moved = path.arrive(path.next!!.token, queue.ids)
+            assertSame(moved, moved.reconcile(queue.ids, moved.current!!.entryId, moved.modes))
+            assertTrue("Worker finds only missing source coordinates with at most one order scan: $reads", reads <= entries.size + 1024)
+            reads = 0
+            repeat(30) { moved.window(); moved.next; moved.previous; moved.artworkWindow() }
+            assertEquals("Published reads use prepared coordinates", 0, reads)
+        }
     }
 
-    @Test fun arrivedAndRestoredJourneysDoNotInheritAnUnrelatedPreparationMarker() {
+    @Test fun sourceCoordinatesRejectNegativeOrdinalsAndDifferentRevisionsAndResolveTheShufflePredecessor() {
+        val projection: (String) -> String = { it }
+        val ids = listOf("A", "B", "C").mapView(projection)
+        val ordered = QueueJourney.start(ids, "B", JourneyModes(loop = true), Random(9))
+        val shuffled = ordered.reconcile(ids, "B", JourneyModes(true, true), Random(9))
+        assertEquals("A", shuffled.previous!!.entryId)
+        assertEquals(0, shuffled.sourceOrdinal(ids, shuffled.previous!!.entryId))
+        val revision = ids.toList().mapView(projection)
+        assertEquals(ids, revision)
+        assertNull(shuffled.sourceOrdinal(revision, "B"))
+        val repaired = shuffled.reconcile(revision, "B", shuffled.modes)
+        assertEquals(1, repaired.sourceOrdinal(revision, "B"))
+        assertEquals(shuffled.window(), repaired.window())
+
+        // Deliberately bypass repair to exercise the defensive negative-coordinate read itself.
+        val malformed = QueueJourney(history = listOf(QueueVisit("removed", 0), QueueVisit("B", 0)), cursor = 1,
+            visited = setOf("B"), plans = mapOf(0L to ids), modes = JourneyModes(shuffle = true), orderedTraversalId = "fixture")
+        val prepare = QueueJourney::class.java.declaredMethods.single { it.name == "prepare" }.apply { isAccessible = true }
+        val exposed = prepare.invoke(malformed, ids, Random(9), null, null, null, null) as QueueJourney
+        assertEquals("removed", exposed.previous!!.entryId)
+        assertNull(exposed.sourceOrdinal(ids, "removed"))
+        val normalized = exposed.copy().reconcile(ids, "B", exposed.modes)
+        assertTrue(normalized.window().none { it.entryId == "removed" })
+        normalized.window().forEach { visit ->
+            val ordinal = normalized.sourceOrdinal(ids, visit.entryId)
+            assertNotNull(ordinal)
+            assertEquals(visit.entryId, ids[ordinal!!])
+        }
+    }
+
+    @Test fun mutableInputsAreIsolatedAndColdCopiesAndRestoresNormalizeBeforePublication() {
+        val ids = mutableListOf("A", "B", "C")
+        for (modes in listOf(JourneyModes(loop = true), JourneyModes(true, true, true))) {
+            val path = QueueJourney.start(ids, "B", modes, Random(9))
+            val window = path.window()
+            ids.reverse()
+            assertEquals(window, path.window())
+            val changed = path.reconcile(ids, "B", modes)
+            assertEquals(if (modes.shuffle) path.plans else mapOf(path.cycle to ids), changed.plans)
+            val cold = changed.copy()
+            assertNotSame(cold, cold.reconcile(ids, "B", modes))
+            val restored = changed.record("q").restore(changed.visitRecords("q"), changed.cycleRecords("q").toList())
+                .reconcile(ids, "B", modes)
+            assertEquals(changed.history, restored.history)
+            assertEquals(changed.window(), restored.window())
+        }
+    }
+
+    @Test fun duplicateOccurrencesAndRestoredMembersRemainColdWithStableTokenAliases() {
+        for ((ids, plan) in listOf(listOf("A", "B", "B") to emptyList(), listOf("A", "B") to listOf("A", "B", "B"))) {
+            val raw = QueueJourney(history = listOf(QueueVisit("A", 0, "anchor")), cursor = 0,
+                visited = setOf("A"), plans = if (plan.isEmpty()) emptyMap() else mapOf(0L to plan), modes = JourneyModes(shuffle = true))
+            val view = ids.mapView { it }
+            val first = raw.reconcile(view, "A", raw.modes, Random(3))
+            val second = first.reconcile(view, "A", raw.modes, Random(3))
+            assertNotSame(first, second)
+            assertEquals(listOf("A", "B", "B"), second.window().map { it.entryId })
+            assertEquals(first.next!!.token, second.next!!.token)
+            assertEquals(second.window()[1].token, second.window()[2].token)
+        }
+    }
+
+    @Test fun duplicatePlusMissingPlanCoversTheSourceButCannotBecomeWarmByCardinality() {
+        val ids = listOf("A", "B", "C", "D").mapView { it }
+        val raw = QueueJourney(history = listOf(QueueVisit("A", 0, "anchor")), cursor = 0,
+            visited = setOf("A"), plans = mapOf(0L to listOf("A", "B", "B", "D")),
+            modes = JourneyModes(shuffle = true))
+        val prepared = raw.reconcile(ids, "A", raw.modes, Random(9))
+        assertEquals(ids.toSet(), prepared.plans.getValue(0).toSet())
+        assertEquals(5, prepared.plans.getValue(0).size)
+        assertNotSame(prepared, prepared.reconcile(ids, "A", raw.modes, Random(9)))
+        assertEquals(2, prepared.plans.getValue(0).count { it == "B" })
+        assertEquals(1, prepared.plans.getValue(0).count { it == "C" })
+    }
+
+    @Test fun fixedSeedShufflePredecessorNeverBecomesAGeneratedVisitOrTruncatesForwardHistory() {
+        val ids = listOf("A", "B", "C", "D")
+        val initial = QueueJourney.start(ids, "D", JourneyModes()).reconcile(ids, "D",
+            JourneyModes(shuffle = true), Random(9))
+        assertEquals(listOf("D", "A", "C", "B"), initial.plans.getValue(0))
+        val predecessor = initial.previous!!
+        val generated = initial.window().single { it.entryId == "C" && it.token != predecessor.token }
+        val advanced = initial.arrive(initial.next!!.token, ids)
+        assertEquals("A", advanced.current!!.entryId)
+        assertEquals(advanced.window().size, advanced.window().map { it.token }.toSet().size)
+        assertEquals(generated, advanced.next)
+        val forward = advanced.arrive(generated.token, ids)
+        assertEquals("A", forward.previous!!.entryId)
+        assertEquals("B", forward.next!!.entryId)
+        val jumped = advanced.arrive(predecessor.token, ids, receipt = predecessor)
+        assertEquals(predecessor, jumped.current)
+        assertEquals(0, jumped.cursor)
+        assertEquals(advanced.history, jumped.history.drop(1))
+        assertEquals(jumped.window().size, jumped.window().map { it.token }.toSet().size)
+        var retraced = jumped
+        for (visit in advanced.history) {
+            assertEquals(visit, retraced.next)
+            retraced = retraced.arrive(visit.token, ids)
+        }
+        assertEquals("B", retraced.next!!.entryId)
+    }
+
+    @Test fun shuffleEnablePredecessorsBecomeHistoryOnlyOnArrivalThenRetraceAndExhaust() {
+        val ids = listOf("A", "B", "C", "D", "E")
+        var path = QueueJourney.start(ids, "D", JourneyModes()).reconcile(ids, "D", JourneyModes(shuffle = true), Random(12))
+        val anchor = path.current!!
+        val pending = path.window().single { it.entryId == "E" }
+        assertEquals(listOf(anchor), path.history)
+        for (id in listOf("C", "B", "A")) {
+            assertEquals(id, path.previous!!.entryId)
+            val previous = path.previous!!
+            assertNotEquals(path.next?.token, previous.token)
+            path = path.arrive(previous.token, ids)
+            assertEquals(previous, path.current)
+        }
+        assertNull(path.previous)
+        for (id in listOf("B", "C", "D")) {
+            assertEquals(id, path.next!!.entryId)
+            path = path.arrive(path.next!!.token, ids)
+        }
+        assertEquals(anchor, path.current)
+        assertEquals(pending, path.next)
+        assertEquals("E", path.next!!.entryId)
+        path = path.arrive(path.next!!.token, ids)
+        assertNull(path.next)
+    }
+
+    @Test fun nativeReceiptSurvivesAWindowDisplacingBatchButRejectsStaleNamespaces() {
         val ids = listOf("A", "B", "C")
-        val modes = JourneyModes(loop = true)
-        val prepared = QueueJourney.start(ids, "A", modes)
-        val visit = requireNotNull(prepared.next)
-        val arrived = prepared.arrive(visit.token, ids)
-        val normalized = arrived.reconcile(ids, visit.entryId, modes)
-        assertNotSame(arrived, normalized)
-        assertEquals(visit.token, normalized.current?.token)
-        assertFixed(normalized, ids, visit.entryId, modes)
-        val restored = current(original(normalized))
-        assertNotSame(restored, restored.reconcile(ids, visit.entryId, modes))
+        val path = QueueJourney.start(ids, "A", JourneyModes(true, true), Random(2))
+        val receipt = path.next!!
+        val added = List(100) { "new:$it" }
+        val updated = ids + added
+        val requested = path.playNext(added, updated)
+        assertTrue(requested.window().none { it.token == receipt.token })
+        assertSame(requested, requested.arrive(receipt.token, updated))
+        val arrived = requested.arrive(receipt.token, updated, receipt = receipt)
+        assertEquals(receipt, arrived.current)
+        assertEquals(requested.history.drop(1), arrived.history.drop(arrived.cursor + 1))
+        val restarted = requested.restart(updated, "A")
+        assertSame(restarted, restarted.arrive(receipt.token, updated, receipt = receipt))
     }
 }

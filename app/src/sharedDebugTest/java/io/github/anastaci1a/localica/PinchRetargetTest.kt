@@ -12,7 +12,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
+import io.github.anastaci1a.localica.pilotComposeRule as createComposeRule
+import io.github.anastaci1a.localica.pilotCaptureToImage as captureToImage
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*
@@ -20,12 +21,15 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
 import kotlin.math.abs
 
 /** #536: a second, already released pinch cannot be discarded by an older settle. */
+@RunWith(AndroidJUnit4::class)
 class PinchRetargetTest {
     @get:Rule val compose = createComposeRule()
 
@@ -162,6 +166,7 @@ class PinchRetargetTest {
                         abs(coordinate(after) - coordinate(before)) <= limit)
                 }
             }
+            compose.onNodeWithTag("retarget-window").pilotScreenshot("pinch-retarget-$fromList-$reverse-$furtherPinches")
         } finally {
             try { if (held) compose.onNodeWithTag("browser-list").performTouchInput { cancel() } }
             finally { compose.mainClock.autoAdvance = true; prefs.write(route, saved, overridden); cover.delete() }

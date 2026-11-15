@@ -2,6 +2,9 @@ package io.github.anastaci1a.localica
 
 import android.content.ContextWrapper
 import android.net.Uri
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.test.*
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -16,8 +19,10 @@ import io.github.anastaci1a.localica.playback.NativeReaders
 import io.github.anastaci1a.localica.playback.RecoveryAdmission
 import io.github.anastaci1a.localica.playback.track
 import io.github.anastaci1a.localica.queue.*
+import io.github.anastaci1a.localica.ui.QueueScreen
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import org.junit.Assert.*
@@ -32,6 +37,140 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    @Test fun sameQueueSelectionMatchesPriorNativePathWithoutReloading() {
+        for (playing in listOf(false, true)) {
+            var reference: List<String>? = null
+            for (oldPath in listOf(true, false)) fixture(duplicateOccurrences = true) {
+                awaitMain { player.engine.playbackState == Player.STATE_READY }
+                queues.playbackRequested(playing)
+                barrier()
+                withContext(Dispatchers.Main) { player.selectionCalls.clear() }
+                if (oldPath) {
+                    // Frozen pre-consolidation selectEntry branch, after its prepared-library publication.
+                    val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+                    @Suppress("UNCHECKED_CAST")
+                    val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+                    val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
+                    val revision = QueueController::class.java.getDeclaredField("commandRevision").apply { isAccessible = true }
+                    val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
+                    val apply = QueueController::class.java.declaredMethods.single { it.name == "applyNativeIntent" }.apply { isAccessible = true }
+                    val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
+                    val action: suspend () -> Unit = {
+                        val active = state.value.library.active!!
+                        val selected = withContext(Dispatchers.Default) { active.copy(currentEntryId = "duplicate-1", positionMs = 0,
+                            journey = active.journey!!.select("duplicate-1", active.ids)) }
+                        state.value = state.value.copy(library = state.value.library.update(selected))
+                        val accepted = revision.getLong(queues)
+                        intents.propose(accepted, true, documentIdentity(track.id))
+                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
+                            sync.invoke(queues, true, true, null, it)
+                        }
+                        apply.invoke(queues, player, accepted, true)
+                    }
+                    withContext(Dispatchers.Main) {
+                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                            command.invoke(queues, false, {}, action, it)
+                        }
+                    }
+                } else queues.selectEntry("duplicate-1")
+                barrier()
+                withContext(Dispatchers.Main) {
+                    assertEquals("duplicate-1", player.currentMediaItem!!.mediaId)
+                    assertTrue(player.playWhenReady)
+                    assertTrue(player.currentPosition < 1500)
+                    val calls = player.selectionCalls.toList()
+                    assertFalse("Selection must retain the prepared player", calls.any { it in listOf("load", "prepare", "stop", "clear") })
+                    assertTrue(calls.contains("seek:duplicate-1:0"))
+                    if (oldPath) reference = calls else assertEquals("Native calls must match the prior same-queue path", reference, calls)
+                }
+            }
+        }
+    }
+
+    @Test fun selectingThenPausingDuringTimelineIoMatchesThePriorNativePath() {
+        var reference: List<String>? = null
+        for (oldPath in listOf(true, false)) fixture(duplicateOccurrences = true) {
+            awaitMain { player.engine.playbackState == Player.STATE_READY }
+            queues.playbackRequested(true); barrier()
+            val gate = store.gateNextSnapshot()
+            withContext(Dispatchers.Main) { player.selectionCalls.clear() }
+            val old = if (oldPath) async(Dispatchers.Main) {
+                val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+                @Suppress("UNCHECKED_CAST")
+                val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+                val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
+                val revision = QueueController::class.java.getDeclaredField("commandRevision").apply { isAccessible = true }
+                val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
+                val apply = QueueController::class.java.declaredMethods.single { it.name == "applyNativeIntent" }.apply { isAccessible = true }
+                val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
+                val action: suspend () -> Unit = {
+                    val active = state.value.library.active!!
+                    val selected = withContext(Dispatchers.Default) { active.copy(currentEntryId = "duplicate-1", positionMs = 0,
+                        journey = active.journey!!.select("duplicate-1", active.ids)) }
+                    state.value = state.value.copy(library = state.value.library.update(selected))
+                    val accepted = revision.getLong(queues)
+                    intents.propose(accepted, true, documentIdentity(track.id))
+                    kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
+                        sync.invoke(queues, true, true, null, it)
+                    }
+                    apply.invoke(queues, player, accepted, true)
+                }
+                kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                    command.invoke(queues, false, {}, action, it)
+                }
+            } else null
+            if (!oldPath) queues.selectEntry("duplicate-1")
+            try {
+                gate.entered.await()
+                assertEquals("The selected occurrence is committed before IO completes", "duplicate-1",
+                    queues.state.value.library.active!!.currentEntryId)
+                withContext(Dispatchers.Main) { queues.playbackRequested(false) }
+            } finally { gate.release.complete(Unit) }
+            old?.await(); barrier()
+            withContext(Dispatchers.Main) {
+                val active = queues.state.value.library.active!!
+                assertEquals("duplicate-1", active.currentEntryId)
+                assertEquals(active.journey!!.current!!.token, player.currentMediaItem!!.queueVisit)
+                assertEquals(1, active.journey.cursor)
+                assertEquals(0L, player.currentPosition)
+                assertFalse(player.playWhenReady)
+                assertEquals(first.entries, active.entries)
+                assertTrue(queues.state.value.library.queues.any { it.id == second.id })
+                val calls = player.selectionCalls.toList()
+                assertFalse(calls.any { it in listOf("load", "prepare", "stop", "clear") })
+                assertEquals(1, calls.count { it == "seek:duplicate-1:0" })
+                if (oldPath) reference = calls else assertEquals(reference, calls)
+                assertNull(queues.state.value.problem)
+            }
+        }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun tappingQueueRowDuringPlaybackRetainsThePreparedPlayer() = fixture(duplicateOccurrences = true) {
+        queues.playbackRequested(true)
+        barrier()
+        awaitMain { player.isPlaying }
+        val request = queues.state.value.playerRequest
+        localicaRunComposeUiTest {
+            setContent { FixtureTime.WithClock { EngineTheme {
+                val state by queues.state.collectAsState()
+                QueueScreen(state, queues, isPlaying = true)
+            } } }
+            waitUntil(timeoutMillis = 5000) { onAllNodesWithTag("media-duplicate-1").fetchSemanticsNodes().isNotEmpty() }
+            runOnIdle { player.selectionCalls.clear() }
+            onNodeWithTag("media-duplicate-1").performTouchInput { click() }
+            waitUntil(timeoutMillis = 10000) { queues.state.value.playerRequest == request + 1 }
+            runOnIdle {
+                assertEquals("duplicate-1", player.currentMediaItem!!.mediaId)
+                assertTrue(player.playWhenReady)
+                assertTrue(player.currentPosition < 1500)
+                assertFalse(player.selectionCalls.any { it in listOf("load", "prepare", "stop", "clear") })
+                assertEquals(1, player.selectionCalls.count { it == "seek:duplicate-1:0" })
+                assertNull(queues.state.value.problem)
+            }
+        }
+    }
+
     @Test fun failedInitialRestoreRejectsQueuedAndLaterCompletionsWithoutEditingStorage() = fixture(attach = false, blockRestore = true) {
         dao.restore!!.entered.await()
         val receipts = CopyOnWriteArrayList<Pair<String, Boolean>>()
@@ -1343,7 +1482,13 @@ class PlaybackIntentTest {
         val arguments = InstrumentationRegistry.getArguments()
         val entries = arguments.getString("queueEntries", "13400")!!.toInt()
         val songs = arguments.getString("libraryTracks", "13400")!!.toInt()
-        fixture(attach = false, duplicateOccurrences = true, occurrences = entries, librarySize = songs, initialIndex = (entries - 10).coerceAtLeast(0), timeoutMs = 300000) {
+        fixture(attach = false, duplicateOccurrences = true, occurrences = entries, librarySize = songs, initialIndex = arguments.getString("initialIndex")?.toInt() ?: (entries - 10).coerceAtLeast(0), timeoutMs = 300000) {
+            val shuffle = arguments.getString("journeyShuffle", "false").toBoolean()
+            val loop = arguments.getString("journeyLoop", "false").toBoolean()
+            val reshuffle = arguments.getString("journeyReshuffle", "false").toBoolean()
+            queues.settings { it.copy(shuffle = shuffle, advancedRepeat = AdvancedRepeat(
+                queueEnd = if (loop) QueueEnd.Repeat else QueueEnd.Stop, reshuffle = reshuffle)) }
+            barrier()
             val runtime = Runtime.getRuntime()
             repeat(3) { runtime.gc(); delay(100) }
             val before = runtime.totalMemory() - runtime.freeMemory()
@@ -1369,13 +1514,47 @@ class PlaybackIntentTest {
             repeat(3) { runtime.gc(); delay(100) }
             val after = runtime.totalMemory() - runtime.freeMemory()
             val afterGc = android.os.Debug.getRuntimeStats()
-            val line = "entries=$entries tracks=$songs beforeBytes=$before peakBytes=${peak.get()} settledBytes=$after maxBytes=${runtime.maxMemory()} built=$built visits=${window.size} activationMs=$elapsed gcBefore=$beforeGc gcAfter=$afterGc"
+            val line = "entries=$entries tracks=$songs shuffle=$shuffle loop=$loop reshuffle=$reshuffle beforeBytes=$before peakBytes=${peak.get()} settledBytes=$after maxBytes=${runtime.maxMemory()} built=$built visits=${window.size} activationMs=$elapsed gcBefore=$beforeGc gcAfter=$afterGc"
             android.util.Log.i("Window957", line)
             File(nativeEvidenceDirectory("window-957", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)), "activation.txt").appendText(line + "\n")
             withContext(Dispatchers.Main) {
                 assertEquals(window.map { it.entryId }, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId })
                 assertEquals("Only the native window may own occurrence templates", window.map { it.entryId }.distinct().size, built)
                 assertTrue(player.mediaItemCount <= 129)
+            }
+            val edits = arguments.getString("permutationEdits", "0")!!.toInt()
+            if (edits > 0) {
+                require(shuffle && loop && !reshuffle)
+                val editPeak = java.util.concurrent.atomic.AtomicLong(runtime.totalMemory() - runtime.freeMemory())
+                val editGc = android.os.Debug.getRuntimeStats()
+                val editStarted = android.os.SystemClock.elapsedRealtime()
+                val editSampler = launch(Dispatchers.Default) {
+                    while (isActive) {
+                        editPeak.updateAndGet { maxOf(it, runtime.totalMemory() - runtime.freeMemory()) }
+                        delay(100)
+                    }
+                }
+                var retained = 0
+                var slots = 0L
+                try { repeat(edits) {
+                    val done = CompletableDeferred<Boolean>()
+                    queues.act(List(4) { track }, SongTap.PlayNext) { done.complete(it) }
+                    assertTrue(withTimeout(300000) { done.await() })
+                    val counts = withContext(Dispatchers.Default) {
+                        val queue = queues.state.value.library.active!!
+                        val permutations = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<List<String>, Boolean>())
+                        permutations.addAll(queue.journey!!.plans.values)
+                        assertEquals(3, queue.journey.plans.size)
+                        assertTrue(permutations.size <= 3)
+                        val references = permutations.sumOf { it.size.toLong() }
+                        assertTrue(references <= 3L * queue.entries.size)
+                        permutations.size to references
+                    }
+                    retained = maxOf(retained, counts.first); slots = maxOf(slots, counts.second)
+                } } finally { editSampler.cancelAndJoin() }
+                val result = "initialEntries=$entries finalEntries=${queues.state.value.library.active!!.entries.size} tracks=$songs edits=$edits maxPermutations=$retained retainedReferenceSlots=$slots peakBytes=${editPeak.get()} settledBytes=${runtime.totalMemory() - runtime.freeMemory()} maxBytes=${runtime.maxMemory()} elapsedMs=${android.os.SystemClock.elapsedRealtime() - editStarted} gcBefore=$editGc gcAfter=${android.os.Debug.getRuntimeStats()}"
+                android.util.Log.i("Permutation957", result)
+                File(nativeEvidenceDirectory("window-957", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)), "permutation-edits.txt").appendText(result + "\n")
             }
         }
     }
@@ -1396,13 +1575,13 @@ class PlaybackIntentTest {
                     override val size get() = queue.entries.size
                     override fun get(index: Int): QueueEntry { reads++; return queue.entries[index] }
                 }
-                val capture = QueueController::class.java.getDeclaredMethod("captureNativeState").apply { isAccessible = true }
+                val capture = QueueController::class.java.getDeclaredMethod("captureNativeState", kotlin.coroutines.Continuation::class.java).apply { isAccessible = true }
                 try {
                     player.engine.seekTo(2000)
                     state.value = before.copy(library = before.library.update(queue.copy(entries = counted, positionMs = 2001)))
                     assertSame(counted, state.value.library.active!!.entries)
                     reads = 0
-                    repeat(20) { capture.invoke(queues) }
+                    repeat(20) { kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> { capture.invoke(queues, it) } }
                     assertEquals("Routine capture must not inspect occurrence membership", 0, reads)
                     val captured = state.value.library.active!!
                     assertSame(queue.journey, captured.journey)
@@ -1423,8 +1602,8 @@ class PlaybackIntentTest {
             val before = state.value
             val queue = before.library.active!!
             val native = player.currentMediaItem!!
-            val capture = QueueController::class.java.getDeclaredMethod("capturedLibrary", Player::class.java).apply { isAccessible = true }
-            fun captureFrom(target: ListeningQueue, item: MediaItem, admitted: Boolean): QueueLibrary {
+            val capture = QueueController::class.java.getDeclaredMethod("capturedLibrary", Player::class.java, kotlin.coroutines.Continuation::class.java).apply { isAccessible = true }
+            suspend fun captureFrom(target: ListeningQueue, item: MediaItem, admitted: Boolean): QueueLibrary {
                 state.value = before.copy(library = before.library.update(target))
                 val source = object : ForwardingPlayer(player) {
                     override fun getCurrentMediaItem() = item
@@ -1433,7 +1612,7 @@ class PlaybackIntentTest {
                         return 4321
                     }
                 }
-                return capture.invoke(queues, source) as QueueLibrary
+                return kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn { capture.invoke(queues, source, it) }
             }
             try {
                 val extras = android.os.Bundle(native.mediaMetadata.extras).apply { putString("queueId", second.id) }
@@ -1458,13 +1637,15 @@ class PlaybackIntentTest {
         }
     }
 
-    @Test fun restoredInvalidJourneyIsNormalizedBeforeNativeCaptureAdmission() = fixture(attach = false, blockRestore = true) {
+    @Test fun restoredInvalidJourneyIsNormalizedBeforeNativeCaptureAdmission() = fixture(attach = false, blockRestore = true, duplicateOccurrences = true, occurrences = 160) {
         dao.restore!!.entered.await()
         val invalid = first.copy(journey = QueueJourney(history = listOf(QueueVisit("removed", 0)), cursor = 0))
         IntentDao::class.java.getDeclaredField("saved").apply { isAccessible = true }
             .set(dao, QueueLibrary(listOf(invalid, second), first.id))
         dao.restore.release.complete(Unit)
         awaitMain { !queues.state.value.loading }
+        assertEquals(listOf(null, null), queues.artworkNeighbors())
+        assertTrue(queues.artworkPreloadUris().isEmpty())
         queues.attach(player)
         barrier()
         withContext(Dispatchers.Main) {
@@ -1472,11 +1653,407 @@ class PlaybackIntentTest {
             assertEquals(first.currentEntryId, active.journey!!.current!!.entryId)
             assertTrue(active.journey.history.none { it.entryId == "removed" })
             assertEquals(active.journey.current!!.token, player.currentMediaItem!!.queueVisit)
+            assertEquals(active.journey.window().map { it.token }, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueVisit })
+            active.journey.window().forEach { visit ->
+                val ordinal = active.journey.sourceOrdinal(active.ids, visit.entryId)
+                assertNotNull("Every exposed visit must have a prepared source ordinal", ordinal)
+                assertEquals(visit.entryId, active.entries[ordinal!!].id)
+            }
+            assertNull(queues.state.value.problem)
+            assertEquals(listOf(track.uri, null), queues.artworkNeighbors())
+            assertEquals(listOf(track.uri), queues.artworkPreloadUris())
         }
         queues.seek(1234)
         barrier()
         assertEquals(1234L, dao.read().active!!.positionMs)
         assertTrue(dao.read().active!!.journey!!.history.none { it.entryId == "removed" })
+    }
+
+    @Test fun settingsAndPreparedJourneyPublishTogetherAfterWorkerPreparation() = fixture(attach = false, duplicateOccurrences = true, occurrences = 160) {
+        val gate = Gate()
+        val firstRead = java.util.concurrent.atomic.AtomicBoolean(true)
+        val entries = object : AbstractList<QueueEntry>() {
+            override val size = first.entries.size
+            override fun get(index: Int): QueueEntry {
+                if (firstRead.getAndSet(false)) {
+                    assertNotEquals(android.os.Looper.getMainLooper(), android.os.Looper.myLooper())
+                    runBlocking { gate.await() }
+                }
+                return first.entries[index]
+            }
+        }
+        val warm = withContext(Dispatchers.Default) { QueueJourney.start(first.ids, first.currentEntryId, JourneyModes()) }
+        val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+        withContext(Dispatchers.Main) { state.value = state.value.copy(library = state.value.library.update(first.copy(entries = entries, journey = warm))) }
+        val before = state.value
+        val pairs = CopyOnWriteArrayList<Pair<JourneyModes, JourneyModes>>()
+        val observer = launch(Dispatchers.Unconfined) { queues.state.collect { snapshot ->
+            snapshot.library.active?.journey?.let { pairs += JourneyModes.from(snapshot.settings) to it.modes }
+        } }
+        try {
+            try {
+                queues.settings { it.copy(shuffle = true, repeat = QueueRepeat.All) }
+                gate.entered.await()
+                withContext(Dispatchers.Main) {
+                    assertSame(before.settings, state.value.settings)
+                    assertSame(before.library, state.value.library)
+                }
+            } finally { gate.release.complete(Unit) }
+            barrier()
+            withContext(Dispatchers.Main) {
+                assertTrue(state.value.settings.shuffle)
+                assertEquals(JourneyModes(shuffle = true, loop = true), state.value.library.active!!.journey!!.modes)
+                assertNull(state.value.problem)
+                assertTrue(pairs.isNotEmpty())
+                assertTrue("No publication may pair new settings with an old journey", pairs.all { it.first == it.second })
+            }
+        } finally { gate.release.complete(Unit); observer.cancelAndJoin() }
+    }
+
+    @Test fun transportOnlyPlayKeepsSuspendedColdSourcePreparationWithoutAPlayer() = coldPlayDuringActivation(false)
+    @Test fun sourceBoundPlaySupersedesSuspendedColdPreparationAndSynchronizesItsSource() = coldPlayDuringActivation(true)
+
+    private fun coldPlayDuringActivation(differentSource: Boolean) = fixture(attach = false) {
+        queues.settings { it.copy(switching = QueueSwitch.Resume) }; barrier()
+        val secondReads = AtomicInteger()
+        val secondMainReads = AtomicInteger()
+        val coldSecond = if (differentSource) second.copy(entries = object : AbstractList<QueueEntry>() {
+            override val size = second.entries.size
+            override fun get(index: Int): QueueEntry {
+                secondReads.incrementAndGet()
+                if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) secondMainReads.incrementAndGet()
+                return second.entries[index]
+            }
+        }) else second
+        val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+        val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
+        val activate = QueueController::class.java.declaredMethods.single { it.name == "activate" }.apply { isAccessible = true }
+        val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
+        val gate = Gate()
+        val firstRead = java.util.concurrent.atomic.AtomicBoolean(true)
+        val entries = object : AbstractList<QueueEntry>() {
+            override val size = first.entries.size
+            override fun get(index: Int): QueueEntry {
+                if (firstRead.getAndSet(false)) {
+                    assertNotEquals("Cold preparation must run off Main", android.os.Looper.getMainLooper(), android.os.Looper.myLooper())
+                    runBlocking { gate.await() }
+                }
+                return first.entries[index]
+            }
+        }
+        val cold = withContext(Dispatchers.Default) { QueueJourney.start(first.ids, first.currentEntryId, JourneyModes()).copy() }
+        withContext(Dispatchers.Main) { state.value = state.value.copy(library = state.value.library
+            .update(first.copy(entries = entries, journey = cold)).update(coldSecond)) }
+        val pending = async(Dispatchers.Main) {
+            val action: suspend () -> Unit = {
+                val before = state.value.library
+                kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                    activate.invoke(queues, true, false, true, true, null, it)
+                }
+                if (differentSource) assertSame("A different bound source rejects obsolete preparation", before, state.value.library)
+                else {
+                    val active = state.value.library.active!!
+                    assertEquals(before.activeId, active.id)
+                    assertSame(before.active!!.entries, active.entries)
+                    assertEquals(before.active!!.currentEntryId, active.currentEntryId)
+                    assertEquals(before.active!!.positionMs, active.positionMs)
+                    assertEquals(active.currentEntryId, active.journey!!.current!!.entryId)
+                    assertEquals(0, active.journey.cursor)
+                }
+                assertNull(player.currentMediaItem)
+            }
+            kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                command.invoke(queues, false, {}, action, it)
+            }
+        }
+        try {
+            gate.entered.await()
+            withContext(Dispatchers.Main) {
+                if (differentSource) {
+                    intents.accept(true, documentIdentity(second.entries.single().track.id))
+                    queues.switchTo(second.id)
+                } else queues.playbackRequested(true)
+            }
+        } finally { gate.release.complete(Unit) }
+        pending.await()
+        barrier()
+        withContext(Dispatchers.Main) {
+            val expected = if (differentSource) second else first
+            assertEquals(expected.id, state.value.library.activeId)
+            assertEquals(expected.currentEntryId, state.value.library.active!!.currentEntryId)
+            assertEquals(expected.positionMs, state.value.library.active!!.positionMs)
+            assertEquals(documentIdentity(expected.entries.single().track.id), intents.pending()!!.source)
+            assertTrue(intents.pending()!!.play)
+            if (differentSource) assertEquals(second.journey, state.value.library.active!!.journey)
+            else assertNotNull(state.value.library.active!!.journey!!.current)
+            if (differentSource) { assertTrue(secondReads.get() > 0); assertEquals(0, secondMainReads.get()) }
+            assertTrue(state.value.library.queues.any { it.id == first.id })
+            assertNull(player.currentMediaItem)
+        }
+    }
+
+    @Test fun savePreparationRejectsOwnerLossBeforePublicationWithoutRestampingItsClosure() {
+        for (ownerLoss in listOf("attach", "detach", "source")) fixture(duplicateOccurrences = true) {
+            queues.settings { it.copy(switching = QueueSwitch.Resume) }; barrier()
+            awaitMain { player.engine.playbackState == Player.STATE_READY }
+            val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+            @Suppress("UNCHECKED_CAST")
+            val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+            val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
+            val save = QueueController::class.java.declaredMethods.single { it.name == "saveStartingPlayback" }.apply { isAccessible = true }
+            val gate = Gate()
+            val firstRead = java.util.concurrent.atomic.AtomicBoolean(true)
+            val entries = object : AbstractList<QueueEntry>() {
+                override val size = first.entries.size
+                override fun get(index: Int): QueueEntry {
+                    if (firstRead.getAndSet(false)) runBlocking { gate.await() }
+                    return first.entries[index]
+                }
+            }
+            val starts = AtomicInteger()
+            withContext(Dispatchers.Main) { player.selectionCalls.clear() }
+            val finished = CompletableDeferred<Unit>()
+            var rejected: Throwable? = null
+            val submit = QueueController::class.java.declaredMethods.single { it.name == "submit" }.apply { isAccessible = true }
+            val action: suspend () -> Unit = { try {
+                val before = state.value.library
+                val next = before.update(before.active!!.copy(entries = entries, currentEntryId = "duplicate-1", journey = before.active!!.journey!!.copy()))
+                val start: suspend () -> Unit = { starts.incrementAndGet(); player.setPlayWhenReady(true) }
+                assertFalse(kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> { save.invoke(queues, next, start, it) })
+                assertNull(state.value.problem)
+                assertSame(before, state.value.library)
+                assertEquals(0, starts.get())
+                assertTrue(player.selectionCalls.isEmpty())
+            } catch (failure: Throwable) { rejected = failure; throw failure } finally { finished.complete(Unit) } }
+            withContext(Dispatchers.Main) { submit.invoke(queues, intents.accept(), { _: Exception -> }, false, action) }
+            var detached: Deferred<Unit>? = null
+            try {
+                gate.entered.await()
+                withContext(Dispatchers.Main) {
+                    if (ownerLoss == "source") {
+                        intents.accept(true, documentIdentity(second.entries.single().track.id))
+                        queues.switchTo(second.id)
+                    } else {
+                        if (ownerLoss == "detach") detached = queues.detach(player)
+                        queues.attach(player)
+                    }
+                }
+            } finally { gate.release.complete(Unit) }
+            withTimeout(10000) { finished.await() }
+            assertNull("Supersession is not a persistence failure", rejected)
+            withContext(Dispatchers.Main) { assertNull("Supersession must not report a failed save", state.value.problem) }
+            detached?.await(); barrier()
+            withContext(Dispatchers.Main) {
+                val active = state.value.library.active!!
+                assertEquals(if (ownerLoss == "source") second.id else first.id, active.id)
+                assertEquals(active.journey!!.current!!.token, player.currentMediaItem!!.queueVisit)
+                assertEquals(0, starts.get())
+                assertNull(state.value.problem)
+                assertTrue(state.value.library.queues.any { it.id == first.id })
+            }
+        }
+    }
+
+    @Test fun rejectedCreationReportsFalseAndKeepsItsPendingRequest() {
+        val gate = Gate()
+        val armed = java.util.concurrent.atomic.AtomicBoolean(false)
+        val workerEntries = AtomicInteger()
+        val checkpoint = object : ThreadContextElement<Unit> {
+            override val key = object : kotlin.coroutines.CoroutineContext.Key<ThreadContextElement<Unit>> {}
+            override fun updateThreadContext(context: kotlin.coroutines.CoroutineContext) {
+                if (armed.get() && context[kotlin.coroutines.ContinuationInterceptor] == Dispatchers.Default && workerEntries.incrementAndGet() == 2)
+                    runBlocking { gate.await() }
+            }
+            override fun restoreThreadContext(context: kotlin.coroutines.CoroutineContext, oldState: Unit) = Unit
+        }
+        fixture(duplicateOccurrences = true, actorContext = checkpoint) {
+            awaitMain { player.engine.playbackState == Player.STATE_READY }
+            queues.settings { it.copy(maximum = 2) }; barrier()
+            val completed = CompletableDeferred<Boolean>()
+            queues.act(List(2) { track }, SongTap.NewQueue) { completed.complete(it) }
+            awaitMain { queues.state.value.pending != null }
+            val before = queues.state.value
+            armed.set(true)
+            queues.confirmCreation(setOf(second.id))
+            try {
+                gate.entered.await()
+                withContext(Dispatchers.Main) {
+                    assertSame(before.pending, queues.state.value.pending)
+                    queues.attach(player)
+                }
+            } finally { armed.set(false); gate.release.complete(Unit) }
+            assertFalse(withTimeout(10000) { completed.await() })
+            command {}
+            withContext(Dispatchers.Main) {
+                val after = queues.state.value
+                assertSame(before.pending, after.pending)
+                assertEquals(before.library, after.library)
+                assertEquals(before.browsedId, after.browsedId)
+                assertEquals(before.playerRequest, after.playerRequest)
+                assertEquals(first.id, player.currentMediaItem!!.listeningQueue)
+                assertFalse(player.playWhenReady)
+                assertNull(after.problem)
+            }
+        }
+    }
+
+    @Test fun pausedPlayNextPublishesArtworkBeforeSuspendedTimelineResolution() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        val song = second.entries.single().track
+        val gate = store.gateNextSnapshot()
+        val observed = CompletableDeferred<List<String?>>()
+        val observer = launch(Dispatchers.Main.immediate) { queues.state.collect { snapshot ->
+            val queue = snapshot.library.active!!
+            val next = queue.journey?.next
+            if (next != null && queue.entries.firstOrNull { it.id == next.entryId }?.track?.id == song.id)
+                observed.complete(queues.artworkNeighbors())
+        } }
+        val completed = CompletableDeferred<Boolean>()
+        try {
+            queues.act(listOf(song), SongTap.PlayNext) { completed.complete(it) }
+            gate.entered.await()
+            assertEquals(song.uri, withTimeout(10000) { observed.await() }.first())
+            withContext(Dispatchers.Main) {
+                assertFalse(player.playWhenReady)
+                assertTrue(queues.artworkPreloadUris().contains(song.uri))
+                val next = queues.state.value.library.active!!.journey!!.next!!
+                assertTrue((0 until player.mediaItemCount).none { player.getMediaItemAt(it).mediaId == next.entryId })
+            }
+        } finally { gate.release.complete(Unit); observer.cancelAndJoin() }
+        assertTrue(withTimeout(10000) { completed.await() })
+        barrier()
+        assertEquals(song.uri, queues.artworkNeighbors().first())
+    }
+
+    @Test fun publishedSelectionIsSynchronizedByTheReattachedOwnerAfterOldIoIsDropped() {
+        for (replacePlayer in listOf(false, true)) fixture(duplicateOccurrences = true) {
+            queues.playbackRequested(true); barrier()
+            val gate = store.gateNextSnapshot()
+            withContext(Dispatchers.Main) { player.selectionCalls.clear() }
+            queues.selectEntry("duplicate-1")
+            var target: RecordingPlayer? = null
+            var detached: Deferred<Unit>? = null
+            lateinit var committed: QueueVisit
+            try {
+                gate.entered.await()
+                committed = queues.state.value.library.active!!.journey!!.current!!
+                assertEquals("duplicate-1", committed.entryId)
+                withContext(Dispatchers.Main) {
+                    queues.playbackRequested(false)
+                    target = if (replacePlayer) newPlayer().also {
+                        detached = queues.detach(player); player.engine.pause()
+                    } else player
+                    queues.attach(target!!)
+                }
+            } finally { gate.release.complete(Unit) }
+            detached?.await(); barrier()
+            withContext(Dispatchers.Main) {
+                val attached = target!!
+                val active = queues.state.value.library.active!!
+                assertEquals(committed, active.journey!!.current)
+                assertEquals(committed.token, attached.currentMediaItem!!.queueVisit)
+                assertEquals(0L, attached.currentPosition)
+                assertFalse(attached.playWhenReady)
+                assertEquals(first.entries, active.entries)
+                assertEquals("load", attached.selectionCalls.first { !it.startsWith("play:") })
+                if (replacePlayer) assertTrue("Old IO cannot seek or play the detached player", player.selectionCalls.isEmpty())
+                assertNull(queues.state.value.problem)
+            }
+        }
+    }
+
+    @Test fun finishResetKeepsItsOriginalOwnerThroughSourceLookupAndRestartPlanning() {
+        for (worker in listOf(1, 2)) for (sourceChange in listOf(false, true)) {
+            val gate = Gate()
+            val armed = java.util.concurrent.atomic.AtomicBoolean(false)
+            val workers = AtomicInteger()
+            val checkpoint = object : ThreadContextElement<Unit> {
+                override val key = object : kotlin.coroutines.CoroutineContext.Key<ThreadContextElement<Unit>> {}
+                override fun updateThreadContext(context: kotlin.coroutines.CoroutineContext) {
+                    if (armed.get() && context[kotlin.coroutines.ContinuationInterceptor] == Dispatchers.Default && workers.incrementAndGet() == worker)
+                        runBlocking { gate.await() }
+                }
+                override fun restoreThreadContext(context: kotlin.coroutines.CoroutineContext, oldState: Unit) = Unit
+            }
+            fixture(duplicateOccurrences = true, actorContext = checkpoint) {
+                queues.settings { it.copy(switching = QueueSwitch.Resume) }; barrier()
+                repeat(2) { queues.next(); barrier() }
+                awaitMain { player.engine.playbackState == Player.STATE_READY }
+                val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+                @Suppress("UNCHECKED_CAST")
+                val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+                val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
+                val finish = QueueController::class.java.declaredMethods.single { it.name == "finishQueue" }.apply { isAccessible = true }
+                withContext(Dispatchers.Main) { player.selectionCalls.clear() }
+                val pending = async { command {
+                    val before = state.value.library
+                    armed.set(true)
+                    val failure = runCatching { kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                        finish.invoke(queues, AdvancedRepeat(queueEnd = QueueEnd.Stop, resetToFirst = true), false, it)
+                    } }.also { armed.set(false) }.exceptionOrNull()
+                    if (failure != null) assertTrue(failure is IllegalStateException)
+                    assertSame(before, state.value.library)
+                    assertEquals("duplicate-2", state.value.library.active!!.currentEntryId)
+                    assertTrue(player.selectionCalls.isEmpty())
+                } }
+                try {
+                    gate.entered.await()
+                    assertEquals(worker, workers.get())
+                    withContext(Dispatchers.Main) {
+                        if (sourceChange) {
+                            intents.accept(true, documentIdentity(second.entries.single().track.id))
+                            queues.switchTo(second.id)
+                        } else queues.attach(player)
+                    }
+                } finally { gate.release.complete(Unit) }
+                pending.await(); barrier()
+                withContext(Dispatchers.Main) {
+                    val active = state.value.library.active!!
+                    assertEquals(if (sourceChange) second.id else first.id, active.id)
+                    assertEquals(active.journey!!.current!!.token, player.currentMediaItem!!.queueVisit)
+                    if (!sourceChange) assertEquals("duplicate-2", active.currentEntryId)
+                }
+            }
+        }
+    }
+
+    @Test fun timelineResolutionAfterGenerationChangeCannotPublishToTheSamePlayer() = fixture {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        barrier()
+        val resolved = QueueController::class.java.getDeclaredField("resolved").apply { isAccessible = true }
+        val timeline = QueueController::class.java.getDeclaredField("timeline").apply { isAccessible = true }.get(queues)
+        val templates = QueueTimeline::class.java.getDeclaredField("templates").apply { isAccessible = true }
+        val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
+        val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
+        val gate = store.gateNextSnapshot()
+        store.snapshot = LibrarySnapshot(tracks = listOf(track.copy(title = "Late generation")))
+        val pending = async(Dispatchers.Main) {
+            val action: suspend () -> Unit = {
+                val oldResolved = resolved.get(queues)
+                val oldTemplates = templates.get(timeline)
+                val oldNative = player.currentMediaItem
+                val published = kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
+                    sync.invoke(queues, false, true, null, it)
+                }
+                assertFalse(published)
+                assertSame(oldResolved, resolved.get(queues))
+                assertSame(oldTemplates, templates.get(timeline))
+                assertSame(oldNative, player.currentMediaItem)
+            }
+            kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+                command.invoke(queues, false, {}, action, it)
+            }
+        }
+        try {
+            gate.entered.await()
+            withContext(Dispatchers.Main) { queues.attach(player) }
+        } finally { gate.release.complete(Unit) }
+        pending.await()
+        barrier()
     }
 
     @Test fun staleWindowResolutionCannotPublishForANewerActiveQueue() = fixture(duplicateOccurrences = true) {
@@ -1595,19 +2172,33 @@ class PlaybackIntentTest {
         var database: androidx.room.RoomDatabase? = null
         try {
             fixture(attach = false, duplicateOccurrences = true, occurrences = entries, librarySize = songs,
-                initialIndex = entries - 10, timeoutMs = 300000, playbackStore = { tracks ->
+                initialIndex = arguments.getString("initialIndex")?.toInt() ?: entries - 10, timeoutMs = 300000, playbackStore = { tracks ->
                     val db = androidx.room.Room.inMemoryDatabaseBuilder(context, LibraryDatabase::class.java).build()
                     database = db
                     RoomLibraryStore(db.libraryDao()).also { store -> runBlocking {
                         store.replaceRoot(ScanResult(FolderSelection("file:///window-957", "Latency fixture"), tracks, 0))
                     } }
                 }) {
+                val shuffle = arguments.getString("journeyShuffle", "false").toBoolean()
+                val loop = arguments.getString("journeyLoop", "false").toBoolean()
+                val reshuffle = arguments.getString("journeyReshuffle", "false").toBoolean()
+                queues.settings { it.copy(shuffle = shuffle, advancedRepeat = AdvancedRepeat(
+                    queueEnd = if (loop) QueueEnd.Repeat else QueueEnd.Stop, reshuffle = reshuffle)) }
+                barrier()
                 queues.attach(player)
                 withTimeout(300000) {
                     while (!withContext(Dispatchers.Main) { player.engine.playbackState == Player.STATE_READY }) delay(10)
                 }
                 val captures = mutableListOf<Double>()
                 val acknowledgements = mutableListOf<Double>()
+                val runtime = Runtime.getRuntime()
+                val peak = java.util.concurrent.atomic.AtomicLong(runtime.totalMemory() - runtime.freeMemory())
+                val sampler = launch(Dispatchers.Default) {
+                    while (isActive) {
+                        peak.updateAndGet { maxOf(it, runtime.totalMemory() - runtime.freeMemory()) }
+                        delay(100)
+                    }
+                }
                 val gcBefore = android.os.Debug.getRuntimeStats()
                 val started = android.os.SystemClock.elapsedRealtimeNanos()
                 val done = CompletableDeferred<Unit>()
@@ -1629,17 +2220,17 @@ class PlaybackIntentTest {
                     }
                     queues.act(emptyList(), SongTap.Append) { done.complete(Unit) }
                 }
-                withTimeout(300000) { done.await() }
+                try { withTimeout(300000) { done.await() } } finally { sampler.cancelAndJoin() }
                 val elapsed = (android.os.SystemClock.elapsedRealtimeNanos() - started) / 1_000_000.0
                 withContext(Dispatchers.Main) {
                     assertEquals(20, acknowledgements.size)
                     assertEquals(20, captures.size)
                     assertNull(queues.state.value.problem)
-                    assertEquals("duplicate-" + (entries - 10), player.currentMediaItem!!.mediaId)
+                    assertEquals(first.currentEntryId, player.currentMediaItem!!.mediaId)
                 }
                 fun p95(values: List<Double>) = values.sorted()[kotlin.math.ceil(values.size * .95).toInt() - 1]
                 // The seek receipt immediately precedes capture(); its first native item-count read follows template publication.
-                val line = "entries=$entries tracks=$songs samples=20 queuedCommands=60 maxOutstandingSeeks=20 captureToPublishUpperP95Ms=${p95(captures)} acknowledgementP95Ms=${p95(acknowledgements)} drainMs=$elapsed captureSamples=$captures acknowledgementSamples=$acknowledgements gcBefore=$gcBefore gcAfter=${android.os.Debug.getRuntimeStats()}"
+                val line = "entries=$entries tracks=$songs shuffle=$shuffle loop=$loop reshuffle=$reshuffle peakBytes=${peak.get()} settledBytes=${runtime.totalMemory() - runtime.freeMemory()} maxBytes=${runtime.maxMemory()} samples=20 queuedCommands=60 maxOutstandingSeeks=20 captureToPublishUpperP95Ms=${p95(captures)} acknowledgementP95Ms=${p95(acknowledgements)} drainMs=$elapsed captureSamples=$captures acknowledgementSamples=$acknowledgements gcBefore=$gcBefore gcAfter=${android.os.Debug.getRuntimeStats()}"
                 android.util.Log.i("Latency957", line)
                 File(nativeEvidenceDirectory("window-957", context.getExternalFilesDir(null)), "latency.txt").appendText(line + "\n")
             }
@@ -1665,7 +2256,7 @@ class PlaybackIntentTest {
     }
 
     private fun fixture(attach: Boolean = true, blockRestore: Boolean = false, rawPlayer: Boolean = false,
-        duplicateOccurrences: Boolean = false, occurrences: Int = 3, librarySize: Int = 1, initialIndex: Int = 0, timeoutMs: Long = 20000, playbackStore: ((List<Track>) -> LibraryStore)? = null, noCurrent: Boolean = false, permissions: FolderPermissions? = null, test: suspend Fixture.() -> Unit) = runBlocking {
+        duplicateOccurrences: Boolean = false, occurrences: Int = 3, librarySize: Int = 1, initialIndex: Int = 0, timeoutMs: Long = 20000, playbackStore: ((List<Track>) -> LibraryStore)? = null, noCurrent: Boolean = false, permissions: FolderPermissions? = null, actorContext: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext, test: suspend Fixture.() -> Unit) = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val id = java.util.UUID.randomUUID().toString()
@@ -1685,7 +2276,7 @@ class PlaybackIntentTest {
         val preferences = QueuePreferences(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences("intent-$id", mode)
         })
-        val actor = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val actor = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + actorContext)
         val readers = NativeReaders()
         val itemBuilds = AtomicInteger()
         val queues = QueueController(dao, preferences, library, actor, readers, mediaItemFactory = { entryId, resolved, origin ->
@@ -1740,6 +2331,10 @@ class PlaybackIntentTest {
         val player: RecordingPlayer, val controls: QueueTransportPlayer, val first: ListeningQueue, val second: ListeningQueue,
         val track: Track, val file: File, val readers: NativeReaders, val library: LibraryRepository,
         val itemBuilds: AtomicInteger, val newPlayer: suspend () -> RecordingPlayer) : CoroutineScope by scope {
+        suspend fun command(action: suspend () -> Unit) = withContext(Dispatchers.Main) {
+            val edit = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
+            kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> { edit.invoke(queues, false, {}, action, it) }
+        }
         suspend fun withHeldEdit(trackId: String, action: suspend () -> Unit) {
             val entered = CompletableDeferred<Unit>()
             val finish = CompletableDeferred<Unit>()
@@ -1766,6 +2361,13 @@ class PlaybackIntentTest {
     }
 
     private class RecordingPlayer(val engine: ExoPlayer) : ForwardingPlayer(engine) {
+        val selectionCalls = CopyOnWriteArrayList<String>()
+        override fun setMediaItems(items: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
+            selectionCalls.add("load")
+            super.setMediaItems(items, startIndex, startPositionMs)
+        }
+        override fun stop() { selectionCalls.add("stop"); super.stop() }
+        override fun clearMediaItems() { selectionCalls.add("clear"); super.clearMediaItems() }
         var timelineRead: (() -> Unit)? = null
         override fun getMediaItemCount(): Int {
             timelineRead?.also { timelineRead = null; it() }
@@ -1774,6 +2376,7 @@ class PlaybackIntentTest {
         val seekVisits = CopyOnWriteArrayList<String>()
         val positionSeeks = CopyOnWriteArrayList<Pair<String?, Long>>()
         override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+            selectionCalls.add("seek:${getMediaItemAt(mediaItemIndex).mediaId}:$positionMs")
             seekVisits.add(getMediaItemAt(mediaItemIndex).mediaId)
             super.seekTo(mediaItemIndex, positionMs)
         }
@@ -1798,11 +2401,12 @@ class PlaybackIntentTest {
         override fun isPlaying() = playWhenReady && playbackState == Player.STATE_READY && playerError == null &&
             playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE && engine.isPlaying
         override fun setPlayWhenReady(playWhenReady: Boolean) {
+            selectionCalls.add("play:$playWhenReady")
             requested.add(playWhenReady)
             if (playWhenReady) trueRequestSources.add(engine.currentMediaItem?.mediaMetadata?.extras?.getString("trackId"))
             super.setPlayWhenReady(playWhenReady)
         }
-        override fun prepare() { preparedWhilePlaying = preparedWhilePlaying || playWhenReady; super.prepare() }
+        override fun prepare() { selectionCalls.add("prepare"); preparedWhilePlaying = preparedWhilePlaying || playWhenReady; super.prepare() }
     }
 
     private class Gate {
@@ -1869,10 +2473,11 @@ class PlaybackIntentTest {
         override suspend fun clearJourney(id: String): Unit = error("save overridden")
         override suspend fun upsertVisits(visits: List<VisitRecord>): Unit = error("save overridden")
         override suspend fun updateVisits(visits: List<VisitRecord>): Int = error("save overridden")
-        override suspend fun upsertCycleMembers(members: List<CycleMemberRecord>): Unit = error("save overridden")
-        override suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int = error("save overridden")
+        override suspend fun upsertCycleMembers(members: Sequence<CycleMemberRecord>): Unit = error("save overridden")
+        override suspend fun updateVisited(id: String, cycle: Long, entries: List<String>, visited: Boolean): Int = error("save overridden")
+        override suspend fun clearCycle(id: String, cycle: Long): Unit = error("save overridden")
         override suspend fun deleteVisits(queueId: String, tokens: List<String>): Unit = error("save overridden")
-        override suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("save overridden")
+        override suspend fun deleteSparseMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("save overridden")
         override suspend fun insertEntries(entries: List<EntryRecord>): Unit = error("save overridden")
         override suspend fun clearEntries(id: String): Unit = error("save overridden")
         override suspend fun deleteQueue(id: String): Unit = error("save overridden")

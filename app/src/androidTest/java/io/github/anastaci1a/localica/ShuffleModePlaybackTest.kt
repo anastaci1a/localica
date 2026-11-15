@@ -85,6 +85,67 @@ class ShuffleModePlaybackTest {
         }
     }
 
+    @Test fun enablingShuffleAtTheMiddleSupportsPreviousAndSwipeThenRetracesAndExhausts() = fixture { f ->
+        f.queues.settings { it.copy(shuffle = false, repeat = QueueRepeat.Off) }
+        f.check { !f.queues.state.value.settings.shuffle }
+        f.committed()
+        val anchor = f.queues.state.value.library.active!!.journey!!.current!!
+        f.queues.shuffle()
+        f.check { f.queues.state.value.settings.shuffle }
+        f.committed()
+        val pending = f.queues.state.value.library.active!!.journey!!.window().filter { it.entryId in f.ids.drop(4) }
+            .associateBy { it.entryId }
+        assertEquals(listOf(anchor), f.queues.state.value.library.active!!.journey!!.history)
+        f.queues.previous(alwaysSong = true); f.at(2)
+        val previous = f.queues.state.value.library.active!!.journey!!.previous!!
+        val swiped = CompletableDeferred<Boolean>()
+        f.queues.swipeTo(previous.token) { swiped.complete(it) }
+        assertTrue(runBlocking { withTimeout(10000) { swiped.await() } })
+        f.at(1)
+        f.queues.previous(alwaysSong = true); f.at(0)
+        assertNull(f.queues.state.value.library.active!!.journey!!.previous)
+        for (index in 1..3) { f.queues.next(); f.at(index) }
+        assertEquals(anchor, f.queues.state.value.library.active!!.journey!!.current)
+        val remaining = mutableSetOf<String>()
+        repeat(3) {
+            val next = f.queues.state.value.library.active!!.journey!!.next!!
+            assertEquals(pending[next.entryId], next)
+            assertTrue(remaining.add(next.entryId))
+            f.queues.next(); f.at(f.ids.indexOf(next.entryId))
+        }
+        assertEquals(f.ids.drop(4).toSet(), remaining)
+        assertNull(f.queues.state.value.library.active!!.journey!!.next)
+        f.main { assertFalse(f.player.hasNextMediaItem()) }
+    }
+
+    @Test fun nativeJumpToShufflePredecessorKeepsForwardHistoryAndUniqueVisitIdentity() = fixture { f ->
+        f.queues.settings { it.copy(shuffle = false, repeat = QueueRepeat.Off) }
+        f.check { !f.queues.state.value.settings.shuffle }; f.committed()
+        f.queues.shuffle()
+        f.check { f.queues.state.value.settings.shuffle }; f.committed()
+        f.queues.next()
+        f.check { f.queues.state.value.library.active!!.journey!!.cursor == 1 }; f.committed()
+        val before = f.queues.state.value.library.active!!.journey!!
+        val predecessor = before.window().first()
+        assertTrue(before.history.none { it.token == predecessor.token })
+        f.main {
+            assertEquals(predecessor.token, f.player.getMediaItemAt(0).queueVisit)
+            f.player.seekTo(0, 0)
+        }
+        f.check { f.queues.state.value.library.active!!.journey!!.current?.token == predecessor.token }
+        f.committed()
+        val arrived = f.queues.state.value.library.active!!.journey!!
+        assertEquals(0, arrived.cursor)
+        assertEquals(before.history, arrived.history.drop(1))
+        assertEquals(arrived.window().size, arrived.window().map { it.token }.toSet().size)
+        for (visit in before.history) {
+            f.queues.next()
+            f.check { f.player.currentMediaItem?.queueVisit == visit.token &&
+                f.queues.state.value.library.active!!.journey!!.current == visit }
+            f.committed()
+        }
+    }
+
     @Test fun offKeepsSimpleAndAdvancedRepeatPoliciesAndCurrentPosition() = fixture { f ->
         val choices = listOf(
             QueueSettings(shuffle = true),
@@ -425,7 +486,8 @@ class ShuffleModePlaybackTest {
             main { player.playerError?.let { throw AssertionError("Native playback failed", it) }; ready = condition() }
             ready
         }
-        fun committed() = await(timeoutMs = 10_000) { dao.committed == queues.state.value.library }
+        fun committed() = await(timeoutMs = 10_000) { queues.state.value.let {
+            dao.committed == it.library } }
         fun at(index: Int) {
             check { player.currentMediaItem?.mediaId == ids[index] && queues.state.value.library.active?.currentEntryId == ids[index] && player.playbackState == Player.STATE_READY }
             committed()
@@ -525,10 +587,11 @@ private class ShuffleGateDao(private val delegate: QueueDao) : QueueDao() {
     override suspend fun clearJourney(id: String): Unit = error("Use save")
     override suspend fun upsertVisits(visits: List<VisitRecord>): Unit = error("Use save")
     override suspend fun updateVisits(visits: List<VisitRecord>): Int = error("Use save")
-    override suspend fun upsertCycleMembers(members: List<CycleMemberRecord>): Unit = error("Use save")
-    override suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int = error("Use save")
+    override suspend fun upsertCycleMembers(members: Sequence<CycleMemberRecord>): Unit = error("Use save")
+    override suspend fun updateVisited(id: String, cycle: Long, entries: List<String>, visited: Boolean): Int = error("Use save")
+    override suspend fun clearCycle(id: String, cycle: Long): Unit = error("Use save")
     override suspend fun deleteVisits(queueId: String, tokens: List<String>): Unit = error("Use save")
-    override suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("Use save")
+    override suspend fun deleteSparseMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("Use save")
     override suspend fun insertEntries(entries: List<EntryRecord>): Unit = error("Use save")
     override suspend fun clearEntries(id: String): Unit = error("Use save")
     override suspend fun deleteQueue(id: String): Unit = error("Use save")

@@ -30,7 +30,8 @@ class QueueDatabaseTest {
             db.queues().save(QueueLibrary(), saved)
             db.close(); db = Room.databaseBuilder(context, QueueDatabase::class.java, name).build()
             assertEquals(saved, db.queues().read())
-            val restored = db.queues().read().active!!.journey!!
+            val restoredQueue = db.queues().read().active!!
+            val restored = restoredQueue.journey!!.reconcile(restoredQueue.ids, restoredQueue.currentEntryId, restoredQueue.journey.modes)
             assertEquals(byLabel["B"], restored.next?.entryId)
             val branch = restored.select(byLabel.getValue("X"), ids)
             val next = saved.update(saved.active!!.copy(currentEntryId = branch.current!!.entryId, positionMs = 0, journey = branch))
@@ -60,7 +61,7 @@ class QueueDatabaseTest {
             old.version = 1
         }
         val db = Room.databaseBuilder(context, QueueDatabase::class.java, name)
-            .addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6, QueueDatabase.MIGRATION_6_7).build()
+            .addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6, QueueDatabase.MIGRATION_6_7, QueueDatabase.MIGRATION_7_8).build()
         try {
             val restored = db.queues().read()
             assertEquals(listOf("old", "new"), restored.queues.map { it.id })

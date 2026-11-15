@@ -299,7 +299,7 @@ class WorkflowTests(unittest.TestCase):
         for job, parent in parents.items():
             self.assertEqual({'identity', parent}, set(jobs[job]['needs']))
             # focused_36 adds the self-hosted owner guard (#592) after the same status condition.
-            self.assertTrue(jobs[job]['if'].startswith("${{ needs.identity.result == 'success' && ("), jobs[job]['if'])
+            self.assertTrue(jobs[job]['if'].startswith("${{ needs.identity.result == 'success' && !inputs.build_only && ("), jobs[job]['if'])
             self.assertIn('!cancelled()', jobs[job]['if'])
         for name in ('build', 'focused_26'):
             self.assertEqual('identity', jobs[name]['needs'])

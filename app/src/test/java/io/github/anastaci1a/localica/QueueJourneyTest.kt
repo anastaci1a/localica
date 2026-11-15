@@ -20,7 +20,7 @@ class QueueJourneyTest {
         path = path.arrive(path.history[1].token, ids, random).select("X", ids, random)
         assertEquals(listOf("A", "D", "X"), path.history.map { it.entryId })
         assertEquals(setOf("A", "D", "B", "F", "X"), path.visited)
-        assertEquals(setOf("C", "E"), path.future.map { it.entryId }.toSet())
+        assertEquals(setOf("C", "E"), path.window().filterNot { it in path.history }.map { it.entryId }.toSet())
     }
 
     @Test fun restartBeginsAtOnlyTheKnownCursorAndForwardVisitsAreDistinctAcrossCycles() {
@@ -45,15 +45,15 @@ class QueueJourneyTest {
         var path = QueueJourney.start(ids, "A", JourneyModes(shuffle = true), random)
         path = path.select("D", ids, random).select("B", ids, random).select("F", ids, random)
         path = path.arrive(path.history[1].token, ids, random)
-        val pending = path.future.associate { it.entryId to it.token }
+        val pending = path.window().filterNot { it in path.history }.associate { it.entryId to it.token }
         val changed = ids.reversed().filterNot { it == "B" } + "new"
         path = path.reconcile(changed, "D", path.modes, random)
         assertEquals(listOf("A", "D", "F"), path.history.map { it.entryId })
         assertEquals("F", path.next?.entryId)
         assertEquals("D", path.current?.entryId)
         assertFalse("B" in path.visited)
-        assertTrue(path.future.any { it.entryId == "new" })
-        path.future.filter { it.entryId in pending }.forEach { assertEquals(pending[it.entryId], it.token) }
+        assertTrue(path.window().filterNot { it in path.history }.any { it.entryId == "new" })
+        path.window().filterNot { it in path.history }.filter { it.entryId in pending }.forEach { assertEquals(pending[it.entryId], it.token) }
     }
 
     @Test fun playerWindowIsBoundedButOldHistoryRemainsReachable() {
@@ -76,6 +76,6 @@ class QueueJourneyTest {
         path = path.select("B", order, random)
         assertEquals(1L, path.cycle)
         assertEquals(setOf("B"), path.visited)
-        assertEquals(setOf("A", "C"), path.future.map { it.entryId }.toSet())
+        assertEquals(setOf("A", "C"), path.window().filterNot { it in path.history }.map { it.entryId }.toSet())
     }
 }

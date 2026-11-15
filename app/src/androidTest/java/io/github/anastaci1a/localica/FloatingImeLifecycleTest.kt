@@ -18,13 +18,19 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import java.io.File
 
 /** Real synthetic IME Window; not Gboard or physical-device certification. */
 @OptIn(ExperimentalLayoutApi::class)
 class FloatingImeLifecycleTest {
+    companion object {
+        @JvmField @ClassRule val nativeIme = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+    }
+
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val records = mutableListOf<String>()
     private val decisions = mutableListOf<String>()
@@ -113,7 +119,7 @@ class FloatingImeLifecycleTest {
         check(Build.VERSION.SDK_INT >= 30) { "This isolated real-window contract requires native IME visibility" }
         val testPackage = InstrumentationRegistry.getInstrumentation().context.packageName
         val component = "$testPackage/io.github.anastaci1a.localica.FloatingTestImeService"
-        val keys = listOf("default_input_method", "enabled_input_methods", "selected_input_method_subtype", "input_methods_subtype_history", "show_ime_with_hard_keyboard")
+        val keys = listOf("default_input_method", "enabled_input_methods", "selected_input_method_subtype", "input_methods_subtype_history")
         val original = keys.associateWith { shell("settings get secure $it") }
         // Validate every value before the first mutation so restoration never
         // discovers an unrepresentable empty/whitespace argument after changing IMEs.
@@ -125,7 +131,6 @@ class FloatingImeLifecycleTest {
             assertTrue("Test APK declares the real IME", shell("ime list -a -s").lineSequence().any { it.trim() == component })
             records += shell("ime enable " + argument(component))
             records += shell("ime set " + argument(component))
-            shell("settings put secure show_ime_with_hard_keyboard 1")
             assertEquals(component, shell("settings get secure default_input_method"))
             compose.setContent {
                 val view = LocalView.current

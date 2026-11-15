@@ -157,6 +157,8 @@ internal class BrowsePinchMotion {
     // finished reading them. Transaction ownership still begins at recognition.
     val visualSource: BrowseStyle? get() = source.takeUnless { capturing }
     var bounds: Map<Any, Rect> = emptyMap()
+    // Result index of each captured key, so no whole-result key map exists; one instance, read at draw time (#957).
+    val indices = HashMap<String, Int>()
     var focusKey: Any? = null
     var focusTop: Int = 0
     var focusFraction = 0f
@@ -197,7 +199,7 @@ internal class BrowsePinchMotion {
         destinationReady = false
         source = null; target = null; focusKey = null
         focusTop = 0; focusFraction = 0f; focusEdge = 0
-        bounds = emptyMap(); frozen.clear()
+        bounds = emptyMap(); indices.clear(); frozen.clear()
         tracking?.cancel()
         capture = null; tracking = null; settling = null
     }
@@ -499,6 +501,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             val sourceInset = (BrowseCellGeometry(motion.sourceColumns).gridInset * density.density).roundToInt()
             motion.bounds = visible.associate { it.key to androidx.compose.ui.geometry.Rect((it.offset.x + sourceInset).toFloat(), it.offset.y.toFloat(),
                 (it.offset.x + sourceInset + it.size.width).toFloat(), (it.offset.y + it.size.height).toFloat()) }
+            motion.indices.clear(); visible.associateTo(motion.indices) { it.key.toString() to it.index - 1 }
             visible.firstOrNull()?.let { first ->
                 motion.anchorIndex = first.index - 1; motion.anchorTop = first.offset.y.toFloat()
                 motion.rowHeight = first.size.height.toFloat()

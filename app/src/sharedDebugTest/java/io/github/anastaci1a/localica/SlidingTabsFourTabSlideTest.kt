@@ -18,16 +18,19 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
+import io.github.anastaci1a.localica.pilotComposeRule as createComposeRule
 import io.github.anastaci1a.localica.navigation.MainTab
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
 import org.junit.Rule
 import org.junit.Test
 import kotlin.math.abs
 
 /** #728: four home tabs at the operator's Galaxy A35 width and density (1080 px at
  * 397 dpi, font scale 0.9), sliding one contact across every boundary both ways. */
+@RunWith(AndroidJUnit4::class)
 class SlidingTabsFourTabSlideTest {
     @get:Rule val compose = createComposeRule()
     private val four = listOf(MainTab.Home, MainTab.Library, MainTab.Playlists, MainTab.AlbumArtists)
@@ -145,11 +148,13 @@ class SlidingTabsFourTabSlideTest {
     @Test fun fittingFourTabsFollowTheFingerAcrossEveryBoundary() {
         fixture(.9f, four, MainTab.Home)
         slideAcrossEveryBoundary("fresh four tabs")
+        host.pilotScreenshot("tabs-fresh")
     }
 
     @Test fun fittingFourTabsFollowTheFingerAfterAScrolledSixTabBar() {
         fromScrolledSixTabs(.9f)
         slideAcrossEveryBoundary("six then four tabs")
+        host.pilotScreenshot("tabs-six-to-four")
     }
 
     @Test fun pressingTheLastTabThenMovingKeepsItAfterAScrolledSixTabBar() {
@@ -158,6 +163,7 @@ class SlidingTabsFourTabSlideTest {
         // The recording: press Album Artists, move right past slop, and the lens fell back to Playlists.
         slide(c * 3.5f, c * 3.5f + 3f * slop, width + 38f * a35)
         compose.runOnIdle { assertEquals(MainTab.AlbumArtists, active) }
+        host.pilotScreenshot("tabs-last-after-six")
     }
 
     @Test fun twiceFontFourTabsOverflowAtMeasuredWidthsAndKeepEveryTabReachable() {
@@ -175,6 +181,7 @@ class SlidingTabsFourTabSlideTest {
             compose.onNodeWithTag("tab-option-$index").performScrollTo().performClick()
             compose.runOnIdle { assertEquals(four[index], active) }
         }
+        host.pilotScreenshot("tabs-twice-font")
     }
 
     @Test fun twiceFontAfterAScrolledSixTabBarStillOverflowsConsistently() {
@@ -185,5 +192,6 @@ class SlidingTabsFourTabSlideTest {
         compose.runOnIdle { assertEquals(MainTab.AlbumArtists, active) }
         compose.onNodeWithTag("tab-option-0").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(MainTab.Home, active) }
+        host.pilotScreenshot("tabs-twice-after-six")
     }
 }

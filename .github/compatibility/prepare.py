@@ -31,7 +31,7 @@ test = 'app/src/androidTest/java/io/github/anastaci1a/localica/LegacyJourneyComp
 build = 'app/build.gradle.kts'
 protected = [base + name for name in ['queue/QueueDatabase.kt', 'queue/QueueController.kt',
     'editing/MetadataRefreshJournal.kt', 'LocalicaApplication.kt']]
-protected += ['app/schemas/io.github.anastaci1a.localica.queue.QueueDatabase/7.json']
+protected += [f'app/schemas/io.github.anastaci1a.localica.queue.QueueDatabase/{version}.json' for version in (7, 8)]
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -65,6 +65,9 @@ for index, phase in enumerate(('seed', 'bridge', 'verify')):
         old = 'JourneyModes(shuffle, loop, reshuffle), orderedTraversalId, orderedAnchorToken)'
         assert content.count(old) == 1
         content = content.replace(old, 'JourneyModes(shuffle, loop, reshuffle))')
+        old = 'QueueJourney(ordered.take(historySize), cursor, cycle,'
+        assert content.count(old) == 1
+        content = content.replace(old, 'QueueJourney(ordered.take(historySize), cursor, emptyList(), cycle,')
         (tree / records).write_text(content)
         allowed |= {journey, records, test}
     current = files(tree)

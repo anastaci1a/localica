@@ -235,7 +235,7 @@ internal fun BrowsePinchMotion.pinchFades(grid: LazyGridState, indices: Map<Stri
     }
     val row = visible.firstOrNull()
     if (row != null) {
-        val rowIndex = indices.retainedPinchItemIndex(row.key)
+        val rowIndex = indices.retainedPinchItemIndex(row.key).takeIf { it >= 0 } ?: (row.index - 1)
         val pitch = max(row.size.height.toFloat(), 1f)
         bounds.forEach { (key, old) ->
             if (key in live) return@forEach
@@ -268,19 +268,6 @@ internal var pinchDrawProbe: ((PinchDrawnFrame) -> Unit)? = null
 private data class RetainedPinchPlacement(val key: Any, val item: FrozenBrowseItem, val origin: Offset,
     val targetWidth: Float, val targetHeight: Float, val alpha: Float, val index: Int,
     val geometryProgress: Float)
-
-/** [indices] is the existing last-wins map for these same [items]. Reuse it for
- * unique keys; malformed duplicate input must retain indexOf's first match. */
-internal fun <T> retainedPinchItemIndices(items: List<T>, indices: Map<String, Int>,
-    keyOf: (T) -> String): Map<String, Int> {
-    if (indices.size == items.size) return indices
-    return buildMap {
-        items.forEachIndexed { index, item ->
-            val key = keyOf(item)
-            if (!containsKey(key)) put(key, index)
-        }
-    }
-}
 
 /** Lazy layout can briefly expose a removed key or a non-item slot. */
 internal fun Map<String, Int>.retainedPinchItemIndex(key: Any): Int =
@@ -368,7 +355,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         val retained = linkedMapOf<Any, RetainedPinchPlacement>()
         val row = visible.firstOrNull { it.key != "browser-notice" }
         if (row != null) {
-            val rowIndex = indices.retainedPinchItemIndex(row.key)
+            val rowIndex = indices.retainedPinchItemIndex(row.key).takeIf { it >= 0 } ?: (row.index - 1)
             val pitch = max(row.size.height.toFloat(), 1f)
             val geometry = BrowseCellGeometry(motion.targetColumns)
             val sourceInset = (BrowseCellGeometry(motion.sourceColumns).cardInset * motion.pixelDensity).roundToInt()

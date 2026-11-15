@@ -382,7 +382,7 @@ class BrowsePinchLayersTest {
             val keys = fixture.keys.value
             val indices = remember(keys) {
                 val shared = keys.withIndex().associate { it.value to it.index }
-                CountedIndices(retainedPinchItemIndices(keys, shared) { it })
+                CountedIndices(shared)
             }
             val empty = rememberTextMeasurer().measure(AnnotatedString(""))
             SideEffect {
@@ -439,9 +439,10 @@ class BrowsePinchLayersTest {
         compose.runOnIdle {
             val row = fixture.grid.layoutInfo.visibleItemsInfo.first { it.key != "browser-notice" }
             val keys = fixture.keys.value
-            // Preserve the old list-search oracle, including a missing anchor's -1.
+            // The list-search oracle; an anchor missing from the result uses its grid index, as a destination-only
+            // row must now that indices hold captured keys only (#957 slice B; was -1 arithmetic).
             val index = keys.indexOf("frozen")
-            val rowIndex = keys.indexOf(row.key)
+            val rowIndex = keys.indexOf(row.key).takeIf { it >= 0 } ?: (row.index - 1)
             val geometry = BrowseCellGeometry(fixture.columns)
             val inset = geometry.cardVerticalInset(BrowseStyle()).roundToInt()
             val y = row.offset.y + (index / fixture.columns - rowIndex / fixture.columns) * row.size.height

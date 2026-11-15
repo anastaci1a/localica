@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica
 
 import android.net.Uri
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import io.github.anastaci1a.localica.localicaAndroidComposeRule as createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.*
@@ -58,7 +60,10 @@ class TagEditorFlowTest {
         compose.onPopupAction(hasText("Close")).performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Retrace tab history").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithContentDescription("Library").performClick()
-        compose.onNodeWithText("Songs").performClick()
+        compose.onPopupAction(hasText("Songs") and hasAnyAncestor(hasScrollToIndexAction() and
+            SemanticsMatcher("Library pager endpoint") {
+                it.config.getOrNull(SemanticsProperties.HorizontalScrollAxisRange)?.run { maxValue() > 0f && value() >= maxValue() - 1f } == true
+            })).performClick()
         val inList = hasAnyAncestor(hasTestTag("browser-list"))
         compose.onPopupAction(hasTestTag("browser-list")).performScrollToNode(hasText("Morning tone"))
         val original = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }

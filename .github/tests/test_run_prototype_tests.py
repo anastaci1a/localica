@@ -32,7 +32,7 @@ class RunnerContract(unittest.TestCase):
         shutil.copyfile(ROOT/'.github/run-prototype-tests.sh', self.root/'runner.sh')
         for helper in ('run-prototype-tests.sh', 'run-prototype-repeat.py', 'prototype-methods.py'):
             shutil.copyfile(ROOT/'.github'/helper, self.root/'.github'/helper)
-        (self.root/'.github/prototype-risk-classes.txt').write_text(REQUIRED+'\n'+FOCUS+'\n'+CONTRAST+'\n'+AFFECTED+'\n')
+        (self.root/'.github/prototype-risk-classes.txt').write_text(REQUIRED+'\n'+FOCUS+'\n'+CONTRAST+'\n')
         for cls in [REQUIRED,FOCUS,CONTRAST,AFFECTED]:
             (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text('package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+' { @org.junit.Test fun regression() {} }\n')
         for apk in ['app/build/outputs/apk/debug/app-debug.apk','app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk']:
@@ -417,22 +417,41 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_injection(self):
         self.run_case(2,AFFECTED_CLASSES=AFFECTED+';touch PWNED')
         self.assertFalse((self.root/'PWNED').exists())
-    def test_unknown(self): self.run_case(2,AFFECTED_CLASSES='io.github.anastaci1a.localica.UnknownTest')
-    def test_registered_nested_package_keeps_all_mandatory_regressions(self):
-        cls = 'io.github.anastaci1a.localica.ui.engine.SearchReturnOracleSensitivityTest'
-        with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
-            inventory.write(cls+'\n')
-        source = self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')
-        source.parent.mkdir(parents=True, exist_ok=True)
-        source.write_text('package io.github.anastaci1a.localica.ui.engine\nclass SearchReturnOracleSensitivityTest { @org.junit.Test fun regression() {} }\n')
+    def test_unknown(self):
+        self.run_case(2, AFFECTED_CLASSES='io.github.anastaci1a.localica.UnknownTest')
+        self.assertFalse((self.root/'argv.json').exists())
+
+    def nested_source(self):
+        cls = 'io.github.anastaci1a.localica.ui.engine.NestedTest'
+        path = self.root/('app/src/androidTest/java/'+cls.replace('.', '/')+'.kt')
+        path.parent.mkdir(parents=True)
+        path.write_text('package '+cls.rsplit('.', 1)[0]+'\nclass NestedTest { @org.junit.Test fun regression() {} }\n')
+        return cls
+
+    def test_nested_source_without_hand_registration_is_accepted(self):
+        cls = self.nested_source()
         self.run_case(AFFECTED_CLASSES=cls)
-        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual({cls,REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+        receipt = json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({cls, REQUIRED, FOCUS, CONTRAST}, set(receipt['selectors']))
+        self.assertEqual({cls, REQUIRED, FOCUS, CONTRAST}, set(receipt['counts']))
+
+    def test_nested_exact_methods_without_hand_registration_are_accepted(self):
+        cls = self.nested_source()
+        self.run_case(AFFECTED_CLASSES=cls, PROTOTYPE_METHODS=cls+'#regression', _timeout=30)
+        receipt = json.loads((self.root/'prototype-evidence/iterations/iteration-01/prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({cls+'#regression': 'passed'}, receipt['methods'])
+
+    def test_bad_nested_selectors_fail_before_instrumentation(self):
+        cls = self.nested_source()
+        for value in (cls.replace('.ui.', '..ui.'), cls+'#regression', cls+',',
+                      cls+';touch PWNED', cls+'\n', cls.replace('.ui.', './ui.')):
+            with self.subTest(value=value):
+                self.run_case(2, AFFECTED_CLASSES=value)
+                self.assertFalse((self.root/'argv.json').exists())
+                self.assertFalse((self.root/'PWNED').exists())
 
     def test_twenty_distinct_affected_classes_keep_all_mandatory_regressions(self):
         classes = ['io.github.anastaci1a.localica.Additional%dTest' % i for i in range(20)]
-        with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
-            inventory.write('\n'.join(classes)+'\n')
         for cls in classes:
             (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text(
                 'package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+
@@ -443,8 +462,6 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
     def distinct_affected_sources(self, count):
         classes = ['io.github.anastaci1a.localica.Coverage%dTest' % i for i in range(count)]
-        with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
-            inventory.write('\n'.join(classes)+'\n')
         for cls in classes:
             (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text(
                 'package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+
@@ -551,8 +568,6 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_menu_classes_run_in_full_with_all_mandatory_regressions(self):
         menu=['io.github.anastaci1a.localica.GlassMenuContentTest',
               'io.github.anastaci1a.localica.GlassMenuViewportTouchTest']
-        with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
-            inventory.write('\n'.join(menu)+'\n')
         for cls in menu:
             (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text(
                 'package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+
@@ -563,8 +578,6 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
                          set(evidence['methods']))
 
     def skip_source(self, cls, method):
-        with (self.root/'.github/prototype-risk-classes.txt').open('a') as stream:
-            stream.write(cls+'\n')
         (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text(
             'package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+
             ' { @org.junit.Test fun regression() {} @org.junit.Test fun '+method+'() {} }\n')
@@ -766,8 +779,6 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
     def gated_source(self, name, body, prefix=''):
         cls=self.PKG+name
-        with (self.root/'.github/prototype-risk-classes.txt').open('a') as stream:
-            stream.write(cls+'\n')
         (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text(
             'package io.github.anastaci1a.localica\n'+prefix+'class '+name+' { '+body+' }\n')
         return cls
@@ -993,7 +1004,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False, infrastructure_jobs=(), failed_jobs=(), historical_infrastructure=False, diagnostic_skip=None, focused_api='both'):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False, infrastructure_jobs=(), failed_jobs=(), historical_infrastructure=False, diagnostic_skip=None, focused_api='both', build_only=False):
         import yaml, hashlib
         affected_classes=affected_classes or (['io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest'] if diagnostic_skip else [AFFECTED])
         selected=[REQUIRED,FOCUS,CONTRAST]+affected_classes
@@ -1007,7 +1018,9 @@ class WorkflowContract(unittest.TestCase):
             (canonical/'provenance.json').write_text(json.dumps({'sha':'a'*40 if wrong_sha else SHA,'apk_sha256':hashlib.sha256(b'wrong' if wrong_digest else b'canonical').hexdigest(),'run_id':build_run,'run_attempt':build_attempt,'signing_certificate':'verified-test-certificate'}))
             checks={k:{'result':'success'} for k in workflow['jobs']['evidence']['needs']}
             for api in ('26', '36'):
-                if focused_api not in ('both', api):
+                if build_only:
+                    checks[f'compatibility_{api}']['result'] = 'skipped'
+                if build_only or focused_api not in ('both', api):
                     checks[f'focused_{api}']['result'] = 'skipped'
             if failed:checks['focused_36']['result']='failure'
             for job in failed_jobs:
@@ -1023,7 +1036,7 @@ class WorkflowContract(unittest.TestCase):
                     'sha': SHA, 'run_id': '1', 'run_attempt': decision_attempt, 'job': job, 'issue': 752}))
             if not missing:
                 for api in (26,36):
-                    if focused_api not in ('both', str(api)):
+                    if build_only or focused_api not in ('both', str(api)):
                         continue
                     focused=evidence/f'prototype-focused-api-{api}'/'prototype-evidence';focused.mkdir(parents=True)
                     inventory={'selectors':selected,'runtime_methods':[c+'#regression' for c in selected]}
@@ -1106,7 +1119,7 @@ class WorkflowContract(unittest.TestCase):
                         (iterations/'summary.json').write_text(json.dumps(summary))
                     compatibility=evidence/f'prototype-compatibility-api-{api}';compatibility.mkdir()
                     (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
-            env=dict(os.environ,PYTHONPATH=str(ROOT/'.github/test-evidence'),PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),FOCUSED_API=focused_api,CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=','.join(affected_classes),COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
+            env=dict(os.environ,PYTHONPATH=str(ROOT/'.github/test-evidence'),PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),FOCUSED_API=focused_api,BUILD_ONLY=str(build_only).lower(),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=','.join(affected_classes),COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
             result=subprocess.run(['bash','-c',script],cwd=root,env=env,capture_output=True,text=True)
             out=root/'prototype-delivery'
             manifest=json.loads((out/'manifest.json').read_text()) if (out/'manifest.json').exists() else None
@@ -1125,6 +1138,57 @@ class WorkflowContract(unittest.TestCase):
                 self.assertEqual([], apks)
                 self.assertEqual({api}, set(manifest['focused_evidence']))
                 self.assertEqual([], manifest['validation_errors'])
+
+    def test_build_only_keeps_all_device_checks_not_run_and_blocks_delivery(self):
+        import yaml
+        workflow = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
+        for event in ('workflow_dispatch', 'workflow_call'):
+            value = workflow['on'][event]['inputs']['build_only']
+            self.assertEqual('boolean', value['type'])
+            self.assertIs(False, value['default'])
+        for name in ('focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'):
+            self.assertIn('!inputs.build_only', workflow['jobs'][name]['if'])
+        self.assertNotIn('if', workflow['jobs']['build'])
+        result, manifest, apks = self.decision(build_only=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIs(True, manifest['build_only'])
+        self.assertEqual({}, manifest['focused_evidence'])
+        self.assertEqual({}, manifest['compatibility_evidence'])
+        self.assertEqual(['26', '36'], manifest['not_run_focused_apis'])
+        self.assertEqual([], manifest['validation_errors'])
+        self.assertFalse(manifest['ready_for_prototype_delivery'])
+        self.assertEqual([], apks)
+        for name in ('focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'):
+            self.assertEqual('not-run', manifest['checks'][name])
+
+    def test_build_exports_the_verified_project_signed_instrumentation_pair(self):
+        import yaml
+        steps = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']['build']['steps']
+        build = next(s['run'] for s in steps if s.get('name') == 'Build and check')
+        self.assertIn('assembleDebugAndroidTest', build.split())
+        verify = next(s for s in steps if s.get('name') == 'Verify development signing certificate')
+        upload = next(s for s in steps if s.get('with', {}).get('name') == 'prototype-signed-instrumentation-pair')
+        hashes = next(s['run'] for s in steps if s.get('name') == 'Record signed instrumentation pair checksums')
+        for apk in ('app/build/outputs/apk/debug/app-debug.apk',
+                    'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'):
+            self.assertIn(apk, verify['run'])
+            self.assertIn(apk, hashes)
+            self.assertIn(apk, upload['with']['path'].splitlines())
+        self.assertIn('test "$expected" = "$actual"', verify['run'])
+        self.assertLess(steps.index(verify), steps.index(upload))
+        self.assertEqual('error', upload['with']['if-no-files-found'])
+        self.assertNotIn('if', upload)
+        self.assertIn('prototype-signed-pair.sha256', upload['with']['path'].splitlines())
+
+    def test_focused_compile_keeps_default_gradle_and_explicit_kotlin_heap(self):
+        import yaml
+        jobs = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
+        for api in (26, 36):
+            compile = next(s['run'] for s in jobs[f'focused_{api}']['steps']
+                           if s.get('name') == 'Compile instrumentation APKs before starting emulator')
+            self.assertNotIn("-Dorg.gradle.jvmargs=", compile)
+            self.assertIn('-Pkotlin.daemon.jvmargs=-Xmx6g', compile)
+            self.assertIn('--max-workers=2', compile)
 
     def test_focused_api_input_is_bounded_and_invalid_values_fail_closed(self):
         import yaml
@@ -1448,7 +1512,7 @@ class WorkflowContract(unittest.TestCase):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
-        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner','focused_api'},set(workflow['on']['workflow_call']['inputs']))
+        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner','focused_api','build_only'},set(workflow['on']['workflow_call']['inputs']))
         self.assertEqual({'ANDROID_DEBUG_KEYSTORE','LASTFM_API_KEY'},set(workflow['on']['workflow_call']['secrets']))
         self.assertFalse(workflow['on']['workflow_call']['secrets']['LASTFM_API_KEY']['required'])
         self.assertEqual({'contents':'read'},workflow['permissions'])
@@ -1679,7 +1743,7 @@ while true; do sleep .05; done
 
 
 class RiskInventoryContract(unittest.TestCase):
-    """The reviewed prototype inventory names only existing top-level test classes, once each."""
+    """Only the mandatory regressions remain hand listed; sources own affected coverage."""
 
     def assert_inventory(self, names, *sources):
         self.assertEqual(sorted(set(names)), sorted(names), 'Duplicate inventory lines')
@@ -1695,6 +1759,7 @@ class RiskInventoryContract(unittest.TestCase):
 
     def test_every_listed_class_exists_once(self):
         lines = (ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()
+        self.assertEqual({REQUIRED, FOCUS, CONTRAST}, {line for line in lines if line.startswith('io.')})
         self.assert_inventory([line for line in lines if line.startswith('io.')],
             ROOT/'app/src/androidTest/java', ROOT/'app/src/sharedTest/java')
 

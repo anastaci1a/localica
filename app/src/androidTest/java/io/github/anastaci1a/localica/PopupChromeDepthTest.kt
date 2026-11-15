@@ -224,7 +224,8 @@ class PopupChromeDepthTest {
             File(output, "ordering.json").writeText(result.toString(2))
             assertTrue("Dialog pre-draw was actually intercepted", blockedDraws > 0)
             assertEquals("Dialog drawing is blocked until after the Activity receipt", 0, nativeDraws)
-            assertFalse("B1 reopen clears prepared before the Activity-first draw", flight.prepared)
+            // C1: the home keeps projecting (Releasing) until the window has drawn the body.
+            assertTrue("B1 the home still projects before the Activity-first window draw", flight.prepared)
             assertFalse("B1 Activity-first reopen must not hand off the stale closing layer", flight.handedOff)
         } finally {
             compose.runOnUiThread {
@@ -693,11 +694,11 @@ class PopupChromeDepthTest {
                 host = LocalView.current
                 home = rememberGlassPopupHome(false)
                 page = rememberFrostedBackdrop(home, dark = false)
-                flight = remember { GlassPopupFlight() }
+                flight = remember { GlassPopupFlight().testRun(PopupEvent.Admitted, PopupEvent.OfferReady) }
                 val layer = rememberGraphicsLayer()
                 BackdropLease(page)
                 DisposableEffect(home, layer) {
-                    flight.layer = layer; flight.prepared = true
+                    flight.layer = layer
                     home.flights.add(flight)
                     onDispose { home.flights.remove(flight) }
                 }

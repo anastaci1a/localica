@@ -24,7 +24,7 @@ class PlayNextJourneyTest {
         val pending = path.history.drop(1)
         val selected = path.select("D", ids)
         assertEquals(pending, selected.history.drop(selected.cursor + 1))
-        val arrived = path.arrive(path.future.last().token, ids)
+        val arrived = path.arrive(path.window().filterNot { it in path.history }.last().token, ids)
         assertEquals(pending, arrived.history.drop(arrived.cursor + 1))
         assertEquals(setOf("A", "D"), selected.visited)
         assertEquals("X", arrived.next!!.entryId)

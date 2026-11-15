@@ -40,7 +40,7 @@ internal class BrowseOrderScrollRequest internal constructor(
         targetOccurrenceId: String? = this.targetOccurrenceId): Int? {
         if (presentation == null || owner !== currentOwner || route != currentRoute || presentation.route != route ||
             !committed.matches(presentation.source)) return null
-        val index = targetOccurrenceId?.let { id -> presentation.result.items.indexOfFirst { it.row?.id == id } } ?: -1
+        val index = targetOccurrenceId?.let { id -> presentation.result.indexOfKey(id) } ?: -1
         return if (index < 0) 0 else index + 1
     }
 }

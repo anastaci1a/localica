@@ -6,6 +6,7 @@ import io.github.anastaci1a.localica.library.TrackLocation
 import io.github.anastaci1a.localica.library.TrackSnapshot
 import io.github.anastaci1a.localica.library.SavedOrderCodec
 import io.github.anastaci1a.localica.library.enumNameOrNull
+import io.github.anastaci1a.localica.library.mapView
 
 @Entity(tableName = "queues")
 data class QueueRecord(@PrimaryKey val id: String, val name: String, val createdAt: Long,
@@ -59,12 +60,13 @@ abstract class QueueDao {
     @Query("DELETE FROM queue_journeys WHERE queueId = :id") protected abstract suspend fun clearJourney(id: String)
     protected open suspend fun upsertVisits(visits: List<VisitRecord>) = journeyWriter().upsertVisits(visits)
     protected open suspend fun updateVisits(visits: List<VisitRecord>): Int = journeyWriter().updateVisits(visits)
-    protected open suspend fun upsertCycleMembers(members: List<CycleMemberRecord>) = journeyWriter().upsertMembers(members)
-    protected open suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int = journeyWriter().updateMembers(members)
+    protected open suspend fun upsertCycleMembers(members: Sequence<CycleMemberRecord>) = journeyWriter().upsertMembers(members)
+    @Query("UPDATE queue_cycle_members SET visited = :visited WHERE queueId = :id AND cycle = :cycle AND entryId IN (:entries)")
+    protected abstract suspend fun updateVisited(id: String, cycle: Long, entries: List<String>, visited: Boolean): Int
+    @Query("DELETE FROM queue_cycle_members WHERE queueId = :id AND cycle = :cycle")
+    protected abstract suspend fun clearCycle(id: String, cycle: Long)
     @Query("DELETE FROM queue_visits WHERE queueId = :queueId AND token IN (:tokens)")
     protected abstract suspend fun deleteVisits(queueId: String, tokens: List<String>)
-    @Query("DELETE FROM queue_cycle_members WHERE queueId = :queueId AND cycle = :cycle AND entryId IN (:entries)")
-    protected abstract suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>)
     @Insert protected abstract suspend fun insertEntries(entries: List<EntryRecord>)
     @Query("DELETE FROM queue_entries WHERE queueId = :id") protected abstract suspend fun clearEntries(id: String)
     @Query("DELETE FROM queues WHERE id = :id") protected abstract suspend fun deleteQueue(id: String)
@@ -127,7 +129,7 @@ abstract class QueueDao {
         measureSave("journey-record", if (after == null) 0 else 1) {
             if (after == null) clearJourney(id) else upsertJourney(after.record(id))
         }
-        if (before?.history != after?.history || before?.future != after?.future) {
+        if (before?.history != after?.history) {
             val (oldVisits, newVisits) = measureSave("visits-project") {
                 before?.visitRecords(id).orEmpty().associateBy { it.token } to
                     after?.visitRecords(id).orEmpty().associateBy { it.token }
@@ -139,22 +141,35 @@ abstract class QueueDao {
                 if (added.isNotEmpty()) upsertVisits(added)
             }
         }
-        if (before?.plans != after?.plans || before?.visited != after?.visited || before?.cycle != after?.cycle) {
-            val (oldMembers, newMembers) = measureSave("cycle-project") {
-                before?.cycleRecords(id).orEmpty().associateBy { it.cycle to it.entryId } to
-                    after?.cycleRecords(id).orEmpty().associateBy { it.cycle to it.entryId }
-            }
-            (oldMembers.keys - newMembers.keys).groupBy({ it.first }, { it.second }).forEach { (cycle, entries) ->
-                entries.chunked(500).forEach { deleteCycleMembers(id, cycle, it) }
-            }
-            val (retained, added) = newMembers.values.filter { oldMembers[it.cycle to it.entryId] != it }
-                .partition { it.cycle to it.entryId in oldMembers }
-            measureSave("cycle-write", retained.size + added.size) {
-                updateOrRepair(retained, ::updateCycleMembers, ::upsertCycleMembers)
-                if (added.isNotEmpty()) upsertCycleMembers(added)
+        val oldCycles = if (before?.modes?.shuffle == true) before.plans else before?.let { mapOf(it.cycle to emptyList<String>()) }.orEmpty()
+        val newCycles = if (after?.modes?.shuffle == true) after.plans else after?.let { mapOf(it.cycle to emptyList<String>()) }.orEmpty()
+        for (number in oldCycles.keys + newCycles.keys) {
+            if (number !in newCycles || number !in oldCycles || before?.modes?.shuffle != after?.modes?.shuffle ||
+                oldCycles[number] != newCycles[number] && after?.modes?.shuffle == true) {
+                clearCycle(id, number)
+                if (after != null && number in newCycles) measureSave("cycle-write", if (after.modes.shuffle) newCycles.getValue(number).size else after.visited.size) {
+                    upsertCycleMembers(after.cycleRecords(id, number))
+                }
+            } else {
+                val old = if (before?.cycle == number) before.visited else emptySet()
+                val new = if (after?.cycle == number) after.visited else emptySet()
+                for ((entries, visited) in listOf(old - new to false, new - old to true)) {
+                    entries.toList().chunked(500).forEach { batch ->
+                        if (after?.modes?.shuffle != true && !visited) deleteSparseMembers(id, number, batch)
+                        else {
+                            val count = updateVisited(id, number, batch, visited)
+                            if (count != batch.size) upsertCycleMembers(batch.asSequence().map { entry ->
+                                CycleMemberRecord(id, number, entry, if (after?.modes?.shuffle == true) newCycles.getValue(number).indexOf(entry) else 0, visited)
+                            })
+                        }
+                    }
+                }
             }
         }
     }
+
+    @Query("DELETE FROM queue_cycle_members WHERE queueId = :id AND cycle = :cycle AND entryId IN (:entries)")
+    protected abstract suspend fun deleteSparseMembers(id: String, cycle: Long, entries: List<String>)
 
     /** Avoid an INSERT/constraint exception for every retained row; preserve upsert repair if a row is missing. */
     private suspend fun <T> updateOrRepair(rows: List<T>, update: suspend (List<T>) -> Int, upsert: suspend (List<T>) -> Unit) {
@@ -207,7 +222,8 @@ private class QueueRestore {
         return ListeningQueue(queue.id, queue.name, queue.createdAt, entries, queue.currentEntryId, queue.positionMs, queue.shuffle,
             enumNameOrNull<QueueRepeat>(queue.repeat) ?: QueueRepeat.Off, queue.lastActivatedAt,
             journeys.singleOrNull()?.restore(visits.map { it.copy(entryId = shared(it.entryId)) },
-                members.map { it.copy(entryId = shared(it.entryId)) }),
+                members.map { it.copy(entryId = shared(it.entryId)) })?.let {
+                if (it.modes.shuffle) it else it.copy(plans = mapOf(it.cycle to entries.mapView(QueueEntry::id))) },
             order.copy(manual = order.manual.map(::shared)))
     }
 
@@ -215,11 +231,25 @@ private class QueueRestore {
 }
 
 @Database(entities = [QueueRecord::class, EntryRecord::class, ActiveQueueRecord::class, JourneyRecord::class,
-    VisitRecord::class, CycleMemberRecord::class], version = 7, exportSchema = true)
+    VisitRecord::class, CycleMemberRecord::class], version = 8, exportSchema = true)
 abstract class QueueDatabase : RoomDatabase() {
     abstract fun queues(): QueueDao
     abstract fun restore(): QueueRestoreDao
     companion object {
+        val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.query("""SELECT queueId FROM queue_journeys j WHERE historySize < 0 OR
+                    (historySize = 0 AND cursor != -1) OR (historySize > 0 AND (cursor < 0 OR cursor >= historySize)) OR
+                    EXISTS (SELECT 1 FROM queue_visits v WHERE v.queueId = j.queueId AND v.ordinal < 0) OR
+                    historySize != (SELECT COUNT(*) FROM queue_visits v WHERE v.queueId = j.queueId AND v.ordinal >= 0 AND v.ordinal < j.historySize) OR
+                    historySize != (SELECT COUNT(DISTINCT ordinal) FROM queue_visits v WHERE v.queueId = j.queueId AND v.ordinal >= 0 AND v.ordinal < j.historySize)""").use {
+                    check(!it.moveToFirst()) { "Invalid legacy journey history boundary" }
+                }
+                db.execSQL("DELETE FROM queue_visits WHERE ordinal >= (SELECT historySize FROM queue_journeys WHERE queueId = queue_visits.queueId)")
+                db.execSQL("DELETE FROM queue_cycle_members WHERE EXISTS (SELECT 1 FROM queue_journeys j WHERE j.queueId = queue_cycle_members.queueId AND j.shuffle = 0 AND (queue_cycle_members.cycle != j.cycle OR visited = 0))")
+                db.execSQL("UPDATE queue_journeys SET orderedTraversalId = lower(hex(randomblob(16))) WHERE shuffle = 1 AND orderedTraversalId IS NULL")
+            }
+        }
         val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE queue_journeys ADD COLUMN orderedTraversalId TEXT DEFAULT NULL")

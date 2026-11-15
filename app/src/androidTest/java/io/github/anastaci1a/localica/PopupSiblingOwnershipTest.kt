@@ -27,6 +27,56 @@ class PopupSiblingOwnershipTest {
     @Test fun disposingAWaitingSiblingNeverFollowsTheHeldPresentation() = overlap(true, true)
     @Test fun dismissingAWaitingSiblingNeverFollowsTheHeldPresentation() = overlap(true, dismissWaiting = true)
 
+    /** #920: the registration and window disposers reset the open that holds them now, after a same-window reopen between two recompositions. */
+    @Test fun disposingAfterASameWindowReopenResetsTheCurrentOpen() {
+        var mounted by mutableStateOf(true)
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        var home: GlassPopupHome? = null
+        var view: View? = null
+        val steps = mutableListOf<GlassTransitionReceipt>()
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides false,
+                LocalGlassSurfaceDrawObserver provides { glassDrawProbe?.invoke(it); if (it is GlassTransitionReceipt) steps += it }) {
+                anchor = rememberGlassAnchor()
+                GlassPopupHome(rememberGlassPopupHome(false).also { home = it }) { Box(Modifier.fillMaxSize()) {
+                    ListSearchPill("Reopen trigger", {}, Modifier.align(Alignment.BottomCenter).padding(24.dp).width(240.dp), anchor)
+                    if (mounted) GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Search) { view = LocalView.current; Text("Reopened", Modifier.height(200.dp)) }
+                } }
+            }
+        } }
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnUiThread { open = true }
+            compose.advanceMorphOpening(2000, anchor) { view }
+            lateinit var flight: GlassPopupFlight
+            var reopened = 0
+            compose.runOnUiThread {
+                flight = requireNotNull(anchor.popup)
+                val window = requireNotNull(flight.window)
+                assertTrue("registered in its home", flight in requireNotNull(home).flights)
+                // Closed and reopened in its admitted window with no recomposition between, so both disposers outlive the first open.
+                assertTrue(flight.advance(flight.state.gen, PopupEvent.Gone))
+                assertTrue(flight.open(SamplingBasis(null, Rect.Zero, null, false)))
+                reopened = flight.state.gen
+                assertTrue(flight.advance(reopened, PopupEvent.Admitted, window))
+                steps.clear()
+                mounted = false
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.runOnUiThread {
+                assertTrue("HomeLeft resets the reopened open: $steps", steps.any { it.event == "HomeLeft" && it.gen == reopened })
+                assertNull("the layer is cleared", flight.layer)
+                assertFalse("the home no longer lists it", flight in requireNotNull(home).flights)
+                assertEquals(PopupTakeover.Closed, flight.takeover)
+            }
+        } finally {
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+        }
+    }
+
     @Test fun lateWindowDetachAfterFrameAllowanceUnblocksTheNextFollow() {
         lateinit var host: View
         lateinit var scope: CoroutineScope
@@ -191,7 +241,7 @@ class PopupSiblingOwnershipTest {
                         assertEquals(1f, requireNotNull(a).progress.value, 0f)
                         assertEquals("Cancelling B releases its wait lease without retiring A", 1, fieldLeases(anchor))
                     }
-                    child.handedOff = true
+                    child.testHandOff()
                 }
                 if (cancelWaiting) {
                     compose.advanceMorphOpening(2000, anchor) { aView }
@@ -216,7 +266,7 @@ class PopupSiblingOwnershipTest {
                 assertSame("Trigger expansion belongs to the current presentation", b.progress, anchor.contact.expansion)
                 assertEquals(PopupTakeover.InWindow, b.takeover)
                 assertSame("The new presentation owns the physical source field", requireNotNull(bView).rootView, fieldHost(anchor))
-                if (heldExit) child.handedOff = true else aMounted = false
+                if (heldExit) child.testHandOff() else aMounted = false
             }
             compose.advanceMorphOpening(2000, anchor) { bView }
             compose.runOnUiThread {
@@ -238,7 +288,7 @@ class PopupSiblingOwnershipTest {
             compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(1)
             compose.runOnUiThread { assertSame(b, anchor.popup) }
         } finally {
-            compose.runOnUiThread { child.handedOff = true; aOpen = false; bOpen = false }
+            compose.runOnUiThread { child.testHandOff(); aOpen = false; bOpen = false }
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
         }

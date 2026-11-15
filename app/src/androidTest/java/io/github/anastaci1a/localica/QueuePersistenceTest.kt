@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.library.viewSource
 import io.github.anastaci1a.localica.queue.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -34,7 +35,9 @@ class QueuePersistenceTest {
             val next = saved.update(saved.active!!.copy(currentEntryId = nextJourney.current!!.entryId,
                 positionMs = 0, journey = nextJourney))
             db.queues().save(saved, next); saved = next
-            assertEquals(saved, db.queues().read())
+            val reopened = db.queues().read()
+            assertEquals(saved, reopened)
+            assertSame(reopened.active!!.entries, reopened.active!!.journey!!.plans.getValue(0).viewSource)
             db.close(); db = Room.databaseBuilder(context, QueueDatabase::class.java, name).build()
             assertEquals(saved, db.queues().read())
             assertEquals(13_000, saved.active!!.entries.map { it.id }.toSet().size)

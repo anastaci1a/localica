@@ -1,6 +1,6 @@
-<!-- Release: v0.34.8 -->
+<!-- Release: v0.34.9 -->
 
-# Release v0.34.8
+# Release v0.34.9
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,39 +8,51 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
-- Move Search pill motion onto the shared popup model and Dialog motion law. Dismiss logically at the input event while retaining physical presentation through child handoff.
-- Deliver [#920](https://github.com/anastaci1a/localica/issues/920) steps 1 and 2: derive the lifecycle phase once and replace takeover flags with views. The issue remains open.
-- App Kotlin/Java source falls from 53,160 to 53,070 lines: 234 added, 324 removed, net -90. Release engineering adds no app state.
-- Inherited UI debt falls from 1,463 to 1,459 with zero new overrides. RawUiMotion falls from 341 to 337; all other rule counts stay unchanged.
-- Keep popup presentation ownership local to each flight, including cancellable waits for native-window detachment. The reviewed repair adds one current-flight reference and no flags.
-- Refresh shard scheduling from the preceding complete producer, 43597960541. Keep the current eight-shard Android workflow.
+- Browse queue songs through revision-owned views and derive future playback through a bounded native window. Accepted [#957](https://github.com/anastaci1a/localica/issues/957) slices B and C include 1,000,000-entry diagnostic acceptance at a 256 MiB Java heap cap; restore exclusions remain below.
+- Store one popup presentation state, replacing writable lifecycle flags and duplicated remembered values ([#920](https://github.com/anastaci1a/localica/issues/920), step 3a). Preserve the release frame until its window draws.
+- Prepare collection metadata facts on the worker before publishing catalog rows, avoiding a collection-wide fold on the first information read on Main ([#772](https://github.com/anastaci1a/localica/issues/772)).
+- Run twelve balanced device shards per API. Refresh scheduling from complete producers 43597960541 and 43672613455.
+- Derive focused test selectors from source inventory, and export signed app/test pairs for external proofs. Build-only runs keep device checks explicitly not-run.
+- Share native keyboard policy across IME tests and admit tag-editor navigation after the Library page reaches its endpoint.
+- Add a JVM screenshot pilot for tabs, pinch fading and pinch retargeting, retaining all device tests and reviewed image assertions.
+- Add opt-in Compose compiler reports and metrics. No application stability changes or frame-time gains are claimed.
+- Add carousel witnesses for settled taps and fling-stop taps ([#977](https://github.com/anastaci1a/localica/issues/977)); the reported lost tap remains unconfirmed.
+- App Kotlin/Java source changes from 53,070 to 53,274 lines: 731 added, 527 removed, net +204. Accepted queue ownership and popup-state consolidation own this growth.
 
 ## Resolved issues
 
-- [#636](https://github.com/anastaci1a/localica/issues/636): Give focused hosted instrumentation prebuilds sufficient Kotlin heap.
+- [#706](https://github.com/anastaci1a/localica/issues/706): Run twelve balanced device shards per API and require all twelve in release evidence.
+- [#990](https://github.com/anastaci1a/localica/issues/990): Accept source-inventoried focused classes, including nested packages, without manual registration.
+- [#967](https://github.com/anastaci1a/localica/issues/967): Admit tag-editor navigation through the existing Library endpoint helper.
+- [#973](https://github.com/anastaci1a/localica/issues/973): Keep native keyboard bindings alive across shared IME policy owners.
+- [#988](https://github.com/anastaci1a/localica/issues/988): Add reviewed JVM screenshot coverage for three existing Compose test classes.
+- [#985](https://github.com/anastaci1a/localica/issues/985): Provide opt-in Compose compiler stability reports and a ranked inventory.
+- [#974](https://github.com/anastaci1a/localica/issues/974): Consolidate native IME policy ownership in four device test classes.
 
-- [#960](https://github.com/anastaci1a/localica/issues/960): Unify Search / ⋯ pill expansion and retraction with the shared popup model.
+## Integration
+
+- Retain #636’s measured focused-build sizing: default 2 GB Gradle, 6 GB Kotlin and two workers. Adopt #990’s contradictory heap assertion without changing its coverage checks.
 
 ## Known issues and follow-ups
 
-- [#957](https://github.com/anastaci1a/localica/issues/957): Slice B is approved with focused proofs pending; slice C is in implementation. Both are deferred.
-- [#920](https://github.com/anastaci1a/localica/issues/920): Step 3a is deferred while a test hang is diagnosed. Later lifecycle consolidation remains pending.
-- [#969](https://github.com/anastaci1a/localica/issues/969) and [#970](https://github.com/anastaci1a/localica/issues/970): Player tone and external-play fixes are deferred while proof completes.
-- [#977](https://github.com/anastaci1a/localica/issues/977): Album carousel taps after scrolling remain under investigation; the fix is deferred.
-- [#706](https://github.com/anastaci1a/localica/issues/706): Twelve-shard scheduling is deferred while failure classification completes. This release retains eight shards per API.
-- [#973](https://github.com/anastaci1a/localica/issues/973): SettingsRootSearchTest readiness fix is deferred pending proof.
-- Filed intermittent device-test failures remain tracked in [#955](https://github.com/anastaci1a/localica/issues/955), [#967](https://github.com/anastaci1a/localica/issues/967), [#972](https://github.com/anastaci1a/localica/issues/972), [#976](https://github.com/anastaci1a/localica/issues/976) and [#979](https://github.com/anastaci1a/localica/issues/979).
-- [#963](https://github.com/anastaci1a/localica/issues/963) and [#966](https://github.com/anastaci1a/localica/issues/966): Queue order, journey storage and mapping still require bounded-memory work.
-- [#975](https://github.com/anastaci1a/localica/issues/975): Restoring a million-entry queue can exhaust memory. The restore implementation is deferred behind queue storage work.
-- [PR #829 / #826](https://github.com/anastaci1a/localica/pull/829): Shuffle Previous is deferred until after #957 slice C because both change QueueJourney. This is the sole open PR.
-- [#772](https://github.com/anastaci1a/localica/issues/772): The historical accepted preference subset remains coupled to blocked Main-thread enforcement work; branch `agent122/main-thread-772` is deferred.
-- Historical branches `feat/stage3-glass-toast-713`, `feat/tag-editor-save-progress-700-agent91` and `fix/cheaper-live-691` are deferred: earlier accepted integrations remain; later or superseded revisions are outside this release.
+- [#1012](https://github.com/anastaci1a/localica/issues/1012): Saved queue order exceeds Android CursorWindow capacity at roughly 54,000 UUID entries. Eight real million-entry restore cases remain excluded; million-entry in-memory acceptance does not certify restoring them.
+- [#1011](https://github.com/anastaci1a/localica/issues/1011): Accepted inherited race: native playback may advance between the Main-thread check and per-edit timeline messages. Editing around that boundary may affect the playing period.
+- [#957](https://github.com/anastaci1a/localica/issues/957): Broader storage, restore and deferred migration remain tracked in [#963](https://github.com/anastaci1a/localica/issues/963), [#966](https://github.com/anastaci1a/localica/issues/966) and [#975](https://github.com/anastaci1a/localica/issues/975). Million-entry repeated insertion reached 255.997 MiB sampled Java heap with substantial blocking GC; no general memory margin or frame-time gain is claimed.
+- Million-entry validation used a 256 MiB diagnostic heap only. Cold million-entry restore still runs out of memory at the standard 192 MiB growth limit, reproduced on an API 36 Pixel 2 emulator ([#975](https://github.com/anastaci1a/localica/issues/975), [#963](https://github.com/anastaci1a/localica/issues/963)). The accepted in-memory cases do not certify cold restore.
+- [#1001](https://github.com/anastaci1a/localica/issues/1001) and [#1004](https://github.com/anastaci1a/localica/issues/1004): Mode/window publication and recovery-scan follow-ups remain outside this release.
+- [#996](https://github.com/anastaci1a/localica/issues/996): Mandatory-only selector preflight ([PR #1003](https://github.com/anastaci1a/localica/pull/1003)) remains outside this cut.
+- [#977](https://github.com/anastaci1a/localica/issues/977): The reported carousel lost tap remains under investigation; this release adds tests without an application fix.
+- [#920](https://github.com/anastaci1a/localica/issues/920): Step 3a is included; later lifecycle consolidation remains open.
+- Browse results are construction-only, preventing stale generated copies. Their constructor still accepts independent items, rows and keys; production paths keep them aligned. Encapsulating those inputs remains model debt for the next release.
+- [#969](https://github.com/anastaci1a/localica/issues/969) and [#970](https://github.com/anastaci1a/localica/issues/970): Player tone and external-play changes remain deferred.
+- Test follow-ups: [#1013](https://github.com/anastaci1a/localica/issues/1013) tracks reopening during native IME hide; [#782](https://github.com/anastaci1a/localica/issues/782) tracks intermittent search-focus readiness. [#998](https://github.com/anastaci1a/localica/issues/998) names the older nested-glass fixture failure already corrected on this release base. Required producer checks remain mandatory.
+- Filed intermittent device-test failures remain tracked in [#955](https://github.com/anastaci1a/localica/issues/955), [#972](https://github.com/anastaci1a/localica/issues/972), [#976](https://github.com/anastaci1a/localica/issues/976) and [#979](https://github.com/anastaci1a/localica/issues/979).
 - [#895](https://github.com/anastaci1a/localica/issues/895): Existing UI architecture findings remain under a decreasing ratchet; new overrides are forbidden.
-- [#947](https://github.com/anastaci1a/localica/issues/947): QueueLibraryHeapTest can exhaust the test heap late in a shard; release runs isolate it while retention is investigated.
+- [#947](https://github.com/anastaci1a/localica/issues/947): QueueLibraryHeapTest remains isolated while retention is investigated.
 - The 8.3 ms whole-frame objective remains unmet and unchanged. Functional acceptance does not qualify frame timing.
 
 ## Install
 
-1. Download `localica-v0.34.8-pre-release.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.34.9-pre-release.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.

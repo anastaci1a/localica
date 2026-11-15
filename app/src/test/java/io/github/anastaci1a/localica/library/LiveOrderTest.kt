@@ -170,7 +170,6 @@ class LiveOrderTest {
             history = listOf(QueueVisit("first", 1, "visit-1"), QueueVisit("duplicate", 1, "visit-2"),
                 QueueVisit("second", 1, "visit-3")),
             cursor = 1,
-            future = listOf(QueueVisit("first", 2, "visit-4"), QueueVisit("duplicate", 2, "visit-5")),
             cycle = 1,
             visited = ids.toSet(),
             plans = mapOf(1L to ids, 2L to ids.reversed()),

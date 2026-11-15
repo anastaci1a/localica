@@ -23,8 +23,9 @@ class QueueReorderCommandTest {
         assertTrue(withTimeout(10_000) { second.await() })
         assertEquals(listOf("b", "c", "a"), f.order())
         val after = f.controller.state.value
-        assertEquals(before.copy(library = before.library.copy(queues = listOf(
-            before.library.queues[1], before.library.queues[2], before.library.queues[0]))), after)
+        assertEquals(before.library.copy(queues = listOf(
+            before.library.queues[1], before.library.queues[2], before.library.queues[0])), after.library)
+        assertEquals(before.copy(library = after.library), after)
         assertEquals(after.library, f.db.queues().read())
         assertTrue(f.move("c", null))
         assertEquals(listOf("b", "a", "c"), f.order())

@@ -89,7 +89,7 @@ class SearchDismissalLifecycleTest {
         var dismiss: (() -> Unit)? = null
         var popupView: View? = null
         var dismissals = 0
-        val child = GlassPopupFlight().also { it.handedOff = handedOff }
+        val child = GlassPopupFlight().apply { if (handedOff) testHandOff() }
         compose.setContent { LocalicaTheme {
             Box(Modifier.fillMaxSize()) {
                 anchor = rememberGlassAnchor()

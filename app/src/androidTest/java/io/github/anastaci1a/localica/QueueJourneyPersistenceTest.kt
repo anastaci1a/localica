@@ -28,10 +28,8 @@ class QueueJourneyPersistenceTest {
         val after = reorderedPlans(before, loop = true)
         try {
             db.queues().save(QueueLibrary(), library(before))
-            // Retained keys must take the batch UPDATE path, without even attempting duplicate INSERTs.
-            for (table in listOf("queue_visits", "queue_cycle_members")) {
-                db.openHelper.writableDatabase.execSQL("CREATE TRIGGER no_insert_$table BEFORE INSERT ON $table BEGIN SELECT RAISE(ABORT, 'Retained row inserted'); END")
-            }
+            // Actual history is updated in place; changed permutations are streamed after cycle replacement.
+            db.openHelper.writableDatabase.execSQL("CREATE TRIGGER no_insert_queue_visits BEFORE INSERT ON queue_visits BEGIN SELECT RAISE(ABORT, 'Retained row inserted'); END")
             val started = SystemClock.elapsedRealtime()
             db.queues().save(library(before), library(after))
             Log.i("QueueScale", "entries=13000 action=synthetic-retained-plan-reorder-room-save elapsedMs=${SystemClock.elapsedRealtime() - started}")
@@ -40,7 +38,7 @@ class QueueJourneyPersistenceTest {
             assertEquals(library(after), db.queues().read())
             assertEquals(13_000, after.entries.map { it.id }.toSet().size)
             assertEquals(before.journey!!.current!!.token, after.journey!!.current!!.token)
-            assertEquals(before.journey.history, after.journey.history)
+            assertEquals(before.journey.history.reversed(), after.journey.history)
             assertEquals(before.journey.visited, after.journey.visited)
         } finally { db.close(); context.deleteDatabase(name) }
     }
@@ -60,11 +58,11 @@ class QueueJourneyPersistenceTest {
             sql.execSQL("DELETE FROM queue_visits WHERE token = ?", arrayOf(missingVisit.token))
             sql.execSQL("DELETE FROM queue_cycle_members WHERE queueId = ? AND cycle = ? AND entryId = ?",
                 arrayOf<Any?>(before.id, missingMember.cycle, missingMember.entryId))
-            val damaged = db.queues().read()
+            val damaged = db.queues().readQueues()
             sql.execSQL("CREATE TRIGGER fail_member_repair BEFORE INSERT ON queue_cycle_members BEGIN SELECT RAISE(ABORT, 'Injected member repair failure'); END")
             try { db.queues().save(library(before), library(after)); fail("Repair failure must roll back earlier updates and inserts") }
             catch (_: android.database.SQLException) { }
-            assertEquals(damaged, db.queues().read())
+            assertEquals(damaged, db.queues().readQueues())
             sql.execSQL("DROP TRIGGER fail_member_repair")
             // The prior durable snapshot is deliberately unchanged, just as QueueController retries it.
             db.queues().save(library(before), library(after))
@@ -83,7 +81,7 @@ class QueueJourneyPersistenceTest {
                 if (measuring.get()) when {
                     sql == "SELECT changes()" -> countQueries.incrementAndGet()
                     sql.startsWith("UPDATE OR ABORT `queue_visits`") -> visitUpdates.incrementAndGet()
-                    sql.startsWith("UPDATE OR ABORT `queue_cycle_members`") -> memberUpdates.incrementAndGet()
+                    sql.startsWith("INSERT INTO `queue_cycle_members`") -> memberUpdates.incrementAndGet()
                 }
             }, Executor { it.run() }).build()
         val before = queue(64, loop = true)
@@ -91,11 +89,11 @@ class QueueJourneyPersistenceTest {
         val oldVisits = before.journey!!.visitRecords(before.id).associateBy { it.token }
         val oldMembers = before.journey.cycleRecords(before.id).associateBy { it.cycle to it.entryId }
         val changedVisits = after.journey!!.visitRecords(after.id).count { oldVisits[it.token] != it }
-        val changedMembers = after.journey.cycleRecords(after.id).filter { oldMembers[it.cycle to it.entryId] != it }
+        val changedMembers = after.journey.cycleRecords(after.id).toList()
         try {
             db.queues().save(QueueLibrary(), library(before))
             val failOrdinal = changedMembers[changedMembers.size / 2].ordinal
-            db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_scalar_update BEFORE UPDATE ON queue_cycle_members WHEN NEW.ordinal = $failOrdinal BEGIN SELECT RAISE(ABORT, 'Injected scalar batch failure'); END")
+            db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_scalar_update BEFORE INSERT ON queue_cycle_members WHEN NEW.ordinal = $failOrdinal BEGIN SELECT RAISE(ABORT, 'Injected scalar batch failure'); END")
             try { db.queues().save(library(before), library(after)); fail("A direct batch failure must roll back every earlier update") }
             catch (_: android.database.SQLException) { }
             assertEquals(library(before), db.queues().read())
@@ -126,8 +124,7 @@ class QueueJourneyPersistenceTest {
         val ids = queue.entries.map { it.id }.reversed()
         val added = if (loop && !journey.modes.loop) (1L..2L).associateWith { ids } else emptyMap()
         return queue.copy(journey = journey.copy(
-            future = journey.future.groupBy { it.cycle }.values.flatMap { it.reversed() } +
-                added.flatMap { (cycle, order) -> order.map { QueueVisit(it, cycle) } },
+            history = journey.history.reversed(), cursor = 0,
             plans = journey.plans.mapValues { (_, order) -> order.reversed() } + added,
             modes = journey.modes.copy(loop = loop)))
     }

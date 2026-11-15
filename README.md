@@ -10,6 +10,9 @@ Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus
 
 [Documentation](docs/README.md) · [Interface contract](docs/interface/materials-and-controls.md) · [Contributing](agents/README.md)
 
+`build_only` and single-API `focused_api` [prototype runs](docs/development/prototypes.md) can be green but incomplete; read the delivery decision rather than the run color.
+The signed APK pair is build output, not device evidence.
+
 <table>
   <tr>
     <td align="center"><img src="docs/assets/screenshots/library.png" width="170" alt="Library in the five-per-row gallery with album and artist covers, floating navigation and the mini-player"><br><sub>Library</sub></td>

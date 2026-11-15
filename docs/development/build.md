@@ -11,11 +11,7 @@ Use the pinned Gradle wrapper, JDK 17 and Android SDK. Debug serves tests; distr
 
 Use JDK 17, Android platform 36 and build tools 35.0.0. Set `ANDROID_HOME`, or an untracked `local.properties` with the SDK path. The wrapper verifies its download checksum.
 
-Register the merge driver for `.github/prototype-risk-classes.txt` once per clone. It merges both sides' classes and drops duplicate lines, which the risk inventory contract rejects.
-
-```sh
-git config merge.union-dedupe.driver 'sh tools/git/merge-union-dedupe.sh %O %A %B'
-```
+Install JDK 21 alongside JDK 17 for `testDebugUnitTest`. Its Robolectric API 36 tests use a Java 21 launcher; Gradle and app compilation use Java 17.
 
 For repeated compile or assemble runs, the configuration cache is an opt-in:
 
@@ -24,6 +20,12 @@ For repeated compile or assemble runs, the configuration cache is an opt-in:
 ```
 
 Run selected tests separately, and verify any other task graph before adopting the cache.
+
+## Compose compiler reports
+
+Run `./gradlew :app:compileReleaseKotlin -PcomposeCompilerReports=true --rerun` to write stability and skippability reports under `app/build/compose/reports` and metrics under `app/build/compose/metrics`. The task-scoped rerun refreshes reports even when compilation was up to date. Normal builds leave both destinations unset. Reports describe compiler decisions; runtime measurements establish performance.
+
+Strong skipping is enabled, so unstable parameters compare by instance. Consult a cost-ranked compiler inventory if [macrobenchmarks](https://github.com/anastaci1a/localica/issues/986) identify recomposition cost on a surface.
 
 ## Variants and signing
 
