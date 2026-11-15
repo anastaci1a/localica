@@ -407,8 +407,6 @@ io.github.anastaci1a.localica.MotionFollowupTest
 io.github.anastaci1a.localica.GlassMorphSubpixelTest
 io.github.anastaci1a.localica.MorphFacesTest
 io.github.anastaci1a.localica.PlayerLyricsOwnerContinuityTest
-io.github.anastaci1a.localica.PopupWindowHostContractTest
-io.github.anastaci1a.localica.SearchOracleSensitivityTest
 io.github.anastaci1a.localica.D46PopupOpenStripTest
 
 io.github.anastaci1a.localica.SheetCollapseCompositionTest
@@ -530,3 +528,5 @@ io.github.anastaci1a.localica.PopupPeakOvershootPortraitTest
 io.github.anastaci1a.localica.PopupShadowFrameExportTest
 io.github.anastaci1a.localica.PopupSiblingOwnershipTest
 io.github.anastaci1a.localica.ui.engine.SearchReturnOracleSensitivityTest
+io.github.anastaci1a.localica.ui.engine.PopupWindowMotionTest
+io.github.anastaci1a.localica.ui.engine.PreparedOverlapTest

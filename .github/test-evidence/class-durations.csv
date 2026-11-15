@@ -370,7 +370,6 @@ api,class,tests,total_seconds,skipped
 26,io.github.anastaci1a.localica.PopupShadowFrameExportTest,5,0.036,0
 26,io.github.anastaci1a.localica.PopupViewChangeTransitionTest,11,160.717,0
 26,io.github.anastaci1a.localica.PopupViewportSlotTest,5,3.583,0
-26,io.github.anastaci1a.localica.PopupWindowHostContractTest,6,0.103,0
 26,io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest,8,1.565,0
 26,io.github.anastaci1a.localica.PreparedQueuePlaybackTest,1,49.544,0
 26,io.github.anastaci1a.localica.PresentationMarkerTest,1,0.559,0
@@ -446,7 +445,6 @@ api,class,tests,total_seconds,skipped
 26,io.github.anastaci1a.localica.SearchHistoryTest,1,6.991,0
 26,io.github.anastaci1a.localica.SearchImeHandoffObservationTest,4,0.004,0
 26,io.github.anastaci1a.localica.SearchImeMotionTest,12,50.65,0
-26,io.github.anastaci1a.localica.SearchOracleSensitivityTest,1,0.001,0
 26,io.github.anastaci1a.localica.SearchPendingReturnGeometryTest,1,9.847,0
 26,io.github.anastaci1a.localica.SearchReturnTopTest,12,52.963,0
 26,io.github.anastaci1a.localica.SearchSortResetTest,2,6.875,0
@@ -921,7 +919,6 @@ api,class,tests,total_seconds,skipped
 36,io.github.anastaci1a.localica.PopupShadowFrameExportTest,5,0.01,0
 36,io.github.anastaci1a.localica.PopupViewChangeTransitionTest,11,110.85,0
 36,io.github.anastaci1a.localica.PopupViewportSlotTest,5,8.14,0
-36,io.github.anastaci1a.localica.PopupWindowHostContractTest,6,0.193,0
 36,io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest,8,3.19,0
 36,io.github.anastaci1a.localica.PreparedQueuePlaybackTest,1,18.194,0
 36,io.github.anastaci1a.localica.PresentationMarkerTest,1,0.938,0
@@ -997,7 +994,6 @@ api,class,tests,total_seconds,skipped
 36,io.github.anastaci1a.localica.SearchHistoryTest,1,7.881,0
 36,io.github.anastaci1a.localica.SearchImeHandoffObservationTest,4,0.054,0
 36,io.github.anastaci1a.localica.SearchImeMotionTest,12,62.904,0
-36,io.github.anastaci1a.localica.SearchOracleSensitivityTest,1,0.008,0
 36,io.github.anastaci1a.localica.SearchPendingReturnGeometryTest,1,9.745,0
 36,io.github.anastaci1a.localica.SearchReturnTopTest,12,197.911,0
 36,io.github.anastaci1a.localica.SearchSortResetTest,2,8.644,0

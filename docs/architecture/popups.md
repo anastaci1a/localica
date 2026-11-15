@@ -51,7 +51,8 @@ Content measures glass; padded backdrops fit separately. Shared ui.spec presets 
 
 [MorphFacesTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/MorphFacesTest.kt).
 
-[PopupWindowHostContractTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PopupWindowHostContractTest.kt).
+[PopupWindowMotionTest](../../app/src/sharedTest/java/io/github/anastaci1a/localica/ui/engine/PopupWindowMotionTest.kt) and
+[PreparedOverlapTest](../../app/src/sharedTest/java/io/github/anastaci1a/localica/ui/engine/PreparedOverlapTest.kt) run directly on both JVM and Android.
 
 [PopupViewportSlotTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PopupViewportSlotTest.kt).
 
