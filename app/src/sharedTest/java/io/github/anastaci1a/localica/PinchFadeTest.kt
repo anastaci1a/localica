@@ -102,7 +102,7 @@ class PinchFadeTest {
                     compose.runOnIdle { runBlocking { motion.progress.snapTo(p) } }
                     compose.mainClock.advanceTimeByFrame()
                     compose.waitForIdle()
-                    if (step == 10 && !backwards) compose.onNodeWithTag("part-fade").pilotScreenshot("pinch-part-$tracklist-$scale")
+                    if (step == 15 && !backwards) compose.onNodeWithTag("part-fade").pilotScreenshot("pinch-part-$tracklist-$scale")
                     alpha()
                 }
             }
@@ -181,7 +181,7 @@ class PinchFadeTest {
                     compose.runOnIdle { runBlocking { motion.progress.snapTo(if (arriving) 1f - p else p) } }
                     compose.mainClock.advanceTimeByFrame()
                     compose.waitForIdle()
-                    if (step == 10 && !arriving) compose.onNodeWithTag("journey-fade").pilotScreenshot("pinch-journey-$scale-$smallest")
+                    if (step == 15 && !arriving) compose.onNodeWithTag("journey-fade").pilotScreenshot("pinch-journey-$scale-$smallest")
                     peak("journey-fade") { it.green } to peak("journey-fade") { it.blue }
                 }
             }
