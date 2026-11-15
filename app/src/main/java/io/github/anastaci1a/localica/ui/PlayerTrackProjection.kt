@@ -32,8 +32,8 @@ internal fun prepareQueuePresentation(state: QueueUiState, library: LibrarySnaps
     val current = playing?.current
     val queue = playing?.queue
     val sameArtwork = queue?.entries === previous?.active?.queue?.entries && queue?.journey === previous?.active?.queue?.journey
-    val neighbors = if (sameArtwork) previous?.neighbors.orEmpty() else listOf(queue?.journey?.next, queue?.journey?.previous).map { queue?.visitTrack(it?.entryId)?.uri }
-    val preload = if (sameArtwork) previous?.preload.orEmpty() else queue?.journey?.artworkWindow().orEmpty().mapNotNull { queue?.visitTrack(it.entryId)?.uri }.distinct()
+    val neighbors = if (sameArtwork) previous?.neighbors.orEmpty() else queue?.artworkNeighbors() ?: listOf(null, null)
+    val preload = if (sameArtwork) previous?.preload.orEmpty() else queue?.artworkPreloadUris().orEmpty()
     val available = if (library.tracks === previous?.library?.tracks && current?.id == previous?.tracks?.current?.id)
         previous?.available else current?.let { saved -> library.tracks.firstOrNull { it.id == saved.id } }
     val tracks = if (current === previous?.tracks?.current && library.trackPlays === previous?.library?.trackPlays && available === previous?.available)

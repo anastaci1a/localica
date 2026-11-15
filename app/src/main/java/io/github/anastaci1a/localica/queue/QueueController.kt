@@ -777,16 +777,6 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         if (!accepted) complete(false, playbackSample())
     }
 
-    fun artworkNeighbors(): List<String?> {
-        val queue = state.value.library.active ?: return emptyList()
-        return listOf(queue.journey?.next, queue.journey?.previous).map { visit ->
-            visitTrack(queue, visit?.entryId)?.uri
-        }
-    }
-    fun artworkPreloadUris(): List<String> {
-        val queue = state.value.library.active ?: return emptyList()
-        return queue.journey?.artworkWindow().orEmpty().mapNotNull { visitTrack(queue, it.entryId)?.uri }.distinct()
-    }
     fun next() = submitCursor {
         capture()
         state.value.library.active?.journey?.next?.let { moveTo(it) }

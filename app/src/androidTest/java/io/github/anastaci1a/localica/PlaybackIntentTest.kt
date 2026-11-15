@@ -1626,8 +1626,8 @@ class PlaybackIntentTest {
             .set(dao, QueueLibrary(listOf(invalid, second), first.id))
         dao.restore.release.complete(Unit)
         awaitMain { !queues.state.value.loading }
-        assertEquals(listOf(null, null), queues.artworkNeighbors())
-        assertTrue(queues.artworkPreloadUris().isEmpty())
+        assertEquals(listOf(null, null), queues.state.value.library.active!!.artworkNeighbors())
+        assertTrue(queues.state.value.library.active!!.artworkPreloadUris().isEmpty())
         queues.attach(player)
         barrier()
         withContext(Dispatchers.Main) {
@@ -1642,8 +1642,8 @@ class PlaybackIntentTest {
                 assertEquals(visit.entryId, active.entries[ordinal!!].id)
             }
             assertNull(queues.state.value.problem)
-            assertEquals(listOf(track.uri, null), queues.artworkNeighbors())
-            assertEquals(listOf(track.uri), queues.artworkPreloadUris())
+            assertEquals(listOf(track.uri, null), queues.state.value.library.active!!.artworkNeighbors())
+            assertEquals(listOf(track.uri), queues.state.value.library.active!!.artworkPreloadUris())
         }
         queues.seek(1234)
         barrier()
@@ -1953,7 +1953,7 @@ class PlaybackIntentTest {
             val queue = snapshot.library.active!!
             val next = queue.journey?.next
             if (next != null && queue.entries.firstOrNull { it.id == next.entryId }?.track?.id == song.id)
-                observed.complete(queues.artworkNeighbors())
+                observed.complete(queues.state.value.library.active!!.artworkNeighbors())
         } }
         val completed = CompletableDeferred<Boolean>()
         try {
@@ -1962,14 +1962,14 @@ class PlaybackIntentTest {
             assertEquals(song.uri, withTimeout(10000) { observed.await() }.first())
             withContext(Dispatchers.Main) {
                 assertFalse(player.playWhenReady)
-                assertTrue(queues.artworkPreloadUris().contains(song.uri))
+                assertTrue(queues.state.value.library.active!!.artworkPreloadUris().contains(song.uri))
                 val next = queues.state.value.library.active!!.journey!!.next!!
                 assertTrue((0 until player.mediaItemCount).none { player.getMediaItemAt(it).mediaId == next.entryId })
             }
         } finally { gate.release.complete(Unit); observer.cancelAndJoin() }
         assertTrue(withTimeout(10000) { completed.await() })
         barrier()
-        assertEquals(song.uri, queues.artworkNeighbors().first())
+        assertEquals(song.uri, queues.state.value.library.active!!.artworkNeighbors().first())
     }
 
     @Test fun publishedSelectionIsSynchronizedByTheReattachedOwnerAfterOldIoIsDropped() {

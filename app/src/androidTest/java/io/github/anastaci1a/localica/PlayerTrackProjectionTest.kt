@@ -204,7 +204,8 @@ class PlayerTrackProjectionTest {
             compose.onNodeWithContentDescription("Information").performClick()
             compose.onNodeWithTag("song-information").assertDoesNotExist()
             release.countDown()
-            compose.waitUntil(10_000) { !source.loading && blocked.reads > 0 }
+            compose.waitUntil(10_000) { compose.onAllNodes(hasText("Replacement occurrence") and
+                (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title"))), true).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithContentDescription("Information").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithText("Replacement occurrence").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Replacement occurrence").assertExists()
