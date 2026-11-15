@@ -16,6 +16,9 @@ class OrderedJourneyDatabaseTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun open(name: String) = Room.databaseBuilder(context, QueueDatabase::class.java, name)
         .addMigrations(QueueDatabase.MIGRATION_6_7, QueueDatabase.MIGRATION_7_8).build()
+    private fun durableFields(library: QueueLibrary) = library.copy(queues = library.queues.map { queue ->
+        queue.copy(journey = queue.journey?.let { if (it.modes.shuffle) it else it.copy(plans = emptyMap()) })
+    })
 
     /** Independently seed released SQL schemas, including generated suffix and branch-pruned membership. */
     private fun seed(name: String, version: Int, shuffle: Boolean): ListeningQueue {
@@ -74,7 +77,7 @@ class OrderedJourneyDatabaseTest {
                 assertEquals(3, rows.visits.size)
                 assertEquals(if (shuffle) 21 else 3, rows.cycleMembers.size)
                 if (shuffle) { assertNotNull(restored.journey.orderedTraversalId); assertNull(restored.journey.orderedAnchorToken) }
-                else assertTrue(restored.journey.plans.isEmpty())
+                else assertEquals(mapOf(restored.journey.cycle to restored.ids), restored.journey.plans)
                 val prepared = restored.journey.reconcile(restored.ids, "D", JourneyModes(shuffle, true))
                 if (shuffle) {
                     assertEquals("X", prepared.next!!.entryId)
@@ -89,6 +92,7 @@ class OrderedJourneyDatabaseTest {
                 db.queues().save(QueueLibrary(listOf(restored), restored.id), durable)
                 db.close(); db = open(name)
                 val reopened = db.queues().read().active!!
+                assertEquals(durableFields(durable), durableFields(QueueLibrary(listOf(reopened), reopened.id)))
                 assertEquals(prepared.window(), reopened.journey!!.reconcile(reopened.ids, "D", prepared.modes).window())
                 val visit = prepared.next!!
                 val arrived = prepared.arrive(visit.token, restored.ids)
@@ -101,19 +105,23 @@ class OrderedJourneyDatabaseTest {
                 try { db.queues().save(durable, targetLibrary); fail("Arrival insert failure must roll back") }
                 catch (_: android.database.SQLException) { }
                 assertEquals(rawBefore, db.queues().readQueues())
+                assertEquals(durableFields(durable), durableFields(db.queues().read()))
                 db.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_arrival")
                 db.queues().save(durable, targetLibrary); durable = targetLibrary
-                val kept = restored.ids - "A"
+                val expectedNext = target.next
+                val kept = restored.ids - setOf("A", "D")
                 val removed = durable.active!!.copy(entries = restored.entries.filter { it.id in kept },
                     order = restored.order.reconcile(kept), journey = target.reconcile(kept, target.current!!.entryId, target.modes))
                 val next = durable.update(removed)
                 db.queues().save(durable, next)
                 db.close(); db = open(name)
-                val final = db.queues().read().active!!
-                assertEquals(removed.currentEntryId, final.currentEntryId)
-                assertEquals(removed.journey!!.history, final.journey!!.history)
-                assertEquals(removed.order, final.order)
-                assertEquals(removed.entries, final.entries)
+                val final = db.queues().read()
+                assertEquals(durableFields(next), durableFields(final))
+                val reconciled = final.active!!.journey!!.reconcile(final.active!!.ids, removed.currentEntryId, target.modes)
+                assertEquals(removed.journey!!.window(), reconciled.window())
+                assertEquals(prepared.orderedTraversalId, reconciled.orderedTraversalId)
+                assertEquals(target.current, reconciled.current)
+                assertEquals(expectedNext, reconciled.next)
             } finally { db.close(); context.deleteDatabase(name) }
         }
     }
