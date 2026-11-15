@@ -30,12 +30,7 @@ uid=$(adb shell stat -c %u "/data/user/0/$pkg" | tr -d '\r')
 [[ $uid =~ ^[0-9]+$ ]]
 adb shell "am force-stop $pkg; tar -xf /data/local/tmp/localica-986-fixture.tar -C /data/user/0/$pkg; chown -R $uid:$uid /data/user/0/$pkg; restorecon -R /data/user/0/$pkg"
 if [[ $mode == generate ]]; then
-    task=:benchmark:connectedNonMinifiedDistributionAndroidTest
-    # New methods run in isolation before the full generator. One scenario suffices
-    # to establish the journey method and shell injector before the complete set.
-    "${gradle[@]}" "$task" -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.BaselineProfileGenerator#startup
-    "${gradle[@]}" "$task" -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.BaselineProfileGenerator#journeys -Pandroid.testInstrumentationRunnerArguments.scenario=library-list-fling
-    "${gradle[@]}" :app:generateBaselineProfile
+    "${gradle[@]}" :app:generateBaselineProfile -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.benchmark.BaselineProfileGenerator
 else
     adb shell am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE -n "$pkg/androidx.profileinstaller.ProfileInstallReceiver"
     adb shell cmd package compile -f -m speed-profile "$pkg"

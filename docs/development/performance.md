@@ -84,7 +84,7 @@ Generation builds only its non-minified target and producer. Final functional bu
 
 Use `performance=build` for compilation, unit tests and lint, or `performance=functional` for the diagnostic scenarios. Each dispatch has its own branch because same-branch dispatches cancel each other. Delete temporary branches after retaining receipts.
 
-The first successful compilation took 25 minutes 30 seconds. Generation and functional jobs also include emulator execution; functional builds additionally produce the no-profile control. Budget at least an hour per refresh pair, with actual cost recorded in its receipts.
+Generation compilation took 4 minutes 35 seconds. Complete profile collection exceeded the initial one-hour job limit after five journeys; generation now has a three-hour ceiling. Functional builds additionally produce the no-profile control. Record actual runner minutes for every refresh pair.
 
 Macrobenchmark reports `FrameTimingMetric`, cold-start `StartupTimingMetric` and the existing `Choreographer#doFrame` trace duration. That trace duration is supporting attribution, not Main CPU time. Emulator and profileable results remain diagnostic. Qualified comparisons use the manifest-only plain twin, identical speed-profile warm-up, physical A35 traces, health receipts and no screen recording.
 
