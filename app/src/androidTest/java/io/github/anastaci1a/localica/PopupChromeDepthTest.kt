@@ -693,11 +693,11 @@ class PopupChromeDepthTest {
                 host = LocalView.current
                 home = rememberGlassPopupHome(false)
                 page = rememberFrostedBackdrop(home, dark = false)
-                flight = remember { GlassPopupFlight() }
+                flight = remember { GlassPopupFlight().testRun(PopupEvent.Admitted, PopupEvent.OfferReady) }
                 val layer = rememberGraphicsLayer()
                 BackdropLease(page)
                 DisposableEffect(home, layer) {
-                    flight.layer = layer; flight.prepared = true
+                    flight.layer = layer
                     home.flights.add(flight)
                     onDispose { home.flights.remove(flight) }
                 }
