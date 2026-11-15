@@ -33,20 +33,22 @@ class QueueFileEditTest {
     @Test fun millionEntryEditMembershipReadsNoEntriesOnMain() {
         lateinit var entries: EditEntries
         fixture(attachPlayer = false, timeoutMs = 60000, initial = { queue ->
-            entries = EditEntries(queue.entries, 1_000_000)
+            entries = EditEntries(queue.entries.mapIndexed { index, entry ->
+                entry.copy(track = entry.track.copy(id = "content://edit-membership/document/${if (index == 1) "two" else "one"}"))
+            }, 1_000_000)
             val active = queue.copy(entries = entries, currentEntryId = "entry:0", order = io.github.anastaci1a.localica.library.SavedOrder(emptyList()))
             QueueLibrary(listOf(active, active.copy(id = "shared")), active.id)
         }) {
             queues.settings { it.copy(switching = QueueSwitch.Resume) }
             awaitMain { queues.state.value.settings.switching == QueueSwitch.Resume }
-            for (identity in listOf("absent", "two")) {
+            for (identity in listOf("content://edit-membership/document/absent", "content://edit-membership/document/two")) {
                 entries.mainReads.set(0); entries.workerReads.set(0)
                 val heap = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
                 val gc = Debug.getRuntimeStat("art.gc.gc-count")
                 queues.withFileEdit(identity) {
                     withContext(Dispatchers.Main) {
                         repeat(10000) {
-                            assertEquals(identity == "two", held())
+                            assertEquals(identity.endsWith("/two"), held())
                             assertEquals(0, entries.mainReads.get())
                         }
                     }
@@ -56,7 +58,7 @@ class QueueFileEditTest {
                     queues.rename("active", "Cursor-independent membership")
                     awaitMain { queues.state.value.library.active?.name == "Cursor-independent membership" }
                     assertEquals(reads, entries.workerReads.get())
-                    if (identity == "two") {
+                    if (identity.endsWith("/two")) {
                         queues.switchTo("shared")
                         awaitMain { queues.state.value.library.activeId == "shared" }
                         withContext(Dispatchers.Main) { assertTrue(held()) }
