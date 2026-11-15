@@ -24,6 +24,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#1001](https://github.com/anastaci1a/localica/issues/1001): Remove the IO-wide repeat/shuffle publication stall.
 - [#679](https://github.com/anastaci1a/localica/issues/679): Remove unused release assembly from the prototype build critical path.
 - [#1018](https://github.com/anastaci1a/localica/issues/1018): Retry Maven HTTP 429 responses using Retry-After.
+- [#1034](https://github.com/anastaci1a/localica/issues/1034): Wait for browse-grid readiness before native Back input in the List Back regression test.
 
 ## Known issues and follow-ups
 
