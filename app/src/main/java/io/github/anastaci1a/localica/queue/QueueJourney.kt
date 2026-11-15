@@ -73,7 +73,6 @@ data class QueueJourney(
         require(added.toSet().size == added.size && valid.containsAll(added))
         val anchor = current ?: return reconcile(ids, ids.firstOrNull(), modes, random)
         if (!modes.shuffle) return reconcile(ids, anchor.entryId, modes, random)
-        require(added.none { id -> history.any { it.entryId == id } || plans.values.any { id in it } })
         return copy(history = history.take(cursor + 1) + added.map { QueueVisit(it, cycle) } + history.drop(cursor + 1))
             .prepare(ids, random, valid)
     }
@@ -91,7 +90,7 @@ data class QueueJourney(
             copy(history = if (skipped.isEmpty()) history else prefix + skipped + history.drop(old + 1),
                 cursor = prefix.lastIndex, visited = if (visit.cycle == cycle) visited + visit.entryId else visited)
         } else this
-        if (traversal == null) {
+        if (traversal?.let { if (it.key != null) it.key != ids.revision else it.ids != ids } != false) {
             val repaired = arrived.reconcile(ids, arrived.current?.entryId, modes, random)
             if (repaired.current == null) return this
             val arrived = repaired.arrive(token, ids, random, receipt)
@@ -111,10 +110,10 @@ data class QueueJourney(
             it.cycle in plans && it.entryId in plans.getValue(it.cycle) &&
             (it.cycle != cycle || it.entryId !in visited) && history.drop(cursor + 1).none { v -> v.cycle == it.cycle && v.entryId == it.entryId } }
             ?: return this
-        if (exposed != null && exposed == traversal?.window?.firstOrNull() && orderedAnchorToken != null && cursor == 0) {
+        if (exposed != null && exposed == traversal?.window?.firstOrNull() && orderedAnchorToken != null) {
             return copy(history = listOf(visit) + history, cursor = 0,
                 visited = if (visit.cycle == cycle) visited + visit.entryId else visited)
-                .prepare(ids, random, previous = traversal, oldestRank = exposed.ordinal)
+                .prepare(ids, random, previous = traversal, oldestRank = exposed.sourceOrdinal)
         }
         val kept = history.take(cursor + 1) + visit
         val scheduled = scheduledNext().filterNot { it.entryId == visit.entryId }
@@ -198,9 +197,9 @@ data class QueueJourney(
         }
         val result = copy(plans = prepared)
         val key = if (ids.viewSource != null && (valid == null || valid.size == ids.size &&
-                (!modes.shuffle || plans.isEmpty() || prepared.values.all { it.toSet().size == it.size }))) ids.revision else null
+                (!modes.shuffle || plans.isEmpty() || prepared.values.all { it.size == ids.size }))) ids.revision else null
         val selectedRank = rank ?: if (modes.shuffle) -1 else ids.indexOf(current?.entryId)
-        val firstRank = oldestRank ?: previous?.oldestRank ?: ids.indexOf(history.firstOrNull()?.entryId)
+        val firstRank = if (!modes.shuffle) -1 else oldestRank ?: previous?.oldestRank ?: ids.indexOf(history.firstOrNull()?.entryId)
         result.traversal = result.project(ids, key, selectedRank, firstRank, previous)
         return result
     }
@@ -228,7 +227,7 @@ data class QueueJourney(
                 val oldest = history.first()
                 val entry = ids[at]
                 val token = UUID.nameUUIDFromBytes("behind:${oldest.token.length}:${oldest.token}:$entry".toByteArray(Charsets.UTF_8)).toString()
-                window += Neighbor(QueueVisit(entry, oldest.cycle, token), at, at)
+                window += Neighbor(QueueVisit(entry, oldest.cycle, token), -1, at)
             }
             val start = (cursor - 64).coerceAtLeast(0)
             history.subList(start, minOf(cursor + 65, history.size)).mapTo(window) { visit ->
