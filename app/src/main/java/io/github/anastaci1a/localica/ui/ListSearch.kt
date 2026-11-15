@@ -105,13 +105,14 @@ internal fun Modifier.listTopFade(strength: () -> Float = { 1f }) = composed {
             if (fade == 0f || band <= 0f) return@onDrawWithContent drawContent()
             val mask = cache.brush(fade)
             if (split < size.height) clipRect(top = split) { this@onDrawWithContent.drawContent() }
+            // The same Offscreen layer mechanism as before, but only as tall as the fade band.
             layer.record(size = androidx.compose.ui.unit.IntSize(kotlin.math.ceil(size.width).toInt(), split.toInt())) {
                 this@onDrawWithContent.drawContent()
                 drawRect(mask, size = Size(size.width, band), blendMode = BlendMode.DstIn)
             }
             drawLayer(layer)
         }
-    }.graphicsLayer()
+    }
 }
 
 /** Single-entry memo of the 17-stop mask for one band height. */
