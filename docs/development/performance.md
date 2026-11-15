@@ -88,6 +88,8 @@ Macrobenchmark reports `FrameTimingMetric`, cold-start `StartupTimingMetric` and
 
 The functional job preserves the full candidate and builds a control from the same source with AGP’s R8 baseline rewriting and startup-layout inputs disabled. Plain packaging then removes the control’s profile assets. Compare the combined baseline-compilation and startup-layout delta on the A35; this does not separate the two contributions.
 
+The job retains R8 metadata for each arm, verifies its DEX checksums against the APK and requires startup layout only in the candidate. This follows Android’s [startup-profile verification](https://developer.android.com/topic/performance/baselineprofiles/confirm-startup-profiles).
+
 ### Release ratchet
 
 Before accepting a release, compare five or more qualified captures per surface with the accepted anchor. Preserve per-capture percentiles; compare their median. Track frame p50/p95, Main CPU milliseconds, allocated megabytes and GC count. Cold startup also tracks initial-display time.

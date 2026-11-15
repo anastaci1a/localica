@@ -978,8 +978,10 @@ jobs:
         run: |
           mkdir -p performance-apks
           cp app/build/outputs/apk/distribution/app-distribution.apk performance-apks/candidate.apk
+          node tools/performance/macrobenchmark/profile-metadata.mjs candidate
           ./gradlew :app:assembleDistribution --init-script tools/performance/macrobenchmark/no-profile.init.gradle --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8' | tee performance-control-build.txt
           cp app/build/outputs/apk/distribution/app-distribution.apk performance-apks/control.apk
+          node tools/performance/macrobenchmark/profile-metadata.mjs control
           cp performance-apks/candidate.apk app/build/outputs/apk/distribution/app-distribution.apk
           sha256sum performance-apks/*.apk > performance-profile-arms.sha256
       - name: Enable emulator acceleration
@@ -1013,6 +1015,7 @@ jobs:
             performance-*.txt
             performance-*.sha256
             performance-apks/*.apk
+            performance-apks/*-r8.json
             app/src/main/generated/baselineProfiles/
             app/build/reports/
             benchmark/build/reports/

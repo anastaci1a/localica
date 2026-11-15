@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+
+const arm = process.argv[2];
+assert(['candidate', 'control'].includes(arm));
+const directory = 'app/build/intermediates/r8_metadata/distribution';
+const files = readdirSync(directory, { recursive: true, withFileTypes: true }).filter(file => file.isFile());
+assert.equal(files.length, 1, 'Expected exactly one distribution R8 metadata file');
+const file = files[0], text = readFileSync(`${file.parentPath}/${file.name}`, 'utf8');
+const { dexFiles } = JSON.parse(text);
+assert(Array.isArray(dexFiles) && dexFiles.length > 0, 'Missing DEX layout metadata');
+const apk = `performance-apks/${arm}.apk`;
+const dexNames = execFileSync('unzip', ['-Z1', apk], { encoding: 'utf8' }).trim().split('\n').filter(name => /^classes(?:\d+)?\.dex$/.test(name));
+const checksums = dexNames.map(name => createHash('sha256').update(execFileSync('unzip', ['-p', apk, name], { maxBuffer: 64 * 1024 ** 2 })).digest('hex'));
+assert.deepEqual(dexFiles.map(dex => dex.checksum).sort(), checksums.sort(), 'R8 metadata does not match APK DEX');
+assert.equal(dexFiles.some(dex => dex.startup === true), arm === 'candidate', 'Unexpected startup profile layout');
+writeFileSync(`performance-apks/${arm}-r8.json`, text);
+console.log(`${arm}: DEX checksums verified; startup layout ${arm === 'candidate' ? 'applied' : 'disabled'}`);
