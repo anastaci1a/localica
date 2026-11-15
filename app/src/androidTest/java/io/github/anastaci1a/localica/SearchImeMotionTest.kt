@@ -1033,9 +1033,12 @@ class SearchImeMotionTest {
     private fun shell(command: String): String = nativeShell(command)
 
     private fun releaseDeferredKeyboard() {
+        val focusStartedAt = compose.mainClock.currentTime
         compose.runOnUiThread { keyboardAllowed = true }
-        compose.mainClock.advanceTimeByFrame()
-        compose.waitForIdle()
+        advanceUntil(virtualTimeoutMillis = 256) {
+            motionTimeline.any { it.endsWith("measured-editor-focus-after-native-and-compose-hide") }
+        }
+        motionTimeline += "${SystemClock.uptimeMillis()} deferred-editor-focus frames=${(compose.mainClock.currentTime - focusStartedAt) / 16}"
         // Native insets advance on real time while the controlled morph is
         // paused. Then one frame must let position start before p reaches one.
         compose.waitUntil(5000) {
