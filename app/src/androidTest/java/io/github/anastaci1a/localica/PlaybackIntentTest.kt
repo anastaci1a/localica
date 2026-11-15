@@ -78,6 +78,33 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun recoveryChangesDuringHeldWindowIoReconcileNativeRepeatInBothDirections() = fixture(duplicateOccurrences = true, occurrences = 4, librarySize = 2) {
+        queues.settings { it.copy(repeat = QueueRepeat.All) }; barrier()
+        withContext(Dispatchers.Main) { assertEquals(Player.REPEAT_MODE_ALL, player.repeatMode) }
+        for (pending in listOf(true, false)) {
+            val gate = store.gateNextSnapshot()
+            queues.settings { it.copy(preloadNext = !it.preloadNext) }
+            try {
+                gate.entered.await()
+                withContext(Dispatchers.Main) {
+                    readers.publishRecovery(if (pending) RecoveryAdmission.Pending(first.entries[1].track.id) else RecoveryAdmission.Clear)
+                    yield()
+                }
+            } finally { gate.release.complete(Unit) }
+            val expected = if (pending) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ALL
+            awaitMain { player.repeatMode == expected }
+            command {}
+            withContext(Dispatchers.Main) {
+                assertEquals("Queued recovery reconciliation must leave the correct native mode standing", expected, player.repeatMode)
+                assertEquals(QueueRepeat.All, queues.state.value.settings.repeat)
+                assertEquals(first.currentEntryId, player.currentMediaItem!!.mediaId)
+                val ids = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
+                assertEquals(!pending, first.entries[1].id in ids)
+            }
+            assertNull(queues.state.value.problem)
+        }
+    }
+
     @Test fun sameQueueSelectionMatchesPriorNativePathWithoutReloading() {
         for (playing in listOf(false, true)) {
             var reference: List<String>? = null
