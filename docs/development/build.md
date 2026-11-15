@@ -21,6 +21,10 @@ For repeated compile or assemble runs, the configuration cache is an opt-in:
 
 Run selected tests separately, and verify any other task graph before adopting the cache.
 
+## Compose compiler reports
+
+Run `./gradlew :app:compileReleaseKotlin -PcomposeCompilerReports=true` to write stability and skippability reports under `app/build/compose/reports` and metrics under `app/build/compose/metrics`. Normal builds leave both destinations unset. Reports describe compiler decisions; runtime measurements establish performance.
+
 ## Variants and signing
 
 | Variant | Use | Notes |

@@ -70,6 +70,13 @@ android {
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
+composeCompiler {
+    if (providers.gradleProperty("composeCompilerReports").orNull == "true") {
+        reportsDestination = layout.buildDirectory.dir("compose/reports")
+        metricsDestination = layout.buildDirectory.dir("compose/metrics")
+    }
+}
+
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
