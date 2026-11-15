@@ -59,9 +59,12 @@ class BrowseQueueProjectionTest {
             val oldRows = source.map { SongRow(it.id, it.track) }
             assertEquals(count, reads)
             reads = 0
-            val (ids, idBytes) = allocation { source.mapView { it.id } }
+            val physical = { source.mapView { it.id } }
+            val popup = { source.mapView { SongRow(it.id, it.track) } }
+            physical(); popup() // Warm these exact projection call sites before descriptor allocation measurement.
+            val (ids, idBytes) = allocation(physical)
             assertEquals("physical admission reads", 0, reads)
-            val (rows, rowBytes) = allocation { source.mapView { SongRow(it.id, it.track) } }
+            val (rows, rowBytes) = allocation(popup)
             assertEquals("first popup admission reads", 0, reads)
             assertTrue("physical view allocated $idBytes B", idBytes < 4096)
             assertTrue("popup view allocated $rowBytes B", rowBytes < 4096)
