@@ -38,7 +38,7 @@ internal object SavedOrderCodec {
     fun decode(input: java.io.Reader, manual: (Sequence<String>) -> Unit): SavedOrder = java.io.PushbackReader(input).use { source ->
         var first = source.read()
         while (first >= 0 && first.toChar().isWhitespace()) first = source.read()
-        if (first < 0) return SavedOrder(emptyList())
+        if (first < 0) return@use SavedOrder(emptyList())
         source.unread(first); android.util.JsonReader(source).apply { isLenient = true }.use { json ->
             var sort = TrackSort.Manual; var ascending = true; json.beginObject()
             while (json.hasNext()) when (json.nextName()) {
