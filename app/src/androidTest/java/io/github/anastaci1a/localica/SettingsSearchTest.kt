@@ -80,6 +80,9 @@ class SettingsSearchTest {
             "Preload" to "Preload next track", "Shape damping" to "Shape damping", "grey" to "Interface gray",
             "minimum duration" to "Exclude short files", "sync" to "Lyrics timing correction")) {
             compose.onNodeWithContentDescription("Search settings input").performTextReplacement(query)
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("search-result:$result").fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNodeWithTag("search-result:$result").assertExists()
         }
     }
@@ -87,6 +90,9 @@ class SettingsSearchTest {
     @Test fun resultNavigatesScrollsAndHighlightsTheActualRow() {
         show()
         compose.onNodeWithContentDescription("Search settings input").performTextInput("Control expansion")
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithTag("search-result:Control expansion").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithTag("search-result:Control expansion").assertExists()
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("search-result:Control expansion").performClick()
@@ -145,6 +151,9 @@ class SettingsSearchTest {
     @Test fun hiddenOptionJumpsToItsRevealingChoice() {
         show()
         compose.onNodeWithContentDescription("Search settings input").performTextInput("Gray pill opacity")
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithTag("search-result:Gray pill opacity").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithTag("search-result:Gray pill opacity").performClick()
         compose.onNodeWithTag("setting:Selector style").assertIsDisplayed()
         compose.onNodeWithTag("setting-highlight:Selector style", useUnmergedTree = true).assertExists()
@@ -266,6 +275,9 @@ class SettingsSearchTest {
             compose.onNodeWithContentDescription("Back from settings").performClick()
             compose.onNodeWithContentDescription("Back from settings").performClick()
             compose.onNodeWithContentDescription("Search settings input").performTextInput("Songs")
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("search-result:Songs").fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNodeWithTag("search-result:Songs").performClick()
             compose.onNode(hasText("Songs") and hasText("Add next")).assertIsDisplayed()
             restoration.emulateSavedInstanceStateRestore()
