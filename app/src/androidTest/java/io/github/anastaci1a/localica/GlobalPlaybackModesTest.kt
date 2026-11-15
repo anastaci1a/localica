@@ -31,6 +31,14 @@ class GlobalPlaybackModesTest {
         lateinit var player: ExoPlayer
         lateinit var queues: QueueController
         fun verifyTraversal(startId: String) {
+            await {
+                var synchronized = false
+                instrumentation.runOnMainSync {
+                    synchronized = queues.state.value.library.active?.journey?.window()?.map { it.token } ==
+                        (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaMetadata.extras!!.getString("queueVisit") }
+                }
+                synchronized
+            }
             instrumentation.runOnMainSync {
                 val journey = queues.state.value.library.active!!.journey!!
                 assertEquals(startId, player.currentMediaItem?.mediaId)

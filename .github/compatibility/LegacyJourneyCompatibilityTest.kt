@@ -118,7 +118,7 @@ class LegacyJourneyCompatibilityTest {
 
     // Schema 8 owns actual history and shuffled permutations; the bridge still derives a legacy future in memory.
     private fun durable(library: QueueLibrary) = library.copy(queues = library.queues.map { queue ->
-        queue.copy(journey = queue.journey?.let { it.copy(future = emptyList(), plans = if (it.modes.shuffle) it.plans else emptyMap()) })
+        queue.copy(journey = queue.journey?.let { it.copy(future = emptyList(), plans = if (it.modes.shuffle) it.plans else mapOf(it.cycle to queue.ids)) })
     })
 
     private fun fixture(): QueueLibrary {
