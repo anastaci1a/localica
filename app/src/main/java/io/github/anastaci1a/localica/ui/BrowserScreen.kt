@@ -838,7 +838,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val filterRangeViewport by remember(gridState) { derivedStateOf { gridState.layoutInfo.viewportSize } }
     LaunchedEffect(filterRangeRequest, artistFilterRange.interruption, listContact, selectionVisible,
         playerOpen, modalBlocked, latestReducedMotion, displayedStyle, pinchMotion.source, zoomAnchor,
-        result.items, filterRangeViewport, obscuredInset, density.density, density.fontScale) {
+        result.items.ownerRevision, filterRangeViewport, obscuredInset, density.density, density.fontScale) {
         val request = filterRangeRequest ?: return@LaunchedEffect
         if (listContact || !selectionVisible || playerOpen || modalBlocked || pinchMotion.source != null || zoomAnchor != null) return@LaunchedEffect
         // A touch/fling/key scroll owns its full mutation before any range reconciliation.
