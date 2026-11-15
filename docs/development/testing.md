@@ -27,7 +27,9 @@ Named JVM snapshots capture partial fades, settled pinch destinations and tab en
 
 Structure and existing assertions retain their tolerances. Screenshot interiors and dimensions are exact. Only pixels in a reference's nonuniform 3×3 neighbourhood permit channel differences up to 3/255; at most 0.5% of those pixels may differ. Images cannot shift.
 
-Reference PNGs are stored as Base64 text and decoded into build reports. Verification is the default in `testDebugUnitTest`. Record explicitly with `-Proborazzi.test.record=true`, then review changes before updating references. Runtime equivalence and device-test retirement remain pilot acceptance requirements.
+Reference PNGs in `app/src/test/screenshots` are declared inputs of `testDebugUnitTest`; reference changes rerun verification. Record locally with `-Proborazzi.test.record=true`, then review build-output images before updating references. CI rejects recording. Runtime equivalence and device-test retirement remain pilot acceptance requirements.
+
+The screenshot bindings, shared fixtures and Robolectric configuration belong to the debug unit-test source set. Only `testDebugUnitTest` uses Java 21 and SDK 36; other unit-test variants retain Java 17 and exclude these fixtures.
 
 ## Focused and final validation
 

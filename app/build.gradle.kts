@@ -63,7 +63,7 @@ android {
     }
     testOptions.unitTests.isIncludeAndroidResources = true
     // Test fixtures and contracts are shared by JVM and device callers.
-    sourceSets.getByName("test").java.srcDir("src/sharedTest/java")
+    sourceSets.getByName("testDebug").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("androidTest").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
@@ -124,6 +124,9 @@ val archiveDebugUnitXml = tasks.register<org.gradle.api.tasks.Copy>("archiveDebu
 }
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
     if (name == "testDebugUnitTest") {
+        val recordScreenshots = providers.gradleProperty("roborazzi.test.record").map(String::toBoolean).orElse(false).get()
+        check(!recordScreenshots || !providers.environmentVariable("CI").isPresent) { "CI must verify screenshot references" }
+        inputs.dir("src/test/screenshots").withPropertyName("screenshotReferences").withPathSensitivity(PathSensitivity.RELATIVE)
         finalizedBy(archiveDebugUnitXml)
         javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(21)) })
         maxHeapSize = "2g"
@@ -142,7 +145,7 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
         systemProperty("robolectric.pixelCopyRenderMode", "hardware")
         systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
         systemProperty("maven.repo.local", gradle.gradleUserHomeDir.resolve("caches/robolectric-maven").absolutePath)
-        systemProperty("roborazzi.test.record", providers.gradleProperty("roborazzi.test.record").orElse("false").get())
+        systemProperty("roborazzi.test.record", recordScreenshots)
     }
 }
 
