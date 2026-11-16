@@ -76,6 +76,7 @@ class CollectionHeaderPinchFrameTest {
             runBlocking { withTimeout(5000) { queues.withFileEdit("absent") {} } }
             compose.runOnIdle { playbackCalls = queues.state.value.playerRequest.toInt() }
         }
+        var primaryFailure: Throwable? = null
         try {
             queuePreferences.write(QueueSettings())
             compose.runOnUiThread {
@@ -282,21 +283,28 @@ class CollectionHeaderPinchFrameTest {
                 drainPlayback()
                 compose.runOnIdle { assertEquals(2, playbackCalls) }
             }
-        } finally {
-            android.util.Log.i("CollectionHeaderFrames", "artist=$artist frames=${frames.size} last=${frames.takeLast(3)}")
-            compose.mainClock.autoAdvance = false
-            if (held) { compose.onNodeWithTag("browser-list").performTouchInput { cancel() }; held = false }
-            compose.mainClock.autoAdvance = true
-            preferences.write(route, original, overridden)
-            try {
+        } catch (failure: Throwable) {
+            primaryFailure = failure
+            throw failure
+        } finally { FixtureRestoration(primaryFailure).apply {
+            attempt("header diagnostics") {
+                android.util.Log.i("CollectionHeaderFrames", "artist=$artist frames=${frames.size} last=${frames.takeLast(3)}")
+            }
+            attempt("pointer cancellation") {
+                compose.mainClock.autoAdvance = false
+                if (held) { compose.onNodeWithTag("browser-list").performTouchInput { cancel() }; held = false }
+            }
+            attempt("test clock") { compose.mainClock.autoAdvance = true }
+            attempt("browse preferences") { preferences.write(route, original, overridden) }
+            attempt("playback drain") {
                 drainPlayback()
                 assertEquals(if (allowPlayback) if (artist) 2 else 1 else 0, playbackCalls)
-            } finally {
-                kotlinx.coroutines.runBlocking { queueJob.cancelAndJoin() }
-                queueDb.close()
-                queuePreferences.write(originalQueuePreferences)
             }
-        }
+            attempt("queue owner") { runBlocking { queueJob.cancelAndJoin() } }
+            attempt("queue database") { queueDb.close() }
+            attempt("queue preferences") { queuePreferences.write(originalQueuePreferences) }
+            finish()
+        } }
     }
 
     private fun spread(span: Float) {
