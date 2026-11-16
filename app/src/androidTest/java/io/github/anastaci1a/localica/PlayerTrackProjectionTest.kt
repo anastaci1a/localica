@@ -178,16 +178,17 @@ class PlayerTrackProjectionTest {
         val other = QueueEdits.create(listOf(track("other")), 0, "Other")
         val catalog = Counted(listOf(preview, other))
         val hook = AtomicReference<(() -> Unit)?>(null)
-        catalog.beforeRead = { hook.getAndSet(null)?.invoke() }
         var source by mutableStateOf(QueueUiState(QueueLibrary(catalog, preview.id), loading = false))
         val native = io.github.anastaci1a.localica.playback.PlaybackState()
         var progress = Float.NaN
         fun publish(next: QueueUiState, ready: SemanticsMatcher, choices: () -> Unit) {
+            val incoming = Counted(next.library.queues)
+            incoming.beforeRead = { hook.getAndSet(null)?.invoke() }
             val started = CountDownLatch(1)
             val release = CountDownLatch(1)
             hook.set { started.countDown(); check(release.await(30, TimeUnit.SECONDS)) }
             try {
-                compose.runOnIdle { source = next }
+                compose.runOnIdle { source = next.copy(library = next.library.copy(queues = incoming)) }
                 compose.waitForIdle()
                 assertTrue(started.await(10, TimeUnit.SECONDS))
                 choices()
