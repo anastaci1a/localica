@@ -1,0 +1,339 @@
+{
+  "schemaVersion": 1,
+  "protocol": "971-playall13400-v1",
+  "referenceViewport": [
+    1080,
+    2340
+  ],
+  "tracks": 13400,
+  "queueEntries": 13400,
+  "settleMs": 400,
+  "scenarios": [
+    {
+      "id": "library-list-fling",
+      "view": "list",
+      "prepare": "songs",
+      "actions": [
+        {
+          "repeat": 3,
+          "steps": [
+            {
+              "gesture": {
+                "from": [
+                  540,
+                  1800
+                ],
+                "to": [
+                  540,
+                  700
+                ],
+                "durationMs": 240,
+                "holdMs": 0
+              }
+            },
+            {
+              "waitMs": 600
+            },
+            {
+              "gesture": {
+                "from": [
+                  540,
+                  700
+                ],
+                "to": [
+                  540,
+                  1800
+                ],
+                "durationMs": 240,
+                "holdMs": 0
+              }
+            },
+            {
+              "waitMs": 600
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "library-list-slow-scroll",
+      "view": "list",
+      "prepare": "songs",
+      "actions": [
+        {
+          "repeat": 3,
+          "steps": [
+            {
+              "gesture": {
+                "from": [
+                  540,
+                  1800
+                ],
+                "to": [
+                  540,
+                  700
+                ],
+                "durationMs": 1200,
+                "holdMs": 120
+              }
+            },
+            {
+              "waitMs": 600
+            },
+            {
+              "gesture": {
+                "from": [
+                  540,
+                  700
+                ],
+                "to": [
+                  540,
+                  1800
+                ],
+                "durationMs": 1200,
+                "holdMs": 120
+              }
+            },
+            {
+              "waitMs": 600
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "library-gallery-fling",
+      "view": "gallery",
+      "prepare": "songs",
+      "actions": [
+        {
+          "repeat": 3,
+          "steps": [
+            {
+              "gesture": {
+                "from": [
+                  540,
+                  1800
+                ],
+                "to": [
+                  540,
+                  700
+                ],
+                "durationMs": 240,
+                "holdMs": 0
+              }
+            },
+            {
+              "waitMs": 600
+            },
+            {
+              "gesture": {
+                "from": [
+                  540,
+                  700
+                ],
+                "to": [
+                  540,
+                  1800
+                ],
+                "durationMs": 240,
+                "holdMs": 0
+              }
+            },
+            {
+              "waitMs": 600
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "library-gallery-slow-scroll",
+      "view": "gallery",
+      "prepare": "songs",
+      "actions": [
+        {
+          "repeat": 3,
+          "steps": [
+            {
+              "gesture": {
+                "from": [
+                  540,
+                  1800
+                ],
+                "to": [
+                  540,
+                  700
+                ],
+                "durationMs": 1200,
+                "holdMs": 120
+              }
+            },
+            {
+              "waitMs": 600
+            },
+            {
+              "gesture": {
+                "from": [
+                  540,
+                  700
+                ],
+                "to": [
+                  540,
+                  1800
+                ],
+                "durationMs": 1200,
+                "holdMs": 120
+              }
+            },
+            {
+              "waitMs": 600
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tab-swipe",
+      "view": "gallery",
+      "prepare": "songs",
+      "actions": [
+        {
+          "repeat": 3,
+          "steps": [
+            {
+              "gesture": {
+                "from": [
+                  950,
+                  1100
+                ],
+                "to": [
+                  150,
+                  1100
+                ],
+                "durationMs": 250,
+                "holdMs": 0
+              }
+            },
+            {
+              "waitMs": 700
+            },
+            {
+              "gesture": {
+                "from": [
+                  150,
+                  1100
+                ],
+                "to": [
+                  950,
+                  1100
+                ],
+                "durationMs": 250,
+                "holdMs": 0
+              }
+            },
+            {
+              "waitMs": 700
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "player-expand-collapse",
+      "view": "list",
+      "prepare": "mini",
+      "actions": [
+        {
+          "repeat": 3,
+          "steps": [
+            {
+              "tap": "target"
+            },
+            {
+              "waitMs": 900
+            },
+            {
+              "back": true
+            },
+            {
+              "waitMs": 900
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lyrics-open",
+      "view": "list",
+      "prepare": "player",
+      "target": "Show lyrics",
+      "actions": [
+        {
+          "tap": "target"
+        },
+        {
+          "waitMs": 1400
+        }
+      ],
+      "witness": "Hide lyrics"
+    },
+    {
+      "id": "search-open",
+      "view": "list",
+      "prepare": "songs",
+      "target": "Search library",
+      "actions": [
+        {
+          "tap": "target"
+        },
+        {
+          "waitMs": 1400
+        }
+      ],
+      "witness": "Search"
+    },
+    {
+      "id": "search-typing",
+      "view": "list",
+      "prepare": "search",
+      "actions": [
+        {
+          "type": "Scale song 000",
+          "intervalMs": 120
+        },
+        {
+          "waitMs": 1200
+        }
+      ],
+      "witness": "Scale song 000"
+    },
+    {
+      "id": "pinch-view-change",
+      "view": "list",
+      "prepare": "songs",
+      "actions": [
+        {
+          "pinch": "pinch-out.csv"
+        },
+        {
+          "waitMs": 1000
+        }
+      ],
+      "witness": "Large"
+    },
+    {
+      "id": "cold-start",
+      "view": "list",
+      "prepare": "cold",
+      "actions": [
+        {
+          "launch": true
+        },
+        {
+          "waitMs": 1400
+        }
+      ]
+    }
+  ]
+}

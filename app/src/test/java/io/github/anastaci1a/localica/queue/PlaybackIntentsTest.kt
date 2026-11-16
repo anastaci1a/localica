@@ -7,6 +7,47 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 class PlaybackIntentsTest {
+    @Test fun modeRequestsReconcileByIdentityWithoutConsumingPlayOrPause() {
+        val intents = PlaybackIntents()
+        val committed = QueueSettings()
+        val first = intents.requestModes({ committed }) { it.copy(shuffle = true) }
+        val pause = intents.accept(false)
+        val latest = intents.requestModes({ committed }) { it.copy(repeat = QueueRepeat.All) }
+        assertTrue(latest.settings.shuffle)
+        assertFalse(intents.current(first))
+        intents.finishModes(first)
+        intents.finishModes(null)
+        assertSame(latest, intents.modes.value)
+        assertEquals(pause, intents.pending()!!.revision)
+        intents.apply(fallback = true) { assertFalse(it) }
+        assertSame(latest, intents.modes.value)
+        intents.finishModes(latest)
+        assertNull(intents.modes.value)
+        assertFalse(intents.current(latest))
+    }
+
+    @Test fun modeProjectionPreservesNonModeSettingsAndNormalizesAdvancedRepeat() {
+        val committed = QueueSettings(preloadNext = false, maximum = 7)
+        val intents = PlaybackIntents()
+        val policy = AdvancedRepeat(songEnd = SongEnd.Repeat)
+        val request = intents.requestModes({ committed }) { it.copy(shuffle = true, advancedRepeat = policy) }
+        assertEquals(QueueRepeat.One, request.settings.repeat)
+        val changed = committed.copy(previousThresholdSeconds = 12)
+        assertEquals(changed.copy(shuffle = true, repeat = QueueRepeat.One, advancedRepeat = policy),
+            changed.withModes(request.settings))
+        assertSame(changed, changed.withModes(null))
+    }
+
+    @Test fun concurrentModeTapsUseTheLatestRequestedPair() {
+        val intents = PlaybackIntents()
+        val workers = List(2) { thread { repeat(1000) {
+            intents.requestModes({ QueueSettings() }) { it.copy(shuffle = !it.shuffle) }
+        } } }
+        workers.forEach(Thread::join)
+        assertFalse(intents.modes.value!!.settings.shuffle)
+        assertEquals(2000L, intents.modes.value!!.revision)
+    }
+
     @Test fun newerPauseWinsEvenBeforeOlderQueueCommandDecidesToPlay() {
         val intents = PlaybackIntents()
         val queued = intents.accept()

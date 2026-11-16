@@ -40,6 +40,8 @@ Popups use shared springs. Finger-driven player, Queue, sheets, pinch and select
 
 One interruptible response couples footprint/depth to acceleration and pressure. Shared overdrag caps at 4 dp; held selectors keep cross-axis extent and concentric contact corners. Free corners flatten near contact; release couples width/height oppositely. Shape damping and Resting depth feed this response. Selector and pressure tests specify contours/rebound.
 
+The same owner integrates broad/local glow alpha and centre springs from admitted contact. Release fades at the last contact target; zero strength cannot extend the clock. Reduced motion snaps light, and shape can settle independently. The shared flex spec owns timing and variant opacity; [Glass](glass.md#presence-and-shape) identifies provisional optics.
+
 ## Speed and Reduced motion
 
 Animation speed (0.5×–1.5×) divides durations and scales spring frequency once. Extent/speed changes retain position/velocity. App Reduce motion or zero Android animator scale snaps motion, suppresses deformation and uses ellipses/jump scrolling. Native ownership receipts remain required. Changes apply live; restoring system animations resumes only if the app option is off.

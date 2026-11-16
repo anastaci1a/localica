@@ -61,7 +61,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private val intents = PlaybackIntents()
     private var commandRevision = 0L
     private val mutable = MutableStateFlow(QueueUiState(settings = preferences.read()))
-    val state = mutable.asStateFlow()
+    internal val state = mutable.asStateFlow()
+    val presentation = combine(state, intents.modes) { value, mode -> value.copy(settings = value.settings.withModes(mode?.settings)) }
+        .stateIn(scope, SharingStarted.Eagerly, mutable.value)
     private var player: Player? = null
     private val timeline = QueueTimeline()
     private data class ResolvedOccurrence(val track: Track, val sourcePlaylistId: String?, val item: MediaItem)
@@ -86,7 +88,6 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private var editPlayRequest: Boolean? = null
     private var lastPlayWhenReady = false
     private var pausedAtEnd = false
-    private var recoveryRepeatSuppressed = false
     private data class RecoveryProblem(val message: String, val queueId: String,
         val entryId: String?, val blockedSource: String)
     private var recoveryProblem: RecoveryProblem? = null
@@ -284,7 +285,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 }
             }
         }
-        commandJob.invokeOnCompletion { commands.close(); checkpoints.close() }
+        commandJob.invokeOnCompletion { commands.close(); checkpoints.close(); intents.finishModes(intents.modes.value) }
         scope.launch { readers.recoveryChanges.collect {
             // Notifications may coalesce or arrive after another publication. Read the authority.
             submit { refreshRecoveryPlayback() }
@@ -551,8 +552,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         QueueEdits.moveBefore(it, entries, beforeId)
     }
-    fun shuffle() = settings { it.copy(shuffle = !it.shuffle) }
-    fun repeat() = settings { it.copy(advancedRepeat = null,
+    fun shuffle() = requestModes { it.copy(shuffle = !it.shuffle) }
+    fun repeat() = requestModes { it.copy(advancedRepeat = null,
         repeat = QueueRepeat.entries[(it.repeat.ordinal + 1) % QueueRepeat.entries.size]) }
     fun randomize(queueId: String, complete: (Boolean) -> Unit = {}) =
         randomize(queueId, kotlin.random.Random.Default, complete)
@@ -627,20 +628,30 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     /** Explicit full replacement, including resets/restoration. */
     fun settings(value: QueueSettings) = settings { value }
+    fun requestModes(change: (QueueSettings) -> QueueSettings) {
+        val request = intents.requestModes({ state.value.settings }, change)
+        settings({ it.withModes(request.settings) }, request)
+    }
     /** Read-modify-write runs in the actor; callers capture only their intended field values. */
-    fun settings(change: (QueueSettings) -> QueueSettings) = submit {
-        // Capture and publish the native mode change without an intervening cursor-only disk wait.
+    fun settings(change: (QueueSettings) -> QueueSettings) = settings(change, null)
+    private fun settings(change: (QueueSettings) -> QueueSettings, request: PlaybackIntents.ModeChoice?) =
+        submit(request?.revision ?: intents.accept(), reject = { intents.finishModes(request) }) { try {
+        if (!intents.current(request)) return@submit
         captureNativeState()
         val value = change(state.value.settings)
         require(value.maximum == null || value.maximum > 0)
         require(value.previousThresholdSeconds in 1..60)
-        changeSettings(value.copy(repeat = value.advancedRepeat?.repeat ?: value.repeat))
+        changeSettings(value.withModes(value), request)
+        } finally { intents.finishModes(request) }
     }
-    private suspend fun changeSettings(value: QueueSettings) {
-        updateSettings(value, reconcile(state.value.library, JourneyModes.from(value)))
+    private suspend fun changeSettings(value: QueueSettings, request: PlaybackIntents.ModeChoice? = null) {
+        updateSettings(value.withModes(state.value.settings), state.value.library)
+        if (!syncTimeline(settings = value, request = request) && intents.current(request)) {
+            captureNativeState()
+            val ready = reconcile(state.value.library, JourneyModes.from(value))
+            intents.preparing { if (intents.current(request)) updateSettings(value, ready) }
+        }
         configurePreloading()
-        applyPlaybackModes()
-        syncTimeline()
         persist(state.value.library)
     }
     private fun updateSettings(value: QueueSettings, ready: QueueLibrary) {
@@ -658,7 +669,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val policy = modes.advancedRepeat
         (attached as? ExoPlayer)?.setPauseAtEndOfMediaItems(policy?.pausesEachSong == true)
         val recovery = readers.recovery()
-        recoveryRepeatSuppressed = modes.repeat == QueueRepeat.All && recovery != RecoveryAdmission.Clear &&
+        val recoveryRepeatSuppressed = modes.repeat == QueueRepeat.All && recovery != RecoveryAdmission.Clear &&
             state.value.library.active?.entries?.any { recovery.blocks(documentIdentity(it.track.id)) } == true
         attached.repeatMode = when (if (policy?.pausesEachSong == true || recoveryRepeatSuppressed) QueueRepeat.Off else modes.repeat) {
             QueueRepeat.Off -> Player.REPEAT_MODE_OFF
@@ -1138,18 +1149,6 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private suspend fun captureNativeState() {
         val ready = capturedLibrary(player)
         mutable.update { it.copy(library = ready) }
-        val blocked = state.value.library.active?.let { blocksCurrent(it) } == true
-        player?.let { attached ->
-            val modes = state.value.settings
-            val repeat = when (attached.repeatMode) { Player.REPEAT_MODE_ALL -> QueueRepeat.All
-                Player.REPEAT_MODE_ONE -> QueueRepeat.One; else -> QueueRepeat.Off }
-            if (!blocked &&
-                (modes.shuffle != attached.shuffleModeEnabled || (modes.advancedRepeat == null && !recoveryRepeatSuppressed && modes.repeat != repeat))) {
-                val next = modes.copy(shuffle = attached.shuffleModeEnabled,
-                    repeat = if (modes.advancedRepeat == null && !recoveryRepeatSuppressed) repeat else modes.repeat)
-                updateSettings(next, reconcile(state.value.library, JourneyModes.from(next)))
-            }
-        }
     }
     private suspend fun capture(orderTiming: QueueOrderTiming? = null) {
         val journey = state.value.library.active?.journey
@@ -1244,11 +1243,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         return true
     }
     private suspend fun syncTimeline(seek: Boolean = false, refreshLocations: Boolean = true,
-        orderTiming: QueueOrderTiming? = null): Boolean {
+        orderTiming: QueueOrderTiming? = null, settings: QueueSettings = state.value.settings,
+        request: PlaybackIntents.ModeChoice? = null): Boolean {
         val prepared = preparation()
         val attached = prepared.player ?: return false
-        val queue = prepared.library.active ?: return false
-        if (holdForEdit(attached, queue) || holdForRecovery(attached, queue) || queue.entries.isEmpty()) return false
+        val active = prepared.library.active ?: return false
+        if (holdForEdit(attached, active) || holdForRecovery(attached, active) || active.entries.isEmpty()) return false
+        val ready = if (settings === prepared.source.settings) prepared.library else reconcile(prepared.library, JourneyModes.from(settings))
+        val queue = ready.active ?: return false
         val recovery = readers.recovery()
         val window = if (recovery == RecoveryAdmission.Clear) requireNotNull(queue.journey).window()
             else withContext(Dispatchers.Default) { recoveryWindow(queue) { recovery.blocks(documentIdentity(it)) } }
@@ -1275,20 +1277,22 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 orderTiming?.mark(QueueOrderTiming.Stage.GrantsTemplates)
             }
         }
-        if (!prepared.isCurrent()) return false
+        if (!prepared.isCurrent() || !intents.current(request)) return false
         if (!seek && loadedQueueId == queue.id && attached.currentMediaItem?.queueVisit != queue.journey?.current?.token) {
             capturedLibrary(attached).let { ready -> mutable.update { it.copy(library = ready) } }
             if (!prepared.ownsPlayer()) return false
-            if (state.value.library.active !== queue) return syncTimeline(seek, refreshLocations, orderTiming)
+            if (state.value.library.active !== active) return syncTimeline(seek, refreshLocations, orderTiming, settings, request)
         }
-        resolved = next
-        timeline.resolve(queue.id, next.values.map { it.item })
         intents.preparing { pauseRequested ->
+            if (!intents.current(request)) return@preparing
+            resolved = next
+            timeline.resolve(queue.id, next.values.map { it.item })
             if (pauseRequested) attached.pause()
             syncingTimeline = true
             try {
                 val changed = timeline.sync(attached, queue, seek, loadedQueueId != queue.id || attached.mediaItemCount == 0, window)
                 loadedQueueId = queue.id
+                if (settings !== state.value.settings) updateSettings(settings, ready)
                 applyPlaybackModes(changed)
             } finally { syncingTimeline = false }
         }

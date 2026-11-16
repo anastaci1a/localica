@@ -202,7 +202,7 @@ class ShuffleModePlaybackTest {
             f.scope.launch { f.queues.state.collect { if (!it.settings.shuffle) stateAt.compareAndSet(0, SystemClock.elapsedRealtime()) } }
         }
         compose.setContent {
-            val state by f.queues.state.collectAsState()
+            val state by f.queues.presentation.collectAsState()
             MaterialTheme {
                 Box(Modifier.size(320.dp, 64.dp).drawWithContent {
                     drawContent()

@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
           mkdir tooling-contract-reports
           git rev-parse HEAD > tooling-contract-reports/source-sha.txt
-          git ls-files -z .github/dependency-cache-audit.sh .github/gradle-transient-retry.sh gradle.properties app/src/main app/src/sharedTest app/src/test lint tools/ui-consolidation tools/performance app/lint-baseline.xml app/ui-escapes.yaml app/build.gradle.kts settings.gradle.kts build.gradle.kts gradle .github/check-ui-lint.mjs .github/run-ui-lint.sh .github/emulator-sdk.py .github/emulator-readiness.py .github/emulator-system-image.py .github/actions .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/shared-test-apks.py .github/prebuilt-device-tests.gradle .github/release-verification.py .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
+          git ls-files -z .github/dependency-cache-audit.sh .github/gradle-transient-retry.sh gradle.properties benchmark app/src/main app/src/sharedTest app/src/test lint tools/ui-consolidation tools/performance app/lint-baseline.xml app/ui-escapes.yaml app/build.gradle.kts settings.gradle.kts build.gradle.kts gradle .github/check-ui-lint.mjs .github/run-ui-lint.sh .github/emulator-sdk.py .github/emulator-readiness.py .github/emulator-system-image.py .github/actions .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/shared-test-apks.py .github/prebuilt-device-tests.gradle .github/release-verification.py .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
           # Pin the interpreter ABI to the reviewed PyYAML wheel; refuse runner drift.
           python3.12 -c 'import platform, sys; assert sys.version_info[:2] == (3, 12) and sys.implementation.name == "cpython" and sys.platform == "linux" and platform.machine() == "x86_64"'
           python3.12 -m venv "$RUNNER_TEMP/tooling-contract-python"
@@ -96,7 +96,7 @@ jobs:
                   raise RuntimeError('Missing required contract file: ' + name)
           commands = [[sys.executable, '-m', 'unittest', 'discover', '-v', '-s', '.github/tests', '-p', name] for name in names]
           commands.append(['node', '--test', '--test-reporter=tap', '.github/tests/test_publish_test_evidence.mjs'])
-          commands.append(['node', '--test', '.github/tests/test_ui_lint_contract.mjs', 'tools/ui-consolidation/pin.test.mjs', 'tools/ui-consolidation/popup-policy.test.mjs', 'tools/ui-consolidation/adopt-baseline.test.mjs', 'tools/performance/none-contract.test.mjs', 'tools/performance/summarize-ui.test.mjs'])
+          commands.append(['node', '--test', '.github/tests/test_ui_lint_contract.mjs', 'tools/ui-consolidation/pin.test.mjs', 'tools/ui-consolidation/popup-policy.test.mjs', 'tools/ui-consolidation/adopt-baseline.test.mjs', 'tools/performance/none-contract.test.mjs', 'tools/performance/summarize-ui.test.mjs', 'tools/performance/macrobenchmark/protocol.test.mjs', 'tools/performance/macrobenchmark/ratchet.test.mjs', 'tools/performance/macrobenchmark/campaign.test.mjs'])
           results = []
           for index, argv in enumerate(commands):
               log = root / ('contract-%02d.log' % index)

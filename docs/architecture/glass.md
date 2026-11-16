@@ -1,12 +1,12 @@
 # Glass
 
-Glass is one material drawn by one of two renderers: Normal (lens) or None (flat fills). Proposed: every glass element has a presence, from 0 to 1, and a shape. Glass appears by raising presence and disappears by lowering it, never by fading. Press, squish and morph change shape only. Each renderer shows what it can.
+Glass uses two renderers: Normal (lens) or None (flat fills). Proposed: every glass element has a presence, from 0 to 1, and a shape. Glass appears by raising presence and disappears by lowering it, never by fading. Press also drives a shared touch glow; squish and morph change shape. Each renderer shows what it can.
 
 - Presence scales every material property. Shape is geometry: size, position, morph, squish and thickness.
 - Constant volume (Proposed): thickness is derived as resting volume divided by footprint area.
 - The optics formula is frozen. Only its inputs change over time.
 - The lens needs Android 13 or newer. Older versions draw the average colour.
-- Status: renderers and fallbacks are Implemented. Presence, constant volume and lensing in (#928) and touch light (#642) are Proposed.
+- Status: renderers, fallbacks and touch light (#642/#1002) are Implemented. Touch-light spatial optics remain provisional; presence, constant volume and lensing in (#928) are Proposed.
 
 A third renderer, Single-Tone Blur, existed up to v0.34.2 as a testing mode. Its removal (#919) is Released in v0.34.3, and stored choices migrate to Normal. This page does not describe it.
 
@@ -28,6 +28,8 @@ Shapes, shadows, input and motion are shared. Frosted panels use downsampled sca
 The diagram separates material strength (presence, 0–1) from geometry (shape). Proposed in #928: appearance changes presence; presses, squish and morph change shape. Lens strength uses presence and thickness; None uses fill opacity. At zero presence all renderers match their background. Fallbacks ignore thickness.
 
 Implemented appearance instead uses scale/opacity at full optical strength. It does not yet ramp lens inputs.
+
+Touch light shares the [contact response](motion.md#deformation). Its broad and local fills use provisional gain, support, falloff and filtering; this does not establish iOS spatial parity. [GlassTouchLightTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/GlassTouchLightTest.kt) specifies the pixel and ownership contracts.
 
 ### Constant volume
 

@@ -107,6 +107,13 @@ class GlassSilhouetteTest {
         fun capture(index: Int): ImageBitmap {
             compose.runOnIdle { phase = index }
             return compose.onNodeWithTag("optical-case").captureToImage().also { bitmap ->
+                val raw = IntArray(bitmap.width * bitmap.height).also { bitmap.asAndroidBitmap().getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height) }
+                val bytes = java.nio.ByteBuffer.allocate(raw.size * 4).apply { raw.forEach { putInt(it) } }.array()
+                val hash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+                androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let {
+                    java.io.File(it, "split-optics-$index.sha256").apply { parentFile?.mkdirs(); writeText("$hash  split-optics-$index\n") }
+                }
+                android.util.Log.i("GlassSplitOptics", "phase=$index pixelSha256=$hash")
                 val folder = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
                 java.io.File(folder, "split-optics-$index.png").outputStream().use {
                     bitmap.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)

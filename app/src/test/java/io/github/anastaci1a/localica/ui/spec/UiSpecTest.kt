@@ -86,7 +86,7 @@ class UiSpecTest {
         assertEquals(2f,accepted(config=settings.copy(glass=GlassAppearance(shapeDamping=2f)) ).material.getValue(MaterialRole.Glass).shapeDamping,0f)
     }
     @Test fun everyPositionSpringIsAdmittedAndSlowOverrideRejected() {
-        for((key,spring) in accepted().spring) if(key!=SpringProfile.Strain) {
+        for((key,spring) in accepted().spring) {
             val horizon=springHorizon(spring)
             assertTrue("$key $horizon",horizon.isFinite() && horizon<=2)
         }

@@ -23,6 +23,7 @@ class ListBackTest {
     private fun position() = compose.onNodeWithTag("browser-list").fetchSemanticsNode()
         .config[SemanticsProperties.VerticalScrollAxisRange].value()
     private fun back() {
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().size == 1 }
         compose.awaitExpectedWindowFocus(compose.onNodeWithTag("browser-list"))
         pressSystemBack()
     }

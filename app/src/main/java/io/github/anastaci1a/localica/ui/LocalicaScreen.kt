@@ -527,7 +527,7 @@ fun LocalicaScreen(
         text = { Text("Playback will continue.") }, confirmButton = { ActionTextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
         dismissButton = { ActionTextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
     CompositionLocalProvider(LocalGlassDialogAppearance provides playerDialogAppearance) {
-    if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
+    if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.requestModes(it) }
     if (customizeActions) CompositionLocalProvider(LocalGlassDialogAppearance provides customizeAppearance) {
         PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false; customizeAppearance = null }, settings.reducedMotion)
     }

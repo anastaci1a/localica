@@ -37,6 +37,32 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    private suspend fun Fixture.selectWithFrozenNativePath() = withContext(Dispatchers.Main) {
+        val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
+        val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
+        val revision = QueueController::class.java.getDeclaredField("commandRevision").apply { isAccessible = true }
+        val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
+        val apply = QueueController::class.java.declaredMethods.single { it.name == "applyNativeIntent" }.apply { isAccessible = true }
+        val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
+        val action: suspend () -> Unit = {
+            val active = state.value.library.active!!
+            val selected = withContext(Dispatchers.Default) { active.copy(currentEntryId = "duplicate-1", positionMs = 0,
+                journey = active.journey!!.select("duplicate-1", active.ids)) }
+            state.value = state.value.copy(library = state.value.library.update(selected))
+            val accepted = revision.getLong(queues)
+            intents.propose(accepted, true, documentIdentity(track.id))
+            kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
+                sync.invoke(queues, true, true, null, queues.state.value.settings, null, it)
+            }
+            apply.invoke(queues, player, accepted, true)
+        }
+        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
+            command.invoke(queues, false, {}, action, it)
+        }
+    }
+
     @Test fun sameQueueSelectionMatchesPriorNativePathWithoutReloading() {
         for (playing in listOf(false, true)) {
             var reference: List<String>? = null
@@ -45,34 +71,7 @@ class PlaybackIntentTest {
                 queues.playbackRequested(playing)
                 barrier()
                 withContext(Dispatchers.Main) { player.selectionCalls.clear() }
-                if (oldPath) {
-                    // Frozen pre-consolidation selectEntry branch, after its prepared-library publication.
-                    val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
-                    @Suppress("UNCHECKED_CAST")
-                    val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
-                    val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
-                    val revision = QueueController::class.java.getDeclaredField("commandRevision").apply { isAccessible = true }
-                    val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
-                    val apply = QueueController::class.java.declaredMethods.single { it.name == "applyNativeIntent" }.apply { isAccessible = true }
-                    val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
-                    val action: suspend () -> Unit = {
-                        val active = state.value.library.active!!
-                        val selected = withContext(Dispatchers.Default) { active.copy(currentEntryId = "duplicate-1", positionMs = 0,
-                            journey = active.journey!!.select("duplicate-1", active.ids)) }
-                        state.value = state.value.copy(library = state.value.library.update(selected))
-                        val accepted = revision.getLong(queues)
-                        intents.propose(accepted, true, documentIdentity(track.id))
-                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
-                            sync.invoke(queues, true, true, null, it)
-                        }
-                        apply.invoke(queues, player, accepted, true)
-                    }
-                    withContext(Dispatchers.Main) {
-                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
-                            command.invoke(queues, false, {}, action, it)
-                        }
-                    }
-                } else queues.selectEntry("duplicate-1")
+                if (oldPath) selectWithFrozenNativePath() else queues.selectEntry("duplicate-1")
                 barrier()
                 withContext(Dispatchers.Main) {
                     assertEquals("duplicate-1", player.currentMediaItem!!.mediaId)
@@ -94,31 +93,7 @@ class PlaybackIntentTest {
             queues.playbackRequested(true); barrier()
             val gate = store.gateNextSnapshot()
             withContext(Dispatchers.Main) { player.selectionCalls.clear() }
-            val old = if (oldPath) async(Dispatchers.Main) {
-                val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
-                @Suppress("UNCHECKED_CAST")
-                val state = mutable.get(queues) as kotlinx.coroutines.flow.MutableStateFlow<QueueUiState>
-                val intents = QueueController::class.java.getDeclaredField("intents").apply { isAccessible = true }.get(queues) as PlaybackIntents
-                val revision = QueueController::class.java.getDeclaredField("commandRevision").apply { isAccessible = true }
-                val sync = QueueController::class.java.declaredMethods.single { it.name == "syncTimeline" }.apply { isAccessible = true }
-                val apply = QueueController::class.java.declaredMethods.single { it.name == "applyNativeIntent" }.apply { isAccessible = true }
-                val command = QueueController::class.java.declaredMethods.single { it.name == "editCommand" }.apply { isAccessible = true }
-                val action: suspend () -> Unit = {
-                    val active = state.value.library.active!!
-                    val selected = withContext(Dispatchers.Default) { active.copy(currentEntryId = "duplicate-1", positionMs = 0,
-                        journey = active.journey!!.select("duplicate-1", active.ids)) }
-                    state.value = state.value.copy(library = state.value.library.update(selected))
-                    val accepted = revision.getLong(queues)
-                    intents.propose(accepted, true, documentIdentity(track.id))
-                    kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
-                        sync.invoke(queues, true, true, null, it)
-                    }
-                    apply.invoke(queues, player, accepted, true)
-                }
-                kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> {
-                    command.invoke(queues, false, {}, action, it)
-                }
-            } else null
+            val old = if (oldPath) async { selectWithFrozenNativePath() } else null
             if (!oldPath) queues.selectEntry("duplicate-1")
             try {
                 gate.entered.await()
@@ -1313,7 +1288,7 @@ class PlaybackIntentTest {
         }
     }
 
-    @Test fun shuffleFlagsCommitBeforeWindowResolutionWithoutChangingNativeOrder() {
+    @Test fun shuffleIntentShowsBeforeCommitWithoutChangingNativeWindowOrFlags() {
         val reads = AtomicReference<Gate?>()
         fixture(rawPlayer = true, duplicateOccurrences = true, playbackStore = { heldReads(reads, it) }) {
             awaitMain { player.engine.playbackState == Player.STATE_READY }
@@ -1335,12 +1310,13 @@ class PlaybackIntentTest {
                     try {
                         withContext(Dispatchers.Main) {
                             reads.set(held)
-                            queues.settings { it.copy(shuffle = shuffle) }
+                            queues.requestModes { it.copy(shuffle = shuffle) }
                         }
                         held.entered.await()
                         withContext(Dispatchers.Main) {
-                            assertEquals(shuffle, queues.state.value.settings.shuffle)
-                            assertEquals(shuffle, player.engine.shuffleModeEnabled)
+                            assertEquals(shuffle, queues.presentation.value.settings.shuffle)
+                            assertEquals(!shuffle, queues.state.value.settings.shuffle)
+                            assertEquals(!shuffle, player.engine.shuffleModeEnabled)
                             assertEquals(before.first, changes.get())
                             assertEquals(before.second, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueVisit })
                             assertEquals(before.third, player.currentMediaItemIndex)
@@ -1352,6 +1328,12 @@ class PlaybackIntentTest {
                         }
                     } finally { reads.compareAndSet(held, null); held.release.complete(Unit) }
                     barrier()
+                    withContext(Dispatchers.Main) {
+                        assertEquals(shuffle, queues.state.value.settings.shuffle)
+                        assertEquals(shuffle, player.engine.shuffleModeEnabled)
+                        assertEquals(queues.state.value.library.active!!.journey!!.window().map { it.token },
+                            (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueVisit })
+                    }
                 }
             } finally { withContext(Dispatchers.Main) { player.engine.removeListener(listener) } }
         }
@@ -2134,7 +2116,7 @@ class PlaybackIntentTest {
                 val oldTemplates = templates.get(timeline)
                 val oldNative = player.currentMediaItem
                 val published = kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
-                    sync.invoke(queues, false, true, null, it)
+                    sync.invoke(queues, false, true, null, queues.state.value.settings, null, it)
                 }
                 assertFalse(published)
                 assertSame(oldResolved, resolved.get(queues))
@@ -2175,7 +2157,7 @@ class PlaybackIntentTest {
                     store.snapshot = LibrarySnapshot(tracks = listOf(track.copy(title = "Stale prepared title")))
                     store.gateNextSnapshot(gate)
                     val published = kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean> {
-                        sync.invoke(queues, false, true, null, it)
+                        sync.invoke(queues, false, true, null, queues.state.value.settings, null, it)
                     }
                     assertFalse("A stale window must decline publication", published)
                     assertSame(oldResolved, resolved.get(queues))
@@ -2350,6 +2332,322 @@ class PlaybackIntentTest {
         }
         override fun acquire(uri: String) = Unit
         override fun release(uri: String) = Unit
+    }
+
+    @Test fun heldTimelineIoKeepsNaturalEndWithItsPublishedModeOwner() {
+        val failures = mutableListOf<String>()
+        for (shuffle in listOf(false, true)) fixture(rawPlayer = true, duplicateOccurrences = true, timeoutMs = 30000) {
+            queues.settings(QueueSettings())
+            barrier()
+            repeat(first.entries.size - 1) { queues.next(); barrier() }
+            awaitMain { player.engine.playbackState == Player.STATE_READY && player.duration > 300 }
+            val exhausted = withContext(Dispatchers.Main) {
+                assertEquals(androidx.media3.common.C.INDEX_UNSET, player.engine.nextMediaItemIndex)
+                player.currentMediaItem!!.queueVisit!!
+            }
+            // Playback starts before the mode command; only native autoplay runs during held actor IO.
+            withContext(Dispatchers.Main) { player.engine.seekTo(0); player.engine.play() }
+            awaitMain { player.engine.isPlaying }
+            val held = store.gateNextSnapshot()
+            queues.settings { it.copy(shuffle = shuffle, repeat = if (shuffle) QueueRepeat.Off else QueueRepeat.All) }
+            var line = ""
+            try {
+                withTimeout(5000) { held.entered.await() }
+                val published = queues.state.value.library.active!!.journey!!
+                val expected = published.next
+                withContext(Dispatchers.Main) {
+                    if (player.currentMediaItem?.queueVisit == exhausted && player.engine.playWhenReady && player.engine.playbackState != Player.STATE_ENDED)
+                        player.engine.seekTo(player.duration - 80)
+                }
+                withTimeout(5000) {
+                    while (!withContext(Dispatchers.Main) {
+                        player.currentMediaItem?.queueVisit != exhausted || player.engine.playbackState == Player.STATE_ENDED || !player.engine.playWhenReady
+                    }) delay(10)
+                }
+                withContext(Dispatchers.Main) {
+                    assertNull("The natural-end witness needs a healthy decoder", player.engine.playerError)
+                    assertFalse("Timeline IO must still be held", held.release.isCompleted)
+                    val actual = player.currentMediaItem?.queueVisit
+                    val ended = player.engine.playbackState == Player.STATE_ENDED || !player.engine.playWhenReady
+                    val matches = if (expected == null) actual == exhausted && ended else actual == expected.token
+                    val settings = queues.state.value.settings
+                    line = "mode=${if (shuffle) "shuffle" else "repeat-all"} matchesPublishedOwner=$matches exhausted=$exhausted expected=${expected?.token} expectedCycle=${expected?.cycle} actual=$actual uiCycle=${published.cycle} uiCurrent=${published.current?.token} uiWindow=${published.window().size} nativeCount=${player.mediaItemCount} nativeRepeat=${player.engine.repeatMode} nativeShuffle=${player.engine.shuffleModeEnabled} uiRepeat=${settings.repeat} uiShuffle=${settings.shuffle} ended=$ended"
+                    if (!matches) failures += line
+                    player.engine.pause()
+                }
+            } finally { held.release.complete(Unit) }
+            barrier()
+            val final = queues.state.value.library.active!!.journey!!
+            line += " finalCycle=${final.cycle} finalCurrent=${final.current?.token}"
+            android.util.Log.i("Mode957Publication", line)
+            File(nativeEvidenceDirectory("mode-957-publication", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)), "natural-end.txt")
+                .appendText(line + "\n")
+        }
+        assertTrue("Natural end consumed a window outside the published owner:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+
+
+    @Test fun modeIntentSupersedesHeldPreparationWithoutPublishingIntermediateModes() = fixture(rawPlayer = true, duplicateOccurrences = true) {
+        val shuffled = AtomicInteger()
+        withContext(Dispatchers.Main) { player.engine.addListener(object : Player.Listener {
+            override fun onShuffleModeEnabledChanged(enabled: Boolean) { if (enabled) shuffled.incrementAndGet() }
+        }) }
+        val firstRead = store.gateNextSnapshot()
+        queues.shuffle()
+        firstRead.entered.await()
+        awaitMain { queues.presentation.value.settings.shuffle }
+        assertFalse(queues.state.value.settings.shuffle)
+        val latestRead = store.gateNextSnapshot()
+        withContext(Dispatchers.Main) { queues.shuffle(); repeat(3) { queues.repeat() } }
+        awaitMain { !queues.presentation.value.settings.shuffle && queues.presentation.value.settings.repeat == QueueRepeat.Off }
+        withContext(Dispatchers.Main) { queues.playbackRequested(false); queues.repeat() }
+        awaitMain { !queues.presentation.value.settings.shuffle && queues.presentation.value.settings.repeat == QueueRepeat.All }
+        firstRead.release.complete(Unit)
+        latestRead.entered.await()
+        withContext(Dispatchers.Main) {
+            assertFalse(player.engine.shuffleModeEnabled)
+            assertEquals(Player.REPEAT_MODE_OFF, player.engine.repeatMode)
+            assertEquals(0, shuffled.get())
+        }
+        latestRead.release.complete(Unit)
+        barrier()
+        withContext(Dispatchers.Main) {
+            assertEquals(QueueRepeat.All, queues.state.value.settings.repeat)
+            assertEquals(Player.REPEAT_MODE_ALL, player.engine.repeatMode)
+            assertFalse(player.engine.playWhenReady)
+            assertEquals(0, shuffled.get())
+            assertEquals(queues.state.value.library.active!!.journey!!.window().map { it.token },
+                (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueVisit })
+        }
+    }
+
+    @Test fun failedModeReadRetiresOnlyItsOverlayAndKeepsNewerRequest() = fixture(rawPlayer = true, duplicateOccurrences = true) {
+        val failed = store.gateNextSnapshot().apply { fail = true }
+        queues.shuffle()
+        failed.entered.await()
+        queues.repeat()
+        val newer = store.gateNextSnapshot()
+        failed.release.complete(Unit)
+        newer.entered.await()
+        awaitMain { queues.presentation.value.settings.shuffle && queues.presentation.value.settings.repeat == QueueRepeat.All }
+        assertFalse(queues.state.value.settings.shuffle)
+        newer.release.complete(Unit)
+        barrier()
+        val latestFailure = store.gateNextSnapshot().apply { fail = true }
+        queues.shuffle()
+        latestFailure.entered.await()
+        awaitMain { !queues.presentation.value.settings.shuffle }
+        latestFailure.release.complete(Unit)
+        awaitMain { queues.state.value.problem != null && queues.presentation.value.settings.shuffle }
+        assertEquals("Couldn’t save this queue change. Try again.", queues.state.value.problem)
+        withContext(Dispatchers.Main) { assertTrue(player.engine.shuffleModeEnabled) }
+        queues.shuffle()
+        barrier()
+        assertFalse(queues.state.value.settings.shuffle)
+        assertNull(queues.state.value.problem)
+    }
+
+    @Test fun nonModeSettingPreservesRequestedModesWithoutReplacingItsOwner() = fixture(rawPlayer = true, duplicateOccurrences = true) {
+        val saving = dao.gateNextSave()
+        queues.rename(first.id, "Held")
+        saving.entered.await()
+        val nonModeRead = store.gateNextSnapshot()
+        queues.settings { it.copy(preloadNext = false) }
+        queues.shuffle()
+        awaitMain { queues.presentation.value.settings.shuffle }
+        saving.release.complete(Unit)
+        nonModeRead.entered.await()
+        val modeRead = store.gateNextSnapshot()
+        nonModeRead.release.complete(Unit)
+        modeRead.entered.await()
+        awaitMain { !queues.presentation.value.settings.preloadNext && queues.presentation.value.settings.shuffle }
+        assertFalse(queues.state.value.settings.shuffle)
+        assertFalse(queues.state.value.settings.preloadNext)
+        modeRead.release.complete(Unit)
+        barrier()
+        assertTrue(queues.state.value.settings.shuffle)
+        assertFalse(queues.state.value.settings.preloadNext)
+    }
+
+    @Test fun nonModeSettingPublishesBeforeHeldReadAndSurvivesItsFailure() {
+        for (fail in listOf(false, true)) fixture(rawPlayer = true, duplicateOccurrences = true) {
+            val preferences = QueueController::class.java.getDeclaredField("preferences").apply { isAccessible = true }.get(queues) as QueuePreferences
+            val committed = queues.state.value.library
+            val held = store.gateNextSnapshot().also { it.fail = fail }
+            queues.settings { it.copy(preloadNext = false, songTap = SongTap.Append, repeat = QueueRepeat.All) }
+            held.entered.await()
+            awaitMain { !queues.presentation.value.settings.preloadNext && queues.presentation.value.settings.songTap == SongTap.Append }
+            assertSame(committed, queues.state.value.library)
+            assertFalse(queues.state.value.settings.preloadNext)
+            assertEquals(SongTap.Append, preferences.read().songTap)
+            assertFalse(preferences.read().preloadNext)
+            assertEquals(QueueRepeat.Off, preferences.read().repeat)
+            withContext(Dispatchers.Main) { assertEquals(Player.REPEAT_MODE_OFF, player.engine.repeatMode) }
+            held.release.complete(Unit)
+            if (fail) awaitMain { queues.state.value.problem != null } else barrier()
+            assertFalse(queues.state.value.settings.preloadNext)
+            assertFalse(preferences.read().preloadNext)
+            assertEquals(SongTap.Append, queues.state.value.settings.songTap)
+            assertEquals(SongTap.Append, preferences.read().songTap)
+            assertEquals(if (fail) QueueRepeat.Off else QueueRepeat.All, preferences.read().repeat)
+            withContext(Dispatchers.Main) { assertEquals(if (fail) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ALL, player.engine.repeatMode) }
+        }
+    }
+
+    @Test fun deferredModeOverlayRetiresOnControllerCancellation() = fixture(rawPlayer = true, duplicateOccurrences = true) {
+        val saving = dao.gateNextSave()
+        queues.tap(listOf(track), track.id)
+        saving.entered.await()
+        queues.shuffle()
+        awaitMain { queues.presentation.value.settings.shuffle }
+        val deferred = QueueController::class.java.getDeclaredField("commandAfterActivation").apply { isAccessible = true }
+        awaitMain { deferred.get(queues) != null }
+        val job = QueueController::class.java.getDeclaredField("commandJob").apply { isAccessible = true }.get(queues) as Job
+        job.cancelAndJoin()
+        awaitMain { queues.presentation.value.settings == queues.state.value.settings }
+        assertFalse(queues.state.value.settings.shuffle)
+        withContext(Dispatchers.Main) { assertFalse(player.engine.shuffleModeEnabled) }
+        saving.release.complete(Unit)
+    }
+
+    @Test fun coldPlayerUnderEditHoldKeepsSavedModesThroughCapture() = fixture(attach = false, rawPlayer = true, duplicateOccurrences = true) {
+        queues.settings(QueueSettings(shuffle = true, repeat = QueueRepeat.All))
+        barrier()
+        withHeldEdit(track.id) {
+            queues.attach(player.engine)
+            barrier()
+            assertTrue(queues.state.value.settings.shuffle)
+            assertEquals(QueueRepeat.All, queues.state.value.settings.repeat)
+            withContext(Dispatchers.Main) {
+                assertEquals(0, player.mediaItemCount)
+                assertFalse(player.engine.shuffleModeEnabled)
+                assertEquals(Player.REPEAT_MODE_OFF, player.engine.repeatMode)
+            }
+        }
+        barrier()
+        withContext(Dispatchers.Main) {
+            assertTrue(player.engine.shuffleModeEnabled)
+            assertEquals(Player.REPEAT_MODE_ALL, player.engine.repeatMode)
+            assertTrue(queues.state.value.settings.shuffle)
+            assertEquals(QueueRepeat.All, queues.state.value.settings.repeat)
+            assertNull(queues.state.value.problem)
+        }
+    }
+
+    @Test fun arrivalDuringModePreparationKeepsBProgressingAfterRederivation() {
+        for (shuffle in listOf(false, true)) fixture(rawPlayer = true, duplicateOccurrences = true, occurrences = 8, timeoutMs = 30000) {
+            awaitMain { player.engine.playbackState == Player.STATE_READY && player.duration > 500 }
+            val b = queues.state.value.library.active!!.journey!!.next!!
+            val firstRead = store.gateNextSnapshot()
+            queues.requestModes { it.copy(shuffle = shuffle, repeat = if (shuffle) QueueRepeat.Off else QueueRepeat.All) }
+            firstRead.entered.await()
+            withContext(Dispatchers.Main) { player.engine.seekTo(player.duration - 200); player.engine.play() }
+            awaitMain { player.currentMediaItem?.queueVisit == b.token }
+            val secondRead = store.gateNextSnapshot()
+            val seeks = AtomicInteger()
+            val positions = withContext(Dispatchers.Main) {
+                player.engine.addListener(object : Player.Listener {
+                    override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                        if (reason == Player.DISCONTINUITY_REASON_SEEK) seeks.incrementAndGet()
+                    }
+                })
+                player.engine.currentPosition
+            }
+            firstRead.release.complete(Unit)
+            secondRead.entered.await()
+            delay(120)
+            val progressed = withContext(Dispatchers.Main) {
+                assertEquals(b.token, player.currentMediaItem!!.queueVisit)
+                assertTrue(player.engine.currentPosition > positions)
+                player.engine.currentPosition
+            }
+            secondRead.release.complete(Unit)
+            awaitMain { queues.state.value.settings.shuffle == shuffle && queues.state.value.settings.repeat == (if (shuffle) QueueRepeat.Off else QueueRepeat.All) }
+            delay(100)
+            withContext(Dispatchers.Main) {
+                assertEquals(b, queues.state.value.library.active!!.journey!!.current)
+                assertEquals(b.token, player.currentMediaItem!!.queueVisit)
+                assertEquals(b.entryId, player.currentMediaItem!!.mediaId)
+                assertTrue(player.engine.currentPosition >= progressed)
+                assertEquals(0, seeks.get())
+                assertNull(player.engine.playerError)
+                player.engine.pause()
+            }
+            barrier()
+        }
+    }
+
+    @Test fun heldModeIoAtOperatorScaleKeepsActualOccurrenceAndCommitsRequestedModes() {
+        val args = InstrumentationRegistry.getArguments()
+        val count = args.getString("queueEntries", "13400")!!.toInt()
+        val tracks = args.getString("libraryTracks", "13400")!!.toInt()
+        for (shuffle in args.getString("modeShuffle")?.let { listOf(it.toBooleanStrict()) } ?: listOf(false, true)) fixture(rawPlayer = true, duplicateOccurrences = true,
+            occurrences = count, librarySize = tracks, initialIndex = count - 1, timeoutMs = 300000) {
+            awaitMain { player.engine.playbackState == Player.STATE_READY && player.duration > 300 }
+            val exhausted = queues.state.value.library.active!!.journey!!.current!!
+            val requested = QueueSettings(shuffle = shuffle, repeat = if (shuffle) QueueRepeat.Off else QueueRepeat.All)
+            val runtime = Runtime.getRuntime()
+            val peak = java.util.concurrent.atomic.AtomicLong(runtime.totalMemory() - runtime.freeMemory())
+            val beforeGc = android.os.Debug.getRuntimeStats()
+            val sampler = launch(Dispatchers.Default) { while (isActive) {
+                peak.updateAndGet { maxOf(it, runtime.totalMemory() - runtime.freeMemory()) }; delay(10)
+            } }
+            try {
+                val held = store.gateNextSnapshot()
+                queues.requestModes { requested }
+                held.entered.await()
+                awaitMain { queues.presentation.value.settings.shuffle == shuffle && queues.presentation.value.settings.repeat == requested.repeat }
+                withContext(Dispatchers.Main) { player.engine.seekTo(player.duration - 100); player.engine.play() }
+                awaitMain { player.currentMediaItem?.queueVisit != exhausted.token || player.engine.playbackState == Player.STATE_ENDED || !player.engine.playWhenReady }
+                withContext(Dispatchers.Main) {
+                    val published = queues.state.value.library.active!!.journey!!
+                    val expected = published.next
+                    val actual = player.currentMediaItem!!
+                    val ended = player.engine.playbackState == Player.STATE_ENDED || !player.engine.playWhenReady
+                    val matches = if (expected == null) actual.queueVisit == exhausted.token && ended else actual.queueVisit == expected.token
+                    val line = "entries=$count tracks=$tracks shuffle=$shuffle matchesPublishedOwner=$matches expected=$expected exhausted=$exhausted actualToken=" + actual.queueVisit + " actualEntry=" + actual.mediaId + " actualTrack=" + actual.mediaMetadata.extras?.getString("trackId") + " nativeCount=" + player.mediaItemCount
+                    android.util.Log.i("Mode1001", line)
+                    File(nativeEvidenceDirectory("mode-1001", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)), "scale.txt").appendText(line + "\n")
+                    assertNull(player.engine.playerError)
+                    assertTrue(line, matches)
+                    assertEquals(exhausted.entryId, actual.mediaId)
+                    assertEquals(first.entries.last().track.id, actual.mediaMetadata.extras!!.getString("trackId"))
+                }
+                held.release.complete(Unit)
+                barrier()
+                withContext(Dispatchers.Main) {
+                    val committed = queues.state.value.library.active!!.journey!!
+                    assertEquals(requested.shuffle, queues.state.value.settings.shuffle)
+                    assertEquals(requested.repeat, queues.state.value.settings.repeat)
+                    assertEquals(requested.shuffle, player.engine.shuffleModeEnabled)
+                    assertEquals(if (shuffle) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ALL, player.engine.repeatMode)
+                    assertEquals(JourneyModes.from(requested), committed.modes)
+                    assertNotNull(committed.next)
+                    assertEquals(exhausted, committed.current)
+                    assertEquals(committed.window().map { it.token }, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueVisit })
+                    assertEquals(first.entries.last().track.id, player.currentMediaItem!!.mediaMetadata.extras!!.getString("trackId"))
+                }
+                val next = queues.state.value.library.active!!.journey!!.next!!
+                val nextTrack = first.entries[next.entryId.removePrefix("duplicate-").toInt()].track.id
+                withContext(Dispatchers.Main) { player.engine.seekTo(player.duration - 150); player.engine.play() }
+                awaitMain { player.currentMediaItem?.queueVisit == next.token }
+                withContext(Dispatchers.Main) {
+                    assertEquals(next.entryId, player.currentMediaItem!!.mediaId)
+                    assertEquals(nextTrack, player.currentMediaItem!!.mediaMetadata.extras!!.getString("trackId"))
+                    assertNull(player.engine.playerError)
+                    player.engine.pause()
+                }
+                barrier()
+                assertEquals(next, queues.state.value.library.active!!.journey!!.current)
+            } finally {
+                sampler.cancelAndJoin()
+                repeat(3) { runtime.gc(); delay(100) }
+                val line = "entries=$count tracks=$tracks shuffle=$shuffle peakBytes=" + peak.get() + " settledBytes=" + (runtime.totalMemory() - runtime.freeMemory()) + " maxBytes=" + runtime.maxMemory() + " gcBefore=$beforeGc gcAfter=" + android.os.Debug.getRuntimeStats()
+                android.util.Log.i("Mode1001", line)
+                File(nativeEvidenceDirectory("mode-1001", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)), "heap.txt").appendText(line + "\n")
+            }
+        }
     }
 
     private fun fixture(attach: Boolean = true, blockRestore: Boolean = false, rawPlayer: Boolean = false,
@@ -2532,7 +2830,7 @@ class PlaybackIntentTest {
         override val snapshots = flow {
             collections.incrementAndGet()
             if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) mainReads.incrementAndGet()
-            next.getAndSet(null)?.await(); emit(snapshot ?: LibrarySnapshot())
+            next.getAndSet(null)?.let { it.await(); if (it.fail) throw IOException("Controlled playback read failure") }; emit(snapshot ?: LibrarySnapshot())
         }
         override suspend fun current() = LibrarySnapshot()
         override suspend fun replaceRoot(result: ScanResult) = Unit

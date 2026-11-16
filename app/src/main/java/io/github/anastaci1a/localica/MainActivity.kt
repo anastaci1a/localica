@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
             val playbackSamples = model.playback.state.collectAsStateWithLifecycle()
             val playbackObservation = io.github.anastaci1a.localica.ui.rememberPlaybackObservation(playbackSamples)
             val playback by playbackObservation.screen
-            val queues by model.playback.queues.state.collectAsStateWithLifecycle()
+            val queues by model.playback.queues.presentation.collectAsStateWithLifecycle()
             val playlist by model.playlist.collectAsStateWithLifecycle()
             val picker = rememberLauncherForActivityResult(LocalFolderPicker()) { uri ->
                 uri?.let { model.addFolder(it.toString()) }

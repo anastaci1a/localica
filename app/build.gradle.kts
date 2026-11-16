@@ -2,6 +2,7 @@ import java.security.MessageDigest
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
+    alias(libs.plugins.androidx.baselineprofile)
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
@@ -15,8 +16,8 @@ android {
         applicationId = "io.github.anastaci1a.localica"
         minSdk = 26
         targetSdk = 36
-        versionCode = 127
-        versionName = "0.34.9"
+        versionCode = 128
+        versionName = "0.34.10"
         val lastFmKey = providers.gradleProperty("lastfmApiKey").orElse(providers.environmentVariable("LASTFM_API_KEY")).orElse("").get().trim()
         require(lastFmKey.isEmpty() || lastFmKey.matches(Regex("[A-Fa-f0-9]{32}"))) { "Invalid Last.fm application key format" }
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmKey\"")
@@ -80,6 +81,12 @@ composeCompiler {
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+
+baselineProfile {
+    mergeIntoMain = true
+    automaticGenerationDuringBuild = false
+    variants { create("distribution") { from(project(":benchmark")) } }
+}
 
 dependencies {
     lintChecks(project(":lint"))

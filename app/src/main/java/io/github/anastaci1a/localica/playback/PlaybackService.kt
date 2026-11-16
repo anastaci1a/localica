@@ -100,10 +100,10 @@ internal class QueueTransportPlayer(player: Player, private val queues: io.githu
     override fun seekToPrevious() { queues.previous() }
     override fun seekToPreviousMediaItem() { queues.previous() }
     override fun setShuffleModeEnabled(shuffleModeEnabled: Boolean) {
-        queues.settings { it.copy(shuffle = shuffleModeEnabled) }
+        queues.requestModes { it.copy(shuffle = shuffleModeEnabled) }
     }
     override fun setRepeatMode(repeatMode: Int) {
-        queues.settings { it.copy(advancedRepeat = null,
+        queues.requestModes { it.copy(advancedRepeat = null,
             repeat = when (repeatMode) {
                 Player.REPEAT_MODE_ALL -> io.github.anastaci1a.localica.queue.QueueRepeat.All
                 Player.REPEAT_MODE_ONE -> io.github.anastaci1a.localica.queue.QueueRepeat.One

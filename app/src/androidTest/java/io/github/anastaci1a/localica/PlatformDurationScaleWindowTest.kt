@@ -223,7 +223,7 @@ class PlatformDurationScaleWindowTest {
                             control.clock.configure(owners.engine.copy(durationScale = 1f), owners.clock.spec)
                             origin = harness.now
                             owners.scalar.retarget(1f, motionProfileId(MotionProfile.Control)); scalar.retarget(1f, motionProfileId(MotionProfile.Control))
-                            owners.spring.retargetSpring(1f, springProfileId(SpringProfile.Strain)); spring.retargetSpring(1f, springProfileId(SpringProfile.Strain))
+                            owners.spring.retargetSpring(1f, springProfileId(SpringProfile.Page)); spring.retargetSpring(1f, springProfileId(SpringProfile.Page))
                             owners.expansion.target(true); expansion.target(true)
                             owners.scrollbar.reveal(); owners.scrollbar.release(.3f)
                         }
@@ -263,18 +263,27 @@ class PlatformDurationScaleWindowTest {
                 }
                 scale(1f)
                 val live = checkNotNull(published.get())
-                main { live.scrollbar.release(.3f); harness.advance(.016); harness.advance(.064) }
+                var releaseAdmission: FrameStamp? = null
+                val admission = FrameObserver { stamp, _ -> if (releaseAdmission == null) releaseAdmission = stamp }
+                main {
+                    live.clock.observers += admission
+                    live.scrollbar.release(.3f); harness.advance(.016)
+                    live.clock.observers -= admission
+                    harness.advance(.064)
+                }
                 scale(2f)
                 val releaseReference = TargetBasedAnimation(tween<Float>(180), Float.VectorConverter, .3f, 0f)
-                fun liveReceipt(label: String, expectedTime: Long) {
+                fun liveReceipt(label: String) {
                     val observed = AtomicReference<Float>()
                     main { harness.advance(.016); observed.set(live.scrollbar.releaseOffset()) }
-                    File(directory, "$label.txt").writeText("source=${BuildConfig.SOURCE_SHA} scale=${published.get()!!.engine.durationScale} releaseBits=${observed.get().toRawBits()} expectedPlayTime=$expectedTime\n")
+                    val origin = checkNotNull(releaseAdmission).nanos
+                    val expectedTime = ((harness.now - origin) / published.get()!!.engine.durationScale).toLong()
+                    File(directory, "$label.txt").writeText("source=${BuildConfig.SOURCE_SHA} scale=${published.get()!!.engine.durationScale} releaseBits=${observed.get().toRawBits()} admission=$origin sample=${harness.now} expectedPlayTime=$expectedTime\n")
                     assertEquals(releaseReference.getValueFromNanos(expectedTime).toRawBits(), observed.get().toRawBits())
                 }
-                liveReceipt("live-one-to-two", 40_000_000)
+                liveReceipt("live-one-to-two")
                 scale(.5f)
-                liveReceipt("live-two-to-half", 192_000_000)
+                liveReceipt("live-two-to-half")
                 scale(2f)
                 val pinchOwner = checkNotNull(published.get())
                 val pinchReference = TargetBasedAnimation(tween<Float>(220), Float.VectorConverter, 0f, 1f)

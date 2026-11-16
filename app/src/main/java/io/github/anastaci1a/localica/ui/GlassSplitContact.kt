@@ -26,6 +26,7 @@ internal class GlassSplitContact(val left: GlassContact) {
             if (a.vertical == target.vertical) 1f else -1f,
             if (b.vertical == target.vertical) 1f else -1f)
         target.state.output.value = target.state.momentum.shape
+        target.state.glow.value = target.state.momentum.glow
         target.state.previous = target.travel + target.expansion.value
         target.state.initialized = true
     }

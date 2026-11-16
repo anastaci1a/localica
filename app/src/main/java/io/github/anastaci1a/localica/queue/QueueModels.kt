@@ -49,6 +49,8 @@ data class QueueSettings(val songTap: SongTap = SongTap.NewQueue, val switching:
         PreviousBehavior.RestartSong -> true
     }
 }
+internal fun QueueSettings.withModes(requested: QueueSettings?) = requested?.let {
+    copy(shuffle = it.shuffle, repeat = it.advancedRepeat?.repeat ?: it.repeat, advancedRepeat = it.advancedRepeat) } ?: this
 data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val activeId: String? = null) {
     val active: ListeningQueue? get() = queues.firstOrNull { it.id == activeId }
     fun update(queue: ListeningQueue) = copy(queues = queues.map { if (it.id == queue.id) queue else it })

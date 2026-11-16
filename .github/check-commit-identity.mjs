@@ -72,10 +72,14 @@ if (commits.length) {
     offset += Number(size) + 1;
     const separator = raw.indexOf('\n\n');
     const headers = raw.slice(0, separator).split('\n');
+    const author = /^author (.*?) <([^<>]+)> /.exec(headers.find(value => value.startsWith('author ')) || '');
+    const operatorMerge = author && approvedNames.has(author[1]) && approvedEmails.has(author[2])
+      && headers.filter(value => value.startsWith('parent ')).length > 1;
     for (const role of ['author', 'committer']) {
       const line = headers.find(value => value.startsWith(`${role} `));
       const identity = /^(?:author|committer) (.*?) <([^<>]+)> /.exec(line || '');
-      if (!identity || !approvedNames.has(identity[1]) || !approvedEmails.has(identity[2])) {
+      const githubMerge = role === 'committer' && operatorMerge && identity?.[1] === 'GitHub' && identity[2] === 'noreply@github.com';
+      if (!githubMerge && (!identity || !approvedNames.has(identity[1]) || !approvedEmails.has(identity[2]))) {
         errors.push(`${sha}: unapproved ${role} identity`);
       }
     }
