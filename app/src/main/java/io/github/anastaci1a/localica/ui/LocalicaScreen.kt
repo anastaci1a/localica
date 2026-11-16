@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.TriggerRole
+
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
@@ -8,6 +10,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.home.*
@@ -19,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -44,7 +49,7 @@ fun LocalicaScreen(
     onRescan: (String) -> Unit,
     onCancelScan: () -> Unit,
     onRemoveFolder: (String) -> Unit = {},
-    queues: QueueUiState = QueueUiState.Empty,
+    queues: QueueUiState = QueueUiState(loading = false),
     queueController: QueueController? = null,
     onPrevious: () -> Unit = {},
     onNext: () -> Unit = {},
@@ -99,17 +104,14 @@ fun LocalicaScreen(
     }
     val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val presentationCache = remember { BrowsePresentationCache() }
-    val queuePresentation = rememberQueuePresentation(queues, library.snapshot)
-    val prepared = queuePresentation.value
-    val playerPresentation = prepared?.takeIf { it.state === queues && it.library.tracks === library.snapshot.tracks && it.library.trackPlays === library.snapshot.trackPlays }
-    val playerTracks = prepared?.playerTracks(queues, library.snapshot)
-    val warmRoutes = remember(navigation.stacks, settings.tabs, prepared) {
+    val warmRoutes = remember(navigation.stacks, settings.tabs, queues.browsedId, queues.library) {
         val pages = settings.tabs.map { navigation.stacks[it]?.lastOrNull() ?: BrowseRoute(it) }
             .filterNot { it.collection == null && !it.search && it.tab in setOf(MainTab.Home, MainTab.Queues) }
-        pages + listOfNotNull(prepared?.browsed?.queue?.let { BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, it.id), it.name) })
+        val queue = queues.library.queues.firstOrNull { it.id == queues.browsedId } ?: queues.library.active
+        pages + listOfNotNull(queue?.let { BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, it.id), it.name) })
     }
-    WarmBrowsePresentations(presentationCache, library.snapshot, playlist.playlists, prepared?.state?.library?.queues.orEmpty(), libraryFilters, warmRoutes, browseSorts,
-        libraryLoading = library.loading, playlistsLoading = playlist.loading, queuesLoading = prepared?.state?.loading != false)
+    WarmBrowsePresentations(presentationCache, library.snapshot, playlist.playlists, queues.library.queues, libraryFilters, warmRoutes, browseSorts,
+        libraryLoading = library.loading, playlistsLoading = playlist.loading, queuesLoading = queues.loading)
     val artworkStore = remember { BrowseArtworkStore() }
     val retainedRoutes = remember(navigation, settings.tabHistory) {
         val retained = navigation.stacks.values.mapNotNull { it.lastOrNull()?.key }.toMutableSet()
@@ -199,9 +201,11 @@ fun LocalicaScreen(
         else if (settings.confirmExit) exitPrompt = true else exit()
     }
     androidx.activity.compose.BackHandler { back() }
-    val currentTrack = playerTracks?.current
-    val indexedTrack = playerTracks?.indexed
-    // Lyrics stay open across song/source changes; the page owns source discovery.
+    val playerTracks = rememberPlayerTrackProjection(queues.library, library.snapshot)
+    val currentTrack = playerTracks.current
+    val indexedTrack = playerTracks.indexed
+    // The lyrics page is available even without local sources and stays open
+    // across song changes; source discovery belongs to the page itself.
     fun openCollection(item: io.github.anastaci1a.localica.browse.BrowserItem) {
         val route = BrowseRoute(navigation.active, item.ref, item.title)
         artworkStore.seed(route.key, artworkStore.scope(navigation.route.key)?.peek(item.coverUris)
@@ -210,36 +214,33 @@ fun LocalicaScreen(
         queueOpen = false; expanded = false; songInfo = false
         navigationScope.launch { queuePopupHome.awaitHandoff(); queueSheet.collapse() }
     }
-    val livePlayerOccurrence by rememberUpdatedState(playerTracks?.let { queues.library.activeId to prepared?.active?.queue?.currentEntryId })
+    val livePlayerOccurrence by rememberUpdatedState(queues.library.activeId to queues.library.active?.currentEntryId)
     val playerCollectionLookup = rememberCollectionLookup(library.snapshot, playlist.playlists, browseSorts, onOpen = ::openCollection)
     fun playerAction(action: PlayerAction, editTags: ((List<Track>, (Boolean) -> Unit) -> Unit)? = null) {
         playerCollectionLookup.cancel()
+        val track = indexedTrack ?: return
         when (action) {
+            PlayerAction.Info, PlayerAction.Count -> songInfo = true
+            PlayerAction.Edit -> editTags?.invoke(listOf(track)) {}
+            PlayerAction.Artwork -> viewArt = true
+            PlayerAction.Lyrics -> lyricsOpen = !lyricsOpen
+            PlayerAction.Playlist -> addPlaying = true
+            PlayerAction.Pin -> pin(MediaRef(MediaKind.Song, track.id))
             PlayerAction.Shuffle -> queueController?.shuffle()
             PlayerAction.Repeat -> queueController?.repeat()
             PlayerAction.BackTen -> onSeek(((playbackSample?.invoke() ?: playback).positionMs - 10000).coerceAtLeast(0))
             PlayerAction.ForwardTen -> onSeek((playbackSample?.invoke() ?: playback).positionMs + 10000)
-            else -> indexedTrack?.let { track ->
-                when (action) {
-                    PlayerAction.Info, PlayerAction.Count -> songInfo = true
-                    PlayerAction.Edit -> editTags?.invoke(listOf(track)) {}
-                    PlayerAction.Artwork -> viewArt = true
-                    PlayerAction.Lyrics -> lyricsOpen = !lyricsOpen
-                    PlayerAction.Playlist -> addPlaying = true
-                    PlayerAction.Pin -> pin(MediaRef(MediaKind.Song, track.id))
-                    PlayerAction.More -> playerMore = true
-                    else -> {
-                        val routeKey = navigation.route.key
-                        val occurrence = livePlayerOccurrence
-                        val informationOpen = songInfo
-                        val playerExpanded = expanded
-                        val drawerOpen = queueOpen
-                        // More intentionally closes before invoking this action; root navigation owns the accepted request.
-                        playerCollectionLookup.open(action, track) {
-                            navigation.route.key == routeKey && livePlayerOccurrence == occurrence &&
-                                songInfo == informationOpen && expanded == playerExpanded && queueOpen == drawerOpen
-                        }
-                    }
+            PlayerAction.More -> playerMore = true
+            else -> {
+                val routeKey = navigation.route.key
+                val occurrence = livePlayerOccurrence
+                val informationOpen = songInfo
+                val playerExpanded = expanded
+                val drawerOpen = queueOpen
+                // More intentionally closes before invoking this action; root navigation owns the accepted request.
+                playerCollectionLookup.open(action, track) {
+                    navigation.route.key == routeKey && livePlayerOccurrence == occurrence &&
+                        songInfo == informationOpen && expanded == playerExpanded && queueOpen == drawerOpen
                 }
             }
         }
@@ -248,13 +249,14 @@ fun LocalicaScreen(
     val playerSample = remember(playbackSample, currentTrack) {
         playbackSample?.let { sample -> { playerDisplayState(sample(), currentTrack) } }
     }
-    val hasPlayer = prepared?.tracks?.current != null || playback.trackUri != null
-    LaunchedEffect(hasPlayer, playerPresentation) { if (!hasPlayer && playerPresentation != null) { expanded = false; queueOpen = false } }
+    val hasPlayer = currentTrack != null || playback.trackUri != null
+    LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false } }
     val dragHost = remember { SongDragHost() }
     val playerVisual = rememberPlayerVisual(player.trackUri)
-    PreloadPlayerArtwork(playerPresentation?.preload.orEmpty())
-    val neighbors = playerPresentation?.neighbors.orEmpty()
-    val journey = playerPresentation?.active?.queue?.journey
+    val preloadUris = queueController?.artworkPreloadUris().orEmpty()
+    PreloadPlayerArtwork(preloadUris)
+    val neighbors = queueController?.artworkNeighbors().orEmpty()
+    val journey = queues.library.active?.journey
     val nextVisual = rememberNeighborArtwork(neighbors.getOrNull(0))
     val previousVisual = rememberNeighborArtwork(neighbors.getOrNull(1))
     val nextArtwork = journey?.next?.let { visit -> nextVisual?.let { ArtworkNeighbor(visit.token, it) } }
@@ -398,7 +400,7 @@ fun LocalicaScreen(
             key(route.key) { CompositionLocalProvider(LocalBrowseArtwork provides routeArtwork) { holder.SaveableStateProvider(route.key) {
                 if (route.tab == MainTab.Queues && !route.search && (route.collection == null || route.collection.kind == MediaKind.Queue)) QueueScreen(queues, queueController, library,
                     playlist, playlistController, playback.connected, pins, ::pin, listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage && !queueVisible, isPlaying = playback.isPlaying,
-                    onOpen = ::openCollection, playerOpen = expanded || playerVisible, presentation = queuePresentation)
+                    onOpen = ::openCollection, playerOpen = expanded || playerVisible)
                 else if (route.tab == MainTab.Home && !route.search && route.collection == null) {
                     PinnedHome(library, playlist, pins, { settingsCategory = "Folders to scan"; settingsOpen = true },
                         { navigation = navigation.open(BrowseRoute(MainTab.Home, globalSearch = true, search = true)) },
@@ -432,7 +434,7 @@ fun LocalicaScreen(
         }
         if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
-            lyricsOpen, { lyricsOpen = it }, playerTracks?.lyrics,
+            lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             onSeekRequest = onSeekRequest, sampleState = playerSample, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             providedPopupHome = playerPopupHome, openingPopupHome = browsePopupHome,
@@ -442,14 +444,14 @@ fun LocalicaScreen(
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
                 PlayerAction.Repeat -> queues.settings.advancedRepeat?.let { "Repeat: ${it.songEnd.label}; queue end: ${it.queueEnd.label}" } ?: ("Repeat: " + queues.settings.repeat.name)
-                PlayerAction.Count -> playerPresentation?.let { "Track ${(it.active?.index ?: -1) + 1} of ${it.active?.queue?.entries?.size ?: 0}" } ?: "Track count loading"
+                PlayerAction.Count -> "Track " + ((queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1) + " of " + (queues.library.active?.entries?.size ?: 0)
                 PlayerAction.Lyrics -> if (lyricsOpen) "Hide lyrics" else "Show lyrics"
                 PlayerAction.Pin -> if (currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true) "Unpin from Home" else "Pin to Home"
                 else -> action.label
             } }, { playerDialogAppearance = actionAppearance; playerAction(it, editTags) }, { customizeAppearance = actionAppearance; customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
                 lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
                 onRepeatOptions = { playerDialogAppearance = actionAppearance; repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
-                count = playerPresentation?.let { "${(it.active?.index ?: -1) + 1} / ${it.active?.queue?.entries?.size ?: 0}" } ?: "…")
+                count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
         ObserveSheetContent("player-overlay")
@@ -464,7 +466,7 @@ fun LocalicaScreen(
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false },
                 selectionVisible = queueOpen && expanded, playerOpen = !queueOpen || !expanded,
-                openingRequest = queueOpeningRequest, presentation = queuePresentation) } } }
+                openingRequest = queueOpeningRequest) } } }
             // Floats over the list: it never shortens the viewport, so the items gain no new bottom clip edge.
             FloatingSelectionPanel(queueSelectionPanel, Modifier.align(Alignment.BottomCenter)) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).controlVerticalScroll(rememberScrollState())) {

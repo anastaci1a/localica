@@ -8,20 +8,17 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
-- Prepare player, queue headers and artwork from immutable publications off Main while keeping live transport commands responsive during replacement.
 - Prepare playback intake, Shuffle, queue reuse, metadata refresh and captured playlist-save inputs on existing workers, preserving occurrence and admission order.
 - Store saved Manual order as occurrence ranks instead of one large JSON row; migrate older saved orders through the shared bounded reader.
 - Prepare Settings search off Main, retaining completed results while a replacement query computes. Update caller tests to await the rendered search target.
 - Reuse immutable browse views and compare filter effect keys by snapshot ownership; broader browse scalability remains open.
-- App Kotlin/Java source grows from 53,376 to 53,463 lines: 296 added, 209 removed, net +87. Ranked durable order and accepted worker/publication ownership account for growth.
+- App Kotlin/Java source grows from 53,376 to 53,455 lines: 172 added, 93 removed, net +79. Ranked durable order and accepted worker ownership account for growth.
 - Refresh shard scheduling from both preceding complete release producers, including risk-preflight results.
 
 ## Resolved issues
 
 - [#1012](https://github.com/anastaci1a/localica/issues/1012): Remove the oversized saved-order row that exceeded CursorWindow capacity.
 - [#1016](https://github.com/anastaci1a/localica/issues/1016): Move catalog normalization and Settings search matching off Main.
-- [#1020](https://github.com/anastaci1a/localica/issues/1020): Prepare current-track projection without Main-thread queue and library scans.
-- [#1021](https://github.com/anastaci1a/localica/issues/1021): Prepare queue-header position and duration off Main.
 - [#1022](https://github.com/anastaci1a/localica/issues/1022): Prepare admitted playback sources on workers while preserving FIFO order.
 - [#1023](https://github.com/anastaci1a/localica/issues/1023): Borrow pinned-song playback input without a Main-thread source copy.
 - [#1024](https://github.com/anastaci1a/localica/issues/1024): Prepare collection Shuffle on the existing command worker.
@@ -30,9 +27,10 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#1027](https://github.com/anastaci1a/localica/issues/1027): Prepare pending queue input off Main at the saved-queue limit.
 - [#1028](https://github.com/anastaci1a/localica/issues/1028): Rebuild refreshed saved-queue metadata off Main.
 - [#1029](https://github.com/anastaci1a/localica/issues/1029): Borrow captured playlist-save input and prepare it on the worker.
-- [#1030](https://github.com/anastaci1a/localica/issues/1030): Prepare active and browsed queue catalog lookups off Main.
 
 ## Known issues and follow-ups
+
+- [#1020](https://github.com/anastaci1a/localica/issues/1020), [#1021](https://github.com/anastaci1a/localica/issues/1021) and [#1030](https://github.com/anastaci1a/localica/issues/1030): Player and queue presentation work is deferred after queue Save readiness failed its release proof.
 
 - [#995](https://github.com/anastaci1a/localica/issues/995) and [#964](https://github.com/anastaci1a/localica/issues/964): This release includes view reuse and the filter-key correction only; broader browse and drag work remains open.
 - [#963](https://github.com/anastaci1a/localica/issues/963): Large cold restores remain slow; shuffled million-entry restore still exceeds the standard heap. The schema fix does not certify restore responsiveness.

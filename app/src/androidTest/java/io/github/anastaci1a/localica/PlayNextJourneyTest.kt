@@ -131,8 +131,8 @@ class PlayNextJourneyTest {
                         val item = player.getMediaItemAt(player.nextMediaItemIndex)
                         assertEquals(id, item.mediaId)
                         assertEquals(visit.token, item.mediaMetadata.extras!!.getString("queueVisit"))
-                        assertEquals(active.entries.first { it.id == id }.track.uri, queues.state.value.library.active!!.artworkNeighbors().first())
-                        assertEquals(active.entries.first { it.id == id }.track.uri, queues.state.value.library.active!!.artworkPreloadUris().first())
+                        assertEquals(active.entries.first { it.id == id }.track.uri, queues.artworkNeighbors().first())
+                        assertEquals(active.entries.first { it.id == id }.track.uri, queues.artworkPreloadUris().first())
                         assertEquals(visit, active.journey!!.artworkWindow().first())
                     }
                 }

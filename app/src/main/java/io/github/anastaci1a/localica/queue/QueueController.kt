@@ -66,8 +66,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private var commandRevision = 0L
     private val mutable = MutableStateFlow(QueueUiState(settings = preferences.read()))
     internal val state = mutable.asStateFlow()
-    val presentation = combine(state, intents.modes) { value, mode -> value.copy(settings = value.settings.withModes(mode?.settings)).resolvePlayerQueue() }
-        .flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.Eagerly, mutable.value)
+    val presentation = combine(state, intents.modes) { value, mode -> value.copy(settings = value.settings.withModes(mode?.settings)) }
+        .stateIn(scope, SharingStarted.Eagerly, mutable.value)
     private var player: Player? = null
     private val timeline = QueueTimeline()
     private data class ResolvedOccurrence(val track: Track, val sourcePlaylistId: String?, val item: MediaItem)
@@ -792,6 +792,17 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         if (!accepted) complete(false, playbackSample())
     }
 
+    /** Artwork and decoder preparation follow the same durable visit sequence. */
+    fun artworkNeighbors(): List<String?> {
+        val queue = state.value.library.active ?: return emptyList()
+        return listOf(queue.journey?.next, queue.journey?.previous).map { visit ->
+            visitTrack(queue, visit?.entryId)?.uri
+        }
+    }
+    fun artworkPreloadUris(): List<String> {
+        val queue = state.value.library.active ?: return emptyList()
+        return queue.journey?.artworkWindow().orEmpty().mapNotNull { visitTrack(queue, it.entryId)?.uri }.distinct()
+    }
     fun next() = submitCursor {
         capture()
         state.value.library.active?.journey?.next?.let { moveTo(it) }
@@ -856,7 +867,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             queue?.entries?.any { identities.getOrPut(it.track.id) { documentIdentity(it.track.id) } == trackId } == true
         }
 
-    private fun visitTrack(queue: ListeningQueue, entryId: String?): Track? = queue.visitTrack(entryId)
+    private fun visitTrack(queue: ListeningQueue, entryId: String?): Track? =
+        queue.journey?.sourceOrdinal(queue.ids, entryId)?.let { queue.entries.getOrNull(it)?.track }
             ?: resolved.takeIf { timeline.queueId == queue.id }?.get(entryId)?.track
     private fun currentSource(queue: ListeningQueue?): String? = queue?.let { visitTrack(it, it.currentEntryId)?.id }?.let(::documentIdentity)
     private fun blocksSource(identity: String): Boolean {
