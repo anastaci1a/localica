@@ -44,6 +44,45 @@ class BrowseQueueProjectionTest {
         playlists: List<ManualPlaylist> = emptyList(), checkActive: () -> Unit = {}) =
         BrowseQueries.evaluate(library, playlists, route, queues = queues, checkActive = checkActive)
 
+    @Test fun physicalNumbersBelongToTheProjectedOccurrenceThroughFilteringAndReplacement() {
+        val library = library(5)
+        val queue = queue(library, 17)
+        val playlist = ManualPlaylist("positions", "Positions", entries = queue.entries.map { SongRow(it.id, it.track) })
+        val route = BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id))
+        val positions = queue.entries.withIndex().associate { it.value.id to it.index + 1 }
+        for (result in listOf(evaluate(library, detail(queue), listOf(queue)),
+            evaluate(library, detail(queue, "Song 1"), listOf(queue)),
+            evaluate(library, route, emptyList(), listOf(playlist)),
+            evaluate(library, route.copy(search = true, text = "Song 1"), emptyList(), listOf(playlist)))) {
+            assertTrue(result.items.isNotEmpty())
+            result.items.forEach { assertEquals(positions.getValue(it.key), it.physicalPosition) }
+        }
+        val captured = evaluate(library, detail(queue, "Song 1"), listOf(queue)).items.first()
+        val changed = queue.copy(entries = queue.entries.reversed())
+        val revised = evaluate(library, detail(changed), listOf(changed))
+        revised.items.forEachIndexed { index, item -> assertEquals(index + 1, item.physicalPosition) }
+        assertEquals(positions.getValue(captured.key), captured.physicalPosition)
+        assertNull(songItem(SongRow("ordinary", library.tracks.first())).physicalPosition)
+    }
+
+    @Test fun indexedViewsKeepOwnerAndProjectionEqualityWithoutReadingTheirMillionEntrySource() {
+        var reads = 0
+        fun source() = object : AbstractList<Int>() {
+            override val size = 1_000_000
+            override fun get(index: Int): Int { reads++; return index * 2 }
+        }
+        val source = source()
+        val projection: (Int, Int) -> Int = { index, value -> index + value }
+        val first = source.mapIndexedView(projection)
+        assertEquals(first.ownerRevision, source.mapIndexedView(projection).ownerRevision)
+        assertNotEquals(first.ownerRevision, source().mapIndexedView(projection).ownerRevision)
+        assertNotEquals(first.ownerRevision, source.mapIndexedView { i, value -> i - value }.ownerRevision)
+        assertEquals(0, reads)
+        assertEquals(2_999_997, first.last())
+        assertEquals(1, reads)
+        assertSame(source, first.viewSource)
+    }
+
     @Test fun physicalIdsAndPopupRowsBorrowTheirSnapshotWithoutEagerReads() {
         for ((tracks, count) in listOf(13_400 to 13_400, 50_000 to 50_000, 50_000 to 1_000_000)) {
             val library = library(tracks)

@@ -24,7 +24,7 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.ManualPlaylist
 import io.github.anastaci1a.localica.playlist.PlaylistState
-import io.github.anastaci1a.localica.queue.QueueUiState
+import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.runBlocking
@@ -71,6 +71,33 @@ class BrowseLoadingRevealTest {
         compose.waitUntil(5000) { queries.tasks.isNotEmpty() }
         queries.next().run()
         compose.waitForIdle()
+    }
+
+    @Test fun loadingMillionEntryBrowserDoesNotEnumeratePhysicalOrderOnMain() {
+        val reads = java.util.concurrent.atomic.AtomicInteger()
+        val entries = object : AbstractList<QueueEntry>() {
+            override val size = 1_000_000
+            override fun get(index: Int): QueueEntry {
+                if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) reads.incrementAndGet()
+                return QueueEntry("physical-$index", track)
+            }
+        }
+        val queue = ListeningQueue("physical", "Physical", entries = entries, currentEntryId = "physical-0",
+            order = SavedOrder(entries.mapView { it.id }))
+        val before = android.os.Debug.getRuntimeStats()
+        compose.setContent { LocalicaTheme {
+            BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false),
+                BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id)),
+                {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                queueState = QueueUiState(QueueLibrary(listOf(queue)), loading = true), reducedMotion = true)
+        } }
+        compose.onNodeWithTag("browse-loading").assertIsDisplayed()
+        compose.onNodeWithTag("browser-list").assertDoesNotExist()
+        compose.runOnIdle { assertEquals("Loading browser must not read any physical entry on Main", 0, reads.get()) }
+        val runtime = Runtime.getRuntime()
+        android.util.Log.i("PhysicalOrder995", "entries=1000000 mainReads=$reads heap=" +
+            (runtime.totalMemory() - runtime.freeMemory()) + " maxHeap=" + runtime.maxMemory() +
+            " gcBefore=$before gcAfter=" + android.os.Debug.getRuntimeStats())
     }
 
     @Test fun readyPlaylistsWaitForLibraryAndTheCompletedQueryPublishesBothKinds() {
