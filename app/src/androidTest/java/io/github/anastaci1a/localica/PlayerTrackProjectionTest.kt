@@ -20,6 +20,10 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -297,6 +301,14 @@ class PlayerTrackProjectionTest {
         val saved = preferences.read()
         val actionPreferences = PlayerActionPreferences(context)
         val savedActions = actionPreferences.read()
+        val modeStore = "projection-modes-" + java.util.UUID.randomUUID()
+        val queuePreferences = QueuePreferences(object : android.content.ContextWrapper(context) {
+            override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences(modeStore, mode)
+        })
+        val database = androidx.room.Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+        val actor = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        lateinit var controller: QueueController
+        val seeks = mutableListOf<Long>()
         val file = File.createTempFile("projection-old-", ".opus", context.cacheDir)
         val replacement = File.createTempFile("projection-native-", ".opus", context.cacheDir)
         copyTestAsset(instrumentation.context.assets, "lyrics.opus", file)
@@ -313,7 +325,7 @@ class PlayerTrackProjectionTest {
         blocked.beforeRead = { hook.getAndSet(null)?.invoke() }
         var source by mutableStateOf(QueueUiState(QueueLibrary(listOf(oldQueue), oldQueue.id), loading = false))
         var native by mutableStateOf(io.github.anastaci1a.localica.playback.PlaybackState(connected = true,
-            trackId = old.id, trackUri = old.uri, title = "Audible old", durationMs = 125000))
+            trackId = old.id, trackUri = old.uri, title = "Audible old", positionMs = 5000, durationMs = 125000, isPlaying = true))
         fun information(expected: String) {
             compose.onNodeWithContentDescription("Information").performClick()
             compose.onNodeWithTag("song-information").assertExists()
@@ -323,9 +335,16 @@ class PlayerTrackProjectionTest {
         }
         try {
             preferences.write(InterfaceSettings())
-            actionPreferences.write(PlayerActionSettings().place(PlayerAction.Count, ActionSlot(0, 1)))
+            actionPreferences.write(PlayerActionSettings(small = true).place(PlayerAction.Count, ActionSlot(0, 1))
+                .place(PlayerAction.BackTen, ActionSlot(0, 2)).place(PlayerAction.ForwardTen, ActionSlot(0, 6)))
+            instrumentation.runOnMainSync {
+                controller = QueueController(database.queues(), queuePreferences,
+                    (context.applicationContext as LocalicaApplication).library, actor)
+            }
+            compose.waitUntil(10_000) { !controller.state.value.loading }
             compose.setContent { EngineTheme(reduced = true) {
-                LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, {}, queues = source)
+                LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, { seeks += it }, {}, {}, {}, {}, queues = source,
+                    queueController = controller, playbackSample = { native.copy(positionMs = 25000) })
             } }
             compose.waitUntil(10_000) { PlayerVisualCache.peek(old.uri) != null }
             compose.onNodeWithTag("player-surface").performClick()
@@ -346,6 +365,14 @@ class PlayerTrackProjectionTest {
             compose.onNodeWithContentDescription("Track count loading").assertExists()
             compose.onNodeWithText("1/1", true).assertDoesNotExist()
             compose.onNodeWithContentDescription("Track 1 of 1").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Back 10 seconds").performClick()
+            compose.onNodeWithContentDescription("Forward 10 seconds").performClick()
+            compose.runOnIdle { assertEquals(listOf(15000L, 35000L), seeks) }
+            compose.onNodeWithContentDescription("Shuffle: off").performClick()
+            compose.waitUntil(10_000) { controller.presentation.value.settings.shuffle }
+            compose.onNodeWithContentDescription("Repeat: Off").performClick()
+            compose.waitUntil(10_000) { controller.presentation.value.settings.repeat == QueueRepeat.All }
+            assertEquals("Preparation is still blocked when independent commands are accepted", 1L, release.count)
             compose.onNodeWithContentDescription("Information").performClick()
             compose.onNodeWithTag("song-information").assertDoesNotExist()
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isEmpty() }
@@ -378,6 +405,8 @@ class PlayerTrackProjectionTest {
             compose.onNode(hasText("Replacement occurrence") and hasAnyAncestor(hasTestTag("song-information"))).assertExists()
         } finally {
             release.countDown(); hook.set(null); file.delete(); replacement.delete()
+            runBlocking { actor.coroutineContext[Job]!!.cancelAndJoin() }
+            database.close(); context.deleteSharedPreferences(modeStore)
             preferences.write(saved); actionPreferences.write(savedActions)
         }
     }

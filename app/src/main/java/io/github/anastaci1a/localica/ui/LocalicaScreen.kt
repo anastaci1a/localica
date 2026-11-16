@@ -213,29 +213,32 @@ fun LocalicaScreen(
     val playerCollectionLookup = rememberCollectionLookup(library.snapshot, playlist.playlists, browseSorts, onOpen = ::openCollection)
     fun playerAction(action: PlayerAction, editTags: ((List<Track>, (Boolean) -> Unit) -> Unit)? = null) {
         playerCollectionLookup.cancel()
-        val track = indexedTrack ?: return
         when (action) {
-            PlayerAction.Info, PlayerAction.Count -> songInfo = true
-            PlayerAction.Edit -> editTags?.invoke(listOf(track)) {}
-            PlayerAction.Artwork -> viewArt = true
-            PlayerAction.Lyrics -> lyricsOpen = !lyricsOpen
-            PlayerAction.Playlist -> addPlaying = true
-            PlayerAction.Pin -> pin(MediaRef(MediaKind.Song, track.id))
             PlayerAction.Shuffle -> queueController?.shuffle()
             PlayerAction.Repeat -> queueController?.repeat()
             PlayerAction.BackTen -> onSeek(((playbackSample?.invoke() ?: playback).positionMs - 10000).coerceAtLeast(0))
             PlayerAction.ForwardTen -> onSeek((playbackSample?.invoke() ?: playback).positionMs + 10000)
-            PlayerAction.More -> playerMore = true
-            else -> {
-                val routeKey = navigation.route.key
-                val occurrence = livePlayerOccurrence
-                val informationOpen = songInfo
-                val playerExpanded = expanded
-                val drawerOpen = queueOpen
-                // More intentionally closes before invoking this action; root navigation owns the accepted request.
-                playerCollectionLookup.open(action, track) {
-                    navigation.route.key == routeKey && livePlayerOccurrence == occurrence &&
-                        songInfo == informationOpen && expanded == playerExpanded && queueOpen == drawerOpen
+            else -> indexedTrack?.let { track ->
+                when (action) {
+                    PlayerAction.Info, PlayerAction.Count -> songInfo = true
+                    PlayerAction.Edit -> editTags?.invoke(listOf(track)) {}
+                    PlayerAction.Artwork -> viewArt = true
+                    PlayerAction.Lyrics -> lyricsOpen = !lyricsOpen
+                    PlayerAction.Playlist -> addPlaying = true
+                    PlayerAction.Pin -> pin(MediaRef(MediaKind.Song, track.id))
+                    PlayerAction.More -> playerMore = true
+                    else -> {
+                        val routeKey = navigation.route.key
+                        val occurrence = livePlayerOccurrence
+                        val informationOpen = songInfo
+                        val playerExpanded = expanded
+                        val drawerOpen = queueOpen
+                        // More intentionally closes before invoking this action; root navigation owns the accepted request.
+                        playerCollectionLookup.open(action, track) {
+                            navigation.route.key == routeKey && livePlayerOccurrence == occurrence &&
+                                songInfo == informationOpen && expanded == playerExpanded && queueOpen == drawerOpen
+                        }
+                    }
                 }
             }
         }
