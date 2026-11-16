@@ -15,7 +15,7 @@ class OrderedJourneyDatabaseTest {
     private val history = listOf(QueueVisit("A", 0, "actual-A"), QueueVisit("D", 0, "actual-D"), QueueVisit("X", 0, "explicit-X"))
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun open(name: String) = Room.databaseBuilder(context, QueueDatabase::class.java, name)
-        .addMigrations(QueueDatabase.MIGRATION_6_7, QueueDatabase.MIGRATION_7_8).build()
+        .addMigrations(QueueDatabase.MIGRATION_6_7, QueueDatabase.MIGRATION_7_8, QueueDatabase.MIGRATION_8_9).build()
     private fun durableFields(library: QueueLibrary) = library.copy(queues = library.queues.map { queue ->
         queue.copy(journey = queue.journey?.let { if (it.modes.shuffle) it else it.copy(plans = emptyMap()) })
     })
@@ -60,6 +60,162 @@ class OrderedJourneyDatabaseTest {
             old.version = version
         }
         return queue
+    }
+
+    private fun largeLegacy(name: String, count: Int) {
+        seed(name, 8, false)
+        val snapshot = TrackSnapshot.encode(Track("content://same", "Same", fileName = "same.mp3", relativePath = "same.mp3"))
+        context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { old ->
+            old.beginTransaction()
+            try {
+                for (table in listOf("queue_visits", "queue_cycle_members", "queue_journeys", "queue_entries")) old.execSQL("DELETE FROM $table")
+                old.compileStatement("INSERT INTO queue_entries VALUES (?, 'legacy', ?, ?, NULL)").use { insert ->
+                    insert.bindString(3, snapshot)
+                    repeat(count) { rank ->
+                        insert.bindString(1, java.util.UUID(0, rank.toLong()).toString()); insert.bindLong(2, rank.toLong()); insert.executeInsert()
+                    }
+                }
+                val json = buildString(count * 39 + 64) {
+                    append("{\"manual\":[")
+                    for (rank in count - 1 downTo 0) {
+                        if (rank < count - 1) append(',')
+                        append('"'); append(java.util.UUID(0, rank.toLong())); append('"')
+                    }
+                    append("],\"sort\":\"Title\",\"ascending\":false}")
+                }
+                old.execSQL("UPDATE queues SET orderState = ?, currentEntryId = ?, positionMs = 2345", arrayOf(json, java.util.UUID(0, count / 2L).toString()))
+                old.setTransactionSuccessful()
+            } finally { old.endTransaction() }
+        }
+    }
+
+    @Test fun oversizedLegacyJsonMigratesWithoutLosingEitherOrderAndReopens() = runBlocking<Unit> {
+        val arguments = InstrumentationRegistry.getArguments()
+        val count = arguments.getString("legacyEntries", "54000")!!.toInt()
+        val name = "legacy-order-1012.db"
+        largeLegacy(name, count)
+        if (arguments.getString("require256MiB") == "true") assertEquals(268435456L, Runtime.getRuntime().maxMemory())
+        val before = android.os.Debug.getRuntimeStats()
+        val peak = java.util.concurrent.atomic.AtomicLong()
+        val nativePeak = java.util.concurrent.atomic.AtomicLong()
+        val pssPeak = java.util.concurrent.atomic.AtomicLong()
+        val sampler = launch(Dispatchers.Default) {
+            var samples = 0
+            while (isActive) {
+                val runtime = Runtime.getRuntime(); peak.updateAndGet { maxOf(it, runtime.totalMemory() - runtime.freeMemory()) }
+                if (++samples % 10 == 0) {
+                    nativePeak.updateAndGet { maxOf(it, android.os.Debug.getNativeHeapAllocatedSize()) }
+                    pssPeak.updateAndGet { maxOf(it, android.os.Debug.getPss().toLong()) }
+                }
+                delay(10)
+            }
+        }
+        val started = android.os.SystemClock.elapsedRealtime()
+        var db = open(name)
+        try {
+            suspend fun verify() {
+                val queue = db.queues().read().active!!
+                assertEquals(count, queue.entries.size); assertEquals(count, queue.order.manual.size)
+                queue.entries.forEachIndexed { rank, entry ->
+                    assertEquals(java.util.UUID(0, rank.toLong()).toString(), entry.id)
+                    assertEquals(entry.id, queue.order.manual[count - 1 - rank])
+                    assertSame(entry.id, queue.order.manual[count - 1 - rank])
+                }
+                assertEquals(TrackSort.Title, queue.order.sort); assertFalse(queue.order.ascending)
+                assertEquals(java.util.UUID(0, count / 2L).toString(), queue.currentEntryId); assertEquals(2345L, queue.positionMs)
+                assertNull(queue.journey)
+                db.openHelper.readableDatabase.query("SELECT length(orderState) FROM queues").use { assertTrue(it.moveToFirst()); assertTrue(it.getInt(0) < 100) }
+            }
+            verify()
+            db.close(); db = open(name); verify()
+            android.util.Log.i("Order1012", "entries=$count elapsedMs=${android.os.SystemClock.elapsedRealtime() - started} peakBytes=${peak.get()} maxBytes=${Runtime.getRuntime().maxMemory()} nativePeakBytes=${nativePeak.get()} pssPeakKiB=${pssPeak.get()} gcBefore=$before gcAfter=${android.os.Debug.getRuntimeStats()}")
+        } finally { sampler.cancelAndJoin(); db.close(); context.deleteDatabase(name) }
+    }
+
+    @Test fun legacyMissingOccurrencesAndUtf8BoundariesRetainCodecReconciliation() = runBlocking {
+        val name = "legacy-order-utf8-1012.db"
+        val seed = seed(name, 8, false)
+        val longId = "é".repeat(4091) + "😀tail"
+        val physical = ids.map { if (it == "X") longId else it }
+        val baseline = SavedOrder(listOf("gone", "F", longId, "B"), TrackSort.Title, false)
+        context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { old ->
+            old.execSQL("UPDATE queue_entries SET id = ? WHERE id = 'X'", arrayOf(longId))
+            for (table in listOf("queue_visits", "queue_cycle_members", "queue_journeys")) old.execSQL("DELETE FROM $table")
+            old.execSQL("UPDATE queues SET orderState = ?", arrayOf(SavedOrderCodec.encode(baseline)))
+        }
+        val db = open(name)
+        try {
+            val restored = db.queues().read().active!!
+            assertEquals(physical, restored.entries.map { it.id })
+            assertEquals(baseline.reconcile(physical), restored.order)
+            assertEquals(seed.positionMs, restored.positionMs)
+        } finally { db.close(); context.deleteDatabase(name) }
+        val fixtures = listOf(
+            "{\"manual\":[\"A\",\"B\",\"A\"]}" to SavedOrder(ids),
+            "{\"manual\":[\"B\",\"A\",\"B\",\"C\"]}" to SavedOrder(listOf("B", "A", "C", "D", "E", "F", "X")),
+            "{\"manual\":[\"gone\",\"F\",\"X\",\"B\"]}" to SavedOrder(listOf("A", "F", "X", "B", "C", "D", "E")),
+            "{\"manual\":[\"gone\",\"B\",\"gone\",\"B\"]}" to SavedOrder(ids),
+            "{\"manual\":[]}" to SavedOrder(ids),
+            "" to SavedOrder(ids),
+            "{}" to SavedOrder(ids),
+            "{\"manual\":[],\"sort\":\"unknown\"}" to SavedOrder(ids),
+            "{\"manual\":[],\"ascending\":\"false\"}" to SavedOrder(ids, ascending = false),
+            "{\"manual\":[],\"sort\":null}" to SavedOrder(ids),
+            "{\"manual\":[],\"ascending\":\"FALSE\"}" to SavedOrder(ids, ascending = false),
+            "{\"manual\":[],\"ascending\":\"unrecognized\"}" to SavedOrder(ids),
+            "{\"manual\":[],\"ascending\":null}" to SavedOrder(ids),
+            "{\"manual\":[],\"ascending\":0}" to SavedOrder(ids),
+            "{\"manual\":[],\"ascending\":1}" to SavedOrder(ids),
+            "\t\r\n\u2003\u00a0" to SavedOrder(ids),
+            "{\"manual\":[true,false,null,17,\"B\"]}" to SavedOrder(ids)
+        )
+        SavedOrderCodec.decode("{\"manual\":[true,false,null,17,1e2]}".reader()) {
+            assertEquals(listOf("true", "false", "null", "17", "100.0"), it.toList())
+        }
+        fixtures.forEachIndexed { index, (json, expected) ->
+            val original = runCatching { SavedOrderCodec.decode(json, ids) }
+            when (index) {
+                0 -> assertEquals(SavedOrder(listOf("A")), original.getOrThrow())
+                1 -> assertEquals(SavedOrder(listOf("B", "C", "D", "E", "F", "X")), original.getOrThrow())
+                6 -> assertTrue(original.isFailure)
+                else -> assertEquals(expected, original.getOrThrow())
+            }
+            seed(name, 8, false)
+            context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { old ->
+                for (table in listOf("queue_visits", "queue_cycle_members", "queue_journeys")) old.execSQL("DELETE FROM $table")
+                old.execSQL("UPDATE queues SET orderState = ?", arrayOf(json))
+            }
+            val migrated = open(name)
+            try {
+                val restored = migrated.queues().read().active!!
+                assertEquals(ids, restored.entries.map { it.id })
+                assertEquals("fixture $index", expected, restored.order)
+                assertEquals(ids.toSet(), restored.order.manual.toSet())
+                assertEquals(ids.size, restored.order.manual.size)
+            } finally { migrated.close(); context.deleteDatabase(name) }
+        }
+    }
+
+    @Test fun malformedLegacyJsonRollsBackRanksAndRetriesTheOriginalDatabase() = runBlocking {
+        val name = "legacy-order-rollback-1012.db"
+        val queue = seed(name, 8, false)
+        context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { it.execSQL("UPDATE queues SET orderState = '{\"manual\":[\"A\",'") }
+        var db = open(name)
+        try {
+            try { db.queues().read(); fail("Malformed order must reject migration") } catch (_: java.io.IOException) { }
+            db.close()
+            context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { old ->
+                assertEquals(8, old.version)
+                old.rawQuery("PRAGMA table_info(queue_entries)", null).use { columns ->
+                    while (columns.moveToNext()) assertNotEquals("manualOrdinal", columns.getString(1))
+                }
+                old.rawQuery("SELECT orderState FROM queues", null).use { assertTrue(it.moveToFirst()); assertEquals("{\"manual\":[\"A\",", it.getString(0)) }
+                old.execSQL("UPDATE queues SET orderState = ?", arrayOf(SavedOrderCodec.encode(queue.order)))
+                for (table in listOf("queue_visits", "queue_cycle_members", "queue_journeys")) old.execSQL("DELETE FROM $table")
+            }
+            db = open(name)
+            assertEquals(queue, db.queues().read().active!!)
+        } finally { db.close(); context.deleteDatabase(name) }
     }
 
     @Test fun releasedSchemaSixPreservesRowsAndOrderedIdentitySurvivesRollbackRemovalAndReopen() = runBlocking {

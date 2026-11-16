@@ -63,7 +63,7 @@ class QueueRestoreEquivalenceTest {
                 QueueEntry(it.id, TrackSnapshot.decode(it.track), it.sourcePlaylistId) }, q.currentEntryId, q.positionMs, q.shuffle,
                 enumNameOrNull<QueueRepeat>(q.repeat) ?: QueueRepeat.Off, q.lastActivatedAt,
                 item.journeys.singleOrNull()?.restore(item.visits, item.cycleMembers),
-                SavedOrderCodec.decode(q.orderState, item.entries.sortedBy { it.ordinal }.map { it.id }))
+                SavedOrderCodec.decode(q.orderState, emptyList()).copy(manual = item.entries.sortedBy { it.manualOrdinal }.map { it.id }))
         } }
         return QueueLibrary(queues, active?.queueId?.takeIf { id -> queues.any { it.id == id } })
     }
