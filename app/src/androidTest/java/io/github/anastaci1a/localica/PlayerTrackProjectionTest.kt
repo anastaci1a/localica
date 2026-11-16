@@ -200,7 +200,8 @@ class PlayerTrackProjectionTest {
         val savedActions = actionPreferences.read()
         val file = File.createTempFile("preview-admission-", ".opus", context.cacheDir)
         copyTestAsset(InstrumentationRegistry.getInstrumentation().context.assets, "lyrics.opus", file)
-        val preview = QueueEdits.create(listOf(track("preview").copy(uri = android.net.Uri.fromFile(file).toString(), fileName = file.name, relativePath = file.name)), 0, "Preview")
+        val preview = QueueEdits.create(listOf(track("preview").copy(uri = android.net.Uri.fromFile(file).toString(), fileName = file.name, relativePath = file.name)), 0, "Preview").let { it.copy(entries = Counted(it.entries)) }
+        val entries = preview.entries as Counted<QueueEntry>
         val other = QueueEdits.create(listOf(track("other")), 0, "Other")
         val catalog = Counted(listOf(preview, other))
         var source by mutableStateOf(QueueUiState(QueueLibrary(catalog, preview.id), loading = false))
@@ -208,11 +209,17 @@ class PlayerTrackProjectionTest {
         var progress = Float.NaN
         fun publish(next: QueueUiState, ready: SemanticsMatcher, afterRelease: () -> Unit = {}, settled: (() -> Unit)? = null, pending: () -> Unit = {}, choices: () -> Unit) {
             val hook = AtomicReference<(() -> Unit)?>(null)
-            val incoming = Counted(next.library.queues)
-            incoming.beforeRead = { hook.getAndSet(null)?.invoke() }
+            entries.beforeRead = {
+                if (Thread.currentThread().stackTrace.any { it.className == "io.github.anastaci1a.localica.ui.PlayerTrackProjectionKt" && it.methodName == "prepareQueuePresentation" })
+                    hook.getAndSet(null)?.invoke()
+            }
             val started = CountDownLatch(1)
             val release = CountDownLatch(1)
             val publication = runBlocking { withContext(Dispatchers.Default) {
+                val incoming = next.library.queues.map { queue ->
+                    if (queue.id != preview.id) queue else queue.copy(journey = (queue.journey ?: QueueJourney()).copy()
+                        .reconcile(queue.ids, queue.currentEntryId, JourneyModes.from(next.settings)))
+                }
                 next.copy(library = next.library.copy(queues = incoming)).resolvePlayerQueue()
             } }
             hook.set { started.countDown(); check(release.await(30, TimeUnit.SECONDS)) }
@@ -222,6 +229,7 @@ class PlayerTrackProjectionTest {
                 assertTrue(started.await(10, TimeUnit.SECONDS))
                 choices()
                 pending()
+                assertEquals("Presentation preparation remains held through the pending assertions", 1L, release.count)
                 release.countDown()
                 afterRelease()
                 compose.waitUntil(10_000) { compose.onAllNodes(ready, true).fetchSemanticsNodes().isNotEmpty() }
