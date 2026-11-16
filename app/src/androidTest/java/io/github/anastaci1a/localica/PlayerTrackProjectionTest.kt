@@ -205,6 +205,8 @@ class PlayerTrackProjectionTest {
             compose.runOnIdle { native = native.copy(trackId = old.id, trackUri = old.uri, title = "Audible old") }
             compose.onNodeWithContentDescription("Information").performClick()
             compose.onNodeWithTag("song-information").assertDoesNotExist()
+            // A matching native ID keeps its native title; expose the queued preview for this publication witness.
+            compose.runOnIdle { native = native.copy(trackId = null) }
             release.countDown()
             compose.waitUntil(10_000) { compose.onAllNodes(hasText("Replacement occurrence") and
                 (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title"))), true).fetchSemanticsNodes().isNotEmpty() }
