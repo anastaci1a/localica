@@ -32,8 +32,8 @@ class ControlGeometryTest {
         val right = GlassMomentum(); val left = GlassMomentum()
         for (speed in listOf(0f, 1f, 4f, 2f, 0f, 0f, -3f, -1f, 0f)) {
             repeat(20) {
-                right.advance(speed, 1f / 120)
-                left.advance(-speed, 1f / 120)
+                right.advance(speed, (1f / 120).toDouble())
+                left.advance(-speed, (1f / 120).toDouble())
                 assertEquals(right.shape.strain, left.shape.strain, .000001f)
                 assertEquals(right.shape.depth, left.shape.depth, .000001f)
             }

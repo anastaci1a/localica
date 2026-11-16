@@ -19,13 +19,13 @@ class GlassReversalTest {
         for (fps in listOf(30, 60, 120)) {
             val forward = GlassMomentum(); val backward = GlassMomentum()
             repeat(fps * 2) {
-                forward.advance(4f, 1f / fps, contact = 1f)
-                backward.advance(-4f, 1f / fps, contact = 1f)
+                forward.advance(4f, (1f / fps).toDouble(), contact = 1f)
+                backward.advance(-4f, (1f / fps).toDouble(), contact = 1f)
             }
             var minimum = 0f
             repeat(fps) {
-                forward.advance(-4f, 1f / fps, contact = 1f)
-                backward.advance(4f, 1f / fps, contact = 1f)
+                forward.advance(-4f, (1f / fps).toDouble(), contact = 1f)
+                backward.advance(4f, (1f / fps).toDouble(), contact = 1f)
                 assertEquals(forward.shape, backward.shape)
                 minimum = minOf(minimum, forward.strain)
                 assertTrue(abs(forward.strain) <= .12f)
@@ -45,15 +45,15 @@ class GlassReversalTest {
             val forward = GlassMomentum(); val backward = GlassMomentum()
             for (speed in listOf(1f, -4f, 4f, -1f, 30f, -30f, 1000f, -1000f, 0f)) {
                 repeat(6) {
-                    forward.advance(speed, 1f / 60, contact = contact)
-                    backward.advance(-speed, 1f / 60, contact = contact)
+                    forward.advance(speed, (1f / 60).toDouble(), contact = contact)
+                    backward.advance(-speed, (1f / 60).toDouble(), contact = contact)
                     assertEquals(forward.shape, backward.shape)
                     assertTrue("Per-channel impulses retain their bounds", abs(forward.strain) <= .12f)
                     assertTrue(forward.shape.depth.isFinite())
                     assertEquals(1f, forward.scaleX * forward.scaleY * forward.shape.thickness, .00001f)
                 }
             }
-            repeat(240) { forward.advance(0f, 1f / 60, contact = contact) }
+            repeat(240) { forward.advance(0f, (1f / 60).toDouble(), contact = contact) }
             assertTrue("Reversals settle whether contact continues or ends", forward.settled)
         }
     }
@@ -62,14 +62,14 @@ class GlassReversalTest {
         for (fps in listOf(30, 60, 120)) for (direction in listOf(-1f, 1f)) {
             val body = GlassMomentum()
             var previous = 4f * direction
-            repeat(fps * 2) { body.advance(previous, 1f / fps, contact = 1f) }
+            repeat(fps * 2) { body.advance(previous, (1f / fps).toDouble(), contact = 1f) }
             repeat(fps) { frame ->
                 //370ms deliberately avoids a zero exactly on every sample grid.
                 val speed = direction * (4f - 8f * (frame + 1f) / fps / .37f).coerceAtLeast(-4f)
                 val correction = glassMotionSpeedChange(previous, speed) - (abs(speed) - abs(previous))
                 assertTrue("Crossing correction shrinks with per-frame speed change", abs(correction) <= 8f / .37f / fps + .00001f)
                 if (previous * speed >= 0f) assertEquals(0f, correction, 0f)
-                body.advance(speed, 1f / fps, contact = 1f)
+                body.advance(speed, (1f / fps).toDouble(), contact = 1f)
                 assertTrue("Slow reversal cannot create an abrupt-impact-sized impulse", abs(body.strain) < .007f)
                 previous = speed
             }

@@ -100,10 +100,10 @@ class SelectorRegistrationTest {
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { readySource?.snapshot != null }
         compose.waitForIdle()
         val momentum = GlassMomentum()
-        repeat(180) { momentum.advance(0f, 1f / 60, pressure = -.15f, contact = 1f) }
+        repeat(180) { momentum.advance(0f, (1f / 60).toDouble(), pressure = -.15f, contact = 1f) }
         val stages = mutableListOf("rest" to GlassShape(), "held" to momentum.shape)
         repeat(32) { frame ->
-            momentum.advance(0f, 1f / 60)
+            momentum.advance(0f, (1f / 60).toDouble())
             if (frame in listOf(0, 6, 12, 18, 27)) stages += "release-$frame" to momentum.shape
         }
         val failures = mutableListOf<String>()

@@ -28,7 +28,6 @@ internal class GlassSplitContact(val left: GlassContact) {
         target.state.output.value = target.state.momentum.shape
         target.state.glow.value = target.state.momentum.glow
         target.state.previous = target.travel + target.expansion.value
-        target.state.initialized = true
     }
 
     fun presentation(body: GlassContact, other: GlassContact, separation: Float): GlassShape {

@@ -361,7 +361,7 @@ class GlassTouchLightTest {
         compose.runOnIdle { modal = !modal; point = Offset(.1f, .9f) }
         compose.runOnIdle { assertEquals("handoff has no reset", before, shared.glow.value) }
         model.targetGlow(Offset(.1f, .9f), 1f, 1f)
-        model.advance(0f, (1f / 60f) * ownerSpeed, contact = 1f)
+        model.advance(0f, ((1f / 60f) * ownerSpeed).toDouble(), contact = 1f)
         model.finishSettlement()
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
@@ -373,7 +373,7 @@ class GlassTouchLightTest {
         val repressed = compose.runOnIdle { GlassMomentum().also { it.blendFrom(shared.momentum) } }
         compose.runOnIdle { point = Offset(.7f, .4f); held = true }
         repressed.targetGlow(Offset(.7f, .4f), 1f, 1f)
-        repressed.advance(0f, .016f * ownerSpeed, contact = 1f)
+        repressed.advance(0f, (.016f * ownerSpeed).toDouble(), contact = 1f)
         repressed.finishSettlement()
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {

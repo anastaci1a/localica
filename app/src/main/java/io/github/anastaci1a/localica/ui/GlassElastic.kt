@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
+import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.*
@@ -20,13 +21,12 @@ internal fun magneticChoicePosition(raw: Float): Float {
 internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.spring<Float>(1f, 90f * speed * speed, visibilityThreshold = .0001f)
 
 /** One interruptible shape clock; live tuning preserves its current displacement and velocity. */
-@Stable internal class GlassBodyState {
+@Stable internal class GlassBodyState(bodyOverride: FlexSpec? = null) {
     val output = mutableStateOf(GlassShape())
     val glow = mutableStateOf(GlassGlow())
-    val momentum = GlassMomentum()
+    val momentum = GlassMomentum(bodyOverride)
     var impulseScale = 1f
     var previous = 0f
-    var initialized = false
 }
 
 @Composable
@@ -34,7 +34,7 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
     state: GlassBodyState = remember { GlassBodyState() }, active: () -> Boolean = { true }, point: (() -> Offset)? = null): State<GlassShape> {
     val result = state.output
     val reduced = LocalReducedMotion.current
-    val speed by rememberUpdatedState(LocalMotionSpeed.current)
+    val speed = LocalMotionSpeed.current
     val damping by rememberUpdatedState(LocalGlassAppearance.current.shapeDamping)
     val input by rememberUpdatedState(position)
     val force by rememberUpdatedState(pressure)
@@ -42,31 +42,35 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
     val glowPoint by rememberUpdatedState(point)
     val strength by rememberUpdatedState(LocalGlassAppearance.current.touchLight)
     val ownsClock by rememberUpdatedState(active)
-    LaunchedEffect(state, reduced) {
+    LaunchedEffect(state, reduced, speed) {
         val body = state.momentum
         var runner: Job? = null
         snapshotFlow { listOf(input(), force(), touch(), damping, ownsClock(), if (strength > 0f) glowPoint?.invoke() else null, strength) }.collect {
             if (!ownsClock()) { runner?.cancel(); runner = null; return@collect }
-            if (!state.initialized) { state.previous = input(); state.initialized = true }
             if (reduced) { body.reset(); body.targetGlow(glowPoint?.invoke(), touch(), strength, snap = true); state.glow.value = body.glow; result.value = GlassShape(); state.previous = input(); return@collect }
             if (runner?.isActive != true) runner = launch {
-                var last = 0L
-                do {
+                var last: Long? = null
+                while (true) {
                     val frame = withFrameNanos { it }
                     // Ownership can change before snapshotFlow cancels this runner.
                     // Never integrate the same shared body twice at a window handoff.
                     if (!ownsClock()) return@launch
-                    val dt = if (last == 0L) 1f / 60f else ((frame - last) / 1e9f).coerceIn(.001f, .1f)
-                    last = frame
+                    if (last != null && frame <= last) continue
+                    val dt = last?.let { (frame - it).toDouble() * speed / 1e9 } ?: 0.0
                     val current = input()
-                    body.damping = damping
-                    body.targetGlow(glowPoint?.invoke(), touch(), strength)
-                    body.advance(((current - state.previous) / dt / speed).coerceIn(-20f, 20f), dt * speed, force(), touch(), state.impulseScale)
+                    if (last == null) state.previous = current
+                    val displacement = current - state.previous
+                    val touched = touch()
+                    body.advance(if (dt > 0.0) (displacement / dt).toFloat().coerceIn(-20f, 20f) else 0f,
+                        dt, force(), touched, state.impulseScale, damping)
+                    body.targetGlow(glowPoint?.invoke(), touched, strength)
                     state.previous = current
-                    body.finishSettlement()
+                    last = frame
+                    val finished = dt > 0.0 && displacement == 0f && body.finishSettlement()
                     result.value = body.shape
                     state.glow.value = body.glow
-                } while (!body.settled)
+                    if (finished) break
+                }
             }
         }
     }
