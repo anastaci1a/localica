@@ -1896,12 +1896,17 @@ class PlaybackIntentTest {
     @Test fun playerReplacementDuringReuseRejectsBothMatchAndNoMatchWithoutCreating() {
         for (matches in listOf(true, false)) fixture {
             val gate = Gate()
-            val armed = java.util.concurrent.atomic.AtomicBoolean(true)
+            val reads = AtomicInteger()
             val requested = object : AbstractList<Track>() {
                 override val size = first.entries.size
                 override fun get(index: Int): Track {
-                    if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper() && armed.getAndSet(false))
+                    if (reads.incrementAndGet() == 2) {
+                        assertNotEquals("Reuse comparison must run off Main", android.os.Looper.getMainLooper(), android.os.Looper.myLooper())
+                        assertTrue("Gate must suspend equivalence, not source intake", Thread.currentThread().stackTrace.any {
+                            it.className == QueueEdits::class.java.name && it.methodName == "equivalent"
+                        })
                         runBlocking { gate.await() }
+                    }
                     val value = first.entries[index].track
                     return if (!matches && index == size - 1) value.copy(id = "mismatch") else value
                 }

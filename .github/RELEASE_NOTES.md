@@ -25,7 +25,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#1022](https://github.com/anastaci1a/localica/issues/1022): Prepare admitted playback sources on workers while preserving FIFO order.
 - [#1023](https://github.com/anastaci1a/localica/issues/1023): Borrow pinned-song playback input without a Main-thread source copy.
 - [#1024](https://github.com/anastaci1a/localica/issues/1024): Prepare collection Shuffle on the existing command worker.
-- [#1025](https://github.com/anastaci1a/localica/issues/1025): Prepare controller-free browse Shuffle off Main.
+- [#1025](https://github.com/anastaci1a/localica/issues/1025): Remove the controller-free browse Shuffle path.
 - [#1026](https://github.com/anastaci1a/localica/issues/1026): Compare reusable queue snapshots on the existing worker.
 - [#1027](https://github.com/anastaci1a/localica/issues/1027): Prepare pending queue input off Main at the saved-queue limit.
 - [#1028](https://github.com/anastaci1a/localica/issues/1028): Rebuild refreshed saved-queue metadata off Main.
