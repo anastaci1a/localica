@@ -2,10 +2,10 @@ package io.github.anastaci1a.localica.library
 
 /** A pure projection of [source], an immutable revision: queue edits replace `entries`, and results own their rows.
  * It keeps the List contract; owners compare its [revision] instead, without reading an element (#957). */
-private class MappedList<S, T>(val source: List<S>, f: Any, private val at: (Int) -> T) : AbstractList<T>(), RandomAccess {
+private class MappedList<S, T>(val source: List<S>, f: Any, private val at: java.util.function.IntFunction<T>) : AbstractList<T>(), RandomAccess {
     val revision: Revision = Revision((source as? MappedList<*, *>)?.revision ?: source, f)
     override val size get() = source.size
-    override fun get(index: Int) = at(index)
+    override fun get(index: Int) = at.apply(index)
 }
 /** A view's source by reference (or the inner view's revision) and its projection. */
 private class Revision(val source: Any?, val f: Any) {
