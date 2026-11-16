@@ -6,7 +6,6 @@ import androidx.compose.runtime.tooling.CompositionData
 import androidx.compose.runtime.tooling.LocalInspectionTables
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
@@ -58,7 +57,7 @@ class GlassBodyConfigurationTest {
             val inspected = remember { mutableSetOf<CompositionData>() }
             root = currentComposer.compositionData
             tables = inspected
-            CompositionLocalProvider(LocalInspectionTables provides inspected, LocalDensity provides Density(1f)) {
+            CompositionLocalProvider(LocalInspectionTables provides inspected) {
                 EngineTheme {
                     CompositionLocalProvider(LocalReducedMotion provides reduced, LocalMotionSpeed provides 1f,
                         LocalGlassAppearance provides GlassAppearance()) {
