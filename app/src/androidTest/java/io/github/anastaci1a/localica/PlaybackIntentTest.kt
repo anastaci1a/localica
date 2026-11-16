@@ -1944,7 +1944,7 @@ class PlaybackIntentTest {
         val checkpoint = object : ThreadContextElement<Unit> {
             override val key = object : kotlin.coroutines.CoroutineContext.Key<ThreadContextElement<Unit>> {}
             override fun updateThreadContext(context: kotlin.coroutines.CoroutineContext) {
-                if (armed.get() && context[kotlin.coroutines.ContinuationInterceptor] == Dispatchers.Default && workerEntries.incrementAndGet() == 2)
+                if (armed.get() && context[kotlin.coroutines.ContinuationInterceptor] == Dispatchers.Default && workerEntries.incrementAndGet() == 3)
                     runBlocking { gate.await() }
             }
             override fun restoreThreadContext(context: kotlin.coroutines.CoroutineContext, oldState: Unit) = Unit

@@ -78,6 +78,24 @@ class QueueSaveOriginTest {
                 try { compose.onNodeWithText("Add", substring = false).assertIsEnabled(); true }
                 catch (_: AssertionError) { false }
             }
+            var previousBounds: Triple<Rect, Rect, Int>? = null
+            var stableFrames = 0
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                val view = popupView()
+                val imeBottom = compose.runOnUiThread {
+                    androidx.core.view.ViewCompat.getRootWindowInsets(view)?.let { insets ->
+                        if (insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()))
+                            insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom else 0
+                    } ?: 0
+                }
+                val bounds = Triple(screenBounds(compose.onNodeWithTag("glass-morph-surface", useUnmergedTree = true)),
+                    screenBounds(compose.onNodeWithText("Add", substring = false)), imeBottom)
+                stableFrames = if (imeBottom > 0 && bounds == previousBounds) stableFrames + 1 else 0
+                previousBounds = bounds
+                (stableFrames >= 2).also { settled -> if (settled)
+                    android.util.Log.i("QueueSaveContact", "Settled before Add: frames=$stableFrames bounds=$bounds") }
+            }
             tap(compose.onNodeWithText("Add", substring = false).assertIsEnabled())
             pump(fixture) { controller.state.value.playlists.singleOrNull()?.entries?.size == fixture.browsed.entries.size }
             awaitReturned(fixture, opened, fixture.originalQueue.copy(browsedId = fixture.playing.id))
