@@ -44,6 +44,90 @@ class BrowseQueueProjectionTest {
         playlists: List<ManualPlaylist> = emptyList(), checkActive: () -> Unit = {}) =
         BrowseQueries.evaluate(library, playlists, route, queues = queues, checkActive = checkActive)
 
+    @Test fun physicalIdsAndPopupRowsBorrowTheirSnapshotWithoutEagerReads() {
+        for ((tracks, count) in listOf(13_400 to 13_400, 50_000 to 50_000, 50_000 to 1_000_000)) {
+            val library = library(tracks)
+            val queue = queue(library, count)
+            var reads = 0
+            val source = object : AbstractList<QueueEntry>() {
+                override val size get() = queue.entries.size
+                override fun get(index: Int): QueueEntry { reads++; return queue.entries[index] }
+            }
+            val oldIds = source.map { it.id }
+            assertEquals(count, reads)
+            reads = 0
+            val oldRows = source.map { SongRow(it.id, it.track) }
+            assertEquals(count, reads)
+            reads = 0
+            val physical = { source.mapView { it.id } }
+            val popup = { source.mapView { SongRow(it.id, it.track) } }
+            physical(); popup() // Warm these exact projection call sites before descriptor allocation measurement.
+            val (ids, idBytes) = allocation(physical)
+            assertEquals("physical admission reads", 0, reads)
+            val (rows, rowBytes) = allocation(popup)
+            assertEquals("first popup admission reads", 0, reads)
+            assertTrue("physical view allocated $idBytes B", idBytes < 4096)
+            assertTrue("popup view allocated $rowBytes B", rowBytes < 4096)
+            assertSame(source, ids.viewSource)
+            assertSame(source, rows.viewSource)
+            assertEquals(oldIds, ids)
+            assertEquals(oldRows, rows)
+            assertEquals(oldIds.hashCode(), ids.hashCode())
+            assertEquals(oldRows.hashCode(), rows.hashCode())
+            val gcBeans = Class.forName("java.lang.management.ManagementFactory").getMethod("getGarbageCollectorMXBeans").invoke(null) as List<*>
+            val gcCount = Class.forName("java.lang.management.GarbageCollectorMXBean").getMethod("getCollectionCount")
+            println("#995 tracks=$tracks entries=$count baselineReads=${2L * count} admissionReads=0 idBytes=$idBytes rowBytes=$rowBytes heap=${used()} gc=${gcBeans.sumOf { gcCount.invoke(it) as Long }}")
+        }
+    }
+
+    @Test fun ownerKeysDistinguishEqualSnapshotsWithoutReadingThemAndComposeNestedViews() {
+        var reads = 0
+        fun source() = object : AbstractList<Int>() {
+            override val size = 1_000_000
+            override fun get(index: Int): Int { reads++; return index }
+        }
+        val a = source()
+        val b = source()
+        val projection: (Int) -> Int = { it + 1 }
+        val nested: (Int) -> String = { it.toString() }
+        assertEquals(a.ownerRevision, a.ownerRevision)
+        assertEquals(a.ownerRevision.hashCode(), a.ownerRevision.hashCode())
+        assertNotEquals(a.ownerRevision, b.ownerRevision)
+        assertEquals(a.identityKey(), a.identityKey())
+        assertNotEquals(a.identityKey(), b.identityKey())
+        assertEquals(null.identityKey(), null.identityKey())
+        assertNotEquals(null.identityKey(), a.identityKey())
+        val first = a.mapView(projection).mapView(nested)
+        val second = a.mapView(projection).mapView(nested)
+        assertEquals(first.ownerRevision, second.ownerRevision)
+        assertEquals(first.ownerRevision.hashCode(), second.ownerRevision.hashCode())
+        assertNotEquals(first.ownerRevision, b.mapView(projection).mapView(nested).ownerRevision)
+        assertNotEquals(first.ownerRevision, a.mapView(projection).ownerRevision)
+        assertEquals(0, reads)
+        assertEquals("1000000", first.last())
+        assertEquals(1, reads)
+    }
+
+    @Test fun popupViewsKeepTheOpeningSnapshotAcrossReplacementAndReleaseItWithTheirOwner() {
+        val original = queue(library(13_400), 50_000)
+        val opening = original.entries.mapView { SongRow(it.id, it.track) }
+        val replacement = original.copy(entries = original.entries.reversed())
+        val current = replacement.entries.mapView { SongRow(it.id, it.track) }
+        assertEquals(original.entries.map(::occurrence), opening)
+        assertEquals(replacement.entries.map(::occurrence), current)
+        assertNotEquals(opening.ownerRevision, current.ownerRevision)
+        assertSame(original.entries, opening.viewSource)
+        assertEquals("e0", opening.first().id)
+        assertEquals("e49999", current.first().id)
+        fun released(): WeakReference<*> {
+            val source = original.entries.toList()
+            val view = source.mapView(::occurrence)
+            assertSame(source, view.viewSource)
+            return WeakReference(source)
+        }
+        assertTrue("discarding a popup view releases its borrowed snapshot", collected(released()))
+    }
+
     @Test fun queueDetailAndOpeningAreViewsOfTheQueueAtOperatorScale() {
         for (tracks in listOf(13_400, 50_000)) {
             val library = library(tracks)

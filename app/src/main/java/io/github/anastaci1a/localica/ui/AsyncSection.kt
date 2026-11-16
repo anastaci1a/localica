@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import android.os.StrictMode
+import io.github.anastaci1a.localica.library.identityKey
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -12,16 +13,10 @@ import io.github.anastaci1a.localica.ui.spec.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** Archive and catalog inputs are immutable snapshots. Comparing them must not walk their contents on main. */
-private class AsyncIdentity(private val value: Any?) {
-    override fun equals(other: Any?) = other is AsyncIdentity && value === other.value
-    override fun hashCode() = System.identityHashCode(value)
-}
-
 /** Cancels superseded requests; no stale value can become the result of a newer request. */
 @Composable
 internal fun <T : Any> rememberAsyncValue(vararg inputs: Any?, retainPrevious: Boolean = false, compute: () -> T): State<T?> {
-    val keys = inputs.map(::AsyncIdentity).toTypedArray()
+    val keys = inputs.map { it.identityKey() }.toTypedArray()
     val result = remember(*(if (retainPrevious) emptyArray() else keys)) { mutableStateOf<T?>(null) }
     LaunchedEffect(result, *keys) {
         result.value = withContext(Dispatchers.Default) {
@@ -49,7 +44,7 @@ internal fun <T : Any> AsyncSection(value: T?, modifier: Modifier = Modifier, ro
         AsyncSpinnerSlot(modifier.artworkTextReveal(opacity, { null }, { 0f }, skeleton = false).testTag("async-section-loading"))
     } else {
         val rowHeight = StockUiSpec.control.getValue(ControlSize.PreferenceRow).value
-        val reveal = if (rowCount == 0) null else rememberBrowseLoadingReveal(AsyncIdentity(value), true, reduced, 1,
+        val reveal = if (rowCount == 0) null else rememberBrowseLoadingReveal(value.identityKey(), true, reduced, 1,
             0f, rowCount * rowHeight, reduced)
         CompositionLocalProvider(LocalAsyncSectionReveal provides reveal) { content(value) }
     }
