@@ -39,7 +39,7 @@ class GlassBodyClockTest {
             CompositionLocalProvider(LocalMotionSpeed provides input.speed, LocalReducedMotion provides input.reduced,
                 LocalGlassAppearance provides GlassAppearance(shapeDamping = input.damping, touchLight = input.strength)) {
                 rememberGlassBody({ input.position }, contact = { input.contact }, state = input.body,
-                    active = { input.active }, point = { input.point ?: Offset.Zero }.takeIf { input.point != null })
+                    active = { input.active }, point = { input.point ?: Offset.Zero })
             }
         }
         suspend fun flush() { Snapshot.sendApplyNotifications(); repeat(4) { yield() } }
@@ -52,6 +52,13 @@ class GlassBodyClockTest {
         val spring = body.momentum.javaClass.getDeclaredField(channel).apply { isAccessible = true }.get(body.momentum)
         return spring.javaClass.getDeclaredField(field).apply { isAccessible = true }.getFloat(spring)
     }
+
+    private fun set(body: GlassBodyState, channel: String, field: String, value: Float) {
+        val spring = body.momentum.javaClass.getDeclaredField(channel).apply { isAccessible = true }.get(body.momentum)
+        spring.javaClass.getDeclaredField(field).apply { isAccessible = true }.setFloat(spring, value)
+    }
+    private fun travel(body: GlassBodyState, velocity: Float) =
+        body.momentum.javaClass.getDeclaredField("travelVelocity").apply { isAccessible = true }.setFloat(body.momentum, velocity)
 
     @Test fun admissionRepeatedTimeTravelBrakingAndIdleRetirementUseRealObservations() = runBlocking(Dispatchers.Main) {
         withBody { frame ->
@@ -68,9 +75,28 @@ class GlassBodyClockTest {
             frame(16_666_666L)
             assertTrue("position-only wake reaches positive deformation", body.output.value.strain > 0f)
             frame(16_666_666L)
+            for (channel in listOf("motion", "pressure", "depth")) {
+                set(body, channel, "value", 0f); set(body, channel, "velocity", 0f)
+            }
+            set(body, "motion", "value", .00001f)
+            travel(body, ((.4f - .3f) / (8_333_333.0 / 1e9)).toFloat())
+            position = .4f
             frame(24_999_999L)
-            assertTrue("quiet sample applies braking before retirement", value(body, "motion", "velocity") < 0f)
-            repeat(1000) { frame(33_333_332L + it * 8_333_333L) }
+            assertTrue("settled constant travel remains observable", body.momentum.settled)
+            assertNotEquals("moving samples cannot finish a settled residual", 0f, value(body, "motion", "value"))
+            frame(33_333_332L)
+            assertTrue("quiet sample applies braking before retirement", value(body, "motion", "velocity") < -.6f)
+            for (channel in listOf("motion", "pressure", "depth")) {
+                set(body, channel, "value", 0f); set(body, channel, "velocity", 0f)
+            }
+            travel(body, 0f)
+            position = Math.nextUp(position)
+            frame(41_666_665L)
+            assertTrue(body.momentum.settled)
+            assertTrue("tiny nonzero displacement cannot finish its tiny impulse", value(body, "motion", "velocity") > 0f)
+            frame(49_999_998L)
+            assertEquals("positive quiet sample may finish the sub-threshold response", 0f, value(body, "motion", "velocity"), 0f)
+            repeat(1000) { frame(58_333_331L + it * 8_333_333L) }
             assertEquals(GlassShape(), body.output.value)
             assertTrue(body.momentum.settled)
             contact = 1f
@@ -98,10 +124,11 @@ class GlassBodyClockTest {
             assertEquals(point, body.glow.value.point)
             frame(8_333_333L)
             assertTrue(body.glow.value.big > 0f)
+            speed = 2f
+            frame(16_666_666L) // Apply the CompositionLocal change after the last old-owner observation.
             val raw = value(body, "depth", "value")
             val velocity = value(body, "depth", "velocity")
             val glow = body.glow.value
-            speed = 2f
             frame(11_000_000_000L)
             assertEquals("speed readmission is h=0", raw, value(body, "depth", "value"), 0f)
             assertEquals(velocity, value(body, "depth", "velocity"), 0f)

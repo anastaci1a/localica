@@ -63,6 +63,16 @@ class GlassBodyConformanceTest {
             }
             cases++
         }
+        for (vector in listOf(
+            listOf(1.0, 0.0, 1.08, .625, .262, 1.0 / 120),
+            listOf(1.07, .1, 1.0, .375, .4, 1.0 / 60),
+            listOf(.2, -.3, 1.0, 1.0, .25, .02),
+            listOf(1.2, 2.0, 1.0, 1.4, .4, .01),
+            listOf(.3, .4, 1.0, .6, .36, 0.0),
+            listOf(1.0, 0.0, 1.0, .375, .4, .01))) {
+            val omega = 2 * PI / vector[4].toFloat()
+            check(omega * omega, (2 * omega * vector[3].toFloat()).toFloat().toDouble(), vector[5], vector[0].toFloat(), vector[1].toFloat(), vector[2].toFloat())
+        }
         val sizes = listOf(44f, 119f, Math.nextDown(120f), 120f, Math.nextUp(120f), 160f, 240f)
         for (damping in 2..40) for (tenths in 5..15) for (held in listOf(false, true)) {
             val spec = FlexSpec.dynamic(sizes[(damping + tenths) % sizes.size], 44f)
@@ -72,6 +82,8 @@ class GlassBodyConformanceTest {
             check(k, c, (if (tenths % 2 == 0) 1.0 / 120 else 1.0 / 60) * (4f * tenths / 30f))
         }
         val w = 2 * PI / .262f
+        for (c in listOf(Math.nextDown((2 * w).toFloat()), (2 * w).toFloat(), Math.nextUp((2 * w).toFloat())))
+            for (h in listOf(1e-9, .02, 11.0)) check(w * w, c.toDouble(), h)
         for (ratio in listOf(1.0, Math.nextDown(1.0), Math.nextUp(1.0), 1 - 2.0.pow(-20), 1 + 2.0.pow(-20), 1 - 2.0.pow(-40), 1 + 2.0.pow(-40), 3.125))
             for (h in listOf(1e-9 * (2f / 3), 1.0 / 120, .1, 1.0, 11.0, 60.0, 3600.0, Long.MAX_VALUE.toDouble() / 1e9 * 2))
                 check(w * w, 2 * w * ratio, h)
@@ -79,6 +91,8 @@ class GlassBodyConformanceTest {
             val omega = 2 * PI / response
             check(omega * omega, 2 * omega, h, .4f, -.7f, 0f)
         }
+        check(w * w, 2 * w, 1e-9, Float.MIN_VALUE, -Float.MIN_VALUE, 0f)
+        println("R4 subnormal valueBits=" + get(channel, "value").toRawBits() + " velocityBits=" + get(channel, "velocity").toRawBits())
         println("R4 Float oracle cases=$cases maximumAbsolute=$maximumAbsolute maximumUlps=$maximumUlps")
     }
 
@@ -122,6 +136,8 @@ class GlassBodyConformanceTest {
                 val expected = if (long < 120f) FlexSpec(.375f, .4f, .625f, .262f) else FlexSpec(.375f + .225f * t, .4f - .04f * t, .625f, .262f + .052f * t, 1f - u, .3f - .1f * u)
                 val body = GlassMomentum(FlexSpec.Small).apply { spec = FlexSpec.dynamic(long, short) }
                 assertEquals(expected, body.spec)
+                body.advance(0f, 0.0, contact = 1f, damping = 40f)
+                assertEquals((2 * PI / FlexSpec.Small.trackingResponse).pow(2), coefficient(body, "stiffness").toDouble(), 0.0)
                 body.targetGlow(Offset(.4f, .6f), 1f, strength)
                 assertEquals((expected.bigOpacity * strength).toBits(), get(lights(body)[0]!!, "target").toBits())
                 assertEquals((expected.littleOpacity * strength).toBits(), get(lights(body)[1]!!, "target").toBits())
@@ -138,6 +154,15 @@ class GlassBodyConformanceTest {
         assertEquals(optical.toBits(), body.shape.depth.toBits())
         assertEquals(raw, state(body))
         assertEquals(body.shape, body.blendedShape(body, .5f))
+        body.bodyOverride = FlexSpec.Small.copy(scaleGain = -(16f / 64f) / .24f)
+        body.advance(0f, 0.0, contact = 1f)
+        set(depth, "value", -.2395f); set(depth, "velocity", .005f)
+        assertTrue("selected completion is measured in scale units", body.settled)
+        assertFalse("the raw rectangular metric is a different contract",
+            abs(get(depth, "value") - get(depth, "target")) < .0003f && abs(get(depth, "velocity")) < .003f)
+        assertTrue(body.finishSettlement())
+        assertEquals(-.24f, get(depth, "value"), 0f)
+        assertEquals(0f, get(depth, "velocity"), 0f)
     }
 
     @Test fun completionFinishesBodyAndEachLightIndependentlyAndTransfersEveryRawScalar() {
