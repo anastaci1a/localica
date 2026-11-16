@@ -44,8 +44,6 @@ class RunnerContract(unittest.TestCase):
         (self.root/'.github/test-evidence/source_methods.py').symlink_to((ROOT/'.github/test-evidence/source_methods.py').resolve())
         (self.root/'.github/test-evidence/teardown_offline.py').symlink_to((ROOT/'.github/test-evidence/teardown_offline.py').resolve())
         shutil.copyfile(ROOT/'.github/test-evidence/full_partition.py', self.root/'.github/test-evidence/full_partition.py')
-        policy = self.root/'.github/test-evidence/full_partition.py'
-        policy.write_text(re.sub(r'(?s)DEFERRED = \{.*?\}', 'DEFERRED = {}', policy.read_text(), count=1))
         (self.root/'.github/test-evidence/utp_results.py').symlink_to((ROOT/'.github/test-evidence/utp_results.py').resolve())
         self.executable('bin/node', '''#!/usr/bin/env python3
 import json,pathlib,sys,time

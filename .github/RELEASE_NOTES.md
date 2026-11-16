@@ -8,11 +8,11 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
-- Prepare playback intake, Shuffle, queue reuse, metadata refresh and captured playlist-save inputs on existing workers, preserving occurrence and admission order.
+- Prepare playback intake, Shuffle and metadata refresh on existing workers, preserving occurrence and admission order.
 - Store saved Manual order as occurrence ranks instead of one large JSON row; migrate older saved orders through the shared bounded reader.
 - Prepare Settings search off Main, retaining completed results while a replacement query computes. Update caller tests to await the rendered search target.
 - Reuse immutable browse views and compare filter effect keys by snapshot ownership; broader browse scalability remains open.
-- App Kotlin/Java source grows from 53,376 to 53,455 lines: 172 added, 93 removed, net +79. Ranked durable order and accepted worker ownership account for growth.
+- App Kotlin/Java source grows from 53,376 to 53,451 lines: 163 added, 88 removed, net +75. Ranked durable order and accepted worker ownership account for growth.
 - Refresh shard scheduling from both preceding complete release producers, including risk-preflight results.
 
 ## Resolved issues
@@ -23,12 +23,12 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#1023](https://github.com/anastaci1a/localica/issues/1023): Borrow pinned-song playback input without a Main-thread source copy.
 - [#1024](https://github.com/anastaci1a/localica/issues/1024): Prepare collection Shuffle on the existing command worker.
 - [#1025](https://github.com/anastaci1a/localica/issues/1025): Remove the controller-free browse Shuffle path.
-- [#1026](https://github.com/anastaci1a/localica/issues/1026): Compare reusable queue snapshots on the existing worker.
 - [#1027](https://github.com/anastaci1a/localica/issues/1027): Prepare pending queue input off Main at the saved-queue limit.
 - [#1028](https://github.com/anastaci1a/localica/issues/1028): Rebuild refreshed saved-queue metadata off Main.
-- [#1029](https://github.com/anastaci1a/localica/issues/1029): Borrow captured playlist-save input and prepare it on the worker.
 
 ## Known issues and follow-ups
+
+- [#1026](https://github.com/anastaci1a/localica/issues/1026) and [#1029](https://github.com/anastaci1a/localica/issues/1029): Queue reuse and captured playlist-save work is deferred after the captured-queue Save proof timed out waiting for the IME and stable dialog bounds. Metadata refresh (#1028) remains included.
 
 - [#1020](https://github.com/anastaci1a/localica/issues/1020), [#1021](https://github.com/anastaci1a/localica/issues/1021) and [#1030](https://github.com/anastaci1a/localica/issues/1030): Player and queue presentation work is deferred after queue Save readiness failed its release proof.
 

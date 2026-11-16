@@ -425,10 +425,7 @@ class RestoredSharedNeighborTest(unittest.TestCase):
             'package example\nimport org.junit.Test\nclass RiskTest { @Test fun one() {} }')
 
     def test_every_method_in_the_class_gates_both_apis_without_deferrals(self):
-        self.assertEqual({
-            'io.github.anastaci1a.localica.QueueSaveOriginTest#millionEntrySaveConsumesCapturedSourceOffMainThroughCommittedCompletion':
-                '#1035 playlist save OOM at 1M (owner: playlist storage)',
-        }, partition.DEFERRED)
+        self.assertEqual({}, partition.DEFERRED)
         for api in ('26', '36'):
             plan = partition.plan(self.root, ['example.RiskTest'], api, 'a'*40)
             self.assertEqual([], plan['deferred'])

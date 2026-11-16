@@ -449,10 +449,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     private suspend fun reuse(tracks: List<Track>, selectedIndex: Int, expandPlayer: Boolean,
         sourceName: String, playlistOrigins: List<String?>): Boolean? {
-        val prepared = preparation()
-        val queue = withContext(Dispatchers.Default) { QueueEdits.equivalent(prepared.library, tracks, sourceName, playlistOrigins) }
-        if (!prepared.isCurrent()) return false
-        queue ?: return null
+        val queue = QueueEdits.equivalent(state.value.library, tracks, sourceName, playlistOrigins) ?: return null
         val selected = selectEntry(queue, queue.entries[selectedIndex].id, expandPlayer)
         if (selected) mutable.update { it.copy(pending = null) }
         return selected
