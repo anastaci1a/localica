@@ -76,6 +76,21 @@ class PopupPolicyDetectorTest : LintDetectorTest() {
     """).indented()
     private val dependencies get() = arrayOf(api, modifier, roles, native, homeApi, presenterApi)
 
+    fun testBodyOverrideIsRestrictedToTheSharedActionOwner() {
+        val surface = kotlin(root + "LiquidGlass.kt", """
+            package io.github.anastaci1a.localica.ui
+            fun LiquidGlassSurface(bodyOverride: Int? = null) {}
+        """).indented()
+        appFiles(surface, kotlin(root + "Screen.kt", """
+            package io.github.anastaci1a.localica.ui
+            fun screen() { LiquidGlassSurface(bodyOverride = 1) }
+        """).indented()).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectErrorCount(1)
+        appFiles(surface, kotlin(root + "GlassActionButton.kt", """
+            package io.github.anastaci1a.localica.ui
+            fun action() { LiquidGlassSurface(bodyOverride = 1) }
+        """).indented()).allowMissingSdk().testModes(TestMode.DEFAULT).run().expectClean()
+    }
+
     fun testCalibrationNamedRoleCannotBeBorrowedByAnotherSurface() {
         appFiles(*dependencies, kotlin(root + "Screen.kt", """
             package io.github.anastaci1a.localica.ui

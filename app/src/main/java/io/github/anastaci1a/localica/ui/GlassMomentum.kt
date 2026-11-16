@@ -3,15 +3,12 @@ package io.github.anastaci1a.localica.ui
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import androidx.compose.ui.geometry.Offset
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.exp
-import kotlin.math.tanh
+import kotlin.math.*
 
-/** Logarithmic deformation of an approximate constant-volume cap, not a fluid simulation. */
-internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f) {
-    fun scaleX(vertical: Boolean = false) = exp((if (vertical) -strain else strain) - depth / 2)
-    fun scaleY(vertical: Boolean = false) = exp((if (vertical) strain else -strain) - depth / 2)
+/** Optical cap depth with an optional independently derived body scale. */
+internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f, val scale: Float? = null) {
+    fun scaleX(vertical: Boolean = false) = scale?.let { it * exp(if (vertical) -strain else strain) } ?: exp((if (vertical) -strain else strain) - depth / 2)
+    fun scaleY(vertical: Boolean = false) = scale?.let { it * exp(if (vertical) strain else -strain) } ?: exp((if (vertical) strain else -strain) - depth / 2)
     val thickness get() = exp(depth)
 }
 
@@ -39,16 +36,37 @@ internal fun glassMotionSpeedChange(previous: Float, current: Float): Float {
 }
 
 /** Position is owned by the gesture; acceleration, contact and pressure drive its shape. */
-internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_DAMPING) {
+internal class GlassMomentum(var bodyOverride: FlexSpec? = null) {
     var spec = FlexSpec.Small
     private class Spring {
         var value = 0f
         var velocity = 0f
         var target = 0f
         val settled get() = abs(value - target) < GlassSpringParameters.SETTLED_DISPLACEMENT && abs(velocity) < GlassSpringParameters.SETTLED_VELOCITY
-        fun advance(dt: Float, stiffness: Float, damping: Float) {
-            velocity += (stiffness * (target - value) - damping * velocity) * dt
-            value += velocity * dt
+        fun advance(h: Double, k: Double, c: Double) {
+            val a = c / 2
+            val omega = sqrt(k)
+            val q = sqrt(abs(a - omega) * (a + omega))
+            val b: Double
+            val aa: Double
+            val dd: Double
+            if (a > omega) {
+                val slow = -k / (a + q)
+                val es = exp(slow * h)
+                b = es * -expm1(-2 * q * h) / (2 * q)
+                aa = es - slow * b
+                dd = exp(-(a + q) * h) + slow * b
+            } else {
+                val e = exp(-a * h)
+                val z = q * h
+                b = e * h * if (z == 0.0) 1.0 else sin(z) / z
+                val hh = e * cos(z)
+                aa = hh + a * b
+                dd = hh - a * b
+            }
+            val y = value.toDouble() - target
+            value = (target + aa * y + b * velocity).toFloat()
+            velocity = (-k * b * y + dd * velocity).toFloat()
         }
         fun finish() { value = if (target == 0f) 0f else target; velocity = 0f }
         fun reset() { value = 0f; velocity = 0f; target = 0f }
@@ -63,16 +81,22 @@ internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_
     private val depth = Spring()
     private val light = List(4) { Spring() }
     private var travelVelocity = 0f
+    private var stiffness = (2 * PI / (bodyOverride ?: spec).response).pow(2)
+    private var resistance = (2 * sqrt(stiffness) * (bodyOverride ?: spec).damping).toFloat()
     val strain get() = .12f * tanh(motion.value / .12f) + pressure.value
-    val shape get() = GlassShape(strain, .24f * tanh(depth.value / .24f))
+    private fun shape(strain: Float, depth: Float) = GlassShape(strain, .24f * tanh(depth / .24f), bodyOverride?.scaleGain?.let { 1f + it * depth })
+    val shape get() = shape(strain, depth.value)
+    private val depthSettled get() = bodyOverride?.scaleGain?.let {
+        (it.toDouble() * (depth.target.toDouble() - depth.value)).pow(2) + (it.toDouble() * depth.velocity * resistance / stiffness).pow(2) <= 1e-6
+    } ?: depth.settled
     val scaleX get() = shape.scaleX()
     val scaleY get() = shape.scaleY()
     val glow get() = GlassGlow(light[0].value, light[1].value, Offset(light[2].value, light[3].value))
-    val settled get() = motion.settled && pressure.settled && depth.settled && light.all { it.settled }
+    val settled get() = motion.settled && pressure.settled && depthSettled && light.all { it.settled }
 
     /** Each output finishes independently while the shared clock waits for all channels. */
     fun finishSettlement(): Boolean {
-        if (motion.settled && pressure.settled && depth.settled) { motion.finish(); pressure.finish(); depth.finish() }
+        if (motion.settled && pressure.settled && depthSettled) { motion.finish(); pressure.finish(); depth.finish() }
         light.forEach { if (it.settled) it.finish() }
         return settled
     }
@@ -104,34 +128,36 @@ internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_
     fun blendedShape(other: GlassMomentum, weight: Float, otherAxis: Float = 1f): GlassShape {
         val fraction = weight.coerceIn(0f, 1f)
         fun mix(a: Float, b: Float) = a + (b - a) * fraction
-        return GlassShape(.12f * tanh(mix(motion.value, other.motion.value * otherAxis) / .12f) +
-            mix(pressure.value, other.pressure.value * otherAxis), .24f * tanh(mix(depth.value, other.depth.value) / .24f))
+        return shape(.12f * tanh(mix(motion.value, other.motion.value * otherAxis) / .12f) +
+            mix(pressure.value, other.pressure.value * otherAxis), mix(depth.value, other.depth.value))
     }
 
-    fun advance(velocity: Float, seconds: Float, pressure: Float = 0f, contact: Float = 0f, impulseScale: Float = 1f) {
-        if (!seconds.isFinite() || seconds <= 0f) return
-        val speed = if (velocity.isFinite()) velocity.coerceIn(-30f, 30f) else 0f
-        val speedChange = glassMotionSpeedChange(travelVelocity, speed)
-        // Strain is axial: acceleration stretches and braking compresses along
-        // travel, independent of whether that travel is leftward or rightward.
-        motion.velocity += (speedChange * .11f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.7f, .7f)
-        // Acceleration flattens the cap; braking lets it rise. Contact sustains flattening.
-        depth.velocity -= (speedChange * .035f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.35f, .35f)
-        travelVelocity = speed
+    fun advance(velocity: Float, seconds: Double, pressure: Float = 0f, contact: Float = 0f, impulseScale: Float = 1f, damping: Float = GlassSpringParameters.DEFAULT_DAMPING) {
+        if (!seconds.isFinite() || seconds < 0.0) return
+        if (seconds > 0.0) {
+            motion.advance(seconds, stiffness, resistance.toDouble())
+            this.pressure.advance(seconds, stiffness, resistance.toDouble())
+            depth.advance(seconds, stiffness, resistance.toDouble())
+            val alphaOmega = 2 * PI / if (light[1].target > 0f) FlexGlow.Show else FlexGlow.Hide
+            val centerOmega = 2 * PI / FlexGlow.Follow
+            for (i in light.indices) { val w = if (i < 2) alphaOmega else centerOmega; light[i].advance(seconds, w * w, 2 * w) }
+        }
+        if (seconds > 0.0) {
+            val speed = if (velocity.isFinite()) velocity.coerceIn(-30f, 30f) else 0f
+            val speedChange = glassMotionSpeedChange(travelVelocity, speed)
+            // Strain is axial: acceleration stretches and braking compresses along
+            // travel, independent of whether that travel is leftward or rightward.
+            motion.velocity += (speedChange * .11f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.7f, .7f)
+            // Acceleration flattens the cap; braking lets it rise. Contact sustains flattening.
+            depth.velocity -= (speedChange * .035f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.35f, .35f)
+            travelVelocity = speed
+        } else travelVelocity = 0f
         this.pressure.target = if (pressure.isFinite()) pressure.coerceIn(-.22f, .12f) else 0f
         val held = contact.isFinite() && contact > 0f || abs(this.pressure.target) > .0001f
         depth.target = -.24f * (if (contact.isFinite()) contact.coerceIn(0f, 1f) else 0f) - abs(this.pressure.target) * .3f
         val drag = if (damping.isFinite()) damping.coerceIn(GlassSpringParameters.MIN_DAMPING, GlassSpringParameters.MAX_DAMPING) else GlassSpringParameters.DEFAULT_DAMPING
-        val omega = (2 * PI).toFloat() / if (held) spec.trackingResponse else spec.response
-        val resistance = 2f * omega * (if (held) spec.trackingDamping else spec.damping) * drag / GlassSpringParameters.DEFAULT_DAMPING
-        val alphaOmega = (2 * PI).toFloat() / if (light[1].target > 0f) FlexGlow.Show else FlexGlow.Hide
-        val centerOmega = (2 * PI).toFloat() / FlexGlow.Follow
-        var remaining = seconds.coerceAtMost(.1f)
-        while (remaining > 0f) {
-            val dt = minOf(remaining, 1f / 240f)
-            motion.advance(dt, omega * omega, resistance); this.pressure.advance(dt, omega * omega, resistance); depth.advance(dt, omega * omega, resistance)
-            for (i in light.indices) { val w = if (i < 2) alphaOmega else centerOmega; light[i].advance(dt, w * w, 2f * w) }
-            remaining -= dt
-        }
+        val selected = bodyOverride ?: spec
+        stiffness = (2 * PI / if (held) selected.trackingResponse else selected.response).pow(2)
+        resistance = (2 * sqrt(stiffness) * (if (held) selected.trackingDamping else selected.damping) * drag / GlassSpringParameters.DEFAULT_DAMPING).toFloat()
     }
 }

@@ -21,12 +21,12 @@ class StrainAdmissionTest {
         assertEquals(.48f, StrainDepthSpan, 0f)
     }
     @Test fun pressureDampingTwoPreservesTheActualBodyRelease() {
-        val body=GlassMomentum(2f)
-        repeat(360) { body.advance(0f,1f/120,-.22f,1f) }
+        val body=GlassMomentum()
+        repeat(360) { body.advance(0f, (1f/120).toDouble(),-.22f,1f, damping = 2f) }
         assertTrue("Normal held convergence uses the owning clock completion", body.finishSettlement())
         val(x,v)=state(body,"pressure")
         assertEquals(-.22,x,.000001); assertEquals(0.0,v,0.0)
-        repeat(240) { body.advance(0f,1f/120) }
+        repeat(240) { body.advance(0f, (1f/120).toDouble(), damping = 2f) }
         assertFalse("Existing low damping is deliberately still active after two integration seconds",body.settled)
     }
     @Test fun timeScalingPreservesEachExistingIntegratorSubstepExactly() {

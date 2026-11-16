@@ -119,3 +119,4 @@ SheetDragArgument.target=app/src/main/java/io/github/anastaci1a/localica/ui/comp
 SheetDragArgument.openingChild=app/src/main/java/io/github/anastaci1a/localica/ui/components/SheetDrag.kt
 SheetDragArgument.canStart=app/src/main/java/io/github/anastaci1a/localica/ui/components/SheetDrag.kt
 SheetDragArgument.onDraggingChanged=app/src/main/java/io/github/anastaci1a/localica/ui/components/SheetDrag.kt
+LiquidGlassSurfaceArgument.bodyOverride=app/src/main/java/io/github/anastaci1a/localica/ui/GlassActionButton.kt

@@ -14,7 +14,7 @@ import java.security.MessageDigest
 class GlassGlowTest {
     private fun step(body: GlassMomentum, fps: Int, point: Offset?, held: Float, strength: Float = 1f) {
         body.targetGlow(point, held, strength)
-        body.advance(0f, 1f / fps, contact = held)
+        body.advance(0f, (1f / fps).toDouble(), contact = held)
         body.finishSettlement()
     }
     private fun critical(time: Double, response: Double): Float {
@@ -164,13 +164,13 @@ class GlassGlowTest {
         for (ms in 1..99) {
             val body = GlassMomentum()
             body.targetGlow(Offset(.5f, .5f), 1f, 1f)
-            repeat(ms) { body.advance(0f, .001f, contact = 1f); body.finishSettlement() }
+            repeat(ms) { body.advance(0f, (.001f).toDouble(), contact = 1f); body.finishSettlement() }
             val before = channels(body)
             body.targetGlow(Offset(.5f, .5f), 0f, 1f)
             val after = channels(body)
             for (channel in 0..1) for (field in 0..1) assertEquals(before[channel][field], after[channel][field], 0f)
             repeat(2000) {
-                body.advance(0f, .001f)
+                body.advance(0f, (.001f).toDouble())
                 body.finishSettlement()
                 assertTrue("release at $ms ms", body.glow.big in 0f..1f && body.glow.little in 0f..1f)
             }

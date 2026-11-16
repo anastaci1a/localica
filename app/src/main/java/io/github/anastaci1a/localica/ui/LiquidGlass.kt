@@ -115,7 +115,7 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
 }
 
 @Stable internal class GlassContact(private val inModal: () -> Boolean = { false },
-    private val presentedExpansion: () -> GlassExpansion? = { null }) {
+    private val presentedExpansion: () -> GlassExpansion? = { null }, bodyOverride: FlexSpec? = null) {
     var pressed by mutableStateOf(false)
     var point by mutableStateOf(Offset(.5f, .5f))
     var travel by mutableFloatStateOf(0f)
@@ -133,13 +133,13 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
         }
     private val idleExpansion = GlassExpansion()
     val expansion get() = presentedExpansion() ?: idleExpansion
-    val state = GlassBodyState()
+    val state = GlassBodyState(bodyOverride)
     val body: State<GlassShape> get() = state.output
 }
 
 @Composable
-internal fun rememberGlassContact(shared: GlassContact? = null): GlassContact {
-    val contact = shared ?: remember { GlassContact() }
+internal fun rememberGlassContact(shared: GlassContact? = null, bodyOverride: FlexSpec? = null): GlassContact {
+    val contact = shared ?: remember { GlassContact(bodyOverride = bodyOverride) }
     val visible = LocalGlassVisible.current
     rememberGlassBody({ contact.travel + contact.expansion.value }, contact = { if (contact.pressed) 1f else 0f },
         state = contact.state, active = { visible && contact.active && !contact.modal }, point = { contact.point })
@@ -225,7 +225,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     contactPresentation: (() -> GlassShape)? = null,
     contactAdmission: () -> Boolean = { true },
     presentation: (() -> GlassSurfacePresentation)? = null,
-    content: (@Composable BoxScope.() -> Unit)? = null) {
+    bodyOverride: FlexSpec? = null, content: (@Composable BoxScope.() -> Unit)? = null) {
     val renderer = currentGlassRendererGeneration()
     val flat = renderer.backend == GlassBackend.FlatNone
     val flatColor = flatGlassColor()
@@ -254,17 +254,24 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val coatingDark = coatingLightMix >= .5f
     val ink = if (flat) MaterialTheme.colorScheme.onSurface else inkOverride ?: lerp(Color(0xFF202124), Color.White, lightMix)
     val anchor = modifier.glassSurfaceAnchor(source, cornerRadius)
-    val contact = rememberGlassContact(anchor?.contact ?: sharedContact)
+    val contact = rememberGlassContact(anchor?.contact ?: sharedContact, bodyOverride)
     val contactShape = contactPresentation ?: modifier.glassSurfaceContactPresentation() ?: { contact.body.value }
     val surfaceClip = remember(silhouette, cornerRadius) {
         silhouette?.let { outline -> androidx.compose.foundation.shape.GenericShape { extent, _ ->
             addPath(outline.frame(extent).path)
         } } ?: cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape
     }
+    val reduced = LocalReducedMotion.current
     val flex = FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density,
         minOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density)
     SideEffect {
-        contact.state.momentum.spec = flex
+        val momentum = contact.state.momentum
+        momentum.spec = flex
+        if (bodyOverride != null && anchor == null && sharedContact == null) {
+            val longSide = maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density
+            momentum.bodyOverride = bodyOverride.copy(scaleGain = if (longSide > 0f) -(16f / longSide) / .24f else null)
+            contact.state.output.value = if (reduced) GlassShape() else momentum.shape
+        }
         if (anchor != null) {
             anchor.depthScale = depthScale
             anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)

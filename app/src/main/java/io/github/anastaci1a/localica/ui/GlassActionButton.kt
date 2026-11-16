@@ -4,6 +4,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
@@ -38,7 +39,7 @@ internal fun GlassActionButton(iconOnly: Boolean, icon: AppIcon, label: String, 
     val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Glass action availability")
     androidx.compose.runtime.CompositionLocalProvider(LocalGlassContactName provides label) {
     LiquidGlassSurface(modifier.glassShadowOpacity { opacity }.heightIn(min = CompactControlSize).ownButtonDrag(enabled)
-        .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = controlActivation(enabled, onClick)), pressFeedback = enabled) {
+        .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = controlActivation(enabled, onClick)), pressFeedback = enabled, bodyOverride = FlexSpec.Small) {
         GlassActionButtonFace(iconOnly, icon, label, Modifier.align(Alignment.CenterStart))
     }
     }
