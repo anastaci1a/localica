@@ -72,6 +72,10 @@ class CollectionHeaderPinchFrameTest {
         val queuePreferences = QueuePreferences(context)
         val originalQueuePreferences = queuePreferences.read()
         lateinit var queues: QueueController
+        fun drainPlayback() {
+            runBlocking { withTimeout(5000) { queues.withFileEdit("absent") {} } }
+            compose.runOnIdle { playbackCalls = queues.state.value.playerRequest.toInt() }
+        }
         try {
             queuePreferences.write(QueueSettings())
             compose.runOnUiThread {
@@ -259,20 +263,23 @@ class CollectionHeaderPinchFrameTest {
                 }
                 assertTrue("Every observed transaction has an endpoint-verified handoff", transaction.any { !it.drawn && it.handoff })
             }
+            drainPlayback()
             assertEquals("No pinch/return path triggered an action", 0, playbackCalls)
             compose.mainClock.autoAdvance = true
             list.performScrollToIndex(0)
             compose.waitForIdle()
+            drainPlayback()
+            assertEquals("No pinch/return path triggered an action", 0, playbackCalls)
             allowPlayback = true
             val play = if (artist) "Play selected albums" else "Play album"
             compose.onAllNodesWithContentDescription(play).assertCountEquals(1)
             compose.onNodeWithContentDescription(play).performTouchInput { click() }
-            compose.waitUntil(5000) { playbackCalls == 1 }
+            drainPlayback()
             compose.runOnIdle { assertEquals("The original action still receives coordinate input once", 1, playbackCalls) }
             if (artist) {
                 compose.onAllNodesWithContentDescription("Shuffle selected albums").assertCountEquals(1)
                 compose.onNodeWithContentDescription("Shuffle selected albums").performTouchInput { click() }
-                compose.waitUntil(5000) { playbackCalls == 2 }
+                drainPlayback()
                 compose.runOnIdle { assertEquals(2, playbackCalls) }
             }
         } finally {
@@ -281,9 +288,14 @@ class CollectionHeaderPinchFrameTest {
             if (held) { compose.onNodeWithTag("browser-list").performTouchInput { cancel() }; held = false }
             compose.mainClock.autoAdvance = true
             preferences.write(route, original, overridden)
-            kotlinx.coroutines.runBlocking { queueJob.cancelAndJoin() }
-            queueDb.close()
-            queuePreferences.write(originalQueuePreferences)
+            try {
+                drainPlayback()
+                assertEquals(if (allowPlayback) if (artist) 2 else 1 else 0, playbackCalls)
+            } finally {
+                kotlinx.coroutines.runBlocking { queueJob.cancelAndJoin() }
+                queueDb.close()
+                queuePreferences.write(originalQueuePreferences)
+            }
         }
     }
 
