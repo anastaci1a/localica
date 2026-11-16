@@ -18,7 +18,10 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import androidx.room.Room
+import io.github.anastaci1a.localica.queue.*
 import org.junit.Assert.*
 import org.junit.After
 import org.junit.Rule
@@ -63,7 +66,30 @@ class CollectionHeaderPinchFrameTest {
         var density = 0f
         var allowPlayback = false
         var playbackCalls = 0
+        val queueDb = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+        val queueJob = SupervisorJob()
+        val queueScope = CoroutineScope(queueJob + Dispatchers.Main.immediate)
+        val queuePreferences = QueuePreferences(context)
+        val originalQueuePreferences = queuePreferences.read()
+        lateinit var queues: QueueController
+        fun drainPlayback() {
+            runBlocking { withTimeout(5000) { queues.withFileEdit("absent") {} } }
+            compose.runOnIdle { playbackCalls = queues.state.value.playerRequest.toInt() }
+        }
+        var primaryFailure: Throwable? = null
         try {
+            queuePreferences.write(QueueSettings())
+            compose.runOnUiThread {
+                queues = QueueController(queueDb.queues(), queuePreferences,
+                    (context.applicationContext as LocalicaApplication).library, queueScope)
+                queueScope.launch {
+                    queues.state.map { it.playerRequest }.distinctUntilChanged().collect {
+                        if (it > 0 && !allowPlayback) fail("A pinch must not start playback")
+                        playbackCalls = it.toInt()
+                    }
+                }
+            }
+            compose.waitUntil(5000) { !queues.state.value.loading }
             compose.setContent { LocalicaTheme {
                 val currentDensity = LocalDensity.current.density
                 SideEffect { density = currentDensity }
@@ -72,7 +98,7 @@ class CollectionHeaderPinchFrameTest {
                     LocalCollectionHeaderActionSamplingObserver provides { sampling += it }) {
                     Box(Modifier.fillMaxSize()) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route, {}, {}, {},
-                            { _, _, _ -> if (!allowPlayback) fail("A pinch must not start playback") else playbackCalls++ }, null, null, true, false,
+                            { rows, index, scope -> if (!allowPlayback) fail("A pinch must not start playback") else queues.tap(rows, index, scope, route) }, queues, null, true, false,
                             queryDispatcher = Dispatchers.Unconfined)
                     }
                 }
@@ -238,27 +264,47 @@ class CollectionHeaderPinchFrameTest {
                 }
                 assertTrue("Every observed transaction has an endpoint-verified handoff", transaction.any { !it.drawn && it.handoff })
             }
+            drainPlayback()
             assertEquals("No pinch/return path triggered an action", 0, playbackCalls)
             compose.mainClock.autoAdvance = true
             list.performScrollToIndex(0)
             compose.waitForIdle()
+            drainPlayback()
+            assertEquals("No pinch/return path triggered an action", 0, playbackCalls)
             allowPlayback = true
             val play = if (artist) "Play selected albums" else "Play album"
             compose.onAllNodesWithContentDescription(play).assertCountEquals(1)
             compose.onNodeWithContentDescription(play).performTouchInput { click() }
+            drainPlayback()
             compose.runOnIdle { assertEquals("The original action still receives coordinate input once", 1, playbackCalls) }
             if (artist) {
                 compose.onAllNodesWithContentDescription("Shuffle selected albums").assertCountEquals(1)
                 compose.onNodeWithContentDescription("Shuffle selected albums").performTouchInput { click() }
+                drainPlayback()
                 compose.runOnIdle { assertEquals(2, playbackCalls) }
             }
-        } finally {
-            android.util.Log.i("CollectionHeaderFrames", "artist=$artist frames=${frames.size} last=${frames.takeLast(3)}")
-            compose.mainClock.autoAdvance = false
-            if (held) { compose.onNodeWithTag("browser-list").performTouchInput { cancel() }; held = false }
-            compose.mainClock.autoAdvance = true
-            preferences.write(route, original, overridden)
-        }
+        } catch (failure: Throwable) {
+            primaryFailure = failure
+            throw failure
+        } finally { FixtureRestoration(primaryFailure).apply {
+            attempt("header diagnostics") {
+                android.util.Log.i("CollectionHeaderFrames", "artist=$artist frames=${frames.size} last=${frames.takeLast(3)}")
+            }
+            attempt("pointer cancellation") {
+                compose.mainClock.autoAdvance = false
+                if (held) { compose.onNodeWithTag("browser-list").performTouchInput { cancel() }; held = false }
+            }
+            attempt("test clock") { compose.mainClock.autoAdvance = true }
+            attempt("browse preferences") { preferences.write(route, original, overridden) }
+            attempt("playback drain") {
+                drainPlayback()
+                assertEquals(if (allowPlayback) if (artist) 2 else 1 else 0, playbackCalls)
+            }
+            attempt("queue owner") { runBlocking { queueJob.cancelAndJoin() } }
+            attempt("queue database") { queueDb.close() }
+            attempt("queue preferences") { queuePreferences.write(originalQueuePreferences) }
+            finish()
+        } }
     }
 
     private fun spread(span: Float) {

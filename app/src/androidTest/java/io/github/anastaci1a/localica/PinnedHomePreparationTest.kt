@@ -94,6 +94,8 @@ class PinnedHomePreparationTest {
         compose.onNodeWithTag("pin-${first.id}").performClick()
         compose.runOnIdle {
             val row = requireNotNull(opened?.row)
+            assertEquals(row.track.id, row.id)
+            assertTrue(openedRows.all { it.id == it.track.id })
             assertEquals(first.id, row.track.id)
             assertEquals("Fresh pinned", row.track.title)
             assertEquals(2L, row.track.playCount)

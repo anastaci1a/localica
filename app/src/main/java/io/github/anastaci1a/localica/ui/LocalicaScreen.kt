@@ -35,6 +35,7 @@ import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.LibraryQuery
 import io.github.anastaci1a.localica.library.SongListView
+import io.github.anastaci1a.localica.library.mapView
 import io.github.anastaci1a.localica.playlist.PlaylistController
 import io.github.anastaci1a.localica.playback.PlaybackState
 
@@ -406,7 +407,7 @@ fun LocalicaScreen(
                     PinnedHome(library, playlist, pins, { settingsCategory = "Folders to scan"; settingsOpen = true },
                         { navigation = navigation.open(BrowseRoute(MainTab.Home, globalSearch = true, search = true)) },
                         { item, songs ->
-                            if (item.row != null) queueController?.tap(songs.map { it.track }, songs.indexOfFirst { it.id == item.row.id }, sourceName = "Pinned songs")
+                            if (item.row != null) queueController?.tap(songs.mapView { it.track }, item.row.id, sourceName = "Pinned songs")
                             else openCollection(item)
                         }, ::pin, { ref, offset -> pins = PinEdits.move(pins, ref, offset); pinPreferences.write(pins) }, listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage, playlistController = playlistController, queues = queueController, playerOpen = expanded)
                 } else BrowserScreen(library, playlist, route, {
@@ -415,7 +416,7 @@ fun LocalicaScreen(
                     ::openCollection,
                     { settingsCategory = "Folders to scan"; settingsOpen = true }, { rows, index, scope ->
                         if (index >= 0) {
-                            if (queueController != null) queueController.tap(rows.map { it.track }, index, scope, io.github.anastaci1a.localica.browse.queueSourceName(route, rows.map { it.track }), rows.map { it.sourcePlaylistId })
+                            if (queueController != null) queueController.tap(rows, index, scope, route)
                             else onPlay(rows[index].track)
                         }
                     }, queueController, playlistController, playback.connected, expanded, pins, ::pin,

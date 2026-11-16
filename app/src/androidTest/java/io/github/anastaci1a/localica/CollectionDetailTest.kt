@@ -19,6 +19,7 @@ import org.junit.Test
 
 class CollectionDetailTest {
     @get:Rule val compose = createComposeRule()
+    private val queues get() = (androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as LocalicaApplication).queues
     private val tracks = (0..5).map { Track("collection:$it", "Song $it", artist = "Artist", albumArtist = "Artist",
         album = if (it < 3) "First album" else "Second album", trackNumber = it % 3 + 1,
         fileName = "$it.mp3", relativePath = "$it.mp3") }
@@ -29,7 +30,7 @@ class CollectionDetailTest {
         compose.setContent { LocalicaTheme {
             BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(),
                 BrowseRoute(MainTab.Artists, MediaRef(MediaKind.Artist, artist.id), "Artist"), {}, {}, {},
-                { _, _, _ -> }, null, null, true, false, queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+                { _, _, _ -> }, queues, null, true, false, queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
         } }
         val trigger = compose.onNodeWithTag("browse-options-trigger").fetchSemanticsNode().boundsInRoot
         for (label in listOf("Sort", "View options")) {
@@ -78,7 +79,7 @@ class CollectionDetailTest {
                 Box(Modifier.weight(1f)) {
                     key(route.key) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route,
-                            {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                            {}, {}, {}, { _, _, _ -> }, queues, null, true, false,
                             sorting = rootSorting, onSortDismiss = { rootSorting = false },
                             presentationOnly = rootView, sortOrigin = rootAnchor,
                             queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
@@ -122,7 +123,7 @@ class CollectionDetailTest {
         compose.setContent { LocalicaTheme {
             BrowserScreen(LibraryUiState(currentSnapshot, loading = false), PlaylistState(),
                 BrowseRoute(tab, MediaRef(kind, artist.id), "Artist"), {}, {}, {},
-                { rows, _, _ -> played = rows.map { it.track } }, null, null, true, false,
+                { rows, _, _ -> played = rows.map { it.track } }, queues, null, true, false,
                 queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
         } }
         compose.onNodeWithContentDescription("Play selected albums").performClick()
@@ -169,7 +170,7 @@ class CollectionDetailTest {
         compose.setContent { LocalicaTheme {
             BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(),
                 BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, album.id), album.title), {}, {}, {},
-                { rows, _, _ -> played = rows.map { it.track } }, null, null, true, false,
+                { rows, _, _ -> played = rows.map { it.track } }, queues, null, true, false,
                 queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
         } }
         compose.onNodeWithText("Search ${album.title}").assertDoesNotExist()

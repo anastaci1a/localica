@@ -14,6 +14,10 @@ import io.github.anastaci1a.localica.playback.RecoveryAdmission
 import io.github.anastaci1a.localica.library.documentIdentity
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.SongListView
+import io.github.anastaci1a.localica.library.SongRow
+import io.github.anastaci1a.localica.library.mapView
+import io.github.anastaci1a.localica.navigation.BrowseRoute
+import io.github.anastaci1a.localica.browse.queueSourceName
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -345,9 +349,16 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         } }
     }
 
-    fun tap(tracks: List<Track>, selectedId: String) = tap(tracks, tracks.indexOfFirst { it.id == selectedId })
+    fun tap(tracks: List<Track>, selectedId: String, sourceName: String = "All Songs") = submit {
+        perform(tracks, withContext(Dispatchers.Default) { tracks.indexOfFirst { it.id == selectedId } }, state.value.settings.tapFor(SongListView.Songs), batch = false, sourceName = sourceName)
+    }
     fun tap(tracks: List<Track>, selectedIndex: Int, view: SongListView = SongListView.Songs, sourceName: String = "All Songs", playlistOrigins: List<String?> = emptyList()) = submit {
         perform(tracks, selectedIndex, state.value.settings.tapFor(view), batch = false, sourceName = sourceName, playlistOrigins = playlistOrigins)
+    }
+    fun tap(rows: List<SongRow>, selectedIndex: Int, view: SongListView, route: BrowseRoute) = submit {
+        val tracks = rows.mapView(SongRow::track)
+        val name = withContext(Dispatchers.Default) { queueSourceName(route, tracks) }
+        perform(tracks, selectedIndex, state.value.settings.tapFor(view), batch = false, sourceName = name, playlistOrigins = rows.mapView(SongRow::sourcePlaylistId))
     }
     /** Explicit selection actions bypass all tap preferences and preserve displayed occurrence order. */
     fun act(tracks: List<Track>, action: SongTap, playlistOrigins: List<String?> = emptyList(), complete: (Boolean) -> Unit = {}) = submit(reject = { complete(false) }) {
@@ -371,13 +382,13 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
 
     /** Randomize the saved visible order without enabling traversal shuffle. */
     fun randomizedQueue(tracks: List<Track>, sourceName: String, playlistOrigins: List<String?> = emptyList()) = submit {
-        val order = tracks.indices.shuffled()
-        perform(order.map(tracks::get), 0, SongTap.NewQueue, batch = true, sourceName = sourceName,
-            playlistOrigins = order.map { playlistOrigins.getOrNull(it) })
+        val order = withContext(Dispatchers.Default) { tracks.indices.shuffled() }
+        perform(order.mapView(tracks::get), 0, SongTap.NewQueue, batch = true, sourceName = sourceName,
+            playlistOrigins = order.mapView { playlistOrigins.getOrNull(it) })
     }
 
     private suspend fun perform(tracks: List<Track>, selectedIndex: Int, action: SongTap, batch: Boolean, sourceName: String = "Selected songs", playlistOrigins: List<String?> = emptyList()): Boolean {
-        val selected = tracks.getOrNull(selectedIndex) ?: return false
+        val selected = withContext(Dispatchers.Default) { tracks.getOrNull(selectedIndex) } ?: return false
         pendingComplete?.invoke(false); pendingComplete = null
         if (state.value.pending != null) mutable.update { it.copy(pending = null) }
         capture()
@@ -386,7 +397,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         if (action == SongTap.NewQueue || current == null) {
             reuse(tracks, selectedIndex, expand, sourceName, playlistOrigins)?.let { return it }
             if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, emptySet())) {
-                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand, sourceName, playlistOrigins)) }
+                val snapshot = withContext(Dispatchers.Default) { tracks.toList() }
+                mutable.update { it.copy(pending = PendingQueue(snapshot, selectedIndex, QueueEdits.oldestInactive(it.library), expand, sourceName, playlistOrigins)) }
                 return false
             } else return create(tracks, selectedIndex, emptySet(), expand, sourceName, playlistOrigins)
         } else {

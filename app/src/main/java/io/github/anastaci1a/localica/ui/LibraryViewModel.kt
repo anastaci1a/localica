@@ -81,11 +81,7 @@ class LibraryViewModel(
             finally { mutableLibrary.update { it.copy(updatingFolders = false) }; refreshAccess() }
         }
     }
-    fun play(track: Track) {
-        val tracks = library.value.snapshot.tracks
-        val index = tracks.indexOfFirst { it.id == track.id }
-        if (index >= 0) playback.queues.tap(tracks, index)
-    }
+    fun play(track: Track) { playback.queues.tap(library.value.snapshot.tracks, track.id) }
     fun refreshAccess() {
         refreshFolderAccess(accessRequests, viewModelScope, Dispatchers.IO, library.value.snapshot.folders,
             { library.value.snapshot.folders }, { repository.unavailableFolders(it) }) { missing ->
