@@ -5035,7 +5035,7 @@
         errorLine2="                                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="60"
+            line="69"
             column="57"/>
     </issue>
 
@@ -5046,63 +5046,63 @@
         errorLine2="                                                                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="63"
+            line="73"
             column="91"/>
     </issue>
 
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {"
-        errorLine2="                                                     ~~~~~">
+        errorLine1="    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {"
+        errorLine2="                                         ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="96"
-            column="54"/>
+            line="77"
+            column="42"/>
     </issue>
 
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {"
-        errorLine2="                                                                       ~~~~">
+        errorLine1="    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {"
+        errorLine2="                                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="96"
-            column="72"/>
+            line="77"
+            column="60"/>
     </issue>
 
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {"
-        errorLine2="                                                                                                                         ~~~~">
+        errorLine1="    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {"
+        errorLine2="                                                                                                             ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="96"
-            column="122"/>
+            line="77"
+            column="110"/>
     </issue>
 
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {"
-        errorLine2="                                                                                              ~~~~">
+        errorLine1="        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {"
+        errorLine2="                                                                                  ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="97"
-            column="95"/>
+            line="78"
+            column="83"/>
     </issue>
 
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {"
-        errorLine2="                                                                                              ~~~~">
+        errorLine1="        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {"
+        errorLine2="                                                                                  ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="114"
-            column="95"/>
+            line="95"
+            column="83"/>
     </issue>
 
     <issue
@@ -5112,18 +5112,18 @@
         errorLine2="                                                                  ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="140"
+            line="130"
             column="67"/>
     </issue>
 
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="            val showHeading = maxHeight >= 240.dp"
+        errorLine1="            val showHeading = maxHeight &gt;= 240.dp"
         errorLine2="                                           ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="141"
+            line="131"
             column="44"/>
     </issue>
 
@@ -5134,7 +5134,7 @@
         errorLine2="                                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="142"
+            line="132"
             column="48"/>
     </issue>
 
@@ -5145,7 +5145,7 @@
         errorLine2="                                                                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="143"
+            line="133"
             column="68"/>
     </issue>
 
@@ -5156,7 +5156,7 @@
         errorLine2="                                                                                     ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="143"
+            line="133"
             column="86"/>
     </issue>
 
@@ -5167,7 +5167,7 @@
         errorLine2="                                                                                ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="144"
+            line="134"
             column="81"/>
     </issue>
 
@@ -5178,7 +5178,7 @@
         errorLine2="                                                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="145"
+            line="135"
             column="61"/>
     </issue>
 
@@ -5189,7 +5189,7 @@
         errorLine2="                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="153"
+            line="143"
             column="51"/>
     </issue>
 
@@ -5200,7 +5200,7 @@
         errorLine2="                                                                    ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="153"
+            line="143"
             column="69"/>
     </issue>
 
@@ -5211,7 +5211,7 @@
         errorLine2="                                                                                                                       ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="175"
+            line="165"
             column="120"/>
     </issue>
 
@@ -8434,74 +8434,74 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="60"
+            line="69"
             column="9"/>
     </issue>
 
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {"
-        errorLine2="                ~~~~~~">
+        errorLine1="    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {"
+        errorLine2="    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="96"
+            line="77"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="NonPresetScreenLayout"
+        message="Use stock screen layout slots"
+        errorLine1="        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {"
+        errorLine2="        ~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
+            line="78"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="NonPresetScreenLayout"
+        message="Use stock screen layout slots"
+        errorLine1="                Box(Modifier.fillMaxWidth().height(CompactControlSize).ownButtonDrag(state.library.queues.isNotEmpty())"
+        errorLine2="                ~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
+            line="81"
             column="17"/>
     </issue>
 
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {"
-        errorLine2="                    ~~~">
+        errorLine1="            Box {"
+        errorLine2="            ~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
+            line="85"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="NonPresetScreenLayout"
+        message="Use stock screen layout slots"
+        errorLine1="        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {"
+        errorLine2="        ~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
+            line="95"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="NonPresetScreenLayout"
+        message="Use stock screen layout slots"
+        errorLine1="            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {"
+        errorLine2="            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
             line="97"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="                            Box(Modifier.fillMaxWidth().height(CompactControlSize).ownButtonDrag(state.library.queues.isNotEmpty())"
-        errorLine2="                            ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="100"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="                        Box {"
-        errorLine2="                        ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="104"
-            column="25"/>
-    </issue>
-
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {"
-        errorLine2="                    ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="114"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {"
-        errorLine2="                        ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="116"
-            column="25"/>
+            column="13"/>
     </issue>
 
     <issue
@@ -8511,7 +8511,7 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="140"
+            line="130"
             column="9"/>
     </issue>
 
@@ -8522,7 +8522,7 @@
         errorLine2="            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="142"
+            line="132"
             column="13"/>
     </issue>
 
@@ -8533,7 +8533,7 @@
         errorLine2="                                 ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="143"
+            line="133"
             column="34"/>
     </issue>
 
@@ -8544,7 +8544,7 @@
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="192"
+            line="182"
             column="17"/>
     </issue>
 
@@ -8555,7 +8555,7 @@
         errorLine2="                        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="198"
+            line="188"
             column="25"/>
     </issue>
 

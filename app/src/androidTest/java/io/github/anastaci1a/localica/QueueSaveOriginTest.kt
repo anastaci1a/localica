@@ -286,7 +286,9 @@ class QueueSaveOriginTest {
             if (entries == null) it else it.copy(entries = entries, currentEntryId = entries[1].id,
                 order = io.github.anastaci1a.localica.library.SavedOrder(emptyList()))
         }
-        var state by mutableStateOf(QueueUiState(QueueLibrary(listOf(playing, browsed), playing.id), loading = entries != null, browsedId = browsed.id))
+        var state by mutableStateOf(runBlocking(kotlinx.coroutines.Dispatchers.Default) {
+            QueueUiState(QueueLibrary(listOf(playing, browsed), playing.id), loading = entries != null, browsedId = browsed.id).resolvePlayerQueue()
+        })
         val originalQueue = state.copy()
         val selection = SessionSelection().apply {
             select(MediaRef(MediaKind.Queue, browsed.id), listOf(browsed.entries[1].let { SongRow(it.id, it.track) }))

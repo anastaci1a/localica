@@ -19,8 +19,9 @@ internal fun AsyncSpinnerSlot(modifier: Modifier) {
 }
 
 @Composable
-internal fun AsyncSectionRowSlot(modifier: Modifier, content: @Composable () -> Unit) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(StockUiSpec.space.getValue(Space.Compact))) { content() }
+internal fun AsyncSectionColumnSlot(modifier: Modifier,
+    arrangement: Arrangement.Vertical = Arrangement.spacedBy(StockUiSpec.space.getValue(Space.Compact)), content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier, verticalArrangement = arrangement, content = content)
 }
 
 @Composable

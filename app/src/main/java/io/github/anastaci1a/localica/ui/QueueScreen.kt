@@ -1,10 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.text.style.TextOverflow
-import io.github.anastaci1a.localica.R
 import androidx.compose.foundation.clickable
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -19,8 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import io.github.anastaci1a.localica.ui.components.MorphPersistentTitle
 import io.github.anastaci1a.localica.ui.components.rememberPopupSharedContent
@@ -35,7 +29,10 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
     enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null, listBackEnabled: Boolean = false, playerOpen: Boolean = false, openingRequest: Long = 0,
-    headerShadowStrengthOverride: Float? = null) {
+    headerShadowStrengthOverride: Float? = null, presentation: State<QueuePresentation?>? = null) {
+    val prepared = (presentation ?: rememberQueuePresentation(state, library.snapshot)).value
+    val resolved = state.resolvedPlayerQueue?.takeIf { it.library === state.library && it.browsedId == state.browsedId }
+    val state = prepared?.state ?: state
     var selector by remember { mutableStateOf(false) }
     val selectorAnchor = rememberGlassAnchor()
     val sortAnchor = rememberGlassAnchor()
@@ -43,35 +40,19 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     val menuAnchor = rememberGlassAnchor()
     val removeOthersAnchor = rememberGlassAnchor()
     var deletionOrigin by remember { mutableStateOf<GlassAnchor?>(null) }
-    var renameId by remember { mutableStateOf<String?>(null) }
+    var renaming by remember { mutableStateOf<ListeningQueue?>(null) }
     var deleting by remember { mutableStateOf<Set<String>?>(null) }
     var saving by remember { mutableStateOf<List<QueueEntry>?>(null) }
     var menu by remember { mutableStateOf(false) }
     var sorting by remember { mutableStateOf(false) }
-    val active = state.library.queues.firstOrNull { it.id == state.browsedId } ?: state.library.active
-    val queueNumber = state.library.queues.indexOfFirst { it.id == active?.id } + 1
-    val selectorLabel = active?.let { "$queueNumber. ${it.name}" } ?: "Queues"
+    val active = if (prepared == null) resolved?.browsed else prepared.browsed?.queue
+    val selectorLabel = active?.let { "${prepared?.number ?: resolved?.number}. ${it.name}" } ?: "Queues"
     val nameMorph = rememberPopupSharedContent(selectorAnchor) {
         MorphPersistentTitle(selectorLabel, MaterialTheme.typography.titleMedium, MaterialTheme.typography.bodyLarge) {
             MarqueeTitle(selectorLabel, reducedMotion, style = MaterialTheme.typography.bodyLarge)
         }
     }
-    @Composable fun SelectorFace(copy: Boolean = false) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (copy) nameMorph.CompactCopy(Modifier.weight(1f))
-            else nameMorph.Compact(Modifier.weight(1f))
-            Icon(appIconPainter(AppIcon.ActionChevronDown), "Select queue", Modifier.size(24.dp))
-        }
-    }
-    val position = remember(active?.entries, active?.currentEntryId) {
-        active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
-    }
-    val duration = remember(active?.entries) {
-        active?.let { formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()) }
-    }
-    // Restoration ignores rememberSaveable inputs, and the drawer removes this screen while
-    // closed. Key the saved navigation by queue so a queue activated meanwhile (#500) cannot
-    // reopen onto the previously browsed queue's rows.
+    // Queue-scoped saved navigation prevents reopening onto another queue's rows.
     var browsing by rememberSaveable(active?.id, key = "queue-navigation:${active?.id.orEmpty()}", saver =navigationStateSaver { state -> state.takeIf { it.active == MainTab.Queues } }) {
         mutableStateOf(NavigationState(MainTab.Queues, mapOf(MainTab.Queues to listOf(BrowseRoute(MainTab.Queues,
             MediaRef(MediaKind.Queue, active?.id.orEmpty()), active?.name ?: "Queue")))))
@@ -82,54 +63,63 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     val route = browsing.route
     BackHandler(browsing.stacks.getValue(MainTab.Queues).size > 1) { browsing.back(false)?.let { browsing = it } }
     val browseHolder = rememberSaveableStateHolder()
-    // Saved scroll state may survive, but drawing nodes must belong to this route.
-    // Reusing the old queue's recorded children can leave stale clip/ink layers.
+    io.github.anastaci1a.localica.ui.layout.AsyncSectionColumnSlot(Modifier.fillMaxSize(), Arrangement.Top) {
+    AsyncSection(prepared, Modifier.weight(1f), chrome = { visible ->
+    @Composable fun SelectorFace(copy: Boolean = false) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (visible == null) AsyncValueText(null, "Queues", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            else if (copy) nameMorph.CompactCopy(Modifier.weight(1f))
+            else nameMorph.Compact(Modifier.weight(1f))
+            Icon(appIconPainter(AppIcon.ActionChevronDown), "Select queue", Modifier.size(24.dp))
+        }
+    }
+    val content: @Composable () -> Unit = {
+    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            onMinimize?.let { ActionIcon(AppIcon.ActionChevronDown, "Minimize queue", onClick = it) }
+            LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor, face = { SelectorFace(copy = true) })) {
+                Box(Modifier.fillMaxWidth().height(CompactControlSize).ownButtonDrag(state.library.queues.isNotEmpty())
+                    .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { selectorAnchor.captureInk(); SelectorFace() }
+
+            }
+            Box {
+                ActionIcon(AppIcon.ActionEllipsis, "Queue actions", anchor = menuAnchor) { menu = true }
+                GlassMenu(menu, menuAnchor, { menu = false }) {
+                    ActionMenuItem("Rename", icon = AppIcon.ActionEdit, enabled = active != null, onClick = { menu = false; renaming = active })
+                    ActionMenuItem("Delete", icon = AppIcon.ActionTrash, enabled = active != null, onClick = { menu = false; deleting = setOfNotNull(active?.id) })
+                    if (state.library.queues.size > 1) ActionMenuItem("Remove others", icon = AppIcon.ActionTrash,
+                        onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            ActionIcon(AppIcon.ActionSort, "Sort queue", anchor = sortAnchor) { sorting = true }
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                AsyncValueText(visible?.let { "${(it.browsed?.index ?: -1) + 1} / ${active?.entries?.size ?: 0}" }, "0 / 0", style = MaterialTheme.typography.titleSmall)
+                AsyncValueText(visible?.let { if (active == null) "0:00" else formatTime(it.browsed?.duration) }, "0:00", style = MaterialTheme.typography.bodySmall)
+            }
+            ActionIcon(AppIcon.ActionListAddLast, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true,
+                anchor = saveAnchor) { saving = active?.entries }
+
+        }
+        if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if ((prepared != null || resolved != null) && active == null) Text("Tap a song in Library to start a queue.")
+    }
+    }
+    val strength = headerShadowStrengthOverride
+    if (strength == null) content()
+    else CompositionLocalProvider(LocalGlassAppearance provides
+        LocalGlassAppearance.current.copy(shadowStrength = strength), content = content)
+    }) { ready ->
+    // Live drawing/focus nodes belong to this route even when saved scroll state survives.
     key(route.key) { browseHolder.SaveableStateProvider(route.key) {
         BrowserScreen(library, playlists, route, { browsing = browsing.update(it) }, onOpen, {}, { rows, index, _ ->
             rows.getOrNull(index)?.let { controller?.selectEntry(it.id) }
-        }, controller, playlistController, enabled, playerOpen, pins, onPin, sorting, { sorting = false }, state,
+        }, controller, playlistController, enabled, playerOpen, pins, onPin, sorting, { sorting = false }, ready.state,
             playingEntryId = active?.takeIf { it.id == state.library.activeId }?.currentEntryId,
-            queueOpeningRequest = openingRequest, header = {
-                // Diagnostic opt-in affects only header shadows, never the list/Search material.
-                // The ordinary null path installs no additional provider or layout/input node.
-                val content: @Composable () -> Unit = {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        onMinimize?.let { ActionIcon(AppIcon.ActionChevronDown, "Minimize queue", onClick = it) }
-                        LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor, face = { SelectorFace(copy = true) })) {
-                            Box(Modifier.fillMaxWidth().height(CompactControlSize).ownButtonDrag(state.library.queues.isNotEmpty())
-                                .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { selectorAnchor.captureInk(); SelectorFace() }
-
-                        }
-                        Box {
-                            ActionIcon(AppIcon.ActionEllipsis, "Queue actions", anchor = menuAnchor) { menu = true }
-                            GlassMenu(menu, menuAnchor, { menu = false }) {
-                                ActionMenuItem("Rename", icon = AppIcon.ActionEdit, enabled = active != null, onClick = { menu = false; renameId = active?.id })
-                                ActionMenuItem("Delete", icon = AppIcon.ActionTrash, enabled = active != null, onClick = { menu = false; deleting = setOfNotNull(active?.id) })
-                                if (state.library.queues.size > 1) ActionMenuItem("Remove others", icon = AppIcon.ActionTrash,
-                                    onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })
-                            }
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ActionIcon(AppIcon.ActionSort, "Sort queue", anchor = sortAnchor) { sorting = true }
-                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(position ?: "0 / 0", style = MaterialTheme.typography.titleSmall)
-                            Text(duration ?: "0:00", style = MaterialTheme.typography.bodySmall)
-                        }
-                        ActionIcon(AppIcon.ActionListAddLast, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true,
-                            anchor = saveAnchor) { saving = active?.entries }
-
-                    }
-                    if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    if (active == null) Text("Tap a song in Library to start a queue.")
-                }
-                }
-                val strength = headerShadowStrengthOverride
-                if (strength == null) content()
-                else CompositionLocalProvider(LocalGlassAppearance provides
-                    LocalGlassAppearance.current.copy(shadowStrength = strength), content = content)
-            }, listBackEnabled = listBackEnabled, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() }, sortOrigin = sortAnchor)
+            queueOpeningRequest = openingRequest, listBackEnabled = listBackEnabled, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() }, sortOrigin = sortAnchor)
+    }
+    }
     }
     }
     if (saving != null) CompositionLocalProvider(LocalGlassOrigin provides saveAnchor) {
@@ -146,7 +136,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 }
                 QueueSelectorList(state.library.queues, active?.id, state.library.activeId, isPlaying, reducedMotion,
                     enabled = selector && enabled && controller != null, modifier = Modifier.weight(1f, fill = false),
-                    onSelect = { controller?.switchTo(it); selector = false }, onRename = { renameId = it },
+                    onSelect = { controller?.switchTo(it); selector = false }, onRename = { renaming = it },
                     onDelete = { deleting = setOf(it) }, onOffset = { id, offset -> controller?.moveQueue(id, offset) },
                     onMove = { id, before, complete -> controller?.moveQueueBefore(id, before, complete) ?: complete(false) })
                 if (state.library.queues.size > 1) GlassActionButton(AppIcon.ActionTrash, "Remove all other queues",
@@ -160,12 +150,12 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         }
     }
     }
-    state.library.queues.firstOrNull { it.id == renameId }?.let { queue ->
+    renaming?.let { queue ->
         var name by remember(queue.id) { mutableStateOf(queue.name) }
-        GlassAlertDialog(onDismissRequest = { renameId = null }, title = { Text("Rename queue") },
+        GlassAlertDialog(onDismissRequest = { renaming = null }, title = { Text("Rename queue") },
             text = { GlassTextField(name, { name = it }, label = { Text("Queue name") }) },
-            confirmButton = { ActionTextButton(enabled = name.isNotBlank(), onClick = { controller?.rename(queue.id, name); renameId = null }) { Text("Save") } },
-            dismissButton = { ActionTextButton(onClick = { renameId = null }) { Text("Cancel") } })
+            confirmButton = { ActionTextButton(enabled = name.isNotBlank(), onClick = { controller?.rename(queue.id, name); renaming = null }) { Text("Save") } },
+            dismissButton = { ActionTextButton(onClick = { renaming = null }) { Text("Cancel") } })
     }
     deleting?.let { ids -> CompositionLocalProvider(LocalGlassOrigin provides deletionOrigin) {
         fun dismissDeletion() { deleting = null; deletionOrigin = null }
