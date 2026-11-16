@@ -166,7 +166,16 @@ class PlayerTrackProjectionTest {
             compose.onNodeWithTag("async-section-loading").assertDoesNotExist()
             compose.onNodeWithText("1. Motion queue").assertExists()
             compose.onNodeWithText("1 / 3").assertExists()
-            compose.onNodeWithText(songs[0].title).assertExists()
+            try {
+                compose.waitUntil(10_000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.onAllNodesWithText(songs[0].title).fetchSemanticsNodes().isNotEmpty()
+                }
+                compose.onNodeWithText(songs[0].title).assertExists()
+            } catch (failure: Throwable) {
+                println(compose.onRoot(true).printToString())
+                throw failure
+            }
         } finally { compose.mainClock.autoAdvance = true }
     }
 
