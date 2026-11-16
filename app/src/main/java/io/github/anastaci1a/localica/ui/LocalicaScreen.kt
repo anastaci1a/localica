@@ -102,14 +102,13 @@ fun LocalicaScreen(
     val prepared = queuePresentation.value
     val playerPresentation = prepared?.takeIf { it.state === queues && it.library.tracks === library.snapshot.tracks && it.library.trackPlays === library.snapshot.trackPlays }
     val playerTracks = prepared?.playerTracks(queues, library.snapshot)
-    val queues = prepared?.state ?: queues
     val warmRoutes = remember(navigation.stacks, settings.tabs, prepared) {
         val pages = settings.tabs.map { navigation.stacks[it]?.lastOrNull() ?: BrowseRoute(it) }
             .filterNot { it.collection == null && !it.search && it.tab in setOf(MainTab.Home, MainTab.Queues) }
         pages + listOfNotNull(prepared?.browsed?.queue?.let { BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, it.id), it.name) })
     }
-    WarmBrowsePresentations(presentationCache, library.snapshot, playlist.playlists, queues.library.queues, libraryFilters, warmRoutes, browseSorts,
-        libraryLoading = library.loading, playlistsLoading = playlist.loading, queuesLoading = queues.loading)
+    WarmBrowsePresentations(presentationCache, library.snapshot, playlist.playlists, prepared?.state?.library?.queues.orEmpty(), libraryFilters, warmRoutes, browseSorts,
+        libraryLoading = library.loading, playlistsLoading = playlist.loading, queuesLoading = prepared?.state?.loading != false)
     val artworkStore = remember { BrowseArtworkStore() }
     val retainedRoutes = remember(navigation, settings.tabHistory) {
         val retained = navigation.stacks.values.mapNotNull { it.lastOrNull()?.key }.toMutableSet()

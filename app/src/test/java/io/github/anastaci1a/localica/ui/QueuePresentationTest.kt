@@ -106,4 +106,27 @@ class QueuePresentationTest {
         assertEquals(0, entries.reads)
         assertEquals(0, tracks.reads)
     }
+
+    @Test fun preparedArtworkWindowsAlwaysResolveTheirOwnSourceOrdinals() {
+        val original = queue("artwork", List(140) { QueueEntry("entry-$it", track("song-$it")) }, "entry-70")
+        for (shuffle in listOf(false, true)) for (loop in listOf(false, true)) for (reshuffle in listOf(false, true)) {
+            val modes = JourneyModes(shuffle, loop, reshuffle)
+            val prepared = original.copy(journey = QueueJourney.start(original.ids, original.currentEntryId, modes, kotlin.random.Random(1)))
+            val edited = prepared.copy(entries = original.entries.reversed().map { it.copy(track = it.track.copy(uri = it.track.uri + "?edited")) })
+            val repaired = edited.copy(journey = edited.journey!!.reconcile(edited.ids, edited.currentEntryId, modes, kotlin.random.Random(2)))
+            for (queue in listOf(prepared, prepared.copy(positionMs = 9000), repaired)) {
+                val journey = queue.journey!!
+                assertTrue(journey.artworkWindow().isNotEmpty())
+                for (visit in journey.window()) {
+                    val ordinal = journey.sourceOrdinal(queue.ids, visit.entryId)
+                    assertNotNull("Every exposed visit owns a source ordinal", ordinal)
+                    assertEquals(visit.entryId, queue.entries[ordinal!!].id)
+                }
+                val expected = journey.artworkWindow().map { visit -> queue.entries.first { it.id == visit.entryId }.track.uri }.distinct()
+                assertEquals(expected, queue.artworkPreloadUris())
+                val neighbors = listOf(journey.next, journey.previous).map { visit -> queue.entries.firstOrNull { it.id == visit?.entryId }?.track?.uri }
+                assertEquals(neighbors, queue.artworkNeighbors())
+            }
+        }
+    }
 }

@@ -37,6 +37,26 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    @Test fun artworkWindowsDoNotNeedTheNativeResolvedFallback() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        barrier()
+        withContext(Dispatchers.Main) {
+            val queue = queues.state.value.library.active!!
+            val resolve = QueueController::class.java.declaredMethods.single { it.name == "visitTrack" }.apply { isAccessible = true }
+            fun legacy(source: ListeningQueue, entryId: String?) = resolve.invoke(queues, source, entryId) as Track?
+            val cold = queue.copy(journey = queue.journey!!.copy())
+            assertNull(cold.visitTrack(cold.currentEntryId))
+            assertNotNull("Native receipts still resolve outside the prepared window", legacy(cold, cold.currentEntryId))
+            assertNull(legacy(cold.copy(id = "different-queue"), cold.currentEntryId))
+            assertEquals(listOf(null, null), cold.artworkNeighbors())
+            assertTrue(cold.artworkPreloadUris().isEmpty())
+            assertTrue(queue.journey!!.artworkWindow().isNotEmpty())
+            for (visit in queue.journey!!.window()) assertNotNull(queue.journey!!.sourceOrdinal(queue.ids, visit.entryId))
+            assertEquals(listOf(queue.journey!!.next, queue.journey!!.previous).map { legacy(queue, it?.entryId)?.uri }, queue.artworkNeighbors())
+            assertEquals(queue.journey!!.artworkWindow().mapNotNull { legacy(queue, it.entryId)?.uri }.distinct(), queue.artworkPreloadUris())
+        }
+    }
+
     private suspend fun Fixture.selectWithFrozenNativePath() = withContext(Dispatchers.Main) {
         val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
         @Suppress("UNCHECKED_CAST")

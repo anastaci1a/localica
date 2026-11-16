@@ -188,7 +188,7 @@ class PlayerTrackProjectionTest {
         var source by mutableStateOf(QueueUiState(QueueLibrary(catalog, preview.id), loading = false))
         val native = io.github.anastaci1a.localica.playback.PlaybackState()
         var progress = Float.NaN
-        fun publish(next: QueueUiState, ready: SemanticsMatcher, afterRelease: () -> Unit = {}, settled: (() -> Unit)? = null, choices: () -> Unit) {
+        fun publish(next: QueueUiState, ready: SemanticsMatcher, afterRelease: () -> Unit = {}, settled: (() -> Unit)? = null, pending: () -> Unit = {}, choices: () -> Unit) {
             val hook = AtomicReference<(() -> Unit)?>(null)
             val incoming = Counted(next.library.queues)
             incoming.beforeRead = { hook.getAndSet(null)?.invoke() }
@@ -203,6 +203,7 @@ class PlayerTrackProjectionTest {
                 compose.waitForIdle()
                 assertTrue(started.await(10, TimeUnit.SECONDS))
                 choices()
+                pending()
                 release.countDown()
                 afterRelease()
                 compose.waitUntil(10_000) { compose.onAllNodes(ready, true).fetchSemanticsNodes().isNotEmpty() }
@@ -222,7 +223,14 @@ class PlayerTrackProjectionTest {
             compose.onNodeWithTag("player-surface").performClick()
             compose.waitUntil(10_000) { progress == 1f }
             val title = hasText("preview") and (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title")))
-            publish(source.copy(settings = source.settings.copy(preloadNext = false)), hasContentDescription("Track 1 of 1")) {
+            publish(source.copy(settings = source.settings.copy(preloadNext = false, shuffle = true, repeat = QueueRepeat.All)), hasContentDescription("Track 1 of 1"), pending = {
+                compose.onNodeWithText("…", true).assertIsDisplayed()
+                compose.onNodeWithContentDescription("Track count loading").assertExists()
+                compose.onNodeWithText("1/1", true).assertDoesNotExist()
+                compose.onNodeWithContentDescription("Track 1 of 1").assertDoesNotExist()
+            }) {
+                compose.onNodeWithContentDescription("Shuffle: on").assertIsDisplayed()
+                compose.onNodeWithContentDescription("Repeat: All").assertIsDisplayed()
                 compose.onNodeWithTag("player-surface").assertExists()
                 compose.onNode(title, true).assertTextEquals("preview")
                 compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
@@ -276,9 +284,10 @@ class PlayerTrackProjectionTest {
     @Test fun nativeIdentityOwnsArtworkActionsAndLyricsWhileTheReplacementPrepares() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
-        context.getSharedPreferences("interface", 0).edit().clear().commit()
-        context.getSharedPreferences("player-actions", 0).edit().clear().commit()
-        PlayerActionPreferences(context).write(PlayerActionSettings().place(PlayerAction.Count, ActionSlot(0, 1)))
+        val preferences = InterfacePreferences(context)
+        val saved = preferences.read()
+        val actionPreferences = PlayerActionPreferences(context)
+        val savedActions = actionPreferences.read()
         val file = File.createTempFile("projection-old-", ".opus", context.cacheDir)
         val replacement = File.createTempFile("projection-native-", ".opus", context.cacheDir)
         copyTestAsset(instrumentation.context.assets, "lyrics.opus", file)
@@ -296,9 +305,6 @@ class PlayerTrackProjectionTest {
         var source by mutableStateOf(QueueUiState(QueueLibrary(listOf(oldQueue), oldQueue.id), loading = false))
         var native by mutableStateOf(io.github.anastaci1a.localica.playback.PlaybackState(connected = true,
             trackId = old.id, trackUri = old.uri, title = "Audible old", durationMs = 125000))
-        compose.setContent { EngineTheme(reduced = true) {
-            LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, {}, queues = source)
-        } }
         fun information(expected: String) {
             compose.onNodeWithContentDescription("Information").performClick()
             compose.onNodeWithTag("song-information").assertExists()
@@ -307,6 +313,11 @@ class PlayerTrackProjectionTest {
             compose.waitUntil(5000) { compose.onAllNodesWithTag("song-information").fetchSemanticsNodes().isEmpty() }
         }
         try {
+            preferences.write(InterfaceSettings())
+            actionPreferences.write(PlayerActionSettings().place(PlayerAction.Count, ActionSlot(0, 1)))
+            compose.setContent { EngineTheme(reduced = true) {
+                LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, {}, queues = source)
+            } }
             compose.waitUntil(10_000) { PlayerVisualCache.peek(old.uri) != null }
             compose.onNodeWithTag("player-surface").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Information").fetchSemanticsNodes().isNotEmpty() }
@@ -356,7 +367,10 @@ class PlayerTrackProjectionTest {
             compose.onNodeWithContentDescription("Information").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithText("Replacement occurrence").fetchSemanticsNodes().isNotEmpty() }
             compose.onNode(hasText("Replacement occurrence") and hasAnyAncestor(hasTestTag("song-information"))).assertExists()
-        } finally { release.countDown(); hook.set(null); file.delete(); replacement.delete() }
+        } finally {
+            release.countDown(); hook.set(null); file.delete(); replacement.delete()
+            preferences.write(saved); actionPreferences.write(savedActions)
+        }
     }
 
     @Test fun millionEntryPreparationIsOffMainAndNativeMetadataDoesNotWaitForIt() {
