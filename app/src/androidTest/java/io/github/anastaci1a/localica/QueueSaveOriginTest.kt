@@ -98,6 +98,8 @@ class QueueSaveOriginTest {
                 val bounds = Triple(screenBounds(compose.onNodeWithTag("glass-morph-surface", useUnmergedTree = true)),
                     screenBounds(compose.onNodeWithText("Add", substring = false)), imeBottom)
                 stableFrames = if (imeBottom > 0 && bounds == previousBounds) stableFrames + 1 else 0
+                android.util.Log.i("QueueSaveSample", "uptime=${SystemClock.uptimeMillis()} virtual=${compose.mainClock.currentTime} " +
+                    "inset=$imeBottom bounds=$bounds previous=$previousBounds stable=$stableFrames")
                 previousBounds = bounds
                 (stableFrames >= 2).also { settled -> if (settled)
                     android.util.Log.i("QueueSaveContact", "Settled before Add: frames=$stableFrames bounds=$bounds") }
