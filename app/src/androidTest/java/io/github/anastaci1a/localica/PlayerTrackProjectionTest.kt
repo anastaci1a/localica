@@ -177,11 +177,11 @@ class PlayerTrackProjectionTest {
         val preview = QueueEdits.create(listOf(track("preview")), 0, "Preview")
         val other = QueueEdits.create(listOf(track("other")), 0, "Other")
         val catalog = Counted(listOf(preview, other))
-        val hook = AtomicReference<(() -> Unit)?>(null)
         var source by mutableStateOf(QueueUiState(QueueLibrary(catalog, preview.id), loading = false))
         val native = io.github.anastaci1a.localica.playback.PlaybackState()
         var progress = Float.NaN
         fun publish(next: QueueUiState, ready: SemanticsMatcher, choices: () -> Unit) {
+            val hook = AtomicReference<(() -> Unit)?>(null)
             val incoming = Counted(next.library.queues)
             incoming.beforeRead = { hook.getAndSet(null)?.invoke() }
             val started = CountDownLatch(1)
@@ -228,7 +228,7 @@ class PlayerTrackProjectionTest {
             compose.runOnIdle { source = QueueUiState(loading = false) }
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("player-surface").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("queue-surface", true).assertDoesNotExist()
-        } finally { hook.set(null); preferences.write(saved) }
+        } finally { preferences.write(saved) }
     }
 
     @Test fun nativeIdentityOwnsArtworkActionsAndLyricsWhileTheReplacementPrepares() {
