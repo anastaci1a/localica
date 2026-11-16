@@ -5,6 +5,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.geometry.Offset
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -135,8 +136,30 @@ class GlassBodyClockTest {
             assertEquals(glow, body.glow.value)
             frame(11_008_333_333L)
             assertNotEquals(glow.big, body.glow.value.big)
-            active = false
+            body.momentum.spec = FlexSpec.dynamic(240f, 160f)
+            for (channel in listOf("motion", "pressure")) {
+                set(body, channel, "value", 0f); set(body, channel, "velocity", 0f)
+            }
+            set(body, "depth", "value", -.23999f); set(body, "depth", "velocity", 0f)
+            val light = body.momentum.javaClass.getDeclaredField("light").apply { isAccessible = true }.get(body.momentum) as List<*>
+            for ((index, item) in light.take(2).withIndex()) {
+                for ((field, value) in listOf("value" to if (index == 0) 0f else .3f,
+                    "velocity" to 0f, "target" to if (index == 0) 0f else 1f))
+                    item!!.javaClass.getDeclaredField(field).apply { isAccessible = true }.setFloat(item, value)
+            }
             frame(11_016_666_666L)
+            assertEquals("eligible body completion does not wait for light", -.24f, value(body, "depth", "value"), 0f)
+            assertEquals(0f, value(body, "depth", "velocity"), 0f)
+            assertEquals("the already settled alpha finishes independently", 0f, body.glow.value.big, 0f)
+            val w = 2 * kotlin.math.PI / .1f
+            val h = 8_333_333.0 * 2 / 1e9
+            val expected = (1 + (.3f.toDouble() - 1) * (1 + w * h) * kotlin.math.exp(-w * h)).toFloat()
+            assertEquals("both alphas use Show from the prior little target", expected, body.glow.value.little, Math.ulp(expected))
+            val unfinishedLight = body.glow.value.little
+            frame(11_024_999_999L)
+            assertNotEquals("another channel's completion cannot retire the clock", unfinishedLight, body.glow.value.little)
+            active = false
+            frame(11_033_333_332L)
             val cancelled = body.output.value
             val cancelledGlow = body.glow.value
             frame(22_000_000_000L)
@@ -152,6 +175,7 @@ class GlassBodyClockTest {
             assertTrue(body.momentum.settled)
             assertEquals(GlassShape(), body.output.value)
             assertEquals(0f, body.glow.value.big, 0f)
+            body.momentum.spec = FlexSpec.Small
             contact = 1f; reduced = true; point = Offset(1.25f, -.25f)
             frame(45_000_000_000L)
             assertEquals(GlassShape(), body.output.value)
