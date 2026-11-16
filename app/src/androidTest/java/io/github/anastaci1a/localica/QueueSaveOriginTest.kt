@@ -36,13 +36,14 @@ import org.junit.ClassRule
 import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 
 /** Real QueueSurface/QueueScreen route and native contacts. Bounds, host identity, focus and
  * draw acknowledgements are ownership witnesses, NOT presented-pixel/material continuity proof.
  * The non-reduced, damping-2 fixture exposes an unsettled return without changing production. */
 class QueueSaveOriginTest {
     companion object {
-        @JvmField @ClassRule val nativeIme = NativeImePolicy()
+        @JvmField @ClassRule val nativeIme: TestRule = NativeImePolicy()
     }
 
     @get:Rule val compose = createComposeRule()
