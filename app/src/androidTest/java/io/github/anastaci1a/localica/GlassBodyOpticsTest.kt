@@ -77,18 +77,6 @@ class GlassBodyOpticsTest {
         val candidate = LensRenderer()
         val baseline = FrozenS1LensRenderer()
         val bitmap = Bitmap.createBitmap(112, 96, Bitmap.Config.ARGB_8888)
-        fun render(effect: RenderEffect): IntArray {
-            val node = RenderNode("S1 matched optics").apply { setPosition(0, 0, 112, 96) }
-            try {
-                node.beginRecording().drawBitmap(bitmap, 0f, 0f, null)
-                node.endRecording()
-                node.setRenderEffect(effect.asAndroidRenderEffect())
-                val image = renderNativeReferenceImage(112, 96, "S1 matched optical readback") { it.drawRenderNode(node) }
-                try {
-                    return IntArray(112 * 96).also { image.asAndroidBitmap().getPixels(it, 0, 112, 0, 0, 112, 96) }
-                } finally { image.asAndroidBitmap().recycle() }
-            } finally { node.discardDisplayList() }
-        }
         try {
             for ((index, depth) in cases.withIndex()) for (singleTone in listOf(false, true)) for (background in 0..2) {
                 val gain = if (index % 2 == 0) null else -(16f / 64f) / .24f
@@ -109,8 +97,21 @@ class GlassBodyOpticsTest {
                     whiteTint = .2f, illumination = illumination, flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(frozenThickness), tone = tone)
                 val observed = candidate.effect(geometry, 1.75f, .8f * thickness, power = .75f,
                     whiteTint = .2f, illumination = illumination, flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(thickness), tone = tone)
-                assertArrayEquals("Normal/SingleTone state=$index singleTone=$singleTone background=$background", render(expected), render(observed))
+                assertArrayEquals("Normal/SingleTone state=$index singleTone=$singleTone background=$background", renderS1Kernel(bitmap, expected), renderS1Kernel(bitmap, observed))
             }
         } finally { bitmap.recycle() }
     }
+}
+
+private fun renderS1Kernel(bitmap: Bitmap, effect: RenderEffect): IntArray {
+    val node = RenderNode("S1 matched optics").apply { setPosition(0, 0, 112, 96) }
+    try {
+        node.beginRecording().drawBitmap(bitmap, 0f, 0f, null)
+        node.endRecording()
+        node.setRenderEffect(effect.asAndroidRenderEffect())
+        val image = renderNativeReferenceImage(112, 96, "S1 matched optical readback") { it.drawRenderNode(node) }
+        try {
+            return IntArray(112 * 96).also { image.asAndroidBitmap().getPixels(it, 0, 112, 0, 0, 112, 96) }
+        } finally { image.asAndroidBitmap().recycle() }
+    } finally { node.discardDisplayList() }
 }

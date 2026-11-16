@@ -47,6 +47,10 @@ class LiquidGlassTest {
         compose.mainClock.advanceTimeBy(64)
         assertEquals("Restoring a selected option must not invent an arrival impulse", GlassShape(), shape.value)
         compose.runOnIdle { position = 1.6f }
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { position = 1.4f }
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { position = 1.2f }
         compose.mainClock.advanceTimeBy(32)
         assertNotEquals("Actual movement still drives deformation", GlassShape(), shape.value)
         compose.mainClock.autoAdvance = true
