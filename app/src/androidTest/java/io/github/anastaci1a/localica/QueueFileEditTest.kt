@@ -32,6 +32,53 @@ import java.util.concurrent.TimeUnit
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class QueueFileEditTest {
+    @Test fun millionEntryReuseComparesEveryCandidateOffMainWithoutCopyingItsSources() {
+        for (catalogSize in listOf(13_400, 50_000)) for (size in listOf(10_000, 100_000, 1_000_000)) {
+            lateinit var entries: EditEntries
+            fixture(attachPlayer = false, timeoutMs = 60_000, initial = { queue ->
+                entries = maintenanceEntries(queue.entries.first().track, catalogSize, size)
+                val active = queue.copy(entries = entries, currentEntryId = "occ:0",
+                    order = io.github.anastaci1a.localica.library.SavedOrder(emptyList()))
+                QueueLibrary(listOf(active, active.copy(id = "other")), active.id)
+            }) {
+                val source = queues.state.value.library
+                val origins = object : AbstractList<String?>() {
+                    override val size = entries.size
+                    override fun get(index: Int) = if (index % 2 == 0) "playlist" else null
+                }
+                val reuse = QueueController::class.java.declaredMethods.single { it.name == "reuse" }.apply { isAccessible = true }
+                for (mismatch in listOf(0, size / 2, size - 1)) {
+                    val requested = entries.mapView { entry ->
+                        if (entry.id == "occ:$mismatch") entry.track.copy(id = "missing") else entry.track
+                    }
+                    entries.mainReads.set(0); entries.workerReads.set(0)
+                    measureMaintenance("reuse-mismatch-$mismatch", catalogSize, size) {
+                        val answer = withContext(Dispatchers.Main) {
+                            kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean?> {
+                                reuse.invoke(queues, requested, 0, false, "Original", origins, it)
+                            }
+                        }
+                        assertNull(answer)
+                        assertSame(source, queues.state.value.library)
+                        assertEquals("Active-first and both saved candidates reach the mismatch", 6 * (mismatch + 1), entries.workerReads.get())
+                        assertEquals(0, entries.mainReads.get())
+                    }
+                }
+                entries.mainReads.set(0); entries.workerReads.set(0)
+                measureMaintenance("reuse-match", catalogSize, size) {
+                    val answer = withContext(Dispatchers.Main) {
+                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Boolean?> {
+                            reuse.invoke(queues, entries.mapView(QueueEntry::track), size - 1, false, "Original", origins, it)
+                        }
+                    }
+                    assertEquals(true, answer)
+                    assertEquals("One selected-entry read plus two existing prepared-source reads", 3, entries.mainReads.get())
+                    assertEquals("occ:${size - 1}", queues.state.value.library.active!!.currentEntryId)
+                }
+            }
+        }
+    }
+
     @Test fun millionEntryRefreshPublicationDoesNotCompareValueEqualPrefixesOnMain() {
         val size = 1_000_000
         for (scenario in listOf("no-match", "unchanged", "late-difference")) {

@@ -214,14 +214,15 @@ class ListDensityGeometryTest {
     @Test fun liftedTracklistKeepsCapturedOccurrenceNumberAfterLiveRowsChange() {
         lateinit var drag: SongDragState
         var captured by mutableStateOf<SongDragPresentation?>(null)
+        var capturedItem by mutableStateOf(item)
         compose.setContent { LocalicaTheme {
             val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
             val scope = rememberCoroutineScope()
             drag = remember { SongDragState(grid, scope) }
             captured?.let { presentation -> LookaheadScope {
-                BrowseItemLayout(item, presentation.style, presentation.cellGeometry, this@LookaheadScope,
+                BrowseItemLayout(capturedItem, presentation.style, presentation.cellGeometry, this@LookaheadScope,
                     true, menu = {}, itemIndex = presentation.indices.getValue(item.key),
-                    mutablePosition = presentation.mutablePositions[item.key])
+                    mutablePosition = capturedItem.physicalPosition)
             } }
         } }
         compose.runOnIdle {
@@ -234,9 +235,10 @@ class ListDensityGeometryTest {
         compose.onNodeWithText("1").assertDoesNotExist()
         compose.runOnIdle {
             drag.style = BrowseStyle(listSize = ListSize.Small)
-            drag.mutablePositions = mapOf(item.key to 46)
+            drag.items = listOf(item.copy(physicalPosition = 46))
+            capturedItem = drag.items.single()
             captured = drag.capturePresentation()
-            drag.mutablePositions = mapOf(item.key to 1)
+            drag.items = listOf(item.copy(physicalPosition = 1))
         }
         compose.onNodeWithText("46").assertIsDisplayed()
         compose.onNodeWithText("1").assertDoesNotExist()

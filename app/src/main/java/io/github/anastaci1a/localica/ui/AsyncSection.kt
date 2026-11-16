@@ -32,12 +32,13 @@ internal fun <T : Any> rememberAsyncValue(vararg inputs: Any?, retainPrevious: B
 
 /** Existing control-state fade and browse loading wave own every animated value here. */
 @Composable
-internal fun <T : Any> AsyncSection(value: T?, modifier: Modifier = Modifier, rowCount: Int = 0, header: @Composable () -> Unit = {}, content: @Composable (T) -> Unit) {
+internal fun <T : Any> AsyncSection(value: T?, modifier: Modifier = Modifier, rowCount: Int = 0, header: @Composable () -> Unit = {}, chrome: @Composable (T?) -> Unit = {}, content: @Composable (T) -> Unit) {
     val reduced = LocalReducedMotion.current
     val spinner = animateControlStateFloat(if (value == null) 1f else 0f, value == null, "Async section")
     val presented by remember(value != null, spinner, reduced) { derivedStateOf { value != null && (reduced || spinner.value == 0f) } }
     var hasPresented by remember { mutableStateOf(false) }
     if (presented) hasPresented = true
+    chrome(value.takeIf { presented })
     if (hasPresented) header()
     if (value == null || !presented) {
         val opacity = remember(spinner) { ArtworkTextReveal { spinner.value }.apply { hold(true) } }
@@ -60,7 +61,7 @@ internal fun AsyncSectionRow(index: Int, content: @Composable () -> Unit) {
     val rowHeight = StockUiSpec.control.getValue(ControlSize.PreferenceRow).value
     SideEffect { cell?.place(0f, index * rowHeight) }
     val opacity = remember(cell) { cell?.let { source -> ArtworkTextReveal { source.alpha }.apply { hold(true) } } }
-    AsyncSectionRowSlot(Modifier.artworkTextReveal(opacity, { null }, { 0f }, skeleton = false), content)
+    AsyncSectionColumnSlot(Modifier.artworkTextReveal(opacity, { null }, { 0f }, skeleton = false)) { content() }
 }
 
 /** Null means pending; callers provide the settled absent value. Ready text keeps Text's inherited contract. */

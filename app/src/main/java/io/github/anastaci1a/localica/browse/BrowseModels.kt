@@ -10,7 +10,7 @@ import java.util.Locale
 
 data class BrowserItem(val ref: MediaRef, val title: String, val subtitle: String?, val songs: List<SongRow>,
     val row: SongRow? = null, val groupHeading: String? = null, private val added: Long? = null,
-    private val modified: Long? = null, private val plays: Long? = null, val coverUri: String? = null) {
+    private val modified: Long? = null, private val plays: Long? = null, val coverUri: String? = null, val physicalPosition: Int? = null) {
     val key: String get() = row?.id ?: "${ref.kind}:${ref.id}"
     val coverUris: List<String> = collectionCoverUris(coverUri, songs.firstOrNull()?.track?.uri)
     // Folded on first read, not on construction: a queue item's songs are a view of the queue (#957).
@@ -19,7 +19,7 @@ data class BrowserItem(val ref: MediaRef, val title: String, val subtitle: Strin
     val modifiedAt get() = modified ?: facts.modifiedAt
     val playCount get() = plays ?: facts.plays
     // Songs compare by revision, never by contents (#957); a new constructor field joins [fields].
-    private fun fields() = listOf(ref, title, subtitle, row, groupHeading, added, modified, plays, coverUri)
+    private fun fields() = listOf(ref, title, subtitle, row, groupHeading, added, modified, plays, coverUri, physicalPosition)
     override fun equals(other: Any?) = other === this || other is BrowserItem && songs.revision == other.songs.revision && fields() == other.fields()
     override fun hashCode() = fields().hashCode()
 }
@@ -71,10 +71,12 @@ class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: SongLi
         items.revision == other.items.revision && rows.revision == other.rows.revision && keys.revision == other.keys.revision
     override fun hashCode() = 31 * scope.hashCode() + items.size
 }
-internal fun songItem(row: SongRow) = BrowserItem(MediaRef(MediaKind.Song, row.track.id), row.track.title,
-    row.track.artist ?: row.track.albumArtist, listOf(row), row)
+internal fun songItem(row: SongRow, physicalPosition: Int? = null) = BrowserItem(MediaRef(MediaKind.Song, row.track.id), row.track.title,
+    row.track.artist ?: row.track.albumArtist, listOf(row), row, physicalPosition = physicalPosition)
+private fun numberedSongItem(index: Int, row: SongRow) = songItem(row, index + 1)
 internal fun songResult(rows: List<SongRow>, scope: SongListView, albums: List<LibraryGroup> = emptyList(),
-    keys: List<String> = rows.mapView(SongRow::id)) = BrowseResult(rows.mapView(::songItem), scope, albums, rows, keys)
+    keys: List<String> = rows.mapView(SongRow::id), physicalOrder: Boolean = false) =
+    BrowseResult(if (physicalOrder) rows.mapIndexedView(::numberedSongItem) else rows.mapView { songItem(it) }, scope, albums, rows, keys)
 /** Matches by source index: 4 B per match, nothing for no match; a song list's matches stay a view of it. */
 internal fun BrowseResult.matching(checkActive: () -> Unit, test: (Int) -> Boolean): BrowseResult {
     var hits = IntArray(0); var count = 0
@@ -86,7 +88,7 @@ internal fun BrowseResult.matching(checkActive: () -> Unit, test: (Int) -> Boole
     if (count == 0) return BrowseResult(scope = scope, artistAlbums = artistAlbums)
     val at = hits.copyOf(count).asList()
     return if (rows.size != items.size) BrowseResult(at.map(items::get), scope, artistAlbums)
-        else songResult(at.mapView(rows::get), scope, artistAlbums, at.mapView(keys::get))
+        else BrowseResult(at.mapView(items::get), scope, artistAlbums, at.mapView(rows::get), at.mapView(keys::get))
 }
 
 /** One result owns carousel and row ordering; invalid old values use album fallback. */
@@ -120,7 +122,7 @@ object BrowseQueries {
         override fun hashCode() = System.identityHashCode(snapshot)
     }
     private fun queueResult(queue: ListeningQueue, snapshot: LibrarySnapshot, scope: SongListView) =
-        songResult(queue.entries.mapView(QueueRow(snapshot)), scope, keys = queue.entries.mapView(QueueEntry::id))
+        songResult(queue.entries.mapView(QueueRow(snapshot)), scope, keys = queue.entries.mapView(QueueEntry::id), physicalOrder = true)
 
     /** Opening-only physical queue projection: the query's own view, without a catalog. */
     internal fun openingQueue(snapshot: LibrarySnapshot, queue: ListeningQueue, route: BrowseRoute,
@@ -254,7 +256,7 @@ object BrowseQueries {
                 val artist = artistRows(source, order, sorts.artistAlbumGrouping, checkActive)
                 return songResult(artist.rows, scope(route), artist.albums)
             }
-            return songResult(LibraryQueries.rows(source, order, checkActive), scope(route))
+            return songResult(LibraryQueries.rows(source, order, checkActive), scope(route), physicalOrder = collection.kind == MediaKind.Playlist)
         }
         val kinds = if (route.globalSearch) route.filter?.let(::listOf) ?: libraryKinds else when (route.tab) {
             MainTab.Library -> route.filter?.let(::listOf) ?: libraryKinds.filter { it in allCollections && it != MediaKind.Song }

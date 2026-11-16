@@ -37,6 +37,26 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    @Test fun artworkWindowsDoNotNeedTheNativeResolvedFallback() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        barrier()
+        withContext(Dispatchers.Main) {
+            val queue = queues.state.value.library.active!!
+            val resolve = QueueController::class.java.declaredMethods.single { it.name == "visitTrack" }.apply { isAccessible = true }
+            fun legacy(source: ListeningQueue, entryId: String?) = resolve.invoke(queues, source, entryId) as Track?
+            val cold = queue.copy(journey = queue.journey!!.copy())
+            assertNull(cold.visitTrack(cold.currentEntryId))
+            assertNotNull("Native receipts still resolve outside the prepared window", legacy(cold, cold.currentEntryId))
+            assertNull(legacy(cold.copy(id = "different-queue"), cold.currentEntryId))
+            assertEquals(listOf(null, null), cold.artworkNeighbors())
+            assertTrue(cold.artworkPreloadUris().isEmpty())
+            assertTrue(queue.journey!!.artworkWindow().isNotEmpty())
+            for (visit in queue.journey!!.window()) assertNotNull(queue.journey!!.sourceOrdinal(queue.ids, visit.entryId))
+            assertEquals(listOf(queue.journey!!.next, queue.journey!!.previous).map { legacy(queue, it?.entryId)?.uri }, queue.artworkNeighbors())
+            assertEquals(queue.journey!!.artworkWindow().mapNotNull { legacy(queue, it.entryId)?.uri }.distinct(), queue.artworkPreloadUris())
+        }
+    }
+
     private suspend fun Fixture.selectWithFrozenNativePath() = withContext(Dispatchers.Main) {
         val mutable = QueueController::class.java.getDeclaredField("mutable").apply { isAccessible = true }
         @Suppress("UNCHECKED_CAST")
@@ -1659,8 +1679,8 @@ class PlaybackIntentTest {
             .set(dao, QueueLibrary(listOf(invalid, second), first.id))
         dao.restore.release.complete(Unit)
         awaitMain { !queues.state.value.loading }
-        assertEquals(listOf(null, null), queues.artworkNeighbors())
-        assertTrue(queues.artworkPreloadUris().isEmpty())
+        assertEquals(listOf(null, null), queues.state.value.library.active!!.artworkNeighbors())
+        assertTrue(queues.state.value.library.active!!.artworkPreloadUris().isEmpty())
         queues.attach(player)
         barrier()
         withContext(Dispatchers.Main) {
@@ -1675,8 +1695,8 @@ class PlaybackIntentTest {
                 assertEquals(visit.entryId, active.entries[ordinal!!].id)
             }
             assertNull(queues.state.value.problem)
-            assertEquals(listOf(track.uri, null), queues.artworkNeighbors())
-            assertEquals(listOf(track.uri), queues.artworkPreloadUris())
+            assertEquals(listOf(track.uri, null), queues.state.value.library.active!!.artworkNeighbors())
+            assertEquals(listOf(track.uri), queues.state.value.library.active!!.artworkPreloadUris())
         }
         queues.seek(1234)
         barrier()
@@ -1873,6 +1893,47 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun playerReplacementDuringReuseRejectsBothMatchAndNoMatchWithoutCreating() {
+        for (matches in listOf(true, false)) fixture {
+            val gate = Gate()
+            val reads = AtomicInteger()
+            val requested = object : AbstractList<Track>() {
+                override val size = first.entries.size
+                override fun get(index: Int): Track {
+                    if (reads.incrementAndGet() == 2) {
+                        assertNotEquals("Reuse comparison must run off Main", android.os.Looper.getMainLooper(), android.os.Looper.myLooper())
+                        assertTrue("Gate must suspend equivalence, not source intake", Thread.currentThread().stackTrace.any {
+                            it.className == QueueEdits::class.java.name && it.methodName == "equivalent"
+                        })
+                        runBlocking { gate.await() }
+                    }
+                    val value = first.entries[index].track
+                    return if (!matches && index == size - 1) value.copy(id = "mismatch") else value
+                }
+            }
+            val replacement = newPlayer()
+            var detached: Deferred<Unit>? = null
+            try {
+                queues.tap(requested, 0, sourceName = first.name)
+                gate.entered.await()
+                withContext(Dispatchers.Main) {
+                    detached = queues.detach(player)
+                    queues.attach(replacement)
+                }
+                gate.release.complete(Unit)
+                detached?.await(); barrier()
+                withContext(Dispatchers.Main) {
+                    assertEquals(listOf(first.id, second.id), queues.state.value.library.queues.map { it.id })
+                    assertEquals(first.currentEntryId, queues.state.value.library.active!!.currentEntryId)
+                    assertEquals(0L, queues.state.value.playerRequest)
+                    assertNull(queues.state.value.pending)
+                    assertNull(queues.state.value.problem)
+                    assertFalse(replacement.playWhenReady)
+                }
+            } finally { gate.release.complete(Unit) }
+        }
+    }
+
     @Test fun generationLossDuringEditMembershipPreparationRejectsTheLibraryAndAnswer() = fixture(duplicateOccurrences = true) {
         awaitMain { player.engine.playbackState == Player.STATE_READY }
         withHeldEdit("absent") {
@@ -1941,7 +2002,7 @@ class PlaybackIntentTest {
         val checkpoint = object : ThreadContextElement<Unit> {
             override val key = object : kotlin.coroutines.CoroutineContext.Key<ThreadContextElement<Unit>> {}
             override fun updateThreadContext(context: kotlin.coroutines.CoroutineContext) {
-                if (armed.get() && context[kotlin.coroutines.ContinuationInterceptor] == Dispatchers.Default && workerEntries.incrementAndGet() == 2)
+                if (armed.get() && context[kotlin.coroutines.ContinuationInterceptor] == Dispatchers.Default && workerEntries.incrementAndGet() == 3)
                     runBlocking { gate.await() }
             }
             override fun restoreThreadContext(context: kotlin.coroutines.CoroutineContext, oldState: Unit) = Unit
@@ -1986,7 +2047,7 @@ class PlaybackIntentTest {
             val queue = snapshot.library.active!!
             val next = queue.journey?.next
             if (next != null && queue.entries.firstOrNull { it.id == next.entryId }?.track?.id == song.id)
-                observed.complete(queues.artworkNeighbors())
+                observed.complete(queues.state.value.library.active!!.artworkNeighbors())
         } }
         val completed = CompletableDeferred<Boolean>()
         try {
@@ -1995,14 +2056,14 @@ class PlaybackIntentTest {
             assertEquals(song.uri, withTimeout(10000) { observed.await() }.first())
             withContext(Dispatchers.Main) {
                 assertFalse(player.playWhenReady)
-                assertTrue(queues.artworkPreloadUris().contains(song.uri))
+                assertTrue(queues.state.value.library.active!!.artworkPreloadUris().contains(song.uri))
                 val next = queues.state.value.library.active!!.journey!!.next!!
                 assertTrue((0 until player.mediaItemCount).none { player.getMediaItemAt(it).mediaId == next.entryId })
             }
         } finally { gate.release.complete(Unit); observer.cancelAndJoin() }
         assertTrue(withTimeout(10000) { completed.await() })
         barrier()
-        assertEquals(song.uri, queues.artworkNeighbors().first())
+        assertEquals(song.uri, queues.state.value.library.active!!.artworkNeighbors().first())
     }
 
     @Test fun publishedSelectionIsSynchronizedByTheReattachedOwnerAfterOldIoIsDropped() {

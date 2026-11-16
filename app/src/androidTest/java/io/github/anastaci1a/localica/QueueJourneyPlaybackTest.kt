@@ -81,7 +81,7 @@ class QueueJourneyPlaybackTest {
             val expectedNext = branched.next!!
             instrumentation.runOnMainSync {
                 assertEquals(expectedNext.token, player.getMediaItemAt(player.nextMediaItemIndex).mediaMetadata.extras!!.getString("queueVisit"))
-                assertEquals(listOf(song.uri, song.uri), queues.artworkNeighbors())
+                assertEquals(listOf(song.uri, song.uri), queues.state.value.library.active!!.artworkNeighbors())
             }
             val moved = CompletableDeferred<Boolean>()
             queues.moveEntry(expectedNext.entryId, -2, queue.id) { moved.complete(it) }

@@ -22,6 +22,11 @@ data class ListeningQueue(
 ) {
     val ids: List<String> get() = entries.mapView(QueueEntry::id)
 }
+internal fun ListeningQueue.visitTrack(entryId: String?): Track? = journey?.sourceOrdinal(ids, entryId)?.let { entries.getOrNull(it)?.track }
+internal fun ListeningQueue.artworkNeighbors(): List<String?> =
+    listOf(journey?.next, journey?.previous).map { visitTrack(it?.entryId)?.uri }
+internal fun ListeningQueue.artworkPreloadUris(): List<String> =
+    journey?.artworkWindow().orEmpty().mapNotNull { visitTrack(it.entryId)?.uri }.distinct()
 enum class QueueRepeat { Off, All, One }
 enum class SongEnd(val label: String) { Stop("Stop here"), NextPaused("Load next song and pause"), Next("Play next song"), Repeat("Repeat this song") }
 enum class QueueEnd(val label: String) { Stop("Stop here"), NextQueue("Go to next queue"), Repeat("Repeat this queue") }
@@ -57,10 +62,24 @@ data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val acti
 }
 data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?, val expandPlayer: Boolean = true, val sourceName: String = "All Songs", val playlistOrigins: List<String?> = emptyList())
 data class QueueUiState(val library: QueueLibrary = QueueLibrary(), val loading: Boolean = true,
-    val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null, val playerRequest: Long = 0, val browsedId: String? = null) {
+    val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null, val playerRequest: Long = 0, val browsedId: String? = null,
+    internal val resolvedPlayerQueue: ResolvedQueues? = null) {
+    companion object { val Empty = QueueUiState(loading = false) }
     private fun fields() = listOf(loading, settings, pending, problem, playerRequest, browsedId)
     override fun equals(other: Any?) = other === this || other is QueueUiState && library === other.library && fields() == other.fields()
     override fun hashCode() = 31 * System.identityHashCode(library) + fields().hashCode()
+}
+class ResolvedQueues internal constructor(internal val library: QueueLibrary, internal val browsedId: String?, internal val active: ListeningQueue?,
+    internal val browsed: ListeningQueue?, internal val number: Int)
+internal fun QueueUiState.resolvePlayerQueue(): QueueUiState {
+    var active = -1; var browsed = -1
+    library.queues.forEachIndexed { index, queue ->
+        if (active < 0 && queue.id == library.activeId) active = index
+        if (browsed < 0 && queue.id == browsedId) browsed = index
+    }
+    if (browsed < 0) browsed = active
+    return copy(resolvedPlayerQueue = ResolvedQueues(library, browsedId,
+        library.queues.getOrNull(active), library.queues.getOrNull(browsed), browsed + 1))
 }
 
 // A new prepared journey must publish even when its durable fields equal a cold predecessor.

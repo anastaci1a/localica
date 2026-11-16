@@ -1,6 +1,6 @@
 # Roadmap
 
-Released: [v0.34.10](https://github.com/anastaci1a/localica/releases/tag/v0.34.10). The milestones below describe planned outcomes, not claims of release or physical-device verification. Issues own acceptance criteria; [release gates](development/release.md) own distribution readiness.
+[Release history](https://github.com/anastaci1a/localica/releases) identifies distributed builds. The milestones below describe planned outcomes, not claims of release or physical-device verification. Issues own acceptance criteria; [release gates](development/release.md) own distribution readiness.
 
 ## Milestones
 

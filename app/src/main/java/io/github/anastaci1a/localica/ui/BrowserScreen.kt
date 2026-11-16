@@ -327,7 +327,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val physicalOrder = remember(mutableQueue?.entries?.ownerRevision, mutablePlaylist?.entries?.ownerRevision) {
         mutableQueue?.entries?.mapView { it.id } ?: mutablePlaylist?.entries?.mapView { it.id }
     }
-    val mutablePositions = remember(physicalOrder) { physicalOrder.orEmpty().withIndex().associate { it.value to it.index + 1 } }
     val pinchMotion = remember(route.key) { BrowsePinchMotion() }
     io.github.anastaci1a.localica.ui.components.BindBrowsePinchProgress(pinchMotion.progressOwner)
     /** A saved geometry change (View popup) takes the pinch transaction, not a reflow (#627).
@@ -995,7 +994,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val cellGeometry = BrowseCellGeometry(columns)
             val dragColors = MaterialTheme.colorScheme
             val dragInk = LocalContentColor.current
-            SideEffect { reorder.style = displayedStyle; reorder.cellGeometry = cellGeometry; reorder.colors = dragColors; reorder.ink = dragInk; reorder.mutablePositions = mutablePositions }
+            SideEffect { reorder.style = displayedStyle; reorder.cellGeometry = cellGeometry; reorder.colors = dragColors; reorder.ink = dragInk }
             val loadingReducedMotion = reducedMotion || LocalReducedMotion.current
             val skeletonReveal = true
             val displayedRoute = presentation?.route ?: route
@@ -1277,7 +1276,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         )) {
                             BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
                                 showInformation = popupDismiss == null, inheritedInformation = inheritedInformation, itemIndex = itemIndex,
-                                loadingReveal = loadingCell, artistOnlyLoading = artistOnlyLoading, mutablePosition = mutablePositions[item.key],
+                                loadingReveal = loadingCell, artistOnlyLoading = artistOnlyLoading, mutablePosition = item.physicalPosition,
                                 trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor,
                                 outline = itemOutline)
                         }
