@@ -43,6 +43,7 @@ class QueuePresentationTest {
         val active = queue("active", entries, "entry")
         val browsed = queue("browsed", entries, "entry")
         val catalog = Counted(listOf(active, active.copy(name = "Duplicate"), browsed, browsed.copy(entries = emptyList())))
+        entries.reads = 0
         val source = QueueUiState(QueueLibrary(catalog, active.id), browsedId = browsed.id).resolvePlayerQueue()
         val resolved = source.resolvedPlayerQueue!!
         assertSame(source.library, resolved.library)
