@@ -62,8 +62,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private var commandRevision = 0L
     private val mutable = MutableStateFlow(QueueUiState(settings = preferences.read()))
     internal val state = mutable.asStateFlow()
-    val presentation = combine(state, intents.modes) { value, mode -> value.copy(settings = value.settings.withModes(mode?.settings)) }
-        .stateIn(scope, SharingStarted.Eagerly, mutable.value)
+    val presentation = combine(state, intents.modes) { value, mode -> value.copy(settings = value.settings.withModes(mode?.settings)).resolvePlayerQueue() }
+        .flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.Eagerly, mutable.value)
     private var player: Player? = null
     private val timeline = QueueTimeline()
     private data class ResolvedOccurrence(val track: Track, val sourcePlaylistId: String?, val item: MediaItem)

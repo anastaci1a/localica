@@ -101,6 +101,7 @@ fun LocalicaScreen(
     val queuePresentation = rememberQueuePresentation(queues, library.snapshot)
     val prepared = queuePresentation.value
     val playerPresentation = prepared?.takeIf { it.state === queues && it.library.tracks === library.snapshot.tracks && it.library.trackPlays === library.snapshot.trackPlays }
+    val playerTracks = prepared?.playerTracks(queues, library.snapshot)
     val queues = prepared?.state ?: queues
     val warmRoutes = remember(navigation.stacks, settings.tabs, prepared) {
         val pages = settings.tabs.map { navigation.stacks[it]?.lastOrNull() ?: BrowseRoute(it) }
@@ -198,8 +199,8 @@ fun LocalicaScreen(
         else if (settings.confirmExit) exitPrompt = true else exit()
     }
     androidx.activity.compose.BackHandler { back() }
-    val currentTrack = playerPresentation?.tracks?.current
-    val indexedTrack = playerPresentation?.tracks?.indexed
+    val currentTrack = playerTracks?.current
+    val indexedTrack = playerTracks?.indexed
     // Lyrics stay open across song/source changes; the page owns source discovery.
     fun openCollection(item: io.github.anastaci1a.localica.browse.BrowserItem) {
         val route = BrowseRoute(navigation.active, item.ref, item.title)
@@ -209,7 +210,7 @@ fun LocalicaScreen(
         queueOpen = false; expanded = false; songInfo = false
         navigationScope.launch { queuePopupHome.awaitHandoff(); queueSheet.collapse() }
     }
-    val livePlayerOccurrence by rememberUpdatedState(queues.library.activeId to playerPresentation?.active?.queue?.currentEntryId)
+    val livePlayerOccurrence by rememberUpdatedState(playerTracks?.let { queues.library.activeId to prepared?.active?.queue?.currentEntryId })
     val playerCollectionLookup = rememberCollectionLookup(library.snapshot, playlist.playlists, browseSorts, onOpen = ::openCollection)
     fun playerAction(action: PlayerAction, editTags: ((List<Track>, (Boolean) -> Unit) -> Unit)? = null) {
         playerCollectionLookup.cancel()
@@ -428,7 +429,7 @@ fun LocalicaScreen(
         }
         if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
-            lyricsOpen, { lyricsOpen = it }, playerPresentation?.tracks?.lyrics,
+            lyricsOpen, { lyricsOpen = it }, playerTracks?.lyrics,
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             onSeekRequest = onSeekRequest, sampleState = playerSample, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             providedPopupHome = playerPopupHome, openingPopupHome = browsePopupHome,

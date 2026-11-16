@@ -9,6 +9,12 @@ internal data class QueueRead(val queue: ListeningQueue, val index: Int, val dur
 class QueuePresentation internal constructor(internal val state: QueueUiState, internal val library: LibrarySnapshot,
     internal val active: QueueRead?, internal val browsed: QueueRead?, internal val number: Int,
     internal val tracks: PlayerTrackProjection, internal val available: Track?, internal val neighbors: List<String?>, internal val preload: List<String>)
+internal fun QueuePresentation.playerTracks(state: QueueUiState, library: LibrarySnapshot): PlayerTrackProjection? = tracks.takeIf {
+    this.library.tracks === library.tracks && this.library.trackPlays === library.trackPlays &&
+        (this.state.library === state.library || state.resolvedPlayerQueue?.takeIf { it.first === state.library }?.let { (_, queue) ->
+            active?.queue?.id == queue?.id && active?.queue?.entries === queue?.entries && active?.queue?.currentEntryId == queue?.currentEntryId
+        } == true)
+}
 private fun ListeningQueue.read(previous: QueueRead?): QueueRead {
     val unchanged = entries === previous?.queue?.entries
     var index = if (unchanged && currentEntryId == previous?.queue?.currentEntryId) previous?.index ?: -1 else -1

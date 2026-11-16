@@ -170,35 +170,48 @@ class PlayerTrackProjectionTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
-    @Test fun pendingUnrelatedPublicationKeepsTheExpandedSavedPreviewAndOpenDrawer() {
+    @Test fun pendingUnrelatedPublicationKeepsTheExpandedSavedPreviewAndOpenDrawer() = assertUnrelatedPublications(null)
+    @Test fun unrelatedPublicationsKeepTheAlreadyOpenInformationDialog() = assertUnrelatedPublications(PlayerAction.Info)
+    @Test fun unrelatedPublicationsKeepTheAlreadyOpenLyrics() = assertUnrelatedPublications(PlayerAction.Lyrics)
+
+    private fun assertUnrelatedPublications(mode: PlayerAction?) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val saved = preferences.read()
-        val preview = QueueEdits.create(listOf(track("preview")), 0, "Preview")
+        val actionPreferences = PlayerActionPreferences(context)
+        val savedActions = actionPreferences.read()
+        val file = File.createTempFile("preview-admission-", ".opus", context.cacheDir)
+        copyTestAsset(InstrumentationRegistry.getInstrumentation().context.assets, "lyrics.opus", file)
+        val preview = QueueEdits.create(listOf(track("preview").copy(uri = android.net.Uri.fromFile(file).toString(), fileName = file.name, relativePath = file.name)), 0, "Preview")
         val other = QueueEdits.create(listOf(track("other")), 0, "Other")
         val catalog = Counted(listOf(preview, other))
         var source by mutableStateOf(QueueUiState(QueueLibrary(catalog, preview.id), loading = false))
         val native = io.github.anastaci1a.localica.playback.PlaybackState()
         var progress = Float.NaN
-        fun publish(next: QueueUiState, ready: SemanticsMatcher, choices: () -> Unit) {
+        fun publish(next: QueueUiState, ready: SemanticsMatcher, afterRelease: () -> Unit = {}, settled: (() -> Unit)? = null, choices: () -> Unit) {
             val hook = AtomicReference<(() -> Unit)?>(null)
             val incoming = Counted(next.library.queues)
             incoming.beforeRead = { hook.getAndSet(null)?.invoke() }
             val started = CountDownLatch(1)
             val release = CountDownLatch(1)
+            val publication = runBlocking { withContext(Dispatchers.Default) {
+                next.copy(library = next.library.copy(queues = incoming)).resolvePlayerQueue()
+            } }
             hook.set { started.countDown(); check(release.await(30, TimeUnit.SECONDS)) }
             try {
-                compose.runOnIdle { source = next.copy(library = next.library.copy(queues = incoming)) }
+                compose.runOnIdle { source = publication }
                 compose.waitForIdle()
                 assertTrue(started.await(10, TimeUnit.SECONDS))
                 choices()
                 release.countDown()
+                afterRelease()
                 compose.waitUntil(10_000) { compose.onAllNodes(ready, true).fetchSemanticsNodes().isNotEmpty() }
-                choices()
+                (settled ?: choices)()
             } finally { release.countDown(); hook.set(null) }
         }
         try {
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home), reducedMotion = true))
+            actionPreferences.write(PlayerActionSettings().place(PlayerAction.Count, ActionSlot(0, 1)))
             compose.setContent { EngineTheme(reduced = true) {
                 CompositionLocalProvider(LocalPlayerWorkObserver provides { kind, p -> if (kind == "root" && p != null) progress = p }) {
                     LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, queues = source)
@@ -209,10 +222,39 @@ class PlayerTrackProjectionTest {
             compose.onNodeWithTag("player-surface").performClick()
             compose.waitUntil(10_000) { progress == 1f }
             val title = hasText("preview") and (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title")))
-            publish(source.copy(settings = source.settings.copy(preloadNext = false)), title) {
+            publish(source.copy(settings = source.settings.copy(preloadNext = false)), hasContentDescription("Track 1 of 1")) {
                 compose.onNodeWithTag("player-surface").assertExists()
+                compose.onNode(title, true).assertTextEquals("preview")
                 compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
                 assertEquals(1f, progress, 0f)
+            }
+            fun expandedPreview() {
+                compose.onNode(title, true).assertTextEquals("preview")
+                compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
+                assertEquals(1f, progress, 0f)
+            }
+            val position = source.copy(library = source.library.update(preview.copy(positionMs = 9000)))
+            if (mode == null) publish(position, hasContentDescription("Track 1 of 1")) { expandedPreview() }
+            else for (positionOnly in listOf(false, true)) {
+                val next = if (positionOnly) source.copy(library = source.library.update(preview.copy(positionMs = 9000)))
+                    else source.copy(settings = source.settings.copy(preloadNext = true))
+                if (mode == PlayerAction.Info) {
+                    compose.onNodeWithContentDescription("Information").performClick()
+                    compose.onNodeWithTag("song-information").assertExists()
+                } else {
+                    compose.onNodeWithTag("player-lyrics-title-target", true).performSemanticsAction(SemanticsActions.OnClick)
+                    compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isNotEmpty() }
+                }
+                publish(next, hasContentDescription("Track 1 of 1"), afterRelease = {
+                    if (mode == PlayerAction.Info) compose.onNodeWithText("Done").performClick()
+                    else compose.onNodeWithContentDescription("Hide lyrics").performClick()
+                }, settled = ::expandedPreview) {
+                    if (mode == PlayerAction.Info) {
+                        compose.onNodeWithTag("song-information").assertExists()
+                        compose.onNode(hasText("preview") and hasAnyAncestor(hasTestTag("song-information"))).assertExists()
+                    } else compose.onNodeWithTag("lyric-lines", true).assertExists()
+                    assertEquals(1f, progress, 0f)
+                }
             }
             compose.onNodeWithContentDescription("Open queue").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Minimize queue").fetchSemanticsNodes().isNotEmpty() }
@@ -228,7 +270,7 @@ class PlayerTrackProjectionTest {
             compose.runOnIdle { source = QueueUiState(loading = false) }
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("player-surface").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("queue-surface", true).assertDoesNotExist()
-        } finally { preferences.write(saved) }
+        } finally { preferences.write(saved); actionPreferences.write(savedActions); file.delete() }
     }
 
     @Test fun nativeIdentityOwnsArtworkActionsAndLyricsWhileTheReplacementPrepares() {
@@ -386,7 +428,10 @@ class PlayerTrackProjectionTest {
                 tracks.reads = 0
             }
             repeat(4) { iteration ->
-                val next = initial.copy(library = QueueLibrary(listOf(queue.copy(positionMs = iteration + 1L)), queue.id))
+                val next = runBlocking { withContext(Dispatchers.Default) {
+                    initial.copy(library = QueueLibrary(listOf(queue.copy(positionMs = iteration + 1L)), queue.id)).resolvePlayerQueue()
+                } }
+                instrumentation.runOnMainSync { assertSame(pure.tracks, pure.playerTracks(next, snapshot)) }
                 compose.runOnIdle { source = next }
                 compose.waitUntil(10_000) { compose.waitForIdle(); observed?.state === next }
                 compose.runOnIdle {

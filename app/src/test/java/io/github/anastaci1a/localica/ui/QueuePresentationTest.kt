@@ -78,4 +78,32 @@ class QueuePresentationTest {
         assertEquals(0, absent.number)
         assertEquals(PlayerTrackProjection(null, null, null), absent.tracks)
     }
+
+    @Test fun occurrenceAdmissionSurvivesUnrelatedPublicationsAndRejectsEveryChangedOwner() {
+        val entries = Counted(listOf(QueueEntry("one", track("song")), QueueEntry("two", track("song"))))
+        val tracks = Counted(listOf(track("song").copy(title = "Available")))
+        val queue = queue("active", entries, "one")
+        val library = LibrarySnapshot(tracks = tracks)
+        val source = QueueUiState(QueueLibrary(listOf(queue), queue.id)).resolvePlayerQueue()
+        val ready = prepareQueuePresentation(source, library, null)
+        val position = source.copy(library = source.library.update(queue.copy(positionMs = 9000))).resolvePlayerQueue()
+        val cursor = source.copy(library = source.library.update(queue.copy(currentEntryId = "two"))).resolvePlayerQueue()
+        val replacement = source.copy(library = source.library.update(queue.copy(entries = entries.toList()))).resolvePlayerQueue()
+        val active = source.copy(library = QueueLibrary(listOf(queue, queue.copy(id = "other")), "other")).resolvePlayerQueue()
+        val duplicate = source.copy(library = QueueLibrary(listOf(queue.copy(entries = emptyList()), queue), queue.id)).resolvePlayerQueue()
+        entries.reads = 0
+        tracks.reads = 0
+        assertSame(ready.tracks, ready.playerTracks(source.copy(settings = source.settings.copy(preloadNext = false)), library))
+        assertSame(ready.tracks, ready.playerTracks(source.copy(browsedId = "other"), library))
+        assertSame(ready.tracks, ready.playerTracks(position, library))
+        assertNull(ready.playerTracks(source.copy(library = position.library), library)) // A copied proof cannot authorize another library.
+        assertNull(ready.playerTracks(cursor, library))
+        assertNull(ready.playerTracks(replacement, library))
+        assertNull(ready.playerTracks(active, library))
+        assertNull(ready.playerTracks(duplicate, library))
+        assertNull(ready.playerTracks(source, library.copy(tracks = listOf(track("song")))))
+        assertNull(ready.playerTracks(source, library.copy(trackPlays = mapOf("song" to 1))))
+        assertEquals(0, entries.reads)
+        assertEquals(0, tracks.reads)
+    }
 }
