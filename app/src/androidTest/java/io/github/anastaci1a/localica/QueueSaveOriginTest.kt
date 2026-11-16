@@ -86,8 +86,7 @@ class QueueSaveOriginTest {
             }
             var previousBounds: Triple<Rect, Rect, Int>? = null
             var stableFrames = 0
-            compose.waitUntil(5000) {
-                compose.mainClock.advanceTimeByFrame()
+            pump(fixture, endpoint = true, predicateOnUiThread = false) {
                 val view = popupView()
                 val imeBottom = compose.runOnUiThread {
                     androidx.core.view.ViewCompat.getRootWindowInsets(view)?.let { insets ->
