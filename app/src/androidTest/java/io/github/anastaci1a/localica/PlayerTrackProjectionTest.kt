@@ -54,7 +54,7 @@ class PlayerTrackProjectionTest {
         compose.setContent {
             val current = state.value
             val source = remember(current) { QueueUiState(current, loading = false) }
-            val result by rememberQueuePresentation(source, library)
+            val result = rememberQueuePresentation(source, library).value
             SideEffect { observed = result?.tracks; publishedPosition = result?.active?.queue?.positionMs ?: -1 }
         }
         compose.waitUntil(5000) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); observed != null }
@@ -87,7 +87,7 @@ class PlayerTrackProjectionTest {
         var observed: PlayerTrackProjection? = null
         compose.setContent {
             val source = remember(queues.value) { QueueUiState(queues.value, loading = false) }
-            val result by rememberQueuePresentation(source, library.value)
+            val result = rememberQueuePresentation(source, library.value).value
             SideEffect { observed = result?.tracks }
         }
         fun assertProjection(current: Track?, indexed: Track?, lyrics: Track?) {
@@ -188,6 +188,8 @@ class PlayerTrackProjectionTest {
             compose.waitForIdle()
             assertTrue(started.await(10, TimeUnit.SECONDS))
             // A replacement raw owner cannot expose the retained occurrence’s actions or lyrics.
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithContentDescription("Hide lyrics").performClick()
             compose.onNodeWithContentDescription("Information").performClick()
             compose.onNodeWithTag("song-information").assertDoesNotExist()
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isEmpty() }
