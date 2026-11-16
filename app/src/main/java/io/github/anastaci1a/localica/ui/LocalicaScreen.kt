@@ -244,8 +244,8 @@ fun LocalicaScreen(
     val playerSample = remember(playbackSample, currentTrack) {
         playbackSample?.let { sample -> { playerDisplayState(sample(), currentTrack) } }
     }
-    val hasPlayer = currentTrack != null || playback.trackUri != null
-    LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false } }
+    val hasPlayer = prepared?.tracks?.current != null || playback.trackUri != null
+    LaunchedEffect(hasPlayer, playerPresentation) { if (!hasPlayer && playerPresentation != null) { expanded = false; queueOpen = false } }
     val dragHost = remember { SongDragHost() }
     val playerVisual = rememberPlayerVisual(player.trackUri)
     PreloadPlayerArtwork(playerPresentation?.preload.orEmpty())
@@ -438,14 +438,14 @@ fun LocalicaScreen(
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
                 PlayerAction.Repeat -> queues.settings.advancedRepeat?.let { "Repeat: ${it.songEnd.label}; queue end: ${it.queueEnd.label}" } ?: ("Repeat: " + queues.settings.repeat.name)
-                PlayerAction.Count -> "Track ${(prepared?.active?.index ?: -1) + 1} of ${prepared?.active?.queue?.entries?.size ?: 0}"
+                PlayerAction.Count -> playerPresentation?.let { "Track ${(it.active?.index ?: -1) + 1} of ${it.active?.queue?.entries?.size ?: 0}" } ?: "Track count loading"
                 PlayerAction.Lyrics -> if (lyricsOpen) "Hide lyrics" else "Show lyrics"
                 PlayerAction.Pin -> if (currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true) "Unpin from Home" else "Pin to Home"
                 else -> action.label
             } }, { playerDialogAppearance = actionAppearance; playerAction(it, editTags) }, { customizeAppearance = actionAppearance; customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
                 lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
                 onRepeatOptions = { playerDialogAppearance = actionAppearance; repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
-                count = "${(prepared?.active?.index ?: -1) + 1} / ${prepared?.active?.queue?.entries?.size ?: 0}")
+                count = playerPresentation?.let { "${(it.active?.index ?: -1) + 1} / ${it.active?.queue?.entries?.size ?: 0}" } ?: "…")
         }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
         ObserveSheetContent("player-overlay")

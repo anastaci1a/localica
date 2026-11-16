@@ -9,6 +9,7 @@ import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -144,11 +145,97 @@ class PlayerTrackProjectionTest {
         } finally { release.countDown(); hook.set(null) }
     }
 
+    @Test fun queueScreenColdLoadingWaitsForTheSharedNormalMotionHandoff() {
+        val songs = List(3) { track("motion-$it").copy(durationMs = 1000) }
+        val queue = QueueEdits.create(songs, 0, "Motion queue")
+        val source = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
+        val ready = runBlocking { withContext(Dispatchers.Default) { prepareQueuePresentation(source, LibrarySnapshot(), null) } }
+        val result = mutableStateOf<QueuePresentation?>(null)
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.setContent { EngineTheme {
+                CompositionLocalProvider(LocalReducedMotion provides false) { QueueScreen(source, null, presentation = result) }
+            } }
+            compose.onNodeWithTag("async-section-loading").assertExists()
+            compose.runOnIdle { result.value = ready }
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithTag("async-section-loading").assertExists()
+            compose.onNodeWithText("1. Motion queue").assertDoesNotExist()
+            compose.onNodeWithText(songs[0].title).assertDoesNotExist()
+            compose.mainClock.advanceTimeBy(1920)
+            compose.onNodeWithTag("async-section-loading").assertDoesNotExist()
+            compose.onNodeWithText("1. Motion queue").assertExists()
+            compose.onNodeWithText("1 / 3").assertExists()
+            compose.onNodeWithText(songs[0].title).assertExists()
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun pendingUnrelatedPublicationKeepsTheExpandedSavedPreviewAndOpenDrawer() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = InterfacePreferences(context)
+        val saved = preferences.read()
+        val preview = QueueEdits.create(listOf(track("preview")), 0, "Preview")
+        val other = QueueEdits.create(listOf(track("other")), 0, "Other")
+        val catalog = Counted(listOf(preview, other))
+        val hook = AtomicReference<(() -> Unit)?>(null)
+        catalog.beforeRead = { hook.getAndSet(null)?.invoke() }
+        var source by mutableStateOf(QueueUiState(QueueLibrary(catalog, preview.id), loading = false))
+        val native = io.github.anastaci1a.localica.playback.PlaybackState()
+        var progress = Float.NaN
+        fun publish(next: QueueUiState, ready: SemanticsMatcher, choices: () -> Unit) {
+            val started = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            hook.set { started.countDown(); check(release.await(30, TimeUnit.SECONDS)) }
+            try {
+                compose.runOnIdle { source = next }
+                assertTrue(started.await(10, TimeUnit.SECONDS))
+                compose.waitForIdle()
+                choices()
+                release.countDown()
+                compose.waitUntil(10_000) { compose.onAllNodes(ready, true).fetchSemanticsNodes().isNotEmpty() }
+                choices()
+            } finally { release.countDown(); hook.set(null) }
+        }
+        try {
+            preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home), reducedMotion = true))
+            compose.setContent { EngineTheme(reduced = true) {
+                CompositionLocalProvider(LocalPlayerWorkObserver provides { kind, p -> if (kind == "root" && p != null) progress = p }) {
+                    LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, queues = source)
+                }
+            } }
+            assertNull(native.trackUri)
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("player-surface").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("player-surface").performClick()
+            compose.waitUntil(10_000) { progress == 1f }
+            val title = hasText("preview") and (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title")))
+            publish(source.copy(settings = source.settings.copy(preloadNext = false)), title) {
+                compose.onNodeWithTag("player-surface").assertExists()
+                compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
+                assertEquals(1f, progress, 0f)
+            }
+            compose.onNodeWithContentDescription("Open queue").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Minimize queue").fetchSemanticsNodes().isNotEmpty() }
+            publish(source.copy(browsedId = other.id, settings = source.settings.copy(preloadNext = true)), hasText("2. Other")) {
+                compose.onNodeWithContentDescription("Minimize queue").assertIsDisplayed()
+                compose.onNodeWithTag("player-surface", true).assertExists()
+                assertEquals(1f, progress, 0f)
+            }
+            compose.onNodeWithContentDescription("Minimize queue").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Collapse player").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
+            assertEquals(1f, progress, 0f)
+            compose.runOnIdle { source = QueueUiState(loading = false) }
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("player-surface").fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithTag("queue-surface", true).assertDoesNotExist()
+        } finally { hook.set(null); preferences.write(saved) }
+    }
+
     @Test fun nativeIdentityOwnsArtworkActionsAndLyricsWhileTheReplacementPrepares() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
         context.getSharedPreferences("player-actions", 0).edit().clear().commit()
+        PlayerActionPreferences(context).write(PlayerActionSettings().place(PlayerAction.Count, ActionSlot(0, 1)))
         val file = File.createTempFile("projection-old-", ".opus", context.cacheDir)
         val replacement = File.createTempFile("projection-native-", ".opus", context.cacheDir)
         copyTestAsset(instrumentation.context.assets, "lyrics.opus", file)
@@ -180,6 +267,8 @@ class PlayerTrackProjectionTest {
             compose.waitUntil(10_000) { PlayerVisualCache.peek(old.uri) != null }
             compose.onNodeWithTag("player-surface").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Information").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("1/1", true).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Track 1 of 1").assertExists()
             information(old.title)
             compose.onNodeWithTag("player-lyrics-title-target", true).performSemanticsAction(SemanticsActions.OnClick)
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isNotEmpty() }
@@ -190,6 +279,10 @@ class PlayerTrackProjectionTest {
             // A replacement raw owner cannot expose the retained occurrence’s actions or lyrics.
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithContentDescription("Hide lyrics").performClick()
+            compose.onNodeWithText("…", true).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Track count loading").assertExists()
+            compose.onNodeWithText("1/1", true).assertDoesNotExist()
+            compose.onNodeWithContentDescription("Track 1 of 1").assertDoesNotExist()
             compose.onNodeWithContentDescription("Information").performClick()
             compose.onNodeWithTag("song-information").assertDoesNotExist()
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("lyric-lines", true).fetchSemanticsNodes().isEmpty() }
@@ -197,6 +290,10 @@ class PlayerTrackProjectionTest {
                 Triple(old.id, fresh.uri + "?same-id", "Same ID, different URI"), Triple(null, fresh.uri + "?uri-only", "URI only"))) {
                 compose.runOnIdle { native = native.copy(trackId = id, trackUri = uri, title = title) }
                 compose.onNode(hasText(title) and (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title"))), true).assertTextEquals(title)
+                compose.onNodeWithText("…", true).assertIsDisplayed()
+                compose.onNodeWithContentDescription("Track count loading").assertExists()
+                compose.onNodeWithText("1/1", true).assertDoesNotExist()
+                compose.onNodeWithContentDescription("Track 1 of 1").assertDoesNotExist()
                 compose.waitUntil(10_000) { PlayerVisualCache.peek(uri) != null }
                 compose.onNodeWithContentDescription("Information").performClick()
                 compose.onNodeWithTag("song-information").assertDoesNotExist()
@@ -210,6 +307,9 @@ class PlayerTrackProjectionTest {
             release.countDown()
             compose.waitUntil(10_000) { compose.onAllNodes(hasText("Replacement occurrence") and
                 (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title"))), true).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("1/1", true).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Track 1 of 1").assertExists()
+            compose.onNodeWithContentDescription("Track count loading").assertDoesNotExist()
             compose.onNodeWithContentDescription("Information").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithText("Replacement occurrence").fetchSemanticsNodes().isNotEmpty() }
             compose.onNode(hasText("Replacement occurrence") and hasAnyAncestor(hasTestTag("song-information"))).assertExists()

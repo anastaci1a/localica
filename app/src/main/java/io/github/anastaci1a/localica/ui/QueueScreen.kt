@@ -29,8 +29,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
     enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null, listBackEnabled: Boolean = false, playerOpen: Boolean = false, openingRequest: Long = 0,
     headerShadowStrengthOverride: Float? = null, presentation: State<QueuePresentation?>? = null) {
-    val prepared = (presentation ?: rememberQueuePresentation(state, library.snapshot)).value
-    if (prepared == null) { AsyncSection<Unit>(null, Modifier.fillMaxSize()) {}; return }
+    AsyncSection((presentation ?: rememberQueuePresentation(state, library.snapshot)).value, Modifier.fillMaxSize()) { prepared ->
     val state = prepared.state
     var selector by remember { mutableStateOf(false) }
     val selectorAnchor = rememberGlassAnchor()
@@ -166,6 +165,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
             confirmButton = { ActionTextButton(onClick = { controller?.removeQueues(ids); dismissDeletion() }) { Text("Delete") } },
             dismissButton = { ActionTextButton(onClick = ::dismissDeletion) { Text("Cancel") } })
     } }
+    }
 }
 
 @Composable
