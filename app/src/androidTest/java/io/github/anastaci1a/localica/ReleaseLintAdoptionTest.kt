@@ -140,6 +140,9 @@ class ReleaseLintAdoptionTest {
             } }
         } }
         compose.onNodeWithContentDescription("Search settings input").performTextInput("Control expansion")
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithTag("search-result:Control expansion").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onAllNodesWithTag("search-result:Control expansion").assertCountEquals(1)
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false

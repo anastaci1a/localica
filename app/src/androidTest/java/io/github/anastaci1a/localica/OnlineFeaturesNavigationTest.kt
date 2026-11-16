@@ -42,6 +42,9 @@ class OnlineFeaturesNavigationTest {
             compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
             compose.onNodeWithContentDescription("Back from settings").performClick()
             compose.onNodeWithContentDescription("Search settings input").performTextReplacement("Photo cache size")
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("search-result:Photo cache size").fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNodeWithTag("search-result:Photo cache size").performClick()
             compose.onNodeWithTag("setting:Photo cache size").assertIsDisplayed()
             compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()

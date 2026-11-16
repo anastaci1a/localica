@@ -55,6 +55,9 @@ class LastFmSettingsTest {
                 compose.onNodeWithContentDescription("Back from settings").performClick()
             }
             compose.onNodeWithContentDescription("Search settings input").performTextReplacement(query)
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("search-result:$query").fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNodeWithTag("search-result:$query").performClick()
             val highlighted = if (hasArchive) "Listening statistics" else "Review matches"
             compose.onNodeWithTag("setting-highlight:$highlighted", useUnmergedTree = true).assertExists()

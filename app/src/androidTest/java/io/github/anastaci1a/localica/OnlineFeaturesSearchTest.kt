@@ -27,6 +27,9 @@ class OnlineFeaturesSearchTest {
             } }
             compose.onNodeWithText("Last.fm").assertDoesNotExist()
             compose.onNodeWithContentDescription("Search settings input").performTextReplacement("Clear photo cache")
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("search-result:Clear photo cache").fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNodeWithTag("search-result:Clear photo cache").performClick()
             compose.onNodeWithTag("setting:Clear photo cache").assertIsDisplayed()
             compose.onNodeWithTag("setting-highlight:Clear photo cache", useUnmergedTree = true).assertExists()
@@ -36,6 +39,9 @@ class OnlineFeaturesSearchTest {
             compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
             compose.onNodeWithContentDescription("Back from settings").performClick()
             compose.onNodeWithContentDescription("Search settings input").performTextReplacement("Last.fm username")
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("search-result:Last.fm username").fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNodeWithTag("search-result:Last.fm username").performClick()
             compose.onNodeWithTag("setting:Last.fm username").assertIsDisplayed()
             compose.onNodeWithTag("setting-highlight:Last.fm username", useUnmergedTree = true).assertExists()

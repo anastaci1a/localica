@@ -24,6 +24,8 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class SettingsSearchTest {
     @get:Rule val compose = localicaComposeRule()
@@ -40,12 +42,47 @@ class SettingsSearchTest {
         } }
     }
 
+    @Test fun emptyResultDoesNotLabelPendingMatchingQueryAsEmpty() {
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val missing = "zzzz-no-setting"
+        var query by mutableStateOf(missing)
+        compose.setContent { LocalicaTheme {
+            Column {
+                SettingsSearchResults(query, emptyMap(), search = { input ->
+                    if (input == "queue") { started.countDown(); check(release.await(10, TimeUnit.SECONDS)) }
+                    SettingsCatalog.search(input)
+                }) {}
+            }
+        } }
+        try {
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithText("No settings match \"$missing\"").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.runOnIdle { query = "queue" }
+            compose.waitForIdle()
+            assertTrue(started.await(5, TimeUnit.SECONDS))
+            compose.onNodeWithText("No settings match \"queue\"").assertDoesNotExist()
+            compose.onNodeWithText("No settings match \"$missing\"").assertDoesNotExist()
+            compose.onNodeWithText("Try a different word, like blur, queue or tabs").assertDoesNotExist()
+            compose.onNodeWithTag("search-result:Preload next track").assertDoesNotExist()
+            release.countDown()
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("search-result:Preload next track").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("No settings match \"queue\"").assertDoesNotExist()
+        } finally { release.countDown() }
+    }
+
     @Test fun deepSearchFindsOptionsAndValuesFromEveryPage() {
         show()
         for ((query, result) in listOf("Lift shadow" to "Lift shadow strength", "Carousel" to "Song-change transition",
             "Preload" to "Preload next track", "Shape damping" to "Shape damping", "grey" to "Interface gray",
             "minimum duration" to "Exclude short files", "sync" to "Lyrics timing correction")) {
             compose.onNodeWithContentDescription("Search settings input").performTextReplacement(query)
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("search-result:$result").fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNodeWithTag("search-result:$result").assertExists()
         }
     }
@@ -53,6 +90,9 @@ class SettingsSearchTest {
     @Test fun resultNavigatesScrollsAndHighlightsTheActualRow() {
         show()
         compose.onNodeWithContentDescription("Search settings input").performTextInput("Control expansion")
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithTag("search-result:Control expansion").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithTag("search-result:Control expansion").assertExists()
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("search-result:Control expansion").performClick()
@@ -111,6 +151,9 @@ class SettingsSearchTest {
     @Test fun hiddenOptionJumpsToItsRevealingChoice() {
         show()
         compose.onNodeWithContentDescription("Search settings input").performTextInput("Gray pill opacity")
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithTag("search-result:Gray pill opacity").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithTag("search-result:Gray pill opacity").performClick()
         compose.onNodeWithTag("setting:Selector style").assertIsDisplayed()
         compose.onNodeWithTag("setting-highlight:Selector style", useUnmergedTree = true).assertExists()
@@ -232,6 +275,9 @@ class SettingsSearchTest {
             compose.onNodeWithContentDescription("Back from settings").performClick()
             compose.onNodeWithContentDescription("Back from settings").performClick()
             compose.onNodeWithContentDescription("Search settings input").performTextInput("Songs")
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("search-result:Songs").fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNodeWithTag("search-result:Songs").performClick()
             compose.onNode(hasText("Songs") and hasText("Add next")).assertIsDisplayed()
             restoration.emulateSavedInstanceStateRestore()
