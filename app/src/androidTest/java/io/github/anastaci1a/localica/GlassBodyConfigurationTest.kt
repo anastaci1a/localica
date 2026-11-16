@@ -43,6 +43,11 @@ class GlassBodyConfigurationTest {
             spring.javaClass.getDeclaredField(field).apply { isAccessible = true }.setFloat(spring, value)
         contact.state.output.value = body.shape
     }
+    private fun alphaTargets(contact: GlassContact): List<Float> {
+        val body = contact.state.momentum
+        val lights = body.javaClass.getDeclaredField("light").apply { isAccessible = true }.get(body) as List<*>
+        return lights.take(2).map { it!!.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(it) }
+    }
 
     @Test fun measuredFreshActionAndSharedAnchorKeepTheirDistinctConfigurationAcrossResizeAndReducedMotion() {
         var width by mutableFloatStateOf(64f)
@@ -52,6 +57,13 @@ class GlassBodyConfigurationTest {
         lateinit var tables: Set<CompositionData>
         val anchor = GlassAnchor()
         val decoy = GlassContact()
+        fun published(contact: GlassContact, longSide: Float) {
+            compose.mainClock.advanceTimeUntil {
+                contact.state.momentum.spec == FlexSpec.dynamic(longSide, 64f) &&
+                    contact.state.momentum.bodyOverride?.scaleGain == -(16f / longSide) / .24f &&
+                    anchor.contact.state.momentum.spec == FlexSpec.dynamic(sharedWidth, 160f)
+            }
+        }
         compose.mainClock.autoAdvance = false
         compose.setContent {
             val inspected = remember { mutableSetOf<CompositionData>() }
@@ -87,11 +99,14 @@ class GlassBodyConfigurationTest {
             assertEquals(1f, fresh.state.glow.value.big, 0f)
             raw(fresh).also { width = 128f; sharedWidth = 160f }
         }
+        val heldTargets = compose.runOnIdle { alphaTargets(fresh) }
+        published(fresh, 128f)
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
             assertEquals("idle size assignment preserves settled raw state", held, raw(fresh))
             assertEquals(1.125f, fresh.body.value.scaleX(), 0f)
             assertEquals("idle resize does not wake or retarget glow", 1f, fresh.state.glow.value.big, 0f)
+            assertEquals("idle layout does not consume the newly assigned opacity targets", heldTargets, alphaTargets(fresh))
             fresh.active = false
         }
         compose.mainClock.advanceTimeByFrame()
@@ -99,14 +114,14 @@ class GlassBodyConfigurationTest {
             seed(fresh)
             raw(fresh).also { width = 64f }
         }
-        compose.mainClock.advanceTimeByFrame()
+        published(fresh, 64f)
         compose.runOnIdle {
             assertEquals(initial, raw(fresh))
             assertEquals(-(16f / 64f) / .24f, fresh.state.momentum.bodyOverride!!.scaleGain)
             assertEquals(1.125f, fresh.body.value.scaleX(), 0f)
             width = 128f
         }
-        compose.mainClock.advanceTimeByFrame()
+        published(fresh, 128f)
         compose.runOnIdle {
             assertEquals(initial, raw(fresh))
             assertEquals(1.0625f, fresh.body.value.scaleX(), 0f)
@@ -117,7 +132,7 @@ class GlassBodyConfigurationTest {
             assertEquals("layout assignment alone does not retarget light", 1f, fresh.state.glow.value.big, 0f)
             reduced = true; width = 64f
         }
-        compose.mainClock.advanceTimeByFrame()
+        published(fresh, 64f)
         compose.runOnIdle {
             assertEquals("idle reduced-motion remeasurement remains identity", GlassShape(), fresh.body.value)
             assertEquals(initial, raw(fresh))
@@ -131,11 +146,12 @@ class GlassBodyConfigurationTest {
             width = 128f
             values
         }
-        compose.mainClock.advanceTimeByFrame()
+        published(fresh, 128f)
         compose.runOnIdle {
             assertEquals(-(16f / 128f) / .24f, fresh.state.momentum.bodyOverride!!.scaleGain)
             assertEquals(FlexSpec.Small.trackingResponse, fresh.state.momentum.bodyOverride!!.trackingResponse, 0f)
             assertNotEquals("running resize preserves live motion instead of resetting", listOf(0f, 0f), moving)
+            assertNotEquals("live velocity is retained through publication", 0f, raw(fresh)[7])
         }
     }
 }
