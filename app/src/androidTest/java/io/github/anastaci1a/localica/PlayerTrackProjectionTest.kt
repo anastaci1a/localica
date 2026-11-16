@@ -218,11 +218,11 @@ class PlayerTrackProjectionTest {
             compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Minimize queue").fetchSemanticsNodes().isNotEmpty() }
             publish(source.copy(browsedId = other.id, settings = source.settings.copy(preloadNext = true)), hasText("2. Other")) {
                 compose.onNodeWithContentDescription("Minimize queue").assertIsDisplayed()
-                compose.onNodeWithTag("player-surface", true).assertExists()
                 assertEquals(1f, progress, 0f)
             }
             compose.onNodeWithContentDescription("Minimize queue").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Collapse player").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("player-surface", true).assertExists()
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
             assertEquals(1f, progress, 0f)
             compose.runOnIdle { source = QueueUiState(loading = false) }
