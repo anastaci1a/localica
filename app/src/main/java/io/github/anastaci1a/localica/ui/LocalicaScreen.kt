@@ -28,8 +28,6 @@ import io.github.anastaci1a.localica.ui.engine.*
 import io.github.anastaci1a.localica.ui.spec.*
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.library.Track
-import io.github.anastaci1a.localica.library.LibraryQuery
-import io.github.anastaci1a.localica.library.SongListView
 import io.github.anastaci1a.localica.library.mapView
 import io.github.anastaci1a.localica.playlist.PlaylistController
 import io.github.anastaci1a.localica.playback.PlaybackState
