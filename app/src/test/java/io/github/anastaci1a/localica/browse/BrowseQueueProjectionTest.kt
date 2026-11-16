@@ -282,7 +282,7 @@ class BrowseQueueProjectionTest {
         val base = BrowserItem(MediaRef(MediaKind.Album, "a"), "t", "s", emptyList(), SongRow("r", track(1)), "g", 1, 2, 3, "c")
         listOf(base.copy(ref = MediaRef(MediaKind.Album, "b")), base.copy(title = "u"), base.copy(subtitle = null), base.copy(row = null),
             base.copy(groupHeading = null), base.copy(added = 9), base.copy(modified = 9), base.copy(plays = 9), base.copy(coverUri = null),
-            base.copy(songs = listOf(SongRow("r", track(1))))).forEach { assertNotEquals(base, it) }
+            base.copy(songs = listOf(SongRow("r", track(1)))), base.copy(physicalPosition = 1)).forEach { assertNotEquals(base, it) }
         assertEquals(base, base.copy(songs = ArrayList()))
         val albums = List(1_000) { LibraryGroup("a$it", "A$it", null, emptyList()) }
         val countingAlbum: (LibraryGroup) -> LibraryGroup = { reads++; it }
@@ -303,7 +303,7 @@ class BrowseQueueProjectionTest {
     /** BrowseResult and BrowserItem state equality by hand (#957): a new constructor field must join it. */
     @Test fun ownerEqualityCoversEveryConstructorField() {
         fun fields(type: Class<*>) = type.declaredConstructors.filterNot { it.isSynthetic }.maxOf { it.parameterCount }
-        assertEquals(10, fields(BrowserItem::class.java))
+        assertEquals(11, fields(BrowserItem::class.java))
         assertEquals(5, fields(BrowseResult::class.java))
     }
 
