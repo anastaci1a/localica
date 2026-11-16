@@ -188,8 +188,8 @@ class PlayerTrackProjectionTest {
             hook.set { started.countDown(); check(release.await(30, TimeUnit.SECONDS)) }
             try {
                 compose.runOnIdle { source = next }
-                assertTrue(started.await(10, TimeUnit.SECONDS))
                 compose.waitForIdle()
+                assertTrue(started.await(10, TimeUnit.SECONDS))
                 choices()
                 release.countDown()
                 compose.waitUntil(10_000) { compose.onAllNodes(ready, true).fetchSemanticsNodes().isNotEmpty() }
