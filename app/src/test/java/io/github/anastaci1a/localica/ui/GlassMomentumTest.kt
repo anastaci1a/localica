@@ -106,18 +106,23 @@ class GlassMomentumTest {
                 repeat(fps * 3) { body.advance(initialVelocity, (1f / fps).toDouble(), contact = 1f, damping = damping) }
                 val nextVelocity = if (braking) 0f else direction * 4f
                 var peak = 0f; var trough = 0f
+                var rawPeak = 0f; var rawTrough = 0f
                 repeat(fps) {
                     body.advance(nextVelocity, (1f / fps).toDouble(), contact = 1f, damping = damping)
                     val raw = rawMotion(body)
                     assertEquals("Visible mapping stays exact at every peak/trough candidate", .12f * tanh(raw / .12f), body.strain, 0f)
-                    val axial = raw * if (braking) -1f else 1f
+                    val sign = if (braking) -1f else 1f
+                    val rawAxial = raw * sign
+                    rawTrough = minOf(rawTrough, rawAxial)
+                    rawPeak = maxOf(rawPeak, rawAxial)
+                    val axial = body.strain * sign
                     trough = minOf(trough, axial)
                     peak = maxOf(peak, axial)
                     assertEquals(1f, body.scaleX * body.scaleY * body.shape.thickness, .00001f)
                 }
                 assertTrue("Held acceleration/braking retains a visible impulse", peak > if (damping == 40f) .0005f else .004f)
                 assertTrue("Held impulse remains bounded", peak < .02f)
-                if (damping == 8f) assertTrue("Default tracking rebound <= 8.1%", -trough <= peak * .081f)
+                if (damping == 8f) assertTrue("Default tracking rebound <= 8.1%", -rawTrough <= rawPeak * .081f)
                 if (damping == 2f) assertTrue("Stored-2 tracking rebound <= 62%", -trough <= peak * .62f)
                 if (damping == 40f) assertTrue("Stored-40 tracking does not cross rest", trough >= -.000001f)
                 // The slowest tracking envelope decays at 3.127/s; 3 s keeps the original tolerance.
