@@ -5090,7 +5090,7 @@
         errorLine2="                                                                                              ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="97"
+            line="82"
             column="95"/>
     </issue>
 
@@ -5101,7 +5101,7 @@
         errorLine2="                                                                                              ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="114"
+            line="99"
             column="95"/>
     </issue>
 
@@ -8456,7 +8456,7 @@
         errorLine2="                    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="97"
+            line="82"
             column="21"/>
     </issue>
 
@@ -8489,7 +8489,7 @@
         errorLine2="                    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueScreen.kt"
-            line="114"
+            line="99"
             column="21"/>
     </issue>
 

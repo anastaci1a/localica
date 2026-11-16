@@ -49,7 +49,7 @@ private data class QueueDragPresentation(val browsedId: String?, val playingId: 
 @Composable
 internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?, playingId: String?,
     isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, modifier: Modifier = Modifier,
-    onSelect: (String) -> Unit, onRename: (String) -> Unit, onDelete: (String) -> Unit,
+    onSelect: (String) -> Unit, onRename: (ListeningQueue) -> Unit, onDelete: (String) -> Unit,
     onOffset: (String, Int) -> Unit, onMove: (String, String?, (Boolean) -> Unit) -> Unit) {
     val panelReady = LocalGlassPanelReady.current
     val playingIndex = queues.indexOfFirst { it.id == playingId }.coerceAtLeast(0)
@@ -141,7 +141,7 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
                                 actionsModifier = Modifier.onGloballyPositioned { actions[queue.id] = it },
                                 selectionPlacement = if (observer == null) Modifier else Modifier.onPlaced { probe.rows[queue.id] = it },
                                 sharedNameLive = drag?.keys?.contains(queue.id) != true,
-                                onSelect = { onSelect(queue.id) }, onRename = { onRename(queue.id) }, onDelete = { onDelete(queue.id) },
+                                onSelect = { onSelect(queue.id) }, onRename = { onRename(queue) }, onDelete = { onDelete(queue.id) },
                                 onOffset = { onOffset(queue.id, it) })
                         }
                     }
