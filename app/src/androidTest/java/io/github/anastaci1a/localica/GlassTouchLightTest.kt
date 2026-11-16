@@ -349,6 +349,7 @@ class GlassTouchLightTest {
         compose.runOnIdle { strength = 1f; held = true }
         compose.mainClock.advanceTimeBy(1200)
         compose.runOnIdle { assertTrue(shared.momentum.settled); point = Offset(.6f, .4f) }
+        compose.mainClock.advanceTimeByFrame() // h=0 admission observes the point without advancing it.
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
             assertTrue("point alone wakes the settled clock", shared.glow.value.point.x in .6f.. .9f && shared.glow.value.point.x != .9f)
@@ -360,20 +361,28 @@ class GlassTouchLightTest {
         val before = compose.runOnIdle { shared.glow.value }
         compose.runOnIdle { modal = !modal; point = Offset(.1f, .9f) }
         compose.runOnIdle { assertEquals("handoff has no reset", before, shared.glow.value) }
+        model.advance(0f, 0.0, contact = 1f)
         model.targetGlow(Offset(.1f, .9f), 1f, 1f)
-        model.advance(0f, ((1f / 60f) * ownerSpeed).toDouble(), contact = 1f)
-        model.finishSettlement()
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
-            assertEquals("handoff integrates exactly once: expected x=${model.glow.point.x} y=${model.glow.point.y}; actual x=${shared.glow.value.point.x} y=${shared.glow.value.point.y}", model.glow, shared.glow.value)
+            assertEquals("handoff admission preserves energy: expected x=${model.glow.point.x} y=${model.glow.point.y}; actual x=${shared.glow.value.point.x} y=${shared.glow.value.point.y}", model.glow, shared.glow.value)
+            assertEquals(model.shape, shared.output.value)
+        }
+        val handoffAdmission = compose.mainClock.currentTime
+        compose.mainClock.advanceTimeByFrame()
+        model.advance(0f, (compose.mainClock.currentTime - handoffAdmission) / 1000.0 * ownerSpeed, contact = 1f)
+        model.targetGlow(Offset(.1f, .9f), 1f, 1f)
+        model.finishSettlement()
+        compose.runOnIdle {
+            assertEquals("the first positive handoff interval advances exactly once", model.glow, shared.glow.value)
             assertEquals(model.shape, shared.output.value)
             held = false
         }
         compose.mainClock.advanceTimeBy(32)
         val repressed = compose.runOnIdle { GlassMomentum().also { it.blendFrom(shared.momentum) } }
         compose.runOnIdle { point = Offset(.7f, .4f); held = true }
+        repressed.advance(0f, .016 * ownerSpeed, contact = 1f)
         repressed.targetGlow(Offset(.7f, .4f), 1f, 1f)
-        repressed.advance(0f, (.016f * ownerSpeed).toDouble(), contact = 1f)
         repressed.finishSettlement()
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
