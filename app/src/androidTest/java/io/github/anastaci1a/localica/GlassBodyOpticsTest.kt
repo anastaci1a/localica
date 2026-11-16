@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
-import android.graphics.Picture
 import android.graphics.RenderNode
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
@@ -84,15 +83,10 @@ class GlassBodyOpticsTest {
                 node.beginRecording().drawBitmap(bitmap, 0f, 0f, null)
                 node.endRecording()
                 node.setRenderEffect(effect.asAndroidRenderEffect())
-                val picture = Picture()
-                picture.beginRecording(112, 96).drawRenderNode(node)
-                picture.endRecording()
-                val hardware = Bitmap.createBitmap(picture)
+                val image = renderNativeReferenceImage(112, 96, "S1 matched optical readback") { it.drawRenderNode(node) }
                 try {
-                    val image = requireNotNull(hardware.copy(Bitmap.Config.ARGB_8888, false))
-                    try { return IntArray(112 * 96).also { image.getPixels(it, 0, 112, 0, 0, 112, 96) } }
-                    finally { image.recycle() }
-                } finally { hardware.recycle() }
+                    return IntArray(112 * 96).also { image.asAndroidBitmap().getPixels(it, 0, 112, 0, 0, 112, 96) }
+                } finally { image.asAndroidBitmap().recycle() }
             } finally { node.discardDisplayList() }
         }
         try {
