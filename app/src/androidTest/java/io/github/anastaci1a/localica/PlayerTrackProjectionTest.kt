@@ -212,7 +212,7 @@ class PlayerTrackProjectionTest {
                 (hasTestTag("player-title") or hasAnyAncestor(hasTestTag("player-title"))), true).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithContentDescription("Information").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithText("Replacement occurrence").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Replacement occurrence").assertExists()
+            compose.onNode(hasText("Replacement occurrence") and hasAnyAncestor(hasTestTag("song-information"))).assertExists()
         } finally { release.countDown(); hook.set(null); file.delete(); replacement.delete() }
     }
 
