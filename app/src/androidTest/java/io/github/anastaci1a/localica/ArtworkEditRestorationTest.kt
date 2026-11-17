@@ -67,6 +67,59 @@ class ArtworkEditRestorationTest {
 
     private var fixtureIndex = 0
     private var fixtureTag = ""
+    private fun observedArtworkClick() {
+        val button = compose.onPopupAction(hasContentDescription("Choose artwork"))
+        val node = button.fetchSemanticsNode()
+        val body = compose.onNodeWithTag("tag-editor-body").fetchSemanticsNode()
+        val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
+        val samples = ArrayDeque<String>()
+        fun sample(label: String) {
+            val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+            val row = "$label time=${android.os.SystemClock.uptimeMillis()} button=${node.boundsInRoot} " +
+                "body=${body.boundsInRoot} scroll=${body.config[SemanticsProperties.VerticalScrollAxisRange].value()} " +
+                "ime=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom} focus=${view.hasWindowFocus()}"
+            if (samples.size == 80) samples.removeFirst()
+            samples.addLast(row)
+        }
+        // Read the pinned callback graph only; never invoke or replace the action.
+        fun workflow(): io.github.anastaci1a.localica.ui.ArtworkWorkflow? {
+            val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
+            fun find(value: Any?, depth: Int): io.github.anastaci1a.localica.ui.ArtworkWorkflow? {
+                if (value is io.github.anastaci1a.localica.ui.ArtworkWorkflow) return value
+                if (value == null || depth == 0 || !seen.add(value)) return null
+                if (value !is Function<*> && value !is androidx.compose.ui.Modifier.Node) return null
+                var type: Class<*>? = value.javaClass
+                while (type != null && type != Any::class.java) {
+                    for (field in type.declaredFields.filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) }) {
+                        val child = runCatching { field.isAccessible = true; field.get(value) }.getOrNull()
+                        find(child, depth - 1)?.let { return it }
+                    }
+                    type = type.superclass
+                }
+                return null
+            }
+            return find(node.config[SemanticsActions.OnClick].action, 12)
+        }
+        val draw = android.view.ViewTreeObserver.OnDrawListener { sample("draw") }
+        val tree = view.viewTreeObserver
+        compose.runOnUiThread { tree.addOnDrawListener(draw); sample("before-scroll") }
+        try {
+            button.performScrollTo()
+            compose.runOnUiThread { sample("before-click") }
+            button.performClick()
+            compose.runOnUiThread {
+                sample("after-click")
+                val current = workflow()
+                android.util.Log.i("Chooser530", "workflow=${current?.stage} target=${current?.target}")
+            }
+            chooseRecent()
+        } finally {
+            compose.runOnUiThread {
+                if (tree.isAlive) tree.removeOnDrawListener(draw)
+                samples.forEach { android.util.Log.i("Chooser530", it) }
+            }
+        }
+    }
     private fun chooseRecent() {
         compose.waitUntil(10000) {
             compose.onAllNodesWithContentDescription("Choose recent image").fetchSemanticsNodes().isNotEmpty()
@@ -235,8 +288,7 @@ class ArtworkEditRestorationTest {
         val firstSession = controller.state.value.sessionId
         compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
             .performScrollTo().performTextReplacement("Discard this draft")
-        compose.onPopupAction(hasContentDescription("Choose artwork")).performScrollTo().performClick()
-        chooseRecent()
+        observedArtworkClick()
         compose.runOnUiThread { controller.close(); controller.open(listOf(track())) }
         assertNotEquals(firstSession, controller.state.value.sessionId)
         compose.awaitPopupGone(hasTestTag("artwork-crop"))
