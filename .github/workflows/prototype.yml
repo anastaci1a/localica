@@ -1010,10 +1010,6 @@ jobs:
         with:
           node-version: '24'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
-      - name: Record runner and toolchain identity
-        run: bash .github/test-evidence/environment.sh | tee performance-runner-environment.txt
-      - name: Record restored dependency files
-        run: bash .github/dependency-cache-audit.sh snapshot
       - name: Restore project signing key
         env:
           DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
@@ -1029,6 +1025,10 @@ jobs:
           name: performance-functional-diagnostic
           run-id: ${{ inputs.performance_apk_run }}
           github-token: ${{ github.token }}
+      - name: Record runner and toolchain identity
+        run: bash .github/test-evidence/environment.sh | tee performance-runner-environment.txt
+      - name: Record restored dependency files
+        run: bash .github/dependency-cache-audit.sh snapshot
       - name: Verify unchanged app and compilation inputs
         if: inputs.performance == 'functional' && inputs.performance_apk_run != ''
         run: |

@@ -187,6 +187,8 @@ class SharedDependencyCacheContract(unittest.TestCase):
         self.assertEqual('performance-runner-environment.txt', identity)
         record = step_index(producer, lambda step: run(step) ==
                             'bash .github/test-evidence/environment.sh | tee ' + identity)
+        reuse = step_index(producer, lambda step: step.get('name') == 'Reuse the immutable app checkpoint')
+        self.assertLess(reuse, record, 'the current identity must replace any downloaded producer identity')
         self.assertLess(record, step_index(producer, lambda step: run(step) == SNAPSHOT))
         upload = next(step for step in producer['steps']
                       if step.get('with', {}).get('name') == 'performance-${{ inputs.performance }}-diagnostic')
@@ -331,6 +333,22 @@ class DependencyCacheAuditContract(unittest.TestCase):
         self.assertTrue(report.stdout.startswith(expected), report.stdout)
         self.assertIn('::notice title=Dependency cache incomplete::2 dependency files', report.stdout)
         self.assertEqual('identity\n' + expected, (self.work / 'prototype-runner-environment.txt').read_text())
+
+    def test_reused_performance_identity_is_replaced_before_current_audit(self):
+        producer = load('prototype.yml')['jobs']['performance']
+        identity = producer['env']['DEPENDENCY_CACHE_AUDIT_IDENTITY']
+        self.env['DEPENDENCY_CACHE_AUDIT_IDENTITY'] = identity
+        (self.work / identity).write_text('previous producer\n')
+        helper = self.work / '.github/test-evidence/environment.sh'
+        helper.parent.mkdir(parents=True)
+        helper.write_text("printf '%s\\n' 'current producer'\n")
+        record = next(step for step in producer['steps'] if step.get('name') == 'Record runner and toolchain identity')
+        result = subprocess.run(['bash', '-euo', 'pipefail', '-c', run(record)],
+                                cwd=self.work, env=self.env, capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(0, self.audit('snapshot').returncode)
+        self.assertEqual(0, self.audit('report').returncode)
+        self.assertEqual('current producer\ndependency-downloads=0\n', (self.work / identity).read_text())
 
     def test_complete_cache_reports_zero_without_an_annotation_and_never_fails(self):
         self.module_file('androidx.compose.ui', 'ui', '1.8.0', 'aaa', 'ui-1.8.0.aar')
