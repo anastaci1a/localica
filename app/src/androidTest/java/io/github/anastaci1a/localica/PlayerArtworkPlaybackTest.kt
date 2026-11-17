@@ -58,7 +58,7 @@ class PlayerArtworkPlaybackTest {
         var progress = 0f
         var observing = false
         try {
-            preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home), reducedMotion = false))
+            preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home), reducedMotion = false, expandOnPlay = false))
             actions.write(PlayerActionSettings().place(PlayerAction.Count, ActionSlot(0, 4)))
             assertNotNull(runBlocking { PlayerVisualCache.read(context, song.uri) }.artwork)
             compose.setContent { EngineTheme {
@@ -97,6 +97,7 @@ class PlayerArtworkPlaybackTest {
                 connection.state.value.isPlaying && latest?.transitioning == false &&
                 connection.queues.presentation.value.library.active?.journey?.previous != null &&
                 connection.queues.presentation.value.library.active?.journey?.next != null }
+            assertEquals("Playback starts in the mini player", 0f, progress, 0f)
             val initial = connection.state.value
             assertEquals(.2f, initial.playbackSpeed, 0f)
             val visit = initial.playbackVisit
