@@ -58,18 +58,19 @@ internal fun awaitSystemImeHardKeyboardPolicy(
     var observed = ""
     val settled = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).wait(Condition<UiDevice, Boolean> {
         val dump = shell("dumpsys -t 2 input_method")
-        fun values(pattern: String) = Regex(pattern).findAll(dump).map { it.groupValues[1] }.toList()
+        fun values(pattern: String, text: String = dump) = Regex(pattern).findAll(text).map { it.groupValues[1] }.toList()
         val bound = values("(?m)^\\s*mCurId=(\\S+)")
         val services = values("(?m)^Input method service state for (.*)$").map { it.substringBefore('@') }
-        val states = values("(?m)^\\s*mSettingsObserver=(.*)$")
+        val states = values("(?m)^\\s*mSettingsObserver=(.*)$", dump.substringAfter("\nInput method service state for ", ""))
         observed = "selected=$selected bound=$bound services=$services observer=$states changed=$changed"
         val manager = dump.substringBefore("\nInput method client state").substringBefore("\nInput method service state")
-        val unbound = Regex("(?m)^\\s*mCurMethod=(\\S+)").findAll(manager).map { it.groupValues[1] }.toList() == listOf("null")
-        dump.startsWith("Input Method Manager Service state:") &&
-            !Regex("(?i)DUMP TIMEOUT|Error dumping|Exception occurred while dumping").containsMatchIn(dump) &&
-            if (unbound) services.isEmpty() && !dump.contains("SettingsObserver") &&
+        val methods = values("(?m)^\\s*mCurMethod=(\\S+)", manager)
+        dump.lineSequence().firstOrNull() in listOf("Input Method Manager Service state:", "Current Input Method Manager state:") &&
+            !Regex("(?i)DUMP TIMEOUT|Error dumping|Failed to dump|Exception occurred while dumping").containsMatchIn(dump) &&
+            if (methods == listOf("null")) services.isEmpty() && states.isEmpty() &&
+                dump.lineSequence().any { it.trim() == "No input method service." } &&
                 bound.singleOrNull() in listOf("null", selected.flattenToShortString(), selected.flattenToString())
-            else bound.singleOrNull()?.let(ComponentName::unflattenFromString) == selected &&
+            else methods.size == 1 && bound.singleOrNull()?.let(ComponentName::unflattenFromString) == selected &&
                 services == listOf(selected.className) &&
                 (states == listOf("SettingsObserver{mShowImeWithHardKeyboard=${if (showWithHardKeyboard) 2 else 1}}") ||
                     !changed && states == listOf("SettingsObserver{mShowImeWithHardKeyboard=0}"))
