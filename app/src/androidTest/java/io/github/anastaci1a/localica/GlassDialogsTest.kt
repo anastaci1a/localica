@@ -69,4 +69,40 @@ class GlassDialogsTest {
         compose.onNodeWithText("Close options").performClick()
         compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(0)
     }
+
+    /** #1051: one trigger keeps one presentation when its closing and opening dialogs swap in one composition pass. */
+    private fun sameTriggerSwap(swapByBack: Boolean) {
+        var first by mutableStateOf(true)
+        var second by mutableStateOf(false)
+        lateinit var host: GlassDialogs
+        compose.setContent { LocalicaTheme {
+            host = LocalGlassDialogs.current!!
+            CompositionLocalProvider(LocalGlassOrigin provides rememberGlassAnchor()) {
+                if (first) GlassAlertDialog(onDismissRequest = { first = false; second = true }, title = { Text("Import data?") },
+                    confirmButton = { TextButton(onClick = { first = false }) { Text("Apply") } })
+                if (second) GlassAlertDialog(onDismissRequest = { second = false }, title = { Text("Data imported") },
+                    confirmButton = { TextButton(onClick = { second = false }) { Text("Close") } })
+            }
+        } }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Import data?").fetchSemanticsNodes().isNotEmpty() }
+        if (swapByBack) {
+            pressSystemBack()
+            compose.waitUntil(5_000) { !first }
+        } else {
+            compose.mainClock.autoAdvance = false
+            androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot { first = false; second = true }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(1, host.entries.size)
+            compose.mainClock.autoAdvance = true
+        }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Data imported").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, host.entries.size)
+        compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(1)
+        compose.onNodeWithText("Close").performClick()
+        compose.waitUntil(5_000) { host.entries.isEmpty() }
+    }
+
+    @Test fun closingAndOpeningDialogsOnOneTriggerInOnePassShareOnePresentation() = sameTriggerSwap(swapByBack = false)
+
+    @Test fun backDismissThatOpensTheNextDialogOnTheSameTriggerShowsIt() = sameTriggerSwap(swapByBack = true)
 }
