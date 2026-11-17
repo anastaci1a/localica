@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.library.*
@@ -34,7 +36,7 @@ class PlayerArtworkCursorTest {
         try { replacementFile.outputStream().use { assertTrue(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) } }
         finally { bitmap.recycle() }
         val song = Track(file.toURI().toString(), "cursor-artwork", fileName = file.name, relativePath = file.name, id = "cursor-artwork")
-        val replacementSong = Track(replacementFile.toURI().toString(), "replacement-artwork", fileName = replacementFile.name, relativePath = replacementFile.name, id = "replacement-artwork")
+        val replacementSong = Track(replacementFile.toURI().toString(), "replacement-artwork", fileName = replacementFile.name, relativePath = replacementFile.name, id = "replacement-artwork", durationMs = 120000)
         val entries = ProjectionCounted(List(3) { QueueEntry("entry-$it", song) })
         val original = ListeningQueue(id = "cursor-artwork", name = "Artwork", entries = entries,
             currentEntryId = "entry-0").let { it.copy(journey = QueueJourney.start(it.ids, it.currentEntryId, JourneyModes())) }
@@ -46,6 +48,7 @@ class PlayerArtworkCursorTest {
         var progress = 0f
         var observing = false
         val blends = linkedSetOf<Any>()
+        val seeks = mutableListOf<Pair<Long, String?>>()
         val hook = AtomicReference<(() -> Unit)?>(null)
         entries.beforeRead = {
             if (Thread.currentThread().stackTrace.any { it.className == "io.github.anastaci1a.localica.ui.PlayerTrackProjectionKt" && it.methodName == "prepareQueuePresentation" })
@@ -75,7 +78,8 @@ class PlayerArtworkCursorTest {
                     if (observing && sample.frame?.transitioning == true)
                         sample.frame.roles.filter { it.incoming && !it.soft }.forEach { blends += it.identity }
                 }, LocalPlayerWorkObserver provides { kind, value -> if (kind == "root" && value != null) progress = value }) {
-                    LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, queues = source)
+                    LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, queues = source,
+                        onSeekRequest = { target, visit -> seeks += target to visit; seeks.size.toLong() })
                 }
             } }
             compose.waitUntil(10000) { latest?.roles?.any { it.visual.artwork != null } == true }
@@ -152,6 +156,11 @@ class PlayerArtworkCursorTest {
             frames(80)
             for (expanded in listOf(false, true)) {
                 if (expanded) { compose.onNodeWithTag("player-surface").performClick(); frames(80) }
+                if (expanded) {
+                    compose.onNodeWithContentDescription("Seek").performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(45000f)) }
+                    frames(1)
+                    assertEquals("Preview seeks remain bound to the native occurrence", 45000L to native.playbackVisit, seeks.last())
+                }
                 val preview = source.library.active!!
                 val preparing = CountDownLatch(1)
                 val finish = CountDownLatch(1)
@@ -166,10 +175,14 @@ class PlayerArtworkCursorTest {
                     assertEquals("A pending preview cursor keeps its pixels", replacementVisual.contentKey,
                         latest!!.roles.first { it.incoming && !it.soft }.visual.contentKey)
                     assertEquals("Preview cursor publication adds no blend (expanded=$expanded)", 1, blends.size)
+                    if (expanded) assertEquals("Pending preparation retains the committed seek", 45000f,
+                        compose.onNodeWithContentDescription("Seek").fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current, 0f)
                 } finally { finish.countDown(); hook.set(null) }
                 frames()
                 settled()
                 assertEquals("Completing preview preparation adds no blend", 1, blends.size)
+                if (expanded) assertEquals("Completing preparation retains the committed seek", 45000f,
+                    compose.onNodeWithContentDescription("Seek").fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current, 0f)
             }
             compose.runOnIdle {
                 native = native.copy(trackId = replacementSong.id, trackUri = replacementSong.uri,
@@ -193,6 +206,24 @@ class PlayerArtworkCursorTest {
             settled()
             assertEquals("Native-first queue handoff admits exactly one displayed change", 1, blends.size)
             assertEquals(ready.contentKey, latest!!.roles.first { it.incoming && !it.soft }.visual.contentKey)
+            val equalCoverSong = song.copy(id = "distinct-track-equal-cover", title = "Equal cover")
+            val equalCover = QueueEdits.create(listOf(equalCoverSong), 0, "Equal cover").let {
+                it.copy(journey = QueueJourney.start(it.ids, it.currentEntryId, JourneyModes()))
+            }
+            compose.runOnIdle {
+                blends.clear()
+                source = source.copy(library = QueueLibrary(listOf(equalCover), equalCover.id)).resolvePlayerQueue()
+            }
+            frames(80)
+            assertEquals("Distinct track IDs sharing pixels still blend once", 1, blends.size)
+            assertEquals(ready.contentKey, latest!!.roles.first { it.incoming && !it.soft }.visual.contentKey)
+            compose.runOnIdle {
+                native = native.copy(trackId = equalCoverSong.id, title = equalCoverSong.title,
+                    playbackVisit = equalCover.journey!!.current!!.token)
+            }
+            frames(80)
+            settled()
+            assertEquals("Equal-cover native receipt does not add a second blend", 1, blends.size)
         } finally {
             hook.set(null)
             compose.mainClock.autoAdvance = true
