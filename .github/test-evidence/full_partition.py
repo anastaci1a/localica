@@ -160,6 +160,9 @@ def expected_for(root, api):
             ('frostedPanelsStillScatterTheParentScene', 33),
             ('blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp', 33),
         ],
+        'GlassBodyOpticsTest': [
+            ('normalAndSingleToneKernelPixelsMatchIndependentFrozenRendererAtMatchedInputs', 33),
+        ],
         'GlassOpticsTest': [
             ('changingDepthBendsARecordedGridAndKeepsTheOutsideUntouched', 33),
         ],
