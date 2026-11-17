@@ -5,6 +5,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
+import androidx.compose.ui.test.printToString
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.UiDevice
@@ -106,5 +107,32 @@ internal fun UiDevice.findFresh(selector: androidx.test.uiautomator.BySelector, 
         findObject(selector)?.let { return it }
         if (android.os.SystemClock.uptimeMillis() >= deadline) return null
         android.os.SystemClock.sleep(100)
+    }
+}
+
+/** [waitUntil] with the same timeout and predicate, logging its duration and when each [stages] matcher
+ * first exists (#530/#1051). On timeout it logs the semantics tree and windows, then rethrows. */
+internal fun ComposeContentTestRule.observedWaitUntil(label: String, timeoutMs: Long,
+    stages: Map<String, androidx.compose.ui.test.SemanticsMatcher> = emptyMap(), condition: () -> Boolean) {
+    val start = android.os.SystemClock.uptimeMillis()
+    val seen = mutableMapOf<String, Long>()
+    fun seenText() = stages.keys.joinToString { "$it=${seen[it] ?: "never"}" }
+    try {
+        waitUntil(timeoutMs) {
+            stages.forEach { (name, matcher) -> if (name !in seen && onAllNodes(matcher, useUnmergedTree = true)
+                .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()) seen[name] = android.os.SystemClock.uptimeMillis() - start }
+            condition()
+        }
+        android.util.Log.i("SemanticWait", "$label ok ms=${android.os.SystemClock.uptimeMillis() - start} ${seenText()}")
+    } catch (failure: Throwable) {
+        runCatching {
+            android.util.Log.e("SemanticWait", "$label timeout ms=${android.os.SystemClock.uptimeMillis() - start} ${seenText()}")
+            val tree = onAllNodes(androidx.compose.ui.test.isRoot(), useUnmergedTree = true).printToString(maxDepth = Int.MAX_VALUE)
+            Regex("(?:file|content)://[^\\s,)]+").replace(tree, "<uri>").chunked(3000)
+                .forEachIndexed { index, chunk -> android.util.Log.e("SemanticWait", "$label tree part=$index $chunk") }
+            android.util.Log.e("SemanticWait", "$label windows " + InstrumentationRegistry.getInstrumentation().uiAutomation.windows
+                .joinToString { "id=${it.id} type=${it.type} focused=${it.isFocused} active=${it.isActive} package=${it.root?.packageName}" })
+        }.exceptionOrNull()?.let(failure::addSuppressed)
+        throw failure
     }
 }

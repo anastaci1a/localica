@@ -68,7 +68,8 @@ class ArtworkEditRestorationTest {
     private var fixtureIndex = 0
     private var fixtureTag = ""
     private fun chooseRecent() {
-        compose.waitUntil(10000) {
+        compose.observedWaitUntil("chooseRecent", 10000, mapOf("chooser" to hasText("Open gallery"),
+            "unavailable" to hasText("Some recent images are unavailable", substring = true))) {
             compose.onAllNodesWithContentDescription("Choose recent image").fetchSemanticsNodes().isNotEmpty()
         }
         compose.awaitExpectedWindowFocus(compose.onPopupAction(hasText("Open gallery")))

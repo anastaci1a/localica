@@ -181,7 +181,15 @@ class LibraryDataExchangeTest {
             // Nothing is written before Apply.
             assertTrue(runBlocking { store.current() }.tracks.none { it.addedAt in dates.values })
             compose.onNodeWithText("Apply").performClick()
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("Library data imported").fetchSemanticsNodes().isNotEmpty() }
+            try {
+                compose.observedWaitUntil("importApplied", 10_000, mapOf("failed" to hasText("Couldn’t import library data", substring = true))) {
+                    compose.onAllNodesWithText("Library data imported").fetchSemanticsNodes().isNotEmpty()
+                }
+            } catch (failure: Throwable) {
+                runCatching { android.util.Log.e("SemanticWait", "importApplied stored=" +
+                    runBlocking { store.current() }.tracks.associate { it.title to it.addedAt }) }.exceptionOrNull()?.let(failure::addSuppressed)
+                throw failure
+            }
             compose.onNodeWithText("Updated date added for 3 songs.", substring = true).assertExists()
             compose.onNodeWithText("Close").performClick()
             assertEquals(dates, runBlocking { store.current() }.tracks.associate { it.title to it.addedAt })
