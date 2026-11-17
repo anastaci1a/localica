@@ -5,6 +5,8 @@ import re
 import unittest
 import yaml
 
+from test_dependency_cache import expand_gradle_targets
+
 ROOT = Path(__file__).resolve().parents[2]
 KEY = 'LASTFM_API_KEY'
 EXPRESSION = '${{ secrets.LASTFM_API_KEY }}'
@@ -12,11 +14,7 @@ BUILD_WORKFLOWS = {'android.yml', 'prototype.yml'}
 
 
 def produces_apk(step):
-    command = step.get('run', '')
-    # prototype.yml:1035-1055 declares APK targets before expanding the array in Gradle.
-    arrays = re.findall(r'(?m)^\s*(\w+)(?:\+)?=\(([^)\n]*)\)', command)
-    for name, targets in arrays:
-        command = command.replace('"${' + name + '[@]}"', targets)
+    command = expand_gradle_targets(step.get('run', ''))
     return bool(re.search(r'\./gradlew\b[^\n]*(?:assemble|bundle)', command) or
                 'bash .github/compatibility/build.sh' in command)
 
@@ -86,6 +84,14 @@ class LastFmKeyContractTest(unittest.TestCase):
             workflow = copy.deepcopy(source)
             target = next(s for s in workflow['jobs']['performance']['steps'] if s.get('name') == step['name'])
             del target['env'][KEY]
+            with self.assertRaises(AssertionError): validate('prototype.yml', workflow)
+        for declaration in ('targets+=(:app:assembleDistribution)',
+                            'if [[ $MODE == functional ]]; then\n  targets=(:app:assembleDistribution)\nfi'):
+            command = 'targets=(lintDebug)\n' + declaration + '\n./gradlew "${targets[@]}"'
+            self.assertTrue(produces_apk({'run': command}))
+            workflow = {'jobs': {'build': {'steps': [{'run': command, 'env': {KEY: EXPRESSION}}]}}}
+            validate('prototype.yml', workflow)
+            del workflow['jobs']['build']['steps'][0]['env'][KEY]
             with self.assertRaises(AssertionError): validate('prototype.yml', workflow)
         for command in ('targets=(:app:assembleRelease)\necho diagnostic',
                         'targets=(lintDebug)\n./gradlew "${targets[@]}"',

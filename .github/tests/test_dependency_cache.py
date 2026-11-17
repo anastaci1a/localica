@@ -98,16 +98,21 @@ def compile_steps(job):
             or COMPATIBILITY_BUILD in run(step)]
 
 
+def expand_gradle_targets(command):
+    """Union declared branches of invoked shell arrays for the workflow's step-wide contracts."""
+    # prototype.yml:1044-1058 declares all possible APK tasks before the array invocation.
+    arrays = re.findall(r'(?m)^\s*(\w+)(?:\+)?=\(([^)\n]*)\)', command)
+    for name in {name for name, _ in arrays}:
+        targets = ' '.join(value for key, value in arrays if key == name)
+        command = command.replace('"${' + name + '[@]}"', targets)
+    return command
+
+
 def compile_tasks(job):
     tasks = set()
     for step in compile_steps(job):
         if COMPATIBILITY_BUILD not in run(step):
-            # prototype.yml:1041-1055: union every declared branch of the target-array invocation.
-            command = run(step)
-            arrays = re.findall(r'(?m)^\s*(\w+)(?:\+)?=\(([^)\n]*)\)', command)
-            for name in {name for name, _ in arrays}:
-                targets = ' '.join(value for key, value in arrays if key == name)
-                command = command.replace('"${' + name + '[@]}"', targets)
+            command = expand_gradle_targets(run(step))
             for line in command.splitlines():
                 line = line.lstrip()
                 if line.startswith(('./gradlew', WRAPPED)):
