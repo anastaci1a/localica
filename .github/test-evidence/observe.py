@@ -10,6 +10,8 @@ produces a provisional JSONL observation and an escaped GitHub annotation on std
 Repeated lines remain observations, not unique failed-test counts. Final XML remains
 owned by the test runner: this tool never invents a pass from silence or exit zero.
 Output directories must be new, avoiding stale evidence and accidental overwrites.
+Hosted API 36 native/prototype runs also retain host process/memory snapshots and
+bounded existing ADB log tails on failure; diagnostic errors preserve the child outcome.
 No shell, retries, test selection, environment mutation, networking or audio capture.
 """
 
@@ -100,41 +102,45 @@ def utc_now():
 
 def capture_host(directory, phase):
     """Read-only lifecycle history, before emulator teardown; never replace the child outcome."""
-    snapshot = {"utc": utc_now(), "phase": phase}
     try:
-        snapshot["meminfo"] = Path("/proc/meminfo").read_text()
-    except OSError as error:
-        snapshot["memory_error"] = str(error)
-    try:
-        result = subprocess.run(["ps", "-eo", "pid,ppid,lstart,rss,comm"],
-                                capture_output=True, text=True, errors="replace", timeout=1)
-        snapshot["processes"] = [line for line in result.stdout.splitlines()
-                                 if line.split() and (line.split()[-1] in ("adb", "emulator", "emulator64-x86")
-                                                      or line.split()[-1].startswith("qemu-system-"))]
-        snapshot["ps_exit"] = result.returncode
-        snapshot["ps_stderr"] = result.stderr[-4096:]
-    except (OSError, subprocess.TimeoutExpired) as error:
-        snapshot["process_error"] = str(error)
-    if "failure" in phase:
-        log = Path(os.environ.get("ANDROID_ADB_LOG_PATH") or
-                   str(Path(os.environ.get("TMPDIR", "/tmp")) / f"adb.{os.getuid()}.log"))
-        snapshot["adb_log_path"] = str(log)
+        snapshot = {"utc": utc_now(), "phase": phase}
         try:
-            if not log.is_file():
-                raise OSError("ADB log is missing or not a regular file")
-            with log.open("rb") as source:
-                size = os.fstat(source.fileno()).st_size
-                source.seek(max(0, size - 1024 * 1024))
-                data = source.read(1024 * 1024)
-            (directory / f"host-adb-{phase}.log").write_bytes(data)
-            snapshot.update(adb_log_bytes=size, adb_log_captured_bytes=len(data))
+            snapshot["meminfo"] = Path("/proc/meminfo").read_text()
         except OSError as error:
-            snapshot["adb_log_error"] = str(error)
-    try:
+            snapshot["memory_error"] = str(error)
+        try:
+            result = subprocess.run(["ps", "-eo", "pid,ppid,lstart,rss,comm"],
+                                    capture_output=True, text=True, errors="replace", timeout=1)
+            # Linux comm may truncate emulator names; the qemu prefix remains intact.
+            snapshot["processes"] = [line for line in result.stdout.splitlines()
+                                     if line.split() and (line.split()[-1] in ("adb", "emulator", "emulator64-x86")
+                                                          or line.split()[-1].startswith("qemu-system-"))]
+            snapshot["ps_exit"] = result.returncode
+            snapshot["ps_stderr"] = result.stderr[-4096:]
+        except (OSError, subprocess.TimeoutExpired) as error:
+            snapshot["process_error"] = str(error)
+        if "failure" in phase:
+            log = Path(os.environ.get("ANDROID_ADB_LOG_PATH") or
+                       str(Path(os.environ.get("TMPDIR", "/tmp")) / f"adb.{os.getuid()}.log"))
+            snapshot["adb_log_path"] = str(log)
+            try:
+                if not log.is_file():
+                    raise OSError("ADB log is missing or not a regular file")
+                with log.open("rb") as source:
+                    size = os.fstat(source.fileno()).st_size
+                    source.seek(max(0, size - 1024 * 1024))
+                    data = source.read(1024 * 1024)
+                (directory / f"host-adb-{phase}.log").write_bytes(data)
+                snapshot.update(adb_log_bytes=size, adb_log_captured_bytes=len(data))
+            except OSError as error:
+                snapshot["adb_log_error"] = str(error)
         with (directory / "host-history.jsonl").open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(snapshot) + "\n")
-    except OSError as error:
-        print("Host diagnostics unavailable: " + str(error), file=sys.stderr, flush=True)
+    except Exception as error:
+        try:
+            print("Host diagnostics unavailable: " + str(error), file=sys.stderr, flush=True)
+        except Exception:
+            pass
 
 
 def parse_failure(raw):

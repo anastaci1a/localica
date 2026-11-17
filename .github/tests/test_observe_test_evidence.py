@@ -140,6 +140,8 @@ class ObserveTestEvidenceTest(unittest.TestCase):
         self.assertEqual(0, record["ps_exit"])
 
     def test_host_capture_admission_and_success_do_not_read_adb_logs(self):
+        log = self.root / "adb.log"
+        log.write_text("host adb log must not be copied on success")
         for index, (lane, api, runner, enabled) in enumerate([
                 ("native", "36", "self-hosted", False), ("prototype", "26", "github-hosted", False),
                 ("other", "36", "github-hosted", False), ("prototype", "36", "github-hosted", True)]):
@@ -147,7 +149,8 @@ class ObserveTestEvidenceTest(unittest.TestCase):
                 self.output = self.root / str(index)
                 argv = self.argv("pass", lane=lane)
                 argv[argv.index("--api") + 1] = api
-                with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": runner}):
+                with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": runner,
+                                                  "ANDROID_ADB_LOG_PATH": str(log)}):
                     result = subprocess.run(argv, capture_output=True, timeout=12)
                 self.assertEqual(0, result.returncode)
                 history = self.output / "host-history.jsonl"
@@ -157,6 +160,30 @@ class ObserveTestEvidenceTest(unittest.TestCase):
                     self.assertEqual(["start", "exit"], [row["phase"] for row in records])
                     self.assertTrue(all("adb_log_path" not in row for row in records))
                 self.assertFalse(list(self.output.glob("host-adb-*.log")))
+
+    def test_unexpected_host_capture_errors_preserve_child_exit_and_observer_status(self):
+        for index, (code, point) in enumerate((code, point) for code in (0, 7)
+                                             for point in ("read", "serialize", "report")):
+            with self.subTest(code=code, point=point):
+                self.output = self.root / str(index)
+                source = ("import runpy, sys; from contextlib import nullcontext; from pathlib import Path; from unittest import mock\n"
+                          f"module = runpy.run_path({str(SCRIPT)!r})\n"
+                          "original = module['json'].dumps\n"
+                          "def serialize(value, *args, **kwargs):\n"
+                          "    if 'phase' in value: raise ValueError('snapshot serialization')\n"
+                          "    return original(value, *args, **kwargs)\n"
+                          f"with mock.patch.object(Path, 'read_text', side_effect=ValueError('snapshot read')) if {point != 'serialize'!r} else mock.patch.object(module['json'], 'dumps', side_effect=serialize):\n"
+                          f"    with mock.patch('builtins.print', side_effect=ValueError('diagnostic report')) if {point == 'report'!r} else nullcontext():\n"
+                          "        sys.exit(module['main']())\n")
+                argv = self.argv(f"print({FAILURE!r}); print('child finished'); raise SystemExit({code})")
+                argv[1:2] = ["-c", source]
+                with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted"}):
+                    result = subprocess.run(argv, capture_output=True, timeout=12)
+                self.assertEqual(code, result.returncode, result.stderr)
+                self.assertEqual(code, self.manifest()["child_returncode"])
+                self.assertIsNone(self.manifest()["observer_error"])
+                self.assertEqual(1, len(self.events()))
+                self.assertIn(b"child finished\n", result.stdout)
 
     def test_first_failure_flushes_before_child_end_and_later_output_continues(self):
         release = self.root / "release"
