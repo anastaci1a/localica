@@ -98,6 +98,45 @@ def utc_now():
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def capture_host(directory, phase):
+    """Read-only lifecycle history, before emulator teardown; never replace the child outcome."""
+    snapshot = {"utc": utc_now(), "phase": phase}
+    try:
+        snapshot["meminfo"] = Path("/proc/meminfo").read_text()
+    except OSError as error:
+        snapshot["memory_error"] = str(error)
+    try:
+        result = subprocess.run(["ps", "-eo", "pid,ppid,lstart,rss,comm"],
+                                capture_output=True, text=True, errors="replace", timeout=1)
+        snapshot["processes"] = [line for line in result.stdout.splitlines()
+                                 if line.split() and (line.split()[-1] in ("adb", "emulator", "emulator64-x86")
+                                                      or line.split()[-1].startswith("qemu-system-"))]
+        snapshot["ps_exit"] = result.returncode
+        snapshot["ps_stderr"] = result.stderr[-4096:]
+    except (OSError, subprocess.TimeoutExpired) as error:
+        snapshot["process_error"] = str(error)
+    if "failure" in phase:
+        log = Path(os.environ.get("ANDROID_ADB_LOG_PATH") or
+                   str(Path(os.environ.get("TMPDIR", "/tmp")) / f"adb.{os.getuid()}.log"))
+        snapshot["adb_log_path"] = str(log)
+        try:
+            if not log.is_file():
+                raise OSError("ADB log is missing or not a regular file")
+            with log.open("rb") as source:
+                size = os.fstat(source.fileno()).st_size
+                source.seek(max(0, size - 1024 * 1024))
+                data = source.read(1024 * 1024)
+            (directory / f"host-adb-{phase}.log").write_bytes(data)
+            snapshot.update(adb_log_bytes=size, adb_log_captured_bytes=len(data))
+        except OSError as error:
+            snapshot["adb_log_error"] = str(error)
+    try:
+        with (directory / "host-history.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(snapshot) + "\n")
+    except OSError as error:
+        print("Host diagnostics unavailable: " + str(error), file=sys.stderr, flush=True)
+
+
 def parse_failure(raw):
     """Parse only a complete anchored AGP line; never edit the raw evidence bytes."""
     clean = ANSI.sub("", raw.decode("utf-8", errors="replace")).rstrip("\r\n")
@@ -209,6 +248,9 @@ def observe(args):
     }
     parsers = {}
     stderr_at_line_start = True
+    host_diagnostics = (args.lane in ("native", "prototype") and args.api == "36"
+                        and os.environ.get("GITHUB_ACTIONS") == "true"
+                        and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted")
 
     def cancel(sig, _frame):
         nonlocal cancelled, cancelled_at
@@ -246,6 +288,8 @@ def observe(args):
                          "stream_byte_offset": byte_offset, **result}
                 events.write(json.dumps(event, ensure_ascii=True) + "\n")
                 events.flush()
+                if host_diagnostics and manifest["observed_failure_lines"] == 1:
+                    capture_host(directory, "first-failure")
                 context.start(event)
                 annotation = ("::error::Provisional test failure " + result["class"] + " > " +
                               result["display_name"] + " (lane=" + args.lane + ", API=" + args.api +
@@ -263,6 +307,8 @@ def observe(args):
 
             for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
                 previous_handlers[sig] = signal.signal(sig, cancel)
+            if host_diagnostics:
+                capture_host(directory, "start")
             child = subprocess.Popen(args.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                      start_new_session=True)
             # A signal can arrive during spawn, before the child handle is assigned.
@@ -297,6 +343,8 @@ def observe(args):
                         stderr_at_line_start = data.endswith(b"\n")
                     flush_annotations()
             child_returncode = child.wait()
+            if host_diagnostics:
+                capture_host(directory, "exit-failure" if child_returncode else "exit")
     except Exception as error:
         observer_error = type(error).__name__ + ": " + str(error)
         signal_child(child, signal.SIGTERM)

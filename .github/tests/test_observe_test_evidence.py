@@ -90,6 +90,74 @@ class ObserveTestEvidenceTest(unittest.TestCase):
         self.assertEqual("failed", self.manifest()["status"])
         self.assertEqual(0, self.manifest()["observed_failure_lines"])
 
+    def test_hosted_failure_retains_lifecycle_memory_and_bounded_adb_log(self):
+        log = self.root / "adb.log"
+        log.write_bytes(b"old" + b"x" * (1024 * 1024 - 4) + b"tail")
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted",
+                                          "ANDROID_ADB_LOG_PATH": str(log)}):
+            result = self.run_child(f"print({FAILURE!r}); print({FAILURE!r}); raise SystemExit(7)")
+        self.assertEqual(7, result.returncode)
+        self.assertEqual(7, self.manifest()["child_returncode"])
+        history = [json.loads(line) for line in (self.output / "host-history.jsonl").read_text().splitlines()]
+        self.assertEqual(["start", "first-failure", "exit-failure"], [row["phase"] for row in history])
+        self.assertEqual(sorted(row["utc"] for row in history), [row["utc"] for row in history])
+        self.assertTrue(all("MemTotal:" in row["meminfo"] for row in history))
+        self.assertNotIn("adb_log_path", history[0])
+        for row in history[1:]:
+            self.assertEqual(1024 * 1024 + 3, row["adb_log_bytes"])
+            self.assertEqual(1024 * 1024, row["adb_log_captured_bytes"])
+            self.assertEqual(log.read_bytes()[-1024 * 1024:],
+                             (self.output / f"host-adb-{row['phase']}.log").read_bytes())
+        self.assertEqual(2, len(self.events()))
+        self.assertEqual((FAILURE + "\n" + FAILURE + "\n").encode(), (self.output / "command.log").read_bytes())
+
+    def test_host_capture_records_missing_log_and_ps_timeout_without_changing_exit(self):
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted",
+                                          "ANDROID_ADB_LOG_PATH": str(self.root / "missing")}):
+            result = self.run_child("raise SystemExit(7)")
+            self.assertEqual(7, result.returncode)
+            with mock.patch.object(observer.subprocess, "run", side_effect=subprocess.TimeoutExpired("ps", 1)):
+                observer.capture_host(self.output, "first-failure")
+        history = [json.loads(line) for line in (self.output / "host-history.jsonl").read_text().splitlines()]
+        self.assertEqual(["start", "exit-failure", "first-failure"], [row["phase"] for row in history])
+        self.assertIn("adb_log_error", history[1])
+        self.assertIn("process_error", history[2])
+        self.assertIn("MemTotal:", history[2]["meminfo"])
+        self.assertFalse(list(self.output.glob("host-adb-*.log")))
+        self.assertIsNone(self.manifest()["observer_error"])
+
+    def test_host_capture_filters_processes_and_preserves_start_identity(self):
+        self.output.mkdir()
+        rows = ("PID PPID STARTED RSS COMMAND\n1 0 Mon Nov 16 13:00:00 2026 1 init\n"
+                "22 1 Mon Nov 16 13:01:00 2026 50 adb\n"
+                "23 1 Mon Nov 16 13:02:00 2026 900 qemu-system-x86\n")
+        with mock.patch.object(observer.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, rows, "")) as run:
+            observer.capture_host(self.output, "start")
+        self.assertEqual("ps", run.call_args.args[0][0])
+        self.assertEqual(1, run.call_args.kwargs["timeout"])
+        record = json.loads((self.output / "host-history.jsonl").read_text())
+        self.assertEqual(rows.splitlines()[2:], record["processes"])
+        self.assertEqual(0, record["ps_exit"])
+
+    def test_host_capture_admission_and_success_do_not_read_adb_logs(self):
+        for index, (lane, api, runner, enabled) in enumerate([
+                ("native", "36", "self-hosted", False), ("prototype", "26", "github-hosted", False),
+                ("other", "36", "github-hosted", False), ("prototype", "36", "github-hosted", True)]):
+            with self.subTest(lane=lane, api=api, runner=runner):
+                self.output = self.root / str(index)
+                argv = self.argv("pass", lane=lane)
+                argv[argv.index("--api") + 1] = api
+                with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": runner}):
+                    result = subprocess.run(argv, capture_output=True, timeout=12)
+                self.assertEqual(0, result.returncode)
+                history = self.output / "host-history.jsonl"
+                self.assertEqual(enabled, history.exists())
+                if enabled:
+                    records = [json.loads(line) for line in history.read_text().splitlines()]
+                    self.assertEqual(["start", "exit"], [row["phase"] for row in records])
+                    self.assertTrue(all("adb_log_path" not in row for row in records))
+                self.assertFalse(list(self.output.glob("host-adb-*.log")))
+
     def test_first_failure_flushes_before_child_end_and_later_output_continues(self):
         release = self.root / "release"
         source = ("from pathlib import Path; import time\n"
