@@ -67,7 +67,7 @@ class ArtworkEditRestorationTest {
 
     private var fixtureIndex = 0
     private var fixtureTag = ""
-    private fun observedArtworkClick(action: () -> Unit) {
+    private fun observedArtworkClick(action: (TouchInjectionScope.() -> Unit) -> Unit) {
         val button = compose.onPopupAction(hasContentDescription("Choose artwork"))
         val node = button.fetchSemanticsNode()
         val body = compose.onNodeWithTag("tag-editor-body").fetchSemanticsNode()
@@ -111,8 +111,25 @@ class ArtworkEditRestorationTest {
         val draw = android.view.ViewTreeObserver.OnDrawListener { sample("draw") }
         val tree = view.viewTreeObserver
         compose.runOnUiThread { tree.addOnDrawListener(draw); sample("before-input") }
+        val restoreSenders = mutableListOf<() -> Unit>()
         try {
-            action()
+            action {
+                // Keep the pinned performClick implementation's exact click batch and sender.
+                val getter = javaClass.getDeclaredMethod("getInputDispatcher").apply { isAccessible = true }
+                val dispatcher = getter.invoke(this)
+                val field = dispatcher.javaClass.getDeclaredField("sendEvent").apply { isAccessible = true }
+                val original = field.get(dispatcher) as (android.view.InputEvent) -> Unit
+                val measured: (android.view.InputEvent) -> Unit = { event ->
+                    val motion = event as? android.view.MotionEvent
+                    val detail = "action=${motion?.actionMasked} x=${motion?.x} y=${motion?.y} event=${event.eventTime}"
+                    sample("dispatch-before $detail")
+                    original(event)
+                    sample("dispatch-after $detail")
+                }
+                field.set(dispatcher, measured)
+                restoreSenders += { field.set(dispatcher, original) }
+                click()
+            }
             compose.runOnUiThread {
                 sample("after-click")
                 android.util.Log.i("Chooser530", "workflow=${artwork?.stage} target=${artwork?.target}")
@@ -120,6 +137,7 @@ class ArtworkEditRestorationTest {
             chooseRecent()
         } finally {
             compose.runOnUiThread {
+                restoreSenders.forEach { it() }
                 if (tree.isAlive) tree.removeOnDrawListener(draw)
                 samples.forEach { android.util.Log.i("Chooser530", it) }
             }
@@ -291,10 +309,10 @@ class ArtworkEditRestorationTest {
     @Test fun closingReopeningAndReplacingTargetDiscardPreviousSession() = withImage {
         compose.runOnUiThread { controller.open(listOf(track())) }
         val firstSession = controller.state.value.sessionId
-        observedArtworkClick {
+        observedArtworkClick { tap ->
             compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
                 .performScrollTo().performTextReplacement("Discard this draft")
-            compose.onPopupAction(hasContentDescription("Choose artwork")).performScrollTo().performClick()
+            compose.onPopupAction(hasContentDescription("Choose artwork")).performScrollTo().performTouchInput(tap)
         }
         compose.runOnUiThread { controller.close(); controller.open(listOf(track())) }
         assertNotEquals(firstSession, controller.state.value.sessionId)
