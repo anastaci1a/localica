@@ -2054,7 +2054,7 @@
         errorLine2="                                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="146"
+            line="144"
             column="92"/>
     </issue>
 
@@ -2065,7 +2065,7 @@
         errorLine2="                                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="151"
+            line="149"
             column="92"/>
     </issue>
 
@@ -7202,7 +7202,7 @@
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="146"
+            line="144"
             column="17"/>
     </issue>
 
@@ -7213,7 +7213,7 @@
         errorLine2="                                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="147"
+            line="145"
             column="33"/>
     </issue>
 
@@ -7224,7 +7224,7 @@
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="151"
+            line="149"
             column="17"/>
     </issue>
 

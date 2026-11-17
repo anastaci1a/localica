@@ -40,7 +40,7 @@ internal class GlassDialogs {
 internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLocalContext,
     dismiss: () -> Unit, dark: Boolean, val placement: GlassPlacement,
     val heightSizing: GlassDialogHeight, content: @Composable () -> Unit) {
-    // Live declarations, not a flag: a same-pass swap or a later dispose cannot close a declared entry.
+    // Counted (#1051): a swap goes 1→0→1 in one apply (forgets before remembers); overlap across compositions stays declared, last writer wins.
     var declarations by mutableIntStateOf(0)
     val mounted get() = declarations > 0
     var locals by mutableStateOf(locals)
@@ -107,9 +107,7 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
         CompositionLocalProvider(LocalGlassDialogAppearance provides null, content = content)
     }
     val entry = remember(host, origin, placement) {
-        // One presentation per trigger and placement. A closing caller may not have applied its
-        // dispose yet (same-pass swap, #1051); reclaim its animation/window anyway instead of
-        // creating a second writer for the trigger's hidden, shadow and expansion state.
+        // One presentation per trigger and placement, reclaimed even before the leaving caller's dispose applies (#1051).
         val returning = host.entries.lastOrNull { it.anchor === origin && it.placement == placement }
         require(returning == null || returning.heightSizing == heightSizing) {
             "Height sizing is fixed while a dialog presentation returns"
