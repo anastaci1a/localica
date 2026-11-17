@@ -315,13 +315,13 @@ class ArtworkEditRestorationTest {
     @Test fun closingReopeningAndReplacingTargetDiscardPreviousSession() = withImage {
         compose.runOnUiThread { controller.open(listOf(track())) }
         val firstSession = controller.state.value.sessionId
+        val title = compose.onPopupAction(hasSetTextAction() and hasText("Restoration song")).performScrollTo()
         val focus = observed(compose.onNodeWithTag("tag-editor-body").fetchSemanticsNode()
             .config[SemanticsProperties.VerticalScrollAxisRange].value,
             io.github.anastaci1a.localica.ui.layout.PopupEditorFocus::class.java)
         val relocation = field(field(focus, "handle"), "owner") as?
             io.github.anastaci1a.localica.ui.engine.NativeViewportRelocation
-        compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
-            .performScrollTo().performTextReplacement("Discard this draft")
+        title.performTextReplacement("Discard this draft")
         observedArtworkClick(relocation)
         compose.runOnUiThread { controller.close(); controller.open(listOf(track())) }
         assertNotEquals(firstSession, controller.state.value.sessionId)
