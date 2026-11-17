@@ -28,6 +28,8 @@ class ArtworkEditRestorationTest {
         val input = File.createTempFile("restoration-source-", ".png", context.cacheDir)
         val crops = File(context.cacheDir, "artwork-crops")
         val existing = crops.listFiles()?.toSet().orEmpty()
+        // #530 diagnostic: log popup state transitions (debug-only receipt probe).
+        io.github.anastaci1a.localica.ui.glassDrawProbe = { if (it is io.github.anastaci1a.localica.ui.GlassTransitionReceipt) android.util.Log.i("SemanticWait", "transition $it") }
         try {
             Bitmap.createBitmap(600, 300, Bitmap.Config.ARGB_8888).let { bitmap ->
                 // Preserve every opaque fixture pixel, avoiding per-pixel JNI writes.
@@ -57,6 +59,7 @@ class ArtworkEditRestorationTest {
             if (!canReadPhotos) fixtureIndex = 0
             block()
         } finally {
+            io.github.anastaci1a.localica.ui.glassDrawProbe = null
             compose.runOnUiThread { controller.close() }
             compose.waitForIdle()
             preferences.edit().putString("recent", original).commit()
