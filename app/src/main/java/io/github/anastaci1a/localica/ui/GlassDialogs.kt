@@ -40,7 +40,9 @@ internal class GlassDialogs {
 internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLocalContext,
     dismiss: () -> Unit, dark: Boolean, val placement: GlassPlacement,
     val heightSizing: GlassDialogHeight, content: @Composable () -> Unit) {
-    var mounted by mutableStateOf(true)
+    // Live declarations, not a flag: a same-pass swap or a later dispose cannot close a declared entry.
+    var declarations by mutableIntStateOf(0)
+    val mounted get() = declarations > 0
     var locals by mutableStateOf(locals)
     var dismiss by mutableStateOf(dismiss)
     var dark by mutableStateOf(dark)
@@ -105,10 +107,10 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
         CompositionLocalProvider(LocalGlassDialogAppearance provides null, content = content)
     }
     val entry = remember(host, origin, placement) {
-        // Conditional callers are disposed at dismissal, while their host entry keeps
-        // returning. Reclaim that same animation/window instead of creating a second
-        // writer for the trigger's hidden, shadow and expansion state.
-        val returning = host.entries.lastOrNull { !it.mounted && it.anchor === origin && it.placement == placement }
+        // One presentation per trigger and placement. A closing caller may not have applied its
+        // dispose yet (same-pass swap, #1051); reclaim its animation/window anyway instead of
+        // creating a second writer for the trigger's hidden, shadow and expansion state.
+        val returning = host.entries.lastOrNull { it.anchor === origin && it.placement == placement }
         require(returning == null || returning.heightSizing == heightSizing) {
             "Height sizing is fixed while a dialog presentation returns"
         }
@@ -125,9 +127,9 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
         entry.fitContent = fitContent
     }
     DisposableEffect(host, entry) {
-        entry.mounted = true
+        entry.declarations++
         if (entry !in host.entries) host.entries.add(entry)
-        onDispose { entry.mounted = false }
+        onDispose { entry.declarations-- }
     }
 }
 
