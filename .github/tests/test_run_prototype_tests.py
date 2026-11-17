@@ -1556,7 +1556,7 @@ class WorkflowContract(unittest.TestCase):
                          workflow['on']['workflow_dispatch']['inputs']['performance']['options'])
         self.assertEqual({'ANDROID_DEBUG_KEYSTORE','LASTFM_API_KEY'},set(workflow['on']['workflow_call']['secrets']))
         self.assertFalse(workflow['on']['workflow_call']['secrets']['LASTFM_API_KEY']['required'])
-        self.assertEqual({'contents':'read'},workflow['permissions'])
+        self.assertEqual({'contents':'read','actions':'read'},workflow['permissions'])
         jobs=workflow['jobs']
         self.assertEqual({'identity','build','focused_26','focused_36','compatibility_26','compatibility_36'},set(jobs['evidence']['needs']))
         # prototype.yml:724,988,1121,1140 keep normal delivery separate from performance diagnostics.
