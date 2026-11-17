@@ -34,9 +34,7 @@ class ScopedSearchHistoryTest {
             .items.associate { it.title to it.key }
         try {
             BrowseSchedulerWatchdog.phase("install scoped history fixture")
-            compose.setContent { androidx.compose.runtime.CompositionLocalProvider(LocalSearchEditTrace provides { event -> android.util.Log.i("SearchEditTrace", event) },
-                LocalTextEditingObservation provides { android.util.Log.i("Input1045", it) },
-                LocalSearchMorphObserver provides { android.util.Log.i("Input1045", "placement $it") }) { LocalicaTheme { LocalicaScreen(
+            compose.setContent { androidx.compose.runtime.CompositionLocalProvider(LocalSearchEditTrace provides { event -> android.util.Log.i("SearchEditTrace", event) }) { LocalicaTheme { LocalicaScreen(
                 LibraryUiState(snapshot, loading = false), PlaybackState(connected = true),
                 {}, {}, {}, {}, {}, {}) } } }
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 000").fetchSemanticsNodes().isNotEmpty() }
