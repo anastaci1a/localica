@@ -23,7 +23,7 @@ internal data class OutlinePoint(val x: Double,val y: Double) {
     fun unit(): OutlinePoint { val n=length(); return if(n>1e-20) this*(1/n) else ZERO_POINT }
 }
 private const val TAU = PI*2
-private fun positiveAngle(a: Double): Double = ((a%TAU)+TAU)%TAU
+private fun positiveAngle(a: Double): Double { val s=(if(abs(a)<TAU) a else a%TAU)+TAU; return if(s<TAU) s else if(s<2*TAU) s-TAU else s%TAU }
 internal fun outlineEase(t: Double): Double {
     val p=t.coerceIn(0.0,1.0)
     return p*p*p*(p*(p*6-15)+10)
