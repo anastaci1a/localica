@@ -72,33 +72,41 @@ class ArtworkEditRestorationTest {
         val node = button.fetchSemanticsNode()
         val body = compose.onNodeWithTag("tag-editor-body").fetchSemanticsNode()
         val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
+        // Read pinned callback captures only; never invoke or replace an action.
+        fun <T : Any> observed(root: Any?, type: Class<T>): T? {
+            val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
+            fun find(value: Any?, depth: Int): T? {
+                if (type.isInstance(value)) return type.cast(value)
+                if (value == null || depth == 0 || !seen.add(value)) return null
+                if (value !is Function<*> && value !is androidx.compose.ui.Modifier.Node) return null
+                var owner: Class<*>? = value.javaClass
+                while (owner != null && owner != Any::class.java) {
+                    for (field in owner.declaredFields.filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) }) {
+                        val child = runCatching { field.isAccessible = true; field.get(value) }.getOrNull()
+                        find(child, depth - 1)?.let { return it }
+                    }
+                    owner = owner.superclass
+                }
+                return null
+            }
+            return find(root, 12)
+        }
+        val scroll = observed(body.config[SemanticsProperties.VerticalScrollAxisRange].value,
+            androidx.compose.foundation.ScrollState::class.java)
+        val artwork = observed(node.config[SemanticsActions.OnClick].action,
+            io.github.anastaci1a.localica.ui.ArtworkWorkflow::class.java)
         val samples = ArrayDeque<String>()
         fun sample(label: String) {
             val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
             val row = "$label time=${android.os.SystemClock.uptimeMillis()} button=${node.boundsInRoot} " +
                 "body=${body.boundsInRoot} scroll=${body.config[SemanticsProperties.VerticalScrollAxisRange].value()} " +
+                "progress=${scroll?.isScrollInProgress} stage=${artwork?.stage} " +
                 "ime=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom} focus=${view.hasWindowFocus()}"
-            if (samples.size == 80) samples.removeFirst()
-            samples.addLast(row)
-        }
-        // Read the pinned callback graph only; never invoke or replace the action.
-        fun workflow(): io.github.anastaci1a.localica.ui.ArtworkWorkflow? {
-            val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
-            fun find(value: Any?, depth: Int): io.github.anastaci1a.localica.ui.ArtworkWorkflow? {
-                if (value is io.github.anastaci1a.localica.ui.ArtworkWorkflow) return value
-                if (value == null || depth == 0 || !seen.add(value)) return null
-                if (value !is Function<*> && value !is androidx.compose.ui.Modifier.Node) return null
-                var type: Class<*>? = value.javaClass
-                while (type != null && type != Any::class.java) {
-                    for (field in type.declaredFields.filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) }) {
-                        val child = runCatching { field.isAccessible = true; field.get(value) }.getOrNull()
-                        find(child, depth - 1)?.let { return it }
-                    }
-                    type = type.superclass
-                }
-                return null
+            if (label != "draw") android.util.Log.i("Chooser530", row)
+            else {
+                if (samples.size == 80) samples.removeFirst()
+                samples.addLast(row)
             }
-            return find(node.config[SemanticsActions.OnClick].action, 12)
         }
         val draw = android.view.ViewTreeObserver.OnDrawListener { sample("draw") }
         val tree = view.viewTreeObserver
@@ -109,8 +117,7 @@ class ArtworkEditRestorationTest {
             button.performClick()
             compose.runOnUiThread {
                 sample("after-click")
-                val current = workflow()
-                android.util.Log.i("Chooser530", "workflow=${current?.stage} target=${current?.target}")
+                android.util.Log.i("Chooser530", "workflow=${artwork?.stage} target=${artwork?.target}")
             }
             chooseRecent()
         } finally {
