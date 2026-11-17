@@ -1,6 +1,6 @@
-<!-- Release: v0.34.12 -->
+<!-- Release: v0.34.13 -->
 
-# Release v0.34.12
+# Release v0.34.13
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,49 +8,26 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
-- Prepare player and queue presentation on existing workers while keeping commands and Save available during preparation.
-- Carry physical browse positions in the existing lazy view, removing Main-thread indexing maps from browse and drag presentation.
-- Prepare queue reuse off Main and refresh queue metadata after file edits.
-- App Kotlin/Java source changes from 53,451 to 53,477 lines: 209 added, 183 removed, net +26. The added lines prepare immutable presentation on existing workers.
-- Refresh shard scheduling from complete producers 43743989694 and 43871578366, including risk-preflight results.
+- Add the Fluidity press response to shared glass controls, including consistent release, reversal and resize behavior.
+- Keep the existing glass appearance while updating the shared press response.
+- App Kotlin/Java source changes from 53,477 to 53,515 lines: 101 added, 63 removed, net +38. The shared response replaces the previous body update law.
+- Refresh shard scheduling from complete v0.34.12 producer 44091537406.
 
 ## Resolved issues
 
-- [#995](https://github.com/anastaci1a/localica/issues/995): Remove Main-thread physical-order indexing from browse and drag presentation.
-- [#1020](https://github.com/anastaci1a/localica/issues/1020): Prepare immutable player and queue presentation off Main while keeping commands available.
-- [#1021](https://github.com/anastaci1a/localica/issues/1021): Keep queue summary and occurrence ownership with the prepared presentation.
-- [#1030](https://github.com/anastaci1a/localica/issues/1030): Keep queue commands and Save ready while presentation preparation is pending.
-
-- [#1026](https://github.com/anastaci1a/localica/issues/1026): Prepare queue reuse on existing workers; captured Save remains deferred.
-- [#1028](https://github.com/anastaci1a/localica/issues/1028): Refresh queue metadata after file edits.
-
-- [#1045](https://github.com/anastaci1a/localica/issues/1045): Retire native editor input with its test fixture scope.
-- [#1048](https://github.com/anastaci1a/localica/issues/1048): Apply the production window motion policy in pinch regression tests.
+- [#1005](https://github.com/anastaci1a/localica/issues/1005): Complete the shared glass press-response scope. The broader interaction programme remains open.
 
 ## Known issues and follow-ups
 
 - [#982](https://github.com/anastaci1a/localica/issues/982): Scoped search history tests can lose the editor node during text replacement.
-- [#1049](https://github.com/anastaci1a/localica/issues/1049): Popup capture can encounter stale or occluded windows during full-suite checks.
-
-- [#1046](https://github.com/anastaci1a/localica/issues/1046): Three inherited workflow contract failures remain in the separate tooling checks.
-- [#1047](https://github.com/anastaci1a/localica/issues/1047): A parallel-build scalar allocation check can fail intermittently; no retry or limit change was made.
-
-- [#1026](https://github.com/anastaci1a/localica/issues/1026) and [#1029](https://github.com/anastaci1a/localica/issues/1029): Captured Save is deferred. Save follows the currently browsed queue and eagerly maps large entry lists on Main; worker-owned queue reuse is retained.
-- [#1042](https://github.com/anastaci1a/localica/issues/1042): The Last.fm first-match persistence JVM test intermittently restores a counts-only result. Its root cause remains open.
-- [#1039](https://github.com/anastaci1a/localica/issues/1039): Hosted API 36 instrumentation transport can terminate without an assertion stack. The previous release recovered through one approved failed-job retry; the transport root cause remains open.
-- [#963](https://github.com/anastaci1a/localica/issues/963): Large cold restores remain slow; shuffled million-entry restore still exceeds the standard heap.
-- [#964](https://github.com/anastaci1a/localica/issues/964): Broader browse and drag work remains open.
-- [#1035](https://github.com/anastaci1a/localica/issues/1035): Million-entry playlist output still runs out of memory.
-- [#1033](https://github.com/anastaci1a/localica/issues/1033): Native track-switch latency remains unresolved; no A35 latency improvement is claimed.
-- [#1011](https://github.com/anastaci1a/localica/issues/1011): Native playback can advance between the Main-thread check and per-edit timeline messages.
-- [#1002](https://github.com/anastaci1a/localica/issues/1002), [#642](https://github.com/anastaci1a/localica/issues/642) and [#986](https://github.com/anastaci1a/localica/issues/986): Later glass adoption and qualified profile comparison remain open.
-- [#1005](https://github.com/anastaci1a/localica/issues/1005) and CI tooling round 4 are outside this train.
-- The 8.3 ms whole-frame A35 objective remains unmet and unchanged. This release makes no qualified frame-timing claim.
+- [#1046](https://github.com/anastaci1a/localica/issues/1046): Inherited workflow contract failures remain in separate tooling checks.
+- [#1047](https://github.com/anastaci1a/localica/issues/1047): A parallel-build scalar allocation check can fail intermittently.
+- [#1049](https://github.com/anastaci1a/localica/issues/1049): Pinch slow-frame release coverage with animations enabled remains follow-up work.
+- [#1026](https://github.com/anastaci1a/localica/issues/1026) and [#1029](https://github.com/anastaci1a/localica/issues/1029): Captured Save remains deferred; Save follows the currently browsed queue and eagerly maps large entry lists on Main.
+- The performance ratchet remains pending. No frame-time or playback-latency improvement is claimed.
 
 ## Install
 
-1. Download `localica-v0.34.12-pre-release.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.34.13-pre-release.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
-
-Schema 9 cannot be reopened by older schema-6, schema-7 or schema-8 APKs. Keep a backup before downgrading.
