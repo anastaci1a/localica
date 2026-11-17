@@ -67,7 +67,7 @@ class ArtworkEditRestorationTest {
 
     private var fixtureIndex = 0
     private var fixtureTag = ""
-    private fun observedArtworkClick(action: (TouchInjectionScope.() -> Unit) -> Unit) {
+    private fun observedArtworkClick() {
         val button = compose.onPopupAction(hasContentDescription("Choose artwork"))
         val node = button.fetchSemanticsNode()
         val body = compose.onNodeWithTag("tag-editor-body").fetchSemanticsNode()
@@ -110,10 +110,12 @@ class ArtworkEditRestorationTest {
         }
         val draw = android.view.ViewTreeObserver.OnDrawListener { sample("draw") }
         val tree = view.viewTreeObserver
-        compose.runOnUiThread { tree.addOnDrawListener(draw); sample("before-input") }
+        compose.runOnUiThread { tree.addOnDrawListener(draw); sample("before-scroll") }
         val restoreSenders = mutableListOf<() -> Unit>()
         try {
-            action {
+            button.performScrollTo()
+            compose.runOnUiThread { sample("before-click") }
+            button.performTouchInput {
                 // Keep the pinned performClick implementation's exact click batch and sender.
                 val getter = javaClass.getDeclaredMethod("getInputDispatcher").apply { isAccessible = true }
                 val dispatcher = getter.invoke(this)
@@ -309,11 +311,9 @@ class ArtworkEditRestorationTest {
     @Test fun closingReopeningAndReplacingTargetDiscardPreviousSession() = withImage {
         compose.runOnUiThread { controller.open(listOf(track())) }
         val firstSession = controller.state.value.sessionId
-        observedArtworkClick { tap ->
-            compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
-                .performScrollTo().performTextReplacement("Discard this draft")
-            compose.onPopupAction(hasContentDescription("Choose artwork")).performScrollTo().performTouchInput(tap)
-        }
+        compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
+            .performScrollTo().performTextReplacement("Discard this draft")
+        observedArtworkClick()
         compose.runOnUiThread { controller.close(); controller.open(listOf(track())) }
         assertNotEquals(firstSession, controller.state.value.sessionId)
         compose.awaitPopupGone(hasTestTag("artwork-crop"))
