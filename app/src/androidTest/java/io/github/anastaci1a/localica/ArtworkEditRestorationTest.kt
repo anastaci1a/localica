@@ -95,12 +95,20 @@ class ArtworkEditRestorationTest {
             androidx.compose.foundation.ScrollState::class.java)
         val artwork = observed(node.config[SemanticsActions.OnClick].action,
             io.github.anastaci1a.localica.ui.ArtworkWorkflow::class.java)
+        fun field(value: Any?, name: String): Any? = runCatching {
+            value?.javaClass?.getDeclaredField(name)?.apply { isAccessible = true }?.get(value)
+        }.getOrNull()
+        val focus = observed(body.config[SemanticsProperties.VerticalScrollAxisRange].value,
+            io.github.anastaci1a.localica.ui.layout.PopupEditorFocus::class.java)
+        val relocation = field(field(focus, "handle"), "owner") as?
+            io.github.anastaci1a.localica.ui.engine.NativeViewportRelocation
         val samples = ArrayDeque<String>()
         fun sample(label: String) {
             val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
             val row = "$label time=${android.os.SystemClock.uptimeMillis()} button=${node.boundsInRoot} " +
                 "body=${body.boundsInRoot} scroll=${body.config[SemanticsProperties.VerticalScrollAxisRange].value()} " +
                 "progress=${scroll?.isScrollInProgress} stage=${artwork?.stage} " +
+                "native=${relocation?.result} mode=${field(relocation, "mode")} frame=${field(relocation, "frame")} " +
                 "ime=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom} focus=${view.hasWindowFocus()}"
             if (label != "draw") android.util.Log.i("Chooser530", row)
             else {
