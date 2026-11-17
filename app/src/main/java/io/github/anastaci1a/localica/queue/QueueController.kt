@@ -242,7 +242,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 val saved = dao.read()
                 persistedLibrary = saved
                 preferences.migratePlaybackModes(saved.active)
-                mutable.update { it.copy(library = saved, settings = preferences.read(), loading = false) }; restored = true
+                val settings = preferences.read()
+                val active = saved.active?.takeIf { it.entries.isNotEmpty() }
+                val ready = active?.let { saved.update(it.copy(journey = journey(it, JourneyModes.from(settings)))) } ?: saved
+                mutable.update { it.copy(library = ready, settings = settings, loading = false) }; restored = true
             }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
@@ -1095,8 +1098,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         activate(false)
     }
 
-    private suspend fun journey(queue: ListeningQueue, action: (QueueJourney, List<String>) -> QueueJourney = { path, _ -> path }): QueueJourney {
-        val modes = JourneyModes.from(state.value.settings)
+    private suspend fun journey(queue: ListeningQueue, modes: JourneyModes = JourneyModes.from(state.value.settings),
+        action: (QueueJourney, List<String>) -> QueueJourney = { path, _ -> path }): QueueJourney {
         return withContext(Dispatchers.Default) {
             val ids = queue.ids
             action(queue.journey?.reconcile(ids, queue.currentEntryId, modes)
@@ -1106,7 +1109,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private suspend fun reconcile(value: QueueLibrary, modes: JourneyModes = JourneyModes.from(state.value.settings)): QueueLibrary {
         val previous = state.value.library
         return withContext(Dispatchers.Default) { value.reuse(previous).let { shared -> shared.copy(queues = shared.queues.map { queue ->
-            if (queue.journey == null) queue else queue.copy(journey = queue.journey.reconcile(queue.ids, queue.currentEntryId, modes))
+            if (queue.journey == null && (queue.id != shared.activeId || queue.entries.isEmpty())) queue else queue.copy(journey = journey(queue, modes))
         }).reuse(previous) } }
     }
     private suspend fun capturedLibrary(source: Player?): QueueLibrary {
@@ -1302,13 +1305,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         recordIntent: Boolean = true, orderTiming: QueueOrderTiming? = null) {
         val revision = commandRevision.takeIf { play != null && recordIntent }
         val prepared = preparation()
-        val active = prepared.library.active
-        val queue = if (active != null && active.entries.isNotEmpty() && (active.journey != null || prepared.player != null)) journey(active).let {
-            if (it === active.journey) active else active.copy(journey = it) } else active
+        val queue = prepared.library.active
         val source = currentSource(queue) ?: withContext(Dispatchers.Default) {
             queue?.entries?.firstOrNull { it.id == queue.currentEntryId }?.track?.id?.let(::documentIdentity) }
         if (!prepared.isCurrent(source)) return
-        if (queue !== active && queue != null) mutable.update { it.copy(library = it.library.update(queue)) }
         if (revision != null) intents.propose(revision, requireNotNull(play), source)
         else intents.bindSource(commandRevision, source)
         val attached = prepared.player ?: return
