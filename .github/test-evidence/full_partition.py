@@ -58,10 +58,7 @@ def discover(root):
 # Lead-ruled single-method deferrals (never whole classes, never relaxed bounds). Each entry is
 # removed from the expected inventory and reported as DEFERRED; the source method must still exist
 # so a rename or removal cannot silently retire the deferral.
-DEFERRED = {
-    'io.github.anastaci1a.localica.QueueSaveOriginTest#millionEntrySaveConsumesCapturedSourceOffMainThroughCommittedCompletion':
-        '#1035 playlist save OOM at 1M (owner: playlist storage)',
-}
+DEFERRED = {}
 
 
 # Exact opt-in/profile assumption identities shared by complete and focused evidence.

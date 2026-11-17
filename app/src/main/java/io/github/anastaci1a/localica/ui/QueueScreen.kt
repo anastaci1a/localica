@@ -21,7 +21,6 @@ import io.github.anastaci1a.localica.ui.components.rememberPopupSharedContent
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.library.SongListView
-import io.github.anastaci1a.localica.library.mapView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +41,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     var deletionOrigin by remember { mutableStateOf<GlassAnchor?>(null) }
     var renaming by remember { mutableStateOf<ListeningQueue?>(null) }
     var deleting by remember { mutableStateOf<Set<String>?>(null) }
-    var saving by remember { mutableStateOf<List<QueueEntry>?>(null) }
+    var saving by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var sorting by remember { mutableStateOf(false) }
     val active = if (prepared == null) resolved?.browsed else prepared.browsed?.queue
@@ -99,7 +98,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 AsyncValueText(visible?.let { if (active == null) "0:00" else formatTime(it.browsed?.duration) }, "0:00", style = MaterialTheme.typography.bodySmall)
             }
             ActionIcon(AppIcon.ActionListAddLast, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true,
-                anchor = saveAnchor) { saving = active?.entries }
+                anchor = saveAnchor) { saving = true }
 
         }
         if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -122,8 +121,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     }
     }
     }
-    if (saving != null) CompositionLocalProvider(LocalGlassOrigin provides saveAnchor) {
-        AddToPlaylistDialog(saving.orEmpty().mapView(QueueEntry::track), playlists, playlistController, { saving = null }, { saving = null })
+    if (saving && active != null) CompositionLocalProvider(LocalGlassOrigin provides saveAnchor) {
+        AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
     }
     GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center, sharedContent = nameMorph) {
         CompositionLocalProvider(LocalQueueSelectorSharedName provides nameMorph) {
