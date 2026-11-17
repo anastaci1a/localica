@@ -16,7 +16,8 @@ internal class PlayerPresentationProbe {
         private set
 
     fun start(root: SemanticsNode, count: String, label: String) {
-        nodes = { root.root.semanticsOwner.getAllSemanticsNodes(mergingEnabled = false) }
+        val owner = requireNotNull(root.root).semanticsOwner
+        nodes = { owner.getAllSemanticsNodes(mergingEnabled = false) }
         text = count
         description = label
     }
