@@ -48,7 +48,8 @@ internal class FreshSystemIme : ExternalResource() {
     }
 }
 
-/** A changed policy needs observer delivery; an unchanged unknown cache reads at next use.
+/** Changed writes need observer delivery first; only unchanged writes may accept lazy cache 0.
+ * ContentService may delay delivery about 10 s (#593); resetStateForNewConfiguration then collapses the keyboard mid-edit.
  * An explicitly unbound service also reads fresh. Missing or malformed dump data proves neither. */
 internal fun awaitSystemImeHardKeyboardPolicy(
     shell: (String) -> String, showWithHardKeyboard: Boolean, changed: Boolean,
@@ -102,7 +103,7 @@ internal class NativeImePolicy : TestRule {
             try {
                 shell("settings put secure $key 1")
                 check(shell("settings get secure $key") == "1") { "Native keyboard policy must precede Activities" }
-                events += "before-activities $key=1 original=$original " +
+                events += "${android.os.SystemClock.uptimeMillis()} before-activities $key=1 original=$original " +
                     awaitSystemImeHardKeyboardPolicy(::shell, true, original != "1")
                 base.evaluate()
             } catch (caught: Throwable) {
@@ -112,7 +113,7 @@ internal class NativeImePolicy : TestRule {
                     if (original == "null") shell("settings delete secure $key")
                     else shell("settings put secure $key $original")
                     check(shell("settings get secure $key") == original) { "Restore native keyboard policy" }
-                    events += "after-activities $key=$original " +
+                    events += "${android.os.SystemClock.uptimeMillis()} after-activities $key=$original " +
                         awaitSystemImeHardKeyboardPolicy(::shell, (original.toIntOrNull() ?: 0) != 0, original != "1")
                 } catch (caught: Throwable) {
                     events += "restore-failed $caught"
