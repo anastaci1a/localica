@@ -27,6 +27,9 @@ class PlayerArtworkCursorTest {
         val context = instrumentation.targetContext
         val preferences = InterfacePreferences(context)
         val saved = preferences.read()
+        val actions = PlayerActionPreferences(context)
+        val savedActions = actions.read()
+        val presentation = PlayerPresentationProbe()
         val file = File.createTempFile("cursor-artwork-", ".mp3", context.cacheDir)
         copyTestAsset(instrumentation.context.assets, "tagged.mp3", file)
         val replacementFile = File.createTempFile("replacement-artwork-", ".png",
@@ -68,6 +71,7 @@ class PlayerArtworkCursorTest {
         }
         try {
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home), reducedMotion = false))
+            actions.write(PlayerActionSettings().place(PlayerAction.Count, ActionSlot(0, 4)))
             val ready = runBlocking { PlayerVisualCache.read(context, song.uri) }
             assertNotNull("The fixture has real decoded cover pixels", ready.artwork)
             val replacementVisual = runBlocking { PlayerVisualCache.read(context, replacementSong.uri) }
@@ -77,7 +81,7 @@ class PlayerArtworkCursorTest {
                     latest = sample.frame
                     if (observing && sample.frame?.transitioning == true)
                         sample.frame.roles.filter { it.incoming && !it.soft }.forEach { blends += it.identity }
-                }, LocalPlayerWorkObserver provides { kind, value -> if (kind == "root" && value != null) progress = value }) {
+                }, LocalPlayerWorkObserver provides { kind, value -> if (kind == "root" && value != null) progress = value; presentation.sample() }) {
                     LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, queues = source,
                         onSeekRequest = { target, visit -> seeks += target to visit; seeks.size.toLong() })
                 }
@@ -90,13 +94,20 @@ class PlayerArtworkCursorTest {
             for (expanded in listOf(false, true)) {
                 if (expanded) { compose.onNodeWithTag("player-surface").performClick(); frames(80); assertEquals(1f, progress, 0f) }
                 compose.runOnIdle { blends.clear(); observing = true }
+                if (expanded) {
+                    val root = compose.onRoot().fetchSemanticsNode()
+                    compose.runOnIdle { presentation.start(root, "1/3", "Track 1 of 3") }
+                }
                 repeat(3) { index ->
                     val queue = source.library.active!!
                     publish(queue.copy(positionMs = queue.positionMs + 5000))
                     frames()
                     settled()
                     assertEquals("A cursor save must not admit a blend (expanded=$expanded, save=$index)", 0, blends.size)
+                    assertTrue("First-composition count changes: ${presentation.changes}", presentation.changes.isEmpty())
                 }
+                if (expanded) assertTrue("Applied count observations were collected", presentation.countSamples > 0)
+                compose.runOnIdle { presentation.stop() }
                 val started = CountDownLatch(1)
                 val release = CountDownLatch(1)
                 val queue = source.library.active!!
@@ -228,6 +239,8 @@ class PlayerArtworkCursorTest {
         } finally {
             hook.set(null)
             compose.mainClock.autoAdvance = true
+            presentation.stop()
+            actions.write(savedActions)
             preferences.write(saved)
             file.delete()
             replacementFile.delete()

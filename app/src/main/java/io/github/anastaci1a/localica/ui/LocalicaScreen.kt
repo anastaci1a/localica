@@ -101,8 +101,8 @@ fun LocalicaScreen(
     val presentationCache = remember { BrowsePresentationCache() }
     val queuePresentation = rememberQueuePresentation(queues, library.snapshot)
     val prepared = queuePresentation.value
-    val playerPresentation = prepared?.takeIf { it.state === queues && it.library.tracks === library.snapshot.tracks && it.library.trackPlays === library.snapshot.trackPlays }
     val playerTracks = prepared?.playerTracks(queues, library.snapshot)
+    val playerPresentation = prepared?.takeIf { playerTracks != null && (it.state.library === queues.library || it.active?.queue?.journey === queues.resolvedPlayerQueue?.active?.journey) }
     val warmRoutes = remember(navigation.stacks, settings.tabs, prepared) {
         val pages = settings.tabs.map { navigation.stacks[it]?.lastOrNull() ?: BrowseRoute(it) }
             .filterNot { it.collection == null && !it.search && it.tab in setOf(MainTab.Home, MainTab.Queues) }
