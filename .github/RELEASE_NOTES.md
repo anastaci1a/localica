@@ -11,7 +11,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - Prepare player and queue presentation on existing workers while keeping commands and Save available during preparation.
 - Carry physical browse positions in the existing lazy view, removing Main-thread indexing maps from browse and drag presentation.
 - Prepare queue reuse off Main and refresh queue metadata after file edits.
-- App Kotlin/Java source changes from 53,451 to 53,477 lines: 209 added, 183 removed, net +26. Growth belongs to the accepted immutable presentation model.
+- App Kotlin/Java source changes from 53,451 to 53,477 lines: 209 added, 183 removed, net +26. The added lines prepare immutable presentation on existing workers.
 - Refresh shard scheduling from complete producers 43743989694 and 43871578366, including risk-preflight results.
 
 ## Resolved issues
@@ -21,7 +21,19 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#1021](https://github.com/anastaci1a/localica/issues/1021): Keep queue summary and occurrence ownership with the prepared presentation.
 - [#1030](https://github.com/anastaci1a/localica/issues/1030): Keep queue commands and Save ready while presentation preparation is pending.
 
+- [#1026](https://github.com/anastaci1a/localica/issues/1026): Prepare queue reuse on existing workers; captured Save remains deferred.
+- [#1028](https://github.com/anastaci1a/localica/issues/1028): Refresh queue metadata after file edits.
+
+- [#1045](https://github.com/anastaci1a/localica/issues/1045): Retire native editor input with its test fixture scope.
+- [#1048](https://github.com/anastaci1a/localica/issues/1048): Apply the production window motion policy in pinch regression tests.
+
 ## Known issues and follow-ups
+
+- [#982](https://github.com/anastaci1a/localica/issues/982): Scoped search history tests can lose the editor node during text replacement.
+- [#1049](https://github.com/anastaci1a/localica/issues/1049): Popup capture can encounter stale or occluded windows during full-suite checks.
+
+- [#1046](https://github.com/anastaci1a/localica/issues/1046): Three inherited workflow contract failures remain in the separate tooling checks.
+- [#1047](https://github.com/anastaci1a/localica/issues/1047): A parallel-build scalar allocation check can fail intermittently; no retry or limit change was made.
 
 - [#1026](https://github.com/anastaci1a/localica/issues/1026) and [#1029](https://github.com/anastaci1a/localica/issues/1029): Captured Save is deferred. Save follows the currently browsed queue and eagerly maps large entry lists on Main; worker-owned queue reuse is retained.
 - [#1042](https://github.com/anastaci1a/localica/issues/1042): The Last.fm first-match persistence JVM test intermittently restores a counts-only result. Its root cause remains open.
