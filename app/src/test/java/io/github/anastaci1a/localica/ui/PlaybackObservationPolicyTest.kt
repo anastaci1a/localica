@@ -37,6 +37,7 @@ class PlaybackObservationPolicyTest {
             artist = current.artist, albumArtist = current.albumArtist, album = current.album,
             fileName = current.fileName, durationMs = current.durationMs, positionMs = 0)
         assertEquals(expected, playerDisplayState(state, current))
+        assertNotSame(state, playerDisplayState(state, current))
         assertSame(state.seekAcknowledgement, playerDisplayState(state, current).seekAcknowledgement)
         assertEquals(expected.copy(sampledAtMs = 99999), playerDisplayState(state.copy(positionMs = 888, sampledAtMs = 99999), current))
         assertSame(state, playerDisplayState(state, null))
