@@ -71,9 +71,16 @@ class ArtworkEditRestorationTest {
     private var fixtureIndex = 0
     private var fixtureTag = ""
     private fun chooseRecent() {
-        compose.observedWaitUntil("chooseRecent", 10000, mapOf("chooser" to hasText("Open gallery"),
-            "unavailable" to hasText("Some recent images are unavailable", substring = true))) {
-            compose.onAllNodesWithContentDescription("Choose recent image").fetchSemanticsNodes().isNotEmpty()
+        try {
+            compose.observedWaitUntil("chooseRecent", 10000, mapOf("chooser" to hasText("Open gallery"),
+                "unavailable" to hasText("Some recent images are unavailable", substring = true))) {
+                compose.onAllNodesWithContentDescription("Choose recent image").fetchSemanticsNodes().isNotEmpty()
+            }
+        } catch (failure: Throwable) {
+            runCatching { controller.state.value.let { android.util.Log.e("SemanticWait", "chooseRecent controller session=${it.sessionId} " +
+                "artworkOnly=${it.artworkOnly} tracks=${it.tracks.size} busy=${it.busy} batch=${it.batchId} jobs=${it.jobsVisible} background=${it.background}") } }
+                .exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
         }
         compose.awaitExpectedWindowFocus(compose.onPopupAction(hasText("Open gallery")))
         compose.onPopupAction(hasScrollToIndexAction() and hasAnyDescendant(hasContentDescription("Choose recent image")))
