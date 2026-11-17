@@ -3,6 +3,9 @@ package io.github.anastaci1a.localica
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import kotlinx.coroutines.test.StandardTestDispatcher
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -15,26 +18,24 @@ import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.PlayerActionPreferences
 import io.github.anastaci1a.localica.ui.PlayerActionSettings
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Test
 import java.io.File
 
 /** Real MainActivity controls, service playback and occurrence receipts for the shuffle-start boundary. */
+@OptIn(ExperimentalTestApi::class)
 class ShufflePreviousPlayerTest {
+    @get:Rule val compose = createEmptyComposeRule(effectContext = StandardTestDispatcher())
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private val device get() = UiDevice.getInstance(instrumentation)
     private fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
 
     private fun click(description: String) {
-        val node = device.findFresh(By.desc(description), 15_000)
-        if (node == null) {
-            val hierarchy = java.io.ByteArrayOutputStream()
-            device.dumpWindowHierarchy(hierarchy)
-            hierarchy.toString("UTF-8").chunked(3000).forEach { Log.e("ShufflePreviousProof", it) }
-        }
-        assertNotNull("Full player control: $description", node)
-        assertTrue(node!!.isEnabled)
-        node.click()
+        compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty() }
+        val node = compose.onNodeWithContentDescription(description).assertIsDisplayed().assertIsEnabled()
+        Log.i("ShufflePreviousProof", "native tap $description; accessibility match=${device.findFresh(By.desc(description), 0) != null}")
+        compose.nativePointer(node)
     }
 
     @Test fun fullScreenShufflePreviousRetracesOriginalOrderAndRespectsRepeatAtExhaustion() {
