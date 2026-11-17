@@ -2,6 +2,8 @@
 package io.github.anastaci1a.localica.ui.layout
 
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.onFocusedBoundsChanged
 import androidx.compose.runtime.*
@@ -9,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.*
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.requireLayoutCoordinates
@@ -75,7 +78,15 @@ internal class PopupEditorFocus(private val state: ScrollState,
             return Velocity.Zero
         }
     }
-    val beforeScroll: Modifier = Modifier.layout { measurable, constraints ->
+    val beforeScroll: Modifier = Modifier.pointerInput(handle) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            handle.contact(down.id, true)
+            try { do { val event = awaitPointerEvent(PointerEventPass.Initial) }
+                while (event.changes.any { it.pressed })
+            } finally { handle.contact(down.id, false) }
+        }
+    }.layout { measurable, constraints ->
         val version = beforeMeasure(this)
         val child = measurable.measure(constraints)
         layout(child.width, child.height) {

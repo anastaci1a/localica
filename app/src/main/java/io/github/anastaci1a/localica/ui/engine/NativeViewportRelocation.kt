@@ -26,7 +26,7 @@ internal class NativeViewportRelocation(private val state: ScrollState, private 
     private var requestSequence = 0L
     private var rejectedRequest = 0L
     private var pending: CompletableDeferred<Unit>? = null
-    private val drags = mutableSetOf<Any>()
+    private val contacts = mutableSetOf<Any>()
     private val flings = mutableMapOf<Job, DisposableHandle?>()
     private val signals = Channel<Long>(Channel.CONFLATED)
     var result = NativeRelocationResult.Ordinary
@@ -41,7 +41,7 @@ internal class NativeViewportRelocation(private val state: ScrollState, private 
     }
 
     private fun allowed() = !disposed && admitted()
-    private fun userOwned() = drags.isNotEmpty() || flings.isNotEmpty()
+    private fun userOwned() = contacts.isNotEmpty() || flings.isNotEmpty()
     private fun current(value: NativeRelocationFrame) = value.window === window && value.focus == focus && value.focused == focused
 
     fun focusChanged(identity: Long, present: Boolean) {
@@ -155,10 +155,10 @@ internal class NativeViewportRelocation(private val state: ScrollState, private 
     fun currentRequest(sequence: Long, focusIdentity: Long) = allowed() && (focused || mode == Mode.Ordinary) &&
         sequence == requestSequence && sequence != rejectedRequest && focusIdentity == focus && mode != Mode.Superseded
 
-    fun drag(identity: Any, began: Boolean) {
+    fun contact(identity: Any, began: Boolean) {
         if (disposed) return
-        if (began) { drags += identity; supersede("drag") }
-        else { drags -= identity; restoreIfIdle() }
+        if (began) { contacts += identity; supersede("contact") }
+        else { contacts -= identity; restoreIfIdle() }
     }
     fun preFling(job: Job) {
         if (disposed) return
