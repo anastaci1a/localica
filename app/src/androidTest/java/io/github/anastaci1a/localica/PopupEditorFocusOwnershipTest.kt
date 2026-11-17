@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.layout.*
 import io.github.anastaci1a.localica.ui.components.rememberNativeViewportRelocation
+import io.github.anastaci1a.localica.ui.components.NativeViewportRelocationHandle
 import io.github.anastaci1a.localica.ui.engine.NativeViewportRelocation
 import io.github.anastaci1a.localica.ui.spec.*
 import kotlinx.coroutines.*
@@ -42,13 +43,14 @@ class PopupEditorFocusOwnershipTest {
     private lateinit var clearFocus: () -> Unit
     private lateinit var state: ScrollState
     private lateinit var owner: PopupEditorFocus
+    private lateinit var native: NativeViewportRelocationHandle
     private lateinit var scope: CoroutineScope
     private val inherited = object : BringIntoViewSpec {
         override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
             if (offset < 0f) offset else (offset + size - containerSize).coerceAtLeast(0f)
     }
 
-    private fun setup() {
+    private fun setup(activate: (() -> Unit)? = null) {
         compose.setContent { LocalicaTheme {
             state = rememberScrollState()
             scope = rememberCoroutineScope()
@@ -58,6 +60,7 @@ class PopupEditorFocusOwnershipTest {
             if (shown) {
                 CompositionLocalProvider(LocalBringIntoViewSpec provides inherited) {
                 val handle = rememberNativeViewportRelocation(state, view) { view.isAttachedToWindow && view.hasWindowFocus() }
+                native = handle
                 owner = remember(handle) { PopupEditorFocus(state,
                     bottomInsets { current }, bottomInsets { source }, bottomInsets { target }, handle) }
                 DisposableEffect(owner) { onDispose { owner.dispose() } }
@@ -65,7 +68,10 @@ class PopupEditorFocusOwnershipTest {
                     Modifier.fillMaxWidth().height(height.dp).testTag("relocation-body")) {
                     Spacer(Modifier.height(450.dp))
                     Box(Modifier.size(48.dp).focusRequester(focus).focusable()
-                        .nestedScroll(object : NestedScrollConnection {}, dispatcher))
+                        .nestedScroll(object : NestedScrollConnection {}, dispatcher)) {
+                        if (activate != null) ActionIconButton(activate,
+                            Modifier.fillMaxSize().testTag("relocation-action")) { Box(Modifier.size(24.dp)) }
+                    }
                     Spacer(Modifier.height(700.dp))
                     Box(Modifier.size(48.dp).focusRequester(nextFocus).focusable())
                     Spacer(Modifier.height(300.dp))
@@ -80,6 +86,37 @@ class PopupEditorFocusOwnershipTest {
 
     @Test fun activeDefaultFlingKeepsItsMutationAcrossNativeResizeAndDoesNotReplay() = flingCase(false)
     @Test fun cancelledFlingWithoutPostCallbackReleasesOnlyItsFence() = flingCase(true)
+
+    @Test fun stationaryButtonTapDuringPendingNativePlacementActivates() {
+        var activations = 0
+        setup { activations++ }
+        val button = compose.onNodeWithTag("relocation-action").assertIsDisplayed()
+        val bounds = button.fetchSemanticsNode().boundsInRoot
+        button.performTouchInput { down(center); up() }
+        var scroll = 0
+        compose.runOnIdle {
+            assertEquals("The same physical button activates before native ownership", 1, activations)
+            assertFalse(state.isScrollInProgress)
+            scroll = state.value
+            target = 200
+        }
+        assertEquals("Changing only the pending inset target leaves the button stationary",
+            bounds, button.fetchSemanticsNode().boundsInRoot)
+        compose.runOnUiThread {
+            assertEquals(NativeRelocationResult.Adjusting, native.result)
+            assertTrue("The native owner holds the mutation while awaiting the next placement", state.isScrollInProgress)
+            assertEquals(scroll, state.value)
+            println("Pending native tap: bounds=$bounds scroll=$scroll native=${native.result} progress=${state.isScrollInProgress}")
+        }
+        button.performTouchInput { down(center); up() }
+        assertEquals("The button remains stationary through physical DOWN and UP",
+            bounds, button.fetchSemanticsNode().boundsInRoot)
+        compose.runOnIdle {
+            println("After native tap: activations=$activations scroll=${state.value} native=${native.result} progress=${state.isScrollInProgress}")
+            assertEquals("A stationary contact must not move the body", scroll, state.value)
+            assertEquals("The in-bounds button tap must activate while native placement is pending", 2, activations)
+        }
+    }
 
     private fun flingCase(cancel: Boolean) {
         setup()
