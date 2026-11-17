@@ -69,6 +69,39 @@ class QueueJourneyPreparationTest {
         }
     }
 
+    @Test fun playedShuffleHistoryRetracesBeforeOrderedPredecessorsAndResumesTheSameVisits() {
+        val ids = List(9) { "entry:$it" }
+        for (loop in listOf(false, true)) {
+            var path = QueueJourney.start(ids, ids[3], JourneyModes())
+                .reconcile(ids, ids[3], JourneyModes(shuffle = true, loop = loop), Random(12))
+            val anchor = path.current!!
+            val played = List(2) {
+                val next = path.next!!
+                path = path.arrive(next.token, ids)
+                assertEquals(next, path.current)
+                next
+            }
+            for (visit in listOf(played[0], anchor)) {
+                assertEquals(visit, path.previous)
+                path = path.arrive(visit.token, ids)
+                assertEquals(visit, path.current)
+            }
+            val predecessors = listOf(2, 1).map { index ->
+                val previous = path.previous!!
+                assertEquals(ids[index], previous.entryId)
+                path = path.arrive(previous.token, ids)
+                assertEquals(previous, path.current)
+                previous
+            }
+            for (visit in listOf(predecessors[0], anchor) + played) {
+                assertEquals(visit, path.next)
+                path = path.arrive(visit.token, ids)
+                assertEquals(visit, path.current)
+            }
+            assertFalse(path.next!!.entryId in path.visited)
+        }
+    }
+
     @Test fun seededTracesPreserveFrozenEntryCycleHistoryAndPermutationSemantics() {
         for (seed in 0..31) {
             val choices = Random(seed)

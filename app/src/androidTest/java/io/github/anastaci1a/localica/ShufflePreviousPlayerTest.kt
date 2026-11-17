@@ -63,16 +63,16 @@ class ShufflePreviousPlayerTest {
                     assertNull(connection.state.value.problem)
                     assertNull(queues.state.value.problem)
                 }
-                fun at(visit: QueueVisit, title: String) {
+                fun at(visit: QueueVisit, title: String, playing: Boolean = false) {
                     await(15_000) {
                         healthy()
                         val state = connection.state.value
                         journey().current == visit && state.playbackVisit == visit.token &&
-                            state.title == title && !state.isBuffering && !state.isPlaying && !state.playWhenReady
+                            state.title == title && !state.isBuffering && state.isPlaying == playing && state.playWhenReady == playing
                     }
                     assertNotNull("Full player stays expanded", device.findFresh(By.desc("Collapse player"), 5000))
                     assertNotNull("Displayed song: $title", device.findFresh(By.text(title), 5000))
-                    Log.i("ShufflePreviousProof", "at entry=${visit.entryId} token=${visit.token} cycle=${visit.cycle} title=$title")
+                    Log.i("ShufflePreviousProof", "at entry=${visit.entryId} token=${visit.token} cycle=${visit.cycle} title=$title playing=$playing")
                 }
                 fun seek(position: Long) {
                     var request = 0L
@@ -103,10 +103,26 @@ class ShufflePreviousPlayerTest {
                             await(15_000) { queues.state.value.settings.repeat == QueueRepeat.One }
                         }
                     }
+                    if (repeatMode == QueueRepeat.Off) {
+                        click("Play")
+                        at(anchor, tracks[3].title, playing = true)
+                        seek(1000)
+                    }
                     click("Shuffle: off")
                     await(15_000) { queues.state.value.settings.shuffle && journey().modes.shuffle }
                     assertEquals("Shuffle keeps the actual visit", anchor, journey().current)
                     assertTrue("Exercise normal Previous below its restart threshold", connection.state.value.positionMs < 5000)
+                    if (repeatMode == QueueRepeat.Off) {
+                        val previous = journey().previous!!
+                        assertEquals(ids[2], previous.entryId)
+                        click("Previous")
+                        at(previous, tracks[2].title, playing = true)
+                        click("Pause")
+                        at(previous, tracks[2].title)
+                        click("Next")
+                        at(anchor, tracks[3].title)
+                        Log.i("ShufflePreviousProof", "PASS playing Previous anchor=$anchor previous=$previous")
+                    }
                     for (index in listOf(2, 1)) {
                         val expected = journey().previous!!
                         assertEquals(ids[index], expected.entryId)
@@ -184,19 +200,22 @@ class ShufflePreviousPlayerTest {
                 }
             }
         } finally {
-            playback?.let { connection ->
-                val owned = connection.queues.state.value.library.queues.map { it.id }.toSet() - existingQueues
-                main {
-                    connection.clear()
-                    connection.queues.removeQueues(owned)
-                    savedSettings?.let(connection.queues::settings)
+            try {
+                playback?.let { connection ->
+                    val owned = connection.queues.state.value.library.queues.map { it.id }.toSet() - existingQueues
+                    main {
+                        connection.clear()
+                        connection.queues.removeQueues(owned)
+                        savedSettings?.let(connection.queues::settings)
+                    }
+                    await(15_000) { connection.queues.state.value.library.queues.none { it.id in owned } }
+                    main { connection.close() }
                 }
-                await(15_000) { connection.queues.state.value.library.queues.none { it.id in owned } }
-                main { connection.close() }
+            } finally {
+                interfacePreferences.write(originalInterface)
+                actionPreferences.write(originalActions)
+                file.delete()
             }
-            interfacePreferences.write(originalInterface)
-            actionPreferences.write(originalActions)
-            file.delete()
         }
     }
 }
