@@ -142,6 +142,8 @@ class LibraryDataExchangeTest {
         val previous = preferences.read(route)
         val overridden = preferences.overridden(route)
         var browsing by mutableStateOf(false)
+        // #1051 diagnostic: log popup state transitions (debug-only receipt probe).
+        io.github.anastaci1a.localica.ui.glassDrawProbe = { if (it is io.github.anastaci1a.localica.ui.GlassTransitionReceipt) android.util.Log.i("SemanticWait", "transition $it") }
         try {
             preferences.write(route, BrowseStyle(sort = TrackSort.Added, ascending = false, extraInfo = ExtraInfo.Added), false)
             compose.setContent { CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) { LocalicaTheme {
@@ -208,6 +210,7 @@ class LibraryDataExchangeTest {
             val shown = DateFormat.getDateInstance().format(Date(1_000_000_000_000L))
             compose.onNode(hasText(shown, substring = true) and inList).assertExists()
         } finally {
+            io.github.anastaci1a.localica.ui.glassDrawProbe = null
             preferences.write(route, previous, overridden)
             exported.delete(); edited.delete()
         }
