@@ -346,9 +346,6 @@ class ListSearchTest {
         fun shell(command: String): String = instrumentation.uiAutomation.executeShellCommand(command).use {
             android.os.ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().use { reader -> reader.readText().trim() }
         }
-        val key = "show_ime_with_hard_keyboard"
-        val original = shell("settings get secure $key")
-        check(original == "null" || original.matches(Regex("-?[0-9]+")))
         val scales = listOf("animator_duration_scale", "transition_animation_scale", "window_animation_scale")
             .associateWith { shell("settings get global $it") }
         check(scales.values.all { it == "null" || it.toFloatOrNull() != null })
@@ -367,8 +364,6 @@ class ListSearchTest {
                 androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it.window, false)
                 it.window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             }
-            shell("settings put secure $key 1")
-            assertEquals("1", shell("settings get secure $key"))
             scales.keys.forEach { shell("settings put global $it 1"); assertEquals(1f, shell("settings get global $it").toFloat(), 0f) }
             prepareNativeDockedKeyboard(compose, setup, ::shell)
             block()
@@ -376,11 +371,6 @@ class ListSearchTest {
             failure = caught
         } finally {
             cleanup { setup.forEach { android.util.Log.i("ListSearchSlotSetup", it) } }
-            cleanup {
-                if (original == "null") shell("settings delete secure $key") else shell("settings put secure $key $original")
-                assertEquals("Restore native keyboard policy", original, shell("settings get secure $key"))
-                compose.awaitSystemImeHardKeyboardPolicy(::shell, (original.toIntOrNull() ?: 0) != 0)
-            }
             scales.forEach { (name, value) ->
                 cleanup {
                     if (value == "null") shell("settings delete global $name") else shell("settings put global $name $value")

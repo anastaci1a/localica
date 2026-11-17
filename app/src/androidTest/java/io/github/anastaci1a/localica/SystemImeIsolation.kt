@@ -1,9 +1,10 @@
 package io.github.anastaci1a.localica
 
 import android.os.ParcelFileDescriptor
-import androidx.compose.ui.test.ComposeTimeoutException
-import androidx.compose.ui.test.junit4.ComposeTestRule
+import android.content.ComponentName
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.Condition
+import androidx.test.uiautomator.UiDevice
 import org.junit.rules.ExternalResource
 import org.junit.rules.TestRule
 import org.junit.runner.Description
@@ -47,33 +48,35 @@ internal class FreshSystemIme : ExternalResource() {
     }
 }
 
-/**
- * Waits until the bound system keyboard has observed a restored `show_ime_with_hard_keyboard`
- * policy (#593). A running IME learns of the change only through a content observer that
- * Android can deliver seconds later. Until then it keeps the previous test's policy: on the API 36
- * hardware-keyboard emulator it shows a full keyboard for the next editor, then collapses it
- * mid-edit when the late notification lands, which an editor reads as the user hiding the keyboard.
- *
- * Restarting the IME instead is not an option for docked-keyboard fixtures: after `am force-stop`
- * the system can take longer than a setup budget to bind a fresh keyboard.
- */
-internal fun ComposeTestRule.awaitSystemImeHardKeyboardPolicy(
-    shell: (String) -> String, showWithHardKeyboard: Boolean,
-) {
-    // InputMethodService.SettingsObserver: 0 unknown (read at next use), 1 false, 2 true.
-    // No observer line means no bound keyboard; the next bind reads the current setting.
-    val settled = setOf("0", if (showWithHardKeyboard) "2" else "1")
-    var observed: String? = null
-    try {
-        waitUntil(20_000) {
-            observed = Regex("""SettingsObserver\{mShowImeWithHardKeyboard=(\d+)\}""")
-                .find(shell("dumpsys -t 2 input_method"))?.groupValues?.get(1)
-            observed == null || observed in settled
-        }
-    } catch (timeout: ComposeTimeoutException) {
-        throw AssertionError("The system keyboard never observed show_ime_with_hard_keyboard=" +
-            "$showWithHardKeyboard (observer state $observed)", timeout)
-    }
+/** A changed policy needs observer delivery; an unchanged unknown cache reads at next use.
+ * An explicitly unbound service also reads fresh. Missing or malformed dump data proves neither. */
+internal fun awaitSystemImeHardKeyboardPolicy(
+    shell: (String) -> String, showWithHardKeyboard: Boolean, changed: Boolean,
+): String {
+    val selected = ComponentName.unflattenFromString(shell("settings get secure default_input_method"))
+        ?: throw AssertionError("No selected system keyboard")
+    var observed = ""
+    val settled = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).wait(Condition<UiDevice, Boolean> {
+        val dump = shell("dumpsys -t 2 input_method")
+        fun values(pattern: String) = Regex(pattern).findAll(dump).map { it.groupValues[1] }.toList()
+        val bound = values("(?m)^\\s*mCurId=(\\S+)")
+        val services = values("(?m)^Input method service state for (.*)$").map { it.substringBefore('@') }
+        val states = values("(?m)^\\s*mSettingsObserver=(.*)$")
+        observed = "selected=$selected bound=$bound services=$services observer=$states changed=$changed"
+        val manager = dump.substringBefore("\nInput method client state").substringBefore("\nInput method service state")
+        val unbound = Regex("(?m)^\\s*mCurMethod=(\\S+)").findAll(manager).map { it.groupValues[1] }.toList() == listOf("null")
+        dump.startsWith("Input Method Manager Service state:") &&
+            !Regex("(?i)DUMP TIMEOUT|Error dumping|Exception occurred while dumping").containsMatchIn(dump) &&
+            if (unbound) services.isEmpty() && !dump.contains("SettingsObserver") &&
+                bound.singleOrNull() in listOf("null", selected.flattenToShortString(), selected.flattenToString())
+            else bound.singleOrNull()?.let(ComponentName::unflattenFromString) == selected &&
+                services == listOf(selected.className) &&
+                (states == listOf("SettingsObserver{mShowImeWithHardKeyboard=${if (showWithHardKeyboard) 2 else 1}}") ||
+                    !changed && states == listOf("SettingsObserver{mShowImeWithHardKeyboard=0}"))
+    }, 20_000)
+    if (settled != true) throw AssertionError("The system keyboard never observed show_ime_with_hard_keyboard=" +
+        "$showWithHardKeyboard ($observed)")
+    return observed
 }
 
 /**
@@ -98,7 +101,8 @@ internal class NativeImePolicy : TestRule {
             try {
                 shell("settings put secure $key 1")
                 check(shell("settings get secure $key") == "1") { "Native keyboard policy must precede Activities" }
-                events += "before-activities $key=1 original=$original"
+                events += "before-activities $key=1 original=$original " +
+                    awaitSystemImeHardKeyboardPolicy(::shell, true, original != "1")
                 base.evaluate()
             } catch (caught: Throwable) {
                 failure = caught
@@ -107,8 +111,10 @@ internal class NativeImePolicy : TestRule {
                     if (original == "null") shell("settings delete secure $key")
                     else shell("settings put secure $key $original")
                     check(shell("settings get secure $key") == original) { "Restore native keyboard policy" }
-                    events += "after-activities $key=$original"
+                    events += "after-activities $key=$original " +
+                        awaitSystemImeHardKeyboardPolicy(::shell, (original.toIntOrNull() ?: 0) != 0, original != "1")
                 } catch (caught: Throwable) {
+                    events += "restore-failed $caught"
                     val primary = failure
                     if (primary == null) failure = caught else primary.addSuppressed(caught)
                 }

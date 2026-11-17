@@ -72,7 +72,6 @@ class PopupImeGeometryTest {
     fun mixedContentDuringNativeImeTrace() = trace(false, mixedContent = true)
 
     private fun trace(editor: Boolean, playerScene: Boolean = false, mixedContent: Boolean = false) {
-        compose.awaitSystemImeHardKeyboardPolicy(UiDevice.getInstance(instrumentation)::executeShellCommand, true)
         val opticalOnly = InstrumentationRegistry.getArguments().getString("popupImeOpticalOnly") == "true"
         if (playerScene && editor) {
             val actions = PlayerActionPreferences(instrumentation.targetContext)

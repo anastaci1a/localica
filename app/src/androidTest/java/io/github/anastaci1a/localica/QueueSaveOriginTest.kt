@@ -86,7 +86,8 @@ class QueueSaveOriginTest {
             }
             var previousBounds: Triple<Rect, Rect, Int>? = null
             var stableFrames = 0
-            pump(fixture, endpoint = true, predicateOnUiThread = false) {
+            var readiness = "No observation"
+            try { pump(fixture, endpoint = true, predicateOnUiThread = false) {
                 val view = popupView()
                 val imeBottom = compose.runOnUiThread {
                     androidx.core.view.ViewCompat.getRootWindowInsets(view)?.let { insets ->
@@ -97,9 +98,15 @@ class QueueSaveOriginTest {
                 val bounds = Triple(screenBounds(compose.onNodeWithTag("glass-morph-surface", useUnmergedTree = true)),
                     screenBounds(compose.onNodeWithText("Add", substring = false)), imeBottom)
                 stableFrames = if (imeBottom > 0 && bounds == previousBounds) stableFrames + 1 else 0
+                readiness = "inset=$imeBottom popupEqual=${bounds.first == previousBounds?.first} " +
+                    "addEqual=${bounds.second == previousBounds?.second} insetEqual=${bounds.third == previousBounds?.third} " +
+                    "stable=$stableFrames focused=${view.hasWindowFocus()} attached=${view.isAttachedToWindow}"
                 previousBounds = bounds
                 (stableFrames >= 2).also { settled -> if (settled)
                     android.util.Log.i("QueueSaveContact", "Settled before Add: frames=$stableFrames bounds=$bounds") }
+            } } catch (failure: ComposeTimeoutException) {
+                android.util.Log.e("QueueSaveReadiness", readiness)
+                throw failure
             }
             tap(compose.onNodeWithText("Add", substring = false).assertIsEnabled())
             pump(fixture) { controller.state.value.playlists.singleOrNull()?.entries?.size == fixture.browsed.entries.size }

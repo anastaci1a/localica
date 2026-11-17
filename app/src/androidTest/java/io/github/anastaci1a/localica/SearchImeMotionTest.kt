@@ -58,7 +58,7 @@ class SearchImeMotionTest {
             .around(object : TestRule {
             override fun apply(base: Statement, description: Description) = object : Statement() {
                 override fun evaluate() {
-                    val settings = listOf("secure show_ime_with_hard_keyboard", "global animator_duration_scale",
+                    val settings = listOf("global animator_duration_scale",
                         "global transition_animation_scale", "global window_animation_scale")
                     val changed = linkedMapOf<String, String>()
                     val events = mutableListOf<String>()
