@@ -27,6 +27,11 @@ class ShufflePreviousPlayerTest {
 
     private fun click(description: String) {
         val node = device.findFresh(By.desc(description), 15_000)
+        if (node == null) {
+            val hierarchy = java.io.ByteArrayOutputStream()
+            device.dumpWindowHierarchy(hierarchy)
+            hierarchy.toString("UTF-8").chunked(3000).forEach { Log.e("ShufflePreviousProof", it) }
+        }
         assertNotNull("Full player control: $description", node)
         assertTrue(node!!.isEnabled)
         node.click()
@@ -141,7 +146,10 @@ class ShufflePreviousPlayerTest {
                     } else assertNull("Only Repeat All extends the shuffle cycle", following)
                     val duration = requireNotNull(connection.state.value.durationMs)
                     assertTrue(duration > 1000)
+                    Log.i("ShufflePreviousProof", "before exhaustion seek: ${connection.state.value}")
                     seek(duration - 250)
+                    Log.i("ShufflePreviousProof", "after exhaustion seek: ${connection.state.value}")
+                    assertFalse("Exhaustion setup remains paused", connection.state.value.playWhenReady)
                     click("Play")
                     when (repeatMode) {
                         QueueRepeat.Off -> await(15_000) { healthy(); connection.state.value.ended && !connection.state.value.isPlaying }
