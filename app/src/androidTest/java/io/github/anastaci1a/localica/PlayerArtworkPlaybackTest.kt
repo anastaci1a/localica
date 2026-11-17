@@ -59,8 +59,9 @@ class PlayerArtworkPlaybackTest {
             compose.setContent { EngineTheme {
                 val playback = rememberPlaybackObservation(connection.state.collectAsState())
                 val queues by connection.queues.presentation.collectAsState()
+                val active = queues.library.active
                 SideEffect {
-                    queues.library.active?.takeIf { it.entries.any { entry -> entry.track.id == song.id } }?.let {
+                    active?.takeIf { it.entries.any { entry -> entry.track.id == song.id } }?.let {
                         ownedQueues += it.id
                         if (observing) positions += it.positionMs
                     }
