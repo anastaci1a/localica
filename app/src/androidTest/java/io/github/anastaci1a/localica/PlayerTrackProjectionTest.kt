@@ -548,4 +548,106 @@ class PlayerTrackProjectionTest {
             } finally { continuePreparation.countDown() }
         } finally { release.countDown(); hook.set(null) }
     }
+
+    @Test fun currentVisitArtworkDoesNotRestartAcrossPendingCursorPublications() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val preferences = InterfacePreferences(context)
+        val saved = preferences.read()
+        val file = File.createTempFile("cursor-artwork-", ".mp3", context.cacheDir)
+        copyTestAsset(instrumentation.context.assets, "tagged.mp3", file)
+        val song = track("cursor-artwork").copy(uri = file.toURI().toString())
+        val entries = Counted(List(3) { QueueEntry("entry-$it", song) })
+        val original = ListeningQueue(id = "cursor-artwork", name = "Artwork", entries = entries,
+            currentEntryId = "entry-0").let { it.copy(journey = QueueJourney.start(it.ids, it.currentEntryId, JourneyModes())) }
+        var source by mutableStateOf(QueueUiState(QueueLibrary(listOf(original), original.id), loading = false).resolvePlayerQueue())
+        val native = io.github.anastaci1a.localica.playback.PlaybackState(connected = true,
+            trackId = song.id, trackUri = song.uri, title = song.title, durationMs = 120000)
+        var latest: ArtworkBackgroundFrame? = null
+        var progress = 0f
+        var observing = false
+        val blends = linkedSetOf<Any>()
+        val hook = AtomicReference<(() -> Unit)?>(null)
+        entries.beforeRead = {
+            if (Thread.currentThread().stackTrace.any { it.className == "io.github.anastaci1a.localica.ui.PlayerTrackProjectionKt" && it.methodName == "prepareQueuePresentation" })
+                hook.getAndSet(null)?.invoke()
+        }
+        fun frames(count: Int = 50) {
+            repeat(count) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+        }
+        fun settled() {
+            assertNotNull(latest)
+            assertFalse("Unchanged artwork must stay settled", latest!!.transitioning)
+            assertEquals(1f, latest!!.clock, 0f)
+            assertTrue(latest!!.roles.any { it.incoming && it.visual.artwork != null })
+        }
+        fun publish(queue: ListeningQueue) {
+            compose.runOnIdle { source = source.copy(library = source.library.update(queue)).resolvePlayerQueue() }
+        }
+        try {
+            preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home), reducedMotion = false))
+            val ready = runBlocking { PlayerVisualCache.read(context, song.uri) }
+            assertNotNull("The fixture has real decoded cover pixels", ready.artwork)
+            compose.setContent { EngineTheme {
+                CompositionLocalProvider(LocalPlayerInkCompositionObserver provides { sample ->
+                    latest = sample.frame
+                    if (observing && sample.frame?.transitioning == true)
+                        sample.frame.roles.filter { it.incoming && !it.soft }.forEach { blends += it.identity }
+                }, LocalPlayerWorkObserver provides { kind, value -> if (kind == "root" && value != null) progress = value }) {
+                    LocalicaScreen(LibraryUiState(loading = false), native, {}, {}, {}, {}, {}, {}, queues = source)
+                }
+            } }
+            compose.waitUntil(10000) { latest?.roles?.any { it.visual.artwork != null } == true }
+            compose.waitForIdle()
+            compose.mainClock.autoAdvance = false
+            frames()
+            settled()
+            for (expanded in listOf(false, true)) {
+                if (expanded) { compose.onNodeWithTag("player-surface").performClick(); frames(80); assertEquals(1f, progress, 0f) }
+                compose.runOnIdle { blends.clear(); observing = true }
+                repeat(3) { index ->
+                    val queue = source.library.active!!
+                    publish(queue.copy(positionMs = queue.positionMs + 5000))
+                    frames()
+                    settled()
+                    assertEquals("A cursor save must not admit a blend (expanded=$expanded, save=$index)", 0, blends.size)
+                }
+                val started = CountDownLatch(1)
+                val release = CountDownLatch(1)
+                val queue = source.library.active!!
+                // Equal visit ownership with fresh prepared windows makes the async gap deterministic.
+                val pending = queue.copy(positionMs = queue.positionMs + 5000,
+                    journey = queue.journey!!.copy().reconcile(queue.ids, queue.currentEntryId, JourneyModes()))
+                assertEquals(queue.journey!!.current, pending.journey!!.current)
+                hook.set { started.countDown(); check(release.await(30, TimeUnit.SECONDS)) }
+                try {
+                    publish(pending)
+                    compose.waitForIdle()
+                    assertTrue("Preparation reaches the controlled pending window", started.await(10, TimeUnit.SECONDS))
+                    frames()
+                    settled()
+                    assertEquals("Pending preparation keeps the same visit without blur", 0, blends.size)
+                } finally { release.countDown(); hook.set(null) }
+                frames()
+                settled()
+                assertEquals("Completing preparation cannot start a second blur", 0, blends.size)
+                assertSame("Cursor publications retain the prepared cover", ready.artwork, PlayerVisualCache.peek(song.uri)?.artwork)
+                compose.runOnIdle { observing = false }
+            }
+            compose.runOnIdle { blends.clear(); observing = true }
+            val queue = source.library.active!!
+            val next = queue.journey!!.next!!
+            publish(queue.copy(currentEntryId = next.entryId, positionMs = 0,
+                journey = queue.journey.arrive(next.token, queue.ids)))
+            frames(80)
+            settled()
+            assertEquals("A different occurrence with identical pixels still has exactly one blend", 1, blends.size)
+        } finally {
+            hook.set(null)
+            compose.mainClock.autoAdvance = true
+            preferences.write(saved)
+            file.delete()
+        }
+    }
+
 }
