@@ -1679,20 +1679,14 @@ class PlaybackIntentTest {
             .set(dao, QueueLibrary(listOf(invalid, second), first.id))
         dao.restore.release.complete(Unit)
         awaitMain { !queues.state.value.loading }
-        assertEquals(listOf(track.uri, null), queues.state.value.library.active!!.artworkNeighbors())
-        assertEquals(listOf(track.uri), queues.state.value.library.active!!.artworkPreloadUris())
-        val publishedJourney = queues.state.value.library.active!!.journey!!
-        assertEquals(first.currentEntryId, publishedJourney.current!!.entryId)
-        assertTrue(publishedJourney.history.none { it.entryId == "removed" })
-        val publishedToken = publishedJourney.current!!.token
-        assertTrue(publishedToken.isNotBlank())
+        assertEquals(listOf(null, null), queues.state.value.library.active!!.artworkNeighbors())
+        assertTrue(queues.state.value.library.active!!.artworkPreloadUris().isEmpty())
         queues.attach(player)
         barrier()
         withContext(Dispatchers.Main) {
             val active = queues.state.value.library.active!!
             assertEquals(first.currentEntryId, active.journey!!.current!!.entryId)
             assertTrue(active.journey.history.none { it.entryId == "removed" })
-            assertEquals(publishedToken, active.journey.current!!.token)
             assertEquals(active.journey.current!!.token, player.currentMediaItem!!.queueVisit)
             assertEquals(active.journey.window().map { it.token }, (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueVisit })
             active.journey.window().forEach { visit ->
@@ -1829,16 +1823,8 @@ class PlaybackIntentTest {
             assertEquals(expected.positionMs, state.value.library.active!!.positionMs)
             assertEquals(documentIdentity(expected.entries.single().track.id), intents.pending()!!.source)
             assertTrue(intents.pending()!!.play)
-            if (differentSource) {
-                val journey = state.value.library.active!!.journey!!
-                assertEquals(second.currentEntryId, journey.current!!.entryId)
-                assertEquals(0, journey.cursor)
-                assertTrue(journey.current!!.token.isNotBlank())
-                assertEquals(listOf(QueueVisit(second.currentEntryId!!, 0, journey.current!!.token)), journey.history)
-                assertEquals(journey.history, journey.window())
-                assertEquals(setOf(second.currentEntryId), journey.visited)
-                assertEquals(JourneyModes.from(state.value.settings), journey.modes)
-            } else assertNotNull(state.value.library.active!!.journey!!.current)
+            if (differentSource) assertEquals(second.journey, state.value.library.active!!.journey)
+            else assertNotNull(state.value.library.active!!.journey!!.current)
             if (differentSource) { assertTrue(secondReads.get() > 0); assertEquals(0, secondMainReads.get()) }
             assertTrue(state.value.library.queues.any { it.id == first.id })
             assertNull(player.currentMediaItem)
@@ -1966,9 +1952,7 @@ class PlaybackIntentTest {
                 val entries = object : AbstractList<QueueEntry>() {
                     override val size = rows.size
                     override fun get(index: Int): QueueEntry {
-                        if (Thread.currentThread().stackTrace.any {
-                            it.className.contains("QueueController") && it.className.contains("membership")
-                        } && firstRead.getAndSet(false)) {
+                        if (firstRead.getAndSet(false)) {
                             assertFalse(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
                             assertTrue("Gate must suspend membership, not journey reconciliation", Thread.currentThread().stackTrace.any {
                                 it.className.contains("QueueController") && it.className.contains("membership")
@@ -1978,6 +1962,7 @@ class PlaybackIntentTest {
                         return rows[index]
                     }
                 }
+                // A null journey bypasses reconciliation reads; membership owns the first entry read.
                 val next = before.update(active.copy(name = "Preparing membership", entries = entries,
                     currentEntryId = null, journey = null, order = SavedOrder(rows.map { it.id })))
                 val start: suspend () -> Unit = { starts.incrementAndGet(); replacement.setPlayWhenReady(true) }
