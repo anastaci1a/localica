@@ -131,10 +131,10 @@ class PlayerArtworkCursorTest {
             settled()
             assertEquals("A different occurrence with identical pixels still has exactly one blend", 1, blends.size)
 
-            val replacementEntries = ProjectionCounted(listOf(QueueEntry("replacement-entry", replacementSong)))
+            val replacementEntries = ProjectionCounted(List(3) { QueueEntry("replacement-entry-$it", replacementSong) })
             replacementEntries.beforeRead = entries.beforeRead
             val replacement = ListeningQueue(id = "replacement", name = "Replacement", entries = replacementEntries,
-                currentEntryId = "replacement-entry").let { it.copy(journey = QueueJourney.start(it.ids, it.currentEntryId, JourneyModes())) }
+                currentEntryId = "replacement-entry-0").let { it.copy(journey = QueueJourney.start(it.ids, it.currentEntryId, JourneyModes())) }
             val started = CountDownLatch(1)
             val release = CountDownLatch(1)
             hook.set { started.countDown(); check(release.await(30, TimeUnit.SECONDS)) }
@@ -162,11 +162,12 @@ class PlayerArtworkCursorTest {
                     assertEquals("Preview seeks remain bound to the native occurrence", 45000L to native.playbackVisit, seeks.last())
                 }
                 val preview = source.library.active!!
+                assertNotNull("The counted preparation fixture has a neighbor to read", preview.journey!!.next)
                 val preparing = CountDownLatch(1)
                 val finish = CountDownLatch(1)
                 hook.set { preparing.countDown(); check(finish.await(30, TimeUnit.SECONDS)) }
                 try {
-                    publish(preview.copy(positionMs = 5000,
+                    publish(preview.copy(positionMs = preview.positionMs + 5000,
                         journey = preview.journey!!.copy().reconcile(preview.ids, preview.currentEntryId, JourneyModes())))
                     frames(1)
                     assertTrue("Preview cursor preparation is held", preparing.await(10, TimeUnit.SECONDS))
