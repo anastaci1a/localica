@@ -2,11 +2,14 @@
 """Bind native app/test APKs and AGP metadata to one producer build."""
 import argparse
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
+import tempfile
 import zipfile
 
 PATHS = (
@@ -64,12 +67,15 @@ def freeze(output):
     print(sha256(manifest))
 
 
-def verify(bundle, digest):
+def verify(bundle, digest, producer_run=None):
     manifest = bundle/'manifest.json'
     if not re.fullmatch('[0-9a-f]{64}', digest) or sha256(manifest) != digest:
         raise ValueError('Producer manifest digest mismatch')
     receipt = json.loads(manifest.read_text())
-    if any(receipt.get(key) != value for key, value in identity().items()):
+    expected = identity()
+    if producer_run is not None:
+        expected['run_id'] = producer_run
+    if any(receipt.get(key) != value for key, value in expected.items()):
         raise ValueError('Producer source/run mismatch')
     if set(receipt['files']) != set(PATHS):
         raise ValueError('Unexpected native input inventory')
@@ -103,6 +109,41 @@ def verify(bundle, digest):
     print(json.dumps(receipt, sort_keys=True))
 
 
+def reuse(run):
+    """An invalid optional producer leaves the normal build selected."""
+    reused = False
+    try:
+        if not re.fullmatch('[1-9][0-9]*', run) or run == os.environ['GITHUB_RUN_ID']:
+            raise ValueError('Invalid prior run')
+        api = ['gh', 'api', f"repos/{os.environ['GITHUB_REPOSITORY']}/actions"]
+        def get(path):
+            return subprocess.check_output(api + [path], timeout=120)
+        producer = json.loads(get(f'runs/{run}'))
+        if producer['head_sha'] != identity()['sha'] or producer['path'] != '.github/workflows/prototype.yml':
+            raise ValueError('Producer source or workflow mismatch')
+        jobs = json.loads(get(f'runs/{run}/jobs?per_page=100'))['jobs']
+        if not any(job['name'] == 'Prototype build, unit tests and lint' and job['conclusion'] == 'success' for job in jobs):
+            raise ValueError('Producer build checks did not pass')
+        artifacts = json.loads(get(f'runs/{run}/artifacts?per_page=100'))['artifacts']
+        artifact, = [item for item in artifacts if item['name'] == 'prototype-signed-instrumentation-pair' and not item['expired']]
+        data = get(f"artifacts/{artifact['id']}/zip")
+        if artifact['digest'] != 'sha256:' + hashlib.sha256(data).hexdigest():
+            raise ValueError('Artifact digest mismatch')
+        with tempfile.TemporaryDirectory() as temp:
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                if any(Path(item.filename).is_absolute() or '..' in Path(item.filename).parts for item in archive.infolist()):
+                    raise ValueError('Invalid artifact path')
+                archive.extractall(temp)
+            bundle = Path(temp)/'prototype-shared-test-apks'
+            verify(bundle, sha256(bundle/'manifest.json'), run)
+        reused = True
+        print('Verified signed APK pair from run ' + run)
+    except (ValueError, KeyError, OSError, subprocess.SubprocessError, zipfile.BadZipFile) as error:
+        print('Signed APK reuse unavailable; normal build selected: ' + str(error))
+    with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+        output.write('reused=' + str(reused).lower() + '\n')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -110,8 +151,11 @@ if __name__ == '__main__':
     check = commands.add_parser('verify')
     check.add_argument('--bundle', type=Path, required=True)
     check.add_argument('--digest', required=True)
+    commands.add_parser('reuse').add_argument('--run', required=True)
     args = parser.parse_args()
     if args.command == 'freeze':
         freeze(args.output)
-    else:
+    elif args.command == 'verify':
         verify(args.bundle, args.digest)
+    else:
+        reuse(args.run)

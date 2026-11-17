@@ -1544,7 +1544,7 @@ class WorkflowContract(unittest.TestCase):
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
         # prototype.yml:17-33,75-86: both entry points expose the same bounded performance controls.
         inputs = {'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner',
-                  'focused_api','build_only','performance','performance_apk_run','performance_scenarios'}
+                  'apk_run','focused_api','build_only','performance','performance_apk_run','performance_scenarios'}
         for event in ('workflow_dispatch', 'workflow_call'):
             self.assertEqual(inputs, set(workflow['on'][event]['inputs']))
             for name, default in (('performance', 'off'), ('performance_apk_run', ''), ('performance_scenarios', '')):
