@@ -67,7 +67,7 @@ class ArtworkEditRestorationTest {
 
     private var fixtureIndex = 0
     private var fixtureTag = ""
-    private fun observedArtworkClick() {
+    private fun observedArtworkClick(action: () -> Unit) {
         val button = compose.onPopupAction(hasContentDescription("Choose artwork"))
         val node = button.fetchSemanticsNode()
         val body = compose.onNodeWithTag("tag-editor-body").fetchSemanticsNode()
@@ -110,11 +110,9 @@ class ArtworkEditRestorationTest {
         }
         val draw = android.view.ViewTreeObserver.OnDrawListener { sample("draw") }
         val tree = view.viewTreeObserver
-        compose.runOnUiThread { tree.addOnDrawListener(draw); sample("before-scroll") }
+        compose.runOnUiThread { tree.addOnDrawListener(draw); sample("before-input") }
         try {
-            button.performScrollTo()
-            compose.runOnUiThread { sample("before-click") }
-            button.performClick()
+            action()
             compose.runOnUiThread {
                 sample("after-click")
                 android.util.Log.i("Chooser530", "workflow=${artwork?.stage} target=${artwork?.target}")
@@ -293,9 +291,11 @@ class ArtworkEditRestorationTest {
     @Test fun closingReopeningAndReplacingTargetDiscardPreviousSession() = withImage {
         compose.runOnUiThread { controller.open(listOf(track())) }
         val firstSession = controller.state.value.sessionId
-        compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
-            .performScrollTo().performTextReplacement("Discard this draft")
-        observedArtworkClick()
+        observedArtworkClick {
+            compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
+                .performScrollTo().performTextReplacement("Discard this draft")
+            compose.onPopupAction(hasContentDescription("Choose artwork")).performScrollTo().performClick()
+        }
         compose.runOnUiThread { controller.close(); controller.open(listOf(track())) }
         assertNotEquals(firstSession, controller.state.value.sessionId)
         compose.awaitPopupGone(hasTestTag("artwork-crop"))
