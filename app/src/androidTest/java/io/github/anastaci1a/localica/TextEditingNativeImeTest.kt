@@ -58,9 +58,9 @@ class TextEditingNativeImeTest {
             CompositionLocalProvider(LocalTextEditingObservation provides { events += it }) {
                 TextEditingFocusHost {
                     val focus = remember { FocusRequester() }
-                    BasicTextField("input", {}, Modifier.focusRequester(focus))
-                    LaunchedEffect(Unit) { focus.requestFocus() }
                     if (installed) {
+                        BasicTextField("input", {}, Modifier.focusRequester(focus))
+                        LaunchedEffect(Unit) { focus.requestFocus() }
                         val view = LocalView.current
                         val host = rememberNativeImeHostReady(view) { invalidations.incrementAndGet(); session.invalidateZeroHeightExposure() }
                         val reader = remember { { _: android.view.View -> reads.incrementAndGet(); native.get() } }
@@ -129,7 +129,6 @@ class TextEditingNativeImeTest {
         val cover = compose.runOnUiThread {
             android.app.Dialog(compose.activity).apply {
                 setContentView(android.widget.TextView(context).apply { text = "Focus cover" })
-                requireNotNull(window).addFlags(android.view.WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
                 show()
             }
         }
@@ -144,11 +143,13 @@ class TextEditingNativeImeTest {
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
 
-        compose.runOnUiThread { installed = false }
-        compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-        val disposedReads = reads.get()
-        native.set(true); nativeFrames()
-        assertEquals("Disposal does not leave a polling callback", disposedReads, reads.get())
+        compose.awaitSearchImeHandoff {
+            compose.runOnUiThread { installed = false }
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+            val disposedReads = reads.get()
+            native.set(true); nativeFrames()
+            assertEquals("Disposal does not leave a polling callback", disposedReads, reads.get())
+        }
         } finally { compose.mainClock.autoAdvance = true }
     }
 
