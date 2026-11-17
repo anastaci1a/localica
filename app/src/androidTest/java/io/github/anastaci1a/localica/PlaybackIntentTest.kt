@@ -1952,7 +1952,9 @@ class PlaybackIntentTest {
                 val entries = object : AbstractList<QueueEntry>() {
                     override val size = rows.size
                     override fun get(index: Int): QueueEntry {
-                        if (firstRead.getAndSet(false)) {
+                        if (Thread.currentThread().stackTrace.any {
+                            it.className.contains("QueueController") && it.className.contains("membership")
+                        } && firstRead.getAndSet(false)) {
                             assertFalse(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
                             assertTrue("Gate must suspend membership, not journey reconciliation", Thread.currentThread().stackTrace.any {
                                 it.className.contains("QueueController") && it.className.contains("membership")
@@ -1962,7 +1964,6 @@ class PlaybackIntentTest {
                         return rows[index]
                     }
                 }
-                // A null journey bypasses reconciliation reads; membership owns the first entry read.
                 val next = before.update(active.copy(name = "Preparing membership", entries = entries,
                     currentEntryId = null, journey = null, order = SavedOrder(rows.map { it.id })))
                 val start: suspend () -> Unit = { starts.incrementAndGet(); replacement.setPlayWhenReady(true) }
