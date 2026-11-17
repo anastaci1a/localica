@@ -115,9 +115,6 @@ name: Prototype (not release certified)
         required: true
 permissions:
   contents: read
-concurrency:
-  group: prototype-${{ github.run_id }}
-  cancel-in-progress: false
 jobs:
   identity:
     name: Commit identities and attribution

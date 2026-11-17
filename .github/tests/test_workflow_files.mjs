@@ -7,14 +7,7 @@ import {fileURLToPath} from 'node:url';
 
 const source = fs.readFileSync(fileURLToPath(new URL('../check-workflow-files.mjs', import.meta.url)), 'utf8');
 const prototype = fs.readFileSync(fileURLToPath(new URL('../workflows/prototype.yml', import.meta.url)), 'utf8');
-const concurrency = prototype.match(/^concurrency:\n((?:[ \t].*\n)+)/m)?.[1];
-assert.ok(concurrency, 'Prototype dispatch needs an explicit concurrency policy');
-assert.match(concurrency, /group: prototype-\$\{\{ github\.run_id \}\}/);
-assert.match(concurrency, /cancel-in-progress: false/);
-for (const runs of [[1, 2], [2, 1], [1, 2, 3]]) {
-  const groups = runs.map(run => concurrency.match(/group: (.+)/)[1].replace('\$\{\{ github.run_id \}\}', String(run)));
-  assert.equal(new Set(groups).size, runs.length, 'Same-ref dispatch order must never share a cancellation group');
-}
+assert.doesNotMatch(prototype, /^concurrency\s*:/m, 'Proof dispatches run independently; the dispatch owner handles ordering');
 
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'localica-workflow-policy-'));
 const script = path.join(directory, '.git', 'check-workflow-files.mjs');
