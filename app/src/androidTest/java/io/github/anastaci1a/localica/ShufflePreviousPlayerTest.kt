@@ -32,10 +32,15 @@ class ShufflePreviousPlayerTest {
     private fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
 
     private fun click(description: String) {
-        compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty() }
-        val node = compose.onNodeWithContentDescription(description).assertIsDisplayed().assertIsEnabled()
-        Log.i("ShufflePreviousProof", "native tap $description; accessibility match=${device.findFresh(By.desc(description), 0) != null}")
-        compose.nativePointer(node)
+        val node = device.findFresh(By.desc(description), 15_000)
+        if (node == null) {
+            val hierarchy = java.io.ByteArrayOutputStream()
+            device.dumpWindowHierarchy(hierarchy)
+            hierarchy.toString("UTF-8").chunked(3000).forEach { Log.e("ShufflePreviousProof", it) }
+        }
+        assertNotNull("Full player control: $description", node)
+        assertTrue(node!!.isEnabled)
+        node.click()
     }
 
     @Test fun fullScreenShufflePreviousRetracesOriginalOrderAndRespectsRepeatAtExhaustion() {
@@ -151,6 +156,24 @@ class ShufflePreviousPlayerTest {
                     seek(duration - 250)
                     Log.i("ShufflePreviousProof", "after exhaustion seek: ${connection.state.value}")
                     assertFalse("Exhaustion setup remains paused", connection.state.value.playWhenReady)
+                    Log.i("ShufflePreviousProof", "current semantics Play=${compose.onAllNodesWithContentDescription("Play").fetchSemanticsNodes().size} " +
+                        "ShuffleOn=${compose.onAllNodesWithContentDescription("Shuffle: on").fetchSemanticsNodes().size}")
+                    val refreshedLabels = mutableSetOf<String>()
+                    fun refresh(node: android.view.accessibility.AccessibilityNodeInfo) {
+                        val old = node.contentDescription?.toString()
+                        val live = node.refresh()
+                        val label = node.contentDescription?.toString()
+                        if (old != null || label != null) Log.i("ShufflePreviousProof", "accessibility refresh old=$old live=$live current=$label")
+                        if (live) {
+                            label?.let(refreshedLabels::add)
+                            for (index in 0 until node.childCount) node.getChild(index)?.let(::refresh)
+                        }
+                    }
+                    instrumentation.uiAutomation.rootInActiveWindow?.let(::refresh)
+                    compose.onNodeWithContentDescription("Play").assertIsDisplayed().assertIsEnabled()
+                    compose.onNodeWithContentDescription("Shuffle: on").assertIsDisplayed()
+                    assertTrue("Fresh accessibility must expose Play", "Play" in refreshedLabels)
+                    assertTrue("Fresh accessibility must expose enabled shuffle", "Shuffle: on" in refreshedLabels)
                     click("Play")
                     when (repeatMode) {
                         QueueRepeat.Off -> await(15_000) { healthy(); connection.state.value.ended && !connection.state.value.isPlaying }
