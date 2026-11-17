@@ -129,6 +129,7 @@ class TextEditingNativeImeTest {
         val cover = compose.runOnUiThread {
             android.app.Dialog(compose.activity).apply {
                 setContentView(android.widget.TextView(context).apply { text = "Focus cover" })
+                requireNotNull(window).addFlags(android.view.WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
                 show()
             }
         }
