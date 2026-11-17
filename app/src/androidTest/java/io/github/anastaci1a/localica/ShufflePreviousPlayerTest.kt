@@ -32,15 +32,10 @@ class ShufflePreviousPlayerTest {
     private fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
 
     private fun click(description: String) {
-        val node = device.findFresh(By.desc(description), 15_000)
-        if (node == null) {
-            val hierarchy = java.io.ByteArrayOutputStream()
-            device.dumpWindowHierarchy(hierarchy)
-            hierarchy.toString("UTF-8").chunked(3000).forEach { Log.e("ShufflePreviousProof", it) }
-        }
-        assertNotNull("Full player control: $description", node)
-        assertTrue(node!!.isEnabled)
-        node.click()
+        compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty() }
+        val node = compose.onNodeWithContentDescription(description)
+        node.assertIsDisplayed().assertIsEnabled()
+        compose.nativePointer(node)
     }
 
     @Test fun fullScreenShufflePreviousRetracesOriginalOrderAndRespectsRepeatAtExhaustion() {
