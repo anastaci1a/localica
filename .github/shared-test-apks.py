@@ -115,9 +115,9 @@ def reuse(run):
     try:
         if not re.fullmatch('[1-9][0-9]*', run) or run == os.environ['GITHUB_RUN_ID']:
             raise ValueError('Invalid prior run')
-        api = ['gh', 'api', f"repos/{os.environ['GITHUB_REPOSITORY']}/actions"]
+        api = f"repos/{os.environ['GITHUB_REPOSITORY']}/actions"
         def get(path):
-            return subprocess.check_output(api + [path], timeout=120)
+            return subprocess.check_output(['gh', 'api', api + '/' + path], timeout=120)
         producer = json.loads(get(f'runs/{run}'))
         if producer['head_sha'] != identity()['sha'] or producer['path'] != '.github/workflows/prototype.yml':
             raise ValueError('Producer source or workflow mismatch')

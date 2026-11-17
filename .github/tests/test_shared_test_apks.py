@@ -96,8 +96,11 @@ class SharedApksTest(unittest.TestCase):
                         os.environ['GITHUB_RUN_ID'] = '124'
                         Path(helper.PATHS[0]).write_bytes(b'consumer sentinel')
                         side_effect = subprocess.CalledProcessError(1, 'gh') if case == 'download' else responses
-                        with mock.patch.object(subprocess, 'check_output', side_effect=side_effect):
+                        with mock.patch.object(subprocess, 'check_output', side_effect=side_effect) as request:
                             helper.reuse('123')
+                        self.assertEqual(mock.call(['gh', 'api', 'repos/example/repo/actions/runs/123'], timeout=120),
+                                         request.call_args_list[0])
+                        self.assertTrue(all(len(call.args[0]) == 3 for call in request.call_args_list))
                         self.assertEqual('reused='+str(case == 'valid').lower(), Path('output').read_text().splitlines()[-1])
                         self.assertEqual(b'producer bytes' if case == 'valid' else b'consumer sentinel', Path(helper.PATHS[0]).read_bytes())
                         if case == 'valid':
