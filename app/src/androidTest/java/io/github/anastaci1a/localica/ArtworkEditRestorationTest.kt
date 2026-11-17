@@ -67,41 +67,37 @@ class ArtworkEditRestorationTest {
 
     private var fixtureIndex = 0
     private var fixtureTag = ""
-    private fun observedArtworkClick() {
+    // Read pinned callback captures only; never invoke or replace an action.
+    private fun <T : Any> observed(root: Any?, type: Class<T>): T? {
+        val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
+        fun find(value: Any?, depth: Int): T? {
+            if (type.isInstance(value)) return type.cast(value)
+            if (value == null || depth == 0 || !seen.add(value)) return null
+            if (value !is Function<*> && value !is androidx.compose.ui.Modifier.Node) return null
+            var owner: Class<*>? = value.javaClass
+            while (owner != null && owner != Any::class.java) {
+                for (field in owner.declaredFields.filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) }) {
+                    val child = runCatching { field.isAccessible = true; field.get(value) }.getOrNull()
+                    find(child, depth - 1)?.let { return it }
+                }
+                owner = owner.superclass
+            }
+            return null
+        }
+        return find(root, 12)
+    }
+    private fun field(value: Any?, name: String): Any? = runCatching {
+        value?.javaClass?.getDeclaredField(name)?.apply { isAccessible = true }?.get(value)
+    }.getOrNull()
+    private fun observedArtworkClick(relocation: io.github.anastaci1a.localica.ui.engine.NativeViewportRelocation?) {
         val button = compose.onPopupAction(hasContentDescription("Choose artwork"))
         val node = button.fetchSemanticsNode()
         val body = compose.onNodeWithTag("tag-editor-body").fetchSemanticsNode()
         val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
-        // Read pinned callback captures only; never invoke or replace an action.
-        fun <T : Any> observed(root: Any?, type: Class<T>): T? {
-            val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
-            fun find(value: Any?, depth: Int): T? {
-                if (type.isInstance(value)) return type.cast(value)
-                if (value == null || depth == 0 || !seen.add(value)) return null
-                if (value !is Function<*> && value !is androidx.compose.ui.Modifier.Node) return null
-                var owner: Class<*>? = value.javaClass
-                while (owner != null && owner != Any::class.java) {
-                    for (field in owner.declaredFields.filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) }) {
-                        val child = runCatching { field.isAccessible = true; field.get(value) }.getOrNull()
-                        find(child, depth - 1)?.let { return it }
-                    }
-                    owner = owner.superclass
-                }
-                return null
-            }
-            return find(root, 12)
-        }
         val scroll = observed(body.config[SemanticsProperties.VerticalScrollAxisRange].value,
             androidx.compose.foundation.ScrollState::class.java)
         val artwork = observed(node.config[SemanticsActions.OnClick].action,
             io.github.anastaci1a.localica.ui.ArtworkWorkflow::class.java)
-        fun field(value: Any?, name: String): Any? = runCatching {
-            value?.javaClass?.getDeclaredField(name)?.apply { isAccessible = true }?.get(value)
-        }.getOrNull()
-        val focus = observed(body.config[SemanticsProperties.VerticalScrollAxisRange].value,
-            io.github.anastaci1a.localica.ui.layout.PopupEditorFocus::class.java)
-        val relocation = field(field(focus, "handle"), "owner") as?
-            io.github.anastaci1a.localica.ui.engine.NativeViewportRelocation
         val samples = ArrayDeque<String>()
         fun sample(label: String) {
             val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
@@ -319,9 +315,14 @@ class ArtworkEditRestorationTest {
     @Test fun closingReopeningAndReplacingTargetDiscardPreviousSession() = withImage {
         compose.runOnUiThread { controller.open(listOf(track())) }
         val firstSession = controller.state.value.sessionId
+        val focus = observed(compose.onNodeWithTag("tag-editor-body").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value,
+            io.github.anastaci1a.localica.ui.layout.PopupEditorFocus::class.java)
+        val relocation = field(field(focus, "handle"), "owner") as?
+            io.github.anastaci1a.localica.ui.engine.NativeViewportRelocation
         compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
             .performScrollTo().performTextReplacement("Discard this draft")
-        observedArtworkClick()
+        observedArtworkClick(relocation)
         compose.runOnUiThread { controller.close(); controller.open(listOf(track())) }
         assertNotEquals(firstSession, controller.state.value.sessionId)
         compose.awaitPopupGone(hasTestTag("artwork-crop"))
