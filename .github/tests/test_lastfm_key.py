@@ -13,6 +13,10 @@ BUILD_WORKFLOWS = {'android.yml', 'prototype.yml'}
 
 def produces_apk(step):
     command = step.get('run', '')
+    # prototype.yml:1035-1055 declares APK targets before expanding the array in Gradle.
+    arrays = re.findall(r'(?m)^\s*(\w+)(?:\+)?=\(([^)\n]*)\)', command)
+    for name, targets in arrays:
+        command = command.replace('"${' + name + '[@]}"', targets)
     return bool(re.search(r'\./gradlew\b[^\n]*(?:assemble|bundle)', command) or
                 'bash .github/compatibility/build.sh' in command)
 
@@ -70,6 +74,23 @@ class LastFmKeyContractTest(unittest.TestCase):
                 elif mutation == 'missing': del build['env'][KEY]
                 else: job['steps'].append({'run': 'echo published', 'env': {KEY: EXPRESSION}})
                 with self.assertRaises(AssertionError): validate('prototype.yml', workflow)
+
+    def test_dynamic_apk_targets_require_a_gradle_invocation_and_scoped_key(self):
+        source = yaml.safe_load((ROOT / '.github/workflows/prototype.yml').read_text())
+        producer = source['jobs']['performance']
+        compiles = [step for step in producer['steps'] if produces_apk(step)]
+        self.assertEqual(['Compile selected performance targets and check source',
+                          'Build no-profile control with the same source'], [s['name'] for s in compiles])
+        for step in compiles:
+            self.assertEqual(EXPRESSION, step['env'][KEY])
+            workflow = copy.deepcopy(source)
+            target = next(s for s in workflow['jobs']['performance']['steps'] if s.get('name') == step['name'])
+            del target['env'][KEY]
+            with self.assertRaises(AssertionError): validate('prototype.yml', workflow)
+        for command in ('targets=(:app:assembleRelease)\necho diagnostic',
+                        'targets=(lintDebug)\n./gradlew "${targets[@]}"',
+                        'echo assembleRelease\n./gradlew lintDebug'):
+            self.assertFalse(produces_apk({'run': command}))
 
     def test_runner_diagnostics_do_not_dump_credentials(self):
         diagnostics = (ROOT / '.github/test-evidence/environment.sh').read_text()

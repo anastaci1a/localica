@@ -298,13 +298,14 @@ class WorkflowTests(unittest.TestCase):
                    'focused_36': 'focused_26'}
         for job, parent in parents.items():
             self.assertEqual({'identity', parent}, set(jobs[job]['needs']))
-            # focused_36 adds the self-hosted owner guard (#592) after the same status condition.
-            self.assertTrue(jobs[job]['if'].startswith("${{ needs.identity.result == 'success' && !inputs.build_only && ("), jobs[job]['if'])
+            # prototype.yml:372,465,632 add performance-off routing before the existing status/owner guards.
+            self.assertTrue(jobs[job]['if'].startswith("${{ (inputs.performance == 'off' || inputs.performance == '') && needs.identity.result == 'success' && !inputs.build_only && ("), jobs[job]['if'])
             self.assertIn('!cancelled()', jobs[job]['if'])
         for name in ('build', 'focused_26'):
             self.assertEqual('identity', jobs[name]['needs'])
-        names = set(jobs) - {'evidence'}
-        self.assertEqual({'identity', 'build', 'focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'}, names)
+        # prototype.yml:988,1121,1140 introduce an exclusive performance dependency graph.
+        names = {'identity', 'build', 'focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'}
+        self.assertEqual(names | {'evidence', 'performance', 'performance_plan', 'performance_functional'}, set(jobs))
 
         def ancestors(name):
             result = set()
@@ -324,7 +325,8 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue(any(a in ancestors(b) or b in ancestors(a)
                                 for a, b in itertools.combinations(triple, 2)))
         self.assertEqual(names, set(jobs['evidence']['needs']))
-        self.assertEqual('${{ always() }}', jobs['evidence']['if'])
+        # prototype.yml:724 runs delivery reconciliation only in the ordinary path.
+        self.assertEqual("${{ always() && (inputs.performance == 'off' || inputs.performance == '') }}", jobs['evidence']['if'])
 
     def test_every_emulator_lane_polls_and_caches_with_retained_diagnostics(self):
         count = 0
@@ -337,6 +339,9 @@ class WorkflowTests(unittest.TestCase):
                         continue
                     count += 1
                     script = step['with']['script']
+                    # prototype.yml:1099,1199 delegate setup to the shared performance script.
+                    if script.startswith('bash tools/performance/macrobenchmark/hosted.sh '):
+                        script = (ROOT / 'tools/performance/macrobenchmark/hosted.sh').read_text()
                     self.assertNotIn('sleep 60', script)
                     self.assertLess(script.index('wm density'), script.index('emulator-readiness.py'))
                     self.assertIn('emulator-readiness.py --normalize-navigation', script)
@@ -350,7 +355,8 @@ class WorkflowTests(unittest.TestCase):
                     diagnostics = next(s for s in steps[index + 1:]
                                        if s.get('with', {}).get('path') == 'emulator-readiness.json')
                     self.assertEqual('always()', diagnostics['if'])
-        self.assertEqual(8, count)
+        # Three Android actions plus seven prototype actions, including both performance jobs.
+        self.assertEqual(10, count)
 
     def test_image_cache_uses_exact_key_and_revision_checked_save(self):
         action = yaml.safe_load((ROOT / '.github/actions/system-image-cache/action.yml').read_text())

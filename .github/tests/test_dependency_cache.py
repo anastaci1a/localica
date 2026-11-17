@@ -1,5 +1,6 @@
 """Contract for the shared Gradle dependency cache and bounded dependency download retries (#681)."""
 import os
+import re
 import shlex
 import datetime
 import http.server
@@ -27,7 +28,7 @@ SNAPSHOT = 'bash .github/dependency-cache-audit.sh snapshot'
 REPORT = 'bash .github/dependency-cache-audit.sh report'
 COMPATIBILITY_BUILD = 'bash .github/compatibility/build.sh'
 # Every job that runs setup-gradle and the cache entry it restores. setup-gradle is read-only on every branch but
-# main, so a reader must name an entry that a main job writes: dependency-cache.yml and the Android workflow.
+# main, so a reader must name an entry written on main by a warmer, Android job or its dedicated producer.
 CACHE_KEYS = {
     ('android.yml', 'test-apks'): 'localica-test-apks',
     ('android.yml', 'compatibility'): 'localica-test-apks',
@@ -35,6 +36,8 @@ CACHE_KEYS = {
     ('android.yml', 'build'): 'localica-distribution',
     ('android.yml', 'device-tests'): 'localica-device-tests',
     ('prototype.yml', 'build'): 'localica-static-checks',
+    # prototype.yml performance.env: separate task family; never evict the ordinary static-checks entry.
+    ('prototype.yml', 'performance'): 'localica-performance',
     ('prototype.yml', 'focused_26'): 'localica-test-apks',
     ('prototype.yml', 'focused_36'): 'localica-test-apks',
     ('prototype.yml', 'compatibility_26'): 'localica-test-apks',
@@ -91,14 +94,22 @@ def gradle_tasks(command):
 def compile_steps(job):
     """Steps that compile before any emulator starts: inline gradlew lines and the compatibility build script."""
     return [step for step in job['steps']
-            if run(step).startswith(('./gradlew', WRAPPED)) or COMPATIBILITY_BUILD in run(step)]
+            if any(line.lstrip().startswith(('./gradlew', WRAPPED)) for line in run(step).splitlines())
+            or COMPATIBILITY_BUILD in run(step)]
 
 
 def compile_tasks(job):
     tasks = set()
     for step in compile_steps(job):
-        if run(step).startswith(('./gradlew', WRAPPED)):
-            for line in run(step).splitlines():
+        if COMPATIBILITY_BUILD not in run(step):
+            # prototype.yml:1041-1055: union every declared branch of the target-array invocation.
+            command = run(step)
+            arrays = re.findall(r'(?m)^\s*(\w+)(?:\+)?=\(([^)\n]*)\)', command)
+            for name in {name for name, _ in arrays}:
+                targets = ' '.join(value for key, value in arrays if key == name)
+                command = command.replace('"${' + name + '[@]}"', targets)
+            for line in command.splitlines():
+                line = line.lstrip()
                 if line.startswith(('./gradlew', WRAPPED)):
                     tasks |= gradle_tasks(line)
         else:
@@ -157,6 +168,25 @@ class SharedDependencyCacheContract(unittest.TestCase):
                     self.assertTrue(reader_tasks)
                     self.assertLessEqual(reader_tasks, writer_tasks)
 
+    def test_performance_cache_is_isolated_and_all_declared_targets_are_accounted_for(self):
+        # prototype.yml performance.env and Compile selected performance targets and check source.
+        self.assertEqual([('prototype.yml', 'performance')],
+                         [job for job, key in CACHE_KEYS.items() if key == 'localica-performance'])
+        self.assertEqual({'testDebugUnitTest', 'lintDebug', ':app:assembleRelease', ':app:assembleDebug',
+                          ':app:assembleDistribution', ':benchmark:assembleBenchmarkDistribution',
+                          ':app:assembleNonMinifiedDistribution', ':benchmark:assembleNonMinifiedDistribution'},
+                         compile_tasks(load('prototype.yml')['jobs']['performance']))
+        producer = load('prototype.yml')['jobs']['performance']
+        # prototype.yml performance.env and diagnostic upload retain the dependency audit in its identity file.
+        identity = producer['env']['DEPENDENCY_CACHE_AUDIT_IDENTITY']
+        self.assertEqual('performance-runner-environment.txt', identity)
+        record = step_index(producer, lambda step: run(step) ==
+                            'bash .github/test-evidence/environment.sh | tee ' + identity)
+        self.assertLess(record, step_index(producer, lambda step: run(step) == SNAPSHOT))
+        upload = next(step for step in producer['steps']
+                      if step.get('with', {}).get('name') == 'performance-${{ inputs.performance }}-diagnostic')
+        self.assertIn('performance-*.txt', upload['with']['path'].splitlines())
+
     def test_warm_workflow_runs_on_main_dependency_changes_and_on_dispatch(self):
         workflow = load('dependency-cache.yml')
         self.assertIn('workflow_dispatch', workflow['on'])
@@ -209,8 +239,11 @@ class SharedDependencyCacheContract(unittest.TestCase):
                 for step in job['steps']:
                     command = run(step)
                     if './gradlew' in command:
-                        self.assertTrue(command.startswith(WRAPPED), command)
                         self.assertNotIn('connected', command, 'a device test run is never wrapped')
+                    for line in command.splitlines():
+                        if './gradlew' in line:
+                            # prototype.yml:1055,1072 compile dynamic targets and the control APK.
+                            self.assertTrue(line.lstrip().startswith(WRAPPED), line)
         build = (GITHUB / 'compatibility' / 'build.sh').read_text()
         self.assertIn('cd "$tree" && ' + WRAPPED + ' assembleDebug assembleDebugAndroidTest', build)
         for script in ('run-prototype-tests.sh', 'run-device-tests.sh', 'compatibility/run.sh', 'prepare-device-tests.sh'):
