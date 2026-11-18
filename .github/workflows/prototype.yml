@@ -3,6 +3,11 @@ name: Prototype (not release certified)
 'on':
   workflow_dispatch:
     inputs:
+      apk_run:
+        description: Optional earlier prototype run with a verified signed APK pair for this exact source SHA
+        required: false
+        default: ''
+        type: string
       build_only:
         description: Build, check and export signed APKs; all device checks remain not-run and block delivery
         required: false
@@ -63,6 +68,11 @@ name: Prototype (not release certified)
         - self-hosted
   workflow_call:
     inputs:
+      apk_run:
+        description: Optional earlier prototype run with a verified signed APK pair for this exact source SHA
+        required: false
+        default: ''
+        type: string
       build_only:
         description: Build, check and export signed APKs; all device checks remain not-run and block delivery
         required: false
@@ -115,6 +125,7 @@ name: Prototype (not release certified)
         required: true
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: prototype-${{ github.ref }}
   cancel-in-progress: true
@@ -167,7 +178,15 @@ jobs:
         echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
     - name: Record runner and toolchain identity
       run: bash .github/test-evidence/environment.sh | tee prototype-runner-environment.txt
+    - name: Reuse a verified signed APK pair
+      id: reuse-apks
+      if: inputs.apk_run != ''
+      env:
+        GH_TOKEN: ${{ github.token }}
+        APK_RUN: ${{ inputs.apk_run }}
+      run: python3 .github/shared-test-apks.py reuse --run "$APK_RUN"
     - name: Build and check
+      if: steps.reuse-apks.outputs.reused != 'true'
       # Only debug APKs are consumed here; release R8 stays in the Android release gates (#679).
       # Keep the Android static-checks heap on the same 16 GB hosted runner (#636).
       env:
@@ -186,6 +205,8 @@ jobs:
     - name: Record verified APK checksum
       working-directory: app/build/outputs/apk/debug
       run: sha256sum app-debug.apk > app-debug.apk.sha256
+    - name: Freeze shared instrumentation inputs
+      run: python3 .github/shared-test-apks.py freeze --output prototype-shared-test-apks
     - name: Record signed instrumentation pair checksums
       run: sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk > prototype-signed-pair.sha256
     - uses: ./.github/actions/upload-artifact-retry
@@ -195,6 +216,7 @@ jobs:
           app/build/outputs/apk/debug/app-debug.apk
           app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
           prototype-signed-pair.sha256
+          prototype-shared-test-apks/
         if-no-files-found: error
     - name: Record exact candidate provenance
       env:
@@ -280,10 +302,21 @@ jobs:
         # This Android job does not use the runner's preinstalled .NET SDKs.
         sudo rm -rf /usr/share/dotnet
         df -h "$HOME"
+    - name: Reuse a verified signed APK pair
+      id: reuse-apks
+      if: inputs.apk_run != ''
+      env:
+        GH_TOKEN: ${{ github.token }}
+        APK_RUN: ${{ inputs.apk_run }}
+      run: python3 .github/shared-test-apks.py reuse --run "$APK_RUN"
     - name: Compile instrumentation APKs before starting emulator
+      if: steps.reuse-apks.outputs.reused != 'true'
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
       run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx6g
+    - name: Warm device dependencies for reused APKs
+      if: steps.reuse-apks.outputs.reused == 'true'
+      run: bash .github/gradle-transient-retry.sh ./gradlew :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2
     - name: Record downloaded dependency files
       if: ${{ !cancelled() && inputs.runner != 'self-hosted' }}
       run: bash .github/dependency-cache-audit.sh report
@@ -510,10 +543,21 @@ jobs:
         # This Android job does not use the runner's preinstalled .NET SDKs.
         sudo rm -rf /usr/share/dotnet
         df -h "$HOME"
+    - name: Reuse a verified signed APK pair
+      id: reuse-apks
+      if: inputs.apk_run != ''
+      env:
+        GH_TOKEN: ${{ github.token }}
+        APK_RUN: ${{ inputs.apk_run }}
+      run: python3 .github/shared-test-apks.py reuse --run "$APK_RUN"
     - name: Compile instrumentation APKs before starting emulator
+      if: steps.reuse-apks.outputs.reused != 'true'
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
       run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx6g
+    - name: Warm device dependencies for reused APKs
+      if: steps.reuse-apks.outputs.reused == 'true'
+      run: bash .github/gradle-transient-retry.sh ./gradlew :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2
     - name: Record downloaded dependency files
       if: ${{ !cancelled() && inputs.runner != 'self-hosted' }}
       run: bash .github/dependency-cache-audit.sh report

@@ -1544,7 +1544,7 @@ class WorkflowContract(unittest.TestCase):
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
         # prototype.yml:17-33,75-86: both entry points expose the same bounded performance controls.
         inputs = {'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner',
-                  'focused_api','build_only','performance','performance_apk_run','performance_scenarios'}
+                  'apk_run','focused_api','build_only','performance','performance_apk_run','performance_scenarios'}
         for event in ('workflow_dispatch', 'workflow_call'):
             self.assertEqual(inputs, set(workflow['on'][event]['inputs']))
             for name, default in (('performance', 'off'), ('performance_apk_run', ''), ('performance_scenarios', '')):
@@ -1556,7 +1556,7 @@ class WorkflowContract(unittest.TestCase):
                          workflow['on']['workflow_dispatch']['inputs']['performance']['options'])
         self.assertEqual({'ANDROID_DEBUG_KEYSTORE','LASTFM_API_KEY'},set(workflow['on']['workflow_call']['secrets']))
         self.assertFalse(workflow['on']['workflow_call']['secrets']['LASTFM_API_KEY']['required'])
-        self.assertEqual({'contents':'read'},workflow['permissions'])
+        self.assertEqual({'contents':'read','actions':'read'},workflow['permissions'])
         jobs=workflow['jobs']
         self.assertEqual({'identity','build','focused_26','focused_36','compatibility_26','compatibility_36'},set(jobs['evidence']['needs']))
         # prototype.yml:724,988,1121,1140 keep normal delivery separate from performance diagnostics.
