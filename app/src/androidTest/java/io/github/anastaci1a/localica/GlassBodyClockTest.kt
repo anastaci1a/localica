@@ -147,6 +147,7 @@ class GlassBodyClockTest {
                     "velocity" to 0f, "target" to if (index == 0) 0f else 1f))
                     item!!.javaClass.getDeclaredField(field).apply { isAccessible = true }.setFloat(item, value)
             }
+            body.momentum.javaClass.getDeclaredField("liftAge").apply { isAccessible = true }.setDouble(body.momentum, io.github.anastaci1a.localica.ui.spec.FlexPress.Hang)
             seedGlowEpoch(body.momentum)
             frame(11_016_666_666L)
             assertEquals("eligible body completion does not wait for light", -.24f, value(body, "depth", "value"), 0f)

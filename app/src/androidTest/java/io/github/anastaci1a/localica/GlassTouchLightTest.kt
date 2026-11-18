@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -418,12 +419,19 @@ class GlassTouchLightTest {
         assertEquals("disabled point changes do not wake either owner", 0, reads.get())
         compose.runOnIdle { strength = 1f; held = true }
         compose.mainClock.advanceTimeBy(1200)
-        compose.runOnIdle { assertTrue(shared.momentum.settled); point = Offset(.6f, .4f) }
+        val trackingStart = compose.runOnIdle { assertTrue(shared.momentum.settled); point = Offset(.6f, .4f); shared.glow.value.point }
         compose.mainClock.advanceTimeByFrame() // h=0 admission observes the point without advancing it.
+        val trackingAdmission = compose.mainClock.currentTime
+        compose.runOnIdle { assertEquals("tracking admission preserves the displayed point", trackingStart, shared.glow.value.point) }
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
             assertTrue("point alone wakes the settled clock", shared.glow.value.point.x in .6f.. .9f && shared.glow.value.point.x != .9f)
-            assertTrue("centre follows rather than snapping on MOVE", shared.glow.value.point.x != .6f)
+            val h = (compose.mainClock.currentTime - trackingAdmission) / 1000.0 * ownerSpeed
+            val w = 2 * PI / FlexGlow.TrackingResponse
+            val residual = (1 + w * h) * exp(-w * h)
+            val expected = Offset((.6f + (trackingStart.x.toDouble() - .6f) * residual).toFloat(),
+                (.4f + (trackingStart.y.toDouble() - .4f) * residual).toFloat())
+            assertEquals("mature tracking matches the independent critical step", expected, shared.glow.value.point)
         }
         compose.mainClock.advanceTimeBy(1200)
         compose.runOnIdle { assertEquals(Offset(.6f, .4f), shared.glow.value.point) }
