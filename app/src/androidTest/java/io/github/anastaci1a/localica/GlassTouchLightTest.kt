@@ -59,13 +59,22 @@ class GlassTouchLightTest {
         val coefficients = weights.map { (it * 16384 / weights.sum()).toInt() }
         val side = 2 * (ceil(sigma).toInt() + ceil(sigma * 2.8199565410614014f + .5f).toInt() + 1) + 1
         val disk = IntArray(side * side) { i ->
-            var count = 0
-            for (yy in 0 until 32) for (xx in 0 until 32) {
-                val x = i % side - side / 2 + (xx + .5) / 32 - .5
-                val y = i / side - side / 2 + (yy + .5) / 32 - .5
-                if (x * x + y * y <= sigma * sigma) count++
-            }
-            (count / 1024f * 255.99000549316406f).toInt()
+            val x = (i % side - side / 2).toDouble(); val y = (i / side - side / 2).toDouble()
+            val r = sigma.toDouble(); val xx = max(0.0, abs(x) - .5); val yy = max(0.0, abs(y) - .5)
+            val area = if (xx * xx + yy * yy >= r * r) 0.0
+                else if ((abs(x) + .5).pow(2) + (abs(y) + .5).pow(2) <= r * r) 1.0
+                else {
+                    val left = max(x - .5, -r); val right = min(x + .5, r)
+                    var sum = 0.0
+                    // Independent vertical-strip integration of the circular source.
+                    for (sample in 0 until 8192) {
+                        val at = left + (sample + .5) * (right - left) / 8192
+                        val cap = sqrt(max(0.0, r * r - at * at))
+                        sum += max(0.0, min(y + .5, cap) - max(y - .5, -cap))
+                    }
+                    sum * (right - left) / 8192
+                }
+            (area.toFloat() * 255.99000549316406f).toInt()
         }
         fun convolve(input: IntArray, dx: Int, dy: Int) = IntArray(input.size) { i ->
             var sum = 8192
@@ -140,6 +149,7 @@ class GlassTouchLightTest {
             return ((byte(0, 0) * (1 - fx) + byte(1, 0) * fx) * (1 - fy) + (byte(0, 1) * (1 - fx) + byte(1, 1) * fx) * fy) / 255
         }
         val maxima = IntArray(3)
+        val idealMaxima = IntArray(3)
         val sensitivity = IntArray(2)
         for (backdrop in listOf(Color(0xff101418), Color(0xff405060), Color(0xffd0d8e0))) for (circle in listOf(false, true)) {
             background = backdrop
@@ -166,12 +176,15 @@ class GlassTouchLightTest {
                         val coverageByte = channel(coverage[y * width + x], 0)
                         if (coverageByte == 0) assertEquals("outside silhouette", idle[y * width + x], actual[y * width + x])
                         if (coverageByte != 255) continue
-                        val first = if (alphas.first > 0) bright[c] else rgb[c]
                         val weight = alphas.second * maskAt(point, x, y)
-                        val incoming = if (alphas.first > 0) bright else rgb.toList()
-                        val dodge = cleaned[c].indices.sumOf { cleaned[c][it] * incoming[it] }.coerceIn(0.0, 1.0)
-                        val expected = ((first * (1 - weight) + dodge * weight) * 255).roundToInt()
+                        val idealIncoming = if (alphas.first > 0) bright else rgb.toList()
+                        val idealDodge = cleaned[c].indices.sumOf { cleaned[c][it] * idealIncoming[it] }.coerceIn(0.0, 1.0)
+                        val ideal = ((idealIncoming[c] * (1 - weight) + idealDodge * weight) * 255).roundToInt()
+                        val incoming = idealIncoming.map { (it * 255).roundToInt() / 255.0 }
+                        val dodge = (cleaned[c].indices.sumOf { cleaned[c][it] * incoming[it] }.coerceIn(0.0, 1.0) * 255).roundToInt() / 255.0
+                        val expected = ((incoming[c] * (1 - weight) + dodge * weight) * 255).roundToInt()
                         maxima[op] = max(maxima[op], abs(channel(actual[y * width + x], shift) - expected))
+                        idealMaxima[op] = max(idealMaxima[op], abs(channel(actual[y * width + x], shift) - ideal))
                     }
                 }
             }
@@ -184,7 +197,7 @@ class GlassTouchLightTest {
             assertSame("movement reuses the current disk", prepared, maskField.get(cache))
             assertArrayEquals("negative optical energy draws nothing", idle, render(GlassGlow(-.22f, -.03f), circle))
         }
-        println("disk/YCC maxima=" + maxima.toList() + " sensitivity=" + sensitivity.toList())
+        println("disk/YCC storedY maxima=" + maxima.toList() + " ideal maxima=" + idealMaxima.toList() + " sensitivity=" + sensitivity.toList())
         for (op in maxima.indices) assertTrue("independent oracle op=" + op + " error=" + maxima[op], maxima[op] <= if (op == 2) 2 else 1)
         for (i in sensitivity.indices) assertTrue("wrong channel=" + i, sensitivity[i] > 4)
     }
