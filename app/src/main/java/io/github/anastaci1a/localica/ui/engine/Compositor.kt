@@ -239,7 +239,7 @@ internal typealias ContactLightPass = androidx.compose.ui.graphics.drawscope.Dra
             val extent = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt()); val backing = layer(0)
             backing.record(size = extent) { drawRoundRect(background, g.first.topLeft, g.first.size, CornerRadius(g.second)); this@drawWithContent.drawContent() }
             if (android.os.Build.VERSION.SDK_INT >= 33) {
-                val mean = layer(1); val atlas = layer(2)
+                val mean = layer(1); val atlas = layer(2); mean.clip = true; atlas.clip = true
                 mean.renderEffect = reduction()
                 mean.record(size = androidx.compose.ui.unit.IntSize(8, 8)) { scale(8f / g.first.width, 8f / g.first.height, Offset.Zero) { translate(-g.first.left, -g.first.top) { drawLayer(backing) } } }
                 atlas.renderEffect = effect(g)

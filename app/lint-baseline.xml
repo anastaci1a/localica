@@ -13502,12 +13502,12 @@
     <issue
         id="RawUiMotion"
         message="Use Engine trajectories"
-        errorLine1="            val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active })"
-        errorLine2="                                                    ~~~~~">
+        errorLine1="    val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active }, state = light, point = { lightPoint }, lightTravel = { lightTravel }, generation = { lightGeneration })"
+        errorLine2="                                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceControls.kt"
-            line="341"
-            column="53"/>
+            line="343"
+            column="45"/>
     </issue>
 
     <issue
@@ -15904,12 +15904,12 @@
     <issue
         id="UnownedSurfaceLifetime"
         message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="            clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }"
-        errorLine2="                                                                   ~~~~~~~~~">
+        errorLine1="            if (layer != null) translate(origin.x, origin.y) { drawLayer(layer) } else drawRect(average)"
+        errorLine2="                                                               ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassControlScene.kt"
-            line="97"
-            column="68"/>
+            line="131"
+            column="64"/>
     </issue>
 
     <issue
