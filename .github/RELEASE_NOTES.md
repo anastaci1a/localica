@@ -1,6 +1,6 @@
-<!-- Release: v0.34.14 -->
+<!-- Release: v0.34.15 -->
 
-# Release v0.34.14
+# Release v0.34.15
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,17 +8,13 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
-- Prevent a scrollbar crash during pending scroll requests.
-- Keep the player count and neighbouring-track presentation stable during position saves.
-- Verify shuffle Previous navigation and exact played-history retracing, including million-entry queues.
-- App Kotlin/Java source changes from 53,515 to 53,514 lines: 5 added, 6 removed, net -1. The scrollbar uses one layout snapshot and removes one redundant input.
-- Refresh shard scheduling from complete v0.34.13 producer 44221675774.
+- Glass backdrop blur strength now follows display density and the reference values, giving noticeably lighter frost behind glass buttons, the tab bar, popups and the player.
+- App Kotlin/Java source changes from 53,514 to 53,520 lines: 9 added, 3 removed, net +6. One shared density-based radius replaces the fixed blur radius, and one obsolete lint baseline entry is removed.
+- Refresh shard scheduling from complete v0.34.14 and v0.34.13 producers 44336375980 and 44221675774.
 
 ## Resolved issues
 
-- [#1062](https://github.com/anastaci1a/localica/issues/1062): Read the scrollbar position consistently during pending scroll requests.
-- [#826](https://github.com/anastaci1a/localica/issues/826): Verify Previous navigation in shuffle mode through player controls and large queues; no application behavior change was needed.
-- [#1057](https://github.com/anastaci1a/localica/issues/1057): Preserve the player count and neighbouring-track presentation during position saves.
+- [#1005](https://github.com/anastaci1a/localica/issues/1005): Glass backdrop blur strength follows display density in the shared glass surface. The broader interaction programme remains open.
 
 ## Known issues and follow-ups
 
@@ -28,6 +24,9 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#1051](https://github.com/anastaci1a/localica/issues/1051): Library data import confirmation has an intermittent Android 8 timeout history; the dialog replacement fix is included, with the known timeout disclosed for release acceptance.
 - [#530](https://github.com/anastaci1a/localica/issues/530): The artwork chooser can intermittently time out waiting for “Choose recent image” in ArtworkEditRestorationTest.
 - [#1061](https://github.com/anastaci1a/localica/issues/1061): A historical held-drag playback test timed out waiting for idle. That test path has been removed; current cover assertions remain mandatory.
+- [#1063](https://github.com/anastaci1a/localica/issues/1063): Investigate count validity when shuffle or repeat changes; this source finding has not been reproduced on a device.
+- [#1064](https://github.com/anastaci1a/localica/issues/1064): Add pending-scroll coverage for the list scrollbar path.
+- [#1065](https://github.com/anastaci1a/localica/issues/1065): Remove obsolete shuffle test diagnostics while preserving native refresh and assertions.
 - [#1052](https://github.com/anastaci1a/localica/issues/1052), [#1053](https://github.com/anastaci1a/localica/issues/1053) and [#1054](https://github.com/anastaci1a/localica/issues/1054): Filed follow-ups cover shared glass complexity accounting, control ownership, and moving-contact and first-frame press response.
 - [#1026](https://github.com/anastaci1a/localica/issues/1026) and [#1029](https://github.com/anastaci1a/localica/issues/1029): Captured Save remains deferred; Save follows the currently browsed queue and eagerly maps large entry lists on Main.
 - [#1042](https://github.com/anastaci1a/localica/issues/1042): The Last.fm first-match persistence JVM test intermittently restores a counts-only result. Its root cause remains open.
@@ -43,7 +42,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Install
 
-1. Download `localica-v0.34.14-pre-release.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.34.15-pre-release.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
 
