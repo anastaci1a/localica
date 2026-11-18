@@ -168,7 +168,7 @@ class GlassMomentumTest {
 
     @Test fun trackingPressAndFreeReleaseMatchS323BandsWithoutChangingVolume() {
         for (fps in listOf(30, 60, 120)) {
-            val body = GlassMomentum(FlexSpec.Small)
+            val body = GlassMomentum()
             body.advance(0f, 0.0, contact = 1f)
             var peak = 0f; var peakTime = 0f
             repeat(fps * 3) {

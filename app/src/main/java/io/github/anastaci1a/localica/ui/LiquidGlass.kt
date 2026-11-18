@@ -155,14 +155,15 @@ internal fun rememberGlassContact(shared: GlassContact? = null, bodyOverride: Fl
 @Composable
 internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     presentation: () -> GlassShape = { contact.body.value }, admit: () -> Boolean = { true },
-    onPressed: (Boolean) -> Unit = {}): Modifier {
-    return glassBody(contact, presentation).observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+    anchored: Boolean = false, onPressed: (Boolean) -> Unit = {}): Modifier {
+    return glassBody(contact, presentation, anchored).observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
 }
 
-private fun Modifier.glassBody(contact: GlassContact, presentation: () -> GlassShape) = drawWithContent {
+private fun Modifier.glassBody(contact: GlassContact, presentation: () -> GlassShape, anchored: Boolean = true) = drawWithContent {
         val shape = presentation()
-        val x = shape.scaleX(contact.vertical); val y = shape.scaleY(contact.vertical)
-        val drift = glassContactDrift(contact.point, size, Offset(x, y))
+        val lift = shape.liftScale(anchored)
+        val x = shape.scaleX(contact.vertical) * lift; val y = shape.scaleY(contact.vertical) * lift
+        val drift = glassContactDrift(contact.point, size, Offset(lift, lift))
         translate(drift.x, drift.y) { scale(x, y) { this@drawWithContent.drawContent() } }
 }
 
@@ -292,7 +293,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape,
-        admit = contactAdmission) else if (anchor != null) Modifier.glassBody(contact, contactShape) else Modifier)
+        admit = contactAdmission, anchored = anchor != null) else if (anchor != null) Modifier.glassBody(contact, contactShape) else Modifier)
         .then(if (!shadow) Modifier else if (silhouette != null) Modifier.silhouetteGlassShadow(silhouette)
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
         .then(if (presentation == null) Modifier.clip(surfaceClip) else Modifier.graphicsLayer {
