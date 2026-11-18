@@ -5,6 +5,11 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import io.github.anastaci1a.localica.ui.spec.FlexGlow
 
+internal fun glowWhite(luminance: Float): Float {
+    val p = Math.pow(luminance.toDouble(), 1.25)
+    return java.math.BigDecimal(1 - p).multiply(java.math.BigDecimal(.9)).add(java.math.BigDecimal(p * .25)).toDouble().toFloat()
+}
+
 /** One draw owner's current preparation; paths are replaced, never rewritten after publication. */
 internal class GlassRimCache {
     private val effect by lazy { if (android.os.Build.VERSION.SDK_INT >= 33) ContactLightEffect() else null }
@@ -20,6 +25,11 @@ internal class GlassRimCache {
     private var maskRadius = Float.NaN
     private var mask: ImageBitmap? = null
     val composite = Paint()
+    private var luminance = Float.NaN; private var white = 0f
+    fun white(value: Float): Float {
+        if (luminance != value) { luminance = value; white = glowWhite(value) }
+        return white
+    }
     private var paintWhite = Float.NaN
     private var localPaint: Paint? = null
     private val broadPaint by lazy { Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(glowMatrix(false, 0f).also { for (i in listOf(4, 9, 14)) it[i] *= 255f })) } }

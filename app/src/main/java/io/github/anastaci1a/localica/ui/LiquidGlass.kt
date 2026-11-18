@@ -456,8 +456,7 @@ internal fun ContactGlowBacking(modifier: Modifier, glow: () -> GlassGlow, shape
 internal fun DrawScope.contactGlowPasses(glow: GlassGlow, body: GlassShape, vertical: Boolean, cache: GlassRimCache,
     bounds: Rect, sample: Color, translation: Offset = Offset.Zero): List<io.github.anastaci1a.localica.ui.engine.ContactLightPass> {
     if (bounds.isEmpty) return emptyList()
-    val p = Math.pow(sample.luminance().toDouble(), 1.25)
-    val white = Math.fma(1 - p, .9, p * .25).toFloat()
+    val white = cache.white(sample.luminance())
     val radius = io.github.anastaci1a.localica.ui.spec.FlexGlow.radius(minOf(bounds.width, bounds.height), density)
     val sigma = glowReducedRadius(radius)
     return (listOf(GlassGlow(big = glow.big)) + glow.retiring + glow.copy(big = 0f, retiring = emptyList())).mapNotNull { frame ->

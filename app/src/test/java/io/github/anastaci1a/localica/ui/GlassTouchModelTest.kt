@@ -40,6 +40,23 @@ class GlassTouchModelTest {
         assertEquals(1f, FlexSpec.dynamic(119.999f, 44f).littleOpacity, 0f)
     }
 
+    @Test fun everyFloatSizeKeepsTheFusedOpacityBitsOnEveryApi() {
+        for (bits in 44f.toBits()..160f.toBits()) {
+            val short = Float.fromBits(bits)
+            val u = (short.toDouble() - 44) / 116
+            val spec = FlexSpec.dynamic(240f, short)
+            val expected = Math.fma(1 - u, .3, u * .2).toFloat()
+            if (spec.littleOpacity.toBits() != expected.toBits())
+                fail("short=$short expected=$expected actual=" + spec.littleOpacity)
+            assertEquals((1 - u).toFloat().toBits(), spec.bigOpacity.toBits())
+        }
+        for (index in 0..65536) {
+            val luminance = index / 65536f
+            val p = Math.pow(luminance.toDouble(), 1.25)
+            assertEquals(Math.fma(1 - p, .9, p * .25).toFloat().toBits(), glowWhite(luminance).toBits())
+        }
+    }
+
     @Test fun smoothedTrackingFollowsTheParameterThenPreservesRetargetVelocity() {
         for (density in listOf(2f, 2.48125f, 3f)) for (fps in listOf(30, 60, 120)) {
             val body = GlassMomentum()
