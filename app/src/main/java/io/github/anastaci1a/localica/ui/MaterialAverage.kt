@@ -23,7 +23,7 @@ internal fun FrostedBackdrop.canAverage(localCorners: List<Offset>): Boolean {
         size.width.toFloat(), size.height.toFloat(), materialCorner, localCorners)
 }
 
-internal data class MaterialAverageStyle(val tone: GlassTone? = null, val opaque: Boolean = false)
+internal data class MaterialAverageStyle(val tone: GlassTone? = null, val opaque: Boolean = false) // null selects the face-fill rows.
 
 /** True when this scene is, or lies inside, a finished panel material (a frosted panel or
  * popup body). That material already carries its panel's broad grade, which is not
