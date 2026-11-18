@@ -35,7 +35,7 @@ internal val probeRegion = Rect(14f, 14f, 186f, 122f)
 class ShadowFieldOracleSensitivityTest {
     @get:Rule val compose = localicaComposeRule()
     private val probe = ShadowFieldProbe(listOf(probeRegion), 1f / 255)
-    private fun field(white: Boolean = false) = shadowCapture { if (white) drawRect(Color.White); glassShadows(listOf(probeBody to 1f), 1f, .5f, GlassShadowGeometry()) }
+    private fun field(white: Boolean = false, strength: Float = 1f) = shadowCapture { if (white) drawRect(Color.White); glassShadows(listOf(probeBody to 1f), strength, .5f, GlassShadowGeometry()) }
     private fun edit(capture: PresentedCapture, change: (Bitmap) -> Unit): PresentedCapture {
         val bitmap = capture.image.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, true); change(bitmap)
         return capture.copy(image = bitmap.asImageBitmap())
@@ -67,7 +67,7 @@ class ShadowFieldOracleSensitivityTest {
     }
 
     @Test fun oppositePixelErrorsWithZeroMeanFail() {
-        val white = shadowCapture { drawRect(Color.White) }; val reference = field(white = true)
+        val white = shadowCapture { drawRect(Color.White) }; val reference = field(white = true, strength = 2f)
         // Symmetric pixels under the body share one shadow value; move them by ±8/255 so the region mean is unchanged.
         val mutated = edit(reference) { b ->
             val y = (89..107).first { android.graphics.Color.red(b.getPixel(80, it)) in 20..235 }

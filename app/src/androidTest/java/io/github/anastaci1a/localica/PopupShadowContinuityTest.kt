@@ -67,6 +67,7 @@ class PopupShadowContinuityTest {
      * page and popup windows at identical geometry on every open and return, so their
      * shared gap must not switch between union and stacked coverage at either handoff. */
     @Test fun sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles() {
+        strength = 2f
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))

@@ -221,9 +221,10 @@ class ShadowContinuityTest {
     @Test fun dragBubbleLandingDoesNotCutItsShadowAtEitherEndpoint() = availability("bubble")
 
     @Test fun buttonPressAndReleaseKeepTheCompleteMovingShadow() {
+        val strength = 2f
         val anchor = GlassAnchor()
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = 1f, shadowSpread = 1f)) {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = strength, shadowSpread = 1f)) {
                 Box(Modifier.size(240.dp).background(Color.White).testTag("press-shadow-scene"),
                     contentAlignment = androidx.compose.ui.Alignment.Center) {
                     GlassActionButton(AppIcon.ActionEllipsis, "Press", Modifier.width(160.dp).glassAnchor(anchor).testTag("press-shadow")) {}
@@ -255,7 +256,7 @@ class ShadowContinuityTest {
                         drawRect(Color.White)
                         drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint())
                         scale(shape.scaleX(anchor.contact.vertical), shape.scaleY(anchor.contact.vertical), body.center) {
-                            glassShadows(listOf(RoundRect(body, CornerRadius(body.height/2)) to 1f), 1f, 1f, GlassShadowGeometry(), rasterizing = true)
+                            glassShadows(listOf(RoundRect(body, CornerRadius(body.height/2)) to 1f), strength, 1f, GlassShadowGeometry(), rasterizing = true)
                         }
                         drawContext.canvas.restore()
                     }
