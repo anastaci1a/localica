@@ -97,13 +97,11 @@ internal inline fun averageGlassColor(sample: (Int, Int) -> Int): Color {
 }
 
 internal fun MaterialAverageStyle.color(mean: Color): Color {
-    val tint = whiteTint.coerceIn(0f, 1f)
-    val y = .2126f * mean.red + .7152f * mean.green + .0722f * mean.blue
-    val lifted = 1f - (1f - y) * (1f - tint) / (1f - tint * y).coerceAtLeast(.0001f)
-    val amount = ((lifted - y) / (1f - y).coerceAtLeast(.0001f)).coerceIn(0f, 1f)
-    return tone.color(lerp(mean, Color.White.copy(alpha = mean.alpha), amount)).let {
-        if (opaque) it.copy(alpha = 1f) else it
-    }
+    val color = tone?.color(mean) ?: Color(
+        glassFillChannel(0, mean.red, mean.green, mean.blue).coerceIn(0f, 1f),
+        glassFillChannel(1, mean.red, mean.green, mean.blue).coerceIn(0f, 1f),
+        glassFillChannel(2, mean.red, mean.green, mean.blue).coerceIn(0f, 1f), mean.alpha)
+    return if (opaque) color.copy(alpha = 1f) else color
 }
 
 @Composable

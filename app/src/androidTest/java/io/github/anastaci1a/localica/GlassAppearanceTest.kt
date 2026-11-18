@@ -114,25 +114,20 @@ class GlassAppearanceTest {
             return pixels[pixels.width / 2 - 5, pixels.height / 2]
         }
         val clear = nearBoundary()
-        assertTrue("Zero blur preserves the red side: $clear", clear.red > .95f && clear.blue < .05f)
+        assertTrue("Zero blur preserves the red side: $clear", clear.red > .95f && kotlin.math.abs(clear.blue - .6401977f) < .025f)
         compose.runOnIdle { expansion = 1f }
         if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback != null }
-        compose.waitUntil(5000) { nearBoundary().blue > .2f }
+        compose.waitUntil(5000) { nearBoundary().blue > clear.blue + .1f }
         compose.runOnIdle { expansion = 0f }
-        compose.waitUntil(5000) { nearBoundary().blue < .05f }
+        compose.waitUntil(5000) { kotlin.math.abs(nearBoundary().blue - clear.blue) < .025f }
         compose.runOnIdle { appearance = appearance.copy(blur = 1f) }
         if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.snapshot != null }
-        compose.waitUntil(5000) { nearBoundary().blue > .2f }
+        compose.waitUntil(5000) { nearBoundary().blue > clear.blue + .1f }
         val blurred = nearBoundary()
         assertTrue("Frost scatters both sides: $blurred", blurred.red > .2f && blurred.blue > .2f)
         compose.runOnIdle { appearance = appearance.copy(whiteTint = .5f) }
-        compose.waitUntil(5000) { nearBoundary().green > blurred.green + .3f }
         val tinted = nearBoundary()
-        val luminance = .2126f * blurred.red + .7152f * blurred.green + .0722f * blurred.blue
-        val lifted = 1f - (1f - luminance) * .5f / (1f - .5f * luminance)
-        val mix = (lifted - luminance) / (1f - luminance)
-        assertEquals("White tint follows the ordered shadow lift independently of scattering",
-            blurred.green + (1f - blurred.green) * mix, tinted.green, .025f)
+        assertEquals("The face matrix is independent of the old white tint setting", blurred.green, tinted.green, .025f)
         val adaptive = compose.onNodeWithTag("adaptive-ink").captureToImage().toPixelMap()
         val contrasting = adaptive[adaptive.width / 2, adaptive.height / 4]
         assertTrue("User tint cannot independently flip this page’s white foreground: $contrasting", contrasting.red > .98f)
@@ -142,7 +137,7 @@ class GlassAppearanceTest {
         compose.runOnIdle { appearance = GlassAppearance(0f, 0f, 1f, 1f, contrast = 0f) }
         // Older adapters prepare a shared optical snapshot off Main. Wait for
         // the requested clear material, as above for blur/tint, before comparing.
-        compose.waitUntil(5000) { nearBoundary().red > .95f && nearBoundary().blue < .05f }
+        compose.waitUntil(5000) { nearBoundary().red > .95f && kotlin.math.abs(nearBoundary().blue - clear.blue) < .025f }
         assertTrue("Shadow cannot darken the clear center", nearBoundary().red > .95f)
         fun outsideBrightness(): Float {
             val scene = compose.onNodeWithTag("scene").captureToImage().toPixelMap()

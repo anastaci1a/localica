@@ -215,15 +215,21 @@ private class ToneSnapshotCompletion {
     return returned
 }
 
-/** Shared post-optics mapping, also used by the material-only average. */
-internal const val GlassColorShader = """
-    // effectiveGlassTrim (#633): weights above 1/trim limit the trim to 1/weight, so brightness never inverts.
+/** Shared encoded face matrix, before surface-range clipping. */
+private val GlassFillRows = arrayOf(
+    floatArrayOf(.5400391f, -.2017822f, -.0203094f, .7001953f),
+    floatArrayOf(-.0599365f, .3984375f, -.0203705f, .7001953f),
+    floatArrayOf(-.0599976f, -.2016602f, .5795898f, .7001953f))
+internal const val GlassFillClamp = 1.06961f
+internal fun glassFillChannel(channel: Int, r: Float, g: Float, b: Float): Float =
+    GlassFillRows[channel].let { minOf(it[0] * r + it[1] * g + it[2] * b + it[3], GlassFillClamp) }
+
+internal val GlassColorShader = """
+    float3 glassColor(float3 color) {
+        return min(float3(${GlassFillRows.joinToString(", ") { "dot(color, float3(${it.take(3).joinToString()})) + ${it[3]}" }}), float3($GlassFillClamp));
+    }
     float glassTrim(float3 tone) { return tone.x * tone.y > 1.0 ? 1.0 / tone.y : tone.x; }
-    float3 glassColor(float3 color, float whiteTint, float3 tone) {
-        float luma = clamp(dot(color, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
-        float lifted = 1.0 - (1.0 - luma) * (1.0 - whiteTint) / max(1.0 - whiteTint * luma, 0.0001);
-        float tint = clamp((lifted - luma) / max(1.0 - luma, 0.0001), 0.0, 1.0);
-        color = mix(color, float3(1), tint);
+    float3 glassTone(float3 color, float3 tone) {
         color = clamp(color, 0.0, 1.0);
         if (tone.x > 0.0) {
             // tone.z is the light-ink mix: 0 and 1 are the two exact polarities, between them their blend.
@@ -246,7 +252,7 @@ internal class GlassToneRenderer {
         $GlassColorShader
         half4 main(float2 p) {
             half4 c = scene.eval(p);
-            return half4(half3(glassColor(float3(c.rgb) / max(float(c.a), 0.0001), 0.0, tone) * float(c.a)), c.a);
+            return half4(half3(glassTone(float3(c.rgb) / max(float(c.a), 0.0001), tone) * float(c.a)), c.a);
         }
     """)
     fun effect(tone: GlassTone, blur: Float): RenderEffect {

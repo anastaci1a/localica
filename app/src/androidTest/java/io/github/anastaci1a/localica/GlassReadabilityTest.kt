@@ -45,7 +45,7 @@ class GlassReadabilityTest {
         }
         for (light in listOf(false, true)) for (amount in listOf(.25f, .5f, 0f)) {
             compose.runOnIdle { lightInk = light; trim = amount }
-            val expected = (0..4).map { GlassTone(amount, 2f, light).channel(it / 4f) }
+            val expected = (0..4).map { minOf(1f, (.5400391f - .2017822f - .0203094f) * (it / 4f) + .7001953f) }
             compose.waitUntil(10000) { ramp().zip(expected).all { (a, b) -> kotlin.math.abs(a - b) < .025f } }
             val ink = compose.onNodeWithTag("ink").captureToImage().toPixelMap()
             assertEquals("The foreground is outside the tone map", 1f, ink[ink.width / 2, ink.height / 2].red, .01f)

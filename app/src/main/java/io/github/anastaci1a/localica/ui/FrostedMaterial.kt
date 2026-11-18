@@ -426,10 +426,10 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: RoundedCornerS
             val blur = with(LocalDensity.current) { 22.dp.toPx() }
             if (Build.VERSION.SDK_INT >= 33) {
                 FilteredBackdrop(Modifier.matchParentSize(), source, location, .5f, blur * 1.5f,
-                    average = MaterialAverageStyle(0f, tone, opaque = true)) { _, resolution, _ ->
+                    average = MaterialAverageStyle(tone, opaque = true)) { _, resolution, _ ->
                     toneRenderer.value?.effect(tone, blur * resolution)
                 }
-            } else AverageBackdrop(Modifier.matchParentSize(), source, location, MaterialAverageStyle(0f, tone, opaque = true))
+            } else AverageBackdrop(Modifier.matchParentSize(), source, location, MaterialAverageStyle(tone, opaque = true))
         }
         Canvas(Modifier.matchParentSize()) {
             if (flat) { drawRect(flatColor); return@Canvas }

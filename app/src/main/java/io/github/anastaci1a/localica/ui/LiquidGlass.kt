@@ -310,10 +310,10 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val scattering = ((blur - 1f) / 5f).coerceIn(0f, 1f)
             val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
             FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution, padding,
-                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint,
+                homeSource, homeWeight, MaterialAverageStyle(), homeBounds, homeFootprint,
                 resolutionReader = presentation?.let { read -> { val b = blurRadius * (appearance.blur + (1f - appearance.blur) * read().frost.coerceIn(0f, 1f))
                     val scatter = ((b - 1f) / 5f).coerceIn(0f, 1f); 1f - .5f * scatter * scatter * (3f - 2f * scatter) } },
-                averageReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint * (1f - read().panel.coerceIn(0f, 1f)), tone) } }) { extent, resolution, flatWeight ->
+                ) { extent, resolution, flatWeight ->
                 val frame = presentation?.invoke()
                 val cornerRadius = if (frame != null) frame.radius else cornerRadius
                 val panel = frame?.panel?.coerceIn(0f, 1f) ?: panel
@@ -329,7 +329,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                         ?: LensGeometry(androidx.compose.ui.geometry.Rect(pad, pad, extent.width - pad, extent.height - pad), radius),
                     blur * resolution,
                     appearance.depth * depthScale * thickness,
-                    power = refraction, whiteTint = appearance.whiteTint * (1f - panel), illumination = 1f - flatWeight,
+                    power = refraction, illumination = 1f - flatWeight,
                     flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(thickness), tone = tone,
                     map = outline?.field, origin = Offset(pad, pad), fieldWeight = outline?.description?.fieldWeight ?: 1f,
                     circles = outline?.description?.circles?.let { (a, b) -> a + Offset(pad, pad) to b + Offset(pad, pad) },
@@ -340,8 +340,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
 
         if (!flat && visible && source != null && Build.VERSION.SDK_INT < 33) {
             AverageBackdrop(Modifier.matchParentSize(), source, location,
-                MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeSource, homeWeight, homeBounds, homeFootprint,
-                styleReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint * (1f - read().panel.coerceIn(0f, 1f)), tone) } })
+                MaterialAverageStyle(), homeSource, homeWeight, homeBounds, homeFootprint)
         }
         Canvas(Modifier.matchParentSize()) {
             val frame = presentation?.invoke()
