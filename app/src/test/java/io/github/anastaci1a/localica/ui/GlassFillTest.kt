@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -43,11 +44,17 @@ class GlassFillTest {
     }
 
     @Test fun broadBackdropGradeRemainsTheExistingSeparateRole() {
-        val sample = Color(.17f, .43f, .81f, .37f)
-        for (light in listOf(false, true)) for (trim in listOf(0f, .25f, .5f)) {
-            val tone = GlassTone(trim, 2f, light)
-            assertEquals(tone.color(sample), MaterialAverageStyle(tone).color(sample))
-            assertEquals(tone.color(sample).copy(alpha = 1f), MaterialAverageStyle(tone, opaque = true).color(sample))
+        for (r in 0..8) for (g in 0..8) for (b in 0..8) for (alpha in listOf(.25f, 1f)) {
+            val sample = Color(r / 8f, g / 8f, b / 8f, alpha)
+            for (light in listOf(false, true)) for (trim in listOf(0f, .25f, .5f)) {
+                val tone = GlassTone(trim, 2f, light)
+                val y = .2126f * sample.red + .7152f * sample.green + .0722f * sample.blue
+                val lifted = 1f - (1f - y)
+                val amount = ((lifted - y) / (1f - y).coerceAtLeast(.0001f)).coerceIn(0f, 1f)
+                val original = tone.color(lerp(sample, Color.White.copy(alpha = sample.alpha), amount))
+                assertEquals("Broad grade preserves original bytes for $sample $tone", original, MaterialAverageStyle(tone).color(sample))
+                assertEquals(original.copy(alpha = 1f), MaterialAverageStyle(tone, opaque = true).color(sample))
+            }
         }
     }
 }

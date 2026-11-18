@@ -53,15 +53,16 @@ class GlassToneShaderParityTest {
         // The limit is applied by the shader itself: at weight 8 white maps to 7/8, not to 1 − .5.
         val white = android.graphics.Color.red(rendered.getPixel(255, tones.indexOf(GlassTone(.5f, 8f, true))))
         assertEquals(.875f * 255f, white.toFloat(), 1.5f)
-        val samples = (0..4).flatMap { r -> (0..4).flatMap { g -> (0..4).map { b -> floatArrayOf(r / 4f, g / 4f, b / 4f) } } }
+        val samples = ((0..4).flatMap { r -> (0..4).flatMap { g -> (0..4).map { b -> floatArrayOf(r / 4f, g / 4f, b / 4f) } } } + listOf(floatArrayOf(4f, 4f, 4f)))
+            .flatMap { rgb -> listOf(0f, .25f, .5f, 1f).map { alpha -> rgb + alpha } }
         val face = Picture()
         val faceCanvas = face.beginRecording(samples.size, 1)
         samples.forEachIndexed { x, rgb ->
             val fill = RuntimeShader("""
-                uniform float3 sample;
+                uniform float4 sample;
                 $GlassColorShader
-                half4 main(float2 p) { return half4(half3(glassColor(sample)), 1.0); }
-            """).apply { setFloatUniform("sample", rgb[0], rgb[1], rgb[2]) }
+                half4 main(float2 p) { return half4(half3(glassColor(sample.rgb / max(sample.a, 0.0001)) * sample.a / 2.0), 1.0); }
+            """).apply { setFloatUniform("sample", rgb[0] * rgb[3], rgb[1] * rgb[3], rgb[2] * rgb[3], rgb[3]) }
             faceCanvas.drawRect(x.toFloat(), 0f, x + 1f, 1f, Paint().apply { shader = fill })
         }
         face.endRecording()
@@ -74,7 +75,7 @@ class GlassToneShaderParityTest {
                 val pixel = facePixels.getPixel(x, 0)
                 val channels = listOf(android.graphics.Color.red(pixel), android.graphics.Color.green(pixel), android.graphics.Color.blue(pixel))
                 rows.forEachIndexed { channel, row ->
-                    val expected = minOf(1.06961f, row.indices.sumOf { (row[it] * rgb[it]).toDouble() }.toFloat() + .7001953f).coerceIn(0f, 1f) * 255f
+                    val expected = minOf(1.06961f, row.indices.sumOf { (row[it] * rgb[it]).toDouble() }.toFloat() + .7001953f) * rgb[3] * .5f * 255f
                     assertEquals("Face sample=$x channel=$channel", expected, channels[channel].toFloat(), 1.5f)
                 }
             }
