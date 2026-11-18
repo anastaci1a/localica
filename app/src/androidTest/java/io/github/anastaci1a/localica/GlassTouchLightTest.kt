@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -219,6 +221,41 @@ class GlassTouchLightTest {
         assertFalse("ordered broad and local passes contribute", held.contentEquals(pixels(node.captureToImage())))
         compose.runOnIdle { light = GlassGlow() }
         assertArrayEquals("idle removes every native pass", idle, pixels(node.captureToImage()))
+    }
+
+    @Test fun nonScalingSurfaceObservesLightWithoutMovingItsForegroundOrTakingTheClick() {
+        var strength by mutableFloatStateOf(1f)
+        var clicks = 0
+        compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(touchLight = strength)) {
+                val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                Box(Modifier.size(192.dp, 96.dp).testTag("light-only-frame")) {
+                    Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xff31516f)) }
+                    LiquidGlassSurface(Modifier.size(160.dp, 80.dp).testTag("light-only")
+                        .then(Modifier.clickable(interactionSource = interaction, indication = null) { clicks++ }),
+                        source = null, pressFeedback = false, shadow = false, tint = Color(0xff405060)) {
+                        Canvas(Modifier.fillMaxSize()) { drawRect(Color.White, Offset(size.width * .4f, size.height * .4f), Size(size.width * .2f, size.height * .2f)) }
+                    }
+                }
+            }
+        } } }
+        val node = compose.onNodeWithTag("light-only")
+        val frame = compose.onNodeWithTag("light-only-frame")
+        compose.mainClock.autoAdvance = false
+        val idle = pixels(frame.captureToImage())
+        node.performTouchInput { down(Offset(width * .25f, height * .75f)) }
+        compose.mainClock.advanceTimeBy(200)
+        val held = pixels(frame.captureToImage())
+        assertFalse("shared light-only admission is visible", idle.contentEquals(held))
+        fun white(image: IntArray) = image.indices.filter { image[it] == Color.White.toArgb() }.toIntArray()
+        assertTrue("foreground witness exists", white(idle).isNotEmpty())
+        assertArrayEquals("non-scaling foreground retains every white pixel", white(idle), white(held))
+        assertEquals(0, clicks)
+        compose.runOnIdle { strength = 0f }
+        compose.mainClock.advanceTimeByFrame()
+        assertArrayEquals("the optical setting removes light-only output", idle, pixels(frame.captureToImage()))
+        node.performTouchInput { up() }
+        compose.runOnIdle { assertEquals("the original clickable keeps activation", 1, clicks) }
     }
 
     @Test fun actualSurfaceHasVisibleHideAndByteExactIdleSettledAndDisabledPixels() {

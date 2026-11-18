@@ -9,8 +9,8 @@ import io.github.anastaci1a.localica.ui.spec.FlexGlow
 internal class GlassRimCache {
     private val effect by lazy { if (android.os.Build.VERSION.SDK_INT >= 33) ContactLightEffect() else null }
     fun meanEffect(background: Color) = if (android.os.Build.VERSION.SDK_INT >= 33) effect?.mean(background) else null
-    fun effect(glow: GlassGlow, body: GlassShape, vertical: Boolean, bounds: Rect, density: Float, background: Color, height: Float, corner: Float): RenderEffect? =
-        if (android.os.Build.VERSION.SDK_INT >= 33 && !bounds.isEmpty) effect?.effect(glow, body, vertical, bounds, density, mask(glowReducedRadius(FlexGlow.radius(minOf(bounds.width, bounds.height), density))), background, height, corner) else null
+    fun effect(glow: GlassGlow, body: GlassShape, vertical: Boolean, bounds: Rect, density: Float, background: Color, height: Float, corner: Float, translation: Offset = Offset.Zero): RenderEffect? =
+        if (android.os.Build.VERSION.SDK_INT >= 33 && !bounds.isEmpty) effect?.effect(glow, body, vertical, bounds, density, mask(glowReducedRadius(FlexGlow.radius(minOf(bounds.width, bounds.height), density))), background, height, corner, translation) else null
     private var center: Offset? = null
     private var tone: GlassTone? = null
     private var brushes: GlassRimBrushes? = null
@@ -19,6 +19,7 @@ internal class GlassRimCache {
     private var path: Path? = null
     private var maskRadius = Float.NaN
     private var mask: ImageBitmap? = null
+    val composite = Paint()
     private var paintWhite = Float.NaN
     private var localPaint: Paint? = null
     private val broadPaint by lazy { Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(glowMatrix(false, 0f).also { for (i in listOf(4, 9, 14)) it[i] *= 255f })) } }
@@ -107,8 +108,8 @@ private class ContactLightEffect {
         return android.graphics.RenderEffect.createRuntimeShaderEffect(mean, "scene").asComposeRenderEffect().also { meanEffect = it }
     }
     fun effect(glow: GlassGlow, body: GlassShape, vertical: Boolean, bounds: Rect, density: Float,
-        mask: ImageBitmap, background: Color, height: Float, corner: Float): RenderEffect? {
-        val key = listOf(glow, body, vertical, bounds, density, mask, background, height, corner)
+        mask: ImageBitmap, background: Color, height: Float, corner: Float, translation: Offset): RenderEffect? {
+        val key = listOf(glow, body, vertical, bounds, density, mask, background, height, corner, translation)
         if (key == previous) return cached
         previous = key
         var result: android.graphics.RenderEffect? = null
@@ -148,7 +149,8 @@ private class ContactLightEffect {
             val shader = passes[slot++]; val matrix = matrices[if (local) 1 else 0]
             for (row in 0..2) shader.setFloatUniform("row$row", matrix[row * 5], matrix[row * 5 + 1], matrix[row * 5 + 2], matrix[row * 5 + 4])
             val radius = FlexGlow.radius(minOf(bounds.width, bounds.height), density)
-            shader.setFloatUniform("light", bounds.left + bounds.width * (.5f + (frame.point.x - .5f) / body.scaleX(vertical)), bounds.top + bounds.height * (.5f + (frame.point.y - .5f) / body.scaleY(vertical)), radius / glowReducedRadius(radius) * frame.scale, mask.width.toFloat())
+            val point = glowCentre(frame.point, bounds, Offset(body.scaleX(vertical), body.scaleY(vertical)), translation)
+            shader.setFloatUniform("light", point.x, point.y, radius / glowReducedRadius(radius) * frame.scale, mask.width.toFloat())
             shader.setFloatUniform("bounds", bounds.left, bounds.top, bounds.right, bounds.bottom)
             shader.setFloatUniform("extent", bounds.right, height); shader.setFloatUniform("corner", corner)
             shader.setFloatUniform("background", background.red, background.green, background.blue)

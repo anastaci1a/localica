@@ -163,8 +163,11 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     presentation: () -> GlassShape = { contact.body.value }, admit: () -> Boolean = { true },
     transform: (Size) -> GlassBodyTransform = { presentation().bodyTransform(contact.point, it, contact.vertical) },
     onPressed: (Boolean) -> Unit = {}): Modifier {
-    return glassBody(transform).observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }, onTravel = { contact.glowTravel = it }) { if (it) contact.glowGeneration++; contact.travel = 0f; contact.pressed = it; onPressed(it) }
+    return glassBody(transform).glassTouch(contact, admit, onPressed)
 }
+
+@Composable private fun Modifier.glassTouch(contact: GlassContact, admit: () -> Boolean, onPressed: (Boolean) -> Unit = {}): Modifier =
+    observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }, onTravel = { contact.glowTravel = it }) { if (it) contact.glowGeneration++; contact.travel = 0f; contact.pressed = it; onPressed(it) }
 
 internal fun DrawScope.drawGlassBody(transform: GlassBodyTransform, content: DrawScope.() -> Unit) =
     translate(transform.drift.x, transform.drift.y) { scale(transform.scale.x, transform.scale.y, block = content) }
@@ -305,6 +308,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape,
         admit = contactAdmission, transform = appliedTransform) else if (anchor != null) Modifier.glassBody(appliedTransform) else Modifier)
+        .then(if (!pressFeedback && sharedContact == null && anchor == null) Modifier.glassTouch(contact, contactAdmission) else Modifier)
         .then(if (!shadow) Modifier else if (silhouette != null) Modifier.silhouetteGlassShadow(silhouette)
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
         .then(if (presentation == null) Modifier.clip(surfaceClip) else Modifier.graphicsLayer {
@@ -316,9 +320,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         val blurRadius = glassBackdropBlurRadius(density.density)
         val blur = blurRadius * (appearance.blur + (1f - appearance.blur) * frost)
         val padding = with(density) { 32.dp.toPx() }
-        ContactGlowBacking(Modifier.matchParentSize(), { contact.state.glow.value }, contactShape, contact.vertical, rim, sample = {
+        ContactGlowBacking(Modifier.matchParentSize(), { contact.state.glow.value }, if (pressFeedback || anchor != null) contactShape else body, contact.vertical, rim, sample = {
             source?.averageColor(location, androidx.compose.ui.geometry.Rect(Offset.Zero, Size(surfaceSize.width.toFloat(), surfaceSize.height.toFloat())))
-        }) {
+        }, translation = { val frame = contactShape(); if (pressFeedback || anchor != null) glassContactDrift(contact.point, Size(surfaceSize.width.toFloat(), surfaceSize.height.toFloat()), Offset(frame.scaleX(contact.vertical), frame.scaleY(contact.vertical))) else Offset.Zero }) {
         if (!flat && visible && source != null && Build.VERSION.SDK_INT >= 33) {
             // Crossing into panel scattering must not swap backing resolution in
             // one frame. Clear glass stays sharp; visible blur gradually permits
@@ -442,15 +446,15 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
 
 @Composable
 internal fun ContactGlowBacking(modifier: Modifier, glow: () -> GlassGlow, shape: () -> GlassShape, vertical: Boolean, cache: GlassRimCache,
-    sample: () -> Color?, geometry: DrawScope.() -> Pair<Rect, Float> = { Rect(Offset.Zero, size) to 0f }, content: @Composable () -> Unit) {
+    sample: () -> Color?, translation: () -> Offset = { Offset.Zero }, geometry: DrawScope.() -> Pair<Rect, Float> = { Rect(Offset.Zero, size) to 0f }, content: @Composable () -> Unit) {
     val background = MaterialTheme.colorScheme.background
     ContactLightBacking(modifier, geometry = geometry, background = background, enabled = { val frame = glow(); frame.big > 0f || frame.little > 0f || frame.retiring.any { it.little > 0f } },
-        effect = { g -> cache.effect(glow(), shape(), vertical, g.first, density, background, size.height, g.second) }, reduction = { cache.meanEffect(background) },
-        paint = { g -> contactGlowPasses(glow(), shape(), vertical, cache, g.first, sample()?.compositeOver(background) ?: background) }, content = content)
+        effect = { g -> cache.effect(glow(), shape(), vertical, g.first, density, background, size.height, g.second, translation()) }, reduction = { cache.meanEffect(background) },
+        paint = { g -> contactGlowPasses(glow(), shape(), vertical, cache, g.first, sample()?.compositeOver(background) ?: background, translation()) }, content = content)
 }
 
 internal fun DrawScope.contactGlowPasses(glow: GlassGlow, body: GlassShape, vertical: Boolean, cache: GlassRimCache,
-    bounds: Rect, sample: Color): List<io.github.anastaci1a.localica.ui.engine.ContactLightPass> {
+    bounds: Rect, sample: Color, translation: Offset = Offset.Zero): List<io.github.anastaci1a.localica.ui.engine.ContactLightPass> {
     if (bounds.isEmpty) return emptyList()
     val p = Math.pow(sample.luminance().toDouble(), 1.25)
     val white = Math.fma(1 - p, .9, p * .25).toFloat()
@@ -459,11 +463,11 @@ internal fun DrawScope.contactGlowPasses(glow: GlassGlow, body: GlassShape, vert
     return (listOf(GlassGlow(big = glow.big)) + glow.retiring + glow.copy(big = 0f, retiring = emptyList())).mapNotNull { frame ->
         val local = frame.big == 0f; val alpha = if (local) frame.little else frame.big
         if (alpha <= 0f) null else {
-            val point = Offset(bounds.left + bounds.width * (.5f + (frame.point.x - .5f) / body.scaleX(vertical)), bounds.top + bounds.height * (.5f + (frame.point.y - .5f) / body.scaleY(vertical)))
+            val point = glowCentre(frame.point, bounds, Offset(body.scaleX(vertical), body.scaleY(vertical)), translation)
             val paint = cache.paint(local, white); val mask = if (local) cache.mask(sigma) else null
             val pass: io.github.anastaci1a.localica.ui.engine.ContactLightPass = { backing ->
-                io.github.anastaci1a.localica.ui.engine.drawContactLight(this, bounds, point, radius / sigma * frame.scale, 1f,
-                    if (local) 0f else alpha, if (local) alpha else 0f, paint, paint, mask, backing)
+                io.github.anastaci1a.localica.ui.engine.drawContactLight(this, bounds, point, radius / sigma * frame.scale,
+                    if (local) 0f else alpha, if (local) alpha else 0f, paint, paint, mask, cache.composite, backing)
             }
             pass
         }

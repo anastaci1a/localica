@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.ui.spec.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -128,6 +129,28 @@ class GlassTouchModelTest {
         assertTrue(body.glow.little > 0f)
         repeat(1200) { body.advance(0f, 1.0 / 120); body.finishSettlement() }
         assertTrue(records(body).isEmpty()); assertTrue(body.settled)
+    }
+
+    @Test fun inverseCentreCancelsTheSingleBodyMapAcrossDensities() {
+        for (density in listOf(2f, 2.48125f, 3f)) for (raw in listOf(Offset(.1f, .8f), Offset(1.25f, -.25f))) {
+            val bounds = Rect(7f * density, 11f * density, 103f * density, 91f * density)
+            val shape = GlassShape(.08f, -.2f)
+            val scale = Offset(shape.scaleX(), shape.scaleY())
+            val drift = glassContactDrift(raw, bounds.size, scale)
+            val tracked = Offset(.7f, .3f)
+            val local = glowCentre(tracked, bounds, scale, drift)
+            val expected = listOf(bounds.left.toDouble() + bounds.width.toDouble() * tracked.x,
+                bounds.top.toDouble() + bounds.height.toDouble() * tracked.y)
+            for (axis in 0..1) {
+                val u = if (axis == 0) local.x else local.y
+                val o = if (axis == 0) bounds.center.x else bounds.center.y
+                val a = if (axis == 0) scale.x else scale.y
+                val d = if (axis == 0) drift.x else drift.y
+                val world = o + a.toDouble() * (u.toDouble() - o) + d
+                val storageBound = Math.ulp(u).toDouble() * abs(a) + Math.ulp(o) + Math.ulp(d) + Math.ulp(expected[axis].toFloat())
+                assertTrue("density=$density axis=$axis error=" + abs(world - expected[axis]), abs(world - expected[axis]) <= storageBound)
+            }
+        }
     }
 
 }

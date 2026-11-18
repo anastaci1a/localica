@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import kotlin.math.*
+import androidx.compose.ui.geometry.*
 
 internal fun glowReducedRadius(radius: Float): Float {
     val threshold = if (radius <= 4f) 2f else if (radius <= 8f) 4f else 8f
@@ -56,3 +57,7 @@ internal fun glowMatrix(local: Boolean, white: Float): FloatArray {
     if (local) for (i in 0..14) matrix[i] = clean(matrix[i] * gain)
     return matrix
 }
+
+internal fun glowCentre(point: Offset, bounds: Rect, scale: Offset, drift: Offset) = Offset(
+    bounds.center.x + (bounds.width * (point.x - .5f) - drift.x) / scale.x,
+    bounds.center.y + (bounds.height * (point.y - .5f) - drift.y) / scale.y)

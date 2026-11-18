@@ -188,7 +188,7 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
 
     /** Each output finishes independently while the shared clock waits for all channels. */
     fun finishSettlement(): Boolean {
-        if (motion.settled && pressure.settled && depthSettled && (bodyOverride != null || liftAge >= FlexPress.Hang)) { motion.finish(); pressure.finish(); depth.finish() }
+        if (motion.settled && pressure.settled && depthSettled) { motion.finish(); pressure.finish(); depth.finish() }
         if (lift.settled && liftAge >= liftSpec.hang) lift.finish()
         if (broad.settled) broad.finish()
         locals.forEach { it.finish() }

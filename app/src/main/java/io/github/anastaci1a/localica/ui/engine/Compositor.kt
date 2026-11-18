@@ -263,8 +263,8 @@ internal typealias ContactLightPass = androidx.compose.ui.graphics.drawscope.Dra
 }
 
 internal fun drawContactLight(scope: androidx.compose.ui.graphics.drawscope.DrawScope, bounds: Rect, point: Offset,
-    pixelScale: Float, expansion: Float, broad: Float, local: Float, broadPaint: androidx.compose.ui.graphics.Paint,
-    localPaint: androidx.compose.ui.graphics.Paint, mask: androidx.compose.ui.graphics.ImageBitmap?,
+    pixelScale: Float, broad: Float, local: Float, broadPaint: androidx.compose.ui.graphics.Paint,
+    localPaint: androidx.compose.ui.graphics.Paint, mask: androidx.compose.ui.graphics.ImageBitmap?, composite: androidx.compose.ui.graphics.Paint,
     backing: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit) = with(scope) {
     val canvas = drawContext.canvas
     fun pass(alpha: Float, paint: androidx.compose.ui.graphics.Paint, draw: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit) {
@@ -274,10 +274,11 @@ internal fun drawContactLight(scope: androidx.compose.ui.graphics.drawscope.Draw
         try { clipRect(bounds.left, bounds.top, bounds.right, bounds.bottom) { draw() } } finally { canvas.restore() }
     }
     pass(broad, broadPaint) { backing() }
-    if (mask != null) pass(local, localPaint) {
+    if (mask != null) pass(local, composite) {
         val left = point.x - mask.width * pixelScale / 2; val top = point.y - mask.height * pixelScale / 2
         clipRect(left, top, left + mask.width * pixelScale, top + mask.height * pixelScale) {
-            scale(expansion, expansion, point) { backing() }
+            localPaint.alpha = 1f; canvas.saveLayer(bounds, localPaint)
+            try { backing() } finally { canvas.restore() }
             translate(left, top) {
                 scale(pixelScale, pixelScale, Offset.Zero) { drawImage(mask, blendMode = androidx.compose.ui.graphics.BlendMode.DstIn) }
             }
