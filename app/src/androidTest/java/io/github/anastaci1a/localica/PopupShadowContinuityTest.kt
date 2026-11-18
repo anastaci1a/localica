@@ -267,7 +267,7 @@ class PopupShadowContinuityTest {
         val height = 112f
         val radius = height / 2f
         val shift = 3.5f
-        val expansion = (.6f * 48f) * 1.75f
+        val expansion = (4f + .6f * 28f) * 1.75f
         val expandedRadius = radius + expansion
         val oldMinimum = -expansion + shift + expandedRadius
         val oldMaximum = height + expansion + shift - expandedRadius
@@ -454,7 +454,7 @@ class PopupShadowContinuityTest {
             assertTrue("The control caster must never transfer", requireNotNull(caster).ownsWindow(plane))
             assertFalse("The real union must not contain a control caster", anchor.shadowPlane?.casters?.any { it === caster } == true)
         }
-        // The spread and 2dp vertical shadow shift are specified by the renderer.
+        // The spread and 8dp vertical shadow shift are specified by the renderer.
         // Check the FULL padded outlines at every sampled strain/depth, not just
         // the gap or the undeformed 64dp body. A separate plane prevents merging.
         val pad = (8f + .6f * 48f) * compose.density.density + 2f

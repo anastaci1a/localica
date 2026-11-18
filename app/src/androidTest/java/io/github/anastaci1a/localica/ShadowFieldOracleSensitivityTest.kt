@@ -28,8 +28,8 @@ internal fun shadowCapture(width: Int = 200, height: Int = 140, generation: Long
     return PresentedCapture(image, listOf("offscreen"), 1, generation, generation, null, System.nanoTime(), offscreen = true)
 }
 internal val probeBody = RoundRect(40f, 40f, 160f, 88f, CornerRadius(24f))
-/** The whole ring field of [probeBody] at spread .5 (reach 18 px, shift 2 px) plus margin. */
-internal val probeRegion = Rect(16f, 16f, 184f, 116f)
+/** The whole ring field of [probeBody] at spread .5 (reach 24 px, shift 8 px) plus margin. */
+internal val probeRegion = Rect(14f, 14f, 186f, 122f)
 
 /** U12.01c red witness: every mutation below passes a mean-only probe or a max-only probe, and the full-field oracle rejects it. */
 class ShadowFieldOracleSensitivityTest {

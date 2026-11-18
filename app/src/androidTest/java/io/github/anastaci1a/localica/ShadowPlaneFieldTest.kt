@@ -20,7 +20,7 @@ class ShadowPlaneFieldTest {
         val a = ShadowPlane(clock, HostKey.next(Any())); val b = ShadowPlane(clock, HostKey.next(Any()))
         val node = SurfaceNode(clock, "trigger", PersistentShape(clock, ShapeTarget(listOf(probeBody), JoinPolicy.Union)), SurfaceTarget(Stratum.Floating, 1f, ShadowRole.Glass), a)
         node.transfer(b, profile); b.acknowledge(); val ownership = node.shadowOwnership as MotionFloat
-        for (strength in listOf(.6f, 1f)) {
+        for (strength in listOf(.6f, 1f, 3f)) {
             val reference = shadowCapture { glassShadows(listOf(probeBody to 1f), strength, .5f, GlassShadowGeometry()) }
             var naiveWorst = 0f
             for (share in listOf(0f, .001f, .1f, .5f, .9f, .999f, 1f)) {
@@ -34,7 +34,7 @@ class ShadowPlaneFieldTest {
                     glassShadows(listOf(probeBody to 1f), strength, .5f, GlassShadowGeometry()); drawContext.canvas.restore() } }
                 naiveWorst = maxOf(naiveWorst, probe.compare(ramps, reference).maximumRgbaError)
             }
-            if (strength == 1f) assertTrue("Alpha ramps must miss the oracle mid-transfer: $naiveWorst", naiveWorst > .008f)
+            if (strength == 3f) assertTrue("Alpha ramps must miss the oracle mid-transfer: $naiveWorst", naiveWorst > .008f)
         }
         node.dispose()
     }

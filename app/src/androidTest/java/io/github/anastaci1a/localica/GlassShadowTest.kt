@@ -74,7 +74,7 @@ class GlassShadowTest {
         val asymmetric = RoundRect(30f, 30f, 90f, 70f, CornerRadius(8f), CornerRadius(12f),
             CornerRadius(6f), CornerRadius(10f))
         render(asymmetric)
-        org.junit.Assert.assertEquals(glassShadowRingCount(20.8f), cache.rings.size)
+        org.junit.Assert.assertEquals(glassShadowRingCount(28.8f), cache.rings.size)
         render(uniform)
         assertTrue("New uniform geometry must discard obsolete ring paths", cache.rings.isEmpty())
     }
@@ -200,12 +200,12 @@ class GlassShadowTest {
                     else {
                         // Generic union path at the same host origin, composited as one
                         // transparent field just like the primitive and retained paths.
-                        geometry.update(listOf(body), (4f + .6f * 28f).dp.toPx(), 2.dp.toPx())
+                        geometry.update(listOf(body), (48f * .6f).dp.toPx(), 8.dp.toPx())
                         clipPath(geometry.body,
                             androidx.compose.ui.graphics.ClipOp.Difference) {
                             val canvas = drawContext.canvas
                             val bounds = androidx.compose.ui.geometry.Rect(body.left, body.top, body.right, body.bottom)
-                                .inflate((6f + .6f * 28f).dp.toPx() + 1f)
+                                .inflate((8f + .6f * 48f).dp.toPx() + 1f)
                             canvas.saveLayer(bounds, androidx.compose.ui.graphics.Paint())
                             try {
                                 geometry.rings.forEachIndexed { index, ring ->
