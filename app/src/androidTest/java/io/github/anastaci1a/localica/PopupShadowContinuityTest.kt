@@ -267,7 +267,7 @@ class PopupShadowContinuityTest {
         val height = 112f
         val radius = height / 2f
         val shift = 3.5f
-        val expansion = (4f + .6f * 28f) * 1.75f
+        val expansion = (.6f * 48f) * 1.75f
         val expandedRadius = radius + expansion
         val oldMinimum = -expansion + shift + expandedRadius
         val oldMaximum = height + expansion + shift - expandedRadius
@@ -457,7 +457,7 @@ class PopupShadowContinuityTest {
         // The spread and 2dp vertical shadow shift are specified by the renderer.
         // Check the FULL padded outlines at every sampled strain/depth, not just
         // the gap or the undeformed 64dp body. A separate plane prevents merging.
-        val pad = (6f + .6f * 28f) * compose.density.density + 2f
+        val pad = (8f + .6f * 48f) * compose.density.density + 2f
         val shift = Offset(0f, -referenceShift)
         val bodies = homeBodies().map { it.boundingRect.inflate(pad) }
         val controls = bodies.map { it.translate(shift) }
@@ -572,10 +572,9 @@ class PopupShadowContinuityTest {
                 val localX = (x + .5f - screen.center.x) / sx + screen.width / 2
                 val localY = (y + .5f - screen.center.y) / sy + screen.height / 2
                 val cx = shadowAxisCenter(localX, bounds.width, radius, 0f)
-                val cy = shadowAxisCenter(localY, bounds.height, radius, 2f*d)
+                val cy = shadowAxisCenter(localY, bounds.height, radius, 8f*d)
                 val distance = kotlin.math.sqrt((localX-cx)*(localX-cx) + (localY-cy)*(localY-cy)) - radius
-                val u = (1f-distance/((4f+.6f*28f)*d)).coerceIn(0f,1f)
-                val expected = 1f-kotlin.math.exp(-.34594453f*.8f*u*u*u)
+                val expected = shadowPolynomialReference(distance / (d * .6f)) * .8f
                 val referenceX = (right + 36f*d*sx).roundToInt()
                 assertTrue("The unshadowed reference must remain on screen", referenceX in 0 until on.width)
                 val background = AndroidColor.red(on.getPixel(referenceX, y)).toFloat()
@@ -611,10 +610,9 @@ class PopupShadowContinuityTest {
                     }
                     if (inside(2f/minOf(sx, sy), 0f)) continue // Exclude antialiased material edge.
                     val dx = (abs(lx-screen.width/2)-(screen.width/2-radius)).coerceAtLeast(0f)
-                    val dy = (abs(ly-screen.height/2-2f*d)-(screen.height/2-radius)).coerceAtLeast(0f)
+                    val dy = (abs(ly-screen.height/2-8f*d)-(screen.height/2-radius)).coerceAtLeast(0f)
                     val distance = kotlin.math.sqrt(dx*dx+dy*dy)-radius
-                    val u = (1f-distance/((4f+.6f*28f)*d)).coerceIn(0f,1f)
-                    val expected = 1f-kotlin.math.exp(-.34594453f*.8f*u*u*u)
+                    val expected = shadowPolynomialReference(distance / (d * .6f)) * .8f
                     val actual = 1f - AndroidColor.red(on.getPixel(x,y))/background.coerceAtLeast(1f)
                     if (expected < .015f && abs(actual) < .015f) continue
                     val error = abs(actual - expected)

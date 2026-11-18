@@ -11,7 +11,7 @@ import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlin.math.ceil
-import kotlin.math.exp
+import android.util.Half
 import kotlin.math.roundToInt
 
 /** Independent receipt kernel. No production field, shadow, geometry cache or renderer is called. */
@@ -23,17 +23,13 @@ internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pa
     require(Color.alpha(background) == 255)
     require(scaleX.isFinite() && scaleY.isFinite() && scaleX > 0f && scaleY > 0f)
     require(outsideMask == null || outsideMask.width == width && outsideMask.height == height)
-    val reach = (4f + spread * 28f) * density
-    val shift = 2f * density
+    val reach = 48f * spread * density
+    val shift = 8f * density
     require(reach.isFinite() && reach >= 0f)
-    val count = ceil(reach).toInt().coerceIn(16, 128)
+    val count = ceil(reach * (7f / 6f)).toInt().coerceIn(16, 128)
     val opacity = bodies.maxOf { it.second }.coerceIn(0f, 1f)
-    // Declared optical-density kernel: quantize cumulative coverage, then derive SrcOver increments.
-    fun coverage(step: Int): Int {
-        val u = step.toFloat() / count
-        return ((1f - exp(-.34594453f * (strength * opacity) * u * u * u)) * 255f)
-            .roundToInt().coerceIn(0, 255)
-    }
+    fun coverage(step: Int): Int = (shadowPolynomialReference(48f - 56f * step / count) * strength * opacity * 255f)
+        .roundToInt().coerceIn(0, 255)
     val uniform = bodies.singleOrNull()?.first?.takeIf { r ->
         val c = r.topLeftCornerRadius
         c == r.topRightCornerRadius && c == r.bottomRightCornerRadius && c == r.bottomLeftCornerRadius &&
@@ -53,23 +49,25 @@ internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pa
                 (255f * (coverage(index + 1) - previous) / (255 - previous)).roundToInt()
             if (alpha > 0) {
                 paint.alpha = alpha
-                val expansion = reach * (1f - (index + .5f) / count)
+                val expansion = reach * (1f - (7f / 6f) * (index + .5f) / count)
                 val ex = expansion * scaleX
                 val ey = expansion * scaleY
                 val dy = shift * scaleY
                 if (uniform != null) {
+                    if (uniform.width + 2f * ex <= 0f || uniform.height + 2f * ey <= 0f) return@repeat
                     canvas.drawRoundRect(uniform.left - ex, uniform.top - ey + dy,
                         uniform.right + ex, uniform.bottom + ey + dy,
-                        uniform.topLeftCornerRadius.x + ex, uniform.topLeftCornerRadius.y + ey, paint)
+                        (uniform.topLeftCornerRadius.x + ex).coerceAtLeast(0f), (uniform.topLeftCornerRadius.y + ey).coerceAtLeast(0f), paint)
                 } else {
                     val ring = Path().apply {
                         bodies.forEach { (r, _) ->
+                            if (r.width + 2f * ex <= 0f || r.height + 2f * ey <= 0f) return@forEach
                             addRoundRect(r.left - ex, r.top - ey + dy,
                                 r.right + ex, r.bottom + ey + dy,
-                                floatArrayOf(r.topLeftCornerRadius.x + ex, r.topLeftCornerRadius.y + ey,
-                                    r.topRightCornerRadius.x + ex, r.topRightCornerRadius.y + ey,
-                                    r.bottomRightCornerRadius.x + ex, r.bottomRightCornerRadius.y + ey,
-                                    r.bottomLeftCornerRadius.x + ex, r.bottomLeftCornerRadius.y + ey), Path.Direction.CW)
+                                floatArrayOf((r.topLeftCornerRadius.x + ex).coerceAtLeast(0f), (r.topLeftCornerRadius.y + ey).coerceAtLeast(0f),
+                                    (r.topRightCornerRadius.x + ex).coerceAtLeast(0f), (r.topRightCornerRadius.y + ey).coerceAtLeast(0f),
+                                    (r.bottomRightCornerRadius.x + ex).coerceAtLeast(0f), (r.bottomRightCornerRadius.y + ey).coerceAtLeast(0f),
+                                    (r.bottomLeftCornerRadius.x + ex).coerceAtLeast(0f), (r.bottomLeftCornerRadius.y + ey).coerceAtLeast(0f)), Path.Direction.CW)
                         }
                     }
                     canvas.drawPath(ring, paint)
@@ -81,4 +79,15 @@ internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pa
         }) }
         canvas.restore()
     }
+}
+
+internal fun shadowPolynomialReference(distance: Float): Float {
+    fun h(v: Float) = Half.toFloat(Half.toHalf(v))
+    val v = h((1f / 24f) * h(distance))
+    val x = h(h(4f * h(h(v * .25f) + .5f).coerceIn(0f, 1f)) - 2f)
+    val q = h(x * x)
+    val p0 = h(.0029544830322265625f * q - .034454345703125f)
+    val p1 = h(p0 * q + .168212890625f)
+    val p2 = h(p1 * q - .560546875f)
+    return h(h(.20f) * h(h(p2 * x + .5f) * .5f))
 }

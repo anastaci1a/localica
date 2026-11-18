@@ -203,7 +203,7 @@ class ShadowContinuityTest {
                 Rect(p.x - 1f, p.y - 1f, p.x + 7f, p.y + 7f)
             }
             assertEquals(retainedCapture.nativeWindows.map { it.generation.marker }, liveCapture.nativeWindows.map { it.generation.marker })
-            val reach = 34f * compose.density.density + 2f
+            val reach = 56f * compose.density.density + 2f
             assertTrue("Diagnostic markers are outside every shadow tail", markers.all { marker ->
                 liveCapture.nativeWindows.first().state.bodies.all { (body, _) ->
                     !marker.overlaps(Rect(body.left, body.top, body.right, body.bottom).inflate(reach))

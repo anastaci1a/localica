@@ -76,7 +76,7 @@ internal fun shadowUnionReference(rule: ComposeContentTestRule, width: Int, heig
             corner(r.topLeftCornerRadius), corner(r.topRightCornerRadius), corner(r.bottomRightCornerRadius), corner(r.bottomLeftCornerRadius)) to alpha
     }
     val density = rule.density.density
-    val padding = (4f + state.spread * 28f) * density + 2f * density + 2f
+    val padding = (48f * state.spread + 8f) * density + 2f
     val inset = Offset(kotlin.math.floor(-padding), kotlin.math.floor(-padding))
     val field = ImageBitmap(kotlin.math.ceil(local.maxOf { it.first.right } + padding - inset.x).toInt(),
         kotlin.math.ceil(local.maxOf { it.first.bottom } + padding - inset.y).toInt())

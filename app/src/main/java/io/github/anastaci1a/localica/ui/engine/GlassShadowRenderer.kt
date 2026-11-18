@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.runtime.*
+import io.github.anastaci1a.localica.ui.spec.*
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
@@ -9,7 +10,6 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
-import kotlin.math.exp
 import kotlinx.coroutines.*
 
 /** Neighboring group shadows that the trigger's own window keeps drawing while a
@@ -31,8 +31,9 @@ internal class GlassShadowExclusion(private val bodies: List<RoundRect>, private
                 r.right + expansion, r.bottom + expansion + offsetY).translate(-origin)
             val local = glassReceiverInCasterSpace(screen, size, scaleX, scaleY, shift) ?: return@forEach
             val corner = r.topLeftCornerRadius
+            if (screen.width <= 0f || screen.height <= 0f) return@forEach
             path.addRoundRect(RoundRect(local.translate(translation),
-                CornerRadius((corner.x + expansion) / scaleX, (corner.y + expansion) / scaleY)))
+                CornerRadius((corner.x + expansion).coerceAtLeast(0f) / scaleX, (corner.y + expansion).coerceAtLeast(0f) / scaleY)))
             any = true
         }
         return path.takeIf { any }
@@ -55,11 +56,9 @@ internal class GlassShadowGeometry {
         val changed = bodies != previous || reach != previousReach || shift != previousShift
         if (!changed && (!needRings || rings.isNotEmpty())) return
         fun outline(expansion: Float, y: Float = 0f): Path = Path().apply {
-            // Non-zero winding fills overlapping clockwise silhouettes once. A
-            // Boolean path union has the same coverage but rebuilds intersections
-            // for every ring on every frame of a changing player/menu outline.
-            bodies.forEach { r ->
-                fun expand(corner: CornerRadius) = CornerRadius(corner.x + expansion, corner.y + expansion)
+                                    bodies.forEach { r ->
+                fun expand(corner: CornerRadius) = CornerRadius((corner.x + expansion).coerceAtLeast(0f), (corner.y + expansion).coerceAtLeast(0f))
+                if (r.width + 2f * expansion <= 0f || r.height + 2f * expansion <= 0f) return@forEach
                 addRoundRect(RoundRect(r.left - expansion, r.top - expansion + y,
                     r.right + expansion, r.bottom + expansion + y,
                     expand(r.topLeftCornerRadius), expand(r.topRightCornerRadius),
@@ -71,26 +70,30 @@ internal class GlassShadowGeometry {
             body = outline(0f)
             rings = emptyList()
         }
-        // Uniform shadows draw primitives; materialize paths only for a path consumer.
-        if (needRings) rings = List(glassShadowRingCount(reach)) { outline(glassShadowRingExpansion(it, reach), shift) }
+            if (needRings) rings = List(glassShadowRingCount(reach)) { outline(glassShadowRingExpansion(it, reach), shift) }
     }
 }
 
-/** One sample per physical pixel prevents broad, visible terraces at high density.
- * The integrated cubic optical density has zero slope at the outer edge and keeps
- * the former field's total opacity. Settled fields still use one retained texture. */
-internal fun glassShadowRingCount(reach: Float): Int = ceil(reach).toInt().coerceIn(16, 128)
-internal fun glassShadowRingExpansion(index: Int, reach: Float): Float =
-    reach * (1f - (index + .5f) / glassShadowRingCount(reach))
-private fun glassShadowRingCoverage(step: Int, count: Int, strength: Float): Int {
-    val u = step.toFloat() / count
-    return ((1f - exp(-.34594453f * strength * u * u * u)) * 255f).roundToInt().coerceIn(0, 255)
+private fun half(value: Float): Float {
+    val unit = Math.scalb(1f, maxOf(-24, Math.getExponent(value) - 10))
+    return Math.rint((value / unit).toDouble()).toFloat() * unit
 }
+internal fun glassShadowAlpha(distance: Float, strength: Float): Float {
+    val v = half((1f / GlassShadowMaskRadius) * half(distance))
+    val x = half(half(4f * half(half(v * .25f) + .5f).coerceIn(0f, 1f)) - 2f)
+    val q = half(x * x)
+    val p = half(half(half(.0029544830322265625f * q - .034454345703125f) * q + .168212890625f) * q - .560546875f)
+    return half(half(GlassShadowFill) * half(half(p * x + .5f) * .5f)) * strength
+}
+/** The fixed cap bounds work; rings exceed one pixel when 7 * reach / 6 > 128. */
+internal fun glassShadowRingCount(reach: Float): Int = ceil(reach * (7f / 6f)).toInt().coerceIn(16, 128)
+internal fun glassShadowRingExpansion(index: Int, reach: Float): Float =
+    reach * (1f - (7f / 6f) * (index + .5f) / glassShadowRingCount(reach))
+private fun glassShadowRingCoverage(step: Int, count: Int, strength: Float): Int =
+    (glassShadowAlpha(48f - 56f * step / count, strength) * 255f).roundToInt().coerceIn(0, 255)
 internal fun glassShadowRingAlpha(index: Int, count: Int, strength: Float): Float {
     val previous = glassShadowRingCoverage(index, count, strength)
     val next = glassShadowRingCoverage(index + 1, count, strength)
-    // Quantize cumulative coverage, not each tiny increment: otherwise low-alpha
-    // outer rings all round to zero before they can form the visible tail.
     return if (previous == 255) 0f else
         (255f * (next - previous) / (255 - previous)).roundToInt() / 255f
 }
@@ -102,18 +105,13 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
     rasterizing: Boolean = false) {
     if (strength <= 0f || bodies.isEmpty()) return
     val opacity = bodies.maxOf { it.second }.coerceIn(0f, 1f)
-    val reach = (4f + spread * 28f).dp.toPx()
-    val shift = 2.dp.toPx()
+    val reach = glassShadowReach(spread).dp.toPx()
+    val shift = GlassShadowShift.dp.toPx()
     val outlines = bodies.map { it.first }
     val response = receiver?.takeIf { glassReceiverTouchesShadow(it,outlines,reach,shift) }
     val brush = response?.let { cache.receiverBrush(it) }
-    // A retained uniform field can write its cumulative alpha directly. Src
-    // avoids software source-over's repeated truncation of small increments.
     val cumulative = rasterizing && response == null
     val blend = if (cumulative) BlendMode.Src else BlendMode.SrcOver
-    // One uniform, already-valid outline needs no generic path fill. Keep the
-    // original path for clipping and for shapes requiring radius normalization:
-    // platform rectXY and per-corner path normalization need not be equivalent.
     val uniform = bodies.singleOrNull()?.first?.takeIf { r ->
         val corner = r.topLeftCornerRadius
         corner == r.topRightCornerRadius && corner == r.bottomRightCornerRadius &&
@@ -137,8 +135,9 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
             val top = uniform.top - expansion + shift
             val right = uniform.right + expansion
             val bottom = uniform.bottom + expansion + shift
-            val corner = CornerRadius(uniform.topLeftCornerRadius.x + expansion,
-                uniform.topLeftCornerRadius.y + expansion)
+            if (right <= left || bottom <= top) return
+            val corner = CornerRadius((uniform.topLeftCornerRadius.x + expansion).coerceAtLeast(0f),
+                (uniform.topLeftCornerRadius.y + expansion).coerceAtLeast(0f))
             if (brush == null) drawRoundRect(tint, Offset(left, top), Size(right - left, bottom - top), corner, blendMode = blend)
             else drawRoundRect(brush, Offset(left, top), Size(right-left,bottom-top), corner, alpha = alpha)
         }
@@ -149,9 +148,7 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
             val alpha = if (cumulative) glassShadowRingCoverage(index + 1, count, strength * opacity) / 255f
                 else glassShadowRingAlpha(index, count, strength * opacity)
             if (alpha > 0f) {
-                // Where a neighbor's identical ring is already drawn below, apply
-                // that ring once (weight 0, the shared union) up to independently.
-                val shared = exclusion?.ring(index, reach, shift, exclusionTranslation)
+                                        val shared = exclusion?.ring(index, reach, shift, exclusionTranslation)
                 if (shared == null) ring(index, alpha)
                 else {
                     clipPath(shared, ClipOp.Difference) { ring(index, alpha) }
@@ -161,9 +158,6 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
             }
         }
     }
-    // Live drawing and retained textures represent the same transparent
-    // field. Blending every ring into the page would round differently for
-    // each background and pop when the cached texture becomes ready.
     fun DrawScope.field() {
         val canvas = drawContext.canvas
         if (!rasterizing) {
@@ -173,30 +167,34 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
         }
         try { rings() } finally { if (!rasterizing) canvas.restore() }
     }
-    // Resolve the cutout in destination coordinates, before the temporary layer.
-    // Legacy clipping inside that layer rounds a few contour pixels differently
-    // from the cached texture's destination clip, exposing a handoff fringe.
     if (excludeInterior) clipPath(cache.body, ClipOp.Difference) { field() } else field()
 }
 /** Paths and round rectangles share the same optical field and live/raster handoff. */
 private fun DrawScope.glassPathShadow(path: Path, strength: Float, spread: Float, color: Color,
     excludeInterior: Boolean, rasterizing: Boolean = false) {
-    val reach = (4f + spread * 28f).dp.toPx()
-    val shift = 2.dp.toPx()
+    val reach = glassShadowReach(spread).dp.toPx()
+    val shift = GlassShadowShift.dp.toPx()
     val count = glassShadowRingCount(reach)
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.FILL_AND_STROKE
         strokeJoin = android.graphics.Paint.Join.ROUND
         if (rasterizing) xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC)
     }
+    val contracted = android.graphics.Path()
+    val boundary = android.graphics.Path()
     fun DrawScope.rings() = translate(0f, shift) {
         repeat(count) { index ->
             val alpha = if (rasterizing) glassShadowRingCoverage(index + 1, count, strength) / 255f
                 else glassShadowRingAlpha(index, count, strength)
             if (alpha > 0f) {
                 paint.color = color.copy(alpha = alpha).toArgb()
-                paint.strokeWidth = glassShadowRingExpansion(index, reach) * 2f
-                drawContext.canvas.nativeCanvas.drawPath(path.asAndroidPath(), paint)
+                val expansion = glassShadowRingExpansion(index, reach)
+                paint.style = android.graphics.Paint.Style.STROKE
+                paint.strokeWidth = kotlin.math.abs(expansion) * 2f
+                paint.getFillPath(path.asAndroidPath(), boundary)
+                contracted.op(path.asAndroidPath(), boundary, if (expansion < 0f) android.graphics.Path.Op.DIFFERENCE else android.graphics.Path.Op.UNION)
+                paint.style = android.graphics.Paint.Style.FILL
+                drawContext.canvas.nativeCanvas.drawPath(contracted, paint)
             }
         }
     }
@@ -205,7 +203,6 @@ private fun DrawScope.glassPathShadow(path: Path, strength: Float, spread: Float
         if (!rasterizing) canvas.saveLayer(path.getBounds().inflate(reach + shift + 1f), Paint())
         try { rings() } finally { if (!rasterizing) canvas.restore() }
     }
-    // Match primitive shadows: resolve the destination cutout before the temporary field.
     if (excludeInterior) clipPath(path, ClipOp.Difference) { field() } else field()
 }
 
@@ -223,11 +220,8 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     fun DrawScope.draw(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float,
         receiver: GlassShadowReceiver? = null, exclusion: GlassShadowExclusion? = null, color: Color = Color.Black) {
         if (bodies.isEmpty() || strength <= 0f) return
-        // Software textures change the nonlinear popup/home receiver response.
-        // Keep it native and in the caller's coordinates: normalizing a fractional
-        // origin also changes legacy clip coverage around an offscreen layer.
-        if (receiver != null && glassReceiverTouchesShadow(receiver, bodies.map { it.first },
-                (4f + spread * 28f).dp.toPx(), 2.dp.toPx())) {
+                    if (receiver != null && glassReceiverTouchesShadow(receiver, bodies.map { it.first },
+                glassShadowReach(spread).dp.toPx(), GlassShadowShift.dp.toPx())) {
             glassShadows(bodies, strength, spread, geometry, receiver = receiver, exclusion = exclusion, color = color)
             return
         }
@@ -257,22 +251,16 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
         if (key != requested) {
             requested = key
             preparation?.cancel()
-            val padding = (4f + spread * 28f).dp.toPx() + 2.dp.toPx() + 2f
+            val padding = glassShadowInset(spread).toPx() + 2f
             val inset = Offset(floor(bounds.left-padding), floor(bounds.top-padding))
             val extent = IntSize(ceil(bounds.right + padding - inset.x).toInt(),
                 ceil(bounds.bottom + padding - inset.y).toInt())
-            // A retained RenderNode is a display list, not a guaranteed cached
-            // raster: traces still showed every shadow ring drawn during scrolling.
-            // Prepare settled geometry off Main. While the outline is morphing,
-            // draw that exact current outline directly instead of allocating a
-            // window-sized bitmap every frame or stretching an obsolete shadow.
-            val metrics = androidx.compose.ui.unit.Density(density, fontScale)
+                                                    val metrics = androidx.compose.ui.unit.Density(density, fontScale)
             val direction = layoutDirection
             preparation = scope.launch {
                 delay(48)
                 val image = withContext(Dispatchers.Default) {
-                    // Write cumulative coverage without repeated software blending.
-                    ImageBitmap(extent.width, extent.height).also { next ->
+                                    ImageBitmap(extent.width, extent.height).also { next ->
                         CanvasDrawScope().draw(metrics, direction, Canvas(next),
                             Size(extent.width.toFloat(), extent.height.toFloat())) {
                             translate(-inset.x, -inset.y) { paintShadow(excludeInterior = false, rasterizing = true) }
@@ -283,13 +271,10 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                 rasterizations++
             }
         }
-        // A neighbor exclusion exists only while the popup is near its shared home.
-        val prepared = raster?.takeIf { it.key == key && exclusion == null }
+            val prepared = raster?.takeIf { it.key == key && exclusion == null }
         if (prepared != null) translate(origin.x, origin.y) {
-            if (outline == null) geometry.update(normalized.map { it.first }, (4f + spread * 28f).dp.toPx(), 2.dp.toPx())
-            // Keep the cutout in the destination renderer. Baking a software clip
-            // would change edge coverage when a fractional-position shadow moves.
-            clipPath(outline ?: geometry.body, ClipOp.Difference) {
+            if (outline == null) geometry.update(normalized.map { it.first }, glassShadowReach(spread).dp.toPx(), GlassShadowShift.dp.toPx())
+                            clipPath(outline ?: geometry.body, ClipOp.Difference) {
                 translate(prepared.inset.x, prepared.inset.y) {
                     drawImage(prepared.image, dstSize = IntSize(prepared.image.width, prepared.image.height), filterQuality = FilterQuality.Low)
                 }

@@ -46,18 +46,18 @@ class GlassShadowStrengthCurveTest {
         }
     }
 
-    @Test fun readoutIsTheTrackPositionRoundedToFivePercent() {
+    @Test fun readoutIsTheModelMultiplierAsPercent() {
         for (strength in listOf(0f, .01f, .05f, .12f, .2f, .3f, .5f, .75f, .9f, 1f)) {
             val label = shadowStrengthReadout(strength)
-            val position = strength.toDouble().pow(1.0 / GlassShadowStrengthCurve.toDouble())
-            assertEquals("Label must step in 5%: strength $strength", 0, label % 5)
-            assertEquals("Label for strength $strength", (Math.round(position * 20.0) * 5).toInt(), label)
+            val position = strength.toDouble()
+            assertEquals("Label for strength $strength", Math.round(position * 100.0).toInt(), label)
         }
     }
 
     @Test fun readoutEndpointsAreExact() {
         assertEquals(0, shadowStrengthReadout(0f))
         assertEquals(100, shadowStrengthReadout(1f))
+        assertEquals(200, shadowStrengthReadout(2f))
     }
 
     @Test fun fivePercentTrackStopsRoundTripThroughTheCurve() {
