@@ -216,7 +216,7 @@ class PopupEditorFocusOwnershipTest {
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
             compose.runOnUiThread { assertEquals("No native write while contact is held", held, state.value) }
-            body.performTouchInput { moveBy(Offset(0f, -80f), delayMillis = 16); up() }
+            body.performTouchInput { repeat(4) { moveBy(Offset(0f, -20f), delayMillis = 16) }; up() }
             compose.waitForIdle()
             compose.runOnUiThread {
                 assertTrue("Physical release must start a real fling", state.isScrollInProgress)
