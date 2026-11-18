@@ -71,7 +71,7 @@ class GlassSilhouetteTest {
         assertTrue("The split control never allocates a sampled field", frames.all { it.field == null })
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             val renderer = LensRenderer()
-            frames.forEach { frame -> renderer.effect(frame.geometry, 0f, 1.3f,
+            frames.forEach { frame -> renderer.effect(frame.geometry, 0f, 1.3f, 1f,
                 map = frame.field, fieldWeight = frame.description.fieldWeight, circles = frame.description.circles,
                 splitInner = frame.description.splitInner) }
         }

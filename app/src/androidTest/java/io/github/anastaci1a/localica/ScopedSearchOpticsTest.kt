@@ -76,7 +76,8 @@ class ScopedSearchOpticsTest {
         val route = BrowseRoute(if (queue) MainTab.Queues else MainTab.Playlists,
             MediaRef(if (queue) MediaKind.Queue else MediaKind.Playlist, if (queue) listening.id else playlist.id), "Optics")
         var depth by mutableFloatStateOf(.6f)
-        compose.setContent { EngineTheme(reduced = true) {
+        var lens by mutableStateOf(true)
+        compose.setContent { CompositionLocalProvider(LocalGlassVisible provides lens) { EngineTheme(reduced = true) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(depth = depth, blur = 0f,
                 whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
                 val backing = rememberFrostedBackdrop(Unit)
@@ -95,7 +96,7 @@ class ScopedSearchOpticsTest {
                     }
                 }
             }
-        } }
+        } } }
         val pill = compose.onNodeWithTag("list-search-pill")
         compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().isNotEmpty() }
         if (!queue) pill.performScrollTo()
@@ -113,7 +114,10 @@ class ScopedSearchOpticsTest {
             assertTrue("None presents a solid average behind the search foreground",
                 clear.maxOf { it.red } - clear.minOf { it.red } < .035f)
         }
-        compose.runOnIdle { depth = 2f }
+        // Depth shapes only the highlight. Hiding the lens shows the same scene unrefracted, and with no tint,
+        // contrast or blur only the refraction lookups separate the two captures.
+        compose.runOnIdle { if (android.os.Build.VERSION.SDK_INT >= 33) lens = false else depth = 2f }
+        compose.mainClock.advanceTimeBy(1200)
         val image = pill.captureToImage()
         val after = image.toPixelMap()
         val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext

@@ -42,7 +42,7 @@ class GlassRenderModesTest {
                             Offset(x * size.width / 8, 0f), Size(size.width / 8, size.height)) }
                     }
                     // Both lenses need the same real scene beyond their padded optical bounds.
-                    Column(Modifier.padding(vertical = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.padding(48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         PopupMaterialReference(source, phase)
                         LiquidGlassSurface(Modifier.fillMaxWidth().height(96.dp).testTag("phase-material"), source,
                             pressFeedback = false, shadow = false, presentation = {

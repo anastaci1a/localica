@@ -18,7 +18,7 @@ internal val LocalControlGeometryDraw = staticCompositionLocalOf<((LensGeometry)
 /** Draw the track once. Only the lens replaces pixels with the sampled track/backdrop.
  * A settled white thumb has no recording, backdrop subscription or optical renderer. */
 @Composable
-internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp,
+internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current,
     geometry: DrawScope.() -> LensGeometry, body: () -> GlassShape,
     active: () -> Float = { 1f }, face: () -> Color = { Color.Transparent },
@@ -92,7 +92,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
         onLensDraw?.invoke()
         if (layer != null && modern) {
             opticalWork?.invoke()
-            layer.renderEffect = lens.value?.effect(shifted, 0f, 1.35f * thickness, flattening = flattening)
+            layer.renderEffect = lens.value?.effect(shifted, 0f, 1.35f * thickness, unit = density, flattening = flattening)
             layer.record(Density(density, fontScale), layoutDirection, extent) { recordScene() }
             clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }
         } else if (averageBitmap != null && !shape.bounds.isEmpty) {

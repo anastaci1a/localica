@@ -63,10 +63,10 @@ class GlassOpticsTest {
 
     @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun changingDepthBendsARecordedGridAndKeepsTheOutsideUntouched() {
-        var depth by mutableFloatStateOf(.6f)
+        var power by mutableFloatStateOf(1f)
         lateinit var source: FrostedBackdrop
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
-            GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f, depth = depth)) {
+            GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f, depth = .6f)) {
             Box(Modifier.size(320.dp, 420.dp).testTag("optics")) {
                 source = rememberFrostedBackdrop(Unit)
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -75,9 +75,9 @@ class GlassOpticsTest {
                         drawRect(if ((x + y) % 2 == 0) Color(0xFF2A6275) else Color(0xFFE4B695), Offset(x * cell, y * cell), Size(cell, cell))
                 }
                 Column(Modifier.align(Alignment.Center), verticalArrangement = Arrangement.spacedBy(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    LiquidGlassSurface(Modifier.size(260.dp, 64.dp), source, pressFeedback = false) { Text("Curved pill", Modifier.align(Alignment.Center)) }
-                    LiquidGlassSurface(Modifier.size(96.dp), source, pressFeedback = false) { Text("Lens", Modifier.align(Alignment.Center)) }
-                    LiquidGlassSurface(Modifier.size(260.dp, 160.dp), source, cornerRadius = 24.dp, pressFeedback = false) {
+                    LiquidGlassSurface(Modifier.size(260.dp, 64.dp), source, pressFeedback = false, refraction = power) { Text("Curved pill", Modifier.align(Alignment.Center)) }
+                    LiquidGlassSurface(Modifier.size(96.dp), source, pressFeedback = false, refraction = power) { Text("Lens", Modifier.align(Alignment.Center)) }
+                    LiquidGlassSurface(Modifier.size(260.dp, 160.dp), source, cornerRadius = 24.dp, pressFeedback = false, refraction = power) {
                         Text("Panel crown", Modifier.align(Alignment.Center))
                     }
                 }
@@ -86,14 +86,16 @@ class GlassOpticsTest {
         val node = compose.onNodeWithTag("optics")
         if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val before = node.captureToImage().toPixelMap()
-        compose.runOnIdle { depth = 2f }
+        // Depth shapes only the highlight; lens power 0 keeps every other input and removes only refraction.
+        compose.runOnIdle { power = 0f }
+        compose.mainClock.advanceTimeBy(1200)
         val image = node.captureToImage()
         val after = image.toPixelMap()
         var changed = 0
         for (y in 0 until before.height step 2) for (x in 0 until before.width step 2) {
             if (kotlin.math.abs(before[x, y].red - after[x, y].red) > .08f) changed++
         }
-        assertTrue("Depth must change spatial refraction", changed > 100)
+        assertTrue("Lens optics must change spatial refraction", changed > 100)
         for (x in 0 until before.width step 4) assertEquals("No lens writes beyond its clipped outline", before[x, 4], after[x, 4])
         val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
         java.io.File(context.cacheDir, "glass-optics-review.png").outputStream().use { image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }

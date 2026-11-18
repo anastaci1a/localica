@@ -198,11 +198,11 @@ class GlassGlowTest {
     @Test fun frozenOpticsMatchTheAcceptedSliceOneSource() {
         val root = File("src/main/java/io/github/anastaci1a/localica/ui")
         fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        // Pinned at accepted d72063fe4625cece1021f9d9a11fae061d071b4c, not regenerated from this candidate.
-        assertEquals("1be7b81ccf3d1f869658d46341661c44004b4ff216c95f12a164eb41c4811d7c", sha(File(root, "LensRenderer.kt").readBytes()))
+        // Re-pinned for the shared refraction law (#1005); GlassRefractionTest pins its formulas.
+        assertEquals("3bbe5235adf8e87f0b047d0dfc35a4d0a247fb801d5a2b77a58d1541e74ecb91", sha(File(root, "LensRenderer.kt").readBytes()))
         val source = File(root, "LiquidGlass.kt").readText()
         val start = source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")
         val effect = source.substring(start, source.indexOf("\n                else if", start))
-        assertEquals("20e598e80a1ac997cfb4d02c22a9c8ceffb5f152de28344c6e71ff53ef954892", sha(effect.toByteArray()))
+        assertEquals("2632ed4118b4a56ee57a5bfa3e877239b52d130ae0650f85ffaf11a082132e64", sha(effect.toByteArray()))
     }
 }

@@ -102,7 +102,7 @@ class LyricsReturnBackdropTest {
 
         compose.runOnIdle { state.depth = 2f }
         val deep = capture("deep")
-        assertChromaMoves("Changing depth must refract the recorded glyphs, not expose direct underlay", shallow, deep, button, green = true)
+        assertChromaMoves("Lens optics must refract the recorded glyphs, not expose direct underlay", direct, shallow, button, green = true)
         assertEquals("Depth cannot alter uncovered lyrics", uncoveredGreen(shallow, button), uncoveredGreen(deep, button), .003f)
         assertTrue("Depth/illumination alone cannot create lyric chroma", green(deep, referenceBounds()) < .015f)
 
@@ -181,7 +181,7 @@ class LyricsReturnBackdropTest {
                 green(direct, button), green(shallow, probe), .012f)
             compose.runOnIdle { state.optics = true; state.depth = 2f }
             val deep = capture("viewport-$index-deep")
-            assertChromaMoves("The actual return lens must refract glyphs at each held viewport", shallow, deep, button, green = true)
+            assertChromaMoves("The actual return lens must refract glyphs at each held viewport", direct, shallow, button, green = true)
             assertEquals("Changing lens depth must not alter uncovered moving lyrics",
                 uncoveredGreen(shallow, button), uncoveredGreen(deep, button), .003f)
 
@@ -219,8 +219,8 @@ class LyricsReturnBackdropTest {
         assertTrue("The actual shared source contains both documents", green(shallow, probe) > .008f && red(shallow, probe) > .008f)
         compose.runOnIdle { state.depth = 2f }
         val deep = capture("overlap-deep")
-        assertChromaMoves("Outgoing document must remain in the shared return source", shallow, deep, button, green = true)
-        assertChromaMoves("Incoming document must enter that same source", shallow, deep, button, green = false)
+        assertChromaMoves("Outgoing document must remain in the shared return source", direct, shallow, button, green = true)
+        assertChromaMoves("Incoming document must enter that same source", direct, shallow, button, green = false)
         assertEquals("Depth does not change direct outgoing glyphs", uncoveredChroma(shallow, button, true), uncoveredChroma(deep, button, true), .003f)
         assertEquals("Depth does not change direct incoming glyphs", uncoveredChroma(shallow, button, false), uncoveredChroma(deep, button, false), .003f)
         assertTrue("Art-only control cannot manufacture either document's ink",

@@ -72,46 +72,105 @@ class GlassBodyOpticsTest {
         }
     }
 
+    /** Each backdrop pixel encodes its own coordinates, so a sample reads back where the kernel looked. */
     @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
-    @Test fun normalAndSingleToneKernelPixelsMatchIndependentFrozenRendererAtMatchedInputs() {
-        val candidate = LensRenderer()
-        val baseline = FrozenS1LensRenderer()
-        val bitmap = Bitmap.createBitmap(112, 96, Bitmap.Config.ARGB_8888)
+    @Test fun kernelSamplesTheSharedRefractionLookups() {
+        val bitmap = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
         try {
-            for ((index, depth) in cases.withIndex()) for (singleTone in listOf(false, true)) for (background in 0..2) {
-                val gain = if (index % 2 == 0) null else -(16f / 64f) / .24f
-                val actual = supplied(depth, gain)
-                val original = S1OpticalState(.037f, depth, gain)
-                val pixels = IntArray(112 * 96) { i ->
-                    if (singleTone || background == 0) 0xff405060.toInt()
-                    else if (background == 1) { if ((i / 112 / 4 + i % 112 / 4) % 2 == 0) -1 else 0xff000000.toInt() }
-                    else 0xff000000.toInt() or ((i * 7919) and 0xffffff)
+            bitmap.setPixels(IntArray(128 * 128) { i -> 0xff000000.toInt() or ((i % 128 * 2) shl 16) or ((i / 128 * 2) shl 8) }, 0, 128, 0, 0, 128, 128)
+            for (unit in listOf(1f, 1.25f)) for (corner in listOf(24f, 12f)) {
+                val geometry = LensGeometry(Rect(20f, 20f, 108f, 68f), corner)
+                val pixels = renderS1Kernel(bitmap, LensRenderer().effect(geometry, 0f, 1.35f, unit, illumination = 0f), 128, 128)
+                var checked = 0
+                for (y in 20 until 68) for (x in 20 until 108) {
+                    val p = Offset(x + .5f, y + .5f)
+                    val field = geometry.field(p)
+                    if (field.distance < 0f) continue
+                    val lookup = GlassRefractionReference.at(field, unit)
+                    val inner = p + lookup.inner
+                    val outer = p + lookup.outer
+                    if (listOf(inner, outer).any { it.x !in 1f..126f || it.y !in 1f..126f }) continue
+                    val expected = inner + (outer - inner) * lookup.outerWeight
+                    val color = pixels[y * 128 + x]
+                    val where = "unit=$unit corner=$corner ($x,$y) distance=${field.distance}"
+                    assertEquals(where, expected.x, (color shr 16 and 255) / 2f + .5f, 1f)
+                    assertEquals(where, expected.y, (color shr 8 and 255) / 2f + .5f, 1f)
+                    checked++
                 }
-                bitmap.setPixels(pixels, 0, 112, 0, 0, 112, 96)
-                val geometry = LensGeometry(Rect(.25f, .5f, 111.5f, 95.25f), 19.5f)
-                val thickness = (if (index % 2 == 0) 1f else actual.thickness) * actual.thickness
-                val frozenThickness = (if (index % 2 == 0) 1f else original.thickness) * original.thickness
-                val illumination = if (singleTone) 0f else 1f
-                val tone = if (index % 2 == 0) GlassTone() else GlassTone(.3f, 1.4f, true)
-                val expected = baseline.effect(geometry, 1.75f, .8f * frozenThickness, power = .75f,
-                    whiteTint = .2f, illumination = illumination, flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(frozenThickness), tone = tone)
-                val observed = candidate.effect(geometry, 1.75f, .8f * thickness, power = .75f,
-                    whiteTint = .2f, illumination = illumination, flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(thickness), tone = tone)
-                assertArrayEquals("Normal/SingleTone state=$index singleTone=$singleTone background=$background", renderS1Kernel(bitmap, expected), renderS1Kernel(bitmap, observed))
+                assertTrue(checked > 3000)
+            }
+        } finally { bitmap.recycle() }
+    }
+
+    /** The highlight follows the shape's continuous-corner normal. A uniform backdrop makes every
+     * lookup equal; the face colour comes from the same kernel without illumination, so only the
+     * highlight terms are asserted. */
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
+    @Test fun kernelHighlightFollowsTheShapeNormal() {
+        val bitmap = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.eraseColor(android.graphics.Color.rgb(89, 128, 166))
+            val tone = GlassTone(trim = .3f)
+            val depth = 1.35f; val flattening = .5f; val whiteTint = .1f; val power = .7f
+            for (corner in listOf(24f, 12f, 0f)) {
+                val geometry = LensGeometry(Rect(20f, 20f, 108f, 68f), corner)
+                fun render(illumination: Float) = renderS1Kernel(bitmap, LensRenderer().effect(geometry, 0f, depth, 1f,
+                    power = power, whiteTint = whiteTint, illumination = illumination, flattening = flattening, tone = tone), 128, 128)
+                val faces = render(0f)
+                val pixels = render(1f)
+                var checked = 0
+                for (y in 20 until 68) for (x in 20 until 108) {
+                    val field = geometry.field(Offset(x + .5f, y + .5f))
+                    if (field.distance < 0f) continue
+                    val face = faces[y * 128 + x].let { floatArrayOf((it shr 16 and 255) / 255f, (it shr 8 and 255) / 255f, (it and 255) / 255f) }
+                    val expected = referenceHighlight(face, field, geometry.span, depth, flattening, tone, power)
+                    val color = pixels[y * 128 + x]
+                    val where = "corner=$corner ($x,$y) distance=${field.distance}"
+                    assertEquals(where, expected[0], (color shr 16 and 255) / 255f, 3 / 255f)
+                    assertEquals(where, expected[1], (color shr 8 and 255) / 255f, 3 / 255f)
+                    assertEquals(where, expected[2], (color and 255) / 255f, 3 / 255f)
+                    checked++
+                }
+                assertTrue(checked > 3000)
             }
         } finally { bitmap.recycle() }
     }
 }
 
-private fun renderS1Kernel(bitmap: Bitmap, effect: RenderEffect): IntArray {
-    val node = RenderNode("S1 matched optics").apply { setPosition(0, 0, 112, 96) }
+private fun renderS1Kernel(bitmap: Bitmap, effect: RenderEffect, width: Int = 112, height: Int = 96): IntArray {
+    val node = RenderNode("S1 matched optics").apply { setPosition(0, 0, width, height) }
     try {
         node.beginRecording().drawBitmap(bitmap, 0f, 0f, null)
         node.endRecording()
         node.setRenderEffect(effect.asAndroidRenderEffect())
-        val image = renderNativeReferenceImage(112, 96, "S1 matched optical readback") { it.drawRenderNode(node) }
+        val image = renderNativeReferenceImage(width, height, "S1 matched optical readback") { it.drawRenderNode(node) }
         try {
-            return IntArray(112 * 96).also { image.asAndroidBitmap().getPixels(it, 0, 112, 0, 0, 112, 96) }
+            return IntArray(width * height).also { image.asAndroidBitmap().getPixels(it, 0, width, 0, 0, width, height) }
         } finally { image.asAndroidBitmap().recycle() }
     } finally { node.discardDisplayList() }
+}
+
+/** Kotlin transcription of the kernel's highlight over an opaque face colour. */
+private fun referenceHighlight(color: FloatArray, field: LensField, span: Float, depth: Float, flattening: Float,
+    tone: GlassTone, power: Float): FloatArray {
+    val trim = if (tone.trim * tone.weight > 1f) 1f / tone.weight else tone.trim
+    val mixLight = tone.lightMix.coerceIn(0f, 1f)
+    val u = (1f - kotlin.math.max(field.distance, 0f) / kotlin.math.max(span, .001f)).coerceIn(0f, 1f)
+    val root = kotlin.math.sqrt(kotlin.math.max(1f - u * u, .0004f))
+    val crown = .62f * depth / kotlin.math.sqrt(1f + depth * depth / 4f)
+    val shoulder = .4f + .06f * flattening.coerceIn(0f, 1f)
+    val slope = crown * u / root * (1f - 2f * shoulder + 3f * shoulder * u * u)
+    val nx = -field.inward.x * slope; val ny = -field.inward.y * slope
+    val length = kotlin.math.sqrt(nx * nx + ny * ny + 1f)
+    val nz = 1f / length
+    val light = kotlin.math.sqrt(.45f * .45f + .75f * .75f + .6f * .6f)
+    val facing = (nx * -.45f + ny * -.75f + .6f) / length / light
+    val grazing = (1f - nz).let { it * it * it }
+    val reflection = (.018f * (1f - nz) + .26f * grazing) * power
+    val white = 1f + (1f - trim - 1f) * mixLight
+    val black = trim + (0f - trim) * mixLight
+    return FloatArray(3) { i ->
+        val lit = color[i] + (white - color[i]) * reflection * kotlin.math.max(facing, 0f)
+        lit + (black - lit) * reflection * kotlin.math.max(-facing, 0f) * .3f
+    }
 }

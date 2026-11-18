@@ -2039,17 +2039,6 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp,"
-        errorLine2="                                                                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassControlScene.kt"
-            line="21"
-            column="76"/>
-    </issue>
-
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
         errorLine1="                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {"
         errorLine2="                                                                                           ~~~~~">
         <location

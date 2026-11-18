@@ -107,6 +107,7 @@ class GlassSplitGeometryTest {
             val expected = circle.field(point)
             val actual = circleLensField(point, Offset(30f, 30f), 30f)
             assertEquals(expected.distance, actual.distance, .001f)
+            if (point == circle.bounds.center) continue // The center has no edge direction.
             assertEquals(expected.inward.x, actual.inward.x, .001f)
             assertEquals(expected.inward.y, actual.inward.y, .001f)
         }
