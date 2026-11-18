@@ -26,7 +26,7 @@ internal class GlassShadowExclusion(private val bodies: List<RoundRect>, private
         val expansion = glassShadowRingExpansion(index, reach)
         path.reset()
         var any = false
-        bodies.forEach { r ->
+            bodies.forEach { r ->
             val screen = Rect(r.left - expansion, r.top - expansion + offsetY,
                 r.right + expansion, r.bottom + expansion + offsetY).translate(-origin)
             val local = glassReceiverInCasterSpace(screen, size, scaleX, scaleY, shift) ?: return@forEach
@@ -56,7 +56,7 @@ internal class GlassShadowGeometry {
         val changed = bodies != previous || reach != previousReach || shift != previousShift
         if (!changed && (!needRings || rings.isNotEmpty())) return
         fun outline(expansion: Float, y: Float = 0f): Path = Path().apply {
-                                    bodies.forEach { r ->
+            bodies.forEach { r ->
                 fun expand(corner: CornerRadius) = CornerRadius((corner.x + expansion).coerceAtLeast(0f), (corner.y + expansion).coerceAtLeast(0f))
                 if (r.width + 2f * expansion <= 0f || r.height + 2f * expansion <= 0f) return@forEach
                 addRoundRect(RoundRect(r.left - expansion, r.top - expansion + y,
@@ -70,7 +70,7 @@ internal class GlassShadowGeometry {
             body = outline(0f)
             rings = emptyList()
         }
-            if (needRings) rings = List(glassShadowRingCount(reach)) { outline(glassShadowRingExpansion(it, reach), shift) }
+        if (needRings) rings = List(glassShadowRingCount(reach)) { outline(glassShadowRingExpansion(it, reach), shift) }
     }
 }
 
@@ -148,7 +148,7 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
             val alpha = if (cumulative) glassShadowRingCoverage(index + 1, count, strength * opacity) / 255f
                 else glassShadowRingAlpha(index, count, strength * opacity)
             if (alpha > 0f) {
-                                        val shared = exclusion?.ring(index, reach, shift, exclusionTranslation)
+                val shared = exclusion?.ring(index, reach, shift, exclusionTranslation)
                 if (shared == null) ring(index, alpha)
                 else {
                     clipPath(shared, ClipOp.Difference) { ring(index, alpha) }
@@ -220,7 +220,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     fun DrawScope.draw(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float,
         receiver: GlassShadowReceiver? = null, exclusion: GlassShadowExclusion? = null, color: Color = Color.Black) {
         if (bodies.isEmpty() || strength <= 0f) return
-                    if (receiver != null && glassReceiverTouchesShadow(receiver, bodies.map { it.first },
+        if (receiver != null && glassReceiverTouchesShadow(receiver, bodies.map { it.first },
                 glassShadowReach(spread).dp.toPx(), GlassShadowShift.dp.toPx())) {
             glassShadows(bodies, strength, spread, geometry, receiver = receiver, exclusion = exclusion, color = color)
             return
@@ -255,12 +255,12 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
             val inset = Offset(floor(bounds.left-padding), floor(bounds.top-padding))
             val extent = IntSize(ceil(bounds.right + padding - inset.x).toInt(),
                 ceil(bounds.bottom + padding - inset.y).toInt())
-                                                    val metrics = androidx.compose.ui.unit.Density(density, fontScale)
+            val metrics = androidx.compose.ui.unit.Density(density, fontScale)
             val direction = layoutDirection
             preparation = scope.launch {
                 delay(48)
                 val image = withContext(Dispatchers.Default) {
-                                    ImageBitmap(extent.width, extent.height).also { next ->
+                    ImageBitmap(extent.width, extent.height).also { next ->
                         CanvasDrawScope().draw(metrics, direction, Canvas(next),
                             Size(extent.width.toFloat(), extent.height.toFloat())) {
                             translate(-inset.x, -inset.y) { paintShadow(excludeInterior = false, rasterizing = true) }
@@ -271,10 +271,10 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                 rasterizations++
             }
         }
-            val prepared = raster?.takeIf { it.key == key && exclusion == null }
+        val prepared = raster?.takeIf { it.key == key && exclusion == null }
         if (prepared != null) translate(origin.x, origin.y) {
             if (outline == null) geometry.update(normalized.map { it.first }, glassShadowReach(spread).dp.toPx(), GlassShadowShift.dp.toPx())
-                            clipPath(outline ?: geometry.body, ClipOp.Difference) {
+            clipPath(outline ?: geometry.body, ClipOp.Difference) {
                 translate(prepared.inset.x, prepared.inset.y) {
                     drawImage(prepared.image, dstSize = IntSize(prepared.image.width, prepared.image.height), filterQuality = FilterQuality.Low)
                 }
