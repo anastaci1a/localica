@@ -272,9 +272,9 @@ private const val FrozenS1GlassColorShader = """
     // effectiveGlassTrim (#633): weights above 1/trim limit the trim to 1/weight, so brightness never inverts.
     float glassTrim(float3 tone) { return tone.x * tone.y > 1.0 ? 1.0 / tone.y : tone.x; }
     float3 glassColor(float3 color, float whiteTint, float3 tone) {
-        return min(float3(
+        return float3(
             dot(color, float3(.5400391, -.2017822, -.0203094)) + .7001953,
             dot(color, float3(-.0599365, .3984375, -.0203705)) + .7001953,
-            dot(color, float3(-.0599976, -.2016602, .5795898)) + .7001953), float3(1.06961));
+            dot(color, float3(-.0599976, -.2016602, .5795898)) + .7001953);
     }
 """

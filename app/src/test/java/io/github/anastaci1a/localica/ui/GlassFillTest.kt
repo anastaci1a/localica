@@ -11,7 +11,7 @@ class GlassFillTest {
         doubleArrayOf(-.0599365, .3984375, -.0203705, .7001953),
         doubleArrayOf(-.0599976, -.2016602, .5795898, .7001953))
 
-    @Test fun matrixRowsAndUpperClampMatchTheSpecifiedValues() {
+    @Test fun matrixRowsAndUnclippedRangeMatchTheSpecifiedValues() {
         for (channel in 0..2) {
             assertEquals(rows[channel][3], glassFillChannel(channel, 0f, 0f, 0f).toDouble(), 1e-7)
             for (axis in 0..2) {
@@ -19,11 +19,11 @@ class GlassFillTest {
                 assertEquals(rows[channel][axis] * .25 + rows[channel][3],
                     glassFillChannel(channel, sample[0], sample[1], sample[2]).toDouble(), 1e-7)
             }
-            assertEquals(1.06961f, glassFillChannel(channel, 4f, 4f, 4f), 0f)
+            assertEquals(rows[channel].take(3).sum() * 4 + rows[channel][3], glassFillChannel(channel, 4f, 4f, 4f).toDouble(), 3e-7)
         }
         assertFalse(GlassColorShader.contains("whiteTint"))
         assertTrue(GlassColorShader.contains("float3 glassColor(float3 color)"))
-        assertTrue(GlassColorShader.contains("1.06961"))
+        assertFalse(GlassColorShader.substringBefore("float glassTrim").contains("min("))
     }
 
     @Test fun encodedRgbCubeMatchesTheIndependentMatrixAndSdrAdapterPreservesAlpha() {
@@ -31,7 +31,7 @@ class GlassFillTest {
             val rgb = floatArrayOf(r / 16f, g / 16f, b / 16f)
             for (channel in 0..2) {
                 val row = rows[channel]
-                val expected = minOf(1.06961, row[0] * rgb[0] + row[1] * rgb[1] + row[2] * rgb[2] + row[3])
+                val expected = row[0] * rgb[0] + row[1] * rgb[1] + row[2] * rgb[2] + row[3]
                 assertEquals(expected, glassFillChannel(channel, rgb[0], rgb[1], rgb[2]).toDouble(), 2e-7)
             }
             for (alpha in listOf(0f, .25f, 1f)) {

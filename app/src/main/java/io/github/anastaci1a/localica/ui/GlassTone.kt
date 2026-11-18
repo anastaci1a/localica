@@ -220,13 +220,12 @@ private val GlassFillRows = arrayOf(
     floatArrayOf(.5400391f, -.2017822f, -.0203094f, .7001953f),
     floatArrayOf(-.0599365f, .3984375f, -.0203705f, .7001953f),
     floatArrayOf(-.0599976f, -.2016602f, .5795898f, .7001953f))
-internal const val GlassFillClamp = 1.06961f
 internal fun glassFillChannel(channel: Int, r: Float, g: Float, b: Float): Float =
-    GlassFillRows[channel].let { minOf(it[0] * r + it[1] * g + it[2] * b + it[3], GlassFillClamp) }
+    GlassFillRows[channel].let { it[0] * r + it[1] * g + it[2] * b + it[3] }
 
 internal val GlassColorShader = """
     float3 glassColor(float3 color) {
-        return min(float3(${GlassFillRows.joinToString(", ") { "dot(color, float3(${it.take(3).joinToString()})) + ${it[3]}" }}), float3($GlassFillClamp));
+        return float3(${GlassFillRows.joinToString(", ") { "dot(color, float3(${it.take(3).joinToString()})) + ${it[3]}" }});
     }
     float glassTrim(float3 tone) { return tone.x * tone.y > 1.0 ? 1.0 / tone.y : tone.x; }
     float3 glassTone(float3 color, float3 tone) {
