@@ -110,11 +110,11 @@ class ShufflePreviousPlayerTest {
                     click("Shuffle: off")
                     await(15_000) { queues.state.value.settings.shuffle && journey().modes.shuffle }
                     assertEquals("Shuffle keeps the actual visit", anchor, journey().current)
-                    assertTrue("Exercise normal Previous below its restart threshold", connection.state.value.positionMs < 5000)
                     if (repeatMode == QueueRepeat.Off) {
                         val previous = journey().previous!!
                         assertEquals(ids[2], previous.entryId)
                         seek(1000)
+                        assertTrue("Exercise normal Previous below its restart threshold", connection.state.value.positionMs < 5000)
                         click("Previous")
                         at(previous, tracks[2].title, playing = true)
                         click("Pause")
