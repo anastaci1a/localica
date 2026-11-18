@@ -8,7 +8,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
-- Glass backdrop blur strength now follows display density and the reference values, giving noticeably lighter frost behind glass buttons, the tab bar, popups and the player.
+- Glass backdrop blur strength now follows display density: lighter on very dense displays, slightly stronger on less dense ones.
 - App Kotlin/Java source changes from 53,514 to 53,520 lines: 9 added, 3 removed, net +6. One shared density-based radius replaces the fixed blur radius, and one obsolete lint baseline entry is removed.
 - Refresh shard scheduling from complete v0.34.14 and v0.34.13 producers 44336375980 and 44221675774.
 
@@ -27,6 +27,9 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#1063](https://github.com/anastaci1a/localica/issues/1063): Investigate count validity when shuffle or repeat changes; this source finding has not been reproduced on a device.
 - [#1064](https://github.com/anastaci1a/localica/issues/1064): Add pending-scroll coverage for the list scrollbar path.
 - [#1065](https://github.com/anastaci1a/localica/issues/1065): Remove obsolete shuffle test diagnostics while preserving native refresh and assertions.
+- [#1066](https://github.com/anastaci1a/localica/issues/1066): Static frosted panels such as the queue drawer still use the previous fixed blur radius.
+- [#1067](https://github.com/anastaci1a/localica/issues/1067): Blur radius outside the 2.0–3.0 density range changes without a reference value.
+- [#1068](https://github.com/anastaci1a/localica/issues/1068) and [#1069](https://github.com/anastaci1a/localica/issues/1069): Blur test clean-up and removal of one unreachable fallback branch.
 - [#1052](https://github.com/anastaci1a/localica/issues/1052), [#1053](https://github.com/anastaci1a/localica/issues/1053) and [#1054](https://github.com/anastaci1a/localica/issues/1054): Filed follow-ups cover shared glass complexity accounting, control ownership, and moving-contact and first-frame press response.
 - [#1026](https://github.com/anastaci1a/localica/issues/1026) and [#1029](https://github.com/anastaci1a/localica/issues/1029): Captured Save remains deferred; Save follows the currently browsed queue and eagerly maps large entry lists on Main.
 - [#1042](https://github.com/anastaci1a/localica/issues/1042): The Last.fm first-match persistence JVM test intermittently restores a counts-only result. Its root cause remains open.
