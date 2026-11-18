@@ -35,8 +35,9 @@ class SelfHostedPrototypeContract(unittest.TestCase):
         self.assertEqual({'workflow_dispatch', 'workflow_call'}, set(self.workflow['on']))
 
     def test_only_focused_jobs_can_reach_the_self_hosted_runner_and_only_for_owner_dispatch(self):
-        self.assertEqual('${{ needs.identity.result == \'success\' && !inputs.build_only && (inputs.focused_api == \'\' || inputs.focused_api == \'both\' || inputs.focused_api == \'26\') && (inputs.runner != \'self-hosted\' || ' + GUARD + ') }}', self.jobs['focused_26']['if'])
-        self.assertEqual('${{ needs.identity.result == \'success\' && !inputs.build_only && (inputs.focused_api == \'\' || inputs.focused_api == \'both\' || inputs.focused_api == \'36\') && (!cancelled() && (inputs.runner != \'self-hosted\' || ' + GUARD + ')) }}',
+        # prototype.yml:235,465 retain the entire owner guard behind performance-off routing.
+        self.assertEqual('${{ (inputs.performance == \'off\' || inputs.performance == \'\') && needs.identity.result == \'success\' && !inputs.build_only && (inputs.focused_api == \'\' || inputs.focused_api == \'both\' || inputs.focused_api == \'26\') && (inputs.runner != \'self-hosted\' || ' + GUARD + ') }}', self.jobs['focused_26']['if'])
+        self.assertEqual('${{ (inputs.performance == \'off\' || inputs.performance == \'\') && needs.identity.result == \'success\' && !inputs.build_only && (inputs.focused_api == \'\' || inputs.focused_api == \'both\' || inputs.focused_api == \'36\') && (!cancelled() && (inputs.runner != \'self-hosted\' || ' + GUARD + ')) }}',
                          self.jobs['focused_36']['if'])
         for name, job in self.jobs.items():
             with self.subTest(job=name):

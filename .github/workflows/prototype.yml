@@ -995,8 +995,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ inputs.performance == 'generate' && 180 || 40 }}
     env:
-      GRADLE_BUILD_ACTION_CACHE_KEY_JOB: localica-static-checks
+      GRADLE_BUILD_ACTION_CACHE_KEY_JOB: localica-performance
       GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE: shared
+      DEPENDENCY_CACHE_AUDIT_IDENTITY: performance-runner-environment.txt
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -1024,6 +1025,10 @@ jobs:
           name: performance-functional-diagnostic
           run-id: ${{ inputs.performance_apk_run }}
           github-token: ${{ github.token }}
+      - name: Record runner and toolchain identity
+        run: bash .github/test-evidence/environment.sh | tee performance-runner-environment.txt
+      - name: Record restored dependency files
+        run: bash .github/dependency-cache-audit.sh snapshot
       - name: Verify unchanged app and compilation inputs
         if: inputs.performance == 'functional' && inputs.performance_apk_run != ''
         run: |
@@ -1065,15 +1070,20 @@ jobs:
           fi
       - name: Build no-profile control with the same source
         if: inputs.performance == 'functional' && inputs.performance_apk_run == ''
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
         run: |
           mkdir -p performance-apks
           cp app/build/outputs/apk/distribution/app-distribution.apk performance-apks/candidate.apk
           node tools/performance/macrobenchmark/profile-metadata.mjs candidate
-          ./gradlew :app:assembleDistribution --init-script tools/performance/macrobenchmark/no-profile.init.gradle --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8' | tee performance-control-build.txt
+          bash .github/gradle-transient-retry.sh ./gradlew :app:assembleDistribution --init-script tools/performance/macrobenchmark/no-profile.init.gradle --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8' | tee performance-control-build.txt
           cp app/build/outputs/apk/distribution/app-distribution.apk performance-apks/control.apk
           node tools/performance/macrobenchmark/profile-metadata.mjs control
           cp performance-apks/candidate.apk app/build/outputs/apk/distribution/app-distribution.apk
           sha256sum performance-apks/*.apk > performance-profile-arms.sha256
+      - name: Record downloaded dependency files
+        if: ${{ !cancelled() }}
+        run: bash .github/dependency-cache-audit.sh report
       - name: Enable emulator acceleration
         if: inputs.performance == 'generate'
         run: |
@@ -1084,6 +1094,7 @@ jobs:
       - uses: ./.github/actions/emulator-sdk-cache
         if: inputs.performance == 'generate'
       - uses: ./.github/actions/system-image-cache
+        id: emulator-image-cache
         if: inputs.performance == 'generate'
         with:
           api: 36
@@ -1097,6 +1108,19 @@ jobs:
           emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel
           disable-animations: false
           script: bash tools/performance/macrobenchmark/hosted.sh ${{ inputs.performance }}
+      - name: Cache the installed SDK system image
+        if: always() && steps.emulator-image-cache.outcome == 'success' && steps.emulator-image-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/system-image-cache
+        with:
+          mode: save
+          api: 36
+      - name: Preserve emulator readiness observations
+        if: always()
+        uses: ./.github/actions/upload-artifact-retry
+        with:
+          name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+          path: emulator-readiness.json
+          if-no-files-found: warn
       - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
@@ -1186,6 +1210,7 @@ jobs:
           sudo rm -rf /usr/share/dotnet
       - uses: ./.github/actions/emulator-sdk-cache
       - uses: ./.github/actions/system-image-cache
+        id: emulator-image-cache
         with:
           api: 36
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
@@ -1197,6 +1222,19 @@ jobs:
           emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel
           disable-animations: false
           script: bash tools/performance/macrobenchmark/hosted.sh functional
+      - name: Cache the installed SDK system image
+        if: always() && steps.emulator-image-cache.outcome == 'success' && steps.emulator-image-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/system-image-cache
+        with:
+          mode: save
+          api: 36
+      - name: Preserve emulator readiness observations
+        if: always()
+        uses: ./.github/actions/upload-artifact-retry
+        with:
+          name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+          path: emulator-readiness.json
+          if-no-files-found: warn
       - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:

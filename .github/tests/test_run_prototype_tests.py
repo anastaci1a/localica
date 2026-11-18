@@ -1148,7 +1148,9 @@ class WorkflowContract(unittest.TestCase):
             self.assertIs(False, value['default'])
         for name in ('focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'):
             self.assertIn('!inputs.build_only', workflow['jobs'][name]['if'])
-        self.assertNotIn('if', workflow['jobs']['build'])
+        # prototype.yml:138 routes ordinary builds separately from performance compilation.
+        self.assertEqual("${{ inputs.performance == 'off' || inputs.performance == '' }}",
+                         workflow['jobs']['build']['if'])
         result, manifest, apks = self.decision(build_only=True)
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIs(True, manifest['build_only'])
@@ -1482,7 +1484,8 @@ class WorkflowContract(unittest.TestCase):
                             self.assertEqual('${{ matrix.api }}', api)
                             self.assertIn("${{ matrix.api == 26 && '-feature -GLDMA' || '' }}", options)
                         self.assertIn('-memory 3072', options)
-            self.assertEqual(3 if filename == 'android.yml' else 5, lanes)
+            # prototype.yml:1090,1191 add generation and functional emulator actions.
+            self.assertEqual(3 if filename == 'android.yml' else 7, lanes)
 
     def test_focused_artifact_paths_preserve_workspace_root(self):
         import yaml
@@ -1508,17 +1511,58 @@ class WorkflowContract(unittest.TestCase):
                 self.assertEqual(expected, manifest['failure_classification'])
                 self.assertFalse(manifest['ready_for_prototype_delivery'])
 
+    def test_performance_jobs_are_opt_in_hosted_and_separate_from_delivery(self):
+        import yaml
+        jobs = yaml.safe_load((ROOT / '.github/workflows/prototype.yml').read_text())['jobs']
+        # prototype.yml:993-994,1123-1124,1142-1143: exact dispatch and dependency guards.
+        self.assertEqual(['identity', 'performance_plan'], jobs['performance']['needs'])
+        self.assertEqual('identity', jobs['performance_plan']['needs'])
+        self.assertEqual(['identity', 'performance', 'performance_plan'], jobs['performance_functional']['needs'])
+        self.assertEqual("${{ !cancelled() && needs.identity.result == 'success' && contains(fromJSON('[\"build\", \"generate\", \"functional\"]'), inputs.performance) && inputs.runner != 'self-hosted' && (inputs.performance != 'functional' || needs.performance_plan.result == 'success') }}",
+                         jobs['performance']['if'])
+        self.assertEqual("inputs.performance == 'functional' && inputs.runner != 'self-hosted'",
+                         jobs['performance_plan']['if'])
+        self.assertEqual("${{ !cancelled() && inputs.performance == 'functional' && needs.identity.result == 'success' && needs.performance_plan.result == 'success' && needs.performance.result == 'success' }}",
+                         jobs['performance_functional']['if'])
+        for name in ('performance', 'performance_plan', 'performance_functional'):
+            self.assertEqual('ubuntu-24.04', jobs[name]['runs-on'])
+            self.assertNotIn(name, jobs['evidence']['needs'])
+        for name in ('build', 'focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'):
+            self.assertIn("inputs.performance == 'off' || inputs.performance == ''", jobs[name]['if'])
+        for name, mode in (('performance', '${{ inputs.performance }}'), ('performance_functional', 'functional')):
+            emulator = next(step for step in jobs[name]['steps']
+                            if step.get('uses', '').startswith('reactivecircus/android-emulator-runner@'))
+            # prototype.yml:1091,1099,1199 delegate readiness to one shared script.
+            self.assertEqual('bash tools/performance/macrobenchmark/hosted.sh ' + mode, emulator['with']['script'])
+            self.assertIs(False, emulator['with']['disable-animations'])
+            if name == 'performance':
+                self.assertEqual("inputs.performance == 'generate'", emulator['if'])
+
     def test_opt_in_only_and_five_required_jobs(self):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
-        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner','focused_api','build_only'},set(workflow['on']['workflow_call']['inputs']))
+        # prototype.yml:17-33,75-86: both entry points expose the same bounded performance controls.
+        inputs = {'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner',
+                  'focused_api','build_only','performance','performance_apk_run','performance_scenarios'}
+        for event in ('workflow_dispatch', 'workflow_call'):
+            self.assertEqual(inputs, set(workflow['on'][event]['inputs']))
+            for name, default in (('performance', 'off'), ('performance_apk_run', ''), ('performance_scenarios', '')):
+                value = workflow['on'][event]['inputs'][name]
+                self.assertEqual(default, value['default'])
+                self.assertIs(False, value['required'])
+                self.assertEqual('choice' if event == 'workflow_dispatch' and name == 'performance' else 'string', value['type'])
+        self.assertEqual(['off', 'build', 'generate', 'functional'],
+                         workflow['on']['workflow_dispatch']['inputs']['performance']['options'])
         self.assertEqual({'ANDROID_DEBUG_KEYSTORE','LASTFM_API_KEY'},set(workflow['on']['workflow_call']['secrets']))
         self.assertFalse(workflow['on']['workflow_call']['secrets']['LASTFM_API_KEY']['required'])
         self.assertEqual({'contents':'read'},workflow['permissions'])
         jobs=workflow['jobs']
         self.assertEqual({'identity','build','focused_26','focused_36','compatibility_26','compatibility_36'},set(jobs['evidence']['needs']))
-        self.assertEqual('${{ always() }}',jobs['evidence']['if'])
+        # prototype.yml:724,988,1121,1140 keep normal delivery separate from performance diagnostics.
+        self.assertEqual({'identity','build','focused_26','focused_36','compatibility_26','compatibility_36',
+                          'evidence','performance','performance_plan','performance_functional'}, set(jobs))
+        self.assertEqual("${{ always() && (inputs.performance == 'off' || inputs.performance == '') }}",jobs['evidence']['if'])
         for name in ('focused_26','focused_36'):
             script='\n'.join(s.get('with',{}).get('script','') for s in jobs[name]['steps'])
             self.assertIn('python3 .github/prototype-health.py' if name == 'focused_36' else 'bash .github/run-prototype-tests.sh',script)
