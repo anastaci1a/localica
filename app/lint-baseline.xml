@@ -13502,7 +13502,7 @@
     <issue
         id="RawUiMotion"
         message="Use Engine trajectories"
-        errorLine1="    val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active }, state = light, point = { lightPoint }, lightTravel = { lightTravel }, generation = { lightGeneration })"
+        errorLine1="    val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active }, state = light, point = { lightPoint }, lightTravel = { lightTravel }, generation = { lightGeneration }, lightContact = { if (pressed || dragging) 1f else 0f })"
         errorLine2="                                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceControls.kt"
