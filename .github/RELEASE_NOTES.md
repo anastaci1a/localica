@@ -12,7 +12,6 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - Keep the player count and neighbouring-track presentation stable during position saves.
 - Verify shuffle Previous navigation and exact played-history retracing, including million-entry queues.
 - App Kotlin/Java source changes from 53,515 to 53,514 lines: 5 added, 6 removed, net -1. The scrollbar uses one layout snapshot and removes one redundant input.
-
 - Refresh shard scheduling from complete v0.34.13 producer 44221675774.
 
 ## Resolved issues
@@ -28,7 +27,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#1049](https://github.com/anastaci1a/localica/issues/1049): Pinch slow-frame release coverage with animations enabled remains follow-up work.
 - [#1051](https://github.com/anastaci1a/localica/issues/1051): Library data import confirmation has an intermittent Android 8 timeout history; the dialog replacement fix is included, with the known timeout disclosed for release acceptance.
 - [#530](https://github.com/anastaci1a/localica/issues/530): The artwork chooser can intermittently time out waiting for “Choose recent image” in ArtworkEditRestorationTest.
-- [#1061](https://github.com/anastaci1a/localica/issues/1061): PlayerArtworkPlaybackTest can time out waiting for idle at line 122.
+- [#1061](https://github.com/anastaci1a/localica/issues/1061): A historical held-drag playback test timed out waiting for idle. That test path has been removed; current cover assertions remain mandatory.
 - [#1052](https://github.com/anastaci1a/localica/issues/1052), [#1053](https://github.com/anastaci1a/localica/issues/1053) and [#1054](https://github.com/anastaci1a/localica/issues/1054): Filed follow-ups cover shared glass complexity accounting, control ownership, and moving-contact and first-frame press response.
 - [#1026](https://github.com/anastaci1a/localica/issues/1026) and [#1029](https://github.com/anastaci1a/localica/issues/1029): Captured Save remains deferred; Save follows the currently browsed queue and eagerly maps large entry lists on Main.
 - [#1042](https://github.com/anastaci1a/localica/issues/1042): The Last.fm first-match persistence JVM test intermittently restores a counts-only result. Its root cause remains open.
