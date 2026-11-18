@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.navigation.GlassBlurDefault
 import android.os.Build
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import androidx.annotation.RequiresApi
@@ -36,6 +37,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 
+internal fun glassBackdropBlurRadius(density: Float): Float {
+    val k = density.coerceIn(2f, 3f)
+    return (if (k <= 2.625f) 5.165593576f + (5.755008754f - 5.165593576f) * ((k - 2f) / .625f) else 5.755008754f + (6.062170952f - 5.755008754f) * ((k - 2.625f) / .375f)) / (.5f * GlassBlurDefault)
+}
 internal val NavigationPillHeight = 64.dp
 internal val CompactControlSize = NavigationPillHeight * .8f
 internal const val RaisedGlassDepthScale = 1.3f
@@ -295,7 +300,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         })
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val blurRadius = with(density) { 22.dp.toPx() }
+        val blurRadius = glassBackdropBlurRadius(density.density)
         val blur = blurRadius * (appearance.blur + (1f - appearance.blur) * frost)
         val padding = with(density) { 32.dp.toPx() }
         if (!flat && visible && source != null && Build.VERSION.SDK_INT >= 33) {

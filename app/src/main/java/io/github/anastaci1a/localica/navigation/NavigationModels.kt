@@ -110,8 +110,9 @@ enum class GlassRendererMode(val label: String) {
     }
 }
 
+const val GlassBlurDefault = .2f
 data class GlassAppearance(
-    val blur: Float = .2f,
+    val blur: Float = GlassBlurDefault,
     val whiteTint: Float = .06f,
     val shadowStrength: Float = .12f,
     val shadowSpread: Float = .6f,
@@ -131,7 +132,7 @@ data class GlassAppearance(
     val liftShadowStrength: Float = LiftShadowDefault,
     val touchLight: Float = 1f,
 ) {
-    fun normalized() = GlassAppearance(blur.unit(.2f), whiteTint.unit(.06f),
+    fun normalized() = GlassAppearance(blur.unit(GlassBlurDefault), whiteTint.unit(.06f),
         shadowStrength.unit(.12f), shadowSpread.unit(.6f), contrast.unit(.25f).coerceAtMost(.5f), tabStyle,
         tabBlur.unit(.3f), tabWhiteTint.unit(.16f),
         if (shapeDamping.isFinite()) shapeDamping.coerceIn(2f, 40f) else 8f,
