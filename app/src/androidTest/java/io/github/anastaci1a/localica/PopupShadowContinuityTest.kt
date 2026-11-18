@@ -476,7 +476,7 @@ class PopupShadowContinuityTest {
         val density = androidx.compose.ui.platform.LocalDensity.current
         SideEffect {
             referencePlane = plane
-            referenceShift = with(density) { 160.dp.roundToPx().toFloat() }
+            referenceShift = with(density) { 192.dp.roundToPx().toFloat() }
         }
         Box(Modifier.fillMaxSize().onGloballyPositioned { referenceOrigin = it.backdropPosition(page) }
             .shadowPlaneHost(plane, strength, .6f)) {
