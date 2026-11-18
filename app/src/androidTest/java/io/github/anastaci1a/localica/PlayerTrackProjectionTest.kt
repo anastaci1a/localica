@@ -29,28 +29,28 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
+internal class ProjectionCounted<T>(private val values: List<T>) : AbstractList<T>() {
+    var reads = 0
+    val mainReads = AtomicInteger()
+    var beforeRead: (() -> Unit)? = null
+    override val size get() = values.size
+    override fun get(index: Int): T {
+        reads++
+        if (Looper.myLooper() == Looper.getMainLooper()) mainReads.incrementAndGet()
+        beforeRead?.invoke()
+        return values[index]
+    }
+}
+
 class PlayerTrackProjectionTest {
     @get:Rule val compose = createComposeRule()
     private fun track(id: String, title: String = id) = Track("content://$id", title,
         fileName = "$id.mp3", relativePath = "$id.mp3", id = id)
 
-    private class Counted<T>(private val values: List<T>) : AbstractList<T>() {
-        var reads = 0
-        val mainReads = AtomicInteger()
-        var beforeRead: (() -> Unit)? = null
-        override val size get() = values.size
-        override fun get(index: Int): T {
-            reads++
-            if (Looper.myLooper() == Looper.getMainLooper()) mainReads.incrementAndGet()
-            beforeRead?.invoke()
-            return values[index]
-        }
-    }
-
     @Test fun positionOnlyPublicationsReuseOccurrenceAndLibraryLookups() {
-        val tracks = Counted(List(13_313) { track("$it") })
+        val tracks = ProjectionCounted(List(13_313) { track("$it") })
         val saved = track("13312", "Saved")
-        val entries = Counted(List(100) { QueueEntry("entry-$it", saved) })
+        val entries = ProjectionCounted(List(100) { QueueEntry("entry-$it", saved) })
         val queue = ListeningQueue(id = "queue", name = "Queue", entries = entries, currentEntryId = "entry-99")
         val state = mutableStateOf(QueueLibrary(listOf(queue), queue.id))
         val library = LibrarySnapshot(tracks = tracks)
@@ -126,7 +126,7 @@ class PlayerTrackProjectionTest {
 
     @Test fun queueScreenColdLoadingBecomesTheActualReadyHeaderAndRows() {
         val songs = List(3) { track("ready-$it").copy(durationMs = 1000) }
-        val entries = Counted(songs.mapIndexed { index, song -> QueueEntry("ready-$index", song) })
+        val entries = ProjectionCounted(songs.mapIndexed { index, song -> QueueEntry("ready-$index", song) })
         val queue = ListeningQueue(id = "ready", name = "Ready", entries = entries, currentEntryId = "ready-1")
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -200,10 +200,10 @@ class PlayerTrackProjectionTest {
         val savedActions = actionPreferences.read()
         val file = File.createTempFile("preview-admission-", ".opus", context.cacheDir)
         copyTestAsset(InstrumentationRegistry.getInstrumentation().context.assets, "lyrics.opus", file)
-        val preview = QueueEdits.create(listOf(track("preview").copy(uri = android.net.Uri.fromFile(file).toString(), fileName = file.name, relativePath = file.name)), 0, "Preview").let { it.copy(entries = Counted(it.entries)) }
-        val entries = preview.entries as Counted<QueueEntry>
+        val preview = QueueEdits.create(listOf(track("preview").copy(uri = android.net.Uri.fromFile(file).toString(), fileName = file.name, relativePath = file.name)), 0, "Preview").let { it.copy(entries = ProjectionCounted(it.entries)) }
+        val entries = preview.entries as ProjectionCounted<QueueEntry>
         val other = QueueEdits.create(listOf(track("other")), 0, "Other")
-        val catalog = Counted(listOf(preview, other))
+        val catalog = ProjectionCounted(listOf(preview, other))
         var source by mutableStateOf(QueueUiState(QueueLibrary(catalog, preview.id), loading = false))
         val native = io.github.anastaci1a.localica.playback.PlaybackState()
         var progress = Float.NaN
@@ -330,7 +330,7 @@ class PlayerTrackProjectionTest {
             fileName = file.name, relativePath = file.name)
         val fresh = old.copy(id = "projection-new", uri = android.net.Uri.fromFile(replacement).toString(), title = "New native")
         val oldQueue = ListeningQueue(id = "old", name = "Old", entries = listOf(QueueEntry("old", old)))
-        val blocked = Counted(listOf(QueueEntry("new", old.copy(title = "Replacement occurrence"))))
+        val blocked = ProjectionCounted(listOf(QueueEntry("new", old.copy(title = "Replacement occurrence"))))
         val pending = ListeningQueue(id = "pending", name = "Pending", entries = blocked)
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -426,14 +426,14 @@ class PlayerTrackProjectionTest {
 
     @Test fun millionEntryPreparationIsOffMainAndNativeMetadataDoesNotWaitForIt() {
         val residentTracks = List(50_000) { track("$it").copy(durationMs = 1000L) }
-        val tracks = Counted(residentTracks)
-        val entries = Counted(List(1_000_000) { QueueEntry("entry-$it", residentTracks[it % residentTracks.size]) })
+        val tracks = ProjectionCounted(residentTracks)
+        val entries = ProjectionCounted(List(1_000_000) { QueueEntry("entry-$it", residentTracks[it % residentTracks.size]) })
         val queue = runBlocking { withContext(Dispatchers.Default) {
             val saved = ListeningQueue(id = "scale", name = "Scale", entries = entries, currentEntryId = "entry-999999")
             saved.copy(journey = QueueJourney().reconcile(saved.ids, saved.currentEntryId, JourneyModes(loop = true)))
         } }
         val empty = ListeningQueue(id = "other", name = "Other", entries = emptyList())
-        val catalog = Counted(object : AbstractList<ListeningQueue>() {
+        val catalog = ProjectionCounted(object : AbstractList<ListeningQueue>() {
             override val size = 50_000
             override fun get(index: Int) = if (index == lastIndex) queue else empty
         })
@@ -548,4 +548,5 @@ class PlayerTrackProjectionTest {
             } finally { continuePreparation.countDown() }
         } finally { release.countDown(); hook.set(null) }
     }
+
 }
