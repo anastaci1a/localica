@@ -264,6 +264,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val appearance = LocalGlassAppearance.current.normalized()
     // The page owns ink polarity. A control never flips independently as content
     // scrolls beneath it, and no GPU readback is needed to choose its foreground.
@@ -286,19 +287,19 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         } } ?: cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape
     }
     val reduced = LocalReducedMotion.current
-    val flex = FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density,
-        minOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density)
+    val flex = FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / density.density,
+        minOf(surfaceSize.width, surfaceSize.height) / density.density)
     SideEffect {
         val momentum = contact.state.momentum
         momentum.spec = flex
         if (bodyOverride != null && anchor == null && sharedContact == null) {
-            val longSide = maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density
+            val longSide = maxOf(surfaceSize.width, surfaceSize.height) / density.density
             momentum.bodyOverride = bodyOverride.copy(scaleGain = if (longSide > 0f) -(16f / longSide) / .24f else null)
             contact.state.output.value = if (reduced) GlassShape() else momentum.shape
         }
         if (anchor != null) {
             anchor.depthScale = depthScale
-            anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
+            anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * density.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
         }
     }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
@@ -316,7 +317,6 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             clip = true
         })
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
-        val density = androidx.compose.ui.platform.LocalDensity.current
         val blurRadius = glassBackdropBlurRadius(density.density)
         val blur = blurRadius * (appearance.blur + (1f - appearance.blur) * frost)
         val padding = with(density) { 32.dp.toPx() }
