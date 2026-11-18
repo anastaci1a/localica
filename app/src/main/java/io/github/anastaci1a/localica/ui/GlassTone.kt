@@ -229,6 +229,10 @@ internal val GlassColorShader = """
     }
     float glassTrim(float3 tone) { return tone.x * tone.y > 1.0 ? 1.0 / tone.y : tone.x; }
     float3 glassTone(float3 color, float3 tone) {
+        float luma = clamp(dot(color, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+        float lifted = 1.0 - (1.0 - luma);
+        float tint = clamp((lifted - luma) / max(1.0 - luma, 0.0001), 0.0, 1.0);
+        color = mix(color, float3(1), tint);
         color = clamp(color, 0.0, 1.0);
         if (tone.x > 0.0) {
             // tone.z is the light-ink mix: 0 and 1 are the two exact polarities, between them their blend.
