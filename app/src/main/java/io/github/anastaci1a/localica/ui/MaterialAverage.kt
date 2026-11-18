@@ -26,8 +26,8 @@ internal fun FrostedBackdrop.canAverage(localCorners: List<Offset>): Boolean {
 internal data class MaterialAverageStyle(val tone: GlassTone? = null, val opaque: Boolean = false)
 
 /** True when this scene is, or lies inside, a finished panel material (a frosted panel or
- * popup body). That material already carries its panel's tint and tone, so None does not
- * apply them a second time to what it samples there. Which pixels are sampled is decided
+ * popup body). That material already carries its panel's broad grade, which is not
+ * applied a second time; each face still applies its rows. Which pixels are sampled is decided
  * by the material's full bounds, never by this provenance. */
 internal fun FrostedBackdrop.withinFinishedMaterial(): Boolean {
     var current: FrostedBackdrop? = this
@@ -39,9 +39,9 @@ internal fun FrostedBackdrop.withinFinishedMaterial(): Boolean {
     return false
 }
 
-/** The colour mapping None applies to a mean sampled from [backing]. */
+/** Suppress only repeated broad grading of a mean sampled from [backing]. */
 internal fun MaterialAverageStyle.forBacking(backing: FrostedBackdrop): MaterialAverageStyle =
-    if (backing.withinFinishedMaterial()) MaterialAverageStyle(GlassTone(), opaque) else this
+    if (tone != null && backing.withinFinishedMaterial()) MaterialAverageStyle(GlassTone(), opaque) else this
 
 /** An 8×8 GPU crop becomes one uniform color before scaling to the control.
  * No readback, full-control ray tracing, or full-panel averaging texture.
