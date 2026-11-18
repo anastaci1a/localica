@@ -1,6 +1,6 @@
-<!-- Release: v0.34.13 -->
+<!-- Release: v0.34.14 -->
 
-# Release v0.34.13
+# Release v0.34.14
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,22 +8,18 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
-- Add the Fluidity press response to standalone glass action buttons. All glass controls use the updated exact shape clock for release, reversal and resize behavior.
-- Keep the existing glass optics.
-- App Kotlin/Java source changes from 53,477 to 53,515 lines: 181 added, 143 removed, net +38. The shared response replaces the previous body update law.
-- Prevent duplicate dialog presentations during a same-pass replacement and keep artwork tied to the displayed queue visit.
-- Reduce selection-outline overhead and improve build reuse, workflow checks and transport diagnostics.
-- Refresh shard scheduling from complete v0.34.12 producer 44091537406.
+- Prevent a scrollbar crash during pending scroll requests.
+- Keep the player count and neighbouring-track presentation stable during position saves.
+- Verify shuffle Previous navigation and exact played-history retracing, including million-entry queues.
+- App Kotlin/Java source changes from 53,515 to 53,514 lines: 5 added, 6 removed, net -1. The scrollbar uses one layout snapshot and removes one redundant input.
+
+- Refresh shard scheduling from complete v0.34.13 producer 44221675774.
 
 ## Resolved issues
 
-- [#1005](https://github.com/anastaci1a/localica/issues/1005): Complete the standalone glass action-button press response and shared exact shape clock. The broader interaction programme remains open.
-- [#1051](https://github.com/anastaci1a/localica/issues/1051): Keep one dialog presentation per trigger during replacement.
-- [#677](https://github.com/anastaci1a/localica/issues/677): Remove call, list and angle-normalization overhead from selection outlines.
-- [#1056](https://github.com/anastaci1a/localica/issues/1056): Keep player artwork tied to its displayed queue visit.
-- [#1046](https://github.com/anastaci1a/localica/issues/1046): Refresh workflow checks and preserve performance safeguards.
-- [#1039](https://github.com/anastaci1a/localica/issues/1039): Add transport diagnostics without changing test outcomes; the underlying intermittent failure remains open.
-- [#1058](https://github.com/anastaci1a/localica/issues/1058): Reuse verified build artifacts from matching source revisions.
+- [#1062](https://github.com/anastaci1a/localica/issues/1062): Read the scrollbar position consistently during pending scroll requests.
+- [#826](https://github.com/anastaci1a/localica/issues/826): Verify Previous navigation in shuffle mode through player controls and large queues; no application behavior change was needed.
+- [#1057](https://github.com/anastaci1a/localica/issues/1057): Preserve the player count and neighbouring-track presentation during position saves.
 
 ## Known issues and follow-ups
 
@@ -48,7 +44,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Install
 
-1. Download `localica-v0.34.13-pre-release.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.34.14-pre-release.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
 
