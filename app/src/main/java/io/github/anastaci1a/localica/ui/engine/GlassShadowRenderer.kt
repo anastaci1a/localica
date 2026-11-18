@@ -26,7 +26,7 @@ internal class GlassShadowExclusion(private val bodies: List<RoundRect>, private
         val expansion = glassShadowRingExpansion(index, reach)
         path.reset()
         var any = false
-            bodies.forEach { r ->
+        bodies.forEach { r ->
             val screen = Rect(r.left - expansion, r.top - expansion + offsetY,
                 r.right + expansion, r.bottom + expansion + offsetY).translate(-origin)
             val local = glassReceiverInCasterSpace(screen, size, scaleX, scaleY, shift) ?: return@forEach
