@@ -94,6 +94,7 @@ class GlassBodyConfigurationTest {
             selected.single().also { it.pressed = true; anchor.contact.active = false }
         }
         compose.mainClock.advanceTimeBy(1200)
+        compose.mainClock.advanceTimeUntil { fresh.state.momentum.settled }
         val held = compose.runOnIdle {
             assertTrue(fresh.state.momentum.settled)
             assertEquals(1f, fresh.state.glow.value.big, 0f)
