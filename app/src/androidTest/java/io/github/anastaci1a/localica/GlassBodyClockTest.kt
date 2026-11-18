@@ -188,10 +188,11 @@ class GlassBodyClockTest {
             assertEquals(GlassGlow(), body.glow.value)
             reduced = false; strength = 1f; contact = 1f; lightContact = 1f; point = Offset(.5f, .5f)
             frame(46_000_000_000L)
-            frame(46_016_666_666L)
+            frame(46_016_666_666L) // New reduced-motion owner admits h=0.
+            frame(46_024_999_999L)
             assertTrue("physical light begin is visible", body.glow.value.big > 0f)
             lightContact = 0f
-            frame(46_024_999_999L)
+            frame(46_033_333_332L)
             assertEquals("body engagement remains independent", -.24f, value(body, "depth", "target"), 0f)
             val channels = glowChannels(body.momentum)
             fun target(channel: Any) = channel.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(channel)
