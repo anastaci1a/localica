@@ -340,7 +340,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val light = remember { GlassBodyState() }
     var lightPoint by remember { mutableStateOf(Offset(.5f, .5f)) }
     var lightTravel by remember { mutableFloatStateOf(0f) }; var lightGeneration by remember { mutableIntStateOf(0) }
-    val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active }, state = light, point = { lightPoint }, lightTravel = { lightTravel }, generation = { lightGeneration })
+    val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active }, state = light, point = { lightPoint }, lightTravel = { lightTravel }, generation = { lightGeneration }, lightContact = { if (pressed || dragging) 1f else 0f })
     val expansion = LocalGlassAppearance.current.controlExpansion
     val change by rememberUpdatedState(onChange)
     val haptics by rememberUpdatedState(rememberControlHaptics())
