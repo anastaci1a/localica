@@ -54,7 +54,7 @@ class PopupEditorFocusOwnershipTest {
             if (offset < 0f) offset else (offset + size - containerSize).coerceAtLeast(0f)
     }
 
-    private fun setup(consumeDown: Boolean = false, activate: (() -> Unit)? = null) {
+    private fun setup(consumeDown: Boolean = false, beforeFling: (suspend () -> Unit)? = null, activate: (() -> Unit)? = null) {
         compose.setContent { LocalicaTheme {
             state = rememberScrollState()
             scope = rememberCoroutineScope()
@@ -71,8 +71,11 @@ class PopupEditorFocusOwnershipTest {
                 val ancestor = if (consumeDown) Modifier.pointerInput(Unit) {
                     awaitEachGesture { awaitFirstDown(false, PointerEventPass.Initial).consume() }
                 } else Modifier
+                val parent = if (beforeFling == null) Modifier else Modifier.nestedScroll(object : NestedScrollConnection {
+                    override suspend fun onPreFling(available: Velocity): Velocity { beforeFling(); return Velocity.Zero }
+                })
                 PopupEditorBodySlot(owner, Modifier.controlVerticalScroll(state),
-                    ancestor.fillMaxWidth().height(height.dp).testTag("relocation-body")) {
+                    parent.then(ancestor).fillMaxWidth().height(height.dp).testTag("relocation-body")) {
                     Spacer(Modifier.height(450.dp))
                     Box(Modifier.size(48.dp).focusRequester(focus).focusable()
                         .nestedScroll(object : NestedScrollConnection {}, dispatcher)) {
@@ -243,6 +246,53 @@ class PopupEditorFocusOwnershipTest {
                 assertEquals("A completed fling must not replay the superseded correction", stopped, state.value)
             }
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun settledNativeFrameStaysSupersededAcrossSuspendedParentFlingHandoff() {
+        val reached = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        setup(beforeFling = { reached.complete(Unit); release.await() })
+        val body = compose.onNodeWithTag("relocation-body")
+        compose.mainClock.autoAdvance = false
+        try {
+            body.performTouchInput { down(center); moveBy(Offset(0f, -80f), delayMillis = 16) }
+            compose.runOnUiThread { target = 200; current = 100 }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.runOnUiThread { current = 200; source = 200 }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.runOnUiThread { assertEquals("Native geometry settles while contact still owns input", NativeRelocationResult.Superseded, native.result) }
+            body.performTouchInput { repeat(4) { moveBy(Offset(0f, -20f), delayMillis = 16) }; up() }
+            compose.waitForIdle()
+            val stopped = compose.runOnUiThread {
+                assertTrue("The physical release reached the parent before the owner's pre-fling callback", reached.isCompleted)
+                assertFalse("The drag mutation has ended while parent pre-fling is suspended", state.isScrollInProgress)
+                target = 260; current = 220
+                state.value
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.runOnUiThread {
+                assertEquals("Fresh native input cannot write in the contact-to-fling interval", stopped, state.value)
+                assertEquals("User ownership must span parent pre-fling suspension", NativeRelocationResult.Superseded, native.result)
+                assertFalse("No native mutation can occupy the handoff interval", state.isScrollInProgress)
+                release.complete(Unit)
+            }
+            compose.waitForIdle()
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            val before = compose.runOnUiThread { assertTrue(state.isScrollInProgress); state.value }
+            compose.runOnUiThread { current = 260; source = 260 }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.runOnUiThread { assertTrue(state.isScrollInProgress); assertTrue(state.value > before) }
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            val end = compose.runOnIdle { assertFalse(state.isScrollInProgress); state.value }
+            repeat(3) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            compose.runOnIdle { assertEquals("No deferred correction after handoff", end, state.value) }
+        } finally { release.complete(Unit); compose.mainClock.autoAdvance = true }
     }
 
     @Test fun buttonTapDuringRealUserFlingStopsWithoutActivation() {
