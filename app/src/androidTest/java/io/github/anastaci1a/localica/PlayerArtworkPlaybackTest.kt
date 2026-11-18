@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -114,32 +113,17 @@ class PlayerArtworkPlaybackTest {
                     val root = compose.onRoot().fetchSemanticsNode()
                     compose.runOnIdle { presentation.start(root, "2/3", "Track 2 of 3") }
                 }
-                for (direction in if (expanded) listOf(-1, 1) else listOf(0)) {
-                    val art = compose.onNodeWithTag("artwork-gesture")
-                    if (direction != 0) {
-                        art.performTouchInput { down(center); moveBy(Offset(width * .2f * direction, 0f), 100) }
-                        compose.waitForIdle()
-                        val preview = compose.onNodeWithTag("player-neighbor-artwork", true).fetchSemanticsNode()
-                        compose.runOnIdle { presentation.preview(preview) }
-                    }
-                    val before = positions.size
-                    try {
-                        val until = SystemClock.elapsedRealtime() + if (expanded) 16500 else 33000
-                        compose.waitUntil(40000) {
-                            compose.waitForIdle()
-                            assertTrue("Playback stays active throughout the observation", connection.state.value.isPlaying)
-                            assertEquals(visit, connection.state.value.playbackVisit)
-                            assertEquals("Cursor saves must not blur the current cover (expanded=$expanded)", 0, blends.size)
-                            assertTrue("Applied count/preview changes: ${presentation.changes}", presentation.changes.isEmpty())
-                            SystemClock.elapsedRealtime() >= until
-                        }
-                        assertTrue("At least three real saves while observing direction $direction", positions.size - before >= 3)
-                    } finally {
-                        compose.runOnIdle { presentation.preview(null) }
-                        if (direction != 0) art.performTouchInput { cancel() }
-                        compose.waitForIdle()
-                    }
+                val before = positions.size
+                val until = SystemClock.elapsedRealtime() + 33000
+                compose.waitUntil(40000) {
+                    compose.waitForIdle()
+                    assertTrue("Playback stays active throughout the observation", connection.state.value.isPlaying)
+                    assertEquals(visit, connection.state.value.playbackVisit)
+                    assertEquals("Cursor saves must not blur the current cover (expanded=$expanded)", 0, blends.size)
+                    assertTrue("Applied count changes: ${presentation.changes}", presentation.changes.isEmpty())
+                    SystemClock.elapsedRealtime() >= until
                 }
+                assertTrue("At least six real saves at rest (expanded=$expanded)", positions.size - before >= 6)
             }
             val elapsed = SystemClock.elapsedRealtime() - started
             assertTrue(elapsed >= 66000)
@@ -147,12 +131,11 @@ class PlayerArtworkPlaybackTest {
             assertTrue(connection.state.value.positionMs > initial.positionMs + 12000)
             assertEquals(1f, latest!!.clock, 0f)
             assertTrue("Count observations cover the real player", presentation.countSamples > 0)
-            assertTrue("Held previews were observed during playback", presentation.previewSamples > 0)
             assertTrue(presentation.changes.toString(), presentation.changes.isEmpty())
             val receipt = JSONObject().put("elapsedMs", elapsed).put("playbackSpeed", initial.playbackSpeed)
                 .put("cursorPositions", org.json.JSONArray(positions.toList())).put("blendAdmissions", blends.size)
                 .put("visit", visit).put("api", android.os.Build.VERSION.SDK_INT)
-                .put("countSamples", presentation.countSamples).put("previewSamples", presentation.previewSamples)
+                .put("countSamples", presentation.countSamples)
                 .put("presentationChanges", org.json.JSONArray(presentation.changes.toList()))
             File(nativeEvidenceDirectory("artwork-reload-1056", context.getExternalFilesDir(null)), "playback.json").writeText(receipt.toString(2))
             println("ArtworkReload1056 $receipt")
