@@ -46,7 +46,7 @@ class ShufflePreviousPlayerTest {
         val file = File.createTempFile("shuffle-previous-", ".mp3", context.cacheDir)
         var playback: PlaybackConnection? = null
         var savedSettings: QueueSettings? = null
-        var existingQueues = emptySet<String>()
+        var existingQueues: Set<String>? = null
         try {
             copyTestAsset(instrumentation.context.assets, "queue-tone.mp3", file)
             interfacePreferences.write(InterfaceSettings())
@@ -202,14 +202,19 @@ class ShufflePreviousPlayerTest {
         } finally {
             try {
                 playback?.let { connection ->
-                    val owned = connection.queues.state.value.library.queues.map { it.id }.toSet() - existingQueues
-                    main {
-                        connection.clear()
-                        connection.queues.removeQueues(owned)
-                        savedSettings?.let(connection.queues::settings)
+                    try {
+                        existingQueues?.let { baseline ->
+                            val owned = connection.queues.state.value.library.queues.map { it.id }.toSet() - baseline
+                            main {
+                                connection.clear()
+                                connection.queues.removeQueues(owned)
+                                savedSettings?.let(connection.queues::settings)
+                            }
+                            await(15_000) { connection.queues.state.value.library.queues.none { it.id in owned } }
+                        }
+                    } finally {
+                        main { connection.close() }
                     }
-                    await(15_000) { connection.queues.state.value.library.queues.none { it.id in owned } }
-                    main { connection.close() }
                 }
             } finally {
                 interfacePreferences.write(originalInterface)
