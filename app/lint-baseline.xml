@@ -5707,7 +5707,7 @@
         errorLine2="                                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SelectionLens.kt"
-            line="41"
+            line="42"
             column="60"/>
     </issue>
 
@@ -5718,7 +5718,7 @@
         errorLine2="                                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SelectionLens.kt"
-            line="47"
+            line="48"
             column="60"/>
     </issue>
 
