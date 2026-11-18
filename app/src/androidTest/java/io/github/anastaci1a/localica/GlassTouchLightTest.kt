@@ -321,8 +321,8 @@ class GlassTouchLightTest {
                     active = { !modal }, point = { point })
                 rememberGlassBody({ reads.incrementAndGet(); 0f }, contact = { if (held) 1f else 0f }, state = shared,
                     active = { modal }, point = { point })
-                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { !modal })
-                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { modal })
+                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { !modal }, point = { point })
+                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { modal }, point = { point })
                 Box(Modifier.size(40.dp))
             }
         } }
@@ -361,7 +361,7 @@ class GlassTouchLightTest {
         val before = compose.runOnIdle { shared.glow.value }
         compose.runOnIdle { modal = !modal; point = Offset(.1f, .9f) }
         compose.runOnIdle { assertEquals("handoff has no reset", before, shared.glow.value) }
-        model.advance(0f, 0.0, contact = 1f)
+        model.advance(0f, 0.0, contact = 1f, point = point)
         model.targetGlow(Offset(.1f, .9f), 1f, 1f)
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
@@ -370,7 +370,7 @@ class GlassTouchLightTest {
         }
         val handoffAdmission = compose.mainClock.currentTime
         compose.mainClock.advanceTimeByFrame()
-        model.advance(0f, (compose.mainClock.currentTime - handoffAdmission) / 1000.0 * ownerSpeed, contact = 1f)
+        model.advance(0f, (compose.mainClock.currentTime - handoffAdmission) / 1000.0 * ownerSpeed, contact = 1f, point = point)
         model.targetGlow(Offset(.1f, .9f), 1f, 1f)
         model.finishSettlement()
         compose.runOnIdle {
@@ -381,7 +381,7 @@ class GlassTouchLightTest {
         compose.mainClock.advanceTimeBy(32)
         val repressed = compose.runOnIdle { GlassMomentum().also { it.blendFrom(shared.momentum) } }
         compose.runOnIdle { point = Offset(.7f, .4f); held = true }
-        repressed.advance(0f, .016 * ownerSpeed, contact = 1f)
+        repressed.advance(0f, .016 * ownerSpeed, contact = 1f, point = point)
         repressed.targetGlow(Offset(.7f, .4f), 1f, 1f)
         repressed.finishSettlement()
         compose.mainClock.advanceTimeByFrame()

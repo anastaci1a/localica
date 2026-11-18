@@ -147,7 +147,7 @@ internal fun rememberGlassContact(shared: GlassContact? = null, bodyOverride: Fl
     val contact = shared ?: remember { GlassContact(bodyOverride = bodyOverride) }
     val visible = LocalGlassVisible.current
     rememberGlassBody({ contact.travel + contact.expansion.value }, contact = { if (contact.pressed) 1f else 0f },
-        state = contact.state, active = { visible && contact.active && !contact.modal }, point = { contact.point })
+        state = contact.state, active = { visible && contact.active && !contact.modal }, point = { contact.point }, vertical = { contact.vertical })
     return contact
 }
 
@@ -156,10 +156,14 @@ internal fun rememberGlassContact(shared: GlassContact? = null, bodyOverride: Fl
 internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     presentation: () -> GlassShape = { contact.body.value }, admit: () -> Boolean = { true },
     onPressed: (Boolean) -> Unit = {}): Modifier {
-    return drawWithContent {
+    return glassBody(contact, presentation).observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+}
+
+private fun Modifier.glassBody(contact: GlassContact, presentation: () -> GlassShape) = drawWithContent {
         val shape = presentation()
-        scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
-    }.observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+        val x = shape.scaleX(contact.vertical); val y = shape.scaleY(contact.vertical)
+        val drift = glassContactDrift(contact.point, size, Offset(x, y))
+        translate(drift.x, drift.y) { scale(x, y) { this@drawWithContent.drawContent() } }
 }
 
 /** Shared contact lifetime for ordinary buttons and independently draggable glass bodies.
@@ -288,10 +292,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape,
-        admit = contactAdmission) else if (anchor != null) Modifier.drawWithContent {
-        val shape = contactShape()
-        scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
-    } else Modifier)
+        admit = contactAdmission) else if (anchor != null) Modifier.glassBody(contact, contactShape) else Modifier)
         .then(if (!shadow) Modifier else if (silhouette != null) Modifier.silhouetteGlassShadow(silhouette)
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
         .then(if (presentation == null) Modifier.clip(surfaceClip) else Modifier.graphicsLayer {

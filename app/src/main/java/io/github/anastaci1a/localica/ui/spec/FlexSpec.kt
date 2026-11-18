@@ -25,3 +25,11 @@ internal object FlexGlow {
     const val ExtentCap = 80f
     val Falloff = listOf(0f to 1f, 1f to 0f)
 }
+
+internal object FlexPress {
+    const val Hang = .22
+    fun response(held: Boolean, large: Boolean) = if (large) .25 else if (held) .27 else .5
+    fun damping(held: Boolean, large: Boolean) = if (large) 1.0 else if (held) .625 else .7
+    fun impulse(held: Boolean, large: Boolean) = if (large) 0.0 else if (held) .032 else .016
+    fun hang(drag: Double, elapsed: Double) = maxOf(0.0, Hang * drag - elapsed)
+}

@@ -2,7 +2,9 @@ package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import io.github.anastaci1a.localica.ui.spec.FlexGlow
+import io.github.anastaci1a.localica.ui.spec.FlexPress
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import kotlin.math.*
 
 /** Optical cap depth with an optional independently derived body scale. */
@@ -13,6 +15,17 @@ internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f, va
 }
 
 internal data class GlassGlow(val big: Float = 0f, val little: Float = 0f, val point: Offset = Offset.Zero)
+
+internal fun glassFingerStrain(point: Offset): Float {
+    val x = 2 * point.x.coerceIn(0f, 1f) - 1; val y = 2 * point.y.coerceIn(0f, 1f) - 1
+    return .05f * (x * x - y * y)
+}
+
+internal fun glassContactDrift(point: Offset, size: Size, scale: Offset): Offset {
+    val lift = maxOf(0f, maxOf(scale.x, scale.y) - 1f)
+    return Offset((point.x.coerceIn(0f, 1f) - .5f) * size.width * lift,
+        (point.y.coerceIn(0f, 1f) - .5f) * size.height * lift)
+}
 
 /** Compensation for center-based scaling: the contacting edge stays on its wall. */
 internal fun glassWallTranslation(extent: Float, scale: Float, wall: Float): Float =
@@ -79,6 +92,17 @@ internal class GlassMomentum(var bodyOverride: FlexSpec? = null) {
     private val motion = Spring()
     private val pressure = Spring()
     private val depth = Spring()
+    private var liftAge = FlexPress.Hang
+    private var liftLarge = false
+    private val liftResponse get() = FlexPress.response(depth.target != 0f, liftLarge)
+    private val liftDamping get() = FlexPress.damping(depth.target != 0f, liftLarge)
+    private fun liftTarget(target: Float) {
+        if (bodyOverride == null) {
+            val w = 2 * PI / FlexPress.response(target != 0f, liftLarge)
+            depth.velocity += (w * w * FlexPress.impulse(target != 0f, liftLarge) * (target - depth.target)).toFloat()
+        }
+        depth.target = target
+    }
     private val light = List(4) { Spring() }
     private var travelVelocity = 0f
     private var stiffness = (2 * PI / (bodyOverride ?: spec).response).pow(2)
@@ -92,16 +116,16 @@ internal class GlassMomentum(var bodyOverride: FlexSpec? = null) {
     val scaleX get() = shape.scaleX()
     val scaleY get() = shape.scaleY()
     val glow get() = GlassGlow(light[0].value, light[1].value, Offset(light[2].value, light[3].value))
-    val settled get() = motion.settled && pressure.settled && depthSettled && light.all { it.settled }
+    val settled get() = motion.settled && pressure.settled && depthSettled && light.all { it.settled } && (bodyOverride != null || liftAge >= FlexPress.Hang)
 
     /** Each output finishes independently while the shared clock waits for all channels. */
     fun finishSettlement(): Boolean {
-        if (motion.settled && pressure.settled && depthSettled) { motion.finish(); pressure.finish(); depth.finish() }
+        if (motion.settled && pressure.settled && depthSettled && (bodyOverride != null || liftAge >= FlexPress.Hang)) { motion.finish(); pressure.finish(); depth.finish() }
         light.forEach { if (it.settled) it.finish() }
         return settled
     }
 
-    fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f; light.forEach { it.reset() } }
+    fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f; liftAge = FlexPress.Hang; liftLarge = false; light.forEach { it.reset() } }
 
     fun targetGlow(point: Offset?, contact: Float, strength: Float, snap: Boolean = false) {
         if (point == null || strength == 0f) { light.forEach { it.reset() }; return }
@@ -121,6 +145,8 @@ internal class GlassMomentum(var bodyOverride: FlexSpec? = null) {
         motion.blendFrom(a.motion, b.motion, fraction, aAxis, bAxis)
         pressure.blendFrom(a.pressure, b.pressure, fraction, aAxis, bAxis)
         depth.blendFrom(a.depth, b.depth, fraction)
+        liftAge = a.liftAge + (b.liftAge - a.liftAge) * fraction
+        liftLarge = a.liftLarge
         light.indices.forEach { light[it].blendFrom(a.light[it], b.light[it], fraction) }
         travelVelocity = a.travelVelocity + (b.travelVelocity - a.travelVelocity) * fraction
     }
@@ -132,12 +158,22 @@ internal class GlassMomentum(var bodyOverride: FlexSpec? = null) {
             mix(pressure.value, other.pressure.value * otherAxis), mix(depth.value, other.depth.value))
     }
 
-    fun advance(velocity: Float, seconds: Double, pressure: Float = 0f, contact: Float = 0f, impulseScale: Float = 1f, damping: Float = GlassSpringParameters.DEFAULT_DAMPING) {
+    fun advance(velocity: Float, seconds: Double, pressure: Float = 0f, contact: Float = 0f, impulseScale: Float = 1f, damping: Float = GlassSpringParameters.DEFAULT_DAMPING, point: Offset? = null) {
         if (!seconds.isFinite() || seconds < 0.0) return
         if (seconds > 0.0) {
             motion.advance(seconds, stiffness, resistance.toDouble())
             this.pressure.advance(seconds, stiffness, resistance.toDouble())
-            depth.advance(seconds, stiffness, resistance.toDouble())
+            val wait = if (liftAge < 0.0) minOf(seconds, -liftAge) else 0.0
+            fun advanceDepth(dt: Double) {
+                val w = 2 * PI / liftResponse
+                depth.advance(dt, if (bodyOverride == null) w * w else stiffness,
+                    if (bodyOverride == null) 2 * w * liftDamping else resistance.toDouble())
+            }
+            if (wait > 0.0) advanceDepth(wait)
+            val release = liftAge < 0.0 && seconds >= -liftAge
+            liftAge = if (release) FlexPress.Hang else minOf(FlexPress.Hang, liftAge + seconds)
+            if (release) liftTarget(0f)
+            advanceDepth(seconds - wait)
             val alphaOmega = 2 * PI / if (light[1].target > 0f) FlexGlow.Show else FlexGlow.Hide
             val centerOmega = 2 * PI / FlexGlow.Follow
             for (i in light.indices) { val w = if (i < 2) alphaOmega else centerOmega; light[i].advance(seconds, w * w, 2 * w) }
@@ -152,9 +188,18 @@ internal class GlassMomentum(var bodyOverride: FlexSpec? = null) {
             depth.velocity -= (speedChange * .035f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.35f, .35f)
             travelVelocity = speed
         } else travelVelocity = 0f
-        this.pressure.target = if (pressure.isFinite()) pressure.coerceIn(-.22f, .12f) else 0f
+        val edge = if (pressure.isFinite()) pressure.coerceIn(-.22f, .12f) else 0f
+        this.pressure.target = edge + if (contact > 0f && point != null && point.x.isFinite() && point.y.isFinite()) glassFingerStrain(point) else 0f
         val held = contact.isFinite() && contact > 0f || abs(this.pressure.target) > .0001f
-        depth.target = -.24f * (if (contact.isFinite()) contact.coerceIn(0f, 1f) else 0f) - abs(this.pressure.target) * .3f
+        liftLarge = spec != FlexSpec.Small
+        val target = -.24f * (if (contact.isFinite()) contact.coerceIn(0f, 1f) else 0f) - abs(edge) * .3f
+        if (held) {
+            if (depth.target == 0f || liftAge < 0.0) liftAge = 0.0
+            liftTarget(target)
+        } else if (depth.target != 0f && liftAge >= 0.0) {
+            val wait = if (bodyOverride == null) FlexPress.hang(1.0, liftAge) else 0.0
+            if (wait > 0.0) liftAge = -wait else liftTarget(0f)
+        }
         val drag = if (damping.isFinite()) damping.coerceIn(GlassSpringParameters.MIN_DAMPING, GlassSpringParameters.MAX_DAMPING) else GlassSpringParameters.DEFAULT_DAMPING
         val selected = bodyOverride ?: spec
         stiffness = (2 * PI / if (held) selected.trackingResponse else selected.response).pow(2)

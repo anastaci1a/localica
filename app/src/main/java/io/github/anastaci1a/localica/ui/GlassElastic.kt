@@ -31,7 +31,8 @@ internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.sp
 
 @Composable
 internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 0f }, contact: () -> Float = { 0f },
-    state: GlassBodyState = remember { GlassBodyState() }, active: () -> Boolean = { true }, point: (() -> Offset)? = null): State<GlassShape> {
+    state: GlassBodyState = remember { GlassBodyState() }, active: () -> Boolean = { true }, point: (() -> Offset)? = null,
+    vertical: () -> Boolean = { false }): State<GlassShape> {
     val result = state.output
     val reduced = LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
@@ -40,12 +41,13 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
     val force by rememberUpdatedState(pressure)
     val touch by rememberUpdatedState(contact)
     val glowPoint by rememberUpdatedState(point)
+    val verticalAxis by rememberUpdatedState(vertical)
     val strength by rememberUpdatedState(LocalGlassAppearance.current.touchLight)
     val ownsClock by rememberUpdatedState(active)
     LaunchedEffect(state, reduced, speed) {
         val body = state.momentum
         var runner: Job? = null
-        snapshotFlow { listOf(input(), force(), touch(), damping, ownsClock(), if (strength > 0f) glowPoint?.invoke() else null, strength) }.collect {
+        snapshotFlow { listOf(input(), force(), touch(), damping, ownsClock(), if (touch() > 0f || strength > 0f) glowPoint?.invoke() else null, verticalAxis(), strength) }.collect {
             if (!ownsClock()) { runner?.cancel(); runner = null; return@collect }
             if (reduced) { body.reset(); body.targetGlow(glowPoint?.invoke(), touch(), strength, snap = true); state.glow.value = body.glow; result.value = GlassShape(); state.previous = input(); return@collect }
             if (runner?.isActive != true) runner = launch {
@@ -62,7 +64,8 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
                     val displacement = current - state.previous
                     val touched = touch()
                     body.advance(if (dt > 0.0) (displacement / dt).toFloat().coerceIn(-20f, 20f) else 0f,
-                        dt, force(), touched, state.impulseScale, damping)
+                        dt, force(), touched, state.impulseScale, damping,
+                        glowPoint?.invoke()?.let { if (verticalAxis()) Offset(it.y, it.x) else it })
                     body.targetGlow(glowPoint?.invoke(), touched, strength)
                     state.previous = current
                     last = frame
