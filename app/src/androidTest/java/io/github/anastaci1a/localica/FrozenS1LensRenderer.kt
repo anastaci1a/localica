@@ -271,10 +271,26 @@ internal class FrozenS1LensRenderer {
 private const val FrozenS1GlassColorShader = """
     // effectiveGlassTrim (#633): weights above 1/trim limit the trim to 1/weight, so brightness never inverts.
     float glassTrim(float3 tone) { return tone.x * tone.y > 1.0 ? 1.0 / tone.y : tone.x; }
+    float3 frozenTone(float3 color, float whiteTint, float3 tone) {
+        float luma = clamp(dot(color, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+        float lifted = 1.0 - (1.0 - luma) * (1.0 - whiteTint) / max(1.0 - whiteTint * luma, 0.0001);
+        float tint = clamp((lifted - luma) / max(1.0 - luma, 0.0001), 0.0, 1.0);
+        color = mix(color, float3(1), tint);
+        color = clamp(color, 0.0, 1.0);
+        if (tone.x > 0.0) {
+            // tone.z is the light-ink mix: 0 and 1 are the two exact polarities, between them their blend.
+            float trim = glassTrim(tone);
+            float3 darkEnd = 1.0 - color;
+            float3 darkWeighted = tone.y == 2.0 ? darkEnd * darkEnd : tone.y == 1.0 ? darkEnd : pow(darkEnd, float3(tone.y));
+            float3 lightWeighted = tone.y == 2.0 ? color * color : tone.y == 1.0 ? color : pow(color, float3(tone.y));
+            color += mix(darkWeighted * trim, -lightWeighted * trim, clamp(tone.z, 0.0, 1.0));
+        }
+        return color;
+    }
     float3 glassColor(float3 color, float whiteTint, float3 tone) {
-        return float3(
+        return mix(float3(
             dot(color, float3(.5400391, -.2017822, -.0203094)) + .7001953,
             dot(color, float3(-.0599365, .3984375, -.0203705)) + .7001953,
-            dot(color, float3(-.0599976, -.2016602, .5795898)) + .7001953);
+            dot(color, float3(-.0599976, -.2016602, .5795898)) + .7001953), frozenTone(color, whiteTint, tone), clamp(tone.z, 0.0, 1.0));
     }
 """

@@ -98,23 +98,15 @@ class LiquidGlassTest {
         fun colors() = compose.onNodeWithTag("tonal-lens").captureToImage().toPixelMap().let { pixels ->
             (0..3).map { pixels[(pixels.width * (it + .5f) / 4).toInt(), pixels.height / 2] }
         }
-        val samples = listOf(floatArrayOf(.03f, .03f, .03f), floatArrayOf(.4f, .4f, .4f),
-            floatArrayOf(.9f, .9f, .9f), floatArrayOf(1f, 1f, 0f))
-        val rows = arrayOf(floatArrayOf(.5400391f, -.2017822f, -.0203094f),
-            floatArrayOf(-.0599365f, .3984375f, -.0203705f), floatArrayOf(-.0599976f, -.2016602f, .5795898f))
         val original = colors()
-        for (setting in listOf(.18f, 1f)) {
-            compose.runOnIdle { tint = setting }
-            val toned = colors()
-            samples.forEachIndexed { sample, rgb ->
-                val channels = listOf(toned[sample].red, toned[sample].green, toned[sample].blue)
-                rows.forEachIndexed { channel, row ->
-                    val expected = minOf(1.06961f, row.indices.sumOf { (row[it] * rgb[it]).toDouble() }.toFloat() + .7001953f).coerceIn(0f, 1f)
-                    assertEquals("Fixed face sample=$sample channel=$channel tint=$setting", expected, channels[channel], .02f)
-                }
-                assertEquals("Legacy tint leaves the face unchanged", original[sample], toned[sample])
-            }
-        }
+        compose.runOnIdle { tint = .18f }
+        val toned = colors()
+        val lift = (0..2).map { toned[it].red - original[it].red }
+        assertTrue("Shadows receive a visible, stronger lift: $lift", lift[0] > .15f && lift[0] > lift[1] && lift[1] > lift[2])
+        assertTrue("Highlights remain close to their original brightness", lift[2] < .02f)
+        assertTrue("Bright yellow retains saturation: ${toned[3]}", toned[3].blue < .04f)
+        compose.runOnIdle { tint = 1f }
+        assertTrue("Full tint remains available", colors().all { it.red > .98f && it.green > .98f && it.blue > .98f })
     }
 
     @Test fun paddedBackdropDoesNotExpandAContentSizedControl() {
@@ -173,9 +165,9 @@ class LiquidGlassTest {
                 interior.red > .97f && interior.green < .01f && interior.blue < .01f)
         } else {
             for (color in listOf(edge, interior)) {
-                assertEquals("The filled half-transparent mean keeps the red drawer beneath it", (1f + .7001953f - .0203094f) * .5f, color.red, .04f)
+                assertEquals("Half-transparent average keeps the red drawer beneath it", .5f, color.red, .04f)
                 assertEquals("Blue occupies half of the sampled footprint", .5f, color.blue, .04f)
-                assertEquals("The face bias is premultiplied by sampled coverage", (.7001953f - .0203705f) * .5f, color.green, .04f)
+                assertTrue("No white coating is introduced", color.green < .04f)
             }
         }
     }
@@ -202,8 +194,11 @@ class LiquidGlassTest {
         val right = pixels[pixels.width * 3 / 4, y]
         assertTrue("Keep the red backdrop visible: $left", left.red > left.blue + .15f)
         assertTrue("Keep the blue backdrop visible: $right", right.blue > right.red + .15f)
-        assertEquals("Red backdrop receives the face row", .7001953f - .0599365f, left.green, .03f)
-        assertEquals("Blue backdrop receives the face row", .7001953f - .0203705f, right.green, .03f)
+        if (dark) assertTrue("Clear lens centers must not acquire a white frost: $left / $right", left.green < .03f && right.green < .03f)
+        else {
+            assertEquals("Red backdrop receives the face row", .7001953f - .0599365f, left.green, .03f)
+            assertEquals("Blue backdrop receives the face row", .7001953f - .0203705f, right.green, .03f)
+        }
         assertTrue("The outer shadow must not darken the transparent center: $left / $right", left.red > .97f && right.blue > .97f)
         val center = pixels[pixels.width / 2, y]
         assertTrue("Foreground must remain black and unfiltered: $center", center.red + center.green + center.blue < .05f)

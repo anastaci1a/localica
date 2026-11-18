@@ -94,9 +94,9 @@ class GlassBodyOpticsTest {
                 val illumination = if (singleTone) 0f else 1f
                 val tone = if (index % 2 == 0) GlassTone() else GlassTone(.3f, 1.4f, true)
                 val expected = baseline.effect(geometry, 1.75f, .8f * frozenThickness, power = .75f,
-                    illumination = illumination, flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(frozenThickness), tone = tone)
+                    whiteTint = .2f, illumination = illumination, flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(frozenThickness), tone = tone)
                 val observed = candidate.effect(geometry, 1.75f, .8f * thickness, power = .75f,
-                    illumination = illumination, flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(thickness), tone = tone)
+                    whiteTint = .2f, illumination = illumination, flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(thickness), tone = tone)
                 assertArrayEquals("Normal/SingleTone state=$index singleTone=$singleTone background=$background", renderS1Kernel(bitmap, expected), renderS1Kernel(bitmap, observed))
             }
         } finally { bitmap.recycle() }

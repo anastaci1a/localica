@@ -97,14 +97,14 @@ internal inline fun averageGlassColor(sample: (Int, Int) -> Int): Color {
 }
 
 internal fun MaterialAverageStyle.color(mean: Color): Color {
-    val color = tone?.let {
-        val y = .2126f * mean.red + .7152f * mean.green + .0722f * mean.blue
-        val amount = ((1f - (1f - y) - y) / (1f - y).coerceAtLeast(.0001f)).coerceIn(0f, 1f)
-        it.color(lerp(mean, Color.White.copy(alpha = mean.alpha), amount))
-    } ?: Color(
-        glassFillChannel(0, mean.red, mean.green, mean.blue).coerceIn(0f, 1f),
-        glassFillChannel(1, mean.red, mean.green, mean.blue).coerceIn(0f, 1f),
-        glassFillChannel(2, mean.red, mean.green, mean.blue).coerceIn(0f, 1f), mean.alpha)
+    val tint = whiteTint.coerceIn(0f, 1f)
+    val y = .2126f * mean.red + .7152f * mean.green + .0722f * mean.blue
+    val lifted = 1f - (1f - y) * (1f - tint) / (1f - tint * y).coerceAtLeast(.0001f)
+    val amount = ((lifted - y) / (1f - y).coerceAtLeast(.0001f)).coerceIn(0f, 1f)
+    val graded = tone.color(lerp(mean, Color.White.copy(alpha = mean.alpha), amount))
+    val m = if (broad) 1f else tone.lightMix
+    val color = if (m >= 1f) graded else listOf(graded.red, graded.green, graded.blue).mapIndexed { i, c ->
+        (glassFillChannel(i, mean.red, mean.green, mean.blue) * (1f - m) + c * m).coerceIn(0f, 1f) }.let { Color(it[0], it[1], it[2], mean.alpha) }
     return if (opaque) color.copy(alpha = 1f) else color
 }
 

@@ -27,6 +27,7 @@ internal class LensRenderer {
         uniform float span;
         uniform float3 optics;
         uniform float power;
+        uniform float whiteTint;
         uniform float illumination;
         uniform float3 tone;
         uniform float fieldMode;
@@ -178,7 +179,7 @@ internal class LensRenderer {
                 } else sampled = scene.eval(lookup);
                 float alpha = float(sampled.a);
                 float3 color = float3(sampled.rgb) / max(alpha, 0.0001);
-                color = glassColor(color);
+                color = glassColor(color, whiteTint, tone);
                 sampled = ink + half4(half3(color * alpha), half(alpha)) * (1.0 - ink.a);
             }
             float alpha = float(sampled.a);
@@ -210,13 +211,13 @@ internal class LensRenderer {
     }
 
     fun effect(geometry: LensGeometry, blur: Float, depth: Float, power: Float = 1f,
-        illumination: Float = 1f, map: LensDistanceMap? = null,
+        whiteTint: Float = 0f, illumination: Float = 1f, map: LensDistanceMap? = null,
         origin: Offset = Offset.Zero, atlas: LensAtlas? = null, flattening: Float = 0f,
         tone: GlassTone = GlassTone(), fieldWeight: Float = 1f,
         circles: Pair<Offset, Offset>? = null, splitInner: Float? = null): RenderEffect {
         val r = geometry.bounds
         val state = floatArrayOf(r.left, r.top, r.right, r.bottom, geometry.corner, geometry.span, blur,
-            depth.coerceIn(.05f, 4f), power, illumination, origin.x, origin.y,
+            depth.coerceIn(.05f, 4f), power, whiteTint, illumination, origin.x, origin.y,
             map?.scale ?: 1f, map?.range ?: 1f, atlas?.foregroundY ?: 0f,
             atlas?.output?.width ?: 0f, atlas?.output?.height ?: 0f,
             atlas?.backdrop?.width ?: 0f, atlas?.backdrop?.height ?: 0f,
@@ -236,6 +237,7 @@ internal class LensRenderer {
         shader.setFloatUniform("optics", geometry.span * .62f * opticalDepth,
             .4f + .06f * flattening.coerceIn(0f, 1f), geometry.span * .32f * opticalDepth)
         shader.setFloatUniform("power", power)
+        shader.setFloatUniform("whiteTint", whiteTint)
         shader.setFloatUniform("illumination", illumination)
         shader.setFloatUniform("tone", tone.trim, tone.weight, tone.lightMix)
         shader.setFloatUniform("foregroundOffset", atlas?.foregroundY ?: 0f)

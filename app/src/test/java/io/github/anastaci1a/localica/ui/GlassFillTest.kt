@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -21,9 +22,8 @@ class GlassFillTest {
             }
             assertEquals(rows[channel].take(3).sum() * 4 + rows[channel][3], glassFillChannel(channel, 4f, 4f, 4f).toDouble(), 3e-7)
         }
-        assertFalse(GlassColorShader.contains("whiteTint"))
-        assertTrue(GlassColorShader.contains("float3 glassColor(float3 color)"))
-        assertFalse(GlassColorShader.substringBefore("float glassTrim").contains("min("))
+        assertTrue(GlassColorShader.contains("glassTone(color, whiteTint, tone), clamp(tone.z, 0.0, 1.0));"))
+        assertFalse(GlassColorShader.substringAfter("float3 glassColor").contains("min("))
     }
 
     @Test fun encodedRgbCubeMatchesTheIndependentMatrixAndSdrAdapterPreservesAlpha() {
@@ -35,10 +35,12 @@ class GlassFillTest {
                 assertEquals(expected, glassFillChannel(channel, rgb[0], rgb[1], rgb[2]).toDouble(), 2e-7)
             }
             for (alpha in listOf(0f, .25f, 1f)) {
-                val mapped = MaterialAverageStyle().color(Color(rgb[0], rgb[1], rgb[2], alpha))
+                val mapped = MaterialAverageStyle(.5f, GlassTone(.5f, 2f, false)).color(Color(rgb[0], rgb[1], rgb[2], alpha))
                 assertEquals(alpha, mapped.alpha, 1f / 255)
                 for ((channel, actual) in listOf(mapped.red, mapped.green, mapped.blue).withIndex())
                     assertEquals(glassFillChannel(channel, rgb[0], rgb[1], rgb[2]).coerceIn(0f, 1f), actual, 1f / 255)
+                val face = MaterialAverageStyle(0f, GlassTone()).color(Color(rgb[0], rgb[1], rgb[2])).luminance()
+                assertTrue("Dark ink keeps 7:1 on every light-appearance face: ${rgb.toList()}", (face + .05f) / (Color(0xFF202124).luminance() + .05f) >= 7f)
             }
         }
     }
@@ -52,8 +54,22 @@ class GlassFillTest {
                 val lifted = 1f - (1f - y)
                 val amount = ((lifted - y) / (1f - y).coerceAtLeast(.0001f)).coerceIn(0f, 1f)
                 val original = tone.color(lerp(sample, Color.White.copy(alpha = sample.alpha), amount))
-                assertEquals("Broad grade preserves original bytes for $sample $tone", original, MaterialAverageStyle(tone).color(sample))
-                assertEquals(original.copy(alpha = 1f), MaterialAverageStyle(tone, opaque = true).color(sample))
+                assertEquals("Broad grade preserves original bytes for $sample $tone", original, MaterialAverageStyle(0f, tone, broad = true).color(sample))
+                assertEquals(original.copy(alpha = 1f), MaterialAverageStyle(0f, tone, opaque = true, broad = true).color(sample))
+            }
+        }
+    }
+
+    @Test fun lightInkFaceKeepsTheExistingGradedFace() {
+        for (r in 0..8) for (g in 0..8) for (b in 0..8) for (alpha in listOf(.25f, 1f)) {
+            val sample = Color(r / 8f, g / 8f, b / 8f, alpha)
+            for (tint in listOf(0f, .06f, .5f)) for (trim in listOf(0f, .25f, .5f)) {
+                val tone = GlassTone(trim, 2f, true)
+                val y = .2126f * sample.red + .7152f * sample.green + .0722f * sample.blue
+                val lifted = 1f - (1f - y) * (1f - tint) / (1f - tint * y).coerceAtLeast(.0001f)
+                val amount = ((lifted - y) / (1f - y).coerceAtLeast(.0001f)).coerceIn(0f, 1f)
+                val original = tone.color(lerp(sample, Color.White.copy(alpha = sample.alpha), amount))
+                assertEquals("Light-ink face keeps original bytes for $sample $tone $tint", original, MaterialAverageStyle(tint, tone).color(sample))
             }
         }
     }

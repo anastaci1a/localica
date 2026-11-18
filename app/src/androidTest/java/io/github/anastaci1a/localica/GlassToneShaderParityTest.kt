@@ -18,7 +18,7 @@ class GlassToneShaderParityTest {
         $GlassColorShader
         half4 main(float2 p) {
             float x = floor(p.x) / 255.0;
-            return half4(half3(glassTone(float3(x), tone)), 1.0);
+            return half4(half3(glassTone(float3(x), 0.0, tone)), 1.0);
         }
     """
 
@@ -68,7 +68,7 @@ class GlassToneShaderParityTest {
             val fill = RuntimeShader("""
                 uniform float4 sample;
                 $GlassColorShader
-                half4 main(float2 p) { return half4(half3(glassColor(sample.rgb / max(sample.a, 0.0001)) * sample.a / 2.0), 1.0); }
+                half4 main(float2 p) { return half4(half3(glassColor(sample.rgb / max(sample.a, 0.0001), .5, float3(.5, 2.0, 0.0)) * sample.a / 2.0), 1.0); }
             """).apply { setFloatUniform("sample", rgb[0] * rgb[3], rgb[1] * rgb[3], rgb[2] * rgb[3], rgb[3]) }
             faceCanvas.drawRect(x.toFloat(), 0f, x + 1f, 1f, Paint().apply { shader = fill })
         }
@@ -110,5 +110,5 @@ private const val FrozenBroadToneShader = """
         }
         return color;
     }
-    float3 glassTone(float3 color, float3 tone) { return glassColor(color, 0.0, tone); }
+    float3 glassTone(float3 color, float whiteTint, float3 tone) { return glassColor(color, whiteTint, tone); }
 """

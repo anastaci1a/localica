@@ -218,12 +218,7 @@ class GlassPressureTest {
         // Reuse only after a full capture cycle, always distinct from the previous frame.
         compose.runOnIdle { presentationStage = (presentationStage + 1) % 32 }
         val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("pressure-scene"), presentationStage) { pressureView }
-        fun red(color: Color): Boolean {
-            val green = .7001953f - .0599365f
-            val blue = .7001953f - .0599976f
-            val redAmount = (color.red - color.green) / (1f - green)
-            return color.red > .6f && color.green - green * redAmount < .4f && color.blue - blue * redAmount < .4f
-        }
+        fun red(color: Color) = color.red > .6f && color.green < .4f && color.blue < .4f
         var lensLeft = pixels.width; var lensTop = pixels.height; var lensRight = -1; var lensBottom = -1
         var shellLeft = pixels.width; var shellTop = pixels.height; var shellRight = -1; var shellBottom = -1
         // Both silhouettes use this owned copied frame; retain the separate containment pass below.
