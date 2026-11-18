@@ -288,9 +288,9 @@ private const val FrozenS1GlassColorShader = """
         return color;
     }
     float3 glassColor(float3 color, float whiteTint, float3 tone) {
-        return mix(float3(
+        return mix(min(float3(
             dot(color, float3(.5400391, -.2017822, -.0203094)) + .7001953,
             dot(color, float3(-.0599365, .3984375, -.0203705)) + .7001953,
-            dot(color, float3(-.0599976, -.2016602, .5795898)) + .7001953), frozenTone(color, whiteTint, tone), clamp(tone.z, 0.0, 1.0));
+            dot(color, float3(-.0599976, -.2016602, .5795898)) + .7001953), 1.06961), frozenTone(color, whiteTint, tone), clamp(tone.z, 0.0, 1.0));
     }
 """

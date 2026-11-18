@@ -12,7 +12,7 @@ class GlassFillTest {
         doubleArrayOf(-.0599365, .3984375, -.0203705, .7001953),
         doubleArrayOf(-.0599976, -.2016602, .5795898, .7001953))
 
-    @Test fun matrixRowsAndUnclippedRangeMatchTheSpecifiedValues() {
+    @Test fun matrixRowsAndCeilingMatchTheSpecifiedValues() {
         for (channel in 0..2) {
             assertEquals(rows[channel][3], glassFillChannel(channel, 0f, 0f, 0f).toDouble(), 1e-7)
             for (axis in 0..2) {
@@ -20,10 +20,12 @@ class GlassFillTest {
                 assertEquals(rows[channel][axis] * .25 + rows[channel][3],
                     glassFillChannel(channel, sample[0], sample[1], sample[2]).toDouble(), 1e-7)
             }
-            assertEquals(rows[channel].take(3).sum() * 4 + rows[channel][3], glassFillChannel(channel, 4f, 4f, 4f).toDouble(), 3e-7)
+            assertEquals("Extended white reaches the ceiling", 1.06961f, glassFillChannel(channel, 4f, 4f, 4f), 0f)
         }
+        assertEquals("Pure red reaches the ceiling", 1.06961f, glassFillChannel(0, 1f, 0f, 0f), 0f)
         assertTrue(GlassColorShader.contains("glassTone(color, whiteTint, tone), clamp(tone.z, 0.0, 1.0));"))
-        assertFalse(GlassColorShader.substringAfter("float3 glassColor").contains("min("))
+        assertTrue(GlassColorShader.substringAfter("float3 glassColor").contains("min(float3("))
+        assertTrue(GlassColorShader.substringAfter("float3 glassColor").contains("1.06961), glassTone"))
     }
 
     @Test fun encodedRgbCubeMatchesTheIndependentMatrixAndSdrAdapterPreservesAlpha() {
@@ -32,15 +34,15 @@ class GlassFillTest {
             for (channel in 0..2) {
                 val row = rows[channel]
                 val expected = row[0] * rgb[0] + row[1] * rgb[1] + row[2] * rgb[2] + row[3]
-                assertEquals(expected, glassFillChannel(channel, rgb[0], rgb[1], rgb[2]).toDouble(), 2e-7)
+                assertEquals(minOf(expected, 1.06961), glassFillChannel(channel, rgb[0], rgb[1], rgb[2]).toDouble(), 2e-7)
             }
             for (alpha in listOf(0f, .25f, 1f)) {
                 val mapped = MaterialAverageStyle(.5f, GlassTone(.5f, 2f, false)).color(Color(rgb[0], rgb[1], rgb[2], alpha))
                 assertEquals(alpha, mapped.alpha, 1f / 255)
                 for ((channel, actual) in listOf(mapped.red, mapped.green, mapped.blue).withIndex())
                     assertEquals(glassFillChannel(channel, rgb[0], rgb[1], rgb[2]).coerceIn(0f, 1f), actual, 1f / 255)
-                val face = MaterialAverageStyle(0f, GlassTone()).color(Color(rgb[0], rgb[1], rgb[2])).luminance()
-                assertTrue("Dark ink keeps 7:1 on every light-appearance face: ${rgb.toList()}", (face + .05f) / (Color(0xFF202124).luminance() + .05f) >= 7f)
+                assertTrue("Dark ink keeps 7:1 on the composited light face: ${rgb.toList()} $alpha",
+                    contrast(composite(MaterialAverageStyle(0f, GlassTone()).color(Color(rgb[0], rgb[1], rgb[2], alpha)), Color.White), Color(0xFF202124)) >= 7f)
             }
         }
     }
@@ -58,6 +60,17 @@ class GlassFillTest {
                 assertEquals(original.copy(alpha = 1f), MaterialAverageStyle(0f, tone, opaque = true, broad = true).color(sample))
             }
         }
+    }
+
+    private fun composite(face: Color, page: Color) = Color(face.red * face.alpha + page.red * (1f - face.alpha),
+        face.green * face.alpha + page.green * (1f - face.alpha), face.blue * face.alpha + page.blue * (1f - face.alpha))
+    private fun contrast(a: Color, b: Color) = (maxOf(a.luminance(), b.luminance()) + .05f) / (minOf(a.luminance(), b.luminance()) + .05f)
+
+    @Test fun translucentBlackFaceStaysReadableOnEitherPage() {
+        val black = Color.Black.copy(alpha = .25f)
+        assertTrue(contrast(composite(MaterialAverageStyle(0f, GlassTone()).color(black), Color.White), Color(0xFF202124)) >= 4.5f)
+        assertTrue(contrast(composite(MaterialAverageStyle(.06f, GlassTone(.25f, 2f, true)).color(black), Color.Black), Color.White) >= 4.5f)
+        assertTrue("Dark artwork on a light page", contrast(MaterialAverageStyle(0f, GlassTone()).color(Color.Black), Color(0xFF202124)) >= 4.5f)
     }
 
     @Test fun lightInkFaceKeepsTheExistingGradedFace() {

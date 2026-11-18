@@ -82,7 +82,7 @@ class GlassToneShaderParityTest {
                 val pixel = facePixels.getPixel(x, 0)
                 val channels = listOf(android.graphics.Color.red(pixel), android.graphics.Color.green(pixel), android.graphics.Color.blue(pixel))
                 rows.forEachIndexed { channel, row ->
-                    val expected = (row.indices.sumOf { (row[it] * rgb[it]).toDouble() }.toFloat() + .7001953f) * rgb[3] * .5f * 255f
+                    val expected = minOf(row.indices.sumOf { (row[it] * rgb[it]).toDouble() }.toFloat() + .7001953f, 1.06961f) * rgb[3] * .5f * 255f
                     assertEquals("Face sample=$x channel=$channel", expected, channels[channel].toFloat(), 1.5f)
                 }
             }

@@ -215,13 +215,13 @@ private class ToneSnapshotCompletion {
     return returned
 }
 
-/** Light-appearance face rows, before surface-range clipping; light-ink pages keep the graded face, selected by the tone's light-ink mix. */
+/** Light-appearance face rows and their 1.06961 ceiling, applied before alpha; light-ink pages keep the graded face, selected by the tone's light-ink mix. */
 private val GlassFillRows = arrayOf(
     floatArrayOf(.5400391f, -.2017822f, -.0203094f, .7001953f),
     floatArrayOf(-.0599365f, .3984375f, -.0203705f, .7001953f),
     floatArrayOf(-.0599976f, -.2016602f, .5795898f, .7001953f))
 internal fun glassFillChannel(channel: Int, r: Float, g: Float, b: Float): Float =
-    GlassFillRows[channel].let { it[0] * r + it[1] * g + it[2] * b + it[3] }
+    GlassFillRows[channel].let { minOf(it[0] * r + it[1] * g + it[2] * b + it[3], 1.06961f) }
 
 internal val GlassColorShader = """
     // effectiveGlassTrim (#633): weights above 1/trim limit the trim to 1/weight, so brightness never inverts.
@@ -243,7 +243,7 @@ internal val GlassColorShader = """
         return color;
     }
     float3 glassColor(float3 color, float whiteTint, float3 tone) {
-        return mix(float3(${GlassFillRows.joinToString(", ") { "dot(color, float3(${it.take(3).joinToString()})) + ${it[3]}" }}), glassTone(color, whiteTint, tone), clamp(tone.z, 0.0, 1.0));
+        return mix(min(float3(${GlassFillRows.joinToString(", ") { "dot(color, float3(${it.take(3).joinToString()})) + ${it[3]}" }}), 1.06961), glassTone(color, whiteTint, tone), clamp(tone.z, 0.0, 1.0));
     }
 """
 

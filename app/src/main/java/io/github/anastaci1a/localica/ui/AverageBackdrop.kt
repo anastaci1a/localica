@@ -103,8 +103,8 @@ internal fun MaterialAverageStyle.color(mean: Color): Color {
     val amount = ((lifted - y) / (1f - y).coerceAtLeast(.0001f)).coerceIn(0f, 1f)
     val graded = tone.color(lerp(mean, Color.White.copy(alpha = mean.alpha), amount))
     val m = if (broad) 1f else tone.lightMix
-    val color = if (m >= 1f) graded else listOf(graded.red, graded.green, graded.blue).mapIndexed { i, c ->
-        (glassFillChannel(i, mean.red, mean.green, mean.blue) * (1f - m) + c * m).coerceIn(0f, 1f) }.let { Color(it[0], it[1], it[2], mean.alpha) }
+    fun face(i: Int, c: Float) = (glassFillChannel(i, mean.red, mean.green, mean.blue) * (1f - m) + c * m).coerceIn(0f, 1f)
+    val color = if (m >= 1f) graded else Color(face(0, graded.red), face(1, graded.green), face(2, graded.blue), mean.alpha)
     return if (opaque) color.copy(alpha = 1f) else color
 }
 
