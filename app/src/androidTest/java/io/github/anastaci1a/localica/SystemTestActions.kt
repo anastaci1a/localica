@@ -4,14 +4,14 @@ import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.SemanticsNodeInteraction
-import androidx.compose.ui.test.junit4.ComposeContentTestRule
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.UiDevice
 import org.junit.Assert.assertTrue
 import kotlin.math.roundToInt
 
-internal fun ComposeContentTestRule.nativePointer(node: SemanticsNodeInteraction, holdMillis: Int = 0) {
+internal fun ComposeTestRule.nativePointer(node: SemanticsNodeInteraction, holdMillis: Int = 0) {
     awaitExpectedWindowFocus(node)
     val semantic = node.fetchSemanticsNode()
     val origin = IntArray(2)
@@ -55,7 +55,7 @@ internal fun UiObject2.clickSystemAction(): Boolean {
 
 /** Semantics can remain queryable without native input focus. Check the actual
  * expected app window before native input; external picker actions use their own host. */
-internal fun androidx.compose.ui.test.junit4.ComposeContentTestRule.awaitExpectedWindowFocus(
+internal fun androidx.compose.ui.test.junit4.ComposeTestRule.awaitExpectedWindowFocus(
     node: androidx.compose.ui.test.SemanticsNodeInteraction,
 ) {
     // Initialize interactive-window retrieval before waiting, not only after a failure.

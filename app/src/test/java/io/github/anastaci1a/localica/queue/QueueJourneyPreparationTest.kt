@@ -9,6 +9,99 @@ import org.junit.Test
 class QueueJourneyPreparationTest {
     private fun identity(visit: QueueVisit?) = visit?.let { it.entryId to it.cycle }
 
+    @Test fun shufflePredecessorsAtOneMillionEntriesReuseRanksAndRetraceTheAnchor() {
+        val factory = Class.forName("java.lang.management.ManagementFactory")
+        val bean = Class.forName("java.lang.management.GarbageCollectorMXBean")
+        val collectors = factory.getMethod("getGarbageCollectorMXBeans").invoke(null) as List<*>
+        fun gc(method: String) = collectors.sumOf { (bean.getMethod(method).invoke(it) as Long).coerceAtLeast(0) }
+        fun heap() = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
+        for (size in listOf(13_400, 50_000, 1_000_000)) {
+            var reads = 0L
+            val values = List(size) { "entry:$it" }
+            val source = object : AbstractList<String>() {
+                override val size get() = values.size
+                override fun get(index: Int): String { reads++; return values[index] }
+            }
+            val ids = source.mapView { it }
+            val start = size * 3 / 4
+            val heapBefore = heap()
+            val gcBefore = gc("getCollectionCount")
+            val gcTimeBefore = gc("getCollectionTime")
+            var path = QueueJourney.start(ids, values[start], JourneyModes(), Random(7))
+                .reconcile(ids, values[start], JourneyModes(shuffle = true), Random(11))
+            val anchor = path.current!!
+            val permutation = path.plans.getValue(path.cycle)
+            val heapPrepared = heap()
+            val moveGc = gc("getCollectionCount")
+            val moveGcTime = gc("getCollectionTime")
+            val perStep = LongArray(128)
+            val times = LongArray(128)
+            for (step in perStep.indices) {
+                val before = reads
+                val time = System.nanoTime()
+                val previous = path.previous!!
+                path = path.arrive(previous.token, ids, Random(13))
+                times[step] = System.nanoTime() - time
+                perStep[step] = reads - before
+                assertEquals(values[start - step - 1], path.current!!.entryId)
+                assertSame("Previous retains the prepared permutation", permutation, path.plans.getValue(path.cycle))
+                assertTrue(path.window().size <= 129)
+            }
+            val heapMoved = heap()
+            val previousGc = gc("getCollectionCount") - moveGc
+            val previousGcMillis = gc("getCollectionTime") - moveGcTime
+            assertEquals(129, path.history.size)
+            assertEquals(129, path.visited.size)
+            repeat(128) { step ->
+                val next = path.next!!
+                assertEquals(values[start - 127 + step], next.entryId)
+                path = path.arrive(next.token, ids, Random(17))
+            }
+            assertEquals(anchor, path.current)
+            assertFalse("Next past the anchor excludes backward arrivals", path.next!!.entryId in path.visited)
+            val sorted = times.sorted()
+            println("SHUFFLE_PREVIOUS_SCALE entries=$size steps=${perStep.size} readsFirst=${perStep.first()} " +
+                "readsLast=${perStep.last()} readsMax=${perStep.max()} heapBefore=$heapBefore heapPrepared=$heapPrepared " +
+                "heapMoved=$heapMoved heapAfter=${heap()} gcCount=${gc("getCollectionCount") - gcBefore} " +
+                "gcMillis=${gc("getCollectionTime") - gcTimeBefore} previousGc=$previousGc previousGcMillis=$previousGcMillis " +
+                "previousMedianNs=${sorted[64]} previousMaxNs=${sorted.last()}")
+            assertTrue("Prepared Previous must not scan the queue: ${perStep.max()} reads", perStep.max() <= 129)
+        }
+    }
+
+    @Test fun playedShuffleHistoryRetracesBeforeOrderedPredecessorsAndResumesTheSameVisits() {
+        val ids = List(9) { "entry:$it" }
+        for (loop in listOf(false, true)) {
+            var path = QueueJourney.start(ids, ids[3], JourneyModes())
+                .reconcile(ids, ids[3], JourneyModes(shuffle = true, loop = loop), Random(12))
+            val anchor = path.current!!
+            val played = List(2) {
+                val next = path.next!!
+                path = path.arrive(next.token, ids)
+                assertEquals(next, path.current)
+                next
+            }
+            for (visit in listOf(played[0], anchor)) {
+                assertEquals(visit, path.previous)
+                path = path.arrive(visit.token, ids)
+                assertEquals(visit, path.current)
+            }
+            val predecessors = listOf(2, 1).map { index ->
+                val previous = path.previous!!
+                assertEquals(ids[index], previous.entryId)
+                path = path.arrive(previous.token, ids)
+                assertEquals(previous, path.current)
+                previous
+            }
+            for (visit in listOf(predecessors[0], anchor) + played) {
+                assertEquals(visit, path.next)
+                path = path.arrive(visit.token, ids)
+                assertEquals(visit, path.current)
+            }
+            assertFalse(path.next!!.entryId in path.visited)
+        }
+    }
+
     @Test fun seededTracesPreserveFrozenEntryCycleHistoryAndPermutationSemantics() {
         for (seed in 0..31) {
             val choices = Random(seed)
