@@ -67,88 +67,6 @@ class ArtworkEditRestorationTest {
 
     private var fixtureIndex = 0
     private var fixtureTag = ""
-    // Read pinned callback captures only; never invoke or replace an action.
-    private fun <T : Any> observed(root: Any?, type: Class<T>): T? {
-        val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
-        fun find(value: Any?, depth: Int): T? {
-            if (type.isInstance(value)) return type.cast(value)
-            if (value == null || depth == 0 || !seen.add(value)) return null
-            if (value !is Function<*> && value !is androidx.compose.ui.Modifier.Node) return null
-            var owner: Class<*>? = value.javaClass
-            while (owner != null && owner != Any::class.java) {
-                for (field in owner.declaredFields.filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) }) {
-                    val child = runCatching { field.isAccessible = true; field.get(value) }.getOrNull()
-                    find(child, depth - 1)?.let { return it }
-                }
-                owner = owner.superclass
-            }
-            return null
-        }
-        return find(root, 12)
-    }
-    private fun field(value: Any?, name: String): Any? = runCatching {
-        value?.javaClass?.getDeclaredField(name)?.apply { isAccessible = true }?.get(value)
-    }.getOrNull()
-    private fun observedArtworkClick(relocation: io.github.anastaci1a.localica.ui.engine.NativeViewportRelocation?) {
-        val button = compose.onPopupAction(hasContentDescription("Choose artwork"))
-        val node = button.fetchSemanticsNode()
-        val body = compose.onNodeWithTag("tag-editor-body").fetchSemanticsNode()
-        val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
-        val scroll = observed(body.config[SemanticsProperties.VerticalScrollAxisRange].value,
-            androidx.compose.foundation.ScrollState::class.java)
-        val artwork = observed(node.config[SemanticsActions.OnClick].action,
-            io.github.anastaci1a.localica.ui.ArtworkWorkflow::class.java)
-        val samples = ArrayDeque<String>()
-        fun sample(label: String) {
-            val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
-            val row = "$label time=${android.os.SystemClock.uptimeMillis()} button=${node.boundsInRoot} " +
-                "body=${body.boundsInRoot} scroll=${body.config[SemanticsProperties.VerticalScrollAxisRange].value()} " +
-                "progress=${scroll?.isScrollInProgress} stage=${artwork?.stage} " +
-                "native=${relocation?.result} mode=${field(relocation, "mode")} frame=${field(relocation, "frame")} " +
-                "ime=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom} focus=${view.hasWindowFocus()}"
-            if (label != "draw") android.util.Log.i("Chooser530", row)
-            else {
-                if (samples.size == 80) samples.removeFirst()
-                samples.addLast(row)
-            }
-        }
-        val draw = android.view.ViewTreeObserver.OnDrawListener { sample("draw") }
-        val tree = view.viewTreeObserver
-        compose.runOnUiThread { tree.addOnDrawListener(draw); sample("before-scroll") }
-        val restoreSenders = mutableListOf<() -> Unit>()
-        try {
-            button.performScrollTo()
-            compose.runOnUiThread { sample("before-click") }
-            button.performTouchInput {
-                // Keep the pinned performClick implementation's exact click batch and sender.
-                val getter = javaClass.getDeclaredMethod("getInputDispatcher").apply { isAccessible = true }
-                val dispatcher = getter.invoke(this)
-                val field = dispatcher.javaClass.getDeclaredField("sendEvent").apply { isAccessible = true }
-                val original = field.get(dispatcher) as (android.view.InputEvent) -> Unit
-                val measured: (android.view.InputEvent) -> Unit = { event ->
-                    val motion = event as? android.view.MotionEvent
-                    val detail = "action=${motion?.actionMasked} x=${motion?.x} y=${motion?.y} event=${event.eventTime}"
-                    sample("dispatch-before $detail")
-                    original(event)
-                    sample("dispatch-after $detail")
-                }
-                field.set(dispatcher, measured)
-                restoreSenders += { field.set(dispatcher, original) }
-                click()
-            }
-            compose.runOnUiThread {
-                sample("after-click")
-                android.util.Log.i("Chooser530", "workflow=${artwork?.stage} target=${artwork?.target}")
-            }
-            chooseRecent()
-        } finally {
-            compose.runOnUiThread {
-                restoreSenders.forEach { it() }
-                if (tree.isAlive) tree.removeOnDrawListener(draw)
-                samples.forEach { android.util.Log.i("Chooser530", it) }
-            }
-        }
-    }
     private fun chooseRecent() {
         compose.waitUntil(10000) {
             compose.onAllNodesWithContentDescription("Choose recent image").fetchSemanticsNodes().isNotEmpty()
@@ -315,14 +233,10 @@ class ArtworkEditRestorationTest {
     @Test fun closingReopeningAndReplacingTargetDiscardPreviousSession() = withImage {
         compose.runOnUiThread { controller.open(listOf(track())) }
         val firstSession = controller.state.value.sessionId
-        val title = compose.onPopupAction(hasSetTextAction() and hasText("Restoration song")).performScrollTo()
-        val focus = observed(compose.onNodeWithTag("tag-editor-body").fetchSemanticsNode()
-            .config[SemanticsProperties.VerticalScrollAxisRange].value,
-            io.github.anastaci1a.localica.ui.layout.PopupEditorFocus::class.java)
-        val relocation = field(field(focus, "handle"), "owner") as?
-            io.github.anastaci1a.localica.ui.engine.NativeViewportRelocation
-        title.performTextReplacement("Discard this draft")
-        observedArtworkClick(relocation)
+        compose.onPopupAction(hasSetTextAction() and hasText("Restoration song"))
+            .performScrollTo().performTextReplacement("Discard this draft")
+        compose.onPopupAction(hasContentDescription("Choose artwork")).performScrollTo().performClick()
+        chooseRecent()
         compose.runOnUiThread { controller.close(); controller.open(listOf(track())) }
         assertNotEquals(firstSession, controller.state.value.sessionId)
         compose.awaitPopupGone(hasTestTag("artwork-crop"))

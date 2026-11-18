@@ -4,6 +4,8 @@ package io.github.anastaci1a.localica
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -15,6 +17,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollDispatcher
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.*
@@ -50,7 +54,7 @@ class PopupEditorFocusOwnershipTest {
             if (offset < 0f) offset else (offset + size - containerSize).coerceAtLeast(0f)
     }
 
-    private fun setup(activate: (() -> Unit)? = null) {
+    private fun setup(consumeDown: Boolean = false, activate: (() -> Unit)? = null) {
         compose.setContent { LocalicaTheme {
             state = rememberScrollState()
             scope = rememberCoroutineScope()
@@ -64,8 +68,11 @@ class PopupEditorFocusOwnershipTest {
                 owner = remember(handle) { PopupEditorFocus(state,
                     bottomInsets { current }, bottomInsets { source }, bottomInsets { target }, handle) }
                 DisposableEffect(owner) { onDispose { owner.dispose() } }
+                val ancestor = if (consumeDown) Modifier.pointerInput(Unit) {
+                    awaitEachGesture { awaitFirstDown(false, PointerEventPass.Initial).consume() }
+                } else Modifier
                 PopupEditorBodySlot(owner, Modifier.controlVerticalScroll(state),
-                    Modifier.fillMaxWidth().height(height.dp).testTag("relocation-body")) {
+                    ancestor.fillMaxWidth().height(height.dp).testTag("relocation-body")) {
                     Spacer(Modifier.height(450.dp))
                     Box(Modifier.size(48.dp).focusRequester(focus).focusable()
                         .nestedScroll(object : NestedScrollConnection {}, dispatcher)) {
@@ -116,6 +123,157 @@ class PopupEditorFocusOwnershipTest {
             assertEquals("A stationary contact must not move the body", scroll, state.value)
             assertEquals("The in-bounds button tap must activate while native placement is pending", 2, activations)
         }
+    }
+
+    @Test fun heldContactKeepsNativeFramesFencedUntilTheLastPointer() {
+        setup()
+        val body = compose.onNodeWithTag("relocation-body")
+        val scroll = compose.runOnIdle { state.value }
+        body.performTouchInput { down(0, center); down(1, center + Offset(20f, 0f)) }
+        compose.runOnIdle { target = 200; current = 100 }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(NativeRelocationResult.Superseded, native.result)
+            assertEquals(scroll, state.value)
+            assertFalse(state.isScrollInProgress)
+        }
+        body.performTouchInput { up(0) }
+        compose.runOnIdle { current = 200; source = 200 }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals("The remaining pointer still owns the settled frame", NativeRelocationResult.Superseded, native.result)
+            assertEquals(scroll, state.value)
+        }
+        body.performTouchInput { up(1) }
+        compose.runOnIdle {
+            assertEquals(NativeRelocationResult.Ordinary, native.result)
+            assertEquals("Last UP cannot replay native correction", scroll, state.value)
+            target = 300
+        }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals("A later native change has no orphan contact fence", NativeRelocationResult.Adjusting, native.result)
+            assertTrue(state.isScrollInProgress)
+        }
+    }
+
+    @Test fun cancelledAndDetachedContactsReleaseTheirOwnership() {
+        setup()
+        val body = compose.onNodeWithTag("relocation-body")
+        body.performTouchInput { down(center) }
+        compose.runOnIdle { target = 200 }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(NativeRelocationResult.Superseded, native.result) }
+        body.performTouchInput { cancel() }
+        compose.runOnIdle { current = 200; source = 200 }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(NativeRelocationResult.Ordinary, native.result); target = 300 }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue(state.isScrollInProgress) }
+        body.performTouchInput { down(center) }
+        val detached = compose.runOnIdle {
+            assertEquals(NativeRelocationResult.Superseded, native.result)
+            assertFalse(state.isScrollInProgress)
+            shown = false
+            native
+        }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(NativeRelocationResult.Disposed, detached.result); assertFalse(state.isScrollInProgress) }
+        compose.onRoot().performTouchInput { cancel() }
+        compose.runOnIdle { current = 300; source = 300; shown = true }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue(focus.requestFocus()) }
+        compose.waitForIdle()
+        compose.runOnIdle { target = 400 }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(NativeRelocationResult.Adjusting, native.result); assertTrue(state.isScrollInProgress) }
+    }
+
+    @Test fun ancestorConsumedDownYieldsNativeLeaseWithoutActivatingChild() {
+        var activations = 0
+        setup(consumeDown = true) { activations++ }
+        compose.runOnIdle { target = 200 }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(NativeRelocationResult.Adjusting, native.result); assertTrue(state.isScrollInProgress) }
+        val button = compose.onNodeWithTag("relocation-action").assertIsDisplayed()
+        button.performTouchInput { down(center) }
+        compose.runOnIdle { assertEquals(NativeRelocationResult.Superseded, native.result); assertFalse(state.isScrollInProgress) }
+        button.performTouchInput { up() }
+        compose.runOnIdle { assertEquals("Contact observation cannot unconsume an ancestor's DOWN", 0, activations) }
+    }
+
+    @Test fun physicalDragFlingKeepsNativeFramesSupersededAcrossRelease() {
+        setup()
+        val body = compose.onNodeWithTag("relocation-body")
+        compose.mainClock.autoAdvance = false
+        try {
+            body.performTouchInput { down(center); moveBy(Offset(0f, -80f), delayMillis = 16) }
+            compose.runOnUiThread { assertTrue(state.isScrollInProgress); target = 200; current = 100 }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            val held = compose.runOnUiThread { assertEquals(NativeRelocationResult.Superseded, native.result); state.value }
+            compose.runOnUiThread { current = 160 }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.runOnUiThread { assertEquals("No native write while contact is held", held, state.value) }
+            body.performTouchInput { moveBy(Offset(0f, -80f), delayMillis = 16); up() }
+            compose.waitForIdle()
+            compose.runOnUiThread {
+                assertTrue("Physical release must start a real fling", state.isScrollInProgress)
+                assertEquals(NativeRelocationResult.Superseded, native.result)
+                current = 200; source = 200
+            }
+            var before = compose.runOnUiThread { state.value }
+            repeat(3) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                compose.runOnUiThread {
+                    assertTrue("Native completion cannot cancel the real fling", state.isScrollInProgress)
+                    assertEquals(NativeRelocationResult.Superseded, native.result)
+                    assertTrue("Fling continues forward without native catch-up", state.value >= before)
+                    before = state.value
+                }
+            }
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            val stopped = compose.runOnIdle { assertFalse(state.isScrollInProgress); state.value }
+            repeat(3) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            compose.runOnIdle {
+                assertEquals(NativeRelocationResult.Ordinary, native.result)
+                assertEquals("A completed fling must not replay the superseded correction", stopped, state.value)
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun buttonTapDuringRealUserFlingStopsWithoutActivation() {
+        var activations = 0
+        setup { activations++ }
+        val button = compose.onNodeWithTag("relocation-action").assertIsDisplayed()
+        button.performTouchInput { down(center); up() }
+        compose.runOnIdle { assertEquals(1, activations) }
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithTag("relocation-body").performTouchInput {
+                swipeWithVelocity(center, center - Offset(0f, 160f), endVelocity = 1800f, durationMillis = 120)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            val before = compose.runOnUiThread { state.value }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.runOnUiThread {
+                assertTrue("The physical release must still be flinging", state.isScrollInProgress)
+                assertTrue("The fling has moved across frames", state.value > before)
+                assertEquals("This is ordinary user scrolling, not native correction", NativeRelocationResult.Ordinary, native.result)
+            }
+            button.assertIsDisplayed().performTouchInput { down(center); up() }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.runOnUiThread {
+                assertFalse("The tap interrupts the real user fling", state.isScrollInProgress)
+                assertEquals("A fling-interruption tap must not activate the button", 1, activations)
+            }
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     private fun flingCase(cancel: Boolean) {
