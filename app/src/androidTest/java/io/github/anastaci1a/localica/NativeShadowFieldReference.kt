@@ -19,24 +19,27 @@ internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pa
     require(bodies.isNotEmpty() && density.isFinite() && density > 0f && strength.isFinite() && spread.isFinite())
     require(Color.alpha(background) == 255)
     require(scaleX.isFinite() && scaleY.isFinite() && scaleX > 0f && scaleY > 0f)
+    val ox = bodies.minOf { it.first.left }; val oy = bodies.minOf { it.first.top }
+    val geometry = shadowScreenBodies(bodies, androidx.compose.ui.geometry.Offset(-ox, -oy))
     val reach = 48f * spread * density
     val shift = 8f * density
     require(reach.isFinite() && reach >= 0f)
     val count = ceil(reach * (7f / 6f)).toInt().coerceIn(16, 128)
-    val opacity = bodies.maxOf { it.second }.coerceIn(0f, 1f)
+    val opacity = geometry.maxOf { it.second }.coerceIn(0f, 1f)
     fun coverage(step: Int): Int = (shadowPolynomialReference(48f - 56f * step / count) * strength * opacity * 255f)
         .roundToInt().coerceIn(0, 255)
-    val uniform = bodies.singleOrNull()?.first?.takeIf { r ->
+    val uniform = geometry.singleOrNull()?.first?.takeIf { r ->
         val c = r.topLeftCornerRadius
         c == r.topRightCornerRadius && c == r.bottomRightCornerRadius && c == r.bottomLeftCornerRadius &&
             c.x >= 0f && c.y >= 0f && c.x <= r.width / 2f && c.y <= r.height / 2f
     }
-    val bounds = RectF(bodies.minOf { it.first.left }, bodies.minOf { it.first.top },
-        bodies.maxOf { it.first.right }, bodies.maxOf { it.first.bottom }).apply {
-        inset(-(reach * scaleX + 1f), -((reach + shift) * scaleY + 1f))
+    val bounds = RectF(geometry.minOf { it.first.left }, geometry.minOf { it.first.top },
+        geometry.maxOf { it.first.right }, geometry.maxOf { it.first.bottom }).apply {
+        inset(-((reach + shift) * scaleX + 1f), -((reach + shift) * scaleY + 1f))
     }
     return renderNativeReferenceImage(width, height, "independent-uncut-field-reference") { canvas ->
         canvas.drawColor(background)
+        canvas.translate(ox, oy)
         fun field() {
             canvas.saveLayer(bounds, null)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
@@ -57,7 +60,7 @@ internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pa
                             (uniform.topLeftCornerRadius.x + ex).coerceAtLeast(0f), (uniform.topLeftCornerRadius.y + ey).coerceAtLeast(0f), paint)
                     } else {
                         val ring = Path().apply {
-                            bodies.forEach { (r, _) ->
+                            geometry.forEach { (r, _) ->
                                 if (r.width + 2f * ex <= 0f || r.height + 2f * ey <= 0f) return@forEach
                                 addRoundRect(r.left - ex, r.top - ey + dy,
                                     r.right + ex, r.bottom + ey + dy,
@@ -73,7 +76,7 @@ internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pa
             }
             canvas.restore()
         }
-        if (excludeInterior) withNativeShadowCutout(canvas, bodies) { field() } else field()
+        if (excludeInterior) withNativeShadowCutout(canvas, geometry) { field() } else field()
     }
 }
 
