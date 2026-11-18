@@ -106,7 +106,6 @@ class ShufflePreviousPlayerTest {
                     if (repeatMode == QueueRepeat.Off) {
                         click("Play")
                         at(anchor, tracks[3].title, playing = true)
-                        seek(1000)
                     }
                     click("Shuffle: off")
                     await(15_000) { queues.state.value.settings.shuffle && journey().modes.shuffle }
@@ -115,6 +114,7 @@ class ShufflePreviousPlayerTest {
                     if (repeatMode == QueueRepeat.Off) {
                         val previous = journey().previous!!
                         assertEquals(ids[2], previous.entryId)
+                        seek(1000)
                         click("Previous")
                         at(previous, tracks[2].title, playing = true)
                         click("Pause")
