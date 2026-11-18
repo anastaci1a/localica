@@ -21,10 +21,16 @@ import org.junit.Test
 import org.junit.Rule
 import io.github.anastaci1a.localica.navigation.GlassRendererMode
 
-/** Offscreen capture at density 1 with the given composition identities. */
+/** Offscreen capture at density 1, using the live native backend where available. */
 internal fun shadowCapture(width: Int = 200, height: Int = 140, generation: Long = 1, draw: DrawScope.() -> Unit): PresentedCapture {
-    val image = ImageBitmap(width, height)
-    CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), Size(width.toFloat(), height.toFloat()), draw)
+    val size = Size(width.toFloat(), height.toFloat())
+    val image = if (android.os.Build.VERSION.SDK_INT >= 29)
+        renderNativeReferenceImage(width, height, "shadow-oracle-control", opaque = false) { canvas ->
+            CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(canvas), size, draw)
+        }
+    else ImageBitmap(width, height).also {
+        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(it), size, draw)
+    }
     return PresentedCapture(image, listOf("offscreen"), 1, generation, generation, null, System.nanoTime(), offscreen = true)
 }
 internal val probeBody = RoundRect(40f, 40f, 160f, 88f, CornerRadius(24f))

@@ -14,6 +14,7 @@ import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.test.platform.graphics.HardwareRendererCompat
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -22,6 +23,16 @@ import java.util.concurrent.TimeUnit
 internal fun nativeShadowCutoutReference(width: Int, height: Int, bodies: List<Pair<RoundRect, Float>>): ImageBitmap {
     require(width > 0 && height > 0 && bodies.isNotEmpty())
     check(Build.VERSION.SDK_INT >= 29)
+    return renderNativeReferenceImage(width, height, "independent-cutout-reference") { canvas ->
+        canvas.drawColor(AndroidColor.WHITE)
+        withNativeShadowCutout(canvas, bodies) { it.drawColor(AndroidColor.BLACK) }
+    }
+}
+
+/** Preserve the destination path and clip order, without a separately quantized mask. */
+@RequiresApi(29)
+internal fun withNativeShadowCutout(canvas: android.graphics.Canvas, bodies: List<Pair<RoundRect, Float>>,
+    draw: (android.graphics.Canvas) -> Unit) {
     val geometry = bodies.map { it.first }
     val ox = geometry.minOf { it.left }; val oy = geometry.minOf { it.top }
     // Preserve the producer's normalized path and fractional destination translation. No renderer/cache reuse.
@@ -32,22 +43,21 @@ internal fun nativeShadowCutoutReference(width: Int, height: Int, bodies: List<P
                 r.bottomRightCornerRadius.x, r.bottomRightCornerRadius.y,
                 r.bottomLeftCornerRadius.x, r.bottomLeftCornerRadius.y), Path.Direction.CW) }
     }
-    return renderNativeReferenceImage(width, height, "independent-cutout-reference") { canvas ->
-        canvas.drawColor(AndroidColor.WHITE)
-        canvas.save()
-        canvas.translate(ox, oy)
-        canvas.clipOutPath(path)
-        canvas.drawColor(AndroidColor.BLACK)
-        canvas.restore()
-    }
+    canvas.save()
+    canvas.translate(ox, oy)
+    canvas.clipOutPath(path)
+    canvas.translate(-ox, -oy)
+    try { draw(canvas) } finally { canvas.restore() }
 }
 
 /** Offscreen native raster/readback only; callers supply independent plain Canvas primitives. */
 @RequiresApi(29)
 internal fun renderNativeReferenceImage(width: Int, height: Int, name: String,
-    draw: (android.graphics.Canvas) -> Unit): ImageBitmap {
+    opaque: Boolean = true, draw: (android.graphics.Canvas) -> Unit): ImageBitmap {
     require(width > 0 && height > 0)
     check(Build.VERSION.SDK_INT >= 29)
+    val drawingWasEnabled = HardwareRendererCompat.isDrawingEnabled()
+    if (!drawingWasEnabled) HardwareRendererCompat.setDrawingEnabled(true)
     val thread = HandlerThread("native-reference-readback").apply { start() }
     val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
     val renderer = HardwareRenderer()
@@ -61,7 +71,7 @@ internal fun renderNativeReferenceImage(width: Int, height: Int, name: String,
         node.endRecording()
         renderer.setSurface(reader.surface)
         renderer.setContentRoot(node)
-        renderer.setOpaque(true)
+        renderer.setOpaque(opaque)
         val status = renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()
         check(status == HardwareRenderer.SYNC_OK) { "Reference render failed: $status" }
         check(available.await(5, TimeUnit.SECONDS)) { "Reference readback was not delivered" }
@@ -84,5 +94,6 @@ internal fun renderNativeReferenceImage(width: Int, height: Int, name: String,
         reader.close()
         thread.quitSafely()
         thread.join(5000)
+        if (!drawingWasEnabled) HardwareRendererCompat.setDrawingEnabled(false)
     }
 }

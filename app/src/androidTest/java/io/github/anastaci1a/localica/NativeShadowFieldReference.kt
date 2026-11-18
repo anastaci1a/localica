@@ -1,11 +1,8 @@
 package io.github.anastaci1a.localica
 
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.RoundRect
@@ -17,12 +14,11 @@ import kotlin.math.roundToInt
 /** Independent receipt kernel. No production field, shadow, geometry cache or renderer is called. */
 @RequiresApi(29)
 internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pair<RoundRect, Float>>,
-    density: Float, strength: Float, spread: Float, background: Int, outsideMask: Bitmap? = null,
+    density: Float, strength: Float, spread: Float, background: Int, excludeInterior: Boolean = false,
     scaleX: Float = 1f, scaleY: Float = 1f): ImageBitmap {
     require(bodies.isNotEmpty() && density.isFinite() && density > 0f && strength.isFinite() && spread.isFinite())
     require(Color.alpha(background) == 255)
     require(scaleX.isFinite() && scaleY.isFinite() && scaleX > 0f && scaleY > 0f)
-    require(outsideMask == null || outsideMask.width == width && outsideMask.height == height)
     val reach = 48f * spread * density
     val shift = 8f * density
     require(reach.isFinite() && reach >= 0f)
@@ -41,43 +37,43 @@ internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pa
     }
     return renderNativeReferenceImage(width, height, "independent-uncut-field-reference") { canvas ->
         canvas.drawColor(background)
-        canvas.saveLayer(bounds, null)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
-        if (strength > 0f) repeat(count) { index ->
-            val previous = coverage(index)
-            val alpha = if (previous == 255) 0 else
-                (255f * (coverage(index + 1) - previous) / (255 - previous)).roundToInt()
-            if (alpha > 0) {
-                paint.alpha = alpha
-                val expansion = reach * (1f - (7f / 6f) * (index + .5f) / count)
-                val ex = expansion * scaleX
-                val ey = expansion * scaleY
-                val dy = shift * scaleY
-                if (uniform != null) {
-                    if (uniform.width + 2f * ex <= 0f || uniform.height + 2f * ey <= 0f) return@repeat
-                    canvas.drawRoundRect(uniform.left - ex, uniform.top - ey + dy,
-                        uniform.right + ex, uniform.bottom + ey + dy,
-                        (uniform.topLeftCornerRadius.x + ex).coerceAtLeast(0f), (uniform.topLeftCornerRadius.y + ey).coerceAtLeast(0f), paint)
-                } else {
-                    val ring = Path().apply {
-                        bodies.forEach { (r, _) ->
-                            if (r.width + 2f * ex <= 0f || r.height + 2f * ey <= 0f) return@forEach
-                            addRoundRect(r.left - ex, r.top - ey + dy,
-                                r.right + ex, r.bottom + ey + dy,
-                                floatArrayOf((r.topLeftCornerRadius.x + ex).coerceAtLeast(0f), (r.topLeftCornerRadius.y + ey).coerceAtLeast(0f),
-                                    (r.topRightCornerRadius.x + ex).coerceAtLeast(0f), (r.topRightCornerRadius.y + ey).coerceAtLeast(0f),
-                                    (r.bottomRightCornerRadius.x + ex).coerceAtLeast(0f), (r.bottomRightCornerRadius.y + ey).coerceAtLeast(0f),
-                                    (r.bottomLeftCornerRadius.x + ex).coerceAtLeast(0f), (r.bottomLeftCornerRadius.y + ey).coerceAtLeast(0f)), Path.Direction.CW)
+        fun field() {
+            canvas.saveLayer(bounds, null)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
+            if (strength > 0f) repeat(count) { index ->
+                val previous = coverage(index)
+                val alpha = if (previous == 255) 0 else
+                    (255f * (coverage(index + 1) - previous) / (255 - previous)).roundToInt()
+                if (alpha > 0) {
+                    paint.alpha = alpha
+                    val expansion = reach * (1f - (7f / 6f) * (index + .5f) / count)
+                    val ex = expansion * scaleX
+                    val ey = expansion * scaleY
+                    val dy = shift * scaleY
+                    if (uniform != null) {
+                        if (uniform.width + 2f * ex <= 0f || uniform.height + 2f * ey <= 0f) return@repeat
+                        canvas.drawRoundRect(uniform.left - ex, uniform.top - ey + dy,
+                            uniform.right + ex, uniform.bottom + ey + dy,
+                            (uniform.topLeftCornerRadius.x + ex).coerceAtLeast(0f), (uniform.topLeftCornerRadius.y + ey).coerceAtLeast(0f), paint)
+                    } else {
+                        val ring = Path().apply {
+                            bodies.forEach { (r, _) ->
+                                if (r.width + 2f * ex <= 0f || r.height + 2f * ey <= 0f) return@forEach
+                                addRoundRect(r.left - ex, r.top - ey + dy,
+                                    r.right + ex, r.bottom + ey + dy,
+                                    floatArrayOf((r.topLeftCornerRadius.x + ex).coerceAtLeast(0f), (r.topLeftCornerRadius.y + ey).coerceAtLeast(0f),
+                                        (r.topRightCornerRadius.x + ex).coerceAtLeast(0f), (r.topRightCornerRadius.y + ey).coerceAtLeast(0f),
+                                        (r.bottomRightCornerRadius.x + ex).coerceAtLeast(0f), (r.bottomRightCornerRadius.y + ey).coerceAtLeast(0f),
+                                        (r.bottomLeftCornerRadius.x + ex).coerceAtLeast(0f), (r.bottomLeftCornerRadius.y + ey).coerceAtLeast(0f)), Path.Direction.CW)
+                            }
                         }
+                        canvas.drawPath(ring, paint)
                     }
-                    canvas.drawPath(ring, paint)
                 }
             }
+            canvas.restore()
         }
-        outsideMask?.let { canvas.drawBitmap(it, 0f, 0f, Paint().apply {
-            xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-        }) }
-        canvas.restore()
+        if (excludeInterior) withNativeShadowCutout(canvas, bodies) { field() } else field()
     }
 }
 
