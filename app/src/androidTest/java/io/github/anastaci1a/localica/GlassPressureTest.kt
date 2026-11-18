@@ -219,8 +219,10 @@ class GlassPressureTest {
         compose.runOnIdle { presentationStage = (presentationStage + 1) % 32 }
         val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("pressure-scene"), presentationStage) { pressureView }
         fun red(color: Color): Boolean {
-            val blue = (color.blue - (.7001953f - .0599976f)) / (1f - (.7001953f - .0599976f))
-            return color.red > .6f && color.green - (.7001953f - .0599365f) * (1f - blue) < .4f && blue < .4f
+            val green = .7001953f - .0599365f
+            val blue = .7001953f - .0599976f
+            val redAmount = (color.red - color.green) / (1f - green)
+            return color.red > .6f && color.green - green * redAmount < .4f && color.blue - blue * redAmount < .4f
         }
         var lensLeft = pixels.width; var lensTop = pixels.height; var lensRight = -1; var lensBottom = -1
         var shellLeft = pixels.width; var shellTop = pixels.height; var shellRight = -1; var shellBottom = -1
