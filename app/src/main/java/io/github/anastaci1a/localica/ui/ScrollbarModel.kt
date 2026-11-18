@@ -11,15 +11,14 @@ internal class ScrollbarItem(val index: Int, val top: Int, val height: Int)
 
 /** Everything the scrollbar needs from one layout pass. [windowEnd] is the content-area end in item coordinates. */
 internal class ScrollbarFrame(
-    val items: List<ScrollbarItem>, val totalItems: Int, val firstScrollOffset: Int,
-    val windowEnd: Int, val viewport: Int, val atEnd: Boolean,
+    val items: List<ScrollbarItem>, val totalItems: Int, val windowEnd: Int, val viewport: Int, val atEnd: Boolean,
 )
 
 internal fun LazyGridState.scrollbarFrame(): ScrollbarFrame {
     val info = layoutInfo
     return ScrollbarFrame(
         info.visibleItemsInfo.map { ScrollbarItem(it.index, it.offset.y, it.size.height) },
-        info.totalItemsCount, firstVisibleItemScrollOffset,
+        info.totalItemsCount,
         info.viewportEndOffset - info.afterContentPadding,
         (info.viewportEndOffset - info.afterContentPadding - info.viewportStartOffset - info.beforeContentPadding).coerceAtLeast(1),
         !canScrollForward,
@@ -30,7 +29,7 @@ internal fun LazyListState.scrollbarFrame(): ScrollbarFrame {
     val info = layoutInfo
     return ScrollbarFrame(
         info.visibleItemsInfo.map { ScrollbarItem(it.index, it.offset, it.size) },
-        info.totalItemsCount, firstVisibleItemScrollOffset,
+        info.totalItemsCount,
         info.viewportEndOffset - info.afterContentPadding,
         (info.viewportEndOffset - info.afterContentPadding - info.viewportStartOffset - info.beforeContentPadding).coerceAtLeast(1),
         !canScrollForward,
@@ -86,7 +85,7 @@ internal class ScrollbarModel {
         val average = average
         var before = 0f
         for (i in 0 until firstLine) before += if (extent[i].isNaN()) average else extent[i]
-        position = before + frame.firstScrollOffset
+        position = before - items[0].top
         val raw = if (frame.atEnd) 0f else {
             var after = (lastLineBottom - frame.windowEnd).coerceAtLeast(0).toFloat()
             for (i in lastIndex + 1 until frame.totalItems) after += if (extent[i].isNaN()) average else extent[i]

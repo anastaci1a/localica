@@ -28,8 +28,7 @@ class ScrollbarModelTest {
             val s = scroll.coerceIn(0, maxScroll)
             val visible = lines.filter { it.top + it.height > s && it.top < s + viewport }
             val items = visible.flatMap { line -> line.items.map { ScrollbarItem(it, line.top - s, heights[it]) } }
-            val first = visible.first()
-            return ScrollbarFrame(items, heights.size, s - first.top, viewport, viewport, s >= maxScroll)
+            return ScrollbarFrame(items, heights.size, viewport, viewport, s >= maxScroll)
         }
     }
 
