@@ -36,7 +36,7 @@ internal class FrozenS1RimCache {
     }
 }
 
-internal data class FrozenS1RimBrushes(val shine: Brush, val shade: Brush, val light: Lazy<Brush>)
+internal data class FrozenS1RimBrushes(val shine: Brush, val shade: Brush)
 
 internal fun frozenS1RimBrushes(center: Offset, tone: GlassTone): FrozenS1RimBrushes {
     val white = tone.color(Color.White)
@@ -54,29 +54,5 @@ internal fun frozenS1RimBrushes(center: Offset, tone: GlassTone): FrozenS1RimBru
         .375f to black.copy(alpha = .11f), .5f to Color.Transparent,
         .625f to Color.Transparent, .75f to Color.Transparent, .875f to black.copy(alpha = .11f),
         1f to Color.Transparent, center = center)
-    return FrozenS1RimBrushes(shine, shade, lazy {
-        Brush.radialGradient(*FrozenS1Glow.Falloff.map { (position, alpha) -> position to white.copy(alpha = alpha) }.toTypedArray(), center = Offset.Zero, radius = 1f)
-    })
-}
-
-internal fun DrawScope.drawFrozenS1Glow(glow: GlassGlow, shape: () -> S1OpticalState, vertical: Boolean, tone: GlassTone, cache: FrozenS1RimCache) {
-    if (glow.big > 0f) drawRect(tone.color(Color.White), alpha = glow.big * FrozenS1Glow.Gain)
-    if (glow.little > 0f) {
-        val shape = shape()
-        val point = Offset(size.width * (.5f + (glow.point.x - .5f) / shape.scaleX(vertical)),
-            size.height * (.5f + (glow.point.y - .5f) / shape.scaleY(vertical)))
-        val radius = minOf(size.minDimension * FrozenS1Glow.ExtentScale, FrozenS1Glow.ExtentCap.dp.toPx())
-        val brush = cache.brushes(size.center, tone).light.value
-        translate(point.x, point.y) { scale(radius, radius, pivot = Offset.Zero) { drawCircle(brush, 1f, Offset.Zero, alpha = glow.little * FrozenS1Glow.Gain) } }
-    }
-}
-
-internal object FrozenS1Glow {
-    const val Show = .1f
-    const val Hide = .5f
-    const val Follow = .15f
-    const val Gain = .12f
-    const val ExtentScale = .75f
-    const val ExtentCap = 80f
-    val Falloff = listOf(0f to 1f, 1f to 0f)
+    return FrozenS1RimBrushes(shine, shade)
 }

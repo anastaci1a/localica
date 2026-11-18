@@ -21,23 +21,21 @@ class GlassGlowTest {
         val w = 2 * PI / response
         return (1 - (1 + w * time) * exp(-w * time)).toFloat()
     }
+    private fun records(body: GlassMomentum) = body.javaClass.getDeclaredField("locals").apply { isAccessible = true }.get(body) as List<*>
     private fun channels(body: GlassMomentum): List<List<Float>> {
-        val field = body.javaClass.getDeclaredField("light").apply { isAccessible = true }
-        return (field.get(body) as List<*>).map { spring ->
-            listOf("value", "velocity", "target").map { name ->
-                spring!!.javaClass.getDeclaredField(name).apply { isAccessible = true }.getFloat(spring)
-            }
-        }
+        val broad = body.javaClass.getDeclaredField("broad").apply { isAccessible = true }.get(body)
+        val local = records(body).lastOrNull()?.let { it.javaClass.getDeclaredField("light").apply { isAccessible = true }.get(it) as List<*> } ?: emptyList<Any>()
+        return (listOf(broad) + local).map { spring -> listOf("value", "velocity", "target").map { name -> spring!!.javaClass.getDeclaredField(name).apply { isAccessible = true }.getFloat(spring) } }
     }
 
     @Test fun extractedTimingAndOpacitySelectionKeepSpatialValuesExplicit() {
         assertEquals(.1f, FlexGlow.Show, 0f)
         assertEquals(.5f, FlexGlow.Hide, 0f)
-        assertEquals(.15f, FlexGlow.Follow, 0f)
-        assertEquals(.12f, FlexGlow.Gain, 0f)
+        assertEquals(.15f, FlexGlow.InitialResponse, 0f)
+        assertEquals(.0015f, FlexGlow.TrackingResponse, 0f)
+        assertEquals(1f, FlexGlow.SmoothingResponse, 0f)
         assertEquals(.75f, FlexGlow.ExtentScale, 0f)
         assertEquals(80f, FlexGlow.ExtentCap, 0f)
-        assertEquals(listOf(0f to 1f, 1f to 0f), FlexGlow.Falloff)
         for (short in listOf(44f, 102f, 160f)) {
             val t = ((short - 44f) / 116f).coerceIn(0f, 1f)
             val spec = FlexSpec.dynamic(240f, short)
@@ -62,15 +60,14 @@ class GlassGlowTest {
                 val error = abs(expected - body.glow.big)
                 worst = maxOf(worst, error)
                 assertTrue("show fps=$fps frame=$frame error=$error", error <= .09f)
-                assertEquals(body.glow.big, body.glow.little, 0f)
+                assertEquals("local epoch follows its independent Show response", expected, body.glow.little, .09f)
             }
             assertEquals(1f, body.glow.big, 0f)
             val moved = Offset(1.25f, -.25f)
             repeat(fps) { frame ->
                 step(body, fps, moved, 1f)
-                val progress = critical((frame + 1.0) / fps, .15)
-                assertEquals(down.x + progress, body.glow.point.x, .06f)
-                assertEquals(down.y - progress, body.glow.point.y, .06f)
+                assertTrue(body.glow.point.x in down.x..1.000001f)
+                assertTrue(body.glow.point.y in -.000001f..down.y)
             }
             repeat(fps * 2) { frame ->
                 step(body, fps, moved, 0f)
@@ -78,13 +75,15 @@ class GlassGlowTest {
                 assertEquals("hide fps=$fps frame=$frame", expected, body.glow.big, .02f)
             }
             assertEquals(0f, body.glow.big, 0f)
+            assertTrue("local tail remains analytic until Float-zero", body.glow.little > 0f)
+            repeat(fps * 10) { step(body, fps, moved, 0f) }
             assertEquals(0f, body.glow.little, 0f)
             assertTrue(body.settled)
         }
         println("critical show max absolute error=$worst bound=0.09")
     }
 
-    @Test fun repressKeepsAlphaEnergyAndSnapsOnlyTheNewCentre() {
+    @Test fun repressKeepsRetiringEnergyAndStartsAnIndependentFreshLocal() {
         for (releaseFrames in listOf(1, 4, 12, 30)) {
             val body = GlassMomentum()
             repeat(60) { step(body, 120, Offset(.2f, .7f), 1f) }
@@ -92,10 +91,13 @@ class GlassGlowTest {
                 step(body, 120, Offset(.2f, .7f), 0f)
                 assertTrue(body.glow.big in 0f..1f && body.glow.little in 0f..1f)
             }
-            val before = channels(body)
+            val before = channels(body); val old = records(body).last()
             body.targetGlow(Offset(.8f, .3f), 1f, 1f)
             val after = channels(body)
-            for (channel in 0..1) for (field in 0..1) assertEquals(before[channel][field], after[channel][field], 0f)
+            for (field in 0..1) assertEquals(before[0][field], after[0][field], 0f)
+            assertSame(old, records(body).first())
+            assertEquals(before[1][0], body.glow.retiring.single().little, 0f)
+            assertEquals(0f, after[1][0], 0f); assertEquals(0f, after[1][1], 0f)
             assertEquals(Offset(.8f, .3f), body.glow.point)
             assertEquals(0f, after[2][1], 0f)
             assertEquals(0f, after[3][1], 0f)
@@ -121,8 +123,9 @@ class GlassGlowTest {
                     assertEquals("disabled settlement frame=$frame", plain.settled, lit.settled)
                 }
             }
-            assertTrue(lit.settled)
             assertEquals(GlassShape(), lit.shape)
+            repeat(fps * 10) { step(lit, fps, Offset(.5f, .5f), 0f, strength) }
+            assertTrue(lit.settled)
             assertEquals(0f, lit.glow.big, 0f)
         }
     }
@@ -139,8 +142,10 @@ class GlassGlowTest {
         val joined = GlassMomentum()
         joined.blendFrom(a, b, .25f, -1f, 1f)
         val actual = channels(joined)
-        for (channel in 0..3) for (field in 0..2)
-            assertEquals(left[channel][field] * .75f + right[channel][field] * .25f, actual[channel][field], 0f)
+        for (field in 0..2) assertEquals(left[0][field] * .75f + right[0][field] * .25f, actual[0][field], 0f)
+        assertEquals(left[1][0] * .75f, joined.glow.retiring.single().little, 0f)
+        assertEquals(right[1][0] * .25f, joined.glow.little, 0f)
+        for (channel in 2..5) for (field in 0..2) assertEquals(right[channel][field], actual[channel][field], 0f)
         joined.reset()
         assertEquals(GlassGlow(), joined.glow)
         assertTrue(joined.settled)
@@ -169,7 +174,7 @@ class GlassGlowTest {
             body.targetGlow(Offset(.5f, .5f), 0f, 1f)
             val after = channels(body)
             for (channel in 0..1) for (field in 0..1) assertEquals(before[channel][field], after[channel][field], 0f)
-            repeat(2000) {
+            repeat(12000) {
                 body.advance(0f, (.001f).toDouble())
                 body.finishSettlement()
                 assertTrue("release at $ms ms", body.glow.big in 0f..1f && body.glow.little in 0f..1f)
@@ -183,7 +188,7 @@ class GlassGlowTest {
             body.spec = FlexSpec.dynamic(240f, 160f)
             repeat(releaseFrames) { step(body, 120, Offset(.5f, .5f), 1f) }
             var negative = false
-            repeat(360) {
+            repeat(1440) {
                 step(body, 120, Offset(.5f, .5f), 0f)
                 for (alpha in listOf(body.glow.big, body.glow.little)) {
                     negative = negative || alpha < 0f

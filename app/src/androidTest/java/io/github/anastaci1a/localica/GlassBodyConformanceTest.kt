@@ -34,7 +34,7 @@ class GlassBodyConformanceTest {
         return apply(0, 1).add(bd(target.toDouble()), precision).toFloat() to apply(2, 3).toFloat()
     }
     private fun spring(body: GlassMomentum, name: String): Any = body.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(body)
-    private fun lights(body: GlassMomentum) = body.javaClass.getDeclaredField("light").apply { isAccessible = true }.get(body) as List<*>
+    private fun lights(body: GlassMomentum) = glowChannels(body)
     private fun get(spring: Any, name: String) = spring.javaClass.getDeclaredField(name).apply { isAccessible = true }.getFloat(spring)
     private fun set(spring: Any, name: String, value: Float) = spring.javaClass.getDeclaredField(name).apply { isAccessible = true }.setFloat(spring, value)
     private fun state(body: GlassMomentum) = (listOf(spring(body, "motion"), spring(body, "pressure"), spring(body, "depth")) + lights(body).map { it!! })
@@ -132,15 +132,15 @@ class GlassBodyConformanceTest {
         for (long in listOf(0f, 44f, 64f, 119f, Math.nextDown(120f), 120f, Math.nextUp(120f), 128f, 160f, 240f))
             for (short in listOf(0f, 44f, 64f, 160f)) for (strength in listOf(0f, .5f, 1f)) {
                 val t = ((long - 44f) / 116f).coerceIn(0f, 1f)
-                val u = ((short - 44f) / 116f).coerceIn(0f, 1f)
-                val expected = if (long < 120f) FlexSpec(.375f, .4f, .625f, .262f) else FlexSpec(.375f + .225f * t, .4f - .04f * t, .625f, .262f + .052f * t, 1f - u, .3f - .1f * u, lift = FlexPress.Large)
+                val u = ((short.toDouble() - 44) / 116).coerceIn(0.0, 1.0)
+                val expected = if (long < 120f) FlexSpec(.375f, .4f, .625f, .262f) else FlexSpec(.375f + .225f * t, .4f - .04f * t, .625f, .262f + .052f * t, Math.fma(1 - u, 1.0, u * 0.0).toFloat(), Math.fma(1 - u, .3, u * .2).toFloat(), lift = FlexPress.Large)
                 val body = GlassMomentum(FlexSpec.Small).apply { spec = FlexSpec.dynamic(long, short) }
                 assertEquals(expected, body.spec)
                 body.advance(0f, 0.0, contact = 1f, damping = 40f)
                 assertEquals((2 * PI / FlexSpec.Small.trackingResponse).pow(2), coefficient(body, "stiffness").toDouble(), 0.0)
                 body.targetGlow(Offset(.4f, .6f), 1f, strength)
                 assertEquals((expected.bigOpacity * strength).toBits(), get(lights(body)[0]!!, "target").toBits())
-                assertEquals((expected.littleOpacity * strength).toBits(), get(lights(body)[1]!!, "target").toBits())
+                assertEquals((expected.littleOpacity * strength).toBits(), (lights(body).getOrNull(1)?.let { get(it, "target") } ?: 0f).toBits())
                 if (strength == 0f) assertEquals(GlassGlow(), body.glow)
             }
         val body = GlassMomentum(FlexSpec.Small.copy(scaleGain = -(16f / 64f) / .24f))
@@ -167,6 +167,7 @@ class GlassBodyConformanceTest {
 
     @Test fun completionFinishesBodyAndEachLightIndependentlyAndTransfersEveryRawScalar() {
         val a = GlassMomentum(); val b = GlassMomentum(); val joined = GlassMomentum()
+        a.targetGlow(Offset(.2f, .4f), 1f, 1f); b.targetGlow(Offset(.8f, .6f), 1f, 1f)
         val allA = listOf(spring(a, "motion"), spring(a, "pressure"), spring(a, "depth")) + lights(a).map { it!! }
         val allB = listOf(spring(b, "motion"), spring(b, "pressure"), spring(b, "depth")) + lights(b).map { it!! }
         for ((i, item) in allA.withIndex()) for ((j, field) in listOf("value", "velocity", "target").withIndex()) {
@@ -175,13 +176,28 @@ class GlassBodyConformanceTest {
         }
         val left = state(a); val right = state(b)
         joined.blendFrom(a, b, .25f, -1f, 1f)
-        for ((i, actual) in state(joined).withIndex()) assertEquals(left[i] * (if (i < 6) -1f else 1f) * .75f + right[i] * .25f, actual, 0f)
+        for ((i, actual) in state(joined).take(12).withIndex()) assertEquals(left[i] * (if (i < 6) -1f else 1f) * .75f + right[i] * .25f, actual, 0f)
+        val records = glowRecords(joined)
+        assertEquals(2, records.size)
+        for ((index, source) in listOf(a, b).withIndex()) {
+            val weight = if (index == 0) .75f else .25f
+            val expected = glowChannels(glowRecords(source).single()!!)
+            val actual = glowChannels(records[index]!!)
+            for (channel in actual.indices) for (field in listOf("value", "velocity", "target")) {
+                if (index == 0 && field == "target" && channel in listOf(0, 4)) continue // Retired: alpha 0 and scale 4.
+                assertEquals(get(expected[channel]!!, field) * if (channel == 0) weight else 1f, get(actual[channel]!!, field), 0f)
+            }
+            assertEquals(if (index == 0) 0f else get(expected[0]!!, "target") * weight, get(actual[0]!!, "target"), 0f)
+        }
         val k = coefficient(joined, "stiffness")
         joined.blendFrom(joined, aAxis = -1f, bAxis = -1f)
         assertEquals(k, coefficient(joined, "stiffness"))
         a.reset()
+        a.targetGlow(Offset(.5f, .5f), 1f, 1f)
+        lights(a).forEach { set(it, "target", get(it, "value")) }
         set(spring(a, "depth"), "target", -.24f); set(spring(a, "depth"), "value", -.23999f)
         set(lights(a)[0]!!, "value", .3f); set(lights(a)[1]!!, "value", .00001f)
+        seedGlowEpoch(a)
         assertFalse(a.finishSettlement())
         assertEquals(-.24f, get(spring(a, "depth"), "value"), 0f)
         assertEquals(.3f, a.glow.big, 0f)

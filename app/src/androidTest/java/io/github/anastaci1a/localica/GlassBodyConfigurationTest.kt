@@ -45,8 +45,8 @@ class GlassBodyConfigurationTest {
     }
     private fun alphaTargets(contact: GlassContact): List<Float> {
         val body = contact.state.momentum
-        val lights = body.javaClass.getDeclaredField("light").apply { isAccessible = true }.get(body) as List<*>
-        return lights.take(2).map { it!!.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(it) }
+        val lights = glowChannels(body)
+        return lights.take(2).map { it.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(it) }.let { if (it.size == 1) it + 0f else it }
     }
 
     @Test fun measuredFreshActionAndSharedAnchorKeepTheirDistinctConfigurationAcrossResizeAndReducedMotion() {

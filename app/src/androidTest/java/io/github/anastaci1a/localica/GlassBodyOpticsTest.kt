@@ -17,6 +17,7 @@ internal class S1OpticalState(val strain: Float, rawDepth: Float, gain: Float?) 
     val depth = .24f * tanh(rawDepth / .24f)
     val thickness = exp(depth)
     private val scale = gain?.let { 1f + it * rawDepth }
+    val shape get() = GlassShape(strain, depth, scale)
     fun scaleX(vertical: Boolean) = scale?.let { it * exp(if (vertical) -strain else strain) } ?: exp((if (vertical) -strain else strain) - depth / 2)
     fun scaleY(vertical: Boolean) = scale?.let { it * exp(if (vertical) strain else -strain) } ?: exp((if (vertical) strain else -strain) - depth / 2)
 }
@@ -36,15 +37,17 @@ class GlassBodyOpticsTest {
         val image = ImageBitmap(112, 96)
         try {
             CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(image), Size(111.5f, 95.25f)) {
+                fun DrawScope.backing() {
                 drawRect(Color(0xff405060))
                 if (background > 0) for (y in 0 until 96 step 4) for (x in 0 until 112 step 4)
                     drawRect(if (background == 1) { if ((x + y) % 8 == 0) Color.White else Color.Black }
                         else Color(0xff000000.toInt() or ((x * 23 + y * 47) and 0xffffff)), Offset(x.toFloat(), y.toFloat()), Size(4f, 4f))
+                }
+                backing()
                 val bounds = Rect(.25f, .5f, 111f, 95f)
                 val path = Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(19.5f))) }
                 clipPath(path) {
-                    if (frozen) drawFrozenS1Glow(glow, { original }, true, tone, FrozenS1RimCache())
-                    else drawContactGlow(glow, { shape }, true, tone, GlassRimCache())
+                    drawTouchLightFixture(glow, if (frozen) original.shape else shape, true, GlassRimCache(), bounds) { backing() }
                     if (frozen) drawOriginalGlassRim(bounds, 19.5f, path, tone)
                     else drawGlassRim(bounds, 19.5f, path, tone, cache = GlassRimCache())
                 }

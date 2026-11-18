@@ -11,6 +11,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import io.github.anastaci1a.localica.ui.spec.*
 enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostics }; enum class ShadowRole { None,Glass,Lift,Glow }
 @Immutable data class SurfaceTransform(val translation: Offset=Offset.Zero,val scale: Float=1f,val pivot: Offset=Offset.Zero) { init { require(translation.isFinite && pivot.isFinite && scale.isFinite() && scale>0) { "A surface transform needs finite offsets and a positive scale" } }
@@ -217,4 +221,66 @@ internal class LayoutShape(override val key: Any,internal var plane: ShadowPlane
         onDispose { if(node.sourceGeneration==generation) onNode?.invoke(node,false); node.releaseSource(generation) }
     }
     return onGloballyPositioned { shape.coordinates=it; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { plane.revision++ } }
+}
+
+internal typealias ContactLightPass = androidx.compose.ui.graphics.drawscope.DrawScope.(androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit) -> Unit
+
+@Composable internal fun ContactLightBacking(modifier: Modifier, enabled: () -> Boolean,
+    geometry: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Pair<Rect, Float>, background: androidx.compose.ui.graphics.Color,
+    effect: androidx.compose.ui.graphics.drawscope.DrawScope.(Pair<Rect, Float>) -> androidx.compose.ui.graphics.RenderEffect?, reduction: () -> androidx.compose.ui.graphics.RenderEffect?,
+    paint: androidx.compose.ui.graphics.drawscope.DrawScope.(Pair<Rect, Float>) -> List<ContactLightPass>, content: @Composable () -> Unit) {
+    val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
+    val layers = remember { mutableListOf<androidx.compose.ui.graphics.layer.GraphicsLayer>() }
+    fun layer(index: Int): androidx.compose.ui.graphics.layer.GraphicsLayer { while (layers.size <= index) layers.add(graphics.createGraphicsLayer()); return layers[index] }
+    DisposableEffect(graphics) { onDispose { layers.forEach(graphics::releaseGraphicsLayer) } }
+    androidx.compose.foundation.layout.Box(modifier.drawWithContent {
+        if (!enabled()) drawContent() else {
+            val g = geometry(); if (g.first.isEmpty) { drawContent(); return@drawWithContent }
+            val extent = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt()); val backing = layer(0)
+            backing.record(size = extent) { drawRoundRect(background, g.first.topLeft, g.first.size, CornerRadius(g.second)); this@drawWithContent.drawContent() }
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                val mean = layer(1); val atlas = layer(2)
+                mean.renderEffect = reduction()
+                mean.record(size = androidx.compose.ui.unit.IntSize(8, 8)) { scale(8f / g.first.width, 8f / g.first.height, Offset.Zero) { translate(-g.first.left, -g.first.top) { drawLayer(backing) } } }
+                atlas.renderEffect = effect(g)
+                atlas.record(size = androidx.compose.ui.unit.IntSize(extent.width, extent.height + 1)) {
+                    drawLayer(backing); translate(0f, extent.height.toFloat()) { scale(.125f, .125f, Offset.Zero) { drawLayer(mean) } }
+                }
+                clipRect { drawLayer(atlas) }
+            } else {
+                var input = backing
+                val passes = paint(g)
+                passes.forEachIndexed { index, pass ->
+                    val previous = input; val output = layer(index + 1)
+                    output.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+                    output.record(size = extent) { drawLayer(previous); pass { drawLayer(previous) } }; input = output
+                }
+                drawLayer(input)
+                while (layers.size > passes.size + 1) graphics.releaseGraphicsLayer(layers.removeAt(layers.lastIndex))
+            }
+        }
+    }) { content() }
+}
+
+internal fun drawContactLight(scope: androidx.compose.ui.graphics.drawscope.DrawScope, bounds: Rect, point: Offset,
+    pixelScale: Float, expansion: Float, broad: Float, local: Float, broadPaint: androidx.compose.ui.graphics.Paint,
+    localPaint: androidx.compose.ui.graphics.Paint, mask: androidx.compose.ui.graphics.ImageBitmap?,
+    backing: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit) = with(scope) {
+    val canvas = drawContext.canvas
+    fun pass(alpha: Float, paint: androidx.compose.ui.graphics.Paint, draw: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit) {
+        if (alpha <= 0f) return
+        paint.alpha = alpha.coerceIn(0f, 1f)
+        canvas.saveLayer(bounds, paint)
+        try { clipRect(bounds.left, bounds.top, bounds.right, bounds.bottom) { draw() } } finally { canvas.restore() }
+    }
+    pass(broad, broadPaint) { backing() }
+    if (mask != null) pass(local, localPaint) {
+        val left = point.x - mask.width * pixelScale / 2; val top = point.y - mask.height * pixelScale / 2
+        clipRect(left, top, left + mask.width * pixelScale, top + mask.height * pixelScale) {
+            scale(expansion, expansion, point) { backing() }
+            translate(left, top) {
+                scale(pixelScale, pixelScale, Offset.Zero) { drawImage(mask, blendMode = androidx.compose.ui.graphics.BlendMode.DstIn) }
+            }
+        }
+    }
 }
