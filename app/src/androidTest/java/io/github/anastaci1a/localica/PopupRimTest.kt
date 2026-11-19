@@ -21,7 +21,6 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 
 /** Exercise the real panel finish without lens sampling or child shadows. Compare each
  * wall with nearby coating: changing aspect must not stretch a corner glint into a strip. */
@@ -39,9 +38,9 @@ class PopupRimTest {
                 Canvas(Modifier.fillMaxSize()) {
                     drawRect(Color(0xFF24262A))
                 }
-                LiquidGlassSurface(Modifier.fillMaxSize(), source = null, cornerRadius = 28.dp,
-                    panelProgress = 1f, panelDark = true, inkOverride = Color.White,
-                    refraction = 0f, shadow = false, pressFeedback = false)
+                // The open popup's own material route (#748): one record, the shared rim, no popup-only finish.
+                LiquidGlassSurface(Modifier.fillMaxSize(), source = null, cornerRadius = 28.dp, shadow = false, pressFeedback = false,
+                    presentation = { GlassSurfacePresentation(1f, 0f, 1f, Color.Transparent, 1f) }, presentedRadius = { 28.dp })
                 PresentationMarker { 1 }
             } }
         }
@@ -73,10 +72,6 @@ class PopupRimTest {
             }
         }
         assertTrue("Flat walls must not carry a corner highlight: ${flat.max()}", flat.max() < .055f)
-        val corner = (radius * (1f - 1f / sqrt(2f)) + inset / sqrt(2f)).roundToInt()
-        assertTrue("Retain the intentional top-left glint", brightness(corner, corner) > brightness(corner + inner, corner + inner) + .12f)
-        assertTrue("Retain the opposing bottom-right glint",
-            brightness(pixels.width - 1 - corner, pixels.height - 1 - corner) >
-                brightness(pixels.width - 1 - corner - inner, pixels.height - 1 - corner - inner) + .12f)
+        // D13 (#748) retires the deleted popup-only finish's two >.12 corner-glint requirements; the wall cap above stays.
     }
 }

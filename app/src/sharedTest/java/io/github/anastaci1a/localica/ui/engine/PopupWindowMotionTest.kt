@@ -62,6 +62,25 @@ class PopupWindowMotionTest {
         assertEquals(0f, motion.preparationCurve.at(e.phase.valueAt(h.clock.stampNow)), 0f)
         motion.dispose()
     }
+    @Test fun preparedGateMapsRawPhaseToZeroPopupProgress() = EngineHarness(spec = spec).use { h ->
+        val motion = PopupWindowMotion(h.clock, spec.expansion, "lyrics", prepared = true, quiet = false)
+        val popup = GlassExpansion().also { it.bind(motion.expansion, motion.popupCurve) }
+        val e = motion.expansion
+        motion.show(true); motion.place(home, envelope, 1f); h.advance(2.0)
+        for (opening in listOf(true, false)) {
+            assertTrue(e.awaitingNativeGate)
+            assertEquals(opening, e.nativeOpening)
+            assertEquals(.25f, e.phase.valueAt(h.clock.stampNow), 0f)
+            assertEquals("The material/body phase is the mapped popup progress, not raw .25", 0f, popup.value, 0f)
+            assertEquals(home, requireNotNull(motion.bounds).valueAt(h.clock.stampNow))
+            e.acknowledgeNativeGate(e.nativeGeneration); h.advance(2.0)
+            if (opening) { assertEquals(1f, popup.value, 0f); motion.show(false); h.advance(2.0) }
+        }
+        assertTrue(e.retirementReady)
+        popup.unbind(e)
+        motion.dispose()
+    }
+
     @Test fun freshWindowSeedsItsMeasuredHomeAfterThePreviousWindowRetired() = EngineHarness(spec = spec).use { h ->
         val motion = PopupWindowMotion(h.clock, spec.expansion, "fresh-window", false, false)
         val originalHost = ShadowPlane(h.clock, HostKey.next(Any()))

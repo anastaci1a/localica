@@ -7,7 +7,7 @@ import org.junit.Test
 
 class GlassMorphPixelsTest {
     private fun sweep(from: Rect, to: Rect, quiet: Boolean) = (0..4000).map { sample ->
-        val p = glassMorphGeometryProgress(sample / 4000f, quiet)
+        val p = fixtureGeometryProgress(sample / 4000f, quiet)
         fun mix(a: Float, b: Float) = a + (b - a) * p
         glassMorphPixelBounds(Rect(mix(from.left, to.left), mix(from.top, to.top),
             mix(from.right, to.right), mix(from.bottom, to.bottom)))
@@ -46,6 +46,16 @@ class GlassMorphPixelsTest {
         val middle = frames[2000]
         assertEquals(293, middle.left)
         assertEquals(367, middle.width)
+    }
+
+    @Test fun productionGeometryCurvesKeepMonotoneEdgesAndRestingEndpoints() {
+        val from = Rect(573f, 1291f, 660f, 1351f); val to = Rect(12f, 952f, 660f, 1351f)
+        for (curve in listOf(Curve.linear(0f, 1f), Curve.window(.14f, 1f), Curve.window(.25f, 1f))) {
+            val frames = (0..4000).map { sample -> val p = curve.at(sample / 4000f)
+                glassMorphPixelBounds(Rect(from.left + (to.left - from.left) * p, from.top + (to.top - from.top) * p, to.right, to.bottom)) }
+            monotone(frames.map { it.left }); monotone(frames.map { it.top })
+            assertEquals(motionPixelRect(from), frames.first()); assertEquals(motionPixelRect(to), frames.last())
+        }
     }
 
     @Test fun bandOvershootKeepsItsExtentAndTinyExtentsKeepOneDrawablePixel() {

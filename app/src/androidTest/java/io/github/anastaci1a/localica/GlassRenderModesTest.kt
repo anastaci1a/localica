@@ -45,9 +45,9 @@ class GlassRenderModesTest {
                     Column(Modifier.padding(48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         PopupMaterialReference(source, phase)
                         LiquidGlassSurface(Modifier.fillMaxWidth().height(96.dp).testTag("phase-material"), source,
-                            pressFeedback = false, shadow = false, presentation = {
+                            pressFeedback = false, shadow = false, presentedRadius = { (12 + 16 * phase.floatValue).dp }, presentation = {
                                 val p = phase.floatValue
-                                GlassSurfacePresentation((12 + 16 * p).dp, p, p, 1f - p)
+                                GlassSurfacePresentation(p, 1f - p, 0f, Color.Transparent, 1f)
                             })
                     }
                 }
@@ -123,6 +123,6 @@ class GlassRenderModesTest {
 @Composable private fun PopupMaterialReference(source: FrostedBackdrop, phase: androidx.compose.runtime.State<Float>) {
     val p = phase.value
     LiquidGlassSurface(Modifier.fillMaxWidth().height(96.dp).testTag("static-material"), source,
-        cornerRadius = (12 + 16 * p).dp, frostProgress = p, panelProgress = p, refraction = 1f - p,
+        cornerRadius = (12 + 16 * p).dp, frostProgress = p, refraction = 1f - p, depthScale = 1f,
         pressFeedback = false, shadow = false)
 }
