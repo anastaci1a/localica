@@ -107,6 +107,28 @@ internal fun fluidContentBlurOut(height: Double, maxScale: () -> Double, minScal
     return FluidContentBlurRequest((1.0 - t) * maxScale() + t * minScale(), 4.0)
 }
 internal val FluidContentBlurIn = FluidContentBlurRequest(1.0, 0.0)
+
+internal fun fluidDestinationCrossBlur(
+    explicit: Boolean?, previousId: Any?, incomingId: Any?, previous: Boolean, incomingGlass: Boolean,
+) = explicit ?: if (previousId != null && previousId == incomingId) false else previous || incomingGlass
+
+internal data class FluidDestinationBlend(val opacity: Double, val gaussianRadius: Double) {
+    val layerOpacity get() = opacity.toFloat()
+}
+
+internal fun fluidDestinationBlend(
+    progress: Double, crossBlur: Boolean, allOpaque: Boolean, lastDestination: Boolean,
+): FluidDestinationBlend {
+    if (crossBlur) return FluidDestinationBlend(progress, progress * 0.0 + (1.0 - progress) * 4.0)
+    if (allOpaque && !lastDestination) return FluidDestinationBlend(1.0, 0.0)
+    val fraction = progress / 0.65
+    val opacity = when {
+        fraction.isNaN() || fraction > 1.0 -> 1.0
+        fraction < 0.0 -> 0.0
+        else -> fraction
+    }
+    return FluidDestinationBlend(opacity, 0.0)
+}
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
 const val MinimumAnimationSpeed = .5f
 const val MaximumAnimationSpeed = 1.5f

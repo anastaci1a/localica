@@ -56,4 +56,40 @@ class FluidPopupPortalGeometryTest {
         assertFalse(fluidPopupContentGrows(from, to.copy(height = Double.NaN)))
         assertEquals(PopupPortalBounds(60.0, 190.0, 80.0, 20.0), from.centeredAt(100.0, 200.0))
     }
+
+    @Test fun liveApertureUsesLocalInsetsAndAxisSelectedRatios() {
+        val aperture = fluidPopupAperture(200.0, 120.0, insets)
+        assertEquals(PopupPortalBounds(0.0, 0.0, 208.0, 128.0), aperture)
+        assertEquals(104.0 to 64.0, aperture.midX to aperture.midY)
+        assertEquals(104.0 to -6.0, aperture.destinationPosition(insets, insets.copy(top = 9.0)))
+
+        assertEquals(2.0 to 3.0, fluidPopupDestinationScale(200.0, 120.0, 100.0, 40.0, axis = 0))
+        assertEquals(2.0 to 2.0, fluidPopupDestinationScale(200.0, 120.0, 100.0, 40.0, axis = 1))
+        assertEquals(3.0 to 3.0, fluidPopupDestinationScale(200.0, 120.0, 100.0, 40.0, axis = 2))
+        assertEquals(1.0 to 3.0, fluidPopupDestinationScale(200.0, 120.0, -0.0, 40.0, axis = 0))
+        assertEquals(1.0 to 1.0, fluidPopupDestinationScale(200.0, 120.0, 100.0, 0.0, axis = 2))
+    }
+
+    @Test fun autoAxisUsesRelativeChangeAndItsOrderedTieRule() {
+        assertEquals(2, fluidPopupAutoAxis(80.0, 40.0, 120.0, 44.0))
+        assertEquals(1, fluidPopupAutoAxis(80.0, 40.0, 88.0, 60.0))
+        assertEquals(1, fluidPopupAutoAxis(80.0, 40.0, 120.0, 60.0))
+        assertEquals(1, fluidPopupAutoAxis(80.0, 0.0, 120.0, 0.0))
+    }
+
+    @Test fun menuPreviewKeepsRolesDirectionAndScaleTolerance() {
+        assertEquals(insets, fluidPopupPreviewInsets(3.0, 2.0, 5.0, 6.0, reversed = false))
+        assertEquals(insets, fluidPopupPreviewInsets(3.0, 6.0, 5.0, 2.0, reversed = true))
+        assertTrue(fluidPopupClipsBounds(fluidPopupPreviewOptions(3, 8)))
+        assertFalse(fluidPopupClipsBounds(fluidPopupPreviewOptions(4, 8)))
+        assertEquals(12, fluidPopupPreviewOptions(5, 8))
+        assertEquals(8, fluidPopupPreviewOptions(6, 8))
+        assertEquals("pivot", fluidPopupThroughPreview(true, "pivot", null) { error("Fallback read") })
+        assertEquals("source", fluidPopupThroughPreview(false, "pivot", "source") { error("Fallback read") })
+        assertEquals("source", fluidPopupThroughPreview(true, null, "source") { error("Fallback read") })
+        assertEquals("resolved", fluidPopupThroughPreview(false, null, null) { "resolved" })
+        assertFalse(fluidPopupPreviewScaleChanges(1.0, Math.nextUp(1.0)))
+        assertTrue(fluidPopupPreviewScaleChanges(1.0, Math.nextUp(Math.nextUp(1.0))))
+        assertTrue(fluidPopupPreviewScaleChanges(1.0, Double.NaN))
+    }
 }

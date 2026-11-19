@@ -105,4 +105,26 @@ class FluidPopupComponentsTest {
         }
         assertEquals(FluidContentBlurRequest(1.0, 0.0), FluidContentBlurIn)
     }
+
+    @Test fun destinationCrossBlurUsesExplicitThenIdentifierThenMaterialPolicy() {
+        assertTrue(fluidDestinationCrossBlur(true, "same", "same", previous = false, incomingGlass = false))
+        assertFalse(fluidDestinationCrossBlur(false, "old", "new", previous = true, incomingGlass = true))
+        assertFalse(fluidDestinationCrossBlur(null, "same", "same", previous = true, incomingGlass = true))
+        assertTrue(fluidDestinationCrossBlur(null, null, null, previous = true, incomingGlass = false))
+        assertTrue(fluidDestinationCrossBlur(null, "old", "new", previous = false, incomingGlass = true))
+        assertFalse(fluidDestinationCrossBlur(null, "old", "new", previous = false, incomingGlass = false))
+    }
+
+    @Test fun destinationProgressKeepsSeparateOpacityAndRadiusWrites() {
+        assertEquals(FluidDestinationBlend(0.25, 3.0), fluidDestinationBlend(0.25, true, false, true))
+        assertEquals(FluidDestinationBlend(0.0, 4.0), fluidDestinationBlend(0.0, true, false, true))
+        assertEquals(FluidDestinationBlend(1.0, 0.0), fluidDestinationBlend(1.0, true, false, true))
+        assertTrue(fluidDestinationBlend(Double.POSITIVE_INFINITY, true, false, true).gaussianRadius.isNaN())
+        assertEquals(FluidDestinationBlend(0.5, 0.0), fluidDestinationBlend(0.325, false, true, true))
+        assertEquals(FluidDestinationBlend(1.0, 0.0), fluidDestinationBlend(0.325, false, true, false))
+        assertEquals(FluidDestinationBlend(0.0, 0.0), fluidDestinationBlend(-0.25, false, false, false))
+        assertEquals(FluidDestinationBlend(1.0, 0.0), fluidDestinationBlend(0.9, false, false, false))
+        assertEquals(FluidDestinationBlend(1.0, 0.0), fluidDestinationBlend(Double.NaN, false, false, false))
+        assertEquals(0.1f.toRawBits(), fluidDestinationBlend(0.1, true, false, true).layerOpacity.toRawBits())
+    }
 }
