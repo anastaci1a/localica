@@ -132,6 +132,37 @@ internal fun fluidDestinationBlend(
     return FluidDestinationBlend(opacity, 0.0)
 }
 
+internal object FluidGaussianSpec {
+    data class EdgeInputs(val mode: Int, val bounds: DoubleArray?)
+
+    fun edgeInputs(
+        normalizeEdges: Int = 0, hardEdges: Int = 0, encodedBounds: DoubleArray? = null,
+        layerBounds: () -> DoubleArray? = { null },
+    ): EdgeInputs {
+        val explicit = encodedBounds?.takeIf { it.size >= 4 }?.let {
+            doubleArrayOf(it[0], it[1], it[2] - it[0], it[3] - it[1])
+        }
+        val mode = when {
+            normalizeEdges != 0 -> 2
+            hardEdges != 0 || explicit != null -> 1
+            else -> 0
+        }
+        val bounds = explicit ?: if (normalizeEdges != 0 || hardEdges != 0) layerBounds() else null
+        return EdgeInputs(mode, bounds)
+    }
+
+    fun effectiveRadius(inputRadius: Double, fillRadius: Double) =
+        if (inputRadius > fillRadius) inputRadius else fillRadius
+
+    fun isIdentity(inputRadius: Double, fillRadius: Double = 0.0) =
+        !(effectiveRadius(inputRadius, fillRadius) > 0.0)
+
+    fun edgePadding(inputRadius: Double, fillRadius: Double, scaleX: Double, scaleY: Double): Pair<Float, Float> {
+        val padding = (effectiveRadius(inputRadius, fillRadius) * Double.fromBits(0x4006666660000000L)).toFloat()
+        return (padding * scaleX.toFloat()) to (padding * scaleY.toFloat())
+    }
+}
+
 internal object FluidLensingSpec {
     enum class Filter { GaussianBlur, DisplacementMap }
     val filterOrder get() = Filter.entries

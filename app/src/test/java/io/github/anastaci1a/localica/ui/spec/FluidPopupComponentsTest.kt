@@ -260,4 +260,36 @@ class FluidPopupComponentsTest {
         val wrapped = FluidLensingSpec.namedMapQuad(Int.MAX_VALUE - 3, 0, 8, 1, 0, 0, 1f, 1f, Math::fma)
         assertEquals(Int.MIN_VALUE.toFloat().toRawBits(), wrapped[1].mapX.toRawBits())
     }
+
+    @Test fun gaussianEdgesKeepModeAndOptionalBoundsSeparate() {
+        val radiusOnly = FluidGaussianSpec.edgeInputs { error("Radius only has no bounds lookup") }
+        assertEquals(0, radiusOnly.mode)
+        assertEquals(null, radiusOnly.bounds)
+        val hard = FluidGaussianSpec.edgeInputs(hardEdges = -1, encodedBounds = doubleArrayOf(1.0, 2.0, 3.0)) {
+            doubleArrayOf(0.0, 0.0, 9.0, 7.0)
+        }
+        assertEquals(1, hard.mode)
+        assertEquals(listOf(0.0, 0.0, 9.0, 7.0), hard.bounds?.toList())
+        val explicit = doubleArrayOf(-5.0, 6.0, 15.0, 17.0, 100.0)
+        val bounded = FluidGaussianSpec.edgeInputs(encodedBounds = explicit) { error("Explicit bounds take precedence") }
+        assertEquals(1, bounded.mode)
+        assertEquals(listOf(-5.0, 6.0, 20.0, 11.0), bounded.bounds?.toList())
+        val normalized = FluidGaussianSpec.edgeInputs(normalizeEdges = 1, hardEdges = 1, encodedBounds = explicit)
+        assertEquals(2, normalized.mode)
+        assertEquals(bounded.bounds?.toList(), normalized.bounds?.toList())
+        val noLayerBounds = FluidGaussianSpec.edgeInputs(normalizeEdges = 1) { null }
+        assertEquals(2, noLayerBounds.mode)
+        assertEquals(null, noLayerBounds.bounds)
+    }
+
+    @Test fun gaussianIdentityAndPaddingUseTheSameOrderedRadius() {
+        assertTrue(FluidGaussianSpec.isIdentity(FluidContentBlurIn.gaussianRadius))
+        assertTrue(FluidGaussianSpec.isIdentity(Double.NaN))
+        assertTrue(FluidGaussianSpec.isIdentity(2.0, Double.NaN))
+        assertFalse(FluidGaussianSpec.isIdentity(0.0, 2.0))
+        assertEquals(4.0, FluidGaussianSpec.effectiveRadius(Double.NaN, 4.0), 0.0)
+        val padding = FluidGaussianSpec.edgePadding(1.0, 2.0, 0.5, 2.0)
+        assertEquals(0x40333333, padding.first.toRawBits())
+        assertEquals(0x41333333, padding.second.toRawBits())
+    }
 }
