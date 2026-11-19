@@ -99,7 +99,7 @@ internal val FluidContentDefaults = FluidContentSettings(
     speed = 0.7, amplifyDelays = false, lensingEnabled = true,
 )
 internal data class FluidPopupStep(val storedDelay: Double, val spring: FluidPopupSpringSettings) {
-    fun scaledDelay(settings: FluidContentSettings) = fluidStoredDelay(storedDelay, settings.speed, settings.amplifyDelays)
+    fun dueThreshold(effectiveSpeed: Double, amplify: Boolean, drag: Double) = fluidStoredDelay(storedDelay, effectiveSpeed, amplify) * drag
 }
 internal data class FluidContentBlurSequence(val blurOut: FluidPopupStep, val blurIn: FluidPopupStep)
 internal data class FluidContentBlurRequest(val portalScale: Double, val gaussianRadius: Double)
