@@ -48,10 +48,6 @@ internal fun fluidPopupPreviewOptions(mode: Int, options: Int) =
 internal fun fluidPopupVisibleMask(pathBounds: PopupPortalBounds?, roundedRect: Boolean, equalsReferenceBounds: Boolean) =
     pathBounds?.takeIf { !roundedRect || !equalsReferenceBounds }
 
-/** A missing raster scale selects the linear filter. A supplied scale selects rasterization and the box filter. */
-internal fun fluidPopupRasterScale(wantsMinification: Boolean, displayScale: Double) =
-    displayScale.takeIf { wantsMinification }
-
 internal fun fluidPopupContentBounds(
     visible: PopupPortalBounds?, backing: PopupPortalBounds?, size: PopupPortalBounds?,
     insets: PopupPortalInsets, scale: Double,
@@ -75,9 +71,6 @@ internal fun fluidPopupPortalPlacement(
 
 internal fun fluidPopupPreviewInsets(top: Double, left: Double, bottom: Double, right: Double, reversed: Boolean) =
     if (reversed) PopupPortalInsets(top, right, bottom, left) else PopupPortalInsets(top, left, bottom, right)
-
-internal fun <T : Any> fluidPopupThroughPreview(usePivot: Boolean, pivot: T?, source: T?, resolveSource: () -> T?) =
-    (if (usePivot) pivot ?: source else source) ?: resolveSource()
 
 internal fun fluidPopupPreviewScaleChanges(old: Double, requested: Double) =
     !(kotlin.math.abs(requested - old) <= Double.fromBits(0x3cb0000000000000L))

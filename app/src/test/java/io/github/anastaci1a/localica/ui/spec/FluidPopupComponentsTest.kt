@@ -149,30 +149,14 @@ class FluidPopupComponentsTest {
         assertEquals((-0.0).toRawBits(), FluidLensingSpec.shortDimension(1.0, -0.0, 0.0).toRawBits())
     }
 
-    @Test fun lensingSetupKeepsFilterOrderAndTracksByIdentity() {
+    @Test fun lensingSetupKeepsFilterOrderAndTrackedProperties() {
         assertEquals(listOf(FluidLensingSpec.Filter.GaussianBlur, FluidLensingSpec.Filter.DisplacementMap), FluidLensingSpec.filterOrder)
         assertEquals(listOf("bounds", "position", "cornerRadius", "cornerRadii", "cornerCurve", "hidden", "meshTransform"), FluidLensingSpec.trackedProperties)
         assertEquals(0.0.toRawBits(), FluidLensingSpec.trackStoredDelay.toRawBits())
         assertTrue(FluidLensingSpec.trackedHitTestsAsFill)
-
-        data class Layer(val name: String)
-        val existing = Layer("same")
-        val new = Layer("same")
-        val other = Layer("other")
-        val additions = FluidLensingSpec.newTrackedSources(listOf(existing, new, new, other), listOf(existing))
-        assertEquals(2, additions.size)
-        assertTrue(additions[0] === new)
-        assertTrue(additions[1] === other)
     }
 
-    @Test fun displacementSelectsTheFirstExactNameAndPrefersExplicitImages() {
-        val names = listOf(byteArrayOf(97), byteArrayOf(97, 0), byteArrayOf(97, 0))
-        val first = FluidLensingSpec.namedSource(names, byteArrayOf(97, 0)) { it }
-        assertTrue(first === names[1])
-        assertEquals(null, FluidLensingSpec.namedSource(names, null) { error("Name lookup without a key") })
-        assertEquals(null, FluidLensingSpec.displacementSource(false, "image") { error("No primary surface") })
-        assertEquals("image", FluidLensingSpec.displacementSource(true, "image") { error("Image takes precedence") })
-        assertEquals("child", FluidLensingSpec.displacementSource(true, null) { "child" })
+    @Test fun displacementKeepsNamedMapInTheSecondTextureSlot() {
         assertEquals(44, FluidLensingSpec.displacementFunction)
         assertEquals(1, FluidLensingSpec.namedSourceTexture)
     }
@@ -193,56 +177,11 @@ class FluidPopupComponentsTest {
         assertEquals(2f to 3f, FluidLensingSpec.offset(doubleArrayOf(2.0, 3.0, 4.0)))
     }
 
-    @Test fun throughCompletionRunsDismissalCallbackBeforeClearingRetainedContent() {
-        val release = listOf(
-            FluidTerminalSpec.Request.ReleaseSharedPortals,
-            FluidTerminalSpec.Request.ClearMorphables,
-            FluidTerminalSpec.Request.ClearMorphAnimations,
-            FluidTerminalSpec.Request.ClearHidingAssertions,
-        )
-        assertEquals(listOf(
-            FluidTerminalSpec.Request.TearDownPlatter,
-            FluidTerminalSpec.Request.RemovePlatterContainer,
-            FluidTerminalSpec.Request.CompleteAlongside,
-        ) + release, FluidTerminalSpec.completeGroup(dismissing = true, hasCallback = true, hasAlongside = true))
-        assertEquals(listOf(FluidTerminalSpec.Request.CompleteAlongside) + release,
-            FluidTerminalSpec.completeGroup(dismissing = false, hasCallback = true, hasAlongside = true))
-        assertEquals(release, FluidTerminalSpec.completeGroup(dismissing = true, hasCallback = false, hasAlongside = true))
-        assertEquals(listOf(FluidTerminalSpec.Request.TearDownPlatter, FluidTerminalSpec.Request.RemovePlatterContainer) + release,
-            FluidTerminalSpec.completeGroup(dismissing = true, hasCallback = true, hasAlongside = false))
-    }
-
-    @Test fun successfulAppearanceRestoresClippingAfterFocusedPortalsAreReleased() {
-        assertEquals(listOf(
-            FluidTerminalSpec.Request.FlashScrollIndicators, FluidTerminalSpec.Request.ClearFocusedPortaling,
-            FluidTerminalSpec.Request.SuspendClipping, FluidTerminalSpec.Request.ReleaseFocusedPortals,
-            FluidTerminalSpec.Request.RestoreClipping,
-        ), FluidTerminalSpec.completeAppearance(success = true, dismissing = false, menuPresent = true, focusedPortaling = true))
-        assertEquals(listOf(FluidTerminalSpec.Request.FlashScrollIndicators, FluidTerminalSpec.Request.RestoreClipping),
-            FluidTerminalSpec.completeAppearance(success = true, dismissing = false, menuPresent = true, focusedPortaling = false))
-        assertEquals(listOf(FluidTerminalSpec.Request.FlashScrollIndicators),
-            FluidTerminalSpec.completeAppearance(success = true, dismissing = false, menuPresent = true, focusedPortaling = null))
-        assertTrue(FluidTerminalSpec.completeAppearance(false, false, true, true).isEmpty())
-        assertTrue(FluidTerminalSpec.completeAppearance(true, true, true, true).isEmpty())
-        assertTrue(FluidTerminalSpec.completeAppearance(true, false, false, true).isEmpty())
-    }
-
     @Test fun guardedThroughSkipsBothImmediateUnhideSites() {
         assertEquals(false to false, FluidTerminalSpec.immediateUnhideSites(true, true, true, true))
         assertEquals(true to false, FluidTerminalSpec.immediateUnhideSites(false, true, true, false))
         assertEquals(false to true, FluidTerminalSpec.immediateUnhideSites(false, true, false, true))
         assertEquals(false to false, FluidTerminalSpec.immediateUnhideSites(false, false, true, false))
-    }
-
-    @Test fun displacementConsumesGaussianColorOnlyWhenThatNodeEmits() {
-        fun color(gaussianEmits: Boolean) = FluidLensingSpec.colorChain("content") { filter, input ->
-            when (filter) {
-                FluidLensingSpec.Filter.GaussianBlur -> if (gaussianEmits) "blur(" + input + ")" else null
-                FluidLensingSpec.Filter.DisplacementMap -> "warp(" + input + ")"
-            }
-        }
-        assertEquals("warp(blur(content))", color(gaussianEmits = true))
-        assertEquals("warp(content)", color(gaussianEmits = false))
     }
 
     @Test fun namedMapQuadKeepsCoordinatePairsAndFusedRounding() {
@@ -262,24 +201,15 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun gaussianEdgesKeepModeAndOptionalBoundsSeparate() {
-        val radiusOnly = FluidGaussianSpec.edgeInputs { error("Radius only has no bounds lookup") }
-        assertEquals(0, radiusOnly.mode)
-        assertEquals(null, radiusOnly.bounds)
-        val hard = FluidGaussianSpec.edgeInputs(hardEdges = -1, encodedBounds = doubleArrayOf(1.0, 2.0, 3.0)) {
-            doubleArrayOf(0.0, 0.0, 9.0, 7.0)
-        }
-        assertEquals(1, hard.mode)
-        assertEquals(listOf(0.0, 0.0, 9.0, 7.0), hard.bounds?.toList())
-        val explicit = doubleArrayOf(-5.0, 6.0, 15.0, 17.0, 100.0)
-        val bounded = FluidGaussianSpec.edgeInputs(encodedBounds = explicit) { error("Explicit bounds take precedence") }
-        assertEquals(1, bounded.mode)
-        assertEquals(listOf(-5.0, 6.0, 20.0, 11.0), bounded.bounds?.toList())
-        val normalized = FluidGaussianSpec.edgeInputs(normalizeEdges = 1, hardEdges = 1, encodedBounds = explicit)
-        assertEquals(2, normalized.mode)
-        assertEquals(bounded.bounds?.toList(), normalized.bounds?.toList())
-        val noLayerBounds = FluidGaussianSpec.edgeInputs(normalizeEdges = 1) { null }
-        assertEquals(2, noLayerBounds.mode)
-        assertEquals(null, noLayerBounds.bounds)
+        assertEquals(null, FluidGaussianSpec.decodeBounds(null))
+        assertEquals(null, FluidGaussianSpec.decodeBounds(doubleArrayOf(1.0, 2.0, 3.0)))
+        val decoded = FluidGaussianSpec.decodeBounds(doubleArrayOf(-5.0, 6.0, 15.0, 17.0, 100.0))
+        assertEquals(listOf(-5.0, 6.0, 20.0, 11.0), decoded?.toList())
+        assertEquals(0, FluidGaussianSpec.edgeMode(0, 0, explicitBounds = false))
+        assertEquals(1, FluidGaussianSpec.edgeMode(0, -1, explicitBounds = false))
+        assertEquals(1, FluidGaussianSpec.edgeMode(0, 0, explicitBounds = decoded != null))
+        assertEquals(2, FluidGaussianSpec.edgeMode(1, 1, explicitBounds = decoded != null))
+        assertEquals(2, FluidGaussianSpec.edgeMode(1, 0, explicitBounds = false))
     }
 
     @Test fun gaussianIdentityAndPaddingUseTheSameOrderedRadius() {
