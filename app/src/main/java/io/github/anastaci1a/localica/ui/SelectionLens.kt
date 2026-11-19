@@ -24,12 +24,12 @@ internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, Animati
     val frame = placement?.invoke(body.value)
     val silhouette = rememberSelectorSilhouette(frame?.contour())
     val density = androidx.compose.ui.platform.LocalDensity.current
-        // Caller semantics and observers belong to the placed surface, not to the
-        // outer offset/wrap coordinator (whose bounds remain at the host origin).
-        LiquidGlassSurface(if (frame == null) modifier.selectorDeformation({ body.value }, vertical, wall)
-            else Modifier.selectorTrackPlacement(frame.bounds).then(modifier), source = source, pressFeedback = false, shadow = false, sharedContact = light,
-            cornerRadius = frame?.let { with(density) { it.corner.toDp() } } ?: cornerRadius, tint = tint,
-            body = { body.value }, depthScale = depthScale, silhouette = silhouette) { Box(Modifier.matchParentSize().testTag("elastic-lens-face")) }
+    // Caller semantics and observers belong to the placed surface, not to the
+    // outer offset/wrap coordinator (whose bounds remain at the host origin).
+    LiquidGlassSurface(if (frame == null) modifier.selectorDeformation({ body.value }, vertical, wall)
+        else Modifier.selectorTrackPlacement(frame.bounds).then(modifier), source = source, pressFeedback = false, shadow = false, sharedContact = light,
+        cornerRadius = frame?.let { with(density) { it.corner.toDp() } } ?: cornerRadius, tint = tint,
+        body = { body.value }, depthScale = depthScale, silhouette = silhouette) { Box(Modifier.matchParentSize().testTag("elastic-lens-face")) }
 }
 
 /** Keep sampling origins in layout space while deforming the displayed body. */

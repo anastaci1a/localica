@@ -281,11 +281,11 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             }
             @Composable fun Lens() {
                 val modifier = Modifier.testTag("tab-selector")
-                    SelectionLens(modifier, lens,
-                        source,
-                        depthScale = BottomPillDepthScale,
-                        pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f },
-                        placement = { selectorFrame }, deformation = selectorBody, travel = { lightTravel }, generation = { lightGeneration }, point = { (lightPoint - selectorFrame.bounds.topLeft).let { Offset(it.x / selectorFrame.bounds.width, it.y / selectorFrame.bounds.height) } })
+                SelectionLens(modifier, lens,
+                    source,
+                    depthScale = BottomPillDepthScale,
+                    pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f },
+                    placement = { selectorFrame }, deformation = selectorBody, travel = { lightTravel }, generation = { lightGeneration }, point = { (lightPoint - selectorFrame.bounds.topLeft).let { Offset(it.x / selectorFrame.bounds.width, it.y / selectorFrame.bounds.height) } })
 
             }
             Box(Modifier.width(width * tabs.size).fillMaxHeight(), contentAlignment = AbsoluteAlignment.TopLeft) {
