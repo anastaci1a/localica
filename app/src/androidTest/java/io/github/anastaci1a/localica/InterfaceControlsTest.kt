@@ -107,7 +107,7 @@ class InterfaceControlsTest {
             // even when its lens is between the committed quarter-step values.
             for (x in pixels.width / 8..pixels.width * 48 / 100) {
                 val c = pixels[x, pixels.height / 2]
-                assertTrue("No moving cutout gap at fraction $fraction, x=$x: $c", c.red > c.green + .015f)
+                assertTrue("No moving cutout gap at fraction $fraction, x=$x: $c", c.red > c.green + if (Build.VERSION.SDK_INT >= 33) .1f else .015f)
             }
         }
         slider.performTouchInput { up() }
