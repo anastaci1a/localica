@@ -243,7 +243,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
         val bounds = outline?.getBounds() ?: Rect(0f,0f,normalized.maxOf { it.first.right },normalized.maxOf { it.first.bottom })
         fun DrawScope.paintShadow(excludeInterior: Boolean, rasterizing: Boolean = false) =
             glassShadows(normalized,strength,spread,if (rasterizing) GlassShadowGeometry() else geometry,
-                excludeInterior = excludeInterior,exclusion = exclusion,exclusionTranslation = -origin,color = color,
+                excludeInterior = !rasterizing && excludeInterior,exclusion = if (rasterizing) null else exclusion,exclusionTranslation = -origin,color = color,
                 rasterizing = rasterizing,path = outline)
         if (key != requested) {
             requested = key
