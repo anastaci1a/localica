@@ -129,24 +129,35 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun lensingRequestsSwapCapturedDimensionsAndReuseTheGrowthDelay() {
-        val middle = FluidPopupSpringSettings(0.9, 0.55)
-        val growing = FluidLensingSpec.requests(true, true, 25.0, 90.0, 0.5, 120.0, middle)
-        val shrinking = FluidLensingSpec.requests(true, false, 25.0, 90.0, 0.6, 120.0, middle)
+        val eject = FluidPopupSpringSettings(0.9, 0.55)
+        val absorb = FluidPopupSpringSettings(0.8, 0.42)
+        val growing = FluidLensingSpec.requests(true, true, 25.0, 90.0, 0.5, 120.0, eject, absorb)
+        val shrinking = FluidLensingSpec.requests(true, false, 25.0, 90.0, 0.6, 120.0, eject, absorb)
         assertEquals(listOf(120.0, 90.0, null), growing.map { it.dimension })
         assertEquals(listOf(90.0, 25.0, null), shrinking.map { it.dimension })
         assertEquals(listOf(1.0, 1.0, 0.0), growing.map { it.gain })
         assertEquals(listOf(0.0, 0.0, 0.12), growing.map { it.timing.storedDelay })
         assertEquals(listOf(0.0, 0.0, 0.1), shrinking.map { it.timing.storedDelay })
         assertEquals(listOf(0.2, 0.55, 0.3), growing.map { it.timing.spring.response })
-        assertEquals(listOf(0.2, 0.55, 0.4), shrinking.map { it.timing.spring.response })
+        assertEquals(listOf(0.2, 0.42, 0.4), shrinking.map { it.timing.spring.response })
         assertEquals(listOf(1.0, 0.9, 1.0), growing.map { it.timing.spring.dampingRatio })
-        assertTrue(growing[1].timing.spring === middle)
+        assertTrue(growing[1].timing.spring === eject)
+        assertTrue(shrinking[1].timing.spring === absorb)
         val content = requireNotNull(FluidContentDefaults.blurSequence(growing = true))
         assertEquals(content.blurIn.scaledDelay(FluidContentDefaults).toRawBits(), growing[2].timing.scaledDelay(FluidContentDefaults).toRawBits())
-        assertTrue(FluidLensingSpec.requests(false, true, 25.0, 90.0, 0.5, 120.0, middle).isEmpty())
+        assertTrue(FluidLensingSpec.requests(false, true, 25.0, 90.0, 0.5, 120.0, eject, absorb).isEmpty())
         assertEquals(15.0, FluidLensingSpec.shortDimension(1.5, 40.0, 10.0), 0.0)
         assertEquals(60.0, FluidLensingSpec.shortDimension(1.5, 40.0, Double.NaN), 0.0)
         assertEquals((-0.0).toRawBits(), FluidLensingSpec.shortDimension(1.0, -0.0, 0.0).toRawBits())
+    }
+
+    @Test fun actionBridgeScalesBothCapturedResponsesWithoutMutatingTheSpring() {
+        val spring = FluidPopupSpringSettings(0.9, 0.55)
+        val (response, tracking) = spring.scaledResponses(1.25, trackingResponse = 0.4)
+        assertEquals(0.6875.toRawBits(), response.toRawBits())
+        assertEquals(0.5.toRawBits(), tracking.toRawBits())
+        assertEquals(0.55.toRawBits(), spring.response.toRawBits())
+        assertEquals(0.9.toRawBits(), spring.dampingRatio.toRawBits())
     }
 
     @Test fun lensingSetupKeepsFilterOrderAndTrackedProperties() {
@@ -178,10 +189,10 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun guardedThroughSkipsBothImmediateUnhideSites() {
-        assertEquals(false to false, FluidTerminalSpec.immediateUnhideSites(true, true, true, true))
-        assertEquals(true to false, FluidTerminalSpec.immediateUnhideSites(false, true, true, false))
-        assertEquals(false to true, FluidTerminalSpec.immediateUnhideSites(false, true, false, true))
-        assertEquals(false to false, FluidTerminalSpec.immediateUnhideSites(false, false, true, false))
+        assertEquals(false to false, fluidImmediateUnhideSites(true, true, true, true))
+        assertEquals(true to false, fluidImmediateUnhideSites(false, true, true, false))
+        assertEquals(false to true, fluidImmediateUnhideSites(false, true, false, true))
+        assertEquals(false to false, fluidImmediateUnhideSites(false, false, true, false))
     }
 
     @Test fun namedMapQuadKeepsCoordinatePairsAndFusedRounding() {
