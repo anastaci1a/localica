@@ -349,7 +349,15 @@ class GlassTouchLightTest {
                 val applied = shape.bodyTransform(Size(44f, 44f), contacts[i].vertical)
                 assertTrue("pull drifts past the old box i=$i drift=${shape.drift}", shape.drift.x > .5f * (exp(.12f) - 1))
                 assertEquals(0f, shape.drift.y, 0f)
+                assertEquals("fast drag measures from DOWN i=$i", glassContactFlex(contacts[i].point, Offset(.5f, .5f), Offset(44f, 44f) / 2000f).x, shape.drift.x, 1e-4f)
                 assertTrue("stretch follows the pull in screen space i=$i scale=${applied.scale}", applied.scale.x > applied.scale.y)
+            }
+            // A new DOWN between frames re-anchors at the down point, not at a later sampled point.
+            compose.onNodeWithTag("drag-$i").performTouchInput { up(); down(Offset(width * .25f, height / 2f)); repeat(3) { moveBy(Offset(-width.toFloat(), 0f)) } }
+            compose.mainClock.advanceTimeBy(1500)
+            compose.runOnIdle {
+                val expected = glassContactFlex(contacts[i].point, Offset(.25f, .5f), Offset(44f, 44f) / 2000f)
+                assertEquals("re-press measures from its own DOWN i=$i", expected.x, contacts[i].state.output.value.drift.x, 1e-4f)
             }
             compose.onNodeWithTag("drag-$i").performTouchInput { up() }
         }

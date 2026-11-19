@@ -130,7 +130,7 @@ class FluidPressTest {
 
     @Test fun stationaryPressNeverDriftsAndAnchorsNeverTranslate() {
         for (density in listOf(2f, 2.48125f, 3f)) {
-            val body = GlassMomentum().apply { extent = Size(64f, 64f) }
+            val body = GlassMomentum().apply { extent = Size(64f, 64f); origin = Offset(.8f, .2f) }
             body.advance(0f, 0.0, contact = 1f, point = Offset(.8f, .2f))
             repeat(60) { body.advance(0f, 1.0 / 120, contact = 1f, point = Offset(.8f, .2f)) }
             assertTrue(body.shape.lift > 0f)

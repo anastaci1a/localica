@@ -62,8 +62,9 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
     var bodyOverride = bodyOverride?.copy(lift = FlexPress.None)
         set(value) { field = value?.copy(lift = FlexPress.None) }
     var spec = FlexSpec.Small
-    /** Body size in dp; contact translation is measured against it. */
+    /** Body size in dp and the touch-down point that contact translation is measured from. */
     var extent = Size.Zero
+    var origin = Offset(.5f, .5f)
     private class Spring {
         var value = 0f
         var velocity = 0f
@@ -107,7 +108,6 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
     private val depth = Spring()
     private val lift = Spring()
     private val drift = List(2) { Spring() }
-    private var origin: Offset? = null
     private var liftAge = FlexPress.Hang
     private var liftSpec = (this.bodyOverride ?: spec).lift
     private val liftResponse get() = if (lift.target != 0f) liftSpec.response else liftSpec.releaseResponse
@@ -195,7 +195,7 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
         return settled
     }
 
-    fun reset() { motion.reset(); pressure.reset(); depth.reset(); drift.forEach { it.reset() }; origin = null; travelVelocity = 0f; lift.reset(); liftAge = FlexPress.Hang; liftSpec = (bodyOverride ?: spec).lift; broad.reset(); locals.clear(); broadResponse = FlexGlow.Hide }
+    fun reset() { motion.reset(); pressure.reset(); depth.reset(); drift.forEach { it.reset() }; travelVelocity = 0f; lift.reset(); liftAge = FlexPress.Hang; liftSpec = (bodyOverride ?: spec).lift; broad.reset(); locals.clear(); broadResponse = FlexGlow.Hide }
 
     fun targetGlow(point: Offset?, contact: Float, strength: Float, snap: Boolean = false, travel: Float = 0f, generation: Int = 0) {
         if (point == null || strength == 0f) { broad.reset(); locals.clear(); return }
@@ -282,8 +282,7 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
         } else travelVelocity = 0f
         val edge = if (pressure.isFinite()) pressure.coerceIn(-.22f, .12f) else 0f
         val touch = point?.takeIf { contact > 0f && it.x.isFinite() && it.y.isFinite() }
-        origin = touch?.let { origin ?: it }
-        val flex = if (touch != null) glassContactFlex(touch, origin ?: touch, Offset(extent.width, extent.height) / spec.distance) else Offset.Zero
+        val flex = if (touch != null) glassContactFlex(touch, origin, Offset(extent.width, extent.height) / spec.distance) else Offset.Zero
         drift[0].target = flex.x; drift[1].target = flex.y
         this.pressure.target = edge + (abs(flex.x) - abs(flex.y)) * if (vertical) -1 else 1
         val held = contact.isFinite() && contact > 0f || abs(this.pressure.target) > .0001f

@@ -168,7 +168,7 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
 }
 
 @Composable private fun Modifier.glassTouch(contact: GlassContact, admit: () -> Boolean, onPressed: (Boolean) -> Unit = {}): Modifier =
-    observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }, onTravel = { contact.glowTravel = it }) { if (it) contact.glowGeneration++; contact.travel = 0f; contact.pressed = it; onPressed(it) }
+    observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }, onTravel = { contact.glowTravel = it }) { if (it) { contact.glowGeneration++; contact.state.momentum.origin = contact.point }; contact.travel = 0f; contact.pressed = it; onPressed(it) }
 
 internal fun DrawScope.drawGlassBody(transform: GlassBodyTransform, content: DrawScope.() -> Unit) =
     translate(transform.drift.x, transform.drift.y) { scale(transform.scale.x, transform.scale.y, block = content) }
