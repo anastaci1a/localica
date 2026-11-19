@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.PixelMap
@@ -19,14 +20,17 @@ import kotlin.math.abs
 
 /** The real caller and a zero-power material share its recorded source and physical placement. */
 internal class DefaultRefractionFixture {
-    private data class Reference(val bounds: Rect, val source: FrostedBackdrop, val power: Float)
+    private data class Reference(val bounds: Rect, val material: Rect, val source: FrostedBackdrop, val power: Float)
     private var reference by mutableStateOf<Reference?>(null)
     private lateinit var recording: FrostedBackdrop
+    private var materialHeight = 0f
     private val draws = mutableMapOf<Int, GlassSurfaceDrawObservation>()
 
     @Composable fun Scene(modifier: Modifier, content: @Composable BoxScope.() -> Unit) {
         recording = rememberFrostedBackdrop(Unit, enabled = false)
         val density = LocalDensity.current.density
+        val height = with(LocalDensity.current) { listPillHeight().toPx() }
+        SideEffect { materialHeight = height }
         Box(modifier.recordFrostedBackdrop(recording)) {
             CompositionLocalProvider(LocalGlassVisible provides (reference == null),
                 LocalGlassSurfaceDrawObserver provides { receipt ->
@@ -36,10 +40,12 @@ internal class DefaultRefractionFixture {
             reference?.let { frame ->
                 val origin = requireNotNull(recording.location.coordinates).positionInRoot()
                 val bounds = frame.bounds.translate(-origin)
-                LiquidGlassSurface(Modifier.absoluteOffset((bounds.left / density).dp, (bounds.top / density).dp)
+                Box(Modifier.absoluteOffset((bounds.left / density).dp, (bounds.top / density).dp)
                     .requiredSize((bounds.width / density).dp, (bounds.height / density).dp)
-                    .testTag("default-refraction-reference"), frame.source,
-                    refraction = frame.power, pressFeedback = false, shadow = false)
+                    .testTag("default-refraction-reference"), contentAlignment = Alignment.Center) {
+                    LiquidGlassSurface(Modifier.requiredSize((frame.material.width / density).dp, (frame.material.height / density).dp),
+                        frame.source, refraction = frame.power, pressFeedback = false, shadow = false)
+                }
             }
         }
     }
@@ -48,12 +54,14 @@ internal class DefaultRefractionFixture {
         val bounds = node.fetchSemanticsNode().boundsInRoot
         compose.runOnIdle {
             if (reference == null) {
+                val material = Rect(bounds.left, bounds.center.y - materialHeight / 2f,
+                    bounds.right, bounds.center.y + materialHeight / 2f)
                 val draw = requireNotNull(draws.values.singleOrNull { draw ->
                     val corners = draw.rootCorners ?: return@singleOrNull false
-                    draw.visible && corners.size == 8 && abs(corners[0] - bounds.left) < .01f &&
-                        abs(corners[1] - bounds.top) < .01f && abs(draw.width - bounds.width) < .01f &&
-                        abs(draw.height - bounds.height) < .01f
-                }) { "The real caller needs one matching material draw" }
+                    draw.visible && corners.size == 8 && abs(corners[0] - material.left) < .01f &&
+                        abs(corners[1] - material.top) < .01f && abs(draw.width - material.width) < .01f &&
+                        abs(draw.height - material.height) < .01f
+                }) { "The real caller needs one matching material draw: target=$bounds material=$material draws=${draws.values.map { listOf(it.width, it.height, it.rootCorners) }}" }
                 assertEquals("The caller uses default refraction", 1f, draw.refraction, 0f)
                 val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<FrostedBackdrop, Boolean>())
                 fun find(source: FrostedBackdrop): FrostedBackdrop? {
@@ -65,7 +73,7 @@ internal class DefaultRefractionFixture {
                 val source = requireNotNull(find(recording)) { "The caller's exact sampled source must remain recorded" }
                 assertTrue(source.recorded)
                 assertEquals("The reference keeps the caller's polarity", source.lightMix, draw.toneLightMix, 0f)
-                reference = Reference(bounds, source, power)
+                reference = Reference(bounds, material, source, power)
             } else reference = reference!!.copy(power = power)
         }
         compose.mainClock.advanceTimeBy(1200)

@@ -227,7 +227,7 @@ class ShadowContinuityTest {
 
                 Box(Modifier.size(240.dp).background(Color.White).testTag("press-shadow-scene"),
                     contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    GlassActionButton(AppIcon.ActionEllipsis, "Press", Modifier.width(160.dp).glassAnchor(anchor).testTag("press-shadow")) {}
+                    GlassActionButton(AppIcon.ActionEllipsis, "Press", Modifier.size(160.dp, 96.dp).glassAnchor(anchor).testTag("press-shadow")) {}
                 }
 
         } }

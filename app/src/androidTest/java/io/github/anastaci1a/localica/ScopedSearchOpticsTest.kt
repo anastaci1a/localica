@@ -34,7 +34,7 @@ class ScopedSearchOpticsTest {
         var loaded by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
 
-                val source = rememberFrostedBackdrop(Unit, enabled = false)
+                val source = rememberFrostedBackdrop(Unit, enabled = false, dark = true)
                 Box(Modifier.size(320.dp, 100.dp)) {
                     if (loaded) Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Red) }
                     CompositionLocalProvider(LocalFrostedBackdrop provides source) {
@@ -46,11 +46,12 @@ class ScopedSearchOpticsTest {
         compose.waitForIdle()
         compose.runOnIdle { loaded = true }
         val image = compose.onNodeWithTag("delayed-pill").captureToImage().toPixelMap()
-        // Tint is emitted only by a rendered lens, not by the red background or
-        // the white foreground (which is confined to the left).
+        // Fixed .06 tint / .25 compression at red luma: (.75, .0473, .0473).
+        // Both raw red and white foreground fall outside these default-material errors.
         var edgePixels = 0
         for (y in image.height / 3..image.height * 2 / 3) for (x in image.width * 3 / 4 until image.width * 4 / 5)
-            if (image[x, y].red > .9f && image[x, y].green > .1f && image[x, y].green < .6f) edgePixels++
+            if (kotlin.math.abs(image[x, y].red - .75f) < .1f &&
+                kotlin.math.abs(image[x, y].green - .0473f) < .03f && image[x, y].green > 2f / 255f) edgePixels++
         assertTrue("Late list recording must wake its stationary search lens", edgePixels > 10)
     }
 
