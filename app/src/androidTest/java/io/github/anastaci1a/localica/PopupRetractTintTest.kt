@@ -64,6 +64,7 @@ class PopupRetractTintTest {
                 val page = rememberFrostedBackdrop(home, dark = false)
                 anchor = rememberGlassAnchor()
                 CompositionLocalProvider(LocalFrostedBackdrop provides page.takeIf { sourced }, LocalModalBackdrop provides page,
+                    LocalGlassRendererRuntime provides remember { GlassRendererRuntime(mode) },
                     LocalGlassMorphWorkObserver provides { kind, window, phase ->
                         if (kind == "dialog" && window != null && popup == null) popup = window
                         if (kind == "geometry" && window === popup && phase != null) progress = phase
@@ -103,8 +104,6 @@ class PopupRetractTintTest {
             val sourceRecord = compose.runOnUiThread { anchor.material?.value }
             compose.runOnUiThread { open = false }
             var last: DoubleArray? = null
-            var bodyAfterWithdraw = 0
-            var withdrawn = false
             // Composite of both windows over the source, the image the display shows.
             fun sample(frame: Int): JSONObject {
                 val base = frames.capture(activity, output, "a-$frame")
@@ -138,13 +137,12 @@ class PopupRetractTintTest {
                 last = luma
                 val drawn = synchronized(receipts) { receipts.toList().also { receipts.clear() } }
                 val withdraws = drawn.count { it is GlassBodyReceipt && it.event == "withdraw" }
+                val refills = drawn.count { it is GlassBodyReceipt && it.event != "withdraw" }
                 val body = drawn.filterIsInstance<GlassSurfaceDrawObservation>().lastOrNull { it.windowIdentity != null && it.presented != null }
-                if (withdrawn && body != null) bodyAfterWithdraw++
-                if (withdraws > 0) withdrawn = true
                 return JSONObject().put("frame", frame).put("phase", progress).put("hidden", anchor.hidden).put("present", anchor.modalPresent)
                     .put("fill", fill / fillCount.coerceAtLeast(1)).put("rim", rim / rimCount.coerceAtLeast(1))
                     .put("pixelMax", step?.maxOrNull() ?: 0.0).put("pixelMean", step?.average() ?: 0.0)
-                    .put("withdraws", withdraws).put("body", body?.presented?.let { JSONArray(it) })
+                    .put("withdraws", withdraws).put("refills", refills).put("body", body?.presented?.let { JSONArray(it) })
                     .put("bodyTint", body?.tintArgb).put("bodyDepthScale", body?.depthScale)
             }
             var after = 0
@@ -162,12 +160,12 @@ class PopupRetractTintTest {
             val lastBody = all.lastOrNull { it.has("body") && !it.isNull("body") }
             report.put("fillStep", step("fill")).put("rimStep", step("rim")).put("handOffPixelMax", handOff.getDouble("pixelMax"))
                 .put("handOffPixelMean", handOff.getDouble("pixelMean")).put("withdraws", all.sumOf { it.getInt("withdraws") })
-                .put("bodyAfterWithdraw", bodyAfterWithdraw).put("status", "captured"); save()
+                .put("refills", all.sumOf { it.getInt("refills") }).put("status", "captured"); save()
             assertTrue("retract covers the hand-off: ${tail.size} tail frames", tail.size >= 4 && tail.last().let { !it.getBoolean("hidden") })
-            // One optical owner per frame (#748 R5): the source takes the body once, and the popup draws no body after it.
+            // One optical owner per frame (#748 R5): the source takes the body once, and the popup never refills or rearms it.
             if (mode == GlassRendererMode.Normal) {
                 assertEquals("one R5 withdrawal per return", 1, all.sumOf { it.getInt("withdraws") })
-                assertEquals("popup body drawn after the source took it", 0, bodyAfterWithdraw)
+                assertEquals("R5 unlink or rearm after the source took the body", 0, all.sumOf { it.getInt("refills") })
                 // Material identity: the returning body's last record is the source's own record, lens weight included.
                 val record = requireNotNull(sourceRecord) { "the source publishes its material record" }
                 val drawn = requireNotNull(lastBody).getJSONArray("body")
