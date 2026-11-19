@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.navigation
 
+import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import io.github.anastaci1a.localica.library.enumValue
 import io.github.anastaci1a.localica.library.enumNameOrNull
 import android.content.Context
@@ -27,6 +28,7 @@ class InterfacePreferences(context: Context) {
             animationSpeedTenths = (if (preferences.contains("animation-speed-tenths")) preferences.getInt("animation-speed-tenths", 10)
                 else if (preferences.getBoolean("faster-motion", false)) FasterAnimationSpeedTenths else 10)
                 .coerceIn(MinimumAnimationSpeedTenths, MaximumAnimationSpeedTenths),
+            popupMotion = preferences.enumValue<PopupMotionStyle>("popup-motion") ?: PopupMotionStyle.EdgeSpring,
             respectSystemAnimationScale = preferences.getBoolean("respect-system-animation-scale", true),
             artworkLayout = preferences.enumValue<ArtworkLayout>("artwork-layout") ?: ArtworkLayout.FullBackground,
             artworkTransition = preferences.enumValue<ArtworkTransition>("artwork-transition") ?: ArtworkTransition.BlurThrough,
@@ -61,7 +63,7 @@ class InterfacePreferences(context: Context) {
             .putString("artwork-transition", value.artworkTransition.name).putBoolean("artwork-swipe", value.artworkSwipe)
             .putFloat("gray-tone", value.grayTone.normalizedGrayTone())
             .putInt("lyric-delay-ms", value.lyricDelayMs.coerceIn(-2000, 2000))
-            .putString("long-scroll", value.longScroll.name)
+            .putString("long-scroll", value.longScroll.name).putString("popup-motion", value.popupMotion.name)
             .putFloat("glass-blur", glass.blur).putFloat("glass-white-tint", glass.whiteTint)
             .putFloat("glass-shadow-strength-multiplier", glass.shadowStrength).putFloat("glass-shadow-spread-multiplier", glass.shadowSpread)
             .remove("glass-shadow-strength").remove("glass-shadow-spread")

@@ -27,6 +27,7 @@ internal fun settingsSearchValues(settings: InterfaceSettings, queues: QueueSett
         put("Reduce motion", settings.reducedMotion.label())
         put("Animation speed", settings.animationSpeedLabel)
         put("Respect system animation scale", settings.respectSystemAnimationScale.label())
+        put("Popup motion", settings.popupMotion.label)
         put("Long scroll animation", settings.longScroll.label)
         put("Preload next track", queues.preloadNext.label())
         put("Song tap", queues.songTap.label())

@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import io.github.anastaci1a.localica.navigation.*
 import java.text.Normalizer
 import java.util.Locale
@@ -96,6 +97,7 @@ internal object SettingsCatalog {
         SettingSpec("Reduce motion", "Motion", "animation accessibility disable animations"),
         SettingSpec("Animation speed", "Motion", "faster slower speed multiplier animations"),
         SettingSpec("Respect system animation scale", "Motion", "developer options animator duration scale"),
+        SettingSpec("Popup motion", "Motion", "fluid edge spring menus dialogs", values = PopupMotionStyle.entries.map { it.label }),
         SettingSpec("Long scroll animation", "Motion", "fly through jump glide fade return top", values = LongScrollStyle.entries.map { it.label }),
         SettingSpec("Preload next track", "Playback and queues", "gapless buffering"),
         SettingSpec("Previous button", "Playback and queues", "back restart rewind", values = listOf("Restart after threshold", "Always previous song", "Always restart song")),

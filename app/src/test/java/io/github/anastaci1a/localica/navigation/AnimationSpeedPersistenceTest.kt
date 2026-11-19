@@ -44,6 +44,18 @@ class AnimationSpeedPersistenceTest {
         override fun getSharedPreferences(name: String?, mode: Int): SharedPreferences = store
     })
 
+    @Test fun popupMotionDefaultsAndChoicesRoundTripThroughTheSameStore() {
+        val store = FakePreferences(); val preferences = preferencesOver(store)
+        assertEquals(io.github.anastaci1a.localica.ui.spec.PopupMotionStyle.EdgeSpring, preferences.read().popupMotion)
+        for (style in io.github.anastaci1a.localica.ui.spec.PopupMotionStyle.entries) {
+            preferences.write(InterfaceSettings(popupMotion = style))
+            assertEquals(style.name, store.values["popup-motion"])
+            assertEquals(style, preferences.read().popupMotion)
+        }
+        store.values["popup-motion"] = "retired-style"
+        assertEquals(io.github.anastaci1a.localica.ui.spec.PopupMotionStyle.EdgeSpring, preferences.read().popupMotion)
+    }
+
     @Test fun defaultsAreNormalSpeedAndRespectOn() {
         val read = preferencesOver(FakePreferences()).read()
         assertEquals(10, read.animationSpeedTenths); assertTrue(read.respectSystemAnimationScale); assertEquals(1f, read.animationSpeed, 0f)

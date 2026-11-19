@@ -34,10 +34,10 @@ private fun edges(rect: Rect)=floatArrayOf(rect.left,rect.top,rect.right,rect.bo
     internal fun prepare(target: Rect,plan: EasedPlan,owner: Any,velocity: DoubleArray?=null): List<MotionIntent> { clock.checkMutation(); require(binding==null || binding===owner); val values=edges(target); require(velocity==null || velocity.size==4 && velocity.all(Double::isFinite)); return channels.mapIndexed { i,m -> val x=m.rawValue(plan.stamp); val v=velocity?.get(i)?:m.rawVelocity(plan.stamp); val next=if(clock.context!!.access==MotionAccess.Reduced) Rest(values[i].toDouble()) else plan.segment(x,v,values[i].toDouble()); m.prepareSegment(next,values[i],plan.stamp,plan,if(clock.context!!.access==MotionAccess.Reduced) "Reduced" else "Continuous",velocity?.get(i)?.toFloat()) } }
     /** One analytic phase plus C1 edge residuals; the physical channels remain the expansion's bound rectangle. */
     /** #854: each edge maps its own axis phase (the main or the cross-axis snap phase) through [curve]; its rebase residual is a spring on that axis law. */
-    internal fun prepareMapped(basis: ExpansionBasis,curve: Curve,phases: List<Trajectory>,target: DoubleArray,residuals: List<Trajectory>,plan: SpringPlan,owner: Any): List<MotionIntent> {
+    internal fun prepareMapped(basis: ExpansionBasis,curve: Curve,phases: List<Trajectory>,target: DoubleArray,residuals: List<Trajectory>,plan: SpringPlan,owner: Any,second: Trajectory,shares: DoubleArray): List<MotionIntent> {
         clock.checkMutation(); require(binding==null || binding===owner)
         return channels.mapIndexed { i,m -> val start=basis.at(0.0)[i]; val delta=basis.delta(i)
-            m.prepareSegment(MappedEdge(phases[i],curve,start,delta,residuals[i]),(start+delta*curve.at(target[i].toFloat())).toFloat(),plan.stamp,plan) }
+            m.prepareSegment(MappedEdge(phases[i],curve,start,delta,residuals[i],second,shares[i]),(start+delta*curve.at(target[i].toFloat())).toFloat(),plan.stamp,plan) }
     }
     internal fun prepareMapped(basis: ExpansionBasis,curve: Curve,phase: Trajectory,target: Double,plan: EasedPlan,owner: Any): List<MotionIntent> {
         clock.checkMutation(); require(binding==null || binding===owner)

@@ -54,14 +54,14 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     private fun rootTimeScale()=context().sigma
     /** #854: the spring model this owner runs instead of [spec]; null keeps the Eased law. */
     internal var popupLaw: ResolvedPopupLaw?=null; private set
-    /** #854 §1.6: the private cross-axis snap phase, committed atomically with [motion] and never published. */
+    /** The private second phase (cross-axis snap or fluid centre), committed atomically with [motion] and never published. */
     private var cross: MotionFloat?=null
     /** #854 §1.3: the time scale captured when a spring flight leaves rest; every later segment of that flight keeps it. */
     private var flightSigma=1.0
     internal fun usePopupLaw(model: PopupMotionModel,kind: PopupKind) {
         clock.checkMutation(); check(!disposed); val variant=model.variant(kind)
         popupLaw=if(variant==PopupMotionVariant.Legacy) null else ResolvedPopupLaw(model,kind,variant)
-        if(cross==null && variant in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto)) cross=MotionFloat(clock,motion.rawValue(clock.stampNow).toFloat(),1f,key=key to "cross").also { it.onRest={ notifyLifecycle() } }
+        if(cross==null && (model.centre!=null || variant in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto))) cross=MotionFloat(clock,motion.rawValue(clock.stampNow).toFloat(),1f,key=key to "cross").also { it.onRest={ notifyLifecycle() } }
     }
     private fun timeScale()=contact?.let { it.timeScale?:rootTimeScale() }?:localTimeScale?:rootTimeScale()
     private var held by mutableStateOf(false)
@@ -166,13 +166,13 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     }
     private data class Prepared(val entries: List<Pair<MotionFloat,MotionIntent>>,val plan: EasedPlan?,val duration: Double,val approvedTau: Double,val spec: ExpansionSpec,val gate: Boolean?,val sigma: Double?=null)
     private fun nativeWaiting(q: Boolean)=if(nativeBoundary==null) null else if(awaitingNativeGate || held && pendingNative!=null) pendingNative else q.takeIf { it!=nativeSide }
-    /** #854 §1.6: the cross-axis edges that follow the snap phase for [b], by the declared variant or the aspect rule; none without cross travel. */
-    private fun snapEdges(law: ResolvedPopupLaw,b: ExpansionBasis): BooleanArray {
-        if(cross==null) return BooleanArray(4); val mainX=b.edgeIndex%2==0; val crossEdges=if(mainX) intArrayOf(1,3) else intArrayOf(0,2)
+    /** Each edge's travel on the second phase: a centre share or the existing cross-axis snap. */
+    private fun shares(law: ResolvedPopupLaw,b: ExpansionBasis): DoubleArray {
+        if(cross==null) return DoubleArray(4); if(law.model.centre!=null) return DoubleArray(4) { if(it%2==1) (b.delta(1)+b.delta(3))/2 else 0.0 }; val mainX=b.edgeIndex%2==0; val crossEdges=if(mainX) intArrayOf(1,3) else intArrayOf(0,2)
         val snaps=crossEdges.any { b.delta(it)!=0.0 } && when(law.variant) { PopupMotionVariant.CrossAxisSnap -> true
             PopupMotionVariant.Auto -> { val main=if(mainX) b.endBounds.width else b.endBounds.height; val other=if(mainX) b.endBounds.height else b.endBounds.width; main>0f && other/main>law.model.snapAspect }
             else -> false }
-        return BooleanArray(4) { snaps && it in crossEdges }
+        return DoubleArray(4) { if(snaps && it in crossEdges) b.delta(it) else 0.0 }
     }
     /** U05 "validate, never clamp": a debug build fails on an unproven extremum; a release build counts it and keeps the motion unchanged. */
     private fun proven(ok: Boolean,what: String) { if(ok) return; if(SpringBandTelemetry.strict) throw IllegalArgumentException("Spring extremum leaves its band: $what"); SpringBandTelemetry.violations++; SpringBandTelemetry.last=what }
@@ -182,11 +182,12 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         val ctx=context(); val display=ctx.displayIntervalSeconds.toDouble(); val x=motion.rawValue(stamp); val v=motion.rawVelocity(stamp); val waiting=nativeWaiting(q)
         val target=waiting?.let { requireNotNull(nativeBoundary).toDouble() }?:if(q) 1.0 else 0.0; val c=cross; val cx=c?.rawValue(stamp)?:x; val cv=c?.rawVelocity(stamp)?:v; val edges=rect?.channels
         val sigma=if(motion.settled && c?.settled!=false && edges?.all { it.settled }!=false) timeScale() else flightSigma
-        val direction=if(waiting!=null) PopupDirection.Gate else if(q) PopupDirection.Open else PopupDirection.Close; val snap=snapEdges(law,next)
+        val direction=if(waiting!=null) PopupDirection.Gate else if(q) PopupDirection.Open else PopupDirection.Close; val share=shares(law,next)
         val mainLaw=law.model.law(law.kind,direction,false); // The cross phase always runs the cross law, so it stays one uniform-law chain whatever the snap of each segment.
         val crossLaw=law.model.law(law.kind,direction,true); val curve=boundCurve?:IdentityCurve
-        val residualStates=edges?.let { e -> List(4) { i -> val p=if(snap[i]) cx else x; val pv=if(snap[i]) cv else v; val start=next.at(0.0)[i]; val d=next.delta(i)
-            doubleArrayOf(e[i].rawValue(stamp)-start-d*curve.at(p.toFloat()),e[i].rawVelocity(stamp)-d*curve.slope(p.toFloat())*pv) } }
+        fun edgeLaw(i: Int)=if(law.model.centre==null && i%2!=next.edgeIndex%2 && share.any { it!=0.0 }) crossLaw else mainLaw
+        val residualStates=edges?.let { e -> List(4) { i -> val start=next.at(0.0)[i]; val mapped=MappedEdge(Driven(x,v),curve,start,next.delta(i),Rest(0.0),Driven(cx,cv),share[i])
+            doubleArrayOf(e[i].rawValue(stamp)-start-mapped.projection(0.0,false),e[i].rawVelocity(stamp)-mapped.projection(0.0,true)) } }
         val rest=x==target && v==0.0 && cx==target && cv==0.0 && (reanchor || residualStates?.all { it[0]==0.0 && it[1]==0.0 }!=false)
         val reduced=ctx.access==MotionAccess.Reduced; val policy=if(reduced) "Reduced" else if(initialize) "Initial" else "Continuous"
         if(reduced || initialize || rest) {
@@ -195,14 +196,15 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
             return Prepared(entries,null,0.0,0.0,spec,waiting,sigma)
         }
         val states=mutableListOf(doubleArrayOf(x,v,target,mainLaw.omega/sigma,mainLaw.zeta.toDouble(),1.0)); if(c!=null) states+=doubleArrayOf(cx,cv,target,crossLaw.omega/sigma,crossLaw.zeta.toDouble(),1.0)
-        residualStates?.forEachIndexed { i,s -> val l=if(snap[i]) crossLaw else mainLaw; states+=doubleArrayOf(s[0],s[1],0.0,l.omega/sigma,l.zeta.toDouble(),edges!![i].range.toDouble()) }
+        residualStates?.forEachIndexed { i,s -> val l=edgeLaw(i); states+=doubleArrayOf(s[0],s[1],0.0,l.omega/sigma,l.zeta.toDouble(),edges!![i].range.toDouble()) }
         val plan=SpringPlan.of(stamp,sigma,display,states); val band=law.model.band.toDouble()
         val phase=plan.segment(x,v,target,mainLaw,1.0,display).also { proven(it.extrema.start>=-band && it.extrema.endInclusive<=1+band,"phase ${it.extrema}") }
-        val crossPhase=c?.let { plan.segment(cx,cv,target,crossLaw,1.0,display).also { t -> proven(t.extrema.start>=-band && t.extrema.endInclusive<=1+band || !law.model.admitsCross(c.settled,q),"cross ${t.extrema}") } }
+        val crossBand=if(law.model.centre!=null) law.model.centreBand.toDouble() else band
+        val crossPhase=c?.let { plan.segment(cx,cv,target,crossLaw,1.0,display).also { t -> proven(t.extrema.start>=-crossBand && t.extrema.endInclusive<=1+crossBand || law.model.centre==null && !law.model.admitsCross(c.settled,q),"cross ${t.extrema}") } }
         val entries=mutableListOf(motion to motion.prepareSegment(phase,target.toFloat(),stamp,plan,policy)); if(c!=null) entries+=c to c.prepareSegment(crossPhase!!,target.toFloat(),stamp,plan,policy)
         if(rect!=null) {
-            val residuals=List(4) { i -> val s=residualStates!![i]; val room=abs(s[0])+band*edges!![i].range; plan.segment(s[0],s[1],0.0,if(snap[i]) crossLaw else mainLaw,edges[i].range.toDouble(),display).also { t -> proven(t.extrema.start>=-room && t.extrema.endInclusive<=room,"residual $i ${t.extrema}") } }
-            entries+=rect.entries(rect.prepareMapped(next,curve,List(4) { if(snap[it]) crossPhase!! else phase },DoubleArray(4) { target },residuals,plan,this))
+            val residuals=List(4) { i -> val s=residualStates!![i]; val room=abs(s[0])+band*edges!![i].range; plan.segment(s[0],s[1],0.0,edgeLaw(i),edges[i].range.toDouble(),display).also { t -> proven(t.extrema.start>=-room && t.extrema.endInclusive<=room,"residual $i ${t.extrema}") } }
+            entries+=rect.entries(rect.prepareMapped(next,curve,List(4) { phase },DoubleArray(4) { target },residuals,plan,this,crossPhase?:phase,share))
         }
         return Prepared(entries,null,plan.finish,0.0,spec,waiting,sigma)
     }
