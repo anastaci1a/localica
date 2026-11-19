@@ -145,25 +145,27 @@ class PopupRetractContinuityTest {
         lateinit var preparation: GlassOriginPreparation
         val calls = Collections.synchronizedList(mutableListOf<String>())
         var opened = 0
+        // The placed layout sample differs from the current progress (0 while unbound) until the test moves it.
+        var sample by mutableFloatStateOf(.5f)
         compose.setContent {
             preparation = rememberGlassOriginPreparation()
-            Box(Modifier.size(80.dp).preparedOrigin(preparation) { 0f }.testTag("prepared")) {
+            Box(Modifier.size(80.dp).preparedOrigin(preparation) { sample }.testTag("prepared")) {
                 Box(Modifier.fillMaxSize().drawBehind { if (preparation.withdrawal == null) opened++ else calls += "content"; drawRect(Color.Blue) })
             }
+            // A sibling in the same recording redraws the origin whenever the sample moves.
+            Box(Modifier.size(1.dp).drawBehind { sample.let { } })
         }
         compose.waitForIdle()
         assertTrue("Opening has no withdrawal callback and draws normally", opened > 0)
-        compose.runOnUiThread {
-            // Closing proof: the receipt bumps and the callback installs in one UI-thread step, before any relayout.
-            preparation.beginOriginProof(7L)
-            preparation.withdrawal = { calls += "withdraw" }
-            assertFalse("A stale captured receipt never qualifies", preparation.qualified(0f, preparation.originReceipt - 1))
-        }
+        // Closing proof: the receipt bumps and the callback installs in one UI-thread step, before any relayout.
+        compose.runOnUiThread { preparation.beginOriginProof(7L); preparation.withdrawal = { calls += "withdraw" } }
+        compose.waitForIdle()
+        assertTrue("A current receipt placed away from the current progress neither withdraws nor draws stale pixels: $calls", calls.isEmpty())
+        compose.runOnIdle { sample = 0f }
         compose.waitForIdle()
         assertTrue("The qualified current draw withdrew: $calls", calls.isNotEmpty())
         assertEquals("Every source draw is preceded by its qualified withdrawal; no stale source pixels: $calls",
             calls.size / 2, calls.windowed(2, 2).count { it == listOf("withdraw", "content") })
-        assertTrue("A mismatched progress never qualifies", compose.runOnIdle { !preparation.qualified(.5f, preparation.originReceipt) })
         compose.runOnIdle { preparation.reset() }
         assertNull("Disposal/reset clears only this owner's callback", preparation.withdrawal)
     }
@@ -257,7 +259,9 @@ class PopupRetractContinuityTest {
         assertSame("Home weight zero returns the actual drawn record", record,
             record.towards(GlassSurfacePresentation(1f, 1f, 1f, Color.Transparent, record.depthScale), 0f))
         cycle(scene, open)
-        assertTrue("${scene.trace()}", scene.body().singleOrNull()?.startsWith("withdraw:") == true)
+        val request = scene.anchor.restoredDrawRequest
+        assertEquals("${scene.trace()}", listOf("withdraw:$request"), scene.body())
+        assertTrue("The body moved before the posted acknowledgment: ${scene.trace()}", "presentedAtWithdraw:${request - 1}" in scene.events)
     }
 
     @Test fun geometryOnlyAndContextSourcesNeedNoGlassPublication() {

@@ -1037,7 +1037,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         }
                         // Composite field and material once, with the original padded footprint.
                         nativeField.draw(this,surfaceOpacity(),wellStrength *
-                            (if(anchor.quiet) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
+                            (if(quietOptics) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
                             radius().toPx(),shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
                             shadowReceiver[0],shadowExclusion[0]) {
                             // R5 (#847): B holds every popup optic until the restored source takes it at its draw entry.
