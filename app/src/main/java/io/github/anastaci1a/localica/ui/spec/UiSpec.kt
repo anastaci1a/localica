@@ -77,6 +77,7 @@ internal class FluidPopupSpringSettings(val dampingRatio: Double, val response: 
     val omega = 2 * PI / response
     val stiffness = omega * omega
     val damping = 2 * dampingRatio * omega
+    fun scaledResponses(multiplier: Double, trackingResponse: Double) = (multiplier * response) to (multiplier * trackingResponse)
 }
 internal val FluidMainEjectDefaults = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
 
@@ -167,13 +168,14 @@ internal object FluidLensingSpec {
 
     fun requests(
         enabled: Boolean, growing: Boolean, smallerShort: Double, largerShort: Double,
-        largerAnchorY: Double, convertedLargerHeight: Double, changeSpring: FluidPopupSpringSettings,
+        largerAnchorY: Double, convertedLargerHeight: Double,
+        mainEject: FluidPopupSpringSettings, mainAbsorb: FluidPopupSpringSettings,
     ): List<Request> {
         if (!enabled) return emptyList()
         val d0 = if (largerAnchorY == 0.5) convertedLargerHeight else smallerShort
         return listOf(
             Request(FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.2)), 1.0, if (growing) d0 else largerShort),
-            Request(FluidPopupStep(0.0, changeSpring), 1.0, if (growing) largerShort else d0),
+            Request(FluidPopupStep(0.0, if (growing) mainEject else mainAbsorb), 1.0, if (growing) largerShort else d0),
             Request(FluidPopupStep(fluidThroughTailDelay(growing), FluidPopupSpringSettings(1.0, if (growing) 0.3 else 0.4)), 0.0, null),
         )
     }
@@ -220,10 +222,8 @@ internal object FluidLensingSpec {
     }
 }
 
-internal object FluidTerminalSpec {
-    fun immediateUnhideSites(through: Boolean, dismissingToDrag: Boolean, hasStashedPreview: Boolean, transitionLoop: Boolean) =
-        (!through && dismissingToDrag && hasStashedPreview) to (!through && transitionLoop)
-}
+internal fun fluidImmediateUnhideSites(through: Boolean, dismissingToDrag: Boolean, hasStashedPreview: Boolean, transitionLoop: Boolean) =
+    (!through && dismissingToDrag && hasStashedPreview) to (!through && transitionLoop)
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
 const val MinimumAnimationSpeed = .5f
 const val MaximumAnimationSpeed = 1.5f
