@@ -34,6 +34,7 @@ class SelectorStackingTest {
     private var backing: FrostedBackdrop? = null
     private var stage by mutableIntStateOf(0)
     private var showTabs by mutableStateOf(true)
+    private var witnessInTab by mutableStateOf(true)
 
     private fun fixture() {
         compose.setContent { LocalicaTheme {
@@ -55,6 +56,12 @@ class SelectorStackingTest {
                             .selectorTrackStacking(activity).testTag("stacked-tabs")) {
                             SlidingTabs(tabs, selected, { tabs.indexOf(selected).toFloat() }, source,
                                 activity = activity) { selected = it }
+                            if (witnessInTab) Canvas(Modifier.matchParentSize()) {
+                                drawRect(Color.Black, Offset(208.dp.toPx(), 28.dp.toPx()), androidx.compose.ui.geometry.Size(8.dp.toPx(), 8.dp.toPx()))
+                            }
+                        }
+                        if (!witnessInTab) Canvas(Modifier.matchParentSize()) {
+                            drawRect(Color.Black, Offset(208.dp.toPx(), 52.dp.toPx()), androidx.compose.ui.geometry.Size(8.dp.toPx(), 8.dp.toPx()))
                         }
                         PopupActionPill(rememberGlassAnchor(), source,
                             Modifier.offset(x = 204.dp, y = 24.dp).size(104.dp, 64.dp),
@@ -83,12 +90,14 @@ class SelectorStackingTest {
 
     private fun assertTabsAbove() {
         val color = overlapPixel()
-        assertTrue("Opaque Classic selector should cover the utility surface: $color", color.red < .15f && color.blue < .15f)
+        assertTrue("The opaque sibling witness should cover the utility surface: $color", color.red < .15f && color.blue < .15f)
     }
 
     @Test fun contactCancelAndSettlementRaiseTheWholeTabSiblingWithoutMovingItsHost() {
         fixture()
         assertUtilityAbove()
+        compose.runOnIdle { witnessInTab = false }; assertUtilityAbove()
+        compose.runOnIdle { witnessInTab = true }
         val host = compose.onNodeWithTag("tab-track-host")
         val restingHost = host.getUnclippedBoundsInRoot()
         compose.mainClock.autoAdvance = false
@@ -97,6 +106,13 @@ class SelectorStackingTest {
             host.performTouchInput { down(Offset(width * 5f / 6f, centerY)); held = true }
             compose.mainClock.advanceTimeBy(32)
             compose.runOnIdle { assertTrue("Pending contact raises the complete pill", activity.raised) }
+            assertTabsAbove()
+            compose.runOnIdle { witnessInTab = false }
+            compose.mainClock.advanceTimeByFrame()
+            val detached = overlapPixel()
+            assertFalse("An unraised witness must fail the raised-order predicate: $detached", detached.red < .15f && detached.blue < .15f)
+            compose.runOnIdle { witnessInTab = true }
+            compose.mainClock.advanceTimeByFrame()
             assertTabsAbove()
             host.performTouchInput { moveBy(Offset(140f, 0f), 100) }
             compose.mainClock.advanceTimeBy(500)

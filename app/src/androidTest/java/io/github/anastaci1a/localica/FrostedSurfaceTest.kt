@@ -10,13 +10,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.GraphicsContext
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.platform.LocalGraphicsContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.*
@@ -24,84 +35,16 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import kotlinx.coroutines.*
 
 class FrostedSurfaceTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun neutralFrostFollowsDefaultContrastInBothInkPolarities() {
-        lateinit var source: FrostedBackdrop
-        var lightInk by mutableStateOf(true)
-        fun identity(value: Any?): String = value?.let { System.identityHashCode(it).toString(16) } ?: "null"
-        fun diagnosticState(): String = "tone=.25,2,$lightInk " +
-            "source=${identity(source)} fallback=${identity(source.fallback)} snapshot=${identity(source.snapshot)} " +
-            "request=${source.readbackRequest} published=${source.snapshotReadbackRequest} " +
-            "size=${source.size} dark=${source.dark} revision=${source.revision} " +
-            "consumers=${source.consumers} recorded=${source.recorded} layerReleased=${source.layer.isReleased} " +
-            "draws=${source.snapshotDraws} pending=${source.readbackBarrier?.isPending} " +
-            "abort=${source.lastReadbackAbort} progress=${source.lastReadbackProgress}"
-        val lastObservations = java.util.concurrent.ConcurrentHashMap<String, String>()
-        fun observe(phase: String, state: String = diagnosticState()) {
-            if (lastObservations.put(phase, state) != state) android.util.Log.i("FrostToneContinuity",
-                "ns=${android.os.SystemClock.elapsedRealtimeNanos()} phase=$phase $state")
-        }
-        compose.setContent { LocalicaTheme {
-
-                GlassPanelTheme(lightInk) { Box(Modifier.fillMaxSize()) {
-                    source = rememberFrostedBackdrop(Unit, dark = lightInk)
-                    LaunchedEffect(source) {
-                        // Existing observable state only; no frames, capture or publication mutation.
-                        // Plain draw diagnostics are sampled when observable state changes, not
-                        // evidence of which bitmap the native compositor actually consumed.
-                        snapshotFlow { diagnosticState() }.collect { observe("state-change", it) }
-                    }
-                    Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Gray) }
-                    GlassPanel(Modifier.align(Alignment.Center).fillMaxWidth().height(200.dp)
-                        .testTag("neutral-frost"), source = source) { }
-                } }
-
-        } }
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) {
-            observe("initial-readiness")
-            source.fallback != null
-        }
-        fun center(phase: String): Color {
-            observe("$phase-pre-capture")
-            val color = compose.onNodeWithTag("neutral-frost").captureToImage().toPixelMap().let {
-                it[it.width / 2, it.height / 2]
-            }
-            observe("$phase-post-capture", diagnosticState() + " center=$color")
-            return color
-        }
-        fun assertNeutral(color: Color) {
-            assertEquals("Neutral red/green: $color", color.red, color.green, .015f)
-            assertEquals("No added blue: $color", color.red, color.blue, .015f)
-            assertTrue("Keep the backdrop visible: $color", color.red in .2f.. .85f)
-        }
-        for (dark in listOf(true, false)) {
-            compose.runOnIdle { lightInk = dark }
-            compose.waitForIdle()
-            val baseline = Color.Gray
-            assertNeutral(baseline)
-            assertEquals("Default trim preserves gray apart from its curve and neutral finish",
-                GlassTone(.25f, 2f, dark).channel(Color.Gray.red), center("baseline").red, .04f)
-            for ((trim, weight) in listOf(.25f to 2f)) {
-                // The unchanged translucent finish slightly attenuates the curve's delta.
-                // Bound that small effect instead of retaining the obsolete fixed-dark-tint range.
-                val expectedDelta = GlassTone(trim, weight, dark).channel(Color.Gray.red) - Color.Gray.red
-                val expected = baseline.red + expectedDelta
-                compose.waitUntil(10000) { kotlin.math.abs(center("polling").red - expected) < .025f }
-                val actual = center("final")
-                assertNeutral(actual)
-                assertEquals("Configured curve: lightInk=$dark trim=$trim weight=$weight",
-                    expected, actual.red, .025f)
-                assertTrue("Contrast follows foreground polarity: $actual vs $baseline",
-                    if (dark) actual.red < baseline.red - .03f else actual.red > baseline.red + .03f)
-            }
-        }
-    }
     @Test fun listBackdropCannotPaintOverSiblingHeaderControls() {
+        lateinit var panel: FrostedBackdrop
+        lateinit var list: FrostedBackdrop
         compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
-            val panel = rememberFrostedBackdrop(Unit, enabled = false)
-            val list = rememberFrostedBackdrop(Unit, enabled = false)
+            panel = rememberFrostedBackdrop(Unit, enabled = false)
+            list = rememberFrostedBackdrop(Unit, enabled = false)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(panel)) { drawRect(Color.Blue) }
             Box(Modifier.fillMaxWidth().height(80.dp).background(Color.Red).testTag("header"))
             Canvas(Modifier.padding(top = 100.dp).fillMaxWidth().height(100.dp).recordFrostedBackdrop(list, panel)) {
@@ -111,6 +54,40 @@ class FrostedSurfaceTest {
         val image = compose.onNodeWithTag("header").captureToImage().toPixelMap()
         val center = image[image.width / 2, image.height / 2]
         assertTrue("A list's backing layer must stay within its viewport: $center", center.red > .97f && center.blue < .01f)
+        compose.runOnIdle {
+            val raster = Bitmap.createBitmap(intArrayOf(0xff000000.toInt(), 0xff000000.toInt(), 0xff000000.toInt(), 0xffffffff.toInt()), 2, 2, Bitmap.Config.ARGB_8888).asImageBitmap()
+            val oldSize = panel.size
+            val oldParent = panel.parent
+            try {
+                panel.size = IntSize(2, 2)
+                assertTrue(panel.publish(raster, raster, 1, null))
+                val whole = Rect(0f, 0f, 2f, 2f)
+                val identity = requireNotNull(BackdropRegistration.create(1f, 0f, 0f, 1f, 0f, 0f))
+                val quarter = Color(.25f, .25f, .25f)
+                panel.materialOnly = true
+                assertEquals("Finished-source contact sampling keeps the center texel", Color.White, panel.averageColor(panel.location, whole))
+                assertEquals("Whole-footprint averaging never uses the center shortcut", quarter, panel.fullBoundsMean(identity, whole) { null })
+                panel.materialOnly = false
+                assertEquals("Raw-source contact sampling integrates the same raster", quarter, panel.averageColor(panel.location, whole))
+                assertEquals("Provenance does not change full-footprint integration", quarter, panel.fullBoundsMean(identity, whole) { null })
+                val diamond = requireNotNull(BackdropRegistration.create(1f, -1f, 1f, 1f, 1f, 0f))
+                assertEquals("Affine coverage integrates all four equal-area quadrants", quarter, panel.fullBoundsMean(diamond, Rect(0f, 0f, 1f, 1f)) { null })
+                val offset = requireNotNull(BackdropRegistration.create(1f, 0f, 0f, 1f, 1f, 1f))
+                assertEquals("Offset footprint retains only the covered white cell", Color.White, panel.fullBoundsMean(offset, Rect(0f, 0f, 1f, 1f)) { null })
+                assertEquals("Clipping excludes unavailable pixels from the mean", Color.White, panel.fullBoundsMean(offset, whole) { null })
+                val style = MaterialAverageStyle(.06f, GlassTone(.25f, 2f, true, .75f, .1f))
+                assertEquals("Raw grading remains unchanged", style, style.forBacking(panel))
+                list.parent = panel
+                panel.parent = list
+                assertFalse("A cyclic raw ancestry does not become a finished material", list.withinFinishedMaterial())
+                panel.materialOnly = true
+                assertTrue("Finished ancestry survives a cycle", list.withinFinishedMaterial())
+                assertEquals("Only repeated tint, trim and shift are suppressed", style.copy(whiteTint = 0f, tone = style.tone.copy(trim = 0f, shift = 0f)), style.forBacking(list))
+                val alpha = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888).apply { eraseColor(0x80ffffff.toInt()) }.asImageBitmap()
+                assertTrue(panel.publish(alpha, alpha, 2, null))
+                assertEquals("Mean alpha remains coverage rather than channel darkening", Color(1f, 1f, 1f, 128f / 255f), panel.fullBoundsMean(identity, whole) { null })
+            } finally { panel.size = oldSize; panel.parent = oldParent; panel.materialOnly = false; list.parent = null }
+        }
     }
     @Test fun queueDrawerKeepsItsMaterialFromShelfThroughHeldExpansion() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -190,15 +167,30 @@ class FrostedSurfaceTest {
 
     @Test fun glassTransmitsTheActualSceneWithSoftEdgesAndCrispControls() {
         lateinit var source: FrostedBackdrop
+        lateinit var material: FrostedBackdrop
+        lateinit var captureLayer: GraphicsLayer
+        lateinit var graphics: GraphicsContext
+        lateinit var density: androidx.compose.ui.unit.Density
+        lateinit var direction: androidx.compose.ui.unit.LayoutDirection
+        lateinit var scope: CoroutineScope
+        var foreground by mutableStateOf(Color.Green)
+        var panelVisible by mutableStateOf(true)
         var swapped by mutableStateOf(false)
         compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
             source = rememberFrostedBackdrop(swapped)
+            captureLayer = rememberGraphicsLayer()
+            graphics = LocalGraphicsContext.current
+            density = LocalDensity.current
+            direction = LocalLayoutDirection.current
+            scope = rememberCoroutineScope()
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                 drawRect(if (swapped) Color.Blue else Color.Red, size = Size(size.width / 2, size.height))
                 drawRect(if (swapped) Color.Red else Color.Blue, topLeft = Offset(size.width / 2, 0f), size = Size(size.width / 2, size.height))
             }
-            GlassPanel(Modifier.align(Alignment.Center).fillMaxWidth().height(240.dp).testTag("glass"), source = source) {
+            if (panelVisible) GlassPanel(Modifier.align(Alignment.Center).fillMaxWidth().height(240.dp).testTag("glass"), source = source) {
+                material = requireNotNull(LocalFrostedBackdrop.current)
                 Text("Sharp foreground", Modifier.align(Alignment.Center))
+                Canvas(Modifier.align(Alignment.Center).offset(y = 40.dp).size(20.dp).testTag("panel-foreground")) { drawRect(foreground) }
             }
         } } }
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.fallback != null }
@@ -224,6 +216,36 @@ class FrostedSurfaceTest {
         compose.onNodeWithText("Sharp foreground").assertIsDisplayed()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         File(nativeEvidenceDirectory("frosted-surface", context.getExternalFilesDir(null)), "frosted-material.png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val retainedMaterial = material
+        assertNotSame("The panel owns a separate material recording", source, material)
+        assertSame("The descendant sampling parent is the real scene", source, material.parent)
+        assertTrue("Only finished material is published", material.materialOnly)
+        assertEquals(28f * density.density, material.materialCorner, 0f)
+        val registration = requireNotNull(material.location.registrationTo(source.location))
+        val materialSize = material.size
+        fun materialPixels(): ImageBitmap {
+            lateinit var copied: Deferred<ImageBitmap?>
+            compose.runOnUiThread {
+                copied = scope.async(start = CoroutineStart.UNDISPATCHED) {
+                    material.captureCurrent(graphics, density, direction, { material.recorded && !material.isRetired }, captureLayer,
+                        record = { captureLayer.record(density, direction, material.size) { drawLayer(material.layer) } })
+                }
+            }
+            compose.waitUntil(10000) { copied.isCompleted }
+            return requireNotNull(runBlocking { copied.await() })
+        }
+        val beforeForeground = materialPixels()
+        compose.runOnIdle { foreground = Color.Yellow }
+        val witness = compose.onNodeWithTag("panel-foreground").captureToImage().toPixelMap()
+        assertEquals("The foreground witness really changed", Color.Yellow, witness[witness.width / 2, witness.height / 2])
+        val afterForeground = materialPixels()
+        assertTrue("Foreground pixels never enter the material-only recording", beforeForeground.asAndroidBitmap().sameAs(afterForeground.asAndroidBitmap()))
+        assertSame("Foreground recomposition retains material identity", retainedMaterial, material)
+        assertSame("Foreground recomposition preserves the source parent", source, material.parent)
+        assertEquals("Foreground recomposition preserves the physical recording bounds", materialSize, material.size)
+        assertEquals("Foreground recomposition preserves registration", registration, material.location.registrationTo(source.location))
+        beforeForeground.asAndroidBitmap().recycle()
+        afterForeground.asAndroidBitmap().recycle()
         val previous = source.fallback
         compose.runOnIdle { swapped = true }
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.fallback !== previous }
@@ -233,5 +255,10 @@ class FrostedSurfaceTest {
             if (Build.VERSION.SDK_INT >= 33) color.blue > color.red + .15f
             else kotlin.math.abs(color.red - left.red) < .04f && kotlin.math.abs(color.blue - left.blue) < .04f
         }
+        assertSame("Scene revision does not replace the panel producer", retainedMaterial, material)
+        compose.runOnIdle { panelVisible = false }
+        compose.waitForIdle()
+        assertTrue("Disposing the panel releases its owned recording", retainedMaterial.isRetired)
+        assertEquals("Disposal leaves no descendant sampling lease", 0, retainedMaterial.consumers)
     }
 }

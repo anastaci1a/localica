@@ -67,6 +67,7 @@ class SelectorRegistrationTest {
         var vertical by mutableStateOf(false)
         var presentedStage by mutableIntStateOf(0)
         var readySource: FrostedBackdrop? = null
+        var sourceShift by mutableStateOf(Offset.Zero)
         lateinit var sceneView: View
         compose.setContent { LocalicaTheme {
             @Composable fun Scene() {
@@ -84,8 +85,8 @@ class SelectorRegistrationTest {
                                     drawRect(if ((x + y) % 2 == 0) Color.Blue else Color.Black,
                                         Offset(x * cell, y * cell), Size(cell, cell))
                                 }
-                                val marker = 2.dp.toPx()
-                                drawRect(Color.Red, center - Offset(marker, marker), Size(marker * 2, marker * 2))
+                                val marker = 12.dp.toPx()
+                                drawRect(Color.Red, center + sourceShift - Offset(marker, marker), Size(marker * 2, marker * 2))
                             }
                             LiquidGlassSurface(Modifier.align(Alignment.Center).size(220.dp, 120.dp)
                                 .selectorDeformation({ shape }, vertical).testTag("registration-lens"), pressFeedback = false, shadow = false, body = { shape })
@@ -105,6 +106,22 @@ class SelectorRegistrationTest {
             momentum.advance(0f, (1f / 60).toDouble())
             if (frame in listOf(0, 6, 12, 18, 27)) stages += "release-$frame" to momentum.shape
         }
+        fun registrationError(pixels: androidx.compose.ui.graphics.PixelMap): Offset {
+            val expected = Offset(pixels.width / 2f, pixels.height / 2f)
+            val radius = with(compose.density) { 24.dp.toPx() }.toInt()
+            fun centroid(horizontal: Boolean): Float {
+                val middle = if (horizontal) expected.x else expected.y
+                var weight = 0.0; var position = 0.0
+                for (index in middle.toInt() - radius..middle.toInt() + radius) {
+                    val p = if (horizontal) pixels[index, expected.y.toInt()] else pixels[expected.x.toInt(), index]
+                    val amount = (p.red - p.green).coerceAtLeast(0f).toDouble()
+                    weight += amount; position += (index + .5) * amount
+                }
+                assertTrue("The independent landmark centroid has red signal", weight > 0)
+                return (position / weight - middle).toFloat()
+            }
+            return Offset(centroid(true), centroid(false))
+        }
         val failures = mutableListOf<String>()
         for (axis in listOf(false, true)) for ((stage, next) in stages) {
             compose.runOnIdle { vertical = axis; shape = next; presentedStage++ }
@@ -114,6 +131,20 @@ class SelectorRegistrationTest {
                 for (x in pixels.width / 2 - 1..pixels.width / 2 + 1) {
                     red += pixels[x, y].red; blue += pixels[x, y].blue
                 }
+            val error = registrationError(pixels)
+            assertTrue("Independent source-center registration stays within one physical pixel: $error", kotlin.math.abs(error.x) <= 1f && kotlin.math.abs(error.y) <= 1f)
+            if (stage == "rest" || stage == "held") {
+                for (shift in listOf(Offset(2f, 0f), Offset(-2f, 0f), Offset(0f, 2f), Offset(0f, -2f))) {
+                    compose.runOnIdle { sourceShift = shift; presentedStage++ }
+                    val displaced = capturePresentedPopupPixels(compose, compose.onNodeWithTag("registration-scene"), presentedStage) { sceneView }
+                    val wrong = registrationError(displaced)
+                    assertTrue("A displaced source must fail the unchanged one-pixel coordinate budget: $shift -> $wrong",
+                        kotlin.math.abs(wrong.x) > 1f || kotlin.math.abs(wrong.y) > 1f)
+                }
+                compose.runOnIdle { sourceShift = Offset.Zero; presentedStage++ }
+                val zero = registrationError(capturePresentedPopupPixels(compose, compose.onNodeWithTag("registration-scene"), presentedStage) { sceneView })
+                assertTrue("Restored source-center registration accepts zero: $zero", kotlin.math.abs(zero.x) <= 1f && kotlin.math.abs(zero.y) <= 1f)
+            }
             val bounds = compose.onNodeWithTag("registration-lens").fetchSemanticsNode().boundsInRoot
             val result = "modal=$modal vertical=$axis stage=$stage strain=${next.strain} depth=${next.depth} " +
                 "lensBounds=$bounds sourceOrigin=${readySource?.origin} sourceSize=${readySource?.size} " +

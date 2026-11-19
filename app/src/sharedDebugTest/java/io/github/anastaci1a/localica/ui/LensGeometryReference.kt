@@ -199,3 +199,5 @@ internal fun GlassSilhouetteFrame.opticalField(point: Offset): LensField {
         val boundary = description.splitInner?.let { splitPillDistanceField(point, bounds, it) } ?: field?.sample(point, path)
         return boundary?.let { blendLensFields(analytic, it, description.fieldWeight) } ?: analytic
     }
+
+internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.spring<Float>(1f, 90f * speed * speed, visibilityThreshold = .0001f)

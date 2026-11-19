@@ -165,17 +165,17 @@ class FullPartitionTest(unittest.TestCase):
             p.write_text(changed)
             with self.assertRaises(ValueError):partition.plan(self.root,['example.RiskTest'],'26','a'*40)
 
-    def test_flat_none_popup_omits_only_two_reviewed_methods_below_33(self):
-        relative = Path('app/src/androidTest/java/io/github/anastaci1a/localica/FlatNoneRendererPopupTest.kt')
+    def test_default_material_omits_only_two_reviewed_methods_below_33(self):
+        relative = Path('app/src/androidTest/java/io/github/anastaci1a/localica/GlassAppearanceTest.kt')
         path = self.root/relative
         path.parent.mkdir(parents=True)
         original = (ROOT/relative).read_text()
         path.write_text(original)
         older = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
         newer = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
-        prefix = 'io.github.anastaci1a.localica.FlatNoneRendererPopupTest#'
-        gated = {prefix+'rendererPopupCanLeaveFlatNoneForNormal',
-                 prefix+'rendererPopupAccessibilityCanLeaveFlatNoneForNormal'}
+        prefix = 'io.github.anastaci1a.localica.GlassAppearanceTest#'
+        gated = {prefix+'frostedPanelsStillScatterTheParentScene',
+                 prefix+'defaultFrostKeepsForegroundSharpAndPageInk'}
         self.assertEqual(gated, {row['id'] for row in older['sdk_omissions']})
         self.assertTrue(all(row['reason'] == 'Reviewed minSdkVersion=33 annotation'
                             for row in older['sdk_omissions']))
@@ -183,9 +183,9 @@ class FullPartitionTest(unittest.TestCase):
         self.assertTrue(gated.issubset(newer['expected']))
         self.assertEqual([], newer['sdk_omissions'])
         for changed in (original.replace('minSdkVersion = 33', 'minSdkVersion = 32'),
-                        original.replace('fun rendererPopupCanLeave', 'fun renamedRendererPopupCanLeave'),
-                        original.replace('import androidx.test.filters.SdkSuppress',
-                                         'import example.SdkSuppress')):
+                        original.replace('fun frostedPanelsStillScatter', 'fun renamedFrostedPanelsStillScatter'),
+                        original.replace('@androidx.test.filters.SdkSuppress',
+                                         '@example.SdkSuppress')):
             path.write_text(changed)
             with self.assertRaises(ValueError):
                 partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
@@ -219,17 +219,19 @@ class FullPartitionTest(unittest.TestCase):
         methods = [('ScopedSearchOpticsTest', 'searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
                    ('FloatingImeLifecycleTest', 'actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
                    ('GlassReadabilityTest', 'entireGlassUsesTheBoundedCurveWithoutTintingItsForeground', 33),
-                   ('GlassBodyOpticsTest', 'normalAndSingleToneKernelPixelsMatchIndependentFrozenRendererAtMatchedInputs', 33),
+                   ('GlassBodyOpticsTest', 'kernelSamplesTheSharedRefractionLookups', 33),
+                   ('GlassBodyOpticsTest', 'kernelHighlightFollowsTheShapeNormal', 33),
                    ('GlassToneShaderParityTest', 'shaderMatchesKotlinAtSamplePoints', 33)]
-        for cls, method, minimum in methods:
+        for cls in dict.fromkeys(cls for cls, _, _ in methods):
             (folder/(cls+'.kt')).write_text('package io.github.anastaci1a.localica\nimport org.junit.Test\nclass '+cls+
-                ' { @Test @androidx.test.filters.SdkSuppress(minSdkVersion = '+str(minimum)+') fun '+method+'() {} }')
+                ' { '+''.join('@Test @androidx.test.filters.SdkSuppress(minSdkVersion = '+str(minimum)+') fun '+method+'() {} '
+                             for owner, method, minimum in methods if owner == cls)+'}')
         legacy = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
         modern = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
-        self.assertEqual(5, len(legacy['sdk_omissions']))
+        self.assertEqual(6, len(legacy['sdk_omissions']))
         self.assertEqual(4, len(legacy['expected']))
         self.assertEqual([], modern['sdk_omissions'])
-        self.assertEqual(9, len(modern['expected']))
+        self.assertEqual(10, len(modern['expected']))
         self.assertEqual({row['id'] for row in legacy['sdk_omissions']}, set(modern['expected'])-set(legacy['expected']))
         path = folder/'FloatingImeLifecycleTest.kt'
         original = path.read_text()
@@ -248,7 +250,7 @@ class FullPartitionTest(unittest.TestCase):
                         '@androidx.test.filters.SdkSuppress(minSdkVersion = 33) @Test '
                         'fun frostedPanelsStillScatterTheParentScene() {} '
                         '@androidx.test.filters.SdkSuppress(minSdkVersion = 33) @Test '
-                        'fun blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp() {} '
+                        'fun defaultFrostKeepsForegroundSharpAndPageInk() {} '
                         '@Test fun averageStillRuns() {} }')
         older = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
         newer = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
