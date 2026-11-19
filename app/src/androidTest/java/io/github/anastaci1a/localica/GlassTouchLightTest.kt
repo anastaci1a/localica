@@ -91,8 +91,8 @@ class GlassTouchLightTest {
     @Test fun fluidSurfaceAndGlowShareOneTransformThroughHoldReleaseAndAnchor() {
         val image = ImageBitmap(1, 1)
         val raw = Offset(.8f, .2f); val tracked = Offset(.3f, .7f)
-        val body = GlassMomentum()
-        body.advance(0f, 0.0, contact = 1f, point = raw)
+        val body = GlassMomentum().apply { extent = Size(96f, 80f) }
+        body.advance(0f, 0.0, contact = 1f, point = Offset(.5f, .5f)); body.advance(0f, 0.0, contact = 1f, point = raw)
         val frames = mutableListOf<GlassShape>()
         for ((seconds, contact) in listOf(.05 to 1f, .3 to 1f, 0.0 to 0f, .05 to 0f, .2 to 0f, .5 to 0f)) {
             body.advance(0f, seconds, contact = contact, point = raw)
@@ -103,12 +103,12 @@ class GlassTouchLightTest {
         try {
             for (shape in frames) for (vertical in listOf(false, true)) for (anchored in listOf(false, true)) {
                 val extent = if (anchored) Size(300f, 240f) else Size(96f, 80f)
-                val applied = shape.bodyTransform(raw, extent, vertical, anchored)
+                val applied = shape.bodyTransform(extent, vertical, anchored)
                 if (anchored) {
                     assertEquals(0f, applied.drift.x, 0f); assertEquals(0f, applied.drift.y, 0f)
                     assertEquals(shape.scaleX(vertical), applied.scale.x, 0f)
                     assertEquals(shape.scaleY(vertical), applied.scale.y, 0f)
-                } else if (shape.lift > 0f) assertTrue("off-centre lift drifts", applied.drift.getDistance() > 0f)
+                } else if (shape.lift > 0f) assertTrue("translated contact drifts", applied.drift.getDistance() > 0f)
                 var draws = 0
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
                     val witness = object : DrawScope by this {

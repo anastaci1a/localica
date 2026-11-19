@@ -68,7 +68,7 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
                     val touched = touch()
                     body.advance(if (dt > 0.0) (displacement / dt).toFloat().coerceIn(-20f, 20f) else 0f,
                         dt, force(), touched, state.impulseScale, damping,
-                        glowPoint?.invoke()?.let { if (verticalAxis()) Offset(it.y, it.x) else it })
+                        glowPoint?.invoke(), verticalAxis())
                     body.targetGlow(glowPoint?.invoke(), illuminate(), strength, travel = distance(), generation = begin())
                     state.previous = current
                     last = frame
