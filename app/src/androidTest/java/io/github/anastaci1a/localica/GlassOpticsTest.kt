@@ -28,7 +28,7 @@ class GlassOpticsTest {
         var material by mutableStateOf(true)
         lateinit var source: FrostedBackdrop
         compose.setContent { LocalicaTheme {
-            source = rememberFrostedBackdrop(Unit)
+            source = rememberFrostedBackdrop(Unit, dark = true)
             val isMaterial = material
             SideEffect { source.materialOnly = isMaterial; source.materialCorner = 0f }
             Box(Modifier.size(256.dp, 160.dp)) {
@@ -44,8 +44,9 @@ class GlassOpticsTest {
         val averaged = compose.onNodeWithTag("sampled-material").captureToImage().toPixelMap()
         for (y in 3..5) for (x in 3..5) {
             val pixel = averaged[averaged.width * x / 8, averaged.height * y / 8]
-            assertEquals("Local red/blue mean", .5f, pixel.red, .04f)
-            assertEquals("Local red/blue mean", .5f, pixel.blue, .04f)
+            assertEquals("Default red/blue mean", .4568f, pixel.red, .04f)
+            assertEquals("Default red/blue mean", .4568f, pixel.blue, .04f)
+            assertEquals("Default mean tint", .0512f, pixel.green, .04f)
         }
         compose.runOnIdle {
             assertFalse("A footprint outside the material is never flattened", source.canAverage(source.origin - Offset(1f, 0f), Size(20f, 20f)))
@@ -64,7 +65,8 @@ class GlassOpticsTest {
         var power by mutableFloatStateOf(1f)
         lateinit var source: FrostedBackdrop
         compose.setContent { LocalicaTheme {
-            Box(Modifier.size(320.dp, 420.dp).testTag("optics")) {
+            // Four checker cells of extra space at either end keep the exterior clear of default shadows.
+            Box(Modifier.size(320.dp, 548.dp).testTag("optics")) {
                 source = rememberFrostedBackdrop(Unit)
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                     val cell = 16.dp.toPx()
