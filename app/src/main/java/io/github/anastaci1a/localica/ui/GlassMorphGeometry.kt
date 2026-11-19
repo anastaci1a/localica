@@ -14,3 +14,58 @@ internal fun popupCornerRadius(home: Dp, popup: Dp, geometry: Float): Dp {
     val g = geometry.coerceIn(0f, 1f)
     return home * (1f - g) + popup * g
 }
+
+internal data class PopupPortalBounds(val x: Double, val y: Double, val width: Double, val height: Double) {
+    val midX get() = minX + kotlin.math.abs(width) * 0.5
+    val midY get() = minY + kotlin.math.abs(height) * 0.5
+    private val minX get() = if (width < 0.0) x + width else x
+    private val minY get() = if (height < 0.0) y + height else y
+
+    fun standardized() = PopupPortalBounds(minX, minY, kotlin.math.abs(width), kotlin.math.abs(height))
+
+    fun centeredAt(centerX: Double, centerY: Double) =
+        copy(x = centerX - width * 0.5, y = centerY - height * 0.5)
+
+    fun maskOffset() = -minX to -minY
+
+    /** Translation input in the scaled portal basis, before composing it with scale. */
+    fun cropOffset(croppedMidX: Double, croppedMidY: Double) = (midX - croppedMidX) to (midY - croppedMidY)
+}
+
+internal data class PopupPortalInsets(val top: Double, val leading: Double, val bottom: Double, val trailing: Double) {
+    val horizontal get() = leading + trailing
+    val vertical get() = top + bottom
+
+    fun signedCrop(bounds: PopupPortalBounds?): PopupPortalBounds? = bounds?.standardized()?.let {
+        PopupPortalBounds(it.x + leading, it.y + top, it.width - horizontal, it.height - vertical)
+    }
+}
+
+internal fun fluidPopupClipsBounds(itemOptions: Int) = (itemOptions and 4) == 0
+internal fun fluidPopupVisibleMask(pathBounds: PopupPortalBounds?, roundedRect: Boolean, equalsReferenceBounds: Boolean) =
+    pathBounds?.takeIf { !roundedRect || !equalsReferenceBounds }
+
+/** A missing raster scale selects the linear filter. A supplied scale selects rasterization and the box filter. */
+internal fun fluidPopupRasterScale(wantsMinification: Boolean, displayScale: Double) =
+    displayScale.takeIf { wantsMinification }
+
+internal fun fluidPopupContentBounds(
+    visible: PopupPortalBounds?, backing: PopupPortalBounds?, size: PopupPortalBounds?,
+    insets: PopupPortalInsets, scale: Double,
+): PopupPortalBounds {
+    val width = visible?.width ?: backing?.let { it.width - insets.horizontal } ?: size?.width ?: 0.0
+    val height = visible?.height ?: backing?.let { it.height - insets.vertical } ?: size?.height ?: 0.0
+    return PopupPortalBounds(0.0, 0.0, width * scale, height * scale)
+}
+
+internal fun fluidPopupContentGrows(from: PopupPortalBounds, to: PopupPortalBounds) =
+    from.width * from.height < to.width * to.height
+
+internal data class PopupPortalPlacement(val bounds: PopupPortalBounds, val x: Double, val y: Double)
+
+internal fun fluidPopupPortalPlacement(
+    content: PopupPortalBounds, backing: PopupPortalBounds?, mask: PopupPortalBounds?,
+): PopupPortalPlacement = if (backing != null && mask != null) {
+    val path = mask.standardized()
+    PopupPortalPlacement(backing, backing.midX - path.x, backing.midY - path.y)
+} else PopupPortalPlacement(content, content.midX, content.midY)
