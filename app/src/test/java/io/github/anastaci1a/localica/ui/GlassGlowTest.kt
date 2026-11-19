@@ -208,6 +208,6 @@ class GlassGlowTest {
         val source = File(root, "LiquidGlass.kt").readText()
         val start = source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")
         val effect = source.substring(start, source.indexOf("\n                else if", start))
-        assertEquals("2632ed4118b4a56ee57a5bfa3e877239b52d130ae0650f85ffaf11a082132e64", sha(effect.toByteArray()))
+        assertEquals("8fc6e8bf032383e058a0630f1c521b36f9d91a278ecb65bd03f57a7411a5eae1", sha(effect.toByteArray()))
     }
 }

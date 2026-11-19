@@ -126,8 +126,8 @@ class QueueHeaderMaterialBoundaryTest {
             compose.runOnIdle { redraw++ }
             awaitDraw(after = previousDraw, expected = 1)
             val redrawn = geometry()
-            assertSameOwnersAndGeometry(ordinary, noHeaderShadow)
-            second = capture("default-header-redraw", noHeaderShadow)
+            assertSameOwnersAndGeometry(ordinary, redrawn)
+            second = capture("default-header-redraw", redrawn)
             // Both complete originals have already been saved and hashed before reading any pixels.
             writePairedBands(requireNotNull(first), requireNotNull(second), ordinary)
             assertEquals("Exactly two copies; no replacement capture", 2, copies)

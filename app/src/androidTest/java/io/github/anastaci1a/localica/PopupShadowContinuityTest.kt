@@ -73,7 +73,7 @@ class PopupShadowContinuityTest {
         compose.setContent { Fixture(false, sharedReference = true) }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
-        val log = StringBuilder("api=${Build.VERSION.SDK_INT} density=${compose.density.density} strength=$strength\n")
+        val log = StringBuilder("api=${Build.VERSION.SDK_INT} density=${compose.density.density} strength=1.0\n")
         val homeContinuity = ShadowFrameProbe()
         val frames = mutableListOf<Pair<Float, Float>>() // progress to geometry-matched error
         val rawContinuity = ShadowFrameProbe()
@@ -475,7 +475,7 @@ class PopupShadowContinuityTest {
             referenceShift = with(density) { 192.dp.roundToPx().toFloat() }
         }
         Box(Modifier.fillMaxSize().onGloballyPositioned { referenceOrigin = it.backdropPosition(page) }
-            .shadowPlaneHost(plane, strength, 1f)) {
+            .shadowPlaneHost(plane, 1f, 1f)) {
             repeat(2) { index ->
                 val key = remember { Any() }
                 Box(Modifier.matchParentSize().glassCaster(plane, key,
