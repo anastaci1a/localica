@@ -46,7 +46,7 @@ class SelectorRegistrationTest {
         for (axis in listOf(false, true)) for (edge in listOf(-1f, 1f)) {
             var restingEdge = 0
             for ((index, next) in listOf(GlassShape(), GlassShape(-.15f, -.2f), GlassShape(.04f, .08f)).withIndex()) {
-                compose.runOnIdle { vertical = axis; wall = edge; shape = next; presentedStage++ }
+                compose.runOnIdle { vertical = axis; wall = edge; shape = next; presentedStage = (presentedStage + 1) % 32 }
                 val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("contact-scene"), presentedStage) { view }
                 val extent = if (axis) pixels.height else pixels.width
                 val covered = (0 until extent).filter { position ->
@@ -124,7 +124,7 @@ class SelectorRegistrationTest {
         }
         val failures = mutableListOf<String>()
         for (axis in listOf(false, true)) for ((stage, next) in stages) {
-            compose.runOnIdle { vertical = axis; shape = next; presentedStage++ }
+            compose.runOnIdle { vertical = axis; shape = next; presentedStage = (presentedStage + 1) % 32 }
             val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("registration-scene"), presentedStage) { sceneView }
             var red = 0f; var blue = 0f
             for (y in pixels.height / 2 - 1..pixels.height / 2 + 1)
@@ -135,13 +135,13 @@ class SelectorRegistrationTest {
             assertTrue("Independent source-center registration stays within one physical pixel: $error", kotlin.math.abs(error.x) <= 1f && kotlin.math.abs(error.y) <= 1f)
             if (stage == "rest" || stage == "held") {
                 for (shift in listOf(Offset(2f, 0f), Offset(-2f, 0f), Offset(0f, 2f), Offset(0f, -2f))) {
-                    compose.runOnIdle { sourceShift = shift; presentedStage++ }
+                    compose.runOnIdle { sourceShift = shift; presentedStage = (presentedStage + 1) % 32 }
                     val displaced = capturePresentedPopupPixels(compose, compose.onNodeWithTag("registration-scene"), presentedStage) { sceneView }
                     val wrong = registrationError(displaced)
                     assertTrue("A displaced source must fail the unchanged one-pixel coordinate budget: $shift -> $wrong",
                         kotlin.math.abs(wrong.x) > 1f || kotlin.math.abs(wrong.y) > 1f)
                 }
-                compose.runOnIdle { sourceShift = Offset.Zero; presentedStage++ }
+                compose.runOnIdle { sourceShift = Offset.Zero; presentedStage = (presentedStage + 1) % 32 }
                 val zero = registrationError(capturePresentedPopupPixels(compose, compose.onNodeWithTag("registration-scene"), presentedStage) { sceneView })
                 assertTrue("Restored source-center registration accepts zero: $zero", kotlin.math.abs(zero.x) <= 1f && kotlin.math.abs(zero.y) <= 1f)
             }
