@@ -364,6 +364,29 @@ class GlassTouchLightTest {
         }
     }
 
+    @Test fun disabledLightRePressAtTheSamePointRetargetsFromItsOwnDown() {
+        val contact = GlassContact()
+        compose.mainClock.autoAdvance = false
+        compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(touchLight = 0f)) {
+                Box(Modifier.size(160.dp)) {
+                    LiquidGlassSurface(Modifier.size(44.dp).testTag("quiet"), source = null, cornerRadius = 22.dp, shadow = false, sharedContact = contact)
+                }
+            }
+        } } }
+        val node = compose.onNodeWithTag("quiet")
+        node.performTouchInput { down(center); moveBy(Offset(width * .3f, 0f)) }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.runOnIdle {
+            assertTrue("inside drag drifts", contact.state.output.value.drift.x > 0f)
+            assertTrue("held drag settles and stops its clock", contact.state.momentum.settled)
+        }
+        node.performTouchInput { up(); down(Offset(width * .8f, height / 2f)) }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.runOnIdle { assertEquals("re-press at the same point measures from its new DOWN", 0f, contact.state.output.value.drift.x, 1e-4f) }
+        node.performTouchInput { up() }
+    }
+
     @Test fun nonScalingSurfaceObservesLightWithoutMovingItsForegroundOrTakingTheClick() {
         var strength by mutableFloatStateOf(1f)
         var clicks = 0
