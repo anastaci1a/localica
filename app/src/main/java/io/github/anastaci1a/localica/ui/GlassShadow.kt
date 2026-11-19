@@ -57,8 +57,10 @@ internal fun glassCasterBody(rect: Rect, density: Density, radius: Dp?, anchor: 
     // Anchored controls deform in draw space. Their coordinates alone
     // do not include the rebound which persists after a modal returns.
     val shape = anchor?.contact?.body?.value ?: GlassShape()
-    val vertical = anchor?.contact?.vertical == true
-    return RoundRect(rect, CornerRadius(corner)).deformed(GlassBodyTransform(Offset(shape.scaleX(vertical), shape.scaleY(vertical))), rect.center)
+    val sx = shape.scaleX(anchor?.contact?.vertical == true)
+    val sy = shape.scaleY(anchor?.contact?.vertical == true)
+    val half = Offset(rect.width * sx / 2f, rect.height * sy / 2f)
+    return RoundRect(Rect(rect.center - half, rect.center + half), CornerRadius(corner * sx, corner * sy))
 }
 
 /** Screen-space neighbor bodies on the trigger's plane, excluding the trigger. */
