@@ -49,7 +49,7 @@ internal fun GlassShape.bodyTransform(size: Size, density: Float, vertical: Bool
     val long = size.maxDimension / density
     val gain = if (long > 0f) FlexSpec.pressPoints(long, size.minDimension / density) / long else 0f
     val m = pressDepth?.let { 1f + (-gain / .24f) * it } ?: (1f + lift * gain)
-    return GlassBodyTransform(Offset(m * exp(s), m * exp(-s)), Offset(drift.x * size.width, drift.y * size.height))
+    return GlassBodyTransform(Offset(m * kotlin.math.exp(s), m * kotlin.math.exp(-s)), Offset(drift.x * size.width, drift.y * size.height))
 }
 
 internal fun glassBackdropBlurRadius(density: Float): Float {
