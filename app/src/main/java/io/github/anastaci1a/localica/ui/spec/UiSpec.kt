@@ -210,7 +210,7 @@ internal object FluidLensingSpec {
         val b2 = transform[1].toFloat()
         val b3 = transform[5].toFloat()
         fun lane(b: Float, z: Float, extent: Int) = (b * amount) / extent.toFloat() + z * 0f
-        return floatArrayOf(lane(b0, b2, width), lane(b1, b3, height), lane(b2, b0, width), lane(b3, b1, height))
+        return floatArrayOf(lane(b0, b2, width), lane(b1, b3, width), lane(b2, b0, height), lane(b3, b1, height))
     }
 
     fun usedExtent(usedX: Int, usedY: Int, width: Int, height: Int) =
