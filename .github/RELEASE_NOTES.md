@@ -44,6 +44,8 @@ This release replaces the shared glass optics in one place, so every glass surfa
 ## Held changes
 
 - [#1081](https://github.com/anastaci1a/localica/issues/1081) — Live lens geometry is deferred.
+- [#1078](https://github.com/anastaci1a/localica/issues/1078) — The downward shadow offset correction is deferred.
+- [#1084](https://github.com/anastaci1a/localica/issues/1084) — The Sort and View shadow clipping and sizing follow-up is deferred.
 
 ## Known issues and follow-ups
 
