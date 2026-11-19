@@ -34,14 +34,25 @@ class PopupRetractContinuityTest {
 
     private enum class Control { Withdraw, NoWithdraw, NoDependency }
 
-    /** Composed-display pixel at the centre of [view]'s [tag] node: what the compositor actually shows. */
-    private fun displayed(tag: String, view: () -> View): Int {
+    /** Composed-display pixel at the centre of [view]'s [tag] node: what the compositor actually shows. With [tick], only a
+     * screenshot whose "tick" marker shows that dialog frame (green even, yellow odd) qualifies; a stale frame never does. */
+    private fun displayed(tag: String, view: () -> View, tick: Int? = null): Int {
         compose.waitForIdle()
-        val bounds = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        fun center(t: String) = compose.onNodeWithTag(t, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
+        val target = center(tag); val marker = if (tick == null) null else center("tick")
         val origin = IntArray(2)
         compose.runOnIdle { view().getLocationOnScreen(origin) }
-        val screen = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
-        return try { screen.getPixel(origin[0] + bounds.center.x.toInt(), origin[1] + bounds.center.y.toInt()) } finally { screen.recycle() }
+        repeat(60) {
+            val screen = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+            try {
+                val current = marker == null || screen.getPixel(origin[0] + marker.x.toInt(), origin[1] + marker.y.toInt()).let {
+                    android.graphics.Color.green(it) > 200 && (android.graphics.Color.red(it) > 200) == (tick!! % 2 == 1) }
+                if (current) return screen.getPixel(origin[0] + target.x.toInt(), origin[1] + target.y.toInt())
+            } finally { screen.recycle() }
+            Thread.sleep(50)
+        }
+        fail("No composed frame showed dialog frame marker $tick")
+        error("unreachable")
     }
     private fun Int.red() = android.graphics.Color.red(this) > 200 && android.graphics.Color.blue(this) < 60
     private fun Int.blue() = android.graphics.Color.blue(this) > 200 && android.graphics.Color.red(this) < 60
@@ -86,7 +97,7 @@ class PopupRetractContinuityTest {
                         optical.draw(this)
                     })
                     // A sibling forces new dialog frames without re-recording C.
-                    Canvas(Modifier.size(2.dp).align(Alignment.BottomEnd)) { drawRect(if (tick % 2 == 0) Color.Green else Color.Yellow) }
+                    Canvas(Modifier.size(12.dp).align(Alignment.BottomEnd).testTag("tick")) { drawRect(if (tick % 2 == 0) Color.Green else Color.Yellow) }
                 }
             }
         } }
@@ -98,7 +109,7 @@ class PopupRetractContinuityTest {
                 round++
             }
             compose.waitForIdle()
-            assertTrue("Before return, B lenses the pre-restoration source", displayed("consumer") { dialogView }.blue())
+            assertTrue("Before return, B lenses the pre-restoration source", displayed("consumer", { dialogView }, tick).blue())
             val recorded = cRecords
             if (sourceFirst) {
                 compose.runOnIdle { restored = true }; compose.waitForIdle()
@@ -106,7 +117,7 @@ class PopupRetractContinuityTest {
             } else compose.runOnIdle { tick++; restored = true }
             compose.waitForIdle()
             compose.runOnIdle { tick++ }
-            val shown = displayed("consumer") { dialogView }.red()
+            val shown = displayed("consumer", { dialogView }, tick).red()
             outcomes += "sourceFirst=$sourceFirst control=$c restored=$shown cRecords=${cRecords - recorded}"
             assertEquals("C is never re-recorded after the source restores: $outcomes", recorded, cRecords)
             if (c != Control.Withdraw) continue
@@ -116,10 +127,11 @@ class PopupRetractContinuityTest {
             repeat(3) { cycle ->
                 compose.runOnIdle { anchor.restoredBodyReceipt = -1L; restored = false; epoch++ }
                 compose.waitForIdle()
-                assertTrue("Cycle $cycle: the reclaimed B lenses the source again", displayed("consumer") { dialogView }.blue())
+                compose.runOnIdle { tick++ }
+                assertTrue("Cycle $cycle: the reclaimed B lenses the source again", displayed("consumer", { dialogView }, tick).blue())
                 compose.runOnIdle { restored = true }; compose.waitForIdle()
                 compose.runOnIdle { tick++ }
-                assertFalse("Cycle $cycle: retained C shows no restored optic", displayed("consumer") { dialogView }.red())
+                assertFalse("Cycle $cycle: retained C shows no restored optic", displayed("consumer", { dialogView }, tick).red())
             }
             assertEquals(listOf("withdraw:1") + List(3) { listOf("unlink:0", "withdraw:1") }.flatten(), events.toList())
         }
@@ -231,8 +243,10 @@ class PopupRetractContinuityTest {
         assertEquals(request, scene.anchor.restoredBodyReceipt)
         assertEquals(request, scene.anchor.restoredPresentedReceipt)
         cycle(scene, open)
-        assertEquals("A reopen empties D before B refills; the next return withdraws again",
-            listOf("withdraw:$request", "unlink:$request", "withdraw:${request + 1}"), scene.body())
+        // A new presentation allocates fresh B/D (the old pair was released with the closed flight), so no unlink is due;
+        // the same-pair reclaim (D emptied before B refills) is the retained-consumer method's cycle.
+        assertEquals("The next return withdraws its own request once: ${scene.trace()}",
+            listOf("withdraw:$request", "withdraw:${request + 1}"), scene.body())
     }
 
     /** R4 §3/§6: the source record is the morph's home endpoint, and a geometry-only anchor publishes none. */
