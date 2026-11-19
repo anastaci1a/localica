@@ -115,7 +115,7 @@ class SelectorReboundRecordingTest {
             val colors = (y - 1..y + 1).map { pixels[x, it] }
             if (Build.VERSION.SDK_INT >= 33) {
                 assertTrue("Padded navbar sampling lost its center landmark at $lens fraction=$fraction: $colors",
-                    colors.any { it.red > .6f && it.blue < .4f })
+                    colors.any { it.red > .6f && it.blue < glassFillChannel(2, 1f, 0f, 0f) + .4f * (glassFillChannel(2, 0f, 0f, 1f) - glassFillChannel(2, 0f, 0f, 0f)) })
             } else {
                 assertTrue("The light face of the blue backing: $colors",
                     colors.all { it.blue > .99f && it.green < .95f && it.red < it.blue })
