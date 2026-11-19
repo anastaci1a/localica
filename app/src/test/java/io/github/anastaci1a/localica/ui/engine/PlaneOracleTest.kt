@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
-import io.github.anastaci1a.localica.ui.engine.glassShadowRingAlpha
 import io.github.anastaci1a.localica.ui.spec.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -13,6 +12,7 @@ import kotlin.math.abs
 /** U04.01a/D27 red witness: the multi-plane composite equals the single-owner oracle at every exclusion weight, because the backend never partitions a caster's field. */
 class PlaneOracleTest {
     private val geometry=(uiSpec(InterfaceSettings(),null,ExpansionGeometryDomain(1000f,2000f,1f/60)) as SpecResult.Accepted).spec
+    private val kernel = GlassShadowModel(1f, 1f)
     private val profile=motionProfileId(MotionProfile.Control)
     private fun field(s: Double,m: Int,n: Int): Double {
         val x = (2.0 - (7.0 / 3.0) * (m + 1) / n).coerceIn(-2.0, 2.0)
@@ -21,7 +21,7 @@ class PlaneOracleTest {
     }
     private fun composite(alphas: List<Double>)=1-alphas.fold(1.0) { p,a -> p*(1-a) }
     /** What one plane's renderer layer holds at depth m: its quantized rings composited SrcOver. */
-    private fun drawn(s: Double,m: Int,n: Int)=composite((0..m).map { glassShadowRingAlpha(it,n,s.toFloat()).toDouble() })
+    private fun drawn(s: Double,m: Int,n: Int)=composite((0..m).map { kernel.ringAlpha(it,s.toFloat(),n).toDouble() })
     private val strengths=listOf(.15,.4,.8,1.0,3.0); private val rings=listOf(16,40,128)
 
     @Test fun rejectsNaiveAlphaPartition() = EngineHarness(spec=geometry).use { h ->
@@ -42,7 +42,9 @@ class PlaneOracleTest {
                 assertEquals(label,field(s,m,n),composite(parts.map { field(s*it,m,n) }),1e-12)
                 // Rejected partitions of the same weights: alpha ramps, and a strength split (exact before quantization, not as drawn).
                 naiveWorst=maxOf(naiveWorst,abs(oracle-composite(weights.map { oracle*it })))
-                assertTrue(label,composite(weights.map { field(s*it,m,n) }) <= field(s,m,n) + 1e-12)
+                val continuous = field(s,m,n)
+                assertEquals(label,continuous * weights.sum() - continuous * continuous * weights[0] * weights[1],
+                    composite(weights.map { field(s*it,m,n) }),1e-12)
                 strengthSplitWorst=maxOf(strengthSplitWorst,abs(oracle-composite(weights.map { drawn(s*it,m,n) })))
             }
         }

@@ -26,6 +26,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 
 internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
 
+/** Strength stays linear in storage; the 2.2 curve gives the faint end more track travel.
+ * #540 raised #502's 1.8 curve; existing stored multipliers are unchanged. The 0–200%
+ * track retains 5% position stops, so actual multiplier labels need not be multiples of 5%. */
 internal const val GlassShadowStrengthCurve = 2.2f
 
 /**
@@ -42,6 +45,8 @@ internal fun contrastWeightFromSlider(value: Float): Float =
 /** #502's curve, kept as the baseline for the #540 granularity test. */
 internal const val GlassShadowStrengthCurve502 = 1.8f
 
+/** Show the stored multiplier percent, rather than its nonlinear track position.
+ * Only track positions snap to 5%; an existing stored multiplier may remain off-grid. */
 internal fun shadowStrengthReadout(strength: Float): Int = (strength * 100f).roundToInt()
 
 @Composable

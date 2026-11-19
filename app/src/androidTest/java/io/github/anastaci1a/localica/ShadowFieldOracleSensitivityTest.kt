@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import io.github.anastaci1a.localica.ui.engine.GlassShadowModel
 import io.github.anastaci1a.localica.ui.engine.GlassShadowGeometry
 import io.github.anastaci1a.localica.ui.engine.glassShadows
 import org.junit.Assert.*
@@ -76,7 +77,10 @@ class ShadowFieldOracleSensitivityTest {
         val white = shadowCapture { drawRect(Color.White) }; val reference = field(white = true, strength = 2f)
         // Symmetric pixels under the body share one shadow value; move them by ±8/255 so the region mean is unchanged.
         val mutated = edit(reference) { b ->
-            val y = (89..107).first { android.graphics.Color.red(b.getPixel(80, it)) in 20..235 }
+            val model = GlassShadowModel(1f, .5f)
+            val signal = kotlin.math.ceil(model.alpha(0f, 2f) * 255f).toInt()
+            val rows = (probeBody.bottom.toInt() + 1)..kotlin.math.ceil(probeBody.bottom + model.shift).toInt()
+            val y = rows.first { android.graphics.Color.red(b.getPixel(80, it)) in 8..(255 - signal) }
             val a = b.getPixel(80, y); val c = b.getPixel(120, y); assertEquals(a, c); val gray = android.graphics.Color.red(a)
             b.setPixel(80, y, android.graphics.Color.rgb(gray + 8, gray + 8, gray + 8)); b.setPixel(120, y, android.graphics.Color.rgb(gray - 8, gray - 8, gray - 8))
         }
