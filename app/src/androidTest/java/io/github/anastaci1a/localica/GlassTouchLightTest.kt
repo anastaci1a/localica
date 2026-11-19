@@ -2,12 +2,12 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
@@ -164,7 +164,7 @@ class GlassTouchLightTest {
             val rgb = doubleArrayOf(backdrop.red.toDouble(), backdrop.green.toDouble(), backdrop.blue.toDouble())
             val bright = broadMatrix.map { row -> (row.indices.sumOf { row[it] * rgb[it] } + .04999999701976776).coerceIn(0.0, 1.0) }
             val p = backdrop.luminance().toDouble().pow(1.25)
-            val white = Math.fma(1 - p, .9, p * .25).toFloat()
+            val white = fusedTestValue(1 - p, .9, p * .25).toFloat()
             val decoded = if (white <= .04045f) white / 12.92f else ((white + .055f) / 1.055f).pow(2.4f)
             val encoded = if (decoded <= .0031308f) decoded * 12.92f else 1.055f * decoded.pow(1f / 2.4f) - .055f
             val q = min(encoded, 255f / 256f)
@@ -235,6 +235,71 @@ class GlassTouchLightTest {
         assertFalse("ordered broad and local passes contribute", held.contentEquals(pixels(node.captureToImage())))
         compose.runOnIdle { light = GlassGlow() }
         assertArrayEquals("idle removes every native pass", idle, pixels(node.captureToImage()))
+    }
+
+    @Test fun nestedSurfaceUsesTheAppliedLiftDriftAndAnchorTransform() {
+        val direct = GlassContact().apply { active = false; point = Offset(.25f, .75f) }
+        val anchor = GlassAnchor().apply { contact.active = false; contact.point = direct.point }
+        val reference = GlassContact().apply { active = false }
+        var anchored by mutableStateOf(false)
+        var manual by mutableStateOf(false)
+        var wrong by mutableStateOf(false)
+        var shape by mutableStateOf(GlassShape(strain = .08f, depth = -.16f, lift = .12f))
+        var light by mutableStateOf(GlassGlow(big = .25f, little = .9f, point = Offset(.65f, .35f)))
+        compose.mainClock.autoAdvance = false
+        compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f)) {
+                val lift = if (anchored) 1f else exp(shape.lift)
+                val ax = exp(shape.strain - shape.depth / 2) * lift
+                val ay = exp(-shape.strain - shape.depth / 2) * lift
+                val dx = (direct.point.x - .5f) * 160 * (lift - 1)
+                val dy = (direct.point.y - .5f) * 80 * (lift - 1)
+                val inverse = if (wrong) shape.copy(lift = 0f) else shape.copy(scale = exp(-shape.depth / 2) * lift, lift = 0f)
+                val mapped = if (wrong) light else light.copy(point = light.point - Offset(dx / 160, dy / 80))
+                SideEffect { direct.state.glow.value = light; anchor.contact.state.glow.value = light; reference.state.glow.value = mapped }
+                Box(Modifier.size(256.dp, 192.dp).testTag("nested-light")) {
+                    Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xff24394d)) }
+                    Box(Modifier.padding(40.dp)) {
+                        if (manual) LiquidGlassSurface(Modifier.size(160.dp, 80.dp).drawWithContent {
+                            translate(dx.dp.toPx(), dy.dp.toPx()) { scale(ax, ay) { this@drawWithContent.drawContent() } }
+                        }, source = null, tint = Color(0xff405060), cornerRadius = 0.dp, shadow = false,
+                            pressFeedback = false, sharedContact = reference, body = { inverse })
+                        else LiquidGlassSurface(Modifier.size(160.dp, 80.dp).glassAnchor(if (anchored) anchor else null),
+                            source = null, tint = Color(0xff405060), cornerRadius = 0.dp, shadow = false,
+                            sharedContact = direct, contactPresentation = { shape })
+                    }
+                }
+            }
+        } } }
+        val node = compose.onNodeWithTag("nested-light")
+        fun capture(reference: Boolean, incorrect: Boolean = false): IntArray {
+            compose.runOnIdle { manual = reference; wrong = incorrect }
+            compose.mainClock.advanceTimeByFrame()
+            return pixels(node.captureToImage())
+        }
+        fun difference(a: IntArray, b: IntArray) = a.indices.maxOf { index ->
+            listOf(0, 8, 16, 24).maxOf { shift -> abs(channel(a[index], shift) - channel(b[index], shift)) }
+        }
+        for (fixed in listOf(false, true)) {
+            compose.runOnIdle { anchored = fixed }
+            for ((phase, lift) in listOf(.12f, .035f, 0f).withIndex()) {
+                compose.runOnIdle {
+                    shape = shape.copy(lift = lift)
+                    light = light.copy(little = if (phase == 0) .9f else if (phase == 1) .3f else 0f,
+                        big = if (phase == 2) 0f else .25f, scale = if (phase == 0) 1f else 4f)
+                }
+                val actual = capture(false)
+                val expected = capture(true)
+                val error = difference(actual, expected)
+                android.util.Log.i("Localica642", "nested-transform anchored=$fixed phase=$phase max=$error")
+                assertTrue("independent nested affine reference anchored=$fixed phase=$phase error=$error", error <= 2)
+                if (!fixed && phase == 0) assertTrue("the witness rejects missing lift and raw drift", difference(actual, capture(true, true)) > 2)
+                if (fixed && phase == 0) {
+                    compose.runOnIdle { shape = shape.copy(lift = 0f) }
+                    assertArrayEquals("anchors ignore nonzero lift and stale raw contact", actual, capture(false))
+                }
+            }
+        }
     }
 
     @Test fun nonScalingSurfaceObservesLightWithoutMovingItsForegroundOrTakingTheClick() {

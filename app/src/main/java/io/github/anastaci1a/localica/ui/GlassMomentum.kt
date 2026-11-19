@@ -12,6 +12,7 @@ internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f, va
     fun scaleX(vertical: Boolean = false) = scale?.let { it * exp(if (vertical) -strain else strain) } ?: exp((if (vertical) -strain else strain) - depth / 2)
     fun scaleY(vertical: Boolean = false) = scale?.let { it * exp(if (vertical) strain else -strain) } ?: exp((if (vertical) strain else -strain) - depth / 2)
     fun liftScale(anchored: Boolean = false) = if (anchored) 1f else exp(lift)
+    fun drawScale(vertical: Boolean = false, anchored: Boolean = true) = liftScale(anchored).let { Offset(scaleX(vertical) * it, scaleY(vertical) * it) }
     val thickness get() = exp(depth)
 }
 

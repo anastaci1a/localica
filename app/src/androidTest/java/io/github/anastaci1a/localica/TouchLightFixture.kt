@@ -6,6 +6,8 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.ui.*
 
+internal fun fusedTestValue(a: Double, b: Double, c: Double) = java.math.BigDecimal(a).multiply(java.math.BigDecimal(b)).add(java.math.BigDecimal(c)).toDouble()
+
 internal fun glowRecords(body: GlassMomentum) = body.javaClass.getDeclaredField("locals").apply { isAccessible = true }.get(body) as List<*>
 internal fun glowChannels(record: Any) = record.javaClass.getDeclaredField("light").apply { isAccessible = true }.get(record) as List<*>
 internal fun glowChannels(body: GlassMomentum): List<Any> = listOf(requireNotNull(body.javaClass.getDeclaredField("broad").apply { isAccessible = true }.get(body))) + (glowRecords(body).lastOrNull()?.let { glowChannels(it).map { s -> s!! } }.orEmpty())
