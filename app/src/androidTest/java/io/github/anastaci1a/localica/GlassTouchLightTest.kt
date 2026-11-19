@@ -455,16 +455,18 @@ class GlassTouchLightTest {
         }
         node.performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(2500)
+        val small = expected()
         compose.runOnIdle {
             assertTrue("held body settles and stops its clock", contact.state.momentum.settled)
-            assertEquals("held 104x48 publishes 16/L", expected(), contact.state.output.value.lift, 1e-5f)
+            assertEquals("held 104x48 publishes 16/L", small, contact.state.output.value.lift, 1e-5f)
             size = DpSize(240.dp, 104.dp)
         }
         compose.mainClock.advanceTimeBy(500)
+        val large = expected()
         compose.runOnIdle {
-            android.util.Log.i("Localica1080", "resize-held lift=${contact.state.output.value.lift} expected=${expected()} settled=${contact.state.momentum.settled}")
+            android.util.Log.i("Localica1080", "resize-held lift=${contact.state.output.value.lift} small=$small expected=$large settled=${contact.state.momentum.settled}")
             assertTrue("resized held body settles again", contact.state.momentum.settled)
-            assertEquals("resize across the P boundary republishes P/L", expected(), contact.state.output.value.lift, 1e-5f)
+            assertEquals("resize across the P boundary republishes P/L", large, contact.state.output.value.lift, 1e-5f)
         }
         node.performTouchInput { up() }
     }
