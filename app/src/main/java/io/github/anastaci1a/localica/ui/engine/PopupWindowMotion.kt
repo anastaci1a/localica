@@ -60,7 +60,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
             nativeWindow = java.lang.ref.WeakReference(window)
         }
     }
-    fun show(visible: Boolean) { shown = visible; if (rectangle != null) expansion.target(visible) }
+    fun show(visible: Boolean) { expansion.refreshPopupLaw(); shown = visible; if (rectangle != null) expansion.target(visible) }
     fun hold() { holding = true; if (rectangle != null) expansion.hold() }
     fun release() { holding = false; expansion.release() }
     fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false) {

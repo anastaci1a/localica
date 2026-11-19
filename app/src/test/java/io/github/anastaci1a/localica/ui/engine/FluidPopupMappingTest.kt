@@ -59,10 +59,10 @@ class FluidPopupMappingTest {
         for (style in PopupMotionStyle.entries) {
             val spec = (uiSpec(InterfaceSettings(popupMotion = style)) as SpecResult.Accepted).spec
             assertEquals(style == PopupMotionStyle.Fluid, spec.popupMotion.centre != null)
-            for (kind in PopupKind.entries.filter { it != PopupKind.Legacy }) EngineHarness().use { h ->
+            for (kind in PopupKind.entries) EngineHarness().use { h ->
                 val basis = ExpansionBasis(Rect(10f, 10f, 40f, 40f), Rect(0f, 0f, 300f, 600f), 1f)
                 val rig = PopupRig(h, basis, kind, model = spec.popupMotion)
-                assertEquals(style == PopupMotionStyle.Fluid || kind == PopupKind.BottomMenu, rig.owner.crossPhase() != null)
+                assertEquals(kind != PopupKind.Legacy && (style == PopupMotionStyle.Fluid || kind == PopupKind.BottomMenu), rig.owner.crossPhase() != null)
                 rig.owner.target(true); h.advance(2.0)
                 assertEquals(basis.endBounds, rig.rect!!.valueAt(h.clock.stampNow))
                 rig.owner.target(false); h.advance(2.0)
@@ -78,4 +78,29 @@ class FluidPopupMappingTest {
             assertEquals(minOf(width / 300f, height / 600f), popupContentScale(width, height, 300, 600, false), 0f)
         }
     }
+    @Test fun existingSharedOwnerRefreshesOnlyAfterClosedRestAndReleasesTheUnusedChannel() {
+        val domain = ExpansionGeometryDomain(1000f, 4000f, 1f / 24)
+        fun spec(style: PopupMotionStyle) = (uiSpec(InterfaceSettings(popupMotion = style), geometry = domain) as SpecResult.Accepted).spec
+        EngineHarness(spec = spec(PopupMotionStyle.EdgeSpring)).use { h ->
+            val popup = PopupMotion(h.clock, h.clock.spec.expansion, "style", kind = PopupKind.Menu)
+            popup.place(ExpansionBasis(Rect(10f, 10f, 40f, 40f), Rect(0f, 0f, 300f, 600f), 1f))
+            popup.show(true)
+            for (next in listOf(PopupMotionStyle.Fluid, PopupMotionStyle.EdgeSpring)) {
+                h.advance(.04)
+                val current = popup.expansion.popupLaw!!.model
+                val before = popup.bounds!!.channels.map { it.sampleAt(h.clock.stampNow) }
+                h.clock.configure(h.clock.context!!, spec(next))
+                popup.show(true)
+                assertSame("A style change does not retarget a flight", current, popup.expansion.popupLaw!!.model)
+                assertEquals(before, popup.bounds!!.channels.map { it.sampleAt(h.clock.stampNow) })
+                popup.show(false); h.advance(2.0)
+                popup.show(true)
+                assertEquals(next == PopupMotionStyle.Fluid, popup.expansion.popupLaw!!.model.centre != null)
+                assertEquals(next == PopupMotionStyle.Fluid, popup.expansion.crossPhase() != null)
+                h.advance(2.0)
+            }
+            popup.expansion.dispose()
+        }
+    }
+
 }
