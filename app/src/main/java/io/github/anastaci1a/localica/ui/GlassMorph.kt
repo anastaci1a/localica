@@ -304,7 +304,7 @@ internal fun GlassAnchor?.captureInk() {
 
 internal fun GlassAnchor.refreshSource() { source?.refresh() }
 
-private fun TriggerRole.LyricsHeader<GlassSplitContact, GlassOriginPreparation>.presentation(height: Float): GlassOriginPresentation {
+internal fun TriggerRole.LyricsHeader<GlassSplitContact, GlassOriginPreparation>.presentation(height: Float): GlassOriginPresentation {
     val separation = originGap(preparation.progress)
     val left = if (side < 0f) contacts.left else contacts.right
     val right = if (side < 0f) contacts.right else contacts.left
@@ -374,7 +374,7 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor?, source: FrostedBackdrop?
         if (role is TriggerRole.LyricsHeader) remember(role) { { height: Float -> role.presentation(height) } } else null
     val marker = GlassDepthMarker(anchor, originPresentation, source, role)
     val presented = if (role is TriggerRole.LyricsHeader) drawWithContent {
-        translate(left = if (role.separated) role.presentation(CompactControlSize.toPx()).horizontalShift else 0f) { this@drawWithContent.drawContent() }
+        translate(left = if (role.separated) role.presentation(size.height).horizontalShift else 0f) { this@drawWithContent.drawContent() }
     } else this
     if (anchor == null) return if (role !is TriggerRole.LyricsHeader) this else presented.then(marker)
     originPresentation?.let { presentation ->

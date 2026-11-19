@@ -161,6 +161,27 @@ class LyricsHeaderActionsTest {
                     assertEquals("density $value, progress $progress: cast $got, surface $want", a, b, .01f)
             }
         }
+        // Held mid-separation at a fractional density: the left cast is the body the anchored surface draws,
+        // posed by that surface's own presentation at its measured height (pivot shift included).
+        compose.runOnUiThread { density = 1.75f; kotlinx.coroutines.runBlocking { phase.snapTo(.75f) } }
+        compose.waitForIdle()
+        val measured = compose.onNodeWithContentDescription("Lyrics sources").fetchSemanticsNode().size.height.toFloat()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithContentDescription("Lyrics sources").performTouchInput { down(Offset(width * .3f, height * .35f)) }
+            compose.mainClock.advanceTimeBy(2000)
+            compose.runOnIdle {
+                val pose = requireNotNull(anchor.originPresentation)(measured)
+                assertTrue("Held mid-separation shifts the pivot (${pose.horizontalShift})", kotlin.math.abs(pose.horizontalShift) > .01f)
+                val drawn = pose.shape.bodyTransform(anchor.contact.point, Size(measured, measured), pose.vertical, anchored = true)
+                val square = androidx.compose.ui.geometry.RoundRect(0f, 0f, measured, measured, androidx.compose.ui.geometry.CornerRadius(measured / 2f))
+                val want = square.deformed(drawn.copy(drift = drawn.drift + Offset(pose.horizontalShift, 0f)), Offset(measured / 2f, measured / 2f))
+                val got = requireNotNull(anchor.shadowPlane).casters.mapNotNull { (it.shape as io.github.anastaci1a.localica.ui.engine.LayoutShape).laidOut() }.minBy { it.left }
+                for ((a, b) in listOf(want.left to got.left, want.top to got.top, want.right to got.right, want.bottom to got.bottom))
+                    assertEquals("held at density 1.75, progress .75: cast $got, surface $want", a, b, .01f)
+            }
+            compose.onNodeWithContentDescription("Lyrics sources").performTouchInput { cancel() }
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     private fun heldBodyCastsNoShadowInside(label: String, separated: Boolean, expands: Boolean) {
