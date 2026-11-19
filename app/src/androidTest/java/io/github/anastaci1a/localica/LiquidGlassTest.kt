@@ -198,8 +198,8 @@ class LiquidGlassTest {
             assertEquals("Blue backdrop receives the face row", .7001953f - .0203705f, right.green, .03f)
         }
         val dominant = if (dark) .75f else 1f
-        assertEquals("The shadow does not darken the modelled red center", dominant, left.red, .03f)
-        assertEquals("The shadow does not darken the modelled blue center", dominant, right.blue, .03f)
+        assertEquals("The shadow does not darken the default red center", dominant, left.red, .03f)
+        assertEquals("The shadow does not darken the default blue center", dominant, right.blue, .03f)
         val center = pixels[pixels.width / 2, y]
         assertTrue("Foreground must remain black and unfiltered: $center", center.red + center.green + center.blue < .05f)
         val previous = source.fallback
