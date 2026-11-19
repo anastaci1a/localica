@@ -764,8 +764,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     SideEffect { if (!returningInline) popupFlight.advance(gen, PopupEvent.HomeReturns) }
     // One popup appearance owner (#748): an explicit host intent, then the source's own material, its measured page,
     // the caller's page and the detached sampling scene, which can span pages, last; the theme only without any page.
+    // The measurement is read first, as at base: this popup recomposes as its trigger moves, whatever owns its appearance.
+    val measured = anchor.bounds != Rect.Zero
     val popupLightMix = darkOverride?.let { if (it) 1f else 0f } ?: anchor.material?.value?.lightMix
-        ?: anchor.source?.takeIf { anchor.bounds != Rect.Zero }?.lightMix ?: LocalFrostedBackdrop.current?.lightMix
+        ?: anchor.source?.takeIf { measured }?.lightMix ?: LocalFrostedBackdrop.current?.lightMix
         ?: currentSource?.lightMix ?: if (MaterialTheme.colorScheme.surface.luminance() < .5f) 1f else 0f
     val panelDark = popupLightMix >= .5f
     val parentPanels = LocalChildPanels.current
