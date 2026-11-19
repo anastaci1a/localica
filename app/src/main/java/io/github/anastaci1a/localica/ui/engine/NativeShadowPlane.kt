@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui.engine
 
+import io.github.anastaci1a.localica.ui.spec.glassShadowInset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -33,7 +34,7 @@ internal class NativeSurfaceField(private val plane: ShadowPlane,private val nod
         val alpha=opacity.coerceIn(0f,1f)
         if(alpha<=0f) return@with
         val scaled=node.fieldInheritsBodyScale
-        val pad=(6f+28f*spread).dp.toPx()+2f
+        val pad=glassShadowInset(spread).toPx()+2f
         val layer=alpha<1f
         if(layer) {
             val footprint=Rect(presented.left-pad*(if(scaled) sx else 1f),presented.top-pad*(if(scaled) sy else 1f),

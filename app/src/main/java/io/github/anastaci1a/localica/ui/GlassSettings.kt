@@ -26,11 +26,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 
 internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
 
-/**
- * Shadow strength stays linear in storage; its slider gives the faint end more travel (position = strength^(1/curve)).
- * #540 raised this from #502's 1.8 to 2.2 so the low end gets finer steps. Stored values are unchanged and still
- * render at the same strength; a given track position now maps to a lower strength between the endpoints.
- */
+/** Strength stays linear in storage; the 2.2 curve gives the faint end more track travel.
+ * #540 raised #502's 1.8 curve; existing stored multipliers are unchanged. The 0–200%
+ * track retains 5% position stops, so actual multiplier labels need not be multiples of 5%. */
 internal const val GlassShadowStrengthCurve = 2.2f
 
 /**
@@ -47,12 +45,9 @@ internal fun contrastWeightFromSlider(value: Float): Float =
 /** #502's curve, kept as the baseline for the #540 granularity test. */
 internal const val GlassShadowStrengthCurve502 = 1.8f
 
-/**
- * Percent shown for a stored shadow strength: its track position rounded to the nearest 5%, so labels step 0, 5 … 100.
- * Only the label is quantized; the stored strength is unchanged and may be off-grid.
- */
-internal fun shadowStrengthReadout(strength: Float): Int =
-    (sliderPosition(strength, 0f..1f, GlassShadowStrengthCurve) * 20f).roundToInt() * 5
+/** Show the stored multiplier percent, rather than its nonlinear track position.
+ * Only track positions snap to 5%; an existing stored multiplier may remain off-grid. */
+internal fun shadowStrengthReadout(strength: Float): Int = (strength * 100f).roundToInt()
 
 @Composable
 internal fun GlassSettingsControls(value: GlassAppearance, section: String = "Glass", onChange: (GlassAppearance) -> Unit) {
@@ -98,8 +93,8 @@ private fun GlassAppearanceSettings(value: GlassAppearance, onChange: (GlassAppe
     if (LocalSettingsEnabled.current) GlassChoices(listOf("Dark icons", "White icons"), if (previewLightInk) 1 else 0, horizontal = true) { previewLightInk = it == 1 }
     GlassSlider("Blur", value.blur, "Clear", "Frosted") { onChange(value.copy(blur = it)) }
     GlassSlider("White tint", value.whiteTint, "None", "White") { onChange(value.copy(whiteTint = it)) }
-    GlassSlider("Shadow strength", value.shadowStrength, "Off", "Strong", curve = GlassShadowStrengthCurve, readout = ::shadowStrengthReadout) { onChange(value.copy(shadowStrength = it)) }
-    GlassSlider("Shadow spread", value.shadowSpread, "Tight", "Broad") { onChange(value.copy(shadowSpread = it)) }
+    GlassSlider("Shadow strength", value.shadowStrength, "Off", "Strong", maximum = 2f, curve = GlassShadowStrengthCurve, readout = ::shadowStrengthReadout) { onChange(value.copy(shadowStrength = it)) }
+    GlassSlider("Shadow spread", value.shadowSpread, "Tight", "Broad", maximum = 2f) { onChange(value.copy(shadowSpread = it)) }
     SliderPreference("Lift shadow strength · ${(value.liftShadowStrength * 100).roundToInt()}%", value.liftShadowStrength,
         { onChange(value.copy(liftShadowStrength = normalizedLiftShadowStrength(it))) }, Modifier.semantics { contentDescription = "Lift shadow strength" },
         valueRange = LiftShadowMin..LiftShadowMax, steps = LiftShadowSteps, low = "50%", high = "150%",

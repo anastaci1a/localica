@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.glassShadowInset
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 import io.github.anastaci1a.localica.ui.components.PopupSharedContent
 
@@ -985,7 +986,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         shadowExclusion[0] = null
                         if (!page && !detached && popupFlight.modalPresent && admittedDraw && coordinates?.isAttached == true) {
                             val surfaceOrigin = coordinates.backdropPosition(view)
-                            val extent = (4f + shadowSpread * 28f + 2f).dp.toPx()
+                            val extent = glassShadowInset(shadowSpread).toPx()
                             val sx = shape.scaleX(vertical)
                             val sy = shape.scaleY(vertical)
                             val drawn = Rect(surfaceOrigin + Offset((pose?.horizontalShift ?: 0f) + size.width * (1f - sx) / 2f,

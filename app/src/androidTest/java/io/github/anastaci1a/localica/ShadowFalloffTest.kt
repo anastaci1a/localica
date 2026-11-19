@@ -46,7 +46,7 @@ class ShadowFalloffTest {
                 })
             }
         }
-        val reach = 32*d
+        val reach = 48*d
         for (mode in listOf(false, true)) {
             compose.runOnIdle { cached = mode }
             if (mode) compose.waitUntil(5000) { retained.rasterizations > 0 }
@@ -58,7 +58,15 @@ class ShadowFalloffTest {
             val steps = profile.zipWithNext { a,b -> b-a }
             val maximumStep = steps.max()
             val maximumSlopeJump = steps.zipWithNext { a,b -> abs(a-b) }.max()
-            assertTrue("The profile must include a substantial shadow", profile.first() < .8f)
+            // Independently evaluate the shifted capsule's signed distance at the measured pixel centers.
+            // Keep the existing one-code representation budget, rather than a legacy darkness threshold.
+            val expectedFirst = ((96*d).toInt() until (104*d).toInt()).map { y ->
+                val x = (130*d).toInt() + 1.5f
+                val distance = kotlin.math.hypot(x - 100*d, y + .5f - 108*d) - 30*d
+                1f - shadowPolynomialReference(distance / d)
+            }.average().toFloat()
+            assertTrue("Initial shadow follows its independent profile: cached=$mode actual=${profile.first()} expected=$expectedFirst",
+                abs(profile.first() - expectedFirst) <= 1f/255f)
             assertTrue("Falloff must be monotonic: cached=$mode $profile", steps.min() >= -1f/255f)
             assertTrue("No discrete ring edge: cached=$mode step=$maximumStep profile=$profile",
                 maximumStep <= .75f/reach + 1f/255f)

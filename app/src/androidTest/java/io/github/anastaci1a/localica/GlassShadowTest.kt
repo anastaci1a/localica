@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -36,24 +37,52 @@ class GlassShadowTest {
     @Test fun deferredRingPathsMaterializeForTheCurrentGeometryOnly() {
         val cache = GlassShadowGeometry()
         val bodies = listOf(RoundRect(20f, 20f, 80f, 60f, CornerRadius(8f)))
-        cache.update(bodies, 12f, 2f, needRings = false)
+        cache.update(bodies, GlassShadowModel(.25f, 1f), needRings = false)
         val body = cache.body
         assertTrue(cache.rings.isEmpty())
-        cache.update(bodies, 12f, 2f)
+        cache.update(bodies, GlassShadowModel(.25f, 1f))
         org.junit.Assert.assertSame(body, cache.body)
-        org.junit.Assert.assertEquals(glassShadowRingCount(12f), cache.rings.size)
+        org.junit.Assert.assertEquals(GlassShadowModel(.25f, 1f).count, cache.rings.size)
         val rings = cache.rings
-        cache.update(bodies, 12f, 2f, needRings = false)
-        cache.update(bodies, 12f, 2f)
+        cache.update(bodies, GlassShadowModel(.25f, 1f), needRings = false)
+        cache.update(bodies, GlassShadowModel(.25f, 1f))
         org.junit.Assert.assertSame(rings, cache.rings)
         val moved = listOf(RoundRect(25f, 30f, 85f, 70f, CornerRadius(8f)))
-        cache.update(moved, 20f, 3f, needRings = false)
+        cache.update(moved, GlassShadowModel(.5f, 1f), needRings = false)
         assertTrue(cache.rings.isEmpty())
         org.junit.Assert.assertNotSame(body, cache.body)
-        cache.update(moved, 20f, 3f)
-        val fresh = GlassShadowGeometry().also { it.update(moved, 20f, 3f) }
+        cache.update(moved, GlassShadowModel(.5f, 1f))
+        val fresh = GlassShadowGeometry().also { it.update(moved, GlassShadowModel(.5f, 1f)) }
         org.junit.Assert.assertEquals(fresh.body.getBounds(), cache.body.getBounds())
         org.junit.Assert.assertEquals(fresh.rings.map { it.getBounds() }, cache.rings.map { it.getBounds() })
+        val model = GlassShadowModel(1f, .25f)
+        val joined = listOf(RoundRect(20f, 20f, 50f, 60f, CornerRadius.Zero),
+            RoundRect(50f, 20f, 80f, 60f, CornerRadius.Zero))
+        cache.update(joined, model)
+        val neighbors = GlassShadowGeometry().also { it.update(emptyList(), model, neighbors = joined) }
+        val exclusion = GlassShadowExclusion(joined, androidx.compose.ui.geometry.Offset.Zero,
+            androidx.compose.ui.geometry.Size(100f, 100f), 1f, 1f, 0f, 0f)
+        for (index in 0 until model.count) if (model.expansion(index) < 0f) {
+            val expansion = model.expansion(index)
+            val expected = androidx.compose.ui.geometry.Rect(20f - expansion, 20f - expansion + model.shift,
+                80f + expansion, 60f + expansion + model.shift)
+            org.junit.Assert.assertEquals(expected, cache.rings[index].getBounds())
+            val ring = checkNotNull(exclusion.ring(index, neighbors, model.count, androidx.compose.ui.geometry.Offset.Zero))
+            org.junit.Assert.assertEquals(expected, ring.getBounds())
+            for (path in listOf(cache.rings[index], ring)) {
+                val region = android.graphics.Region()
+                region.setPath(path.asAndroidPath(), android.graphics.Region(0, 0, 100, 100))
+                assertTrue("Whole-union erosion preserves the abutting seam at ring $index", region.contains(50, 50))
+            }
+        }
+        val path = androidx.compose.ui.graphics.Path().apply { joined.forEach { addRoundRect(it) } }
+        cache.update(emptyList(), model, path = path)
+        val cachedPaths = cache.rings
+        cache.update(emptyList(), model, path = path)
+        org.junit.Assert.assertSame("An unchanged arbitrary outline performs no ring operations", cachedPaths, cache.rings)
+        cache.update(emptyList(), model.copy(spread = .5f), path = path)
+        org.junit.Assert.assertNotSame(cachedPaths, cache.rings)
+
     }
 
     @Test fun uniformDrawingSkipsRingPathsAndGenericDrawingStillBuildsThem() {
@@ -74,7 +103,7 @@ class GlassShadowTest {
         val asymmetric = RoundRect(30f, 30f, 90f, 70f, CornerRadius(8f), CornerRadius(12f),
             CornerRadius(6f), CornerRadius(10f))
         render(asymmetric)
-        org.junit.Assert.assertEquals(glassShadowRingCount(20.8f), cache.rings.size)
+        org.junit.Assert.assertEquals(GlassShadowModel(1f, .6f).count, cache.rings.size)
         render(uniform)
         assertTrue("New uniform geometry must discard obsolete ring paths", cache.rings.isEmpty())
     }
@@ -200,16 +229,17 @@ class GlassShadowTest {
                     else {
                         // Generic union path at the same host origin, composited as one
                         // transparent field just like the primitive and retained paths.
-                        geometry.update(listOf(body), (4f + .6f * 28f).dp.toPx(), 2.dp.toPx())
+                        val model = GlassShadowModel(density, .6f)
+                        geometry.update(listOf(body), model)
                         clipPath(geometry.body,
                             androidx.compose.ui.graphics.ClipOp.Difference) {
                             val canvas = drawContext.canvas
                             val bounds = androidx.compose.ui.geometry.Rect(body.left, body.top, body.right, body.bottom)
-                                .inflate((6f + .6f * 28f).dp.toPx() + 1f)
+                                .inflate((8f + .6f * 48f).dp.toPx() + 1f)
                             canvas.saveLayer(bounds, androidx.compose.ui.graphics.Paint())
                             try {
                                 geometry.rings.forEachIndexed { index, ring ->
-                                    val alpha = glassShadowRingAlpha(index, geometry.rings.size, .8f * opacity)
+                                    val alpha = model.ringAlpha(index, .8f * opacity)
                                     if (alpha > 0f) drawPath(ring, Color.Black.copy(alpha = alpha))
                                 }
                             } finally { canvas.restore() }
@@ -292,7 +322,7 @@ class GlassShadowTest {
                                 RoundRect(85.dp.toPx(), 60.dp.toPx(), 180.dp.toPx(), 120.dp.toPx(), CornerRadius(22.dp.toPx()))
                             )
                             val geometry = GlassShadowGeometry()
-                            geometry.update(bodies, 24.dp.toPx(), 2.dp.toPx())
+                            geometry.update(bodies, GlassShadowModel(density, 1f), needRings = false)
                             // Compare intersecting silhouettes, including a duplicate,
                             // against the old Boolean union with translucent ink.
                             if (unionReference) {
@@ -301,7 +331,7 @@ class GlassShadowTest {
                                     androidx.compose.ui.graphics.PathOperation.Union, paths[0], paths[1])
                                 drawPath(union, Color.Black.copy(alpha = .25f))
                             } else {
-                                geometry.update(bodies + bodies.first(), 24.dp.toPx(), 2.dp.toPx())
+                                geometry.update(bodies + bodies.first(), GlassShadowModel(density, 1f), needRings = false)
                                 drawPath(geometry.body, Color.Black.copy(alpha = .25f))
                             }
                         })

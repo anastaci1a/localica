@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import io.github.anastaci1a.localica.ui.engine.GlassShadowModel
 import io.github.anastaci1a.localica.ui.engine.GlassShadowGeometry
 import io.github.anastaci1a.localica.ui.engine.glassShadows
 import org.junit.Assert.*
@@ -21,21 +22,27 @@ import org.junit.Test
 import org.junit.Rule
 import io.github.anastaci1a.localica.navigation.GlassRendererMode
 
-/** Offscreen capture at density 1 with the given composition identities. */
+/** Offscreen capture at density 1, using the live native backend where available. */
 internal fun shadowCapture(width: Int = 200, height: Int = 140, generation: Long = 1, draw: DrawScope.() -> Unit): PresentedCapture {
-    val image = ImageBitmap(width, height)
-    CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), Size(width.toFloat(), height.toFloat()), draw)
+    val size = Size(width.toFloat(), height.toFloat())
+    val image = if (android.os.Build.VERSION.SDK_INT >= 29)
+        renderNativeReferenceImage(width, height, "shadow-oracle-control", opaque = false) { canvas ->
+            CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(canvas), size, draw)
+        }
+    else ImageBitmap(width, height).also {
+        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(it), size, draw)
+    }
     return PresentedCapture(image, listOf("offscreen"), 1, generation, generation, null, System.nanoTime(), offscreen = true)
 }
 internal val probeBody = RoundRect(40f, 40f, 160f, 88f, CornerRadius(24f))
-/** The whole ring field of [probeBody] at spread .5 (reach 18 px, shift 2 px) plus margin. */
-internal val probeRegion = Rect(16f, 16f, 184f, 116f)
+/** The whole ring field of [probeBody] at spread .5 (reach 24 px, shift 8 px) plus margin. */
+internal val probeRegion = Rect(14f, 14f, 186f, 122f)
 
 /** U12.01c red witness: every mutation below passes a mean-only probe or a max-only probe, and the full-field oracle rejects it. */
 class ShadowFieldOracleSensitivityTest {
     @get:Rule val compose = localicaComposeRule()
     private val probe = ShadowFieldProbe(listOf(probeRegion), 1f / 255)
-    private fun field(white: Boolean = false) = shadowCapture { if (white) drawRect(Color.White); glassShadows(listOf(probeBody to 1f), 1f, .5f, GlassShadowGeometry()) }
+    private fun field(white: Boolean = false, strength: Float = 1f) = shadowCapture { if (white) drawRect(Color.White); glassShadows(listOf(probeBody to 1f), strength, .5f, GlassShadowGeometry()) }
     private fun edit(capture: PresentedCapture, change: (Bitmap) -> Unit): PresentedCapture {
         val bitmap = capture.image.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, true); change(bitmap)
         return capture.copy(image = bitmap.asImageBitmap())
@@ -67,10 +74,13 @@ class ShadowFieldOracleSensitivityTest {
     }
 
     @Test fun oppositePixelErrorsWithZeroMeanFail() {
-        val white = shadowCapture { drawRect(Color.White) }; val reference = field(white = true)
+        val white = shadowCapture { drawRect(Color.White) }; val reference = field(white = true, strength = 2f)
         // Symmetric pixels under the body share one shadow value; move them by ±8/255 so the region mean is unchanged.
         val mutated = edit(reference) { b ->
-            val y = (89..107).first { android.graphics.Color.red(b.getPixel(80, it)) in 20..235 }
+            val model = GlassShadowModel(1f, .5f)
+            val signal = kotlin.math.ceil(model.alpha(0f, 2f) * 255f).toInt()
+            val rows = (probeBody.bottom.toInt() + 1)..kotlin.math.ceil(probeBody.bottom + model.shift).toInt()
+            val y = rows.first { android.graphics.Color.red(b.getPixel(80, it)) in 8..(255 - signal) }
             val a = b.getPixel(80, y); val c = b.getPixel(120, y); assertEquals(a, c); val gray = android.graphics.Color.red(a)
             b.setPixel(80, y, android.graphics.Color.rgb(gray + 8, gray + 8, gray + 8)); b.setPixel(120, y, android.graphics.Color.rgb(gray - 8, gray - 8, gray - 8))
         }

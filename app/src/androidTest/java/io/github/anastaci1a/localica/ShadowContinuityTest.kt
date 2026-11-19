@@ -203,10 +203,11 @@ class ShadowContinuityTest {
                 Rect(p.x - 1f, p.y - 1f, p.x + 7f, p.y + 7f)
             }
             assertEquals(retainedCapture.nativeWindows.map { it.generation.marker }, liveCapture.nativeWindows.map { it.generation.marker })
-            val reach = 34f * compose.density.density + 2f
+            val reach = 48f * compose.density.density + 2f
+            val shift = 8f * compose.density.density
             assertTrue("Diagnostic markers are outside every shadow tail", markers.all { marker ->
                 liveCapture.nativeWindows.first().state.bodies.all { (body, _) ->
-                    !marker.overlaps(Rect(body.left, body.top, body.right, body.bottom).inflate(reach))
+                    !marker.overlaps(Rect(body.left, body.top + shift, body.right, body.bottom + shift).inflate(reach))
                 }
             })
             var maximum = 0f
@@ -221,9 +222,10 @@ class ShadowContinuityTest {
     @Test fun dragBubbleLandingDoesNotCutItsShadowAtEitherEndpoint() = availability("bubble")
 
     @Test fun buttonPressAndReleaseKeepTheCompleteMovingShadow() {
+        val strength = 2f
         val anchor = GlassAnchor()
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = 1f, shadowSpread = 1f)) {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = strength, shadowSpread = 1f)) {
                 Box(Modifier.size(240.dp).background(Color.White).testTag("press-shadow-scene"),
                     contentAlignment = androidx.compose.ui.Alignment.Center) {
                     GlassActionButton(AppIcon.ActionEllipsis, "Press", Modifier.width(160.dp).glassAnchor(anchor).testTag("press-shadow")) {}
@@ -255,7 +257,7 @@ class ShadowContinuityTest {
                         drawRect(Color.White)
                         drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint())
                         scale(shape.scaleX(anchor.contact.vertical), shape.scaleY(anchor.contact.vertical), body.center) {
-                            glassShadows(listOf(RoundRect(body, CornerRadius(body.height/2)) to 1f), 1f, 1f, GlassShadowGeometry(), rasterizing = true)
+                            glassShadows(listOf(RoundRect(body, CornerRadius(body.height/2)) to 1f), strength, 1f, GlassShadowGeometry(), rasterizing = true)
                         }
                         drawContext.canvas.restore()
                     }

@@ -31,7 +31,7 @@ class UiSpecTest {
         assertEquals(.05f,stock.expansion.band,0f)
         // #846 (operator 3:17-3:20 AM): both drawers (player sheet and Queue) are the #608 measured model.
         assertEquals(ExpansionSpec(EasingSpec(.242192f,.999967f,.511935f,.997652f),426.086832f,.500401615f,1.41952128f,.73607278f,.5f,140f,.25f,.5f,.05f),stock.sheetExpansion)
-        assertEquals(22.8f,stock.clearance.getValue(Clearance.ShadowInset).value,.00001f)
+        assertEquals(56f,stock.clearance.getValue(Clearance.ShadowInset).value,.00001f)
     }
     @Test fun rejectsNaNZeroDurationAndEveryMalformedFieldWithoutThrowing() {
         val r=Random(600000)
@@ -82,7 +82,7 @@ class UiSpecTest {
         assertEquals(MotionAccess.Reduced,accepted(UiSpecData(access=MotionAccess.Standard),settings.copy(reducedMotion=true,animationSpeedTenths=15)).access)
         assertEquals(MotionAccess.Standard,accepted(config=settings.copy(animationSpeedTenths=15)).access); assertEquals(1.5f,accepted(config=settings.copy(animationSpeedTenths=15)).speed,0f)
         val m=StockUiSpec.material.getValue(MaterialRole.Glass).copy(shadowSpread=.1f)
-        assertEquals(8.8f,accepted(UiSpecData(material=mapOf(MaterialRole.Glass to m))).clearance.getValue(Clearance.ShadowInset).value,.00001f)
+        assertEquals(12.8f,accepted(UiSpecData(material=mapOf(MaterialRole.Glass to m))).clearance.getValue(Clearance.ShadowInset).value,.00001f)
         assertEquals(2f,accepted(config=settings.copy(glass=GlassAppearance(shapeDamping=2f)) ).material.getValue(MaterialRole.Glass).shapeDamping,0f)
     }
     @Test fun everyPositionSpringIsAdmittedAndSlowOverrideRejected() {

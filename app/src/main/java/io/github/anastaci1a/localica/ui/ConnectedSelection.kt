@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.glassShadowInset
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 
 import android.os.Build
@@ -249,7 +250,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
             outline,progress,backing,location,blurEffects,density,direction,sampleOffset,shadow,lift,averageProgress,flatColor)
     }
     if(layers.size==1 && layers[0].weight==1f) { paint(layers[0]);return }
-    val padding=if(shadow)(6f+lift.spread*28f).dp.toPx()+2f else gap/2f
+    val padding=if(shadow)glassShadowInset(lift.spread).toPx()+2f else gap/2f
     val bounds=regions.map { it.bounds }.reduce { a,b -> a.union(b) }.inflate(padding)
     val canvas=drawContext.canvas
     canvas.saveLayer(bounds,Paint())

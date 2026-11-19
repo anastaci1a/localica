@@ -2113,16 +2113,6 @@
             column="171"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="                            val extent = (4f + shadowSpread * 28f + 2f).dp.toPx()"
-        errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="982"
-            column="42"/>
-    </issue>
 
     <issue
         id="LiteralUiSpacing"
@@ -2234,16 +2224,6 @@
             column="103"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="@Composable internal fun glassShadowInset(): Dp = (6f + 28f * LocalGlassAppearance.current.shadowSpread).dp"
-        errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassShadow.kt"
-            line="27"
-            column="51"/>
-    </issue>
 
     <issue
         id="LiteralUiSpacing"
@@ -15633,7 +15613,7 @@
         errorLine2="                                                                   ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="296"
+            line="297"
             column="68"/>
     </issue>
 
@@ -15666,7 +15646,7 @@
         errorLine2="                                                                   ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="314"
+            line="315"
             column="68"/>
     </issue>
 

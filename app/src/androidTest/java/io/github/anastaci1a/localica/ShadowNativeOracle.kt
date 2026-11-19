@@ -49,16 +49,8 @@ private fun nativeShadowUnionReference(rule: ComposeContentTestRule, width: Int,
     check(state.receiver == null && state.exclusion == null) {
         "Incomplete: native reference requires an independent receiver/exclusion model"
     }
-    val cutout = destinationShadowCutoutReference(rule, width, height, state.bodies).asAndroidBitmap()
-    val pixels = IntArray(width * height)
-    cutout.getPixels(pixels, 0, width, 0, 0, width, height)
-    for (index in pixels.indices) {
-        val interior = pixels[index] ushr 16 and 255
-        pixels[index] = ((255 - interior) shl 24) or 0x00ffffff
-    }
-    val outside = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
     return nativeShadowFieldReference(width, height, state.bodies, rule.density.density,
-        state.strength, state.spread, state.background.toArgb(), outside, state.scaleX, state.scaleY)
+        state.strength, state.spread, state.background.toArgb(), true, state.scaleX, state.scaleY)
 }
 
 /** Immutable receipt inputs only: normalized field, destination filtering, independently proven cutout. */
@@ -76,7 +68,7 @@ internal fun shadowUnionReference(rule: ComposeContentTestRule, width: Int, heig
             corner(r.topLeftCornerRadius), corner(r.topRightCornerRadius), corner(r.bottomRightCornerRadius), corner(r.bottomLeftCornerRadius)) to alpha
     }
     val density = rule.density.density
-    val padding = (4f + state.spread * 28f) * density + 2f * density + 2f
+    val padding = (48f * state.spread + 8f) * density + 2f
     val inset = Offset(kotlin.math.floor(-padding), kotlin.math.floor(-padding))
     val field = ImageBitmap(kotlin.math.ceil(local.maxOf { it.first.right } + padding - inset.x).toInt(),
         kotlin.math.ceil(local.maxOf { it.first.bottom } + padding - inset.y).toInt())

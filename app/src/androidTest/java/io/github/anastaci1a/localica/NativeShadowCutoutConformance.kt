@@ -21,7 +21,7 @@ import org.junit.Assert.*
 /** The da41387f on-screen bare control, unchanged, has no rings, filtering or retained cache. */
 private fun DrawScope.bareDestinationCutout(bodies: List<Pair<RoundRect, Float>>) {
     val origin = Offset(bodies.minOf { it.first.left }, bodies.minOf { it.first.top })
-    val geometry = GlassShadowGeometry().apply { update(shadowScreenBodies(bodies, -origin).map { it.first }, 0f, 0f, false) }
+    val geometry = GlassShadowGeometry().apply { update(shadowScreenBodies(bodies, -origin).map { it.first }, GlassShadowModel(density, 0f), needRings = false) }
     translate(origin.x, origin.y) { clipPath(geometry.body, ClipOp.Difference) { drawRect(Color.Black, -origin, size) } }
 }
 

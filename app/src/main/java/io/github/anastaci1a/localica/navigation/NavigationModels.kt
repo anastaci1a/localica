@@ -114,8 +114,8 @@ const val GlassBlurDefault = .2f
 data class GlassAppearance(
     val blur: Float = GlassBlurDefault,
     val whiteTint: Float = .06f,
-    val shadowStrength: Float = .12f,
-    val shadowSpread: Float = .6f,
+    val shadowStrength: Float = 1f,
+    val shadowSpread: Float = 1f,
     val contrast: Float = .25f,
     val tabStyle: TabLensStyle = TabLensStyle.Adjustable,
     val tabBlur: Float = .3f,
@@ -133,7 +133,7 @@ data class GlassAppearance(
     val touchLight: Float = 1f,
 ) {
     fun normalized() = GlassAppearance(blur.unit(GlassBlurDefault), whiteTint.unit(.06f),
-        shadowStrength.unit(.12f), shadowSpread.unit(.6f), contrast.unit(.25f).coerceAtMost(.5f), tabStyle,
+        shadowStrength.unit(1f, 2f), shadowSpread.unit(1f, 2f), contrast.unit(.25f).coerceAtMost(.5f), tabStyle,
         tabBlur.unit(.3f), tabWhiteTint.unit(.16f),
         if (shapeDamping.isFinite()) shapeDamping.coerceIn(2f, 40f) else 8f,
         if (depth.isFinite()) depth.coerceIn(.6f, 2f) else 1.35f,
@@ -142,7 +142,7 @@ data class GlassAppearance(
         if (controlExpansion.isFinite()) controlExpansion.coerceIn(1f, 2f) else 1.75f,
         overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground, renderer,
         normalizedLiftShadowStrength(liftShadowStrength), touchLight.unit(1f))
-    private fun Float.unit(fallback: Float) = if (isFinite()) coerceIn(0f, 1f) else fallback
+    private fun Float.unit(fallback: Float, maximum: Float = 1f) = if (isFinite()) coerceIn(0f, maximum) else fallback
 }
 
 enum class ArtworkAction(val label: String) {

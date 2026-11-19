@@ -67,6 +67,7 @@ class PopupShadowContinuityTest {
      * page and popup windows at identical geometry on every open and return, so their
      * shared gap must not switch between union and stacked coverage at either handoff. */
     @Test fun sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles() {
+        strength = 2f
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
@@ -454,10 +455,10 @@ class PopupShadowContinuityTest {
             assertTrue("The control caster must never transfer", requireNotNull(caster).ownsWindow(plane))
             assertFalse("The real union must not contain a control caster", anchor.shadowPlane?.casters?.any { it === caster } == true)
         }
-        // The spread and 2dp vertical shadow shift are specified by the renderer.
+        // The spread and 8dp vertical shadow shift are specified by the renderer.
         // Check the FULL padded outlines at every sampled strain/depth, not just
         // the gap or the undeformed 64dp body. A separate plane prevents merging.
-        val pad = (6f + .6f * 28f) * compose.density.density + 2f
+        val pad = (8f + .6f * 48f) * compose.density.density + 2f
         val shift = Offset(0f, -referenceShift)
         val bodies = homeBodies().map { it.boundingRect.inflate(pad) }
         val controls = bodies.map { it.translate(shift) }
@@ -475,7 +476,7 @@ class PopupShadowContinuityTest {
         val density = androidx.compose.ui.platform.LocalDensity.current
         SideEffect {
             referencePlane = plane
-            referenceShift = with(density) { 160.dp.roundToPx().toFloat() }
+            referenceShift = with(density) { 192.dp.roundToPx().toFloat() }
         }
         Box(Modifier.fillMaxSize().onGloballyPositioned { referenceOrigin = it.backdropPosition(page) }
             .shadowPlaneHost(plane, strength, .6f)) {
@@ -572,10 +573,9 @@ class PopupShadowContinuityTest {
                 val localX = (x + .5f - screen.center.x) / sx + screen.width / 2
                 val localY = (y + .5f - screen.center.y) / sy + screen.height / 2
                 val cx = shadowAxisCenter(localX, bounds.width, radius, 0f)
-                val cy = shadowAxisCenter(localY, bounds.height, radius, 2f*d)
+                val cy = shadowAxisCenter(localY, bounds.height, radius, 8f*d)
                 val distance = kotlin.math.sqrt((localX-cx)*(localX-cx) + (localY-cy)*(localY-cy)) - radius
-                val u = (1f-distance/((4f+.6f*28f)*d)).coerceIn(0f,1f)
-                val expected = 1f-kotlin.math.exp(-.34594453f*.8f*u*u*u)
+                val expected = shadowPolynomialReference(distance / (d * .6f)) * .8f
                 val referenceX = (right + 36f*d*sx).roundToInt()
                 assertTrue("The unshadowed reference must remain on screen", referenceX in 0 until on.width)
                 val background = AndroidColor.red(on.getPixel(referenceX, y)).toFloat()
@@ -611,10 +611,9 @@ class PopupShadowContinuityTest {
                     }
                     if (inside(2f/minOf(sx, sy), 0f)) continue // Exclude antialiased material edge.
                     val dx = (abs(lx-screen.width/2)-(screen.width/2-radius)).coerceAtLeast(0f)
-                    val dy = (abs(ly-screen.height/2-2f*d)-(screen.height/2-radius)).coerceAtLeast(0f)
+                    val dy = (abs(ly-screen.height/2-8f*d)-(screen.height/2-radius)).coerceAtLeast(0f)
                     val distance = kotlin.math.sqrt(dx*dx+dy*dy)-radius
-                    val u = (1f-distance/((4f+.6f*28f)*d)).coerceIn(0f,1f)
-                    val expected = 1f-kotlin.math.exp(-.34594453f*.8f*u*u*u)
+                    val expected = shadowPolynomialReference(distance / (d * .6f)) * .8f
                     val actual = 1f - AndroidColor.red(on.getPixel(x,y))/background.coerceAtLeast(1f)
                     if (expected < .015f && abs(actual) < .015f) continue
                     val error = abs(actual - expected)

@@ -32,7 +32,8 @@ class InterfacePreferences(context: Context) {
             artworkTransition = preferences.enumValue<ArtworkTransition>("artwork-transition") ?: ArtworkTransition.BlurThrough,
             artworkSwipe = preferences.getBoolean("artwork-swipe", true),
             glass = GlassAppearance(preferences.getFloat("glass-blur", .2f), preferences.getFloat("glass-white-tint", .06f),
-                preferences.getFloat("glass-shadow-strength", .12f), preferences.getFloat("glass-shadow-spread", .6f),
+                preferences.getFloat("glass-shadow-strength-multiplier", preferences.getFloat("glass-shadow-strength", .12f) / .12f),
+                preferences.getFloat("glass-shadow-spread-multiplier", preferences.getFloat("glass-shadow-spread", .6f) / .6f),
                 preferences.getFloat("glass-contrast-trim", if (preferences.getFloat("glass-contrast", .4f) == 0f) 0f else .25f),
                 preferences.enumValue<TabLensStyle>("tab-lens-style") ?: TabLensStyle.Adjustable,
                 preferences.getFloat("tab-lens-blur", .3f), preferences.getFloat("tab-lens-tint", .16f),
@@ -62,7 +63,8 @@ class InterfacePreferences(context: Context) {
             .putInt("lyric-delay-ms", value.lyricDelayMs.coerceIn(-2000, 2000))
             .putString("long-scroll", value.longScroll.name)
             .putFloat("glass-blur", glass.blur).putFloat("glass-white-tint", glass.whiteTint)
-            .putFloat("glass-shadow-strength", glass.shadowStrength).putFloat("glass-shadow-spread", glass.shadowSpread)
+            .putFloat("glass-shadow-strength-multiplier", glass.shadowStrength).putFloat("glass-shadow-spread-multiplier", glass.shadowSpread)
+            .remove("glass-shadow-strength").remove("glass-shadow-spread")
             .putFloat("glass-contrast-trim", glass.contrast).remove("glass-contrast")
             .putFloat("glass-contrast-weight", glass.contrastWeight).putFloat("tab-classic-opacity", glass.classicOpacity)
             .putFloat("glass-control-expansion", glass.controlExpansion)
