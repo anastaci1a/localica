@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import java.util.Collections
+import java.util.IdentityHashMap
 import kotlin.math.*
 
 /** Neutral extent for an absent inset; independent of configurable spacing. */
@@ -110,12 +111,49 @@ internal fun fluidContentBlurOut(height: Double, maxScale: () -> Double, minScal
 }
 internal val FluidContentBlurIn = FluidContentBlurRequest(1.0, 0.0)
 
+internal enum class FluidPopupChannel(val key: String, val value: Value) {
+    DestinationOpacity("opacity", Value.PresentationScalar), ContentZoom("sublayerTransform", Value.Transform),
+    GaussianRadius("filters.gaussianBlur.inputRadius", Value.ScaledScalar), LensHeight("effect.height", Value.CoarseScalar),
+    LensAmount("filters.displacementMap.inputAmount", Value.CoarseScalar);
+
+    enum class Value { PresentationScalar, Transform, ScaledScalar, CoarseScalar }
+}
+
+internal fun fluidLensSuppressesAction(old: Double, new: Double, latest: Double?, bypass: Boolean) =
+    !bypass && abs(new - old) <= 0.05 && (latest == null || abs(new - latest) <= 0.05)
+
+internal fun fluidRadiusEpsilonSquared(pointScale: Double): Double {
+    val unit = 1.0 / pointScale
+    return unit * unit
+}
+
+internal fun fluidZoomEpsilonSquared(pointScale: Double, size: Pair<Double, Double>?, empty: Boolean, anchorX: Double, anchorY: Double): DoubleArray {
+    val translation = fluidRadiusEpsilonSquared(pointScale)
+    val fixed = Double.fromBits(0x3eb0c6f7a0b5ed8dL)
+    if (size == null) return doubleArrayOf(0.0001, fixed, translation, fixed, fixed)
+    if (empty) return doubleArrayOf(0.01 * 0.01, 0.001 * 0.001, translation, 0.001 * 0.001, 0.001 * 0.001)
+    val (width, height) = size
+    val x = maxOf(anchorX, 1.0 - anchorX) * width
+    val y = maxOf(anchorY, 1.0 - anchorY) * height
+    val length = sqrt(x * x + y * y)
+    val spatial = (1.0 / pointScale) / (if (length <= 1.0) 1.0 else length)
+    val square = spatial * spatial
+    return doubleArrayOf(square, square, translation, square, square)
+}
+
 internal fun fluidDestinationCrossBlur(
     explicit: Boolean?, previousId: Any?, incomingId: Any?, previous: Boolean, incomingGlass: Boolean,
 ) = explicit ?: if (previousId != null && previousId == incomingId) false else previous || incomingGlass
 
 internal data class FluidDestinationBlend(val opacity: Double, val gaussianRadius: Double) {
     val layerOpacity get() = opacity.toFloat()
+
+    /** The presentation owner receives absolute values with nil velocity, cap zero and immediate false. */
+    fun present(write: ((FluidPopupChannel, Double) -> Unit)?) {
+        write ?: return
+        write(FluidPopupChannel.DestinationOpacity, opacity)
+        write(FluidPopupChannel.GaussianRadius, gaussianRadius)
+    }
 }
 
 internal fun fluidDestinationBlend(
@@ -157,6 +195,8 @@ internal object FluidGaussianSpec {
 internal object FluidLensingSpec {
     enum class Filter { GaussianBlur, DisplacementMap }
     val filterOrder get() = Filter.entries
+    fun <Image : Any> colorChain(content: Image, emit: (Filter, Image) -> Image?): Image =
+        filterOrder.fold(content) { color, filter -> emit(filter, color) ?: color }
 
     data class Request(val timing: FluidPopupStep, val gain: Double, val dimension: Double?)
 
@@ -186,6 +226,31 @@ internal object FluidLensingSpec {
 
     const val displacementFunction = 44
     const val namedSourceTexture = 1
+    const val displacementVertexType = 6
+    const val freshHeight = 20.0
+    const val freshAmount = -0.001
+    val freshOffset get() = offset(null)
+    fun skipsDisplacementSample(maskBlue: Float) = maskBlue < Float.fromBits(0x3b808081)
+
+    fun surfaceCoordinates(x: Float, y: Float, width: Int, height: Int, normalized: Boolean, kind: Int, flipped: Boolean): Pair<Float, Float> {
+        val sx = if (normalized) 1f / width.toFloat() else 1f
+        val sy = if (normalized) 1f / height.toFloat() else 1f
+        val flip = flipped && ((1L shl (kind and 63)) and 0x0000042000fffe00L) == 0L
+        return (x * sx + 0f) to if (flip) y * -sy + 1f else y * sy + 0f
+    }
+
+    fun <Layer : Any, Portal : Any> registerPortals(
+        animations: Iterable<Layer>, lensingEnabled: Boolean, retained: IdentityHashMap<Layer, Portal>,
+        clippingLayer: (Layer) -> Layer, outermostLayer: (Layer) -> Layer, mask: (Layer, Boolean) -> Unit,
+        track: (Layer) -> Unit, attach: (Layer, Layer) -> Portal,
+    ) {
+        for (animation in animations) {
+            mask(clippingLayer(animation), !lensingEnabled)
+            track(animation)
+            val clipping = clippingLayer(animation)
+            if (!retained.containsKey(clipping)) retained[clipping] = attach(clipping, outermostLayer(animation))
+        }
+    }
 
     data class Vertex(
         val x: Float, val y: Float,
@@ -232,6 +297,80 @@ internal object FluidLensingSpec {
         val x = values?.getOrNull(0)?.toFloat() ?: 0f
         return x to (values?.getOrNull(1)?.toFloat() ?: x)
     }
+}
+
+internal object FluidCornerSpec {
+    const val continuous = 1
+    fun freshCurve(sdkVersionSet: Int) = if (sdkVersionSet >= 0x07e80000) continuous else 0
+    fun matchedRadius(source: Double) = source.toFloat().let { if (it < 0f) 0f else it }
+    fun matchedRadii(source: DoubleArray) = DoubleArray(source.size) { if (source[it] < 0.0) 0.0 else source[it] }
+
+    fun rawRadii(precomputed: FloatArray?, suppressFallback: Boolean, vector: DoubleArray?, scalar: Float, shortSide: Double): FloatArray? {
+        if (precomputed != null) return precomputed
+        if (suppressFallback) return null
+        if (vector != null) return FloatArray(4) { vector[it * 2].toFloat() }
+        val radius = when {
+            scalar.toRawBits() == 0x7fe00000 -> (shortSide * 0.5).toFloat()
+            scalar.isNaN() -> 0f
+            else -> scalar
+        }
+        return FloatArray(4) { radius }
+    }
+
+    data class BoundsEncoding(val imageFunction: Int, val family: Float, val radii: FloatArray, val expansion: Double) {
+        fun splitsIntoRect(pad: Double, largerHalfExtent: Double) = expansion + pad < largerHalfExtent
+    }
+
+    fun boundsEncoding(raw: FloatArray, scale: Float, curveCode: Int, halfWidth: Float, halfHeight: Float): BoundsEncoding {
+        val floor = Float.fromBits(0x3c23d70a)
+        val clamped = FloatArray(4) { if (raw[it] < floor) floor else raw[it] }
+        val uniform = clamped[0] == clamped[1] && clamped[1] == clamped[2] && clamped[2] == clamped[3]
+        val scaled = FloatArray(4) { clamped[it] * scale }
+        val continuous = curveCode and 3 != 0
+        val maxRadius = (if (uniform) scaled[0] else scaled.reduce { left, right -> if (left > right) left else right }).toDouble()
+        val expansion = if (continuous) maxRadius * Double.fromBits(0x3ff875696e58a32fL) else maxRadius
+        if (!uniform) return BoundsEncoding(22, 5f, if (continuous) FloatArray(4) { -scaled[it] } else scaled, expansion)
+        fun weight(half: Float): Float {
+            if (!continuous) return 1f
+            val coefficient = Double.fromBits(0x400721e8a7a4b61bL)
+            return ((half + half).toDouble() * -coefficient / expansion + coefficient).coerceIn(0.0, 1.0).toFloat()
+        }
+        return BoundsEncoding(21, 4f, floatArrayOf(weight(halfWidth), weight(halfHeight), scaled[0], 0f), expansion)
+    }
+
+    // Group texture selection is independent of the per-element image kind.
+    fun groupTexture(subtract: Boolean, roiDirect: Boolean, roiOverlap: Boolean) = when {
+        subtract -> 59
+        roiDirect -> 1
+        roiOverlap -> 58
+        else -> 3
+    }
+    const val rectImageFunction = 20
+    const val inlineEffectTexture = 66
+    fun scansOverlap(parentAdmitted: Boolean, disableOption: Boolean) = parentAdmitted && !disableOption
+    fun inlinesBounds(parentAllowsInline: Boolean, eligibleBoundsUnionChildren: Int) =
+        parentAllowsInline && eligibleBoundsUnionChildren == 1
+}
+
+internal fun <Item, Assertion : Any> fluidHoldEndpoints(from: Item, to: Item, hide: (Item) -> Assertion?) =
+    listOfNotNull(hide(from), hide(to))
+
+internal fun fluidCompleteGroup(callback: (() -> Unit)?, releasePortals: () -> Unit,
+    clearMorphables: () -> Unit, clearAnimations: () -> Unit, releaseHiding: () -> Unit,
+) {
+    callback?.invoke()
+    releasePortals()
+    clearMorphables()
+    clearAnimations()
+    releaseHiding()
+}
+
+internal fun fluidCompleteTransition(dismissing: Boolean, teardown: () -> Unit, removeContainer: () -> Unit, alongside: (() -> Unit)?) {
+    if (dismissing) {
+        teardown()
+        removeContainer()
+    }
+    alongside?.invoke()
 }
 
 internal fun fluidImmediateUnhideSites(through: Boolean, dismissingToDrag: Boolean, hasStashedPreview: Boolean, transitionLoop: Boolean) =
