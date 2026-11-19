@@ -227,27 +227,21 @@ internal class GlassPopupFlight(private val anchor: GlassAnchor? = null, private
         reportGlass(receipts) { GlassTransitionReceipt(System.identityHashCode(this), next.gen, "${from.takeover}/${from.presenter}", event, "${next.takeover}/${next.presenter}") }
     }
     var layer by mutableStateOf<GraphicsLayer?>(null)
-    /** R5: the optical body (B and its dependency D) of this presentation; the native field stays outside it. */
+    /** R5 optical body (B and D; the native field stays outside it) and the closing request's withdrawal at an ordinary source's draw entry. */
     var body: OpticalBody? = null
-    /** The current closing request's withdrawal at an ordinary source's draw entry. */
     var sourceDraw: ((DrawScope) -> Unit)? = null
-    /** The source takes [request]'s body at its draw entry: B empties and D -> empty B enters its graph before its content. */
     fun withdrawBody(scope: DrawScope, request: Long) {
         val a = anchor ?: return
         val take = a.restoredBodyReceipt != request
-        if (take) a.restoredBodyReceipt = request
+        if (take) { a.restoredBodyReceipt = request; reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "withdraw", request) } }
         body?.withdraw(scope, take)
-        if (take) reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "withdraw", request) }
     }
-    fun refillBody(scope: DrawScope, optics: DrawScope.() -> Unit) {
-        if (body?.refill(scope, optics) == true) reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "unlink", anchor?.restoredDrawRequest ?: -1L) }
-    }
+    fun refillBody(scope: DrawScope, optics: DrawScope.() -> Unit) { if (body?.refill(scope, optics) == true)
+        reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "unlink", anchor?.restoredDrawRequest ?: -1L) } }
     /** A source draw that did not complete returns its reservation; the popup's next draw refills B. */
     fun rearmBody(request: Long) {
-        val a = anchor ?: return
-        if (a.restoredBodyReceipt != request) return
-        a.restoredBodyReceipt = -1L
-        reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "rearm", request) }
+        val a = anchor?.takeIf { it.restoredBodyReceipt == request } ?: return
+        a.restoredBodyReceipt = -1L; reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "rearm", request) }
     }
     var origin = Offset.Zero
     private var homeOrigin = Offset.Zero
@@ -436,8 +430,7 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor?, source: FrostedBackdrop?
             if (!anchor.hidden) {
                 val flight = anchor.popup
                 flight?.sourceDraw?.invoke(this)
-                var drawn = false
-                try { drawContent(); drawn = true } finally { if (!drawn) flight?.rearmBody(restoreRequest) }
+                var drawn = false; try { drawContent(); drawn = true } finally { if (!drawn) flight?.rearmBody(restoreRequest) }
                 anchor.restoredDrawn = true
                 view.post { if (anchor.restoredDrawRequest == restoreRequest) anchor.restoredPresentedReceipt = restoreRequest }
             }
@@ -678,11 +671,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     val receipt = ++anchor.restoredDrawRequest
                     continuousOrigin?.beginOriginProof(generation)
                     // R5: only this request's actual source draw entry takes the optical body.
-                    val withdrawal: (DrawScope) -> Unit = { scope ->
-                        if (anchor.popup === popupFlight && popupFlight.gen == gen && !motion.shown && popupFlight.takeover == Restoring &&
-                            motion.expansion.nativeGateCurrent(generation, false) && anchor.restoredDrawRequest == receipt)
-                            popupFlight.withdrawBody(scope, receipt)
-                    }
+                    val withdrawal: (DrawScope) -> Unit = { if (anchor.popup === popupFlight && popupFlight.gen == gen && !motion.shown && popupFlight.takeover == Restoring &&
+                        motion.expansion.nativeGateCurrent(generation, false) && anchor.restoredDrawRequest == receipt) popupFlight.withdrawBody(it, receipt) }
                     if (continuousOrigin != null) continuousOrigin.withdrawal = withdrawal else popupFlight.sourceDraw = withdrawal
                     popupFlight.advance(gen, PopupEvent.AtHome)
                     // The request ends at its return or the six-frame allowance; a newer request keeps its own withdrawal.
@@ -705,10 +695,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 if (fieldReady) break
                             }
                         }
-                    } } finally {
-                        if (continuousOrigin?.withdrawal === withdrawal) continuousOrigin.withdrawal = null
-                        if (popupFlight.sourceDraw === withdrawal) popupFlight.sourceDraw = null
-                    }
+                    } } finally { if (continuousOrigin?.withdrawal === withdrawal) continuousOrigin.withdrawal = null
+                        if (popupFlight.sourceDraw === withdrawal) popupFlight.sourceDraw = null }
                     if (!gateCurrent()) continue@gateLoop
                     // Keep one frame in which the restored trigger is drawn while this modal
                     // still owns the window, so a reopen there reclaims the same dialog (#858).
@@ -770,8 +758,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         onDispose {
             popupHome?.flights?.remove(popupFlight)
             // Resource lifetime, not an open's step: the registration (and below, the window) leaving resets whichever open holds it now.
-            popupFlight.layer = null; popupFlight.body = null
-            popupFlight.advance(popupFlight.state.gen, PopupEvent.HomeLeft)
+            popupFlight.layer = null; popupFlight.body = null; popupFlight.advance(popupFlight.state.gen, PopupEvent.HomeLeft)
         }
     }
     SideEffect { if (!returningInline) popupFlight.advance(gen, PopupEvent.HomeReturns) }
