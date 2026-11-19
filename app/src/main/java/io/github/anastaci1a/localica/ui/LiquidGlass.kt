@@ -371,7 +371,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                     map = outline?.field, origin = Offset(pad, pad), fieldWeight = outline?.description?.fieldWeight ?: 1f,
                     circles = outline?.description?.circles?.let { (a, b) -> a + Offset(pad, pad) to b + Offset(pad, pad) },
                     splitInner = outline?.description?.splitInner)
-                else if (blur > 0f) BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp) else null
+                else null
             }
         }
 

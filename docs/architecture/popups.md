@@ -61,8 +61,6 @@ Content measures glass; padded backdrops fit separately. Shared ui.spec presets 
 
 [PopupScrollEdgesTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PopupScrollEdgesTest.kt).
 
-[PopupRimTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PopupRimTest.kt).
-
 [DialogChromeLayoutTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/DialogChromeLayoutTest.kt).
 
 [PopupHomeShapeTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PopupHomeShapeTest.kt).

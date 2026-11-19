@@ -17,7 +17,7 @@ Proposed: every glass element has a presence, from 0 to 1, and a shape. Glass ap
 | Normal, Android 13+ | Padded AGSL refraction, illuminated rim and tone mapping over recorded scenes. |
 | Normal, older Android | Coverage-weighted scene average with tint/contrast and the same outline; no refraction or blur. |
 
-Shapes, shadows, input and motion are shared. Frosted panels use downsampled scattering on Android 12+; refracting glass requires Android 13+. Foregrounds and clear glass stay full-resolution.
+Shapes, shadows, input and motion are shared. Panels use downsampled scattering on Android 13+ and the average-colour fallback on older versions. Foregrounds stay sharp; clear glass stays full-resolution.
 
 ## Presence and shape
 
@@ -59,7 +59,7 @@ Resting white thumbs hold no lease. Normal contact captures only the procedural 
 
 ## Backings and selectors
 
-Backings stay viewport-bounded; released/unrecorded layers cannot read back. Queue frost is independent of floating glass. Navbar selectors use the same default material and draw labels/icons once above it. Graphics remain independent of storage/playback.
+Backings stay viewport-bounded; released/unrecorded layers cannot read back. Queue panels and navbar selectors share the default material while retaining their scene sources and foreground layout. Labels/icons draw once above it. Graphics remain independent of storage/playback.
 
 ## Tests
 
