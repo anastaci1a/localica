@@ -133,9 +133,9 @@ class PopupRetractTintTest {
                 rows.put(sample(frame)); save()
                 if (!anchor.hidden && !anchor.modalPresent && ++after >= 6) break
             }
-            // Smooth-motion bound: at the end of the retract each frame may move fill and rim by at most
-            // what the geometry's own last frames move them; a hand-off step is several times larger.
-            val tail = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { it.getDouble("phase") <= .05 || !it.getBoolean("hidden") }
+            // Smooth-motion bound over the settled end of the retract (phase <= .01, the body within a few pixels of home)
+            // through the hand-off: earlier frames still carry the body edge across the measured bands.
+            val tail = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { it.getDouble("phase") <= .01 || !it.getBoolean("hidden") }
             fun step(key: String) = tail.zipWithNext { a, b -> abs(b.getDouble(key) - a.getDouble(key)) }.maxOrNull() ?: 0.0
             report.put("fillStep", step("fill")).put("rimStep", step("rim")).put("status", "captured"); save()
             assertTrue("retract covers the hand-off: ${tail.size} tail frames", tail.size >= 4 && tail.last().let { !it.getBoolean("hidden") })
