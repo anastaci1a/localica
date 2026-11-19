@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.Curve
 import org.junit.Assert.*
+import kotlin.math.roundToInt
 import org.junit.Rule
 import org.junit.Test
 
@@ -129,6 +130,38 @@ class LyricsHeaderActionsTest {
 
     /** The anchored left body keeps unit lift and no drift; its cast body still follows its press deformation. */
     @Test fun heldAnchoredLeftBodyCastsNoShadowInsideItsBody() = heldBodyCastsNoShadowInside("Lyrics sources", separated = true, expands = false)
+
+    /** #1076: separated casters are the measured surfaces (CompactControlSize squares at either end of the
+     * header), exactly, at fractional densities whose header width rounds independently, and mid-separation. */
+    @Test fun separatedCastersMatchTheirMeasuredSurfacesAtRoundedSizes() {
+        var density by mutableStateOf(1.75f)
+        val phase = Animatable(1f)
+        lateinit var anchor: GlassAnchor
+        lateinit var preparation: GlassOriginPreparation
+        compose.setContent { EngineTheme {
+            anchor = rememberGlassAnchor()
+            preparation = rememberGlassOriginPreparation()
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density)) {
+                Box(Modifier.padding(32.dp)) { LyricsHeaderActions(true, 1f, anchor, preparation, {}, {}, {}) }
+            }
+        } }
+        compose.runOnIdle { preparation.bind(AnimatablePhase(phase), Curve.linear(0f, 1f)) }
+        for (value in listOf(1.75f, 2.625f, 2.75f, 3f, 3.5f)) for (progress in listOf(.75f, 1f)) {
+            compose.runOnUiThread { density = value; kotlinx.coroutines.runBlocking { phase.snapTo(progress) } }
+            compose.waitForIdle()
+            val width = compose.onNodeWithTag("player-lyrics-pill").fetchSemanticsNode().size.width.toFloat()
+            val side = (CompactControlSize.value * value).roundToInt().toFloat()
+            val expected = listOf(androidx.compose.ui.geometry.Rect(0f, 0f, side, side), androidx.compose.ui.geometry.Rect(width - side, 0f, width, side))
+            compose.runOnIdle {
+                assertTrue(preparation.separated)
+                val cast = requireNotNull(anchor.shadowPlane).casters.mapNotNull { (it.shape as io.github.anastaci1a.localica.ui.engine.LayoutShape).laidOut()?.let { body ->
+                    androidx.compose.ui.geometry.Rect(body.left, body.top, body.right, body.bottom) } }.sortedBy { it.left }
+                assertEquals(2, cast.size)
+                for ((want, got) in expected.zip(cast)) for ((a, b) in listOf(want.left to got.left, want.top to got.top, want.right to got.right, want.bottom to got.bottom))
+                    assertEquals("density $value, progress $progress: cast $got, surface $want", a, b, .01f)
+            }
+        }
+    }
 
     private fun heldBodyCastsNoShadowInside(label: String, separated: Boolean, expands: Boolean) {
         val backdrop = Color(0xFF3F6FB0)

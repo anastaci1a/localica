@@ -7,9 +7,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.boundingRect
-import androidx.compose.ui.geometry.center
+import androidx.compose.ui.geometry.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -30,17 +28,18 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     // substituting a full-width pill at the beginning of preparation.
     val pill = rememberSplitPill { preparation.progress }
     // Each body casts through the transform its surface draws with, lift and drift included (the anchored left body has neither).
+    // Separated surfaces are the measured header height square at either end, so their casters are too.
     val shadow = rememberGlassSilhouette { size ->
-        val bodies = pill.bodies(size)
         val joined = contacts.joined
-        if (!preparation.separated) bodies.map { it.deformed(joined.body.value.bodyTransform(joined.point, size, joined.vertical), size.center) }
+        if (!preparation.separated) pill.bodies(size).map { it.deformed(joined.body.value.bodyTransform(joined.point, size, joined.vertical), size.center) }
         else {
             val separation = originGap(preparation.progress)
             val common = contacts.presentation(contacts.left, contacts.right, 0f).scaleX(contacts.left.vertical)
-            bodies.mapIndexed { index, body ->
+            listOf(0f, size.width - size.height).mapIndexed { index, left ->
+                val body = RoundRect(left, 0f, left + size.height, size.height, CornerRadius(size.height / 2f))
                 val (contact, other) = if (index == 0) contacts.left to contacts.right else contacts.right to contacts.left
                 val shift = (if (index == 0) -1f else 1f) * size.height / 2f * (common - 1f) * (1f - separation)
-                val drawn = contacts.presentation(contact, other, separation).bodyTransform(contact.point, body.boundingRect.size, contact.vertical, anchored = index == 0)
+                val drawn = contacts.presentation(contact, other, separation).bodyTransform(contact.point, Size(size.height, size.height), contact.vertical, anchored = index == 0)
                 body.deformed(drawn.copy(drift = drawn.drift + Offset(shift, 0f)), body.center)
             }
         }
