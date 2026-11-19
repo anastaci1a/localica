@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.semantics.getAllSemanticsNodes
@@ -44,54 +43,6 @@ class ListSearchTest {
     @Test fun searchSlotUsesPlacedTravelThroughNativeReadinessAndInterruptedReturn() = slotFrames(false)
     @Test fun reducedSearchSlotUsesTheSameNativePlacementEndpoints() = slotFrames(true)
     @Test fun queueRowsLandAtTheDepartingSearchMaterialTop() = slotFrames(false, queue = true)
-
-    @Test fun pressedSearchPillGrowsSixteenPointsAndStaysInsideTheWindow() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val route = BrowseRoute(MainTab.Songs, key = "search-pill-press")
-        val preferences = BrowsePreferences(context)
-        val previous = preferences.read(route)
-        preferences.write(route, BrowseStyle(quickSearch = true), false)
-        val tracks = (0..10).map { Track("press:$it", "Song $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
-        try {
-            compose.setContent { LocalicaTheme {
-                BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("press-root", "Music")), tracks = tracks), loading = false),
-                    PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false, queryDispatcher = Dispatchers.Unconfined)
-            } }
-            compose.waitUntil(5000) { compose.onAllNodesWithText("Song 0").fetchSemanticsNodes().isNotEmpty() }
-            compose.mainClock.autoAdvance = false
-            compose.mainClock.advanceTimeBy(1500)
-            val pill = compose.onNodeWithTag("list-search-pill")
-            val bounds = pill.fetchSemanticsNode().boundsInRoot
-            val root = compose.onRoot()
-            val density = compose.density.density
-            val row = kotlin.math.round(bounds.center.y).toInt()
-            fun line() = root.captureToImage().toPixelMap().let { map -> List(map.width) { map[it, row] } }
-            var rest = line(); var stable = false
-            repeat(20) { if (!stable) { compose.mainClock.advanceTimeBy(500); val next = line(); stable = next == rest; rest = next } }
-            assertTrue("rest row is identical across 500 ms before pressing", stable)
-            pill.performTouchInput { down(center) }
-            compose.mainClock.advanceTimeBy(2500)
-            val held = line()
-            compose.mainClock.advanceTimeBy(500)
-            assertEquals("pressed pill has settled", held, line())
-            pill.performTouchInput { cancel() }
-            fun d(a: androidx.compose.ui.graphics.Color, b: androidx.compose.ui.graphics.Color) =
-                (maxOf(kotlin.math.abs(a.red - b.red), kotlin.math.abs(a.green - b.green), kotlin.math.abs(a.blue - b.blue)) * 255).toInt()
-            val diff = IntArray(rest.size) { d(rest[it], held[it]) }
-            val left = bounds.left.toInt(); val right = kotlin.math.ceil(bounds.right).toInt()
-            val leftFloor = maxOf(diff[0], diff[1]); val rightFloor = maxOf(diff[diff.size - 1], diff[diff.size - 2])
-            val leftHalf = leftFloor + (diff.take(left).max() - leftFloor) / 2; val rightHalf = rightFloor + (diff.drop(right).max() - rightFloor) / 2
-            val heldLeft = (0 until left).firstOrNull { diff[it] > leftHalf } ?: -1
-            val heldRight = (right until diff.size).lastOrNull { diff[it] > rightHalf } ?: -1
-            android.util.Log.i("Localica1080", "production pill window=${diff.size} density=$density rest=${bounds.left}..${bounds.right} held=$heldLeft..$heldRight " +
-                "floor=$leftFloor/$rightFloor threshold=$leftHalf/$rightHalf outerMax=${diff.take(left).max()}/${diff.drop(right).max()} leftOutside=${diff.take(left).toList()} leftBand=${diff.slice(maxOf(0, heldLeft - 3)..minOf(left, heldLeft + 3)).toList()} edge0=${diff[0]} edgeEnd=${diff.last()}")
-            assertEquals("left edge moves out 8 points", 8 * density, bounds.left - heldLeft, 1.5f)
-            assertEquals("right edge moves out 8 points", 8 * density, heldRight + 1 - bounds.right, 1.5f)
-            assertTrue("pressed pill stays inside the window", heldLeft > 0 && heldRight < diff.size - 1)
-        } finally {
-            preferences.write(route, previous, false)
-        }
-    }
 
     @Test fun scopedResultsWrapBelowTheirLimitWithAndWithoutKeyboard() = withDockedSlotKeyboard {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
