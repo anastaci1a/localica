@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalView
@@ -89,7 +90,8 @@ class PopupRetractContinuityTest {
             Dialog({}, DialogProperties(usePlatformDefaultWidth = false)) {
                 dialogView = LocalView.current
                 Box(Modifier.size(200.dp)) {
-                    Box(Modifier.size(120.dp).testTag("consumer").drawWithContent {
+                    // C is its own retained RenderNode, as the popup body node is; sibling frames never re-record it.
+                    Box(Modifier.size(120.dp).testTag("consumer").graphicsLayer().drawWithContent {
                         epoch.let { cRecords++ }
                         flight.refillBody(this) { drawLayer(s) }
                         optical.draw(this)
@@ -198,22 +200,35 @@ class PopupRetractContinuityTest {
         return Scene(anchor, events) to open
     }
 
+    /** Step the clock one frame at a time with real Android draws between frames; bulk virtual frames would expire the
+     * six-frame allowance before the restored trigger ever draws (that is the fallback path, tested separately). */
+    private fun frames(what: String, limit: Int = 900, until: () -> Boolean) {
+        compose.mainClock.autoAdvance = false
+        try {
+            repeat(limit) { if (compose.runOnIdle(until)) return; compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            fail("Timed out waiting for $what")
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+    private fun opened() = compose.onAllNodesWithText("Create playlist").fetchSemanticsNodes().isNotEmpty()
+    private fun closed(scene: Scene) = compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() &&
+        scene.anchor.popup == null && !scene.anchor.hidden
+
     private fun cycle(scene: Scene, open: MutableState<Boolean>) {
         compose.runOnIdle { open.value = true }
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("Create playlist").fetchSemanticsNodes().isNotEmpty() && scene.anchor.hidden }
-        compose.waitForIdle()
+        frames("open rest") { opened() && scene.anchor.hidden && scene.anchor.contact.expansion.value == 1f }
         compose.runOnIdle { open.value = false }
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() && !scene.anchor.hidden }
+        frames("return") { closed(scene) }
     }
 
     private fun Scene.body() = events.filterIsInstance<GlassBodyReceipt>().map { "${it.event}:${it.request}" }
+    private fun Scene.trace() = events.filter { it is GlassBodyReceipt || it is GlassTransitionReceipt || it is String }
 
     /** R4 §1/R5: the ordinary source takes the body at its draw entry, before its posted acknowledgment, exactly once per request. */
     @Test fun pillReturnStopsFilteringOnSourceDrawBeforePost() {
         val (scene, open) = pill()
         cycle(scene, open)
         val request = scene.anchor.restoredDrawRequest
-        assertEquals("One withdrawal for the return request; no rearm", listOf("withdraw:$request"), scene.body())
+        assertEquals("One withdrawal for the return request; no rearm: ${scene.trace()}", listOf("withdraw:$request"), scene.body())
         assertTrue("The body moved before the posted acknowledgment: ${scene.events.filterIsInstance<String>()}",
             "presentedAtWithdraw:${request - 1}" in scene.events || scene.events.filterIsInstance<String>().single().removePrefix("presentedAtWithdraw:").toLong() < request)
         assertEquals(request, scene.anchor.restoredBodyReceipt)
@@ -231,7 +246,7 @@ class PopupRetractContinuityTest {
         assertSame("Home weight zero returns the actual drawn record", record,
             record.towards(GlassSurfacePresentation(1f, 1f, 1f, Color.Transparent, record.depthScale), 0f))
         cycle(scene, open)
-        assertTrue(scene.body().single().startsWith("withdraw:"))
+        assertTrue("${scene.trace()}", scene.body().singleOrNull()?.startsWith("withdraw:") == true)
     }
 
     @Test fun geometryOnlyAndContextSourcesNeedNoGlassPublication() {
@@ -239,7 +254,7 @@ class PopupRetractContinuityTest {
         assertNull("A raw Box anchor is geometry-only", compose.runOnIdle { scene.anchor.material })
         cycle(scene, open)
         assertFalse(scene.anchor.hidden)
-        assertTrue(scene.body().single().startsWith("withdraw:"))
+        assertTrue("${scene.trace()}", scene.body().singleOrNull()?.startsWith("withdraw:") == true)
     }
 
     /** Condition 2: a source that never reaches draw entry cannot hold the body: the existing allowance ends the request. */
@@ -247,15 +262,14 @@ class PopupRetractContinuityTest {
         var draw by mutableStateOf(true)
         val (scene, open) = pill(drawTrigger = { draw })
         compose.runOnIdle { open.value = true }
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("Create playlist").fetchSemanticsNodes().isNotEmpty() }
-        compose.waitForIdle()
+        frames("open rest") { opened() && scene.anchor.hidden && scene.anchor.contact.expansion.value == 1f }
         compose.runOnIdle { draw = false; open.value = false }
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() }
-        assertTrue("No withdrawal without a source draw: ${scene.body()}", scene.body().isEmpty())
+        frames("fallback retirement") { closed(scene) }
+        assertTrue("No withdrawal without a source draw: ${scene.trace()}", scene.body().isEmpty())
         assertNotEquals("No presented receipt is fabricated", scene.anchor.restoredDrawRequest, scene.anchor.restoredPresentedReceipt)
         compose.runOnIdle { draw = true }
         cycle(scene, open)
-        assertTrue(scene.body().last().startsWith("withdraw:"))
+        assertTrue("${scene.trace()}", scene.body().lastOrNull()?.startsWith("withdraw:") == true)
     }
 
     /** Condition 3: a source draw that throws returns its reservation; the next draw withdraws again and the return completes. */
@@ -263,7 +277,7 @@ class PopupRetractContinuityTest {
         val (scene, open) = pill(geometryOnly = true, throwOnce = true)
         cycle(scene, open)
         val request = scene.anchor.restoredDrawRequest
-        assertEquals("withdraw, rearm, withdraw for one request: ${scene.body()}",
+        assertEquals("withdraw, rearm, withdraw for one request: ${scene.trace()}",
             listOf("withdraw:$request", "rearm:$request", "withdraw:$request"), scene.body())
         assertEquals(request, scene.anchor.restoredBodyReceipt)
     }
@@ -273,15 +287,14 @@ class PopupRetractContinuityTest {
         val mix = mutableFloatStateOf(.1f)
         val (scene, open) = pill(lightMix = { mix.floatValue })
         compose.runOnIdle { open.value = true }
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("Create playlist").fetchSemanticsNodes().isNotEmpty() && scene.anchor.hidden }
-        compose.waitForIdle()
+        frames("open rest") { opened() && scene.anchor.hidden && scene.anchor.contact.expansion.value == 1f }
         compose.mainClock.autoAdvance = false
         try {
             compose.runOnIdle { open.value = false }
-            repeat(45) { frame -> compose.runOnIdle { mix.floatValue = .1f + .8f * (frame + 1) / 45f }; compose.mainClock.advanceTimeByFrame() }
+            repeat(45) { frame -> compose.runOnIdle { mix.floatValue = .1f + .8f * (frame + 1) / 45f }; compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
         } finally { compose.mainClock.autoAdvance = true }
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() && !scene.anchor.hidden }
-        assertEquals("Monotonic owner while the source eases: ${scene.body()}", 1, scene.body().count { it.startsWith("withdraw") })
+        frames("return") { closed(scene) }
+        assertEquals("Monotonic owner while the source eases: ${scene.trace()}", 1, scene.body().count { it.startsWith("withdraw") })
         assertTrue(scene.body().none { it.startsWith("rearm") })
         assertEquals(.9f, compose.runOnIdle { requireNotNull(scene.anchor.material).value.lightMix }, 1e-5f)
     }
@@ -307,12 +320,11 @@ class PopupRetractContinuityTest {
             }
         } } }
         compose.runOnIdle { open.value = true }
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("Explicit dark").fetchSemanticsNodes().isNotEmpty() }
-        compose.waitForIdle()
+        frames("open rest") { compose.onAllNodesWithText("Explicit dark").fetchSemanticsNodes().isNotEmpty() && anchor.contact.expansion.value == 1f }
         assertEquals(1f, requireNotNull(nested).lightMix, 0f)
         assertTrue("Explicit dark host gives light ink", panelInk.red > .9f)
         assertEquals("The source keeps its own fractional record", .23f, requireNotNull(anchor.material).value.lightMix, 1e-6f)
         compose.runOnIdle { open.value = false }
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() && !anchor.hidden }
+        frames("return") { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() && anchor.popup == null }
     }
 }
