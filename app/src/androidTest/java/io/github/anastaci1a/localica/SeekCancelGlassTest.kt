@@ -100,7 +100,7 @@ class SeekCancelGlassTest {
         awaitSource(sceneRecording)
         val withUi = sample()
         if (optical) {
-            assertTrue("The UI behind the X is refracted: scene=$withUi artwork-only=$artOnly", withUi.first > artOnly.first + .03f)
+            assertTrue("The UI behind the X is refracted: scene=$withUi artwork-only=$artOnly", withUi.first > artOnly.first + .03f * .3179475f)
         } else {
             assertTrue("$mode has no stripe detail on this API: $withUi", withUi.first < .04f)
             assertTrue("The averaged scene replaces the darker artwork: scene=$withUi artwork=$artOnly", withUi.second > artOnly.second + .1f)

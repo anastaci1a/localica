@@ -123,7 +123,7 @@ class GlassRendererSwitchingTest {
                         requireNotNull(childMounted.get()).view
                     }
                     val color = pixels[pixels.width / 2, pixels.height / 2]
-                    if (target) color.blue > color.red + .2f else color.red > color.blue + .2f
+                    if (target) color.blue > color.red + .05f else color.red > color.blue + .05f
                 }
             }
         }

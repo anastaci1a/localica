@@ -157,9 +157,9 @@ class NestedGlassRegistrationTest {
             for ((point, expected) in samples) {
                 val actual = pixels[point.x.roundToInt(), point.y.roundToInt()]
                 val message = "phase=$index fit=${phase.x},${phase.y} scroll=${phase.scroll} point=$point expected=$expected actual=$actual"
-                assertEquals(message, expected.red, actual.red, .08f)
-                assertEquals(message, expected.green, actual.green, .08f)
-                assertEquals(message, expected.blue, actual.blue, .08f)
+                assertEquals(message, io.github.anastaci1a.localica.ui.glassFillChannel(0, expected.red, expected.green, expected.blue).coerceAtMost(1f), actual.red, .08f)
+                assertEquals(message, io.github.anastaci1a.localica.ui.glassFillChannel(1, expected.red, expected.green, expected.blue).coerceAtMost(1f), actual.green, .08f)
+                assertEquals(message, io.github.anastaci1a.localica.ui.glassFillChannel(2, expected.red, expected.green, expected.blue).coerceAtMost(1f), actual.blue, .08f)
             }
         }
     }
@@ -234,9 +234,9 @@ class NestedGlassRegistrationTest {
             for (fraction in listOf(.25f, .5f, .75f)) {
                 val x = (bounds.left - sceneBounds.left + bounds.width * fraction).roundToInt()
                 val actual = pixels[x, y]
-                assertEquals("Red/blue mean at fit=$scale fraction=$fraction", .5f, actual.red, .05f)
-                assertEquals("Red/blue mean at fit=$scale fraction=$fraction", .5f, actual.blue, .05f)
-                assertTrue("Material mean must not introduce green", actual.green < .03f)
+                assertEquals("Red/blue mean at fit=$scale fraction=$fraction", io.github.anastaci1a.localica.ui.glassFillChannel(0, .5f, 0f, .5f), actual.red, .05f)
+                assertEquals("Red/blue mean at fit=$scale fraction=$fraction", io.github.anastaci1a.localica.ui.glassFillChannel(2, .5f, 0f, .5f), actual.blue, .05f)
+                assertEquals("Filled red/blue mean green at fit=$scale fraction=$fraction", io.github.anastaci1a.localica.ui.glassFillChannel(1, .5f, 0f, .5f), actual.green, .03f)
             }
         }
     }

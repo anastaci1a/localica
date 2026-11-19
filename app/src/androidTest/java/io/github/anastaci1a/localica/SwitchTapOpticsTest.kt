@@ -278,8 +278,8 @@ class SwitchTapOpticsTest {
             val c = pixels[x, y]
             // Both patterned source colors share this signature. A black stripe
             // made a green-only check depend on which stripe crossed the curved band.
-            // The blue cover, red track, white face and shadows cannot qualify.
-            if (c.green > .45f && c.blue < .25f) {
+            // Filled green (.50,1,.50) and yellow (1,1,.44) qualify; the filled blue cover, red track, white face and shadows cannot.
+            if (c.green > .9f && c.blue < .6f) {
                 green++
                 if (kotlin.math.abs(y - centerY) > halfTrack) outsideGreen++
             }

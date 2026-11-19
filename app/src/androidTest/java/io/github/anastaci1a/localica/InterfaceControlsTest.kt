@@ -135,10 +135,10 @@ class InterfaceControlsTest {
         compose.setContent { LocalicaTheme { Box(Modifier.background(Color.White).padding(32.dp)) {
             InterfaceSlider(2f, {}, Modifier.width(300.dp), valueRange = 1f..3f)
         } } }
-        compose.onNodeWithTag("settings-slider-scene", useUnmergedTree = true).performTouchInput { down(center) }
+        compose.onAllNodesWithTag("settings-slider-scene", useUnmergedTree = true)[0].performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(240)
         val pixels = compose.onNodeWithTag("settings-slider-thumb", useUnmergedTree = true).captureToImage().toPixelMap()
-        compose.onNodeWithTag("settings-slider-scene", useUnmergedTree = true).performTouchInput { up() }
+        compose.onAllNodesWithTag("settings-slider-scene", useUnmergedTree = true)[0].performTouchInput { up() }
         for (percent in 20..40 step 5) {
             val ink = pixels[pixels.width * percent / 100, pixels.height / 2]
             assertSampledTrack(ink)

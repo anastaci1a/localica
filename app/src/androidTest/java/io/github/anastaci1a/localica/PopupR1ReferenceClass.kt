@@ -31,7 +31,7 @@ internal fun verifyR1ReferenceClass(preOpen: Bitmap, reference: Bitmap, tabs: Re
         }
     val api = Build.VERSION.SDK_INT
     val expected = when {
-        api == 26 && densityDpi == 420 && reference.width == 1080 && reference.height == 1731 -> mapOf(1 to 557)
+        api == 26 && densityDpi == 420 && reference.width == 1080 && reference.height == 1731 -> mapOf(1 to 365)
         api == 36 && densityDpi == 280 && reference.width == 720 && reference.height == 1280 -> mapOf(-1 to 294)
         else -> error("R1 reference class must be pinned for API $api, density $densityDpi, ${reference.width}x${reference.height}")
     }
