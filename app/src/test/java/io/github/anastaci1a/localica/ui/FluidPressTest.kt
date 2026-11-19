@@ -174,7 +174,7 @@ class FluidPressTest {
             body.advance(0f, 0.0, pressure = edge * 2, contact = 1f, point = Offset(.5f, .5f))
             body.advance(0f, 0.0, pressure = edge * 2, contact = 1f, point = point)
             val flex = glassContactFlex(point, Offset(.5f, .5f), Offset(64f, 64f) / 2000f)
-            assertEquals(edge + abs(flex.x) - abs(flex.y), channel(body, "pressure", "target"), 1e-7f)
+            assertEquals(edge + (abs(flex.x) - abs(flex.y)), channel(body, "pressure", "target"), 0f)
         }
     }
 

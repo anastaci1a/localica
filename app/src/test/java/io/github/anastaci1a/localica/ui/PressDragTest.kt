@@ -58,6 +58,25 @@ class PressDragTest {
         }
     }
 
+    @Test fun overrideBodiesKeepNoLiftButFollowTheSameTranslationLaw() {
+        val to = Offset(.5f + 300f / 44, .5f)
+        val override = GlassMomentum(FlexSpec.Small).apply { spec = FlexSpec.dynamic(200f, 44f); extent = Size(200f, 44f) }
+        val ordinary = GlassMomentum().apply { spec = FlexSpec.dynamic(200f, 44f); extent = Size(200f, 44f) }
+        for (body in listOf(override, ordinary)) {
+            body.advance(0f, 0.0, contact = 1f, point = Offset(.5f, .5f))
+            body.advance(0f, 0.0, contact = 1f, point = to)
+        }
+        fun strainTarget(b: GlassMomentum) = GlassMomentum::class.java.getDeclaredField("pressure").apply { isAccessible = true }.get(b)
+            .let { s -> s.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(s) }
+        assertEquals(0f, override.shape.lift, 0f)
+        assertTrue(strainTarget(override) > 0f)
+        assertEquals(strainTarget(ordinary), strainTarget(override), 0f)
+        repeat(240) { override.advance(0f, 1.0 / 120, contact = 1f, point = to) }
+        val expected = glassContactFlex(to, Offset(.5f, .5f), Offset(200f, 44f) / 6000f)
+        assertEquals(expected.x, override.shape.drift.x, 1e-4f); assertEquals(0f, override.shape.drift.y, 0f)
+        assertEquals(0f, override.shape.lift, 0f)
+    }
+
     @Test fun verticalBodiesStretchInScreenSpaceAndReleaseSettles() {
         val size = Size(44f, 44f); val to = Offset(.5f + 150f / 44, .2f)
         assertEquals(held(to).bodyTransform(size), held(to, vertical = true).bodyTransform(size, vertical = true))
