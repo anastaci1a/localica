@@ -79,8 +79,8 @@ class FluidPopupComponentsTest {
         assertEquals(0.0.toRawBits(), grows.blurOut.storedDelay.toRawBits())
         assertEquals(0.12.toRawBits(), grows.blurIn.storedDelay.toRawBits())
         assertEquals(0.1.toRawBits(), shrinks.blurIn.storedDelay.toRawBits())
-        assertEquals(1.5.toRawBits(), grows.blurIn.scaledDelay(supplied).toRawBits())
-        assertEquals(1.25.toRawBits(), shrinks.blurIn.scaledDelay(supplied).toRawBits())
+        assertEquals(1.5.toRawBits(), grows.blurIn.dueThreshold(supplied.speed, supplied.amplifyDelays, 1.0).toRawBits())
+        assertEquals(1.25.toRawBits(), shrinks.blurIn.dueThreshold(supplied.speed, supplied.amplifyDelays, 1.0).toRawBits())
         assertEquals(null, supplied.copy(lensingEnabled = false).blurSequence(growing = true))
     }
 
@@ -144,11 +144,17 @@ class FluidPopupComponentsTest {
         assertTrue(growing[1].timing.spring === eject)
         assertTrue(shrinking[1].timing.spring === absorb)
         val content = requireNotNull(FluidContentDefaults.blurSequence(growing = true))
-        assertEquals(content.blurIn.scaledDelay(FluidContentDefaults).toRawBits(), growing[2].timing.scaledDelay(FluidContentDefaults).toRawBits())
+        assertEquals(content.blurIn.dueThreshold(0.7, false, 1.0).toRawBits(), growing[2].timing.dueThreshold(0.7, false, 1.0).toRawBits())
         assertTrue(FluidLensingSpec.requests(false, true, 25.0, 90.0, 0.5, 120.0, eject, absorb).isEmpty())
         assertEquals(15.0, FluidLensingSpec.shortDimension(1.5, 40.0, 10.0), 0.0)
         assertEquals(60.0, FluidLensingSpec.shortDimension(1.5, 40.0, Double.NaN), 0.0)
         assertEquals((-0.0).toRawBits(), FluidLensingSpec.shortDimension(1.0, -0.0, 0.0).toRawBits())
+    }
+
+    @Test fun actionThresholdAppliesDragAfterSpeedAndAmplification() {
+        val step = FluidPopupStep(0.1, FluidMainEjectDefaults)
+        assertEquals(0.21.toRawBits(), step.dueThreshold(0.7, true, 0.3).toRawBits())
+        assertEquals(0.0.toRawBits(), step.dueThreshold(0.0, true, 0.3).toRawBits())
     }
 
     @Test fun actionBridgeScalesBothCapturedResponsesWithoutMutatingTheSpring() {
