@@ -41,7 +41,10 @@ internal data class PopupPortalInsets(val top: Double, val leading: Double, val 
     }
 }
 
-internal fun fluidPopupClipsBounds(itemOptions: Int) = (itemOptions and 4) == 0
+private const val PopupUnclippedContent = 4
+internal fun fluidPopupClipsBounds(itemOptions: Int) = (itemOptions and PopupUnclippedContent) == 0
+internal fun fluidPopupPreviewOptions(mode: Int, options: Int) =
+    if (mode == 4 || mode == 5) options or PopupUnclippedContent else options
 internal fun fluidPopupVisibleMask(pathBounds: PopupPortalBounds?, roundedRect: Boolean, equalsReferenceBounds: Boolean) =
     pathBounds?.takeIf { !roundedRect || !equalsReferenceBounds }
 
@@ -69,3 +72,33 @@ internal fun fluidPopupPortalPlacement(
     val path = mask.standardized()
     PopupPortalPlacement(backing, backing.midX - path.x, backing.midY - path.y)
 } else PopupPortalPlacement(content, content.midX, content.midY)
+
+internal fun fluidPopupPreviewInsets(top: Double, left: Double, bottom: Double, right: Double, reversed: Boolean) =
+    if (reversed) PopupPortalInsets(top, right, bottom, left) else PopupPortalInsets(top, left, bottom, right)
+
+internal fun <T : Any> fluidPopupThroughPreview(usePivot: Boolean, pivot: T?, source: T?, resolveSource: () -> T?) =
+    (if (usePivot) pivot ?: source else source) ?: resolveSource()
+
+internal fun fluidPopupPreviewScaleChanges(old: Double, requested: Double) =
+    !(kotlin.math.abs(requested - old) <= Double.fromBits(0x3cb0000000000000L))
+
+internal fun fluidPopupAperture(width: Double, height: Double, insets: PopupPortalInsets) =
+    PopupPortalBounds(0.0, 0.0, width + insets.horizontal, height + insets.vertical)
+
+internal fun PopupPortalBounds.destinationPosition(apertureInsets: PopupPortalInsets, destinationInsets: PopupPortalInsets) =
+    midX to (apertureInsets.top - destinationInsets.top)
+
+internal fun fluidPopupDestinationScale(
+    width: Double, height: Double, croppedWidth: Double, croppedHeight: Double, axis: Int,
+): Pair<Double, Double> {
+    val rx = if (croppedWidth == 0.0) 1.0 else width / croppedWidth
+    val ry = if (croppedHeight == 0.0) 1.0 else height / croppedHeight
+    return when (axis) {
+        1 -> rx to rx
+        2 -> ry to ry
+        else -> rx to ry
+    }
+}
+
+internal fun fluidPopupAutoAxis(oldWidth: Double, oldHeight: Double, targetWidth: Double, targetHeight: Double) =
+    if (kotlin.math.abs(targetHeight - oldHeight) / oldHeight < kotlin.math.abs(targetWidth - oldWidth) / oldWidth) 2 else 1
