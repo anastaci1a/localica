@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.ui.engine.ContactLightBacking
+import io.github.anastaci1a.localica.ui.engine.presentedAlpha
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -232,14 +233,16 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yield
     }
 }
 
-/** One glass material record (#748): a surface draws it, and a popup morph starts from the very record its source draws. */
-internal data class GlassSurfacePresentation(val frost: Float, val refraction: Float, val lightMix: Float, val tint: Color, val depthScale: Float) {
+/** One glass material record (#748): a surface draws it, and a popup morph starts from the very record its source draws.
+ * [lens] is the weight of the sampled lens layer: 0 for a surface without a sampled source (#847). */
+internal data class GlassSurfacePresentation(val frost: Float, val refraction: Float, val lightMix: Float, val tint: Color, val depthScale: Float, val lens: Float = 1f) {
     /** Weight 0 is this exact record and 1 is [target]; every field moves with the same weight. */
     fun towards(target: GlassSurfacePresentation, weight: Float): GlassSurfacePresentation = when {
         weight <= 0f -> this
         weight >= 1f -> target
         else -> GlassSurfacePresentation(frost + (target.frost - frost) * weight, refraction + (target.refraction - refraction) * weight,
-            lightMix + (target.lightMix - lightMix) * weight, lerp(tint, target.tint, weight), depthScale + (target.depthScale - depthScale) * weight)
+            lightMix + (target.lightMix - lightMix) * weight, lerp(tint, target.tint, weight), depthScale + (target.depthScale - depthScale) * weight,
+            lens + (target.lens - lens) * weight)
     }
 }
 
@@ -281,8 +284,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val ink = if (flat) MaterialTheme.colorScheme.onSurface else inkOverride ?: lerp(Color(0xFF202124), Color.White, lightMix)
     val anchor = modifier.glassSurfaceAnchor(source, cornerRadius)
     // The surface draws its own live record, and its anchor carries that same holder to the popup morph.
-    val own = rememberUpdatedState(remember(frostProgress, refraction, lightMix, tint, depthScale) {
-        GlassSurfacePresentation(frostProgress.coerceIn(0f, 1f), refraction, lightMix, tint, depthScale) })
+    val own = rememberUpdatedState(remember(frostProgress, refraction, lightMix, tint, depthScale, source != null) {
+        GlassSurfacePresentation(frostProgress.coerceIn(0f, 1f), refraction, lightMix, tint, depthScale, if (source != null) 1f else 0f) })
     if (anchor != null && presentation == null) DisposableEffect(anchor, own) {
         anchor.material = own
         onDispose { if (anchor.material === own) anchor.material = null }
@@ -332,6 +335,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         val blurRadius = glassBackdropBlurRadius(density.density)
         fun blur(record: GlassSurfacePresentation) = blurRadius * (appearance.blur + (1f - appearance.blur) * record.frost)
         val padding = with(density) { 32.dp.toPx() }
+        val lensLayer = if (presentation == null) Modifier.matchParentSize() else Modifier.matchParentSize().presentedAlpha { material().lens }
         ContactGlowBacking(Modifier.matchParentSize(), { contact.state.glow.value }, if (pressFeedback || anchor != null) contactShape else body, contact.vertical, rim, sample = {
             source?.averageColor(location, androidx.compose.ui.geometry.Rect(Offset.Zero, Size(surfaceSize.width.toFloat(), surfaceSize.height.toFloat())))
         }, transform = appliedTransform) {
@@ -343,7 +347,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 val scattering = ((blur(record) - 1f) / 5f).coerceIn(0f, 1f)
                 return 1f - .5f * scattering * scattering * (3f - 2f * scattering)
             }
-            FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution(own.value), padding,
+            FilteredBackdrop(lensLayer, source, location, resolution(own.value), padding,
                 homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint, tone), homeBounds, homeFootprint,
                 resolutionReader = presentation?.let { read -> { resolution(read()) } },
                 averageReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint, toneOf(read())) } }) { extent, resolution, flatWeight ->
@@ -371,7 +375,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         }
 
         if (!flat && visible && source != null && Build.VERSION.SDK_INT < 33) {
-            AverageBackdrop(Modifier.matchParentSize(), source, location,
+            AverageBackdrop(lensLayer, source, location,
                 MaterialAverageStyle(appearance.whiteTint, tone), homeSource, homeWeight, homeBounds, homeFootprint,
                 styleReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint, toneOf(read())) } })
         }
