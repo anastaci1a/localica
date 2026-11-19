@@ -60,6 +60,13 @@ internal fun fluidPopupContentBounds(
 internal fun fluidPopupContentGrows(from: PopupPortalBounds, to: PopupPortalBounds) =
     from.width * from.height < to.width * to.height
 
+internal enum class PopupThroughItem { From, Pivot, To }
+
+internal fun popupThroughSlots(growing: Boolean, fromPhase: Boolean): Pair<PopupThroughItem, PopupThroughItem> {
+    val endpoint = if (fromPhase) PopupThroughItem.From else PopupThroughItem.To
+    return if (growing == fromPhase) PopupThroughItem.Pivot to endpoint else endpoint to PopupThroughItem.Pivot
+}
+
 internal data class PopupPortalPlacement(val bounds: PopupPortalBounds, val x: Double, val y: Double)
 
 internal fun fluidPopupPortalPlacement(

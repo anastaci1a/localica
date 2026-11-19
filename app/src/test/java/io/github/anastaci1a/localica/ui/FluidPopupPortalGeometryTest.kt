@@ -86,4 +86,11 @@ class FluidPopupPortalGeometryTest {
         assertTrue(fluidPopupPreviewScaleChanges(1.0, Math.nextUp(Math.nextUp(1.0))))
         assertTrue(fluidPopupPreviewScaleChanges(1.0, Double.NaN))
     }
+
+    @Test fun throughRoleRequestsKeepTheRecoveredIndexOrder() {
+        assertEquals(PopupThroughItem.Pivot to PopupThroughItem.From, popupThroughSlots(growing = true, fromPhase = true))
+        assertEquals(PopupThroughItem.To to PopupThroughItem.Pivot, popupThroughSlots(growing = true, fromPhase = false))
+        assertEquals(PopupThroughItem.From to PopupThroughItem.Pivot, popupThroughSlots(growing = false, fromPhase = true))
+        assertEquals(PopupThroughItem.Pivot to PopupThroughItem.To, popupThroughSlots(growing = false, fromPhase = false))
+    }
 }
