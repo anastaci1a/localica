@@ -14,7 +14,7 @@ internal fun glowWhite(luminance: Float): Float {
 internal class GlassRimCache {
     private val effect by lazy { if (android.os.Build.VERSION.SDK_INT >= 33) ContactLightEffect() else null }
     fun meanEffect(background: Color) = if (android.os.Build.VERSION.SDK_INT >= 33) effect?.mean(background) else null
-    fun <T> effect(glow: GlassGlow, transform: T, bounds: Rect, density: Float, background: Color, height: Float, corner: Float, localPoint: (T, Offset, Size) -> Offset): RenderEffect? =
+    fun <T : Any> effect(glow: GlassGlow, transform: T, bounds: Rect, density: Float, background: Color, height: Float, corner: Float, localPoint: (T, Offset, Size) -> Offset): RenderEffect? =
         if (android.os.Build.VERSION.SDK_INT >= 33 && !bounds.isEmpty) effect?.effect(glow, transform, bounds, density, mask(glowReducedRadius(FlexGlow.radius(minOf(bounds.width, bounds.height), density))), background, height, corner, localPoint) else null
     private var center: Offset? = null
     private var tone: GlassTone? = null
@@ -117,7 +117,7 @@ private class ContactLightEffect {
         mean.setFloatUniform("background", background.red, background.green, background.blue)
         return android.graphics.RenderEffect.createRuntimeShaderEffect(mean, "scene").asComposeRenderEffect().also { meanEffect = it }
     }
-    fun <T> effect(glow: GlassGlow, transform: T, bounds: Rect, density: Float,
+    fun <T : Any> effect(glow: GlassGlow, transform: T, bounds: Rect, density: Float,
         mask: ImageBitmap, background: Color, height: Float, corner: Float, localPoint: (T, Offset, Size) -> Offset): RenderEffect? {
         val key = listOf(glow, transform, bounds, density, mask, background, height, corner)
         if (key == previous) return cached
