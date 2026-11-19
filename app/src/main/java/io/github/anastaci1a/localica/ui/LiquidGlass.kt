@@ -431,7 +431,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                         surfaceDrawIdentity(observedShadowGroup),
                         anchor?.modalPresent, silhouette != null, frame.lightMix, homeBounds?.invoke()?.surfaceDrawScalars(),
                         homeFootprint?.invoke()?.let { f -> listOf(f.size.width, f.size.height) + f.localToScreen.let { listOf(it.xx, it.xy, it.yx, it.yy, it.tx, it.ty) } },
-                        presentation?.let { listOf(cornerRadius?.value ?: -1f, frame.frost, frame.lightMix, frame.refraction) }))
+                        presentation?.let { listOf(cornerRadius?.value ?: -1f, frame.frost, frame.lightMix, frame.refraction, frame.lens) }))
                 }
             } catch (_: Throwable) { /* A diagnostic must never fail or change the drawing. */ }
 
