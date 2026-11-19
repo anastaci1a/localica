@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassShadowStrength
+import io.github.anastaci1a.localica.ui.spec.GlassShadowSpread
+
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
@@ -64,8 +67,6 @@ fun LocalicaScreen(
     val preferences = remember(context) { io.github.anastaci1a.localica.navigation.InterfacePreferences(context) }
     val uiRoot = LocalLocalicaUiRoot.current ?: rememberLocalicaUiRoot()
     var settings by uiRoot.settings
-    val glassRenderer = LocalGlassRendererRuntime.current
-    SideEffect { glassRenderer?.request(settings.glass.renderer) }
     val libraryFilterPreferences = remember(context) { io.github.anastaci1a.localica.browse.LibraryFilterPreferences(context) }
     var libraryFilters by remember { mutableStateOf(libraryFilterPreferences.read()) }
     val pinPreferences = remember(context) { PinPreferences(context) }
@@ -265,7 +266,7 @@ fun LocalicaScreen(
     // The eased polarity (foreground and materials share it); the discrete decision only seeds it.
     val playerLightMix = playerBackgroundPolarity.lightMix
     val playerLightInk = playerLightMix >= .5f
-    val playerBackdrop = rememberFrostedBackdrop(listOf(playerVisual, lyricsOpen, settings.glass), expanded && playerFullyOpen, dark = playerLightInk, lightMix = playerLightMix)
+    val playerBackdrop = rememberFrostedBackdrop(listOf(playerVisual, lyricsOpen), expanded && playerFullyOpen, dark = playerLightInk, lightMix = playerLightMix)
     var browseInk by remember { mutableStateOf(androidx.compose.ui.graphics.Color.Black) }
     var pageBackground by remember { mutableStateOf(androidx.compose.ui.graphics.Color(0xFFF9F9FB)) }
     val miniInk by androidx.compose.animation.animateColorAsState(browseInk,
@@ -278,7 +279,7 @@ fun LocalicaScreen(
     val browseBottomChrome = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
         if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White)
-    val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual, settings.glass),
+    val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual),
         dark = if (expanded) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White,
         lightMix = if (expanded) playerLightMix else null)
     val dialogs = LocalGlassDialogs.current
@@ -288,14 +289,14 @@ fun LocalicaScreen(
     val bottomShadows = rememberShadowPlane()
     SideEffect { LongScroll.style = settings.longScroll }
     LocalicaTheme(grayTone = settings.grayTone) {
-    CompositionLocalProvider(LocalPageShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides rememberEffectiveReducedMotion(settings.reducedMotion), LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+    CompositionLocalProvider(LocalPageShadows provides bottomShadows, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides rememberEffectiveReducedMotion(settings.reducedMotion), LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache, LocalBrowseSortSnapshot provides browseSorts,
         LocalMotionSpeed provides settings.legacyMotionSpeed,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseSelectionPanel provides selectionPanel,
         LocalBrowseObscuredInset provides (browseBottomChrome + selectionPanel.clearance)) {
-    ShadowPlaneViewport(bottomShadows, settings.glass.shadowStrength, settings.glass.shadowSpread,
+    ShadowPlaneViewport(bottomShadows, GlassShadowStrength, GlassShadowSpread,
         Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background),
         Modifier.testTag("browse-background"), WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()

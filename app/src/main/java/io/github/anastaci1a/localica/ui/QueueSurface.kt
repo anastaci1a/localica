@@ -125,7 +125,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
         .width(maxWidth).height(CollapsedQueueHeight).then(QueuePointerFrame), content = {
     // The drawer is an app panel, not a replica of the display. Its one intrinsic
     // contour clips content/material and draws the rim; the window clips hardware edges.
-    FrostedSurface(Modifier.width(maxWidth).height(maxHeight - status)
+    GlassPanel(Modifier.width(maxWidth).height(maxHeight - status)
         .graphicsLayer { alpha = ((playerProgress() - .4f) / .6f).coerceIn(0f, 1f) }
         .then(if (!interactive) Modifier.clearAndSetSemantics {} else Modifier)
         .sheetDrag(SheetDragTarget(sheet, onSettled, onOpening = { currentOpeningContact?.invoke() }))
@@ -133,7 +133,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
         .controlScrollParent { when { !phase.settled || sheet.expansion.inContact -> ControlScrollDirection.Down or ControlScrollDirection.Up
             sheet.expansion.expanded -> ControlScrollDirection.Down; else -> ControlScrollDirection.Up } }
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
-        .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel) {
+        .nestedScroll(listPull).testTag("queue-surface")) {
 
         GlassPopupHome(popupHome) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {

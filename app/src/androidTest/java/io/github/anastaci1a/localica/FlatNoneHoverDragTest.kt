@@ -98,8 +98,7 @@ class FlatNoneHoverDragTest {
             compose.runOnIdle { GlassWork.observer = { events.add(it) } }
             compose.setContent {
                 root = currentComposer.compositionData
-                CompositionLocalProvider(LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.FlatNone) },
-                    LocalGlassAppearance provides GlassAppearance(renderer = GlassRendererMode.FlatNone),
+                CompositionLocalProvider(
                     LocalDensity provides Density(1f)) {
                     LocalicaTheme {
                         val rest = MediaItemOutline(Rect(40f, 48f, 240f, 112f), 12f)

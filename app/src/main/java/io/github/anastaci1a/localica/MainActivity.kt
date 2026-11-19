@@ -68,11 +68,6 @@ class MainActivity : ComponentActivity() {
         // composition exists; the root keeps its respect flag in step with the setting.
         installLocalicaWindowMotion(io.github.anastaci1a.localica.navigation.InterfacePreferences(this).read().respectSystemAnimationScale)
         setContent {
-            // Seed policy before any backdrop producer or retained dialog host exists.
-            val glassRenderer = androidx.compose.runtime.remember {
-                io.github.anastaci1a.localica.ui.GlassRendererRuntime(
-                    io.github.anastaci1a.localica.navigation.InterfacePreferences(this).read().glass.renderer)
-            }
             val library by model.library.collectAsStateWithLifecycle()
             val playbackSamples = model.playback.state.collectAsStateWithLifecycle()
             val playbackObservation = io.github.anastaci1a.localica.ui.rememberPlaybackObservation(playbackSamples)
@@ -83,7 +78,6 @@ class MainActivity : ComponentActivity() {
                 uri?.let { model.addFolder(it.toString()) }
             }
             androidx.compose.runtime.CompositionLocalProvider(
-                io.github.anastaci1a.localica.ui.LocalGlassRendererRuntime provides glassRenderer,
                 io.github.anastaci1a.localica.ui.LocalGlassMorphWorkObserver provides
                     (if (io.github.anastaci1a.localica.diagnostics.FrameStats.recording.value)
                         { _, window, _ -> io.github.anastaci1a.localica.diagnostics.FrameStats.attach(window) }

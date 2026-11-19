@@ -33,9 +33,7 @@ internal object FrameStats {
     private var started = 0L
     private var ended = Long.MAX_VALUE
     private var environment = ""
-    private var glass = ""
     private var effectiveGlass = ""
-    private var requestedGlass = ""
     private var windowLimitReached = false
     private var timeLimitReached = false
     private val windows = IdentityHashMap<Window, Window.OnFrameMetricsAvailableListener>()
@@ -51,9 +49,7 @@ internal object FrameStats {
         if (Build.VERSION.SDK_INT >= 29) android.os.Trace.beginAsyncSection("ui600:$capturedTag", 600)
         owner = activity
         environment = DiagnosticsExport.environment(activity).toString()
-        val appearance = io.github.anastaci1a.localica.navigation.InterfacePreferences(activity).read().glass
-        glass = appearance.toString(); requestedGlass = appearance.renderer.name
-        effectiveGlass = io.github.anastaci1a.localica.ui.effectiveGlassBackend(appearance.renderer, Build.VERSION.SDK_INT).name
+        effectiveGlass = io.github.anastaci1a.localica.ui.effectiveGlassBackend(Build.VERSION.SDK_INT).name
         started = System.nanoTime(); ended = Long.MAX_VALUE
         worker = HandlerThread("localica-frame-stats").also { it.start() }
         handler = Handler(requireNotNull(worker).looper)
@@ -99,8 +95,8 @@ internal object FrameStats {
 
     @Synchronized fun report(): String {
         val end = if (recording.value) System.nanoTime() else ended
-        return JSONObject().put("schema", 2).put("environment", environment).put("glass", glass)
-            .put("requestedGlass", requestedGlass).put("effectiveGlass", effectiveGlass).put("windowLimitReached", windowLimitReached)
+        return JSONObject().put("schema", 2).put("environment", environment)
+            .put("effectiveGlass", effectiveGlass).put("windowLimitReached", windowLimitReached)
             .put("scenarioTag", capturedTag).put("captureId", captureId)
             .put("buildSource", io.github.anastaci1a.localica.BuildConfig.SOURCE_SHA)
             .put("startedNanos", started).put("endedNanos", if (recording.value) JSONObject.NULL else ended)

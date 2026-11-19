@@ -186,17 +186,16 @@ class LyricsHeaderActionsTest {
 
     private fun heldBodyCastsNoShadowInside(label: String, separated: Boolean, expands: Boolean) {
         val backdrop = Color(0xFF3F6FB0)
-        var shadows by mutableStateOf(true)
         lateinit var backing: FrostedBackdrop
         lateinit var preparation: GlassOriginPreparation
+        lateinit var anchor: GlassAnchor
         compose.setContent { EngineTheme {
-            val anchor = rememberGlassAnchor()
+            anchor = rememberGlassAnchor()
             preparation = rememberGlassOriginPreparation()
             backing = rememberFrostedBackdrop(Unit)
             Box(Modifier.fillMaxSize()) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backing)) { drawRect(backdrop) }
-                CompositionLocalProvider(LocalFrostedBackdrop provides backing, LocalGlassAppearance provides
-                    LocalGlassAppearance.current.copy(shadowStrength = if (shadows) 1f else 0f)) {
+                CompositionLocalProvider(LocalFrostedBackdrop provides backing) {
                     Box(Modifier.padding(48.dp)) { LyricsHeaderActions(separated, if (separated) 1f else 0f, anchor, preparation, {}, {}, {}) }
                 }
             }
@@ -216,9 +215,18 @@ class LyricsHeaderActionsTest {
         fun difference(a: Int, b: Int) = maxOf(kotlin.math.abs(android.graphics.Color.red(a) - android.graphics.Color.red(b)),
             kotlin.math.abs(android.graphics.Color.green(a) - android.graphics.Color.green(b)), kotlin.math.abs(android.graphics.Color.blue(a) - android.graphics.Color.blue(b)))
         fun bareShot(): IntArray {
-            compose.runOnIdle { shadows = false }
+            val nodes = compose.runOnUiThread { requireNotNull(anchor.shadowPlane).casters.toList() }
+            val roles = nodes.map { it.role }
+            fun restore() = compose.runOnUiThread { nodes.zip(roles).forEach { (node, role) ->
+                node.request(io.github.anastaci1a.localica.ui.engine.SurfaceTarget(node.stratum, node.opacity.value(), role),
+                    io.github.anastaci1a.localica.ui.engine.motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
+            } }
+            compose.runOnUiThread { nodes.forEach { node ->
+                node.request(io.github.anastaci1a.localica.ui.engine.SurfaceTarget(node.stratum, node.opacity.value(), io.github.anastaci1a.localica.ui.engine.ShadowRole.None),
+                    io.github.anastaci1a.localica.ui.engine.motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
+            } }
             compose.mainClock.advanceTimeBy(100)
-            return shot().also { compose.runOnIdle { shadows = true }; compose.mainClock.advanceTimeBy(100) }
+            return try { shot() } finally { restore(); compose.mainClock.advanceTimeBy(100) }
         }
         compose.mainClock.autoAdvance = false
         try {

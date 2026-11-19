@@ -32,8 +32,8 @@ class GlassSilhouetteTest {
         for (y in 2 until field.bitmap.height - 2 step 3) for (x in 2 until field.bitmap.width - 2)
             for (fraction in listOf(0f, .5f)) {
             val boundary = field.origin + Offset((x + fraction) / field.scale, (y + .3f) / field.scale)
-            val a = field.sample(boundary - Offset(.0001f, 0f))
-            val b = field.sample(boundary + Offset(.0001f, 0f))
+            val a = field.sample(boundary - Offset(.0001f, 0f), frame.path)
+            val b = field.sample(boundary + Offset(.0001f, 0f), frame.path)
             assertTrue("A sampling boundary must not jump its refracting normal", (a.inward - b.inward).getDistance() < .001f)
         }
     }

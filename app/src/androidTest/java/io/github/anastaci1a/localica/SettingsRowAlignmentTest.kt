@@ -29,11 +29,11 @@ import org.junit.Test
 class SettingsRowAlignmentTest {
     @get:Rule val compose = createComposeRule()
 
-    private val pages = listOf(null, "Interface", "Appearance", "Icon packs", "Glass", "Navigation", "Player", "Motion",
+    private val pages = listOf(null, "Interface", "Appearance", "Icon packs", "Navigation", "Player", "Motion",
         "Playback and queues", "Song tap behavior", "Library and tags", "Library filters", "Folders to scan", "Scanner",
         "Tag jobs and recovery", "About and licenses")
     /** Pages whose content is built from shared rows; each must expose at least one. */
-    private val rowPages = setOf(null, "Interface", "Glass", "Player", "Motion", "Playback and queues", "Song tap behavior",
+    private val rowPages = setOf(null, "Interface", "Player", "Motion", "Playback and queues", "Song tap behavior",
         "Library and tags", "Folders to scan", "Scanner", "Icon packs")
     private val navigationSummary = "Main tabs, Back history, and exit confirmation"
 

@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -16,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.ArtworkCache
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
@@ -38,9 +38,8 @@ class QueueShadowContinuityTest {
         val queue = QueueEdits.create(tracks, 0, "Shadow queue")
         val state = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
         val library = LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false)
-        var strength by mutableFloatStateOf(1f)
         compose.setContent { EngineTheme(reduced = true) {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = strength, shadowSpread = 1f)) {
+
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.White).testTag("queue-shadow-scene")) {
                     val backing = rememberFrostedBackdrop(Unit, dark = false)
                     androidx.compose.foundation.Canvas(Modifier.matchParentSize().recordFrostedBackdrop(backing)) { drawRect(Color.White) }
@@ -54,7 +53,7 @@ class QueueShadowContinuityTest {
                     }
                     }
                 }
-            }
+
         } }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().size == 1 }
         compose.waitForIdle()
@@ -70,8 +69,9 @@ class QueueShadowContinuityTest {
         val bodyBottom = target.bottom - 4*d
         val bodyTop = target.top + 4*d
         val shadow = scene.captureToImage()
-        compose.runOnIdle { strength = 0f }
-        val baseline = scene.captureToImage()
+        // White backing and red artwork both have red=1; the sampled bands contain no ink.
+        val baseline = Bitmap.createBitmap(shadow.width, shadow.height, Bitmap.Config.ARGB_8888)
+            .apply { eraseColor(android.graphics.Color.WHITE) }.asImageBitmap()
         val output = nativeEvidenceDirectory("shadow-continuity",
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
         listOf("queue-shadow" to shadow, "queue-baseline" to baseline).forEach { (name, image) ->

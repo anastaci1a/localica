@@ -9,7 +9,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.takeOrElse
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.dp
@@ -27,8 +26,6 @@ internal object HoverLift {
     val MaxLift = 4.dp
     /** Growth never leaves less than this to a neighbour's content. */
     val Clearance = 1.dp
-    /** Frost blur radius at full lift (Normal renderer). */
-    val Blur = 6.dp
 }
 
 /**
@@ -38,16 +35,15 @@ internal object HoverLift {
  */
 @Immutable internal data class LiftShadow(val strength: Float, val spread: Float, val color: Color)
 
-internal fun liftShadow(glass: GlassAppearance, lightInk: Boolean) = LiftShadow(
-    glass.shadowStrength * glass.liftShadowStrength, glass.shadowSpread, if (lightInk) Color.White else Color.Black)
+internal fun liftShadow(lightInk: Boolean) = LiftShadow(
+    io.github.anastaci1a.localica.ui.spec.GlassShadowStrength * io.github.anastaci1a.localica.ui.spec.GlassLiftShadowStrength, io.github.anastaci1a.localica.ui.spec.GlassShadowSpread, if (lightInk) Color.White else Color.Black)
 
 /** Reads the menu's theming: light content ink means a light-icon (dark) menu. [ink] defaults to the
  * local content ink. A surface composed outside its source's theming (the foreground drag overlay)
  * passes the source's captured ink, so a lifted item keeps one glow or shadow from press to drop. */
 @Composable internal fun rememberLiftShadow(ink: Color = Color.Unspecified): LiftShadow {
-    val glass = LocalGlassAppearance.current
     val lightInk = ink.takeOrElse { LocalContentColor.current }.luminance() > .5f
-    return remember(glass.shadowStrength, glass.shadowSpread, glass.liftShadowStrength, lightInk) { liftShadow(glass, lightInk) }
+    return remember(lightInk) { liftShadow(lightInk) }
 }
 
 internal fun hoverMotionSpec(reducedMotion: Boolean) =

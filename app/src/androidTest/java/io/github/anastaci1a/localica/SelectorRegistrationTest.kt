@@ -73,8 +73,7 @@ class SelectorRegistrationTest {
                 sceneView = LocalView.current
                 val source = rememberFrostedBackdrop(Unit)
                 readySource = source
-                CompositionLocalProvider(LocalFrostedBackdrop provides source,
-                    LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
+                CompositionLocalProvider(LocalFrostedBackdrop provides source) {
                     // Offset both source and consumer inside their window. The same
                     // marker must survive a different Dialog screen origin as well.
                     Box(Modifier.padding(start = 17.dp, top = 29.dp, end = 11.dp, bottom = 13.dp)) {

@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.assertTrue
@@ -34,8 +33,7 @@ class LiftShadowContinuityTest {
         var selected by mutableStateOf(false)
         lateinit var selection: SelectionScene
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Color.Black,
-                LocalGlassAppearance provides GlassAppearance(shadowStrength = 1f, shadowSpread = 1f)) {
+            CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Color.Black) {
                 Box(Modifier.size(300.dp, 320.dp).background(Color.White).testTag("lift-shadow-scene")) {
                     ConnectedSelectionHost(Modifier.fillMaxSize()) {
                         selection = checkNotNull(LocalSelectionScene.current)

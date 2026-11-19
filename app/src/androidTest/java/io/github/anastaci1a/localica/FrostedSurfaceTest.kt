@@ -27,12 +27,11 @@ import java.io.File
 
 class FrostedSurfaceTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun neutralFrostFollowsConfiguredContrastInBothInkPolarities() {
+    @Test fun neutralFrostFollowsDefaultContrastInBothInkPolarities() {
         lateinit var source: FrostedBackdrop
         var lightInk by mutableStateOf(true)
-        var appearance by mutableStateOf(io.github.anastaci1a.localica.navigation.GlassAppearance(contrast = 0f))
         fun identity(value: Any?): String = value?.let { System.identityHashCode(it).toString(16) } ?: "null"
-        fun diagnosticState(): String = "tone=${appearance.contrast},${appearance.contrastWeight},$lightInk " +
+        fun diagnosticState(): String = "tone=.25,2,$lightInk " +
             "source=${identity(source)} fallback=${identity(source.fallback)} snapshot=${identity(source.snapshot)} " +
             "request=${source.readbackRequest} published=${source.snapshotReadbackRequest} " +
             "size=${source.size} dark=${source.dark} revision=${source.revision} " +
@@ -45,7 +44,7 @@ class FrostedSurfaceTest {
                 "ns=${android.os.SystemClock.elapsedRealtimeNanos()} phase=$phase $state")
         }
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides appearance) {
+
                 GlassPanelTheme(lightInk) { Box(Modifier.fillMaxSize()) {
                     source = rememberFrostedBackdrop(Unit, dark = lightInk)
                     LaunchedEffect(source) {
@@ -55,10 +54,10 @@ class FrostedSurfaceTest {
                         snapshotFlow { diagnosticState() }.collect { observe("state-change", it) }
                     }
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Gray) }
-                    FrostedSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(200.dp)
+                    GlassPanel(Modifier.align(Alignment.Center).fillMaxWidth().height(200.dp)
                         .testTag("neutral-frost"), source = source) { }
                 } }
-            }
+
         } }
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) {
             observe("initial-readiness")
@@ -78,14 +77,13 @@ class FrostedSurfaceTest {
             assertTrue("Keep the backdrop visible: $color", color.red in .2f.. .85f)
         }
         for (dark in listOf(true, false)) {
-            compose.runOnIdle { lightInk = dark; appearance = appearance.copy(contrast = 0f) }
+            compose.runOnIdle { lightInk = dark }
             compose.waitForIdle()
-            val baseline = center("baseline")
+            val baseline = Color.Gray
             assertNeutral(baseline)
-            assertEquals("Zero trim preserves gray apart from the neutral frost finish",
-                Color.Gray.red, baseline.red, .04f)
-            for ((trim, weight) in listOf(.25f to 2f, .5f to 2f, .5f to 1f)) {
-                compose.runOnIdle { appearance = appearance.copy(contrast = trim, contrastWeight = weight) }
+            assertEquals("Default trim preserves gray apart from its curve and neutral finish",
+                GlassTone(.25f, 2f, dark).channel(Color.Gray.red), center("baseline").red, .04f)
+            for ((trim, weight) in listOf(.25f to 2f)) {
                 // The unchanged translucent finish slightly attenuates the curve's delta.
                 // Bound that small effect instead of retaining the obsolete fixed-dark-tint range.
                 val expectedDelta = GlassTone(trim, weight, dark).channel(Color.Gray.red) - Color.Gray.red
@@ -199,7 +197,7 @@ class FrostedSurfaceTest {
                 drawRect(if (swapped) Color.Blue else Color.Red, size = Size(size.width / 2, size.height))
                 drawRect(if (swapped) Color.Red else Color.Blue, topLeft = Offset(size.width / 2, 0f), size = Size(size.width / 2, size.height))
             }
-            FrostedSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(240.dp).testTag("glass"), source = source) {
+            GlassPanel(Modifier.align(Alignment.Center).fillMaxWidth().height(240.dp).testTag("glass"), source = source) {
                 Text("Sharp foreground", Modifier.align(Alignment.Center))
             }
         } } }

@@ -33,25 +33,25 @@ class ScopedSearchOpticsTest {
     fun searchLensRedrawsWhenItsListBackdropArrivesLater() {
         var loaded by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = .4f,
-                contrast = 0f, shadowStrength = 0f)) {
-                val source = rememberFrostedBackdrop(Unit, enabled = false)
+
+                val source = rememberFrostedBackdrop(Unit, enabled = false, dark = true)
                 Box(Modifier.size(320.dp, 100.dp)) {
                     if (loaded) Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Red) }
                     CompositionLocalProvider(LocalFrostedBackdrop provides source) {
                         ListSearchPill("Delayed list", {}, Modifier.padding(12.dp).testTag("delayed-pill"))
                     }
                 }
-            }
+
         } }
         compose.waitForIdle()
         compose.runOnIdle { loaded = true }
         val image = compose.onNodeWithTag("delayed-pill").captureToImage().toPixelMap()
-        // Tint is emitted only by a rendered lens, not by the red background or
-        // the white foreground (which is confined to the left).
+        // Fixed .06 tint / .25 compression at red luma: (.75, .0473, .0473).
+        // Both raw red and white foreground fall outside these default-material errors.
         var edgePixels = 0
         for (y in image.height / 3..image.height * 2 / 3) for (x in image.width * 3 / 4 until image.width * 4 / 5)
-            if (image[x, y].red > .9f && image[x, y].green > .1f && image[x, y].green < .6f) edgePixels++
+            if (kotlin.math.abs(image[x, y].red - .75f) < .1f &&
+                kotlin.math.abs(image[x, y].green - .0473f) < .03f && image[x, y].green > 2f / 255f) edgePixels++
         assertTrue("Late list recording must wake its stationary search lens", edgePixels > 10)
     }
 
@@ -75,13 +75,11 @@ class ScopedSearchOpticsTest {
         val listening = ListeningQueue(name = "Optics", entries = tracks.map { QueueEntry(track = it) })
         val route = BrowseRoute(if (queue) MainTab.Queues else MainTab.Playlists,
             MediaRef(if (queue) MediaKind.Queue else MediaKind.Playlist, if (queue) listening.id else playlist.id), "Optics")
-        var depth by mutableFloatStateOf(.6f)
-        var lens by mutableStateOf(true)
-        compose.setContent { CompositionLocalProvider(LocalGlassVisible provides lens) { EngineTheme(reduced = true) {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(depth = depth, blur = 0f,
-                whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+        val optics = DefaultRefractionFixture()
+        compose.setContent { EngineTheme(reduced = true) {
+
                 val backing = rememberFrostedBackdrop(Unit)
-                Box(Modifier.size(320.dp, 500.dp)) {
+                optics.Scene(Modifier.size(320.dp, 500.dp)) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backing)) {
                         val cell = 10.dp.toPx()
                         for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt())
@@ -95,8 +93,8 @@ class ScopedSearchOpticsTest {
                             reducedMotion = true)
                     }
                 }
-            }
-        } } }
+
+        } }
         val pill = compose.onNodeWithTag("list-search-pill")
         compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().isNotEmpty() }
         if (!queue) pill.performScrollTo()
@@ -114,9 +112,16 @@ class ScopedSearchOpticsTest {
             assertTrue("None presents a solid average behind the search foreground",
                 clear.maxOf { it.red } - clear.minOf { it.red } < .035f)
         }
-        // Depth shapes only the highlight. Hiding the lens shows the same scene unrefracted, and with no tint,
-        // contrast or blur only the refraction lookups separate the two captures.
-        compose.runOnIdle { if (android.os.Build.VERSION.SDK_INT >= 33) lens = false else depth = 2f }
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            val reference = optics.capture(compose, pill, 0f)
+            val minimum = before.width * before.height / 20
+            optics.assertDisplacement(before, reference, .15f, minimum)
+            val withoutRefraction = optics.capture(compose, pill, 0f)
+            org.junit.Assert.assertThrows(AssertionError::class.java) {
+                optics.assertDisplacement(withoutRefraction, reference, .15f, minimum)
+            }
+            return
+        }
         compose.mainClock.advanceTimeBy(1200)
         val image = pill.captureToImage()
         val after = image.toPixelMap()
@@ -127,8 +132,6 @@ class ScopedSearchOpticsTest {
         var changed = 0
         for (y in 0 until before.height) for (x in 0 until before.width)
             if (kotlin.math.abs(before[x, y].red - after[x, y].red) > .15f) changed++
-        if (android.os.Build.VERSION.SDK_INT >= 33)
-            assertTrue("Scoped search needs spatial refraction, changed=$changed", changed > before.width * before.height / 20)
-        else org.junit.Assert.assertEquals("None ignores optical depth", 0, changed)
+        org.junit.Assert.assertEquals("The average fallback stays stable", 0, changed)
     }
 }

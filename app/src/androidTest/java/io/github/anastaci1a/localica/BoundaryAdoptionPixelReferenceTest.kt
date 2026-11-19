@@ -1,7 +1,5 @@
 package io.github.anastaci1a.localica
 
-import android.content.Context
-import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.foundation.Canvas
@@ -35,20 +33,10 @@ import java.io.File
 class BoundaryAdoptionPixelReferenceTest {
     @get:Rule val compose = localicaComposeRule()
 
-    @Test fun NormalLive() = fixture(true, GlassRendererMode.Normal)
-    @Test fun NormalRetained() = fixture(false, GlassRendererMode.Normal)
-    @Test fun FlatNoneLive() = fixture(true, GlassRendererMode.FlatNone)
-    @Test fun FlatNoneRetained() = fixture(false, GlassRendererMode.FlatNone)
-
-    private fun fixture(live: Boolean, mode: GlassRendererMode) {
+    @Test fun NormalLive() = fixture(true)
+    @Test fun NormalRetained() = fixture(false)
+    private fun fixture(live: Boolean) {
         val base = InstrumentationRegistry.getInstrumentation().targetContext
-        val context = object : ContextWrapper(base) {
-            override fun getSharedPreferences(ignored: String, mode: Int) =
-                base.getSharedPreferences("legacy-controlled-740", mode)
-        }
-        val raw = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
-        raw.edit().clear().putString("glass-renderer", "None").commit()
-        val appearance = InterfacePreferences(context).read().glass.copy(renderer = mode)
         val pin = LiveShadowBranchPin()
         val shadows = ShadowStates()
         var dark by mutableStateOf(false)
@@ -64,9 +52,7 @@ class BoundaryAdoptionPixelReferenceTest {
                 val tables = remember { mutableSetOf<CompositionData>() }
                 shadows.bind(currentComposer.compositionData, tables)
                 pin.bind(currentComposer.compositionData, tables)
-                CompositionLocalProvider(LocalInspectionTables provides tables, LocalDensity provides Density(1f),
-                    LocalGlassRendererRuntime provides remember { GlassRendererRuntime(appearance.renderer) },
-                    LocalGlassAppearance provides appearance) {
+                CompositionLocalProvider(LocalInspectionTables provides tables, LocalDensity provides Density(1f)) {
                     LocalicaTheme { GlassPanelTheme(dark) {
                         source = rememberFrostedBackdrop(Unit, dark = dark)
                         val observe = Modifier.drawWithContent {
@@ -119,9 +105,9 @@ class BoundaryAdoptionPixelReferenceTest {
                 repeat(8) { frame() }
                 if (!live) compose.waitUntil(10_000) { compose.runOnIdle { shadows.prepared() } }
                 compose.runOnIdle {
-                    assertTrue(mode == GlassRendererMode.FlatNone || source.recorded)
-                    if (mode != GlassRendererMode.FlatNone) assertEquals(source.rendererGeneration, source.recordedGeneration)
-                    if (Build.VERSION.SDK_INT < 33 && mode != GlassRendererMode.FlatNone) assertNotNull(source.snapshot)
+                    assertTrue(source.recorded)
+
+                    if (Build.VERSION.SDK_INT < 33) assertNotNull(source.snapshot)
                     assertTrue("The fixture must contain actual production shadows", shadows.count >= 1)
                     if (live) pin.assertLive() else assertTrue(shadows.prepared())
                 }
@@ -129,20 +115,18 @@ class BoundaryAdoptionPixelReferenceTest {
                 val image = compose.onNodeWithTag("controlled-reference").captureToImage()
                 val after = compose.runOnIdle { shadows.receipt(live) }
                 assertEquals("Native copy cannot cross a shadow branch or key", before.toString(), after.toString())
-                val prefix = "boundary-${mode.name}-$branch-$isDark-${compose.mainClock.currentTime}"
+                val prefix = "boundary-${"Default"}-$branch-$isDark-${compose.mainClock.currentTime}"
                 File(root, "$prefix.png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
                 File(root, "$prefix.json").writeText(JSONObject().put("api", Build.VERSION.SDK_INT)
-                    .put("branch", branch).put("dark", isDark).put("alpha", alpha).put("mode", mode.name).put("clockMs", compose.mainClock.currentTime)
-                    .put("rendererGeneration", source.rendererGeneration.toString())
-                    .put("recordedGeneration", source.recordedGeneration.toString())
+                    .put("branch", branch).put("dark", isDark).put("alpha", alpha).put("mode", "Default").put("clockMs", compose.mainClock.currentTime)
+
+                    .put("recorded", source.recorded)
                     .put("sourceReady", source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null))
                     .put("shadowsBefore", before).put("shadowsAfter", after).toString(2))
               }
             }
         } finally {
             compose.mainClock.autoAdvance = true
-            raw.edit().clear().commit()
-            base.deleteSharedPreferences("legacy-controlled-740")
         }
     }
 

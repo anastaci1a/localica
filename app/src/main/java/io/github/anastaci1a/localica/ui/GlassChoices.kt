@@ -146,9 +146,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
 
 @Composable
 internal fun SelectionPane(modifier: Modifier = Modifier) {
-    CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
-        LiquidGlassSurface(modifier, cornerRadius = 20.dp, pressFeedback = false)
-    }
+    LiquidGlassSurface(modifier, cornerRadius = 20.dp, pressFeedback = false)
 }
 
 @Composable

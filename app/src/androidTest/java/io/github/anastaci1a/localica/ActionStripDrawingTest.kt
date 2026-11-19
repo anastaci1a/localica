@@ -72,7 +72,7 @@ class ActionStripDrawingTest {
             CompositionLocalProvider(LocalLayoutDirection provides direction, LocalReducedMotion provides reduced) {
                 val state = rememberScrollState()
                 SideEffect { scroll = state }
-                val inset = glassShadowInset()
+                val inset = io.github.anastaci1a.localica.ui.spec.GlassLayoutInset
                 val drawing = rememberActionStripDrawing()
                 Box(Modifier.size(280.dp, 180.dp).background(Color.White).testTag("comparison")
                     .drawWithContent { drawContent(); drawnReplay = replay }) {
@@ -80,7 +80,7 @@ class ActionStripDrawingTest {
                     // representation switch, including their prepared shadow caches.
                     Box(Modifier.align(Alignment.Center).width(216.dp)
                         .then(drawing.replay(inset) { replay }).graphicsLayer { clip = replay }) {
-                        Row(Modifier.fillMaxWidth().shadowViewportOutset(inset, horizontal = true)
+                        Row(Modifier.fillMaxWidth().stripContentOutset(horizontal = true)
                             .then(drawing.record { replay })
                             .controlHorizontalScroll(state).padding(inset),
                             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

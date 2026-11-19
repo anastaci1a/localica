@@ -82,20 +82,6 @@ private fun footprintPixelArea(corners: List<Offset>, x: Int, y: Int): Float {
     }.toFloat()) * .5f
 }
 
-internal inline fun averageGlassColor(sample: (Int, Int) -> Int): Color {
-    var red = 0f; var green = 0f; var blue = 0f; var alpha = 0f
-    for (y in 0 until 8) for (x in 0 until 8) {
-        val pixel = sample(x, y)
-        val a = (pixel ushr 24) / 255f
-        red += (pixel ushr 16 and 255) / 255f * a
-        green += (pixel ushr 8 and 255) / 255f * a
-        blue += (pixel and 255) / 255f * a
-        alpha += a
-    }
-    return if (alpha == 0f) Color.Transparent else Color(red / alpha, green / alpha, blue / alpha, alpha / 64)
-
-}
-
 internal fun MaterialAverageStyle.color(mean: Color): Color {
     val tint = whiteTint.coerceIn(0f, 1f)
     val y = .2126f * mean.red + .7152f * mean.green + .0722f * mean.blue
@@ -114,7 +100,7 @@ internal fun MaterialAverageStyle.color(mean: Color): Color {
 internal fun AverageBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
     style: MaterialAverageStyle, home: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
     homeBounds: (() -> Rect)? = null, homeFootprint: (() -> HomeBackdropFootprint?)? = null, styleReader: (() -> MaterialAverageStyle)? = null) {
-    if (flatGlass()) return
+
     val drawObserver = LocalBackdropSamplingObserver.current
     // The scene the lens would sample (and its parent outside its box), never a substitute.
     val backing = source
