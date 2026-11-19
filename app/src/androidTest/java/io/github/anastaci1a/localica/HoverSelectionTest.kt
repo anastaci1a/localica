@@ -98,7 +98,7 @@ class HoverSelectionTest {
 
     /** Backdrop: a red ramp across the first row's leading edge, fine green stripes everywhere. */
     @Composable private fun Fixture(first: Boolean, second: Boolean, rowGap: androidx.compose.ui.unit.Dp = 8.dp, retainSecond: Boolean = false,
-        measuredOutline: Boolean = false,third: Boolean? = null) {
+        measuredOutline: Boolean = false,third: Boolean? = null, blue: Float = .6f) {
         LocalicaTheme {
             val outline=rememberPaddedItemOutline(48.dp,0.dp,null,0.dp,0.dp).takeIf { measuredOutline }
             source = rememberFrostedBackdrop(Unit, dark = false)
@@ -111,7 +111,7 @@ class HoverSelectionTest {
                     while (x < size.width) {
                         val red = ((x - rampStart) / ramp).coerceIn(0f, 1f)
                         val green = if ((x / stripe).toInt() % 2 == 0) .9f else .5f
-                        drawRect(Color(red, green, .6f), Offset(x, 0f), Size(1f, size.height))
+                        drawRect(Color(red, green, blue), Offset(x, 0f), Size(1f, size.height))
                         x += 1f
                     }
                 }
@@ -255,7 +255,7 @@ class HoverSelectionTest {
 
     @Test fun adjacentSelectionsShareOneOutlineAndDeselectionNarrowsTheJoinContinuously() {
         var second by mutableStateOf(true)
-        compose.setContent { Fixture(true, second,measuredOutline=true) }
+        compose.setContent { Fixture(true, second,measuredOutline=true,blue=1f) }
         compose.waitForIdle()
         val joined = capture()
         save(compose.onNodeWithTag("hover-scene").captureNativeFrame(), "hover-joined")
@@ -270,7 +270,7 @@ class HoverSelectionTest {
         val gapY = (scene.viewportHover.getValue("first").lifted.bounds.bottom+d).toInt()
         fun joinedWidth(pixels: PixelMap): Int {
             var count = 0
-            for (x in (24 * d).toInt() until ((360 - 24) * d).toInt()) if (pixels[x, gapY].blue > .55f) count++
+            for (x in (24 * d).toInt() until ((360 - 24) * d).toInt()) if (pixels[x, gapY].blue > .95f) count++
             return count
         }
         val full = joinedWidth(joined)
@@ -308,7 +308,7 @@ class HoverSelectionTest {
 
     @Test fun aDepartingMiddleMemberRevealsTheSameShadowWhenItsRestGroupSplits() {
         var middle by mutableStateOf(true)
-        compose.setContent { Fixture(true,middle,measuredOutline=true,third=true) }
+        compose.setContent { Fixture(true,middle,measuredOutline=true,third=true,blue=1f) }
         compose.waitForIdle()
         val first=capture()
         val density=first.width/360f
