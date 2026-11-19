@@ -1,6 +1,6 @@
-<!-- Release: v0.34.15 -->
+<!-- Release: v0.34.16 -->
 
-# Release v0.34.15
+# Release v0.34.16
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,13 +8,25 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Changes
 
-- Glass backdrop blur strength now follows display density: lighter on very dense displays, slightly stronger on less dense ones.
-- App Kotlin/Java source changes from 53,514 to 53,520 lines: 9 added, 3 removed, net +6. One shared density-based radius replaces the fixed blur radius, and one obsolete lint baseline entry is removed.
-- Refresh shard scheduling from complete v0.34.14 and v0.34.13 producers 44336375980 and 44221675774.
+This release replaces the shared glass optics in one place, so every glass surface (buttons, tab bar, popups, search, lyrics and the player) changes together. The previous optic code is removed rather than kept behind a setting.
+
+- **Glass refraction:** the backdrop seen through glass now bends with a new edge profile: a stronger inward pull just inside the rim and a soft outward band just outside it. The previous crown and shoulder displacement is removed.
+- **Glass colour fill:** glass faces use fixed colour rows applied just before output, and the same face colour is used by both rendering paths. Light glass faces now always get dark ink, so text and icons stay readable over white backdrops and on popups shown over dark pages.
+- **Glass shadow:** one shared shadow replaces the previous falloff: a soft shadow shifted 8 dp down with a 24 dp blur, drawn the same way under every glass surface. Shadow rasters no longer depend on live exclusions.
+- **Fluid press:** pressable glass lifts and leans toward the finger while held, then settles back with a spring on release. Pressing again during the settle continues from the current motion instead of restarting.
+- **Touch glow:** the light under the finger is replaced, including the rippling glow that follows a press as it moves. The light follows the finger smoothly, a broad glow fades in and out around the press, and its strength adapts to how bright the backdrop is. Switches light up only while they are physically touched.
+- App Kotlin/Java source changes from 53,520 to 53,903 lines: 843 added, 460 removed, net +383. Most of the growth is the new touch glow and fluid press; the old refraction and shadow code is removed.
+- Refresh shard scheduling from complete v0.34.15 and v0.34.14 producers 44398792857 and 44336375980.
+
+## Open items
+
+- The Depth setting now changes only the highlight. Changing Depth or pressing no longer changes how much the backdrop bends.
+- Sliders and switches keep their own press shape and existing lens bounds; joining them to the shared fluid press is follow-up work.
+- Glass faces on dark pages use the light colour rows with dark ink; dedicated dark-appearance rows are follow-up work.
 
 ## Resolved issues
 
-- [#1005](https://github.com/anastaci1a/localica/issues/1005): Glass backdrop blur strength follows display density in the shared glass surface. The broader interaction programme remains open.
+- [#1005](https://github.com/anastaci1a/localica/issues/1005): Shared glass refraction, colour fill, shadow, fluid press and touch glow are replaced in the shared glass surface. The broader interaction programme remains open.
 
 ## Known issues and follow-ups
 
@@ -24,6 +36,9 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 - [#1051](https://github.com/anastaci1a/localica/issues/1051): Library data import confirmation has an intermittent Android 8 timeout history; the dialog replacement fix is included, with the known timeout disclosed for release acceptance.
 - [#530](https://github.com/anastaci1a/localica/issues/530): The artwork chooser can intermittently time out waiting for “Choose recent image” in ArtworkEditRestorationTest.
 - [#1061](https://github.com/anastaci1a/localica/issues/1061): A historical held-drag playback test timed out waiting for idle. That test path has been removed; current cover assertions remain mandatory.
+- [#1070](https://github.com/anastaci1a/localica/issues/1070): SublistLoadingPlaceholderCaptureTest#albumLight can fail intermittently on Android 8.
+- [#1072](https://github.com/anastaci1a/localica/issues/1072): On Android 8, one touch-light pixel check exceeds its unchanged one-byte limit by one step because the test's rounding differs from the device's byte quantization. The limit is unchanged; this is disclosed as non-blocking.
+- [#1073](https://github.com/anastaci1a/localica/issues/1073): Glass refraction rows at the bottom edge can sample unrecorded backdrop padding, so a popup can intermittently show a slightly different colour along its bottom edge.
 - [#1063](https://github.com/anastaci1a/localica/issues/1063): Investigate count validity when shuffle or repeat changes; this source finding has not been reproduced on a device.
 - [#1064](https://github.com/anastaci1a/localica/issues/1064): Add pending-scroll coverage for the list scrollbar path.
 - [#1065](https://github.com/anastaci1a/localica/issues/1065): Remove obsolete shuffle test diagnostics while preserving native refresh and assertions.
@@ -45,7 +60,7 @@ This optimized, non-debuggable build uses R8 and updates the existing app in pla
 
 ## Install
 
-1. Download `localica-v0.34.15-pre-release.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.34.16-pre-release.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
 
