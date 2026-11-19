@@ -165,17 +165,17 @@ class FullPartitionTest(unittest.TestCase):
             p.write_text(changed)
             with self.assertRaises(ValueError):partition.plan(self.root,['example.RiskTest'],'26','a'*40)
 
-    def test_flat_none_popup_omits_only_two_reviewed_methods_below_33(self):
-        relative = Path('app/src/androidTest/java/io/github/anastaci1a/localica/FlatNoneRendererPopupTest.kt')
+    def test_default_material_omits_only_two_reviewed_methods_below_33(self):
+        relative = Path('app/src/androidTest/java/io/github/anastaci1a/localica/GlassAppearanceTest.kt')
         path = self.root/relative
         path.parent.mkdir(parents=True)
         original = (ROOT/relative).read_text()
         path.write_text(original)
         older = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
         newer = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
-        prefix = 'io.github.anastaci1a.localica.FlatNoneRendererPopupTest#'
-        gated = {prefix+'rendererPopupCanLeaveFlatNoneForNormal',
-                 prefix+'rendererPopupAccessibilityCanLeaveFlatNoneForNormal'}
+        prefix = 'io.github.anastaci1a.localica.GlassAppearanceTest#'
+        gated = {prefix+'frostedPanelsStillScatterTheParentScene',
+                 prefix+'defaultFrostKeepsForegroundSharpAndPageInk'}
         self.assertEqual(gated, {row['id'] for row in older['sdk_omissions']})
         self.assertTrue(all(row['reason'] == 'Reviewed minSdkVersion=33 annotation'
                             for row in older['sdk_omissions']))
@@ -183,9 +183,9 @@ class FullPartitionTest(unittest.TestCase):
         self.assertTrue(gated.issubset(newer['expected']))
         self.assertEqual([], newer['sdk_omissions'])
         for changed in (original.replace('minSdkVersion = 33', 'minSdkVersion = 32'),
-                        original.replace('fun rendererPopupCanLeave', 'fun renamedRendererPopupCanLeave'),
-                        original.replace('import androidx.test.filters.SdkSuppress',
-                                         'import example.SdkSuppress')):
+                        original.replace('fun frostedPanelsStillScatter', 'fun renamedFrostedPanelsStillScatter'),
+                        original.replace('@androidx.test.filters.SdkSuppress',
+                                         '@example.SdkSuppress')):
             path.write_text(changed)
             with self.assertRaises(ValueError):
                 partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
@@ -248,7 +248,7 @@ class FullPartitionTest(unittest.TestCase):
                         '@androidx.test.filters.SdkSuppress(minSdkVersion = 33) @Test '
                         'fun frostedPanelsStillScatterTheParentScene() {} '
                         '@androidx.test.filters.SdkSuppress(minSdkVersion = 33) @Test '
-                        'fun blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp() {} '
+                        'fun defaultFrostKeepsForegroundSharpAndPageInk() {} '
                         '@Test fun averageStillRuns() {} }')
         older = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
         newer = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
