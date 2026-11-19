@@ -88,9 +88,14 @@ class FluidPopupPortalGeometryTest {
     }
 
     @Test fun throughRoleRequestsKeepTheRecoveredIndexOrder() {
-        assertEquals(PopupThroughItem.Pivot to PopupThroughItem.From, popupThroughSlots(growing = true, fromPhase = true))
-        assertEquals(PopupThroughItem.To to PopupThroughItem.Pivot, popupThroughSlots(growing = true, fromPhase = false))
-        assertEquals(PopupThroughItem.From to PopupThroughItem.Pivot, popupThroughSlots(growing = false, fromPhase = true))
-        assertEquals(PopupThroughItem.Pivot to PopupThroughItem.To, popupThroughSlots(growing = false, fromPhase = false))
+        val smaller = PopupPortalBounds(0.0, 0.0, 40.0, 20.0)
+        val larger = PopupPortalBounds(0.0, 0.0, 50.0, 30.0)
+        val tied = PopupPortalBounds(0.0, 0.0, 20.0, 40.0)
+        assertEquals(PopupThroughItem.Pivot to PopupThroughItem.From, popupThroughSlots(smaller, larger, fromPhase = true))
+        assertEquals(PopupThroughItem.To to PopupThroughItem.Pivot, popupThroughSlots(smaller, larger, fromPhase = false))
+        assertEquals(PopupThroughItem.From to PopupThroughItem.Pivot, popupThroughSlots(larger, smaller, fromPhase = true))
+        assertEquals(PopupThroughItem.Pivot to PopupThroughItem.To, popupThroughSlots(larger, smaller, fromPhase = false))
+        assertEquals(PopupThroughItem.From to PopupThroughItem.Pivot, popupThroughSlots(smaller, tied, fromPhase = true))
+        assertEquals(PopupThroughItem.Pivot to PopupThroughItem.To, popupThroughSlots(smaller, tied, fromPhase = false))
     }
 }
