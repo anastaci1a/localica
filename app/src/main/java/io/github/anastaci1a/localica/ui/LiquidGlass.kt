@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -147,7 +148,7 @@ internal fun rememberGlassContact(shared: GlassContact? = null, bodyOverride: Fl
     val contact = shared ?: remember { GlassContact(bodyOverride = bodyOverride) }
     val visible = LocalGlassVisible.current
     rememberGlassBody({ contact.travel + contact.expansion.value }, contact = { if (contact.pressed) 1f else 0f },
-        state = contact.state, active = { visible && contact.active && !contact.modal }, point = { contact.point })
+        state = contact.state, active = { visible && contact.active && !contact.modal }, point = { contact.point }, vertical = { contact.vertical })
     return contact
 }
 
@@ -155,11 +156,16 @@ internal fun rememberGlassContact(shared: GlassContact? = null, bodyOverride: Fl
 @Composable
 internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     presentation: () -> GlassShape = { contact.body.value }, admit: () -> Boolean = { true },
+    transform: (Size) -> GlassBodyTransform = { presentation().bodyTransform(contact.point, it, contact.vertical) },
     onPressed: (Boolean) -> Unit = {}): Modifier {
-    return drawWithContent {
-        val shape = presentation()
-        scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
-    }.observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+    return glassBody(transform).observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+}
+
+internal fun DrawScope.drawGlassBody(transform: GlassBodyTransform, content: DrawScope.() -> Unit) =
+    translate(transform.drift.x, transform.drift.y) { scale(transform.scale.x, transform.scale.y, block = content) }
+
+private fun Modifier.glassBody(transform: (Size) -> GlassBodyTransform) = drawWithContent {
+    drawGlassBody(transform(size)) { this@drawWithContent.drawContent() }
 }
 
 /** Shared contact lifetime for ordinary buttons and independently draggable glass bodies.
@@ -261,6 +267,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val anchor = modifier.glassSurfaceAnchor(source, cornerRadius)
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact, bodyOverride)
     val contactShape = contactPresentation ?: modifier.glassSurfaceContactPresentation() ?: { contact.body.value }
+    val appliedTransform: (Size) -> GlassBodyTransform = { extent -> if (pressFeedback || anchor != null)
+        contactShape().bodyTransform(contact.point, extent, contact.vertical, anchored = anchor != null) else GlassBodyTransform() }
     val surfaceClip = remember(silhouette, cornerRadius) {
         silhouette?.let { outline -> androidx.compose.foundation.shape.GenericShape { extent, _ ->
             addPath(outline.frame(extent).path)
@@ -288,10 +296,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape,
-        admit = contactAdmission) else if (anchor != null) Modifier.drawWithContent {
-        val shape = contactShape()
-        scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
-    } else Modifier)
+        admit = contactAdmission, transform = appliedTransform) else if (anchor != null) Modifier.glassBody(appliedTransform) else Modifier)
         .then(if (!shadow) Modifier else if (silhouette != null) Modifier.silhouetteGlassShadow(silhouette)
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
         .then(if (presentation == null) Modifier.clip(surfaceClip) else Modifier.graphicsLayer {
@@ -356,7 +361,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val splitRim = outline?.description?.rimSplit ?: 0f
             val bounds = androidx.compose.ui.geometry.Rect(Offset.Zero, size)
             val radius = cornerRadius?.toPx() ?: size.minDimension / 2f
-            drawContactGlow(contact.state.glow.value, contactShape, contact.vertical, tone, rim)
+            drawContactGlow(contact.state.glow.value, contactShape, contact.vertical, tone, rim, appliedTransform(size))
             // Blend the control finish into the shared panel finish during the morph.
             // Flat panel walls have constant normals; diagonal glints stay on corners.
             val panelRimWeight = if (popupRim == null) 0f else panel

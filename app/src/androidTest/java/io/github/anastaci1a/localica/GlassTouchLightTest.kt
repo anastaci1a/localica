@@ -84,6 +84,50 @@ class GlassTouchLightTest {
         return (first + (white - first) * .12f * little * falloff * coverage).roundToInt()
     }
 
+    @Test fun fluidSurfaceAndGlowShareOneTransformThroughHoldReleaseAndAnchor() {
+        val image = ImageBitmap(1, 1)
+        val raw = Offset(.8f, .2f); val tracked = Offset(.3f, .7f)
+        val body = GlassMomentum()
+        body.advance(0f, 0.0, contact = 1f, point = raw)
+        val frames = mutableListOf<GlassShape>()
+        for ((seconds, contact) in listOf(.05 to 1f, .3 to 1f, 0.0 to 0f, .05 to 0f, .2 to 0f, .5 to 0f)) {
+            body.advance(0f, seconds, contact = contact, point = raw)
+            frames += body.shape
+        }
+        assertTrue("held frames include nonzero explicit lift", frames.first().lift > 0f)
+        assertTrue("release returns the lift", abs(frames.last().lift) < abs(frames[1].lift))
+        try {
+            for (shape in frames) for (vertical in listOf(false, true)) for (anchored in listOf(false, true)) {
+                val extent = if (anchored) Size(300f, 240f) else Size(96f, 80f)
+                val applied = shape.bodyTransform(raw, extent, vertical, anchored)
+                if (anchored) {
+                    assertEquals(0f, applied.drift.x, 0f); assertEquals(0f, applied.drift.y, 0f)
+                    assertEquals(shape.scaleX(vertical), applied.scale.x, 0f)
+                    assertEquals(shape.scaleY(vertical), applied.scale.y, 0f)
+                } else if (shape.lift > 0f) assertTrue("off-centre lift drifts", applied.drift.getDistance() > 0f)
+                var draws = 0
+                CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
+                    val witness = object : DrawScope by this {
+                        override fun drawCircle(brush: Brush, radius: Float, center: Offset, alpha: Float,
+                            style: DrawStyle, colorFilter: ColorFilter?, blendMode: BlendMode) {
+                            val mapped = floatArrayOf(center.x, center.y)
+                            @Suppress("DEPRECATION")
+                            val matrix = drawContext.canvas.nativeCanvas.matrix
+                            matrix.mapPoints(mapped)
+                            assertEquals(tracked.x * extent.width, mapped[0], .0001f)
+                            assertEquals(tracked.y * extent.height, mapped[1], .0001f)
+                            draws++
+                        }
+                    }
+                    witness.drawGlassBody(applied) {
+                        drawContactGlow(GlassGlow(0f, 1f, tracked), { shape }, vertical, GlassTone(), GlassRimCache(), applied)
+                    }
+                }
+                assertEquals("one nested local draw", 1, draws)
+            }
+        } finally { image.asAndroidBitmap().recycle() }
+    }
+
     @Test fun broadAndLocalFillsMatchIndependentCoverageAndRejectWrongChannels() {
         val probe = ImageBitmap(1, 1)
         try {
@@ -321,8 +365,8 @@ class GlassTouchLightTest {
                     active = { !modal }, point = { point })
                 rememberGlassBody({ reads.incrementAndGet(); 0f }, contact = { if (held) 1f else 0f }, state = shared,
                     active = { modal }, point = { point })
-                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { !modal })
-                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { modal })
+                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { !modal }, point = { point })
+                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { modal }, point = { point })
                 Box(Modifier.size(40.dp))
             }
         } }
@@ -361,7 +405,7 @@ class GlassTouchLightTest {
         val before = compose.runOnIdle { shared.glow.value }
         compose.runOnIdle { modal = !modal; point = Offset(.1f, .9f) }
         compose.runOnIdle { assertEquals("handoff has no reset", before, shared.glow.value) }
-        model.advance(0f, 0.0, contact = 1f)
+        model.advance(0f, 0.0, contact = 1f, point = point)
         model.targetGlow(Offset(.1f, .9f), 1f, 1f)
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
@@ -370,7 +414,7 @@ class GlassTouchLightTest {
         }
         val handoffAdmission = compose.mainClock.currentTime
         compose.mainClock.advanceTimeByFrame()
-        model.advance(0f, (compose.mainClock.currentTime - handoffAdmission) / 1000.0 * ownerSpeed, contact = 1f)
+        model.advance(0f, (compose.mainClock.currentTime - handoffAdmission) / 1000.0 * ownerSpeed, contact = 1f, point = point)
         model.targetGlow(Offset(.1f, .9f), 1f, 1f)
         model.finishSettlement()
         compose.runOnIdle {
@@ -381,7 +425,7 @@ class GlassTouchLightTest {
         compose.mainClock.advanceTimeBy(32)
         val repressed = compose.runOnIdle { GlassMomentum().also { it.blendFrom(shared.momentum) } }
         compose.runOnIdle { point = Offset(.7f, .4f); held = true }
-        repressed.advance(0f, .016 * ownerSpeed, contact = 1f)
+        repressed.advance(0f, .016 * ownerSpeed, contact = 1f, point = point)
         repressed.targetGlow(Offset(.7f, .4f), 1f, 1f)
         repressed.finishSettlement()
         compose.mainClock.advanceTimeByFrame()
