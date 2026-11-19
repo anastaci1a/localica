@@ -209,6 +209,6 @@ class GlassGlowTest {
         val start = source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")
         val effect = source.substring(start, source.indexOf("\n                else if", start))
         // Re-pinned for #748: depth/power/tone read the one material record and the D13/RM01 white-tint fade is deleted; kernel unchanged.
-        assertEquals("25bd1e042f1820f425790952550ca323046beb263de21d74875f9b12da954b7e", sha(effect.toByteArray()))
+        assertEquals("31cf05b3b152e626023b560f9fc92f1620617fc2f2e6d7eed5f3724cb968cf42", sha(effect.toByteArray()))
     }
 }

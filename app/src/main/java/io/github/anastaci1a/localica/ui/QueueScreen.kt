@@ -28,7 +28,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
     enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null, listBackEnabled: Boolean = false, playerOpen: Boolean = false, openingRequest: Long = 0,
-    headerShadowStrengthOverride: Float? = null, presentation: State<QueuePresentation?>? = null) {
+    presentation: State<QueuePresentation?>? = null) {
     val prepared = (presentation ?: rememberQueuePresentation(state, library.snapshot)).value
     val resolved = state.resolvedPlayerQueue?.takeIf { it.library === state.library && it.browsedId == state.browsedId }
     val state = prepared?.state ?: state
@@ -105,10 +105,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         if ((prepared != null || resolved != null) && active == null) Text("Tap a song in Library to start a queue.")
     }
     }
-    val strength = headerShadowStrengthOverride
-    if (strength == null) content()
-    else CompositionLocalProvider(LocalGlassAppearance provides
-        LocalGlassAppearance.current.copy(shadowStrength = strength), content = content)
+    content()
     }) { ready ->
     // Live drawing/focus nodes belong to this route even when saved scroll state survives.
     key(route.key) { browseHolder.SaveableStateProvider(route.key) {

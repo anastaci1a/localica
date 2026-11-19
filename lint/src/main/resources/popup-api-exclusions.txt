@@ -60,3 +60,4 @@ ContactGlowBacking|app/src/main/java/io/github/anastaci1a/localica/ui/LiquidGlas
 ContactLightBacking|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|bounded touch-paint recording; reuses backing without choosing popup motion
 drawContactLight|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|bounded matrix and mask composition; no popup behavior
 contactGlowPasses|app/src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt|ordered touch-paint inputs; no popup geometry or lifecycle
+glassBackdropBlurRadius|app/src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt|fixed optical kernel radius in recorded pixels; no popup ownership or motion input

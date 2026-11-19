@@ -38,7 +38,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     resolutionReader: (() -> Float)? = null, averageReader: (() -> MaterialAverageStyle)? = null, effect: (Size, Float, Float) -> RenderEffect?) {
-    if (flatGlass()) return
+
     val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     val drawObserver = LocalBackdropSamplingObserver.current
@@ -196,7 +196,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(b
         close()
     }
     chain.asReversed().forEach { scene ->
-        if (scene.hasGlassLayer && scene.recorded && !scene.layer.isReleased) {
+        if (scene.recorded && !scene.layer.isReleased) {
             if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(scene)
             val registration = if (scene === backing) backingToLocal else parentToLocal(scene)
             if (registration != null) {

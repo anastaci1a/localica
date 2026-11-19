@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -28,9 +27,8 @@ class GlassOpticsTest {
         org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)
         var material by mutableStateOf(true)
         lateinit var source: FrostedBackdrop
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
-            GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
-            source = rememberFrostedBackdrop(Unit)
+        compose.setContent { LocalicaTheme {
+            source = rememberFrostedBackdrop(Unit, dark = true)
             val isMaterial = material
             SideEffect { source.materialOnly = isMaterial; source.materialCorner = 0f }
             Box(Modifier.size(256.dp, 160.dp)) {
@@ -42,12 +40,13 @@ class GlassOpticsTest {
                 LiquidGlassSurface(Modifier.fillMaxSize().testTag("sampled-material"), source,
                     cornerRadius = 24.dp, pressFeedback = false)
             }
-        } } }
+         } }
         val averaged = compose.onNodeWithTag("sampled-material").captureToImage().toPixelMap()
         for (y in 3..5) for (x in 3..5) {
             val pixel = averaged[averaged.width * x / 8, averaged.height * y / 8]
-            assertEquals("Local red/blue mean", .5f, pixel.red, .04f)
-            assertEquals("Local red/blue mean", .5f, pixel.blue, .04f)
+            assertEquals("Default red/blue mean", .4568f, pixel.red, .04f)
+            assertEquals("Default red/blue mean", .4568f, pixel.blue, .04f)
+            assertEquals("Default mean tint", .0512f, pixel.green, .04f)
         }
         compose.runOnIdle {
             assertFalse("A footprint outside the material is never flattened", source.canAverage(source.origin - Offset(1f, 0f), Size(20f, 20f)))
@@ -65,9 +64,9 @@ class GlassOpticsTest {
     @Test fun changingDepthBendsARecordedGridAndKeepsTheOutsideUntouched() {
         var power by mutableFloatStateOf(1f)
         lateinit var source: FrostedBackdrop
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
-            GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f, depth = .6f)) {
-            Box(Modifier.size(320.dp, 420.dp).testTag("optics")) {
+        compose.setContent { LocalicaTheme {
+            // Four checker cells of extra space at either end keep the exterior clear of default shadows.
+            Box(Modifier.size(320.dp, 548.dp).testTag("optics")) {
                 source = rememberFrostedBackdrop(Unit)
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                     val cell = 16.dp.toPx()
@@ -82,7 +81,7 @@ class GlassOpticsTest {
                     }
                 }
             }
-        } } }
+         } }
         val node = compose.onNodeWithTag("optics")
         if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val before = node.captureToImage().toPixelMap()

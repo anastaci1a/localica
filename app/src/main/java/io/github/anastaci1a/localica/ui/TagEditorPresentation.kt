@@ -9,25 +9,22 @@ import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.luminance
 import io.github.anastaci1a.localica.editing.TagEditorState
 import io.github.anastaci1a.localica.library.Track
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 
 /** Only presentation values cross the launch boundary, never a retiring popup's layers or view locals. */
-internal data class TagEditorPresentation(val ink: Color, val colors: ColorScheme, val appearance: GlassAppearance)
+internal data class TagEditorPresentation(val ink: Color, val colors: ColorScheme)
 
 @Composable
 internal fun currentTagEditorPresentation() = TagEditorPresentation(
     LocalContentColor.current.takeIf { it.isSpecified } ?: MaterialTheme.colorScheme.onSurface,
-    MaterialTheme.colorScheme.copy(), LocalGlassAppearance.current)
+    MaterialTheme.colorScheme.copy())
 
 @Composable
 internal fun TagEditorPresentationScope(presentation: TagEditorPresentation?, content: @Composable () -> Unit) {
     if (presentation == null) { content(); return }
-    CompositionLocalProvider(LocalGlassAppearance provides presentation.appearance) {
         MaterialTheme(colorScheme = presentation.colors) {
             val ink = presentation.ink.takeIf { it.isSpecified } ?: presentation.colors.onSurface
             GlassPanelTheme(ink.isSpecified && ink.luminance() > .5f, content)
         }
-    }
 }
 
 internal data class SongInformationRequest(val track: Track, val presentation: TagEditorPresentation)

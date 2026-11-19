@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.geometry.Offset
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import kotlinx.coroutines.*
@@ -25,10 +24,8 @@ class GlassBodyClockTest {
         var lightContact by mutableStateOf<Float?>(null)
         var point by mutableStateOf<Offset?>(null)
         var speed by mutableFloatStateOf(1f)
-        var damping by mutableFloatStateOf(8f)
         var active by mutableStateOf(true)
         var reduced by mutableStateOf(false)
-        var strength by mutableFloatStateOf(1f)
         val body = GlassBodyState()
     }
     private suspend fun CoroutineScope.withBody(block: suspend Inputs.(suspend (Long) -> Unit) -> Unit) {
@@ -38,8 +35,7 @@ class GlassBodyClockTest {
         val composition = Composition(EmptyApplier(), recomposer)
         val runner = launch(clock) { recomposer.runRecomposeAndApplyChanges() }
         composition.setContent {
-            CompositionLocalProvider(LocalMotionSpeed provides input.speed, LocalReducedMotion provides input.reduced,
-                LocalGlassAppearance provides GlassAppearance(shapeDamping = input.damping, touchLight = input.strength)) {
+            CompositionLocalProvider(LocalMotionSpeed provides input.speed, LocalReducedMotion provides input.reduced) {
                 rememberGlassBody({ input.position }, contact = { input.contact }, state = input.body,
                     active = { input.active }, point = { input.point ?: Offset.Zero }, lightContact = { input.lightContact ?: input.contact })
             }
@@ -183,10 +179,10 @@ class GlassBodyClockTest {
             frame(45_000_000_000L)
             assertEquals(GlassShape(), body.output.value)
             assertEquals(GlassGlow(1f, 1f, Offset(1f, 0f)), body.glow.value)
-            strength = 0f
+            lightContact = 0f
             frame(45_008_333_333L)
             assertEquals(GlassGlow(), body.glow.value)
-            reduced = false; strength = 1f; contact = 1f; lightContact = 1f; point = Offset(.5f, .5f)
+            reduced = false; contact = 1f; lightContact = 1f; point = Offset(.5f, .5f)
             frame(46_000_000_000L)
             frame(46_016_666_666L) // New reduced-motion owner admits h=0.
             frame(46_024_999_999L)

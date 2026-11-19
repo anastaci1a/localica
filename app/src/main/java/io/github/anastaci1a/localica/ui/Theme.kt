@@ -101,12 +101,6 @@ internal fun GlassPanelTheme(lightMix: Float, content: @Composable () -> Unit) {
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun LocalicaTheme(grayTone: Float = .4f, content: @Composable () -> Unit) {
-    // Nested artwork/settings themes reuse the same owner. Retained dialog caller
-    // contexts must keep this live reference even after their declaration is gone.
-    val inheritedRenderer = LocalGlassRendererRuntime.current
-    val renderer = inheritedRenderer ?: remember {
-        GlassRendererRuntime(io.github.anastaci1a.localica.navigation.GlassRendererMode.Normal)
-    }
     val level = .18f + .36f * grayTone.normalizedGrayTone()
     val gray = Color(level, level, level + .012f)
     MaterialTheme(colorScheme = LightColors.copy(onSurfaceVariant = gray, secondary = gray, tertiary = gray,
@@ -114,7 +108,6 @@ fun LocalicaTheme(grayTone: Float = .4f, content: @Composable () -> Unit) {
         shapes = androidx.compose.material3.Shapes(small = Corners.card, medium = Corners.menu, large = Corners.largeArtwork, extraLarge = Corners.panel),
     ) {
         androidx.compose.runtime.CompositionLocalProvider(
-            LocalGlassRendererRuntime provides renderer,
             androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurface,
             androidx.compose.material3.LocalRippleConfiguration provides null,
         ) { ProvideUiClock { ModalGestureRoot { TextEditingFocusHost { GlassDialogHost { GlassPopupHome(content = content) } } } } }

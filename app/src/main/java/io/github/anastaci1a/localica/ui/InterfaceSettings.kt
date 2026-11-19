@@ -31,7 +31,6 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
             }
             SettingsEntry("Reset gray tone") { ActionTextButton(onClick = { onChange(value.copy(grayTone = InterfaceSettings().grayTone)) }) { Text("Reset gray tone") } }
         }
-        "Glass", "Glass appearance", "Glass advanced", "Navigation selector" -> GlassSettingsControls(value.glass, section) { onChange(value.copy(glass = it)) }
         "Motion" -> {
             SettingsHeading("Animation")
             BooleanPreference("Reduce motion", value.reducedMotion) { onChange(value.copy(reducedMotion = it)) }

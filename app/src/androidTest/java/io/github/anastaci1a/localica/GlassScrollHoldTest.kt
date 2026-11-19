@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -30,7 +29,7 @@ class GlassScrollHoldTest {
     private fun mount(): Fixture {
         var scene: BrowseBackdropScene? = null
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance()) {
+
                 val scroll = rememberScrollState()
                 val source = rememberFrostedBackdrop(Unit, dark = true, retainRaster = false)
                 val page = rememberBrowseBackdropScene(source, null, Unit)
@@ -43,7 +42,7 @@ class GlassScrollHoldTest {
                     }
                     BrowseBackdropRecording(page, null)
                 }
-            }
+
         } }
         compose.waitUntil(10_000) { scene?.let { it.source.recorded && it.layers.all { l -> l.source.recorded } } == true }
         return Fixture(requireNotNull(scene))

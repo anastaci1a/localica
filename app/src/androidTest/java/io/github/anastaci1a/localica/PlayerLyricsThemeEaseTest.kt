@@ -40,8 +40,7 @@ class PlayerLyricsThemeEaseTest {
     private val owner = PlayerBackgroundPolarityState()
     private var lyrics by mutableStateOf(false)
     private var expanded by mutableStateOf(true)
-    private var settings by mutableStateOf(InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground,
-        glass = GlassAppearance(contrast = .3f)))
+    private var settings by mutableStateOf(InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground))
     @Volatile private var inkComposition: PlayerInkComposition? = null
     private var sampleHeld by mutableStateOf(false)
     /** Latest drawn ink of every glass surface, by surface identity. */
@@ -148,7 +147,6 @@ class PlayerLyricsThemeEaseTest {
 
     /** No pin: the real sampler must supply BOTH endpoints before the layout moves. */
     @Test fun sampledThemeTracksEveryLyricsFrameInBothDirectionsAndOnReversal() {
-        settings = settings.copy(glass = settings.glass.copy(contrast = 0f))
         mount(realDecision = true)
         compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current &&
             inkComposition?.contentColor?.red == 0f }

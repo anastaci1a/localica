@@ -52,7 +52,6 @@ class UiPerformanceTest {
         folders = listOf(FolderSelection("fixture", "Fixture")), tracks = tracks), loading = false) }
     private val queue by lazy { ListeningQueue(id = "fixture", name = "Fixture", createdAt = 0,
         entries = tracks.mapIndexed { n, track -> QueueEntry("entry:$n", track) }) }
-    private val glassMode = GlassRendererMode.FlatNone
     private var effectiveMode = "unobserved"
     private val events = mutableListOf<JSONObject>()
     private val windows = mutableSetOf<Window>() // main thread only
@@ -61,11 +60,7 @@ class UiPerformanceTest {
     private var tone by mutableFloatStateOf(.4f)
     private var lyrics by mutableStateOf(LyricsResult())
 
-    @Test fun performanceRendererUsesExplicitFlatNone() {
-        org.junit.Assert.assertEquals(GlassRendererMode.FlatNone, glassMode)
-    }
-
-    @Test fun measurePureUiScenarios() {
+        @Test fun measurePureUiScenarios() {
         assumeTrue("Pass uiPerformance=true on an owned disposable test device", args.getString("uiPerformance") == "true")
         val repetitions = (args.getString("uiPerformanceRepetitions")?.toInt() ?: 3).also { require(it in 1..10) }
         val protocolLegacy = args.getString("uiPerformanceProtocolLegacy") == "true"
@@ -79,8 +74,7 @@ class UiPerformanceTest {
             .associateWith { context.getSharedPreferences(it, 0).all.toMap() }
         try {
             context.getSharedPreferences("interface", 0).edit().clear()
-                .putString("tabs", "Songs,Albums,Home").putString("glass-renderer", glassMode.name)
-                .putFloat("glass-blur", 0f).putFloat("tab-lens-blur", 0f).putBoolean("glass-live-scroll", false).commit()
+                .putString("tabs", "Songs,Albums,Home").commit()
             PinPreferences(context).write(tracks.take(30).map { MediaRef(MediaKind.Song, it.id) })
             var measuredScenarios = 0
             fun measure(name: String, launch: () -> Unit, prepare: () -> Unit = {}, action: () -> Unit) {
@@ -95,8 +89,7 @@ class UiPerformanceTest {
                         }
                         launch(); prepare(); awaitStableScene(); events.clear()
                         main { activity ->
-                            check(io.github.anastaci1a.localica.navigation.InterfacePreferences(context).read().glass.renderer == GlassRendererMode.FlatNone)
-                            check(effectiveMode == "FlatNone") { "Effective scene backend: $effectiveMode" }
+                            check(effectiveMode == effectiveGlassBackend(Build.VERSION.SDK_INT).name) { "Effective scene backend: $effectiveMode" }
                             if (!protocolLegacy) FrameStats.setScenarioTag(name)
                             FrameStats.start(activity)
                             windows.forEach { FrameStats.attach(it) }
@@ -112,12 +105,12 @@ class UiPerformanceTest {
                         Thread.sleep(300)
                         val report = JSONObject(FrameStats.report()).put("scenario", name).put("rep", rep)
                             .put("warmup", warmup && rep == 0).put("protocolLegacy", protocolLegacy).put("seed", seed).put("songs", tracks.size)
-                            .put("api", Build.VERSION.SDK_INT).put("glassMode", glassMode.name)
-                            .put("glassFallback", false).put("requestedGlass", "FlatNone").put("observedSceneBackend", effectiveMode)
+                            .put("api", Build.VERSION.SDK_INT).put("glassBackend", effectiveMode)
+                            .put("glassFallback", effectiveMode == GlassBackend.AverageFallback.name).put("observedSceneBackend", effectiveMode)
                             .put("scriptVersion", "stage0-flat-none-v1").put("actions", org.json.JSONArray(events))
                             .put("artwork", "placeholders; no media I/O")
                             .put("source", args.getString("uiPerformanceSource") ?: "unspecified")
-                        check(report.getString("effectiveGlass") == "FlatNone")
+                        check(report.getString("effectiveGlass") == effectiveMode)
                         if (!protocolLegacy) check(report.getString("source") == BuildConfig.SOURCE_SHA && report.getString("buildSource") == BuildConfig.SOURCE_SHA)
                         check(!report.getBoolean("windowLimitReached"))
                         check(!report.getBoolean("timeLimitReached")) { "$name exceeded the capture time limit" }
@@ -307,12 +300,11 @@ class UiPerformanceTest {
         main { activity ->
             windows += activity.window
             activity.setContent {
-                val runtime = remember { GlassRendererRuntime(glassMode) }
-                SideEffect { effectiveMode = runtime.generation.backend.name }
-                CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
+
+                SideEffect { effectiveMode = effectiveGlassBackend(Build.VERSION.SDK_INT).name }
+                CompositionLocalProvider(
                     LocalGlassMorphWorkObserver provides { _, window, _ ->
                         if (window != null) {
-                            check(runtime.requested == GlassRendererMode.FlatNone && runtime.generation.backend == GlassBackend.FlatNone)
                             windows += window; FrameStats.attach(window)
                         }
                     }, LocalBrowseObscuredInset provides 96.dp) { LocalicaTheme(tone, content) }

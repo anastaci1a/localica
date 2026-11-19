@@ -17,8 +17,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.navigation.MainTab
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.TabLensStyle
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -31,18 +29,15 @@ class SelectorTrackControlsTest {
     private lateinit var reviewView: android.view.View
     private var reviewName: String? = null
 
-    @Test fun navbarPullMovesTheShellLabelsAndSelectorTowardTheSameWall() = navbar(TabLensStyle.Adjustable)
-    @Test fun clearOverlayPullKeepsItsCurrentInkAndShellGeometry() = navbar(TabLensStyle.Overlay)
-
-    private fun navbar(style: TabLensStyle) {
-        reviewName = style.name
+    @Test fun navbarPullMovesTheShellLabelsAndSelectorTowardTheSameWall() = navbar()
+        private fun navbar() {
+        reviewName = "Default"
         var source: FrostedBackdrop? = null
         compose.setContent { LocalicaTheme {
             reviewView = LocalView.current
             val backdrop = rememberFrostedBackdrop(Unit)
             source = backdrop
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style,
-                overlayForeground = true, blur = 0f, whiteTint = 0f, contrast = 0f)) {
+
                 Box(Modifier.fillMaxSize().testTag("selector-review"), contentAlignment = Alignment.Center) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backdrop)) {
                         val cell = 24.dp.toPx()
@@ -56,7 +51,7 @@ class SelectorTrackControlsTest {
                     }
                     PresentationMarker(Modifier.align(Alignment.TopStart)) { reviewStage }
                 }
-            }
+
         } }
         if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.snapshot != null }
         checkPull("tab-track-host", "tab-track-shell", "tab-selector", "tab-option-content-0", false)

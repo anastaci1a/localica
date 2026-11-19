@@ -30,15 +30,15 @@ import java.util.concurrent.TimeUnit
 class SettingsSearchTest {
     @get:Rule val compose = localicaComposeRule()
 
-    private fun show(initial: String? = null, glass: GlassAppearance = GlassAppearance(),
-        interfaceSettings: InterfaceSettings = InterfaceSettings(glass = glass)) {
+    private fun show(initial: String? = null,
+        interfaceSettings: InterfaceSettings = InterfaceSettings(), queueSettings: QueueSettings = QueueSettings()) {
         compose.setContent { LocalicaTheme {
             var settings by remember { mutableStateOf(interfaceSettings) }
-            CompositionLocalProvider(LocalGlassAppearance provides settings.glass) {
+
                 FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = initial,
                     interfaceContent = { section -> InterfaceSettingsControls(settings, section) { settings = it } },
-                    playbackContent = { section -> QueueSettingsControls(QueueSettings(), section) {} })
-            }
+                    playbackContent = { section -> QueueSettingsControls(queueSettings, section) {} })
+
         } }
     }
 
@@ -64,7 +64,7 @@ class SettingsSearchTest {
             assertTrue(started.await(5, TimeUnit.SECONDS))
             compose.onNodeWithText("No settings match \"queue\"").assertDoesNotExist()
             compose.onNodeWithText("No settings match \"$missing\"").assertDoesNotExist()
-            compose.onNodeWithText("Try a different word, like blur, queue or tabs").assertDoesNotExist()
+            compose.onNodeWithText("Try a different word, like motion, queue or tabs").assertDoesNotExist()
             compose.onNodeWithTag("search-result:Preload next track").assertDoesNotExist()
             release.countDown()
             compose.waitUntil(5000) {
@@ -76,8 +76,8 @@ class SettingsSearchTest {
 
     @Test fun deepSearchFindsOptionsAndValuesFromEveryPage() {
         show()
-        for ((query, result) in listOf("Lift shadow" to "Lift shadow strength", "Carousel" to "Song-change transition",
-            "Preload" to "Preload next track", "Shape damping" to "Shape damping", "grey" to "Interface gray",
+        for ((query, result) in listOf("animation speed" to "Animation speed", "Carousel" to "Song-change transition",
+            "Preload" to "Preload next track", "Artwork hold" to "Artwork hold", "grey" to "Interface gray",
             "minimum duration" to "Exclude short files", "sync" to "Lyrics timing correction")) {
             compose.onNodeWithContentDescription("Search settings input").performTextReplacement(query)
             compose.waitUntil(5000) {
@@ -89,19 +89,19 @@ class SettingsSearchTest {
 
     @Test fun resultNavigatesScrollsAndHighlightsTheActualRow() {
         show()
-        compose.onNodeWithContentDescription("Search settings input").performTextInput("Control expansion")
+        compose.onNodeWithContentDescription("Search settings input").performTextInput("Artwork hold")
         compose.waitUntil(5000) {
-            compose.onAllNodesWithTag("search-result:Control expansion").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithTag("search-result:Artwork hold").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithTag("search-result:Control expansion").assertExists()
+        compose.onNodeWithTag("search-result:Artwork hold").assertExists()
         compose.mainClock.autoAdvance = false
-        compose.onNodeWithTag("search-result:Control expansion").performClick()
+        compose.onNodeWithTag("search-result:Artwork hold").performClick()
         var tinted = false
         val positions = mutableSetOf<Int>()
         val deadline = compose.mainClock.currentTime + 5000
         while (!tinted && compose.mainClock.currentTime < deadline) {
             compose.mainClock.advanceTimeByFrame()
-            tinted = compose.onAllNodesWithTag("setting:Control expansion").fetchSemanticsNodes().any {
+            tinted = compose.onAllNodesWithTag("setting:Artwork hold").fetchSemanticsNodes().any {
                 (it.config.getOrNull(SettingsHighlightAlpha) ?: 0f) > .01f
             }
             compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
@@ -111,15 +111,15 @@ class SettingsSearchTest {
         }
         assertTrue("The selected row must show its tint", tinted)
         assertTrue("The eased scroll must present intermediate positions", positions.count { it > 0 } > 1)
-        compose.onNodeWithTag("setting:Control expansion").assertIsDisplayed()
+        compose.onNodeWithTag("setting:Artwork hold").assertIsDisplayed()
         val scrollers = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
             .fetchSemanticsNodes()
         assertTrue("Search must scroll beyond the top", scrollers.any {
             it.config[SemanticsProperties.VerticalScrollAxisRange].value() > 0f
         })
         compose.mainClock.autoAdvance = true
-        compose.onNodeWithTag("setting:Control expansion").assertIsDisplayed()
-        compose.onNodeWithTag("setting-highlight:Control expansion", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("setting:Artwork hold").assertIsDisplayed()
+        compose.onNodeWithTag("setting-highlight:Artwork hold", useUnmergedTree = true).assertExists()
         compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
     }
 
@@ -127,20 +127,20 @@ class SettingsSearchTest {
         lateinit var focus: SettingsSearchFocus
         compose.setContent { EngineTheme(reduced = true) {
             val scroll = rememberScrollState()
-            focus = remember { SettingsSearchFocus("Glass", scroll) }
+            focus = remember { SettingsSearchFocus("Playback and queues", scroll) }
             MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color.Magenta)) {
                 CompositionLocalProvider(LocalSettingsSearchFocus provides focus, LocalReducedMotion provides true) {
-                    SettingsEntry("Glass renderer") {
+                    SettingsEntry("Previous button") {
                         Box(Modifier.fillMaxWidth().height(80.dp).background(Color.White))
                     }
                 }
             }
         } }
-        val before = compose.onNodeWithTag("setting:Glass renderer").captureToImage().toPixelMap()
+        val before = compose.onNodeWithTag("setting:Previous button").captureToImage().toPixelMap()
         compose.mainClock.autoAdvance = false
-        compose.runOnIdle { focus.highlighted = "Glass renderer" }
+        compose.runOnIdle { focus.highlighted = "Previous button" }
         repeat(3) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
-        val after = compose.onNodeWithTag("setting:Glass renderer").captureToImage().toPixelMap()
+        val after = compose.onNodeWithTag("setting:Previous button").captureToImage().toPixelMap()
         val x = before.width / 2
         val y = before.height / 2
         assertTrue("The tint must be drawn above an opaque descendant", after[x, y].green < before[x, y].green - .03f)
@@ -149,25 +149,17 @@ class SettingsSearchTest {
     }
 
     @Test fun hiddenOptionJumpsToItsRevealingChoice() {
-        show()
-        compose.onNodeWithContentDescription("Search settings input").performTextInput("Gray pill opacity")
+        show(queueSettings = QueueSettings(previousBehavior = PreviousBehavior.PreviousSong))
+        compose.onNodeWithContentDescription("Search settings input").performTextInput("Restart threshold")
         compose.waitUntil(5000) {
-            compose.onAllNodesWithTag("search-result:Gray pill opacity").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithTag("search-result:Restart threshold").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithTag("search-result:Gray pill opacity").performClick()
-        compose.onNodeWithTag("setting:Selector style").assertIsDisplayed()
-        compose.onNodeWithTag("setting-highlight:Selector style", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("search-result:Restart threshold").performClick()
+        compose.onNodeWithTag("setting:Previous button").assertIsDisplayed()
+        compose.onNodeWithTag("setting-highlight:Previous button", useUnmergedTree = true).assertExists()
     }
 
-    @Test fun noneKeepsGlassSubmenusVisibleAndDisabled() {
-        show("Glass", GlassAppearance(renderer = GlassRendererMode.FlatNone))
-        compose.onNodeWithText("Glass appearance", substring = false).assertIsDisplayed().assertIsNotEnabled()
-        compose.onNodeWithText("Glass advanced", substring = false).assertIsDisplayed().assertIsNotEnabled()
-        compose.onNodeWithText("Navigation selector", substring = false).assertIsDisplayed().assertIsNotEnabled()
-        compose.onNodeWithText("Glass renderer").assertIsEnabled()
-    }
-
-    @Test fun disabledSliderIgnoresTapsAndDragsAndExposesDisabledSemantics() {
+        @Test fun disabledSliderIgnoresTapsAndDragsAndExposesDisabledSemantics() {
         var changes = 0
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalSettingsEnabled provides false) {
@@ -225,14 +217,15 @@ class SettingsSearchTest {
                 .putBoolean("expand-on-play", false).commit())
             val seeded = store.all.toMap()
             val restored = InterfacePreferences(context).read()
-            assertEquals(.65f, restored.glass.blur)
+            val removed = setOf("glass-blur", "glass-depth", "glass-renderer")
+            removed.forEach { assertFalse("Removed Glass key $it", store.contains(it)) }
             assertEquals(-750, restored.lyricDelayMs)
             assertFalse(restored.expandOnPlay)
             show("Player", interfaceSettings = restored)
             compose.onNodeWithText("Expand player when a song starts").assertIsOff()
             compose.onNodeWithText("Correction: -750 ms").performScrollTo().assertIsDisplayed()
             compose.waitForIdle()
-            assertEquals(seeded, store.all)
+            assertEquals(seeded.filterKeys { it !in removed }, store.all)
         } finally {
             val editor = store.edit().clear()
             before.forEach { (key, value) -> when (value) {

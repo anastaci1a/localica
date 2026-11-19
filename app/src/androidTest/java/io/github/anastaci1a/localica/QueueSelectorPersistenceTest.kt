@@ -38,7 +38,6 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -124,7 +123,6 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             }
             CompositionLocalProvider(LocalReducedMotion provides reducedMotion,
                 LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
-                LocalGlassAppearance provides GlassAppearance(shadowStrength = .8f, shadowSpread = .6f),
                 LocalGlassMorphWorkObserver provides { kind, native, _ ->
                     if (kind == "dialog" && native != null) { window = native; attach(native.decorView) }
                 }) {
