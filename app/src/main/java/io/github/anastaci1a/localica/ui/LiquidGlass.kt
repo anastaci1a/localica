@@ -47,7 +47,7 @@ internal fun GlassShape.lensTransform(vertical: Boolean) = GlassBodyTransform(Of
 internal fun GlassShape.bodyTransform(size: Size, density: Float, vertical: Boolean = false): GlassBodyTransform {
     val s = if (vertical) -strain else strain
     val long = size.maxDimension / density
-    val gain = if (size.isEmpty) 0f else FlexSpec.pressPoints(long, size.minDimension / density) / long
+    val gain = if (size.isEmpty()) 0f else FlexSpec.pressPoints(long, size.minDimension / density) / long
     val m = pressDepth?.let { 1f + (-gain / .24f) * it } ?: (1f + lift * gain)
     return GlassBodyTransform(Offset(m * kotlin.math.exp(s), m * kotlin.math.exp(-s)), Offset(drift.x * size.width, drift.y * size.height))
 }
