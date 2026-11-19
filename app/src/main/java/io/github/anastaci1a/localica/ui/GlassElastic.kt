@@ -27,6 +27,17 @@ internal fun magneticChoicePosition(raw: Float): Float {
     val momentum = GlassMomentum(bodyOverride)
     var impulseScale = 1f
     var previous = 0f
+    fun admitSize(size: androidx.compose.ui.unit.IntSize, density: Float, body: FlexSpec?, anchored: Boolean, reduced: Boolean) {
+        val long = maxOf(size.width, size.height) / density
+        val flex = FlexSpec.dynamic(long, minOf(size.width, size.height) / density)
+        momentum.spec = flex
+        momentum.extent = androidx.compose.ui.geometry.Size(size.width / density, size.height / density)
+        if (body != null) {
+            momentum.bodyOverride = body.copy(scaleGain = if (long > 0f) -(16f / long) / .24f else null)
+            output.value = if (reduced) GlassShape() else momentum.shape
+        }
+        if (anchored) impulseScale = sqrt(96f * density / size.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
+    }
 }
 
 @Composable

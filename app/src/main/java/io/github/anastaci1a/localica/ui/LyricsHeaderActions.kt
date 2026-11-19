@@ -46,7 +46,6 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     val source = LocalFrostedBackdrop.current
 
     @Composable fun leftAction() {
-        anchor.captureInk()
         ActionIconButton(if (lyricsOpen) onSources else onShow, Modifier.fillMaxSize()) {
             Icon(appIconPainter(AppIcon.ActionLyrics), if (lyricsOpen) "Lyrics sources" else "Show lyrics", Modifier.size(24.dp))
         }

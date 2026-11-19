@@ -304,20 +304,6 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         } } ?: cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape
     }
     val reduced = LocalReducedMotion.current
-    val flex = FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / density.density,
-        minOf(surfaceSize.width, surfaceSize.height) / density.density)
-    SideEffect {
-        val momentum = contact.state.momentum
-        momentum.spec = flex; momentum.extent = Size(surfaceSize.width / density.density, surfaceSize.height / density.density)
-        if (bodyOverride != null && anchor == null && sharedContact == null) {
-            val longSide = maxOf(surfaceSize.width, surfaceSize.height) / density.density
-            momentum.bodyOverride = bodyOverride.copy(scaleGain = if (longSide > 0f) -(16f / longSide) / .24f else null)
-            contact.state.output.value = if (reduced) GlassShape() else momentum.shape
-        }
-        if (anchor != null) {
-            anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * density.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
-        }
-    }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
     val rim = remember { GlassRimCache() }
     val glowCache = remember { ContactGlowCache() }
@@ -332,7 +318,10 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             shape = if (silhouette != null) surfaceClip else presentedRadius()?.let { RoundedCornerShape(it) } ?: CircleShape
             clip = true
         })
-        .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
+        .backdropLocation(location).onGloballyPositioned {
+            contact.state.admitSize(it.size, density.density, bodyOverride.takeIf { anchor == null && sharedContact == null }, anchor != null, reduced)
+            surfaceSize = it.size
+        }, propagateMinConstraints = true) {
         val blurRadius = glassBackdropBlurRadius(density.density)
         fun blur(record: GlassSurfacePresentation) = blurRadius * (GlassBlurDefault + (1f - GlassBlurDefault) * record.frost)
         val padding = with(density) { 32.dp.toPx() }

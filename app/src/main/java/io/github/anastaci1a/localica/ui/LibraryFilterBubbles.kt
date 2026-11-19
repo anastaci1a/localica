@@ -119,7 +119,6 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
                 .semantics { this.selected = item in selected }, contentAlignment = Alignment.Center) {
                 LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(anchor, source, face = { Text(label(item), style = style, maxLines = 1) }),
                     tint = androidx.compose.ui.graphics.Color.Black.copy(alpha = selection)) {
-                    anchor.captureInk()
                     Text(label(item), Modifier.align(Alignment.Center), style = style, maxLines = 1)
                 }
                 overlay(item, anchor)

@@ -78,7 +78,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
             onMinimize?.let { ActionIcon(AppIcon.ActionChevronDown, "Minimize queue", onClick = it) }
             LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor, face = { SelectorFace(copy = true) })) {
                 Box(Modifier.fillMaxWidth().height(CompactControlSize).ownButtonDrag(state.library.queues.isNotEmpty())
-                    .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { selectorAnchor.captureInk(); SelectorFace() }
+                    .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { SelectorFace() }
 
             }
             Box {
