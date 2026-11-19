@@ -32,7 +32,7 @@ class GlassShadowRasterTest {
             return IntArray(200 * 140).also { image.getPixels(it, 0, 200, 0, 0, 200, 140) }
         }
         val control = prepared(null)
-        val excluded = prepared(GlassShadowExclusion(bodies.map { it.first }, Offset.Zero, size, 1f, 1f, 0f, 0f))
+        val excluded = prepared(GlassShadowExclusion(bodies.map { it.first }, Offset.Zero, size, io.github.anastaci1a.localica.ui.GlassBodyTransform(), 0f))
         assertTrue("The control must contain an exterior shadow", control.any { it ushr 24 > 0 })
         assertArrayEquals("A raster prepared near a neighbor must replay the complete field away from home", control, excluded)
     }

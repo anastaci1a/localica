@@ -135,7 +135,7 @@ class FluidPressTest {
             repeat(60) { body.advance(0f, 1.0 / 120, contact = 1f, point = Offset(.8f, .2f)) }
             assertTrue(body.shape.lift > 0f)
             assertEquals(Offset.Zero, body.shape.bodyTransform(Size(64 * density, 64 * density), density).drift)
-            val pulled = GlassShape(strain = .12f, depth = -.2f, lift = 16f, drift = Offset(.1f, -.1f))
+            val pulled = GlassShape(strain = .12f, depth = -.2f, lift = 1f, drift = Offset(.1f, -.1f))
             assertEquals(Offset(6.4f * density, -6.4f * density), pulled.bodyTransform(Size(64 * density, 64 * density), density).drift)
             assertEquals(Offset(30f * density, -20f * density), pulled.bodyTransform(Size(300 * density, 200 * density), density).drift)
             assertEquals(1.25f * exp(.12f), pulled.bodyTransform(Size(64 * density, 64 * density), density).scale.x, 1e-5f)

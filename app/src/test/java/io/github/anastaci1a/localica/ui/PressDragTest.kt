@@ -133,11 +133,14 @@ class PressDragTest {
         assertEquals(Offset(1f, 1f), settled(Size(64f, 64f)).bodyTransform(Size.Zero, 2f).scale)
     }
 
-    @Test fun aHeldBodyDrawnAtANewSizeGrowsByTheSameDpWithoutARepublish() {
+    @Test fun aHeldBodyUsesCurrentSizePointsWithoutARepublish() {
         val shape = settled(Size(104f, 48f))
+        val snapshot = shape.copy()
         for ((size, density) in listOf(Size(104f, 48f) to 2f, Size(240f, 104f) to 2f, Size(240f, 104f) to 3f)) {
             val map = shape.bodyTransform(Size(size.width * density, size.height * density), density)
-            assertEquals("size=$size", 16f * density, size.width * density * (map.scale.x - 1), 1e-3f * density)
+            val p = if (size.maxDimension < 120f) 16f else (284.0 / 29).toFloat()
+            assertEquals("size=$size", p * density, size.width * density * (map.scale.x - 1), 1e-3f * density)
+            assertEquals(snapshot, shape)
         }
     }
 
@@ -153,6 +156,57 @@ class PressDragTest {
             val nearMove = pulledNear - stillNear; val farMove = pulledFar - stillFar
             assertTrue("size=$size far end follows far=$farMove", farMove > 0f)
             assertTrue("size=$size near=$nearMove far=$farMove", nearMove > 2f * farMove)
+        }
+    }
+
+    @Test fun bothAxesAndSignsFollowIndependentNearFarEquationsAtEveryDensity() {
+        var cases = 0
+        for (size in listOf(Size(51.2f,51.2f), Size(64f,64f), Size(110f,51.2f), Size(144f,64f), Size(328f,40f)))
+            for (axis in 0..1) for (direction in listOf(-1f,1f)) for (vertical in listOf(false,true)) {
+                val a = (if (axis == 0) size.width else size.height).toDouble()
+                val long = size.maxDimension.toDouble(); val short = size.minDimension.toDouble()
+                val u = ((short-44)/116).coerceIn(0.0,1.0)
+                val distance = if (long<120) 2000.0 else 6000+18000*u
+                val points = if (long<120) 16.0 else 16-12*u
+                val e = (minOf(100.0,a/2)/4+100-minOf(100.0,a/2))/distance
+                val m = 1+points/long
+                val expectedNear = e*a+m*a*expm1(e)/2
+                val expectedFar = e*a-m*a*expm1(e)/2
+                val delta = (direction*100/a).toFloat()
+                val target = Offset(.5f,.5f)+if (axis==0) Offset(delta,0f) else Offset(0f,delta)
+                val shape = held(target,size,vertical,FlexSpec.dynamic(size.maxDimension,size.minDimension))
+                for (density in listOf(1f,2.625f,3f)) {
+                    val pixels = Size(size.width*density,size.height*density)
+                    val t = shape.bodyTransform(pixels,density,vertical)
+                    val scale = if (axis==0) t.scale.x else t.scale.y
+                    val drift = (if (axis==0) t.drift.x else t.drift.y)*direction
+                    val expansion = (scale-m)*a*density/2
+                    assertEquals("near size=$size axis=$axis sign=$direction vertical=$vertical",expectedNear*density,drift+expansion,1e-3*density)
+                    assertEquals("far size=$size axis=$axis sign=$direction vertical=$vertical",expectedFar*density,drift-expansion,1e-3*density)
+                    assertTrue(expectedNear>expectedFar)
+                    assertTrue(t.scale.x.isFinite() && t.scale.x>0f && t.scale.y.isFinite() && t.scale.y>0f)
+                    cases++
+                }
+            }
+        println("press near/far finite-positive transform cases=$cases")
+    }
+
+    @Test fun outsideDownOriginsKeepTheAbsolutePressureEquationOnBothAxes() {
+        for (axis in 0..1) for (outside in listOf(-.2f,1.2f)) for (vertical in listOf(false,true)) {
+            val origin = if (axis==0) Offset(outside,.5f) else Offset(.5f,outside)
+            val point = origin + if (axis==0) Offset(.01f,0f) else Offset(0f,.01f)
+            val body = GlassMomentum().apply { extent=Size(64f,64f); this.origin=origin }
+            body.advance(0f,0.0,contact=1f,point=point,vertical=vertical)
+            fun expected(p: Double,o: Double): Double {
+                val t=p-o; val u=abs(p.coerceIn(0.0,1.0)-o)
+                return sign(t)*(64.0/2000)*(u/4+abs(t)-u)
+            }
+            val fx=expected(point.x.toDouble(),origin.x.toDouble())
+            val fy=expected(point.y.toDouble(),origin.y.toDouble())
+            val spring=body.javaClass.getDeclaredField("pressure").apply { isAccessible=true }.get(body)
+            val target=spring.javaClass.getDeclaredField("target").apply { isAccessible=true }.getFloat(spring)
+            assertEquals((abs(fx)-abs(fy))*(if(vertical) -1 else 1),target.toDouble(),1e-8)
+            assertTrue("Outside DOWN exercises negative resistance before abs",if(axis==0) fx<0 else fy<0)
         }
     }
 

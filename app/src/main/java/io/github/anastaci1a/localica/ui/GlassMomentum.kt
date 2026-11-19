@@ -7,10 +7,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import kotlin.math.*
 
-/** Optical cap depth with an optional independently derived body scale. */
-internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f, val scale: Float? = null, val lift: Float = 0f, val drift: Offset = Offset.Zero) {
-    fun scaleX(vertical: Boolean = false) = scale?.let { it * exp(if (vertical) -strain else strain) } ?: exp((if (vertical) -strain else strain) - depth / 2)
-    fun scaleY(vertical: Boolean = false) = scale?.let { it * exp(if (vertical) strain else -strain) } ?: exp((if (vertical) strain else -strain) - depth / 2)
+/** Optical cap depth, raw conditional press depth and normalized lift. */
+internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f, val pressDepth: Float? = null, val lift: Float = 0f, val drift: Offset = Offset.Zero) {
+    fun scaleX(vertical: Boolean = false) = exp((if (vertical) -strain else strain) - depth / 2)
+    fun scaleY(vertical: Boolean = false) = exp((if (vertical) strain else -strain) - depth / 2)
     val thickness get() = exp(depth)
 }
 
@@ -23,21 +23,7 @@ internal fun glassContactFlex(point: Offset, origin: Offset, reach: Offset): Off
     return Offset(axis(point.x, origin.x, reach.x), axis(point.y, origin.y, reach.y))
 }
 
-internal data class GlassBodyTransform(val scale: Offset = Offset(1f, 1f), val drift: Offset = Offset.Zero) {
-    fun localPoint(point: Offset, size: Size) = Offset(
-        size.width * (.5f + (point.x - .5f) / scale.x) - drift.x / scale.x,
-        size.height * (.5f + (point.y - .5f) / scale.y) - drift.y / scale.y)
-}
-
-/** Selector lenses and switch thumbs: depth-scaled axes about the centre, no lift or drift. */
-internal fun GlassShape.lensTransform(vertical: Boolean) = GlassBodyTransform(Offset(scaleX(vertical), scaleY(vertical)))
-
-/** The one drawn press geometry of every glass body: [GlassShape.lift] adds that many dp to the long side being drawn. */
-internal fun GlassShape.bodyTransform(size: Size, density: Float, vertical: Boolean = false): GlassBodyTransform {
-    val s = if (vertical) -strain else strain
-    val m = scale ?: size.maxDimension.let { if (it > 0f) 1f + lift * density / it else 1f }
-    return GlassBodyTransform(Offset(m * exp(s), m * exp(-s)), Offset(drift.x * size.width, drift.y * size.height))
-}
+internal typealias GlassBodyTransform = io.github.anastaci1a.localica.ui.engine.GlassBodyTransform
 
 /** Compensation for center-based scaling: the contacting edge stays on its wall. */
 internal fun glassWallTranslation(extent: Float, scale: Float, wall: Float): Float =
@@ -179,7 +165,7 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
     private var stiffness = (2 * PI / (bodyOverride ?: spec).response).pow(2)
     private var resistance = (2 * sqrt(stiffness) * (bodyOverride ?: spec).damping).toFloat()
     val strain get() = .12f * tanh(motion.value / .12f) + pressure.value
-    private fun shape(strain: Float, depth: Float, lift: Float, drift: Offset) = GlassShape(strain, .24f * tanh(depth / .24f), bodyOverride?.scaleGain?.let { 1f + it * depth }, lift * liftSpec.points, drift)
+    private fun shape(strain: Float, depth: Float, lift: Float, drift: Offset) = GlassShape(strain, .24f * tanh(depth / .24f), bodyOverride?.scaleGain?.let { depth }, lift, drift)
     val shape get() = shape(strain, depth.value, lift.value, Offset(drift[0].value, drift[1].value))
     private val depthSettled get() = bodyOverride?.scaleGain?.let {
         (it.toDouble() * (depth.target.toDouble() - depth.value)).pow(2) + (it.toDouble() * depth.velocity * resistance / stiffness).pow(2) <= 1e-6

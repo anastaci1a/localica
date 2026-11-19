@@ -11,14 +11,15 @@ import kotlin.math.*
  */
 internal data class GlassShadowReceiver(val bounds: Rect, val mask: ImageBitmap, val sampleBounds: Rect = bounds)
 
-/** Inverse of GlassMorph's translate(shift), scale(sx,sy,center) draw transform. */
-internal fun glassReceiverInCasterSpace(home: Rect, size: Size, sx: Float, sy: Float, shift: Float): Rect? {
+/** Inverse of the shared centre scale followed by two-axis drift. */
+internal fun glassReceiverInCasterSpace(home: Rect, size: Size, transform: GlassBodyTransform): Rect? {
+    val (sx, sy) = transform.scale; val (dx, dy) = transform.drift
     if (!home.left.isFinite() || !home.top.isFinite() || !home.right.isFinite() || !home.bottom.isFinite() ||
-        !size.width.isFinite() || !size.height.isFinite() || !sx.isFinite() || !sy.isFinite() || !shift.isFinite() ||
+        !size.width.isFinite() || !size.height.isFinite() || !sx.isFinite() || !sy.isFinite() || !dx.isFinite() || !dy.isFinite() ||
         home.width <= 0f || home.height <= 0f || sx <= .001f || sy <= .001f) return null
     val cx = size.width / 2f; val cy = size.height / 2f
-    fun x(value: Float) = cx + (value - cx - shift) / sx
-    fun y(value: Float) = cy + (value - cy) / sy
+    fun x(value: Float) = cx + (value - cx - dx) / sx
+    fun y(value: Float) = cy + (value - cy - dy) / sy
     val result = Rect(x(home.left),y(home.top),x(home.right),y(home.bottom))
     if (!result.left.isFinite() || !result.top.isFinite() || !result.right.isFinite() || !result.bottom.isFinite() ||
         !result.width.isFinite() || !result.height.isFinite() || result.width <= 0f || result.height <= 0f) return null
@@ -48,7 +49,7 @@ internal class GlassShadowReceiverField {
     private var key: Key? = null
     private var mask: ImageBitmap? = null
     internal var rasterizations = 0; private set
-    fun receiver(home: Rect, radius: Float, casterSize: Size, sx: Float, sy: Float, shift: Float,
+    fun receiver(home: Rect, radius: Float, casterSize: Size, transform: GlassBodyTransform,
         profile: GlassOriginWellProfile = DefaultGlassOriginWellProfile, floorWeight: Float = .45f,
         physicalSize: Size = home.size): GlassShadowReceiver? {
         require(floorWeight.isFinite() && floorWeight in 0f..1f)
@@ -56,7 +57,7 @@ internal class GlassShadowReceiverField {
         // translated edges, which can jitter in low float bits and rerasterize.
         if (!physicalSize.width.isFinite() || !physicalSize.height.isFinite() || physicalSize.minDimension <= 0f) return null
         val stableHome = Rect(home.topLeft,physicalSize)
-        val local = glassReceiverInCasterSpace(stableHome,casterSize,sx,sy,shift) ?: return null
+        val local = glassReceiverInCasterSpace(stableHome,casterSize,transform) ?: return null
         if (!radius.isFinite() || radius <= 0f || floorWeight == 1f) return null
         val r = radius.coerceAtMost(physicalSize.minDimension/2f)
         val next = Key(physicalSize,r,profile.wallFraction,floorWeight)
@@ -84,7 +85,7 @@ internal class GlassShadowReceiverField {
         // equally opaque sample, then two outside guard samples.
         val sample = Rect(stableHome.left-2.5f*dx,stableHome.top-2.5f*dy,
             stableHome.right+2.5f*dx,stableHome.bottom+2.5f*dy)
-        val localSample = glassReceiverInCasterSpace(sample,casterSize,sx,sy,shift) ?: return null
+        val localSample = glassReceiverInCasterSpace(sample,casterSize,transform) ?: return null
         return GlassShadowReceiver(local,image,localSample)
     }
 }

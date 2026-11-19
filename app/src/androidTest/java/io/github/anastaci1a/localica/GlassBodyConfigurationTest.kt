@@ -14,6 +14,14 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
+internal fun rawGlassBody(contact: GlassContact): List<Float> {
+    val body = contact.state.momentum
+    return listOf("motion", "pressure", "depth").flatMap { channel ->
+        val spring = body.javaClass.getDeclaredField(channel).apply { isAccessible = true }.get(body)
+        listOf("value", "velocity", "target").map { spring.javaClass.getDeclaredField(it).apply { isAccessible = true }.getFloat(spring) }
+    }
+}
+
 /** Reuses the accepted CompositionData owner inspection; no production observer or state hook. */
 class GlassBodyConfigurationTest {
     @get:Rule val compose = localicaComposeRule()
@@ -28,13 +36,6 @@ class GlassBodyConfigurationTest {
         visit(root)
         tables.filter { it !== root }.forEach(::visit)
         return result
-    }
-    private fun raw(contact: GlassContact): List<Float> {
-        val body = contact.state.momentum
-        return listOf("motion", "pressure", "depth").flatMap { channel ->
-            val spring = body.javaClass.getDeclaredField(channel).apply { isAccessible = true }.get(body)
-            listOf("value", "velocity", "target").map { spring.javaClass.getDeclaredField(it).apply { isAccessible = true }.getFloat(spring) }
-        }
     }
     private fun seed(contact: GlassContact) {
         val body = contact.state.momentum
@@ -99,14 +100,14 @@ class GlassBodyConfigurationTest {
         val held = compose.runOnIdle {
             assertTrue(fresh.state.momentum.settled)
             assertEquals(1f, fresh.state.glow.value.big, 0f)
-            raw(fresh).also { width = 128f; sharedWidth = 160f }
+            rawGlassBody(fresh).also { width = 128f; sharedWidth = 160f }
         }
         val heldTargets = compose.runOnIdle { alphaTargets(fresh) }
         published(fresh, 128f)
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
-            assertEquals("idle size assignment preserves settled raw state", held, raw(fresh))
-            assertEquals(1f + gain(128f) * -.24f, fresh.body.value.scaleX(), 0f)
+            assertEquals("idle size assignment preserves settled raw state", held, rawGlassBody(fresh))
+            assertEquals(1f + gain(128f) * -.24f, fresh.body.value.bodyTransform(androidx.compose.ui.geometry.Size(width, 64f), 1f).scale.x, 0f)
             assertEquals("idle resize does not wake or retarget glow", 1f, fresh.state.glow.value.big, 0f)
             assertEquals("idle layout does not consume the newly assigned opacity targets", heldTargets, alphaTargets(fresh))
             fresh.active = false
@@ -114,19 +115,19 @@ class GlassBodyConfigurationTest {
         compose.mainClock.advanceTimeByFrame()
         val initial = compose.runOnIdle {
             seed(fresh)
-            raw(fresh).also { width = 64f }
+            rawGlassBody(fresh).also { width = 64f }
         }
         published(fresh, 64f)
         compose.runOnIdle {
-            assertEquals(initial, raw(fresh))
+            assertEquals(initial, rawGlassBody(fresh))
             assertEquals(gain(64f), fresh.state.momentum.bodyOverride!!.scaleGain)
-            assertEquals(1.125f, fresh.body.value.scaleX(), 0f)
+            assertEquals(1.125f, fresh.body.value.bodyTransform(androidx.compose.ui.geometry.Size(width, 64f), 1f).scale.x, 0f)
             width = 128f
         }
         published(fresh, 128f)
         compose.runOnIdle {
-            assertEquals(initial, raw(fresh))
-            assertEquals(1f + gain(128f) * -.12f, fresh.body.value.scaleX(), 0f)
+            assertEquals(initial, rawGlassBody(fresh))
+            assertEquals(1f + gain(128f) * -.12f, fresh.body.value.bodyTransform(androidx.compose.ui.geometry.Size(width, 64f), 1f).scale.x, 0f)
             assertEquals(gain(128f), fresh.state.momentum.bodyOverride!!.scaleGain)
             assertEquals(FlexSpec.Small.response, fresh.state.momentum.bodyOverride!!.response, 0f)
             assertEquals(FlexSpec.dynamic(128f, 64f), fresh.state.momentum.spec)
@@ -137,7 +138,7 @@ class GlassBodyConfigurationTest {
         published(fresh, 64f)
         compose.runOnIdle {
             assertEquals("idle reduced-motion remeasurement remains identity", GlassShape(), fresh.body.value)
-            assertEquals(initial, raw(fresh))
+            assertEquals(initial, rawGlassBody(fresh))
             reduced = false; fresh.active = true; fresh.pressed = true; fresh.point = Offset(.25f, .75f)
         }
         compose.mainClock.advanceTimeBy(64)
@@ -153,7 +154,7 @@ class GlassBodyConfigurationTest {
             assertEquals(gain(128f), fresh.state.momentum.bodyOverride!!.scaleGain)
             assertEquals(FlexSpec.Small.trackingResponse, fresh.state.momentum.bodyOverride!!.trackingResponse, 0f)
             assertNotEquals("running resize preserves live motion instead of resetting", listOf(0f, 0f), moving)
-            assertNotEquals("live velocity is retained through publication", 0f, raw(fresh)[7])
+            assertNotEquals("live velocity is retained through publication", 0f, rawGlassBody(fresh)[7])
         }
     }
 }

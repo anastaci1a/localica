@@ -148,9 +148,11 @@ class GlassBodyConformanceTest {
         set(depth, "value", -.12f); set(depth, "velocity", .3f); set(depth, "target", -.24f)
         val raw = state(body)
         val optical = body.shape.depth
-        assertEquals(1.125f, body.shape.scaleX(), 0f)
+        val snapshot = body.shape
+        assertEquals(1.125f, snapshot.bodyTransform(androidx.compose.ui.geometry.Size(64f, 44f), 1f).scale.x, 0f)
         body.bodyOverride = body.bodyOverride!!.copy(scaleGain = -(16f / 128f) / .24f)
-        assertEquals(1.0625f, body.shape.scaleX(), 0f)
+        assertEquals(1.0625f, body.shape.bodyTransform(androidx.compose.ui.geometry.Size(128f, 44f), 1f).scale.x, 0f)
+        assertEquals(snapshot, body.shape)
         assertEquals(optical.toBits(), body.shape.depth.toBits())
         assertEquals(raw, state(body))
         assertEquals(body.shape, body.blendedShape(body, .5f))
@@ -205,4 +207,21 @@ class GlassBodyConformanceTest {
         a.targetGlow(null, 1f, 1f)
         assertTrue(a.settled)
     }
+    @Test fun conditionalHeldResizeChangesOnlyTheDrawnSizeLaw() {
+        val body = GlassMomentum(FlexSpec.Small.copy(scaleGain=-(16f/104)/.24f))
+        set(spring(body,"depth"),"value",-.24f)
+        set(spring(body,"depth"),"velocity",.31f)
+        set(spring(body,"depth"),"target",-.24f)
+        val raw=state(body); val shape=body.shape
+        for ((size,density) in listOf(androidx.compose.ui.geometry.Size(104f,48f) to 2f,
+            androidx.compose.ui.geometry.Size(240f,104f) to 2f, androidx.compose.ui.geometry.Size(240f,104f) to 3f,
+            androidx.compose.ui.geometry.Size(128f,64f) to 1f)) {
+            val p=if(size.maxDimension<120) 16.0 else 16-12*((size.minDimension.toDouble()-44)/116).coerceIn(0.0,1.0)
+            val t=shape.bodyTransform(androidx.compose.ui.geometry.Size(size.width*density,size.height*density),density)
+            assertEquals(p*density,(size.maxDimension*density*(t.scale.x-1)).toDouble(),1e-3*density)
+            assertEquals(shape,body.shape)
+            assertEquals(raw,state(body))
+        }
+    }
+
 }

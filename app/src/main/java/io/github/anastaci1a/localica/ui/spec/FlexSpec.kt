@@ -8,12 +8,14 @@ internal data class FlexSpec(val damping: Float, val response: Float,
     val scaleGain: Float? = null, val lift: FlexPress = FlexPress(), val distance: Float = 2000f) {
     companion object {
         val Small = FlexSpec(.375f, .4f, .625f, .262f)
+        fun pressPoints(longSide: Float, shortSide: Float) = if (longSide < 120f) 16f else
+            (16.0 - 12.0 * ((shortSide.toDouble() - 44.0) / 116.0).coerceIn(0.0, 1.0)).toFloat()
         fun dynamic(longSide: Float, shortSide: Float = longSide): FlexSpec {
             if (longSide < 120f) return Small
             val t = ((longSide - 44f) / 116f).coerceIn(0f, 1f)
             val u = ((shortSide.toDouble() - 44.0) / 116.0).coerceIn(0.0, 1.0)
             return FlexSpec(.375f + .225f * t, .4f - .04f * t, .625f, .262f + .052f * t, (1.0 - u).toFloat(), ((1.0 - u) * .3 + u * .2).toFloat(),
-                lift = FlexPress.Large.copy(points = (16.0 - 12.0 * u).toFloat()), distance = (6000.0 + 18000.0 * u).toFloat())
+                lift = FlexPress.Large.copy(points = pressPoints(longSide, shortSide)), distance = (6000.0 + 18000.0 * u).toFloat())
         }
     }
 }

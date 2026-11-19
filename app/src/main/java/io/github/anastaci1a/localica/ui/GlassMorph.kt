@@ -997,12 +997,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         // optical jump when the same body returns to its trigger.
                         val pose = if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight()) else null
                         val shape = if (page || reduced && pose == null) GlassShape() else pose?.shape ?: body.value
-                        val t = shape.bodyTransform(size, density.density, pose?.vertical ?: anchor.contact.vertical)
-                        val shift = (pose?.horizontalShift ?: 0f) + t.drift.x
+                        val base = shape.bodyTransform(size, density.density, pose?.vertical ?: anchor.contact.vertical)
+                        val t = base.copy(drift = base.drift + Offset(pose?.horizontalShift ?: 0f, 0f))
                         val scaledField=windowNode.fieldScalesWithBody()
-                        val fieldSx=if(scaledField) t.scale.x else 1f
-                        val fieldSy=if(scaledField) t.scale.y else 1f
-                        val fieldShift=if(scaledField) shift else 0f
+                        val fieldTransform=if(scaledField) t else GlassBodyTransform()
                         // Draw in this native window outside the sampled panel/backdrop.
                         // Read placed coordinates in the same draw, not a previous-frame
                         // globally-positioned state handoff. The original trigger restores
@@ -1013,10 +1011,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             popupFlight.expanded && admittedDraw &&
                             coordinates?.isAttached == true) {
                             val home = (returningHome ?: anchor.presentedBounds).translate(-coordinates.backdropPosition(view))
-                            val caster = glassWellCaster(size, radius().toPx(), t.scale.x, t.scale.y, shift)
+                            val caster = glassWellCaster(size, radius().toPx(), t)
                             with(originWell) { draw(home, homeRadius().toPx(), caster, wellStrength) }
                             shadowReceiver[0] = receiverField.receiver(home,homeRadius().toPx(),size,
-                                fieldSx,fieldSy,fieldShift,
+                                fieldTransform,
                                 physicalSize = (returningHome ?: anchor.presentedBounds).size)
                         }
                         // The trigger's window keeps drawing its neighbors' shared shadow.
@@ -1025,25 +1023,23 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (!page && !detached && popupFlight.modalPresent && admittedDraw && coordinates?.isAttached == true) {
                             val surfaceOrigin = coordinates.backdropPosition(view)
                             val extent = glassShadowInset(shadowSpread).toPx()
-                            val drawn = Rect(surfaceOrigin + Offset(shift + size.width * (1f - t.scale.x) / 2f,
+                            val drawn = Rect(surfaceOrigin + Offset(t.drift.x + size.width * (1f - t.scale.x) / 2f,
                                 t.drift.y + size.height * (1f - t.scale.y) / 2f), Size(size.width * t.scale.x, size.height * t.scale.y)).inflate(extent)
                             val neighbors = glassShadowNeighbors(anchor, this).filter { Rect(it.left, it.top, it.right, it.bottom).inflate(extent).overlaps(drawn) }
                             shadowExclusion[0] = nativeShadowExclusion(neighbors, surfaceOrigin, size,
-                                fieldSx, fieldSy, fieldShift, weight = phase())
+                                fieldTransform, weight = phase())
                         }
                         // Composite field and material once, with the original padded footprint.
                         nativeField.draw(this,surfaceOpacity(),wellStrength *
                             (if(quietOptics) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
-                            radius().toPx(),t.scale.x,t.scale.y,shift,
+                            radius().toPx(),t,
                             shadowReceiver[0],shadowExclusion[0]) {
                             // R5 (#847): B holds every popup optic until the restored source takes it at its draw entry.
                             if (visible || popupFlight.expanded || anchor.restoredBodyReceipt != anchor.restoredDrawRequest)
                                 popupFlight.refillBody(this@drawWithContent) {
-                                    translate(shift, t.drift.y) {
-                                        scale(t.scale.x, t.scale.y) {
-                                            this@drawWithContent.drawContent()
-                                            wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
-                                        }
+                                    drawGlassBody(t) {
+                                        this@drawWithContent.drawContent()
+                                        wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
                                     }
                                 }
                             opticalBody.draw(this@drawWithContent)

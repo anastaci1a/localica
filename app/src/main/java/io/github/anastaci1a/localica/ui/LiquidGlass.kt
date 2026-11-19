@@ -40,6 +40,18 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 
+/** Selector lenses and switch thumbs: depth-scaled axes about the centre, no lift or drift. */
+internal fun GlassShape.lensTransform(vertical: Boolean) = GlassBodyTransform(Offset(scaleX(vertical), scaleY(vertical)))
+
+/** One size law at the current drawn dimensions, independent of spring publication. */
+internal fun GlassShape.bodyTransform(size: Size, density: Float, vertical: Boolean = false): GlassBodyTransform {
+    val s = if (vertical) -strain else strain
+    val long = size.maxDimension / density
+    val gain = if (long > 0f) FlexSpec.pressPoints(long, size.minDimension / density) / long else 0f
+    val m = pressDepth?.let { 1f + (-gain / .24f) * it } ?: (1f + lift * gain)
+    return GlassBodyTransform(Offset(m * exp(s), m * exp(-s)), Offset(drift.x * size.width, drift.y * size.height))
+}
+
 internal fun glassBackdropBlurRadius(density: Float): Float {
     val k = density.coerceIn(2f, 3f)
     return (if (k <= 2.625f) 5.165593576f + (5.755008754f - 5.165593576f) * ((k - 2f) / .625f) else 5.755008754f + (6.062170952f - 5.755008754f) * ((k - 2.625f) / .375f)) / (.5f * GlassBlurDefault)
@@ -456,7 +468,7 @@ internal fun ContactGlowBacking(modifier: Modifier, glow: () -> GlassGlow, shape
     sample: () -> Color?, transform: (Size) -> GlassBodyTransform = { shape().lensTransform(vertical) }, geometry: DrawScope.() -> Pair<Rect, Float> = { Rect(Offset.Zero, size) to 0f }, content: @Composable () -> Unit) {
     val background = MaterialTheme.colorScheme.background
     ContactLightBacking(modifier, geometry = geometry, background = background, enabled = { val frame = glow(); frame.big > 0f || frame.little > 0f || frame.retiring.any { it.little > 0f } },
-        effect = { g -> cache.effect(glow(), transform(size), g.first, density, background, size.height, g.second) }, reduction = { cache.meanEffect(background) },
+        effect = { g -> cache.effect(glow(), transform(size), g.first, density, background, size.height, g.second, GlassBodyTransform::localPoint) }, reduction = { cache.meanEffect(background) },
         paint = { g -> contactGlowPasses(glow(), shape(), vertical, cache, g.first, sample()?.compositeOver(background) ?: background, transform(size), g.second) }, content = content)
 }
 

@@ -105,8 +105,9 @@ class GlassTouchLightTest {
             for (shape in frames) for (vertical in listOf(false, true)) for (extent in listOf(Size(96f, 80f), Size(300f, 240f))) {
                 val applied = shape.bodyTransform(extent, 1f, vertical)
                 val s = if (vertical) -shape.strain else shape.strain
-                assertEquals((1f + shape.lift / extent.maxDimension) * exp(s), applied.scale.x, 1e-6f)
-                assertEquals((1f + shape.lift / extent.maxDimension) * exp(-s), applied.scale.y, 1e-6f)
+                val p = if (extent.maxDimension < 120f) 16f else 4f
+                assertEquals((1f + shape.lift * p / extent.maxDimension) * exp(s), applied.scale.x, 1e-6f)
+                assertEquals((1f + shape.lift * p / extent.maxDimension) * exp(-s), applied.scale.y, 1e-6f)
                 if (shape.lift > 0f) assertTrue("translated contact drifts", applied.drift.getDistance() > 0f)
                 var draws = 0
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
@@ -269,13 +270,13 @@ class GlassTouchLightTest {
         var anchored by mutableStateOf(false)
         var manual by mutableStateOf(false)
         var wrong by mutableStateOf(false)
-        var shape by mutableStateOf(GlassShape(strain = .08f, depth = -.16f, lift = 16f, drift = Offset(-.05f, .05f)))
+        var shape by mutableStateOf(GlassShape(strain = .08f, depth = -.16f, lift = 1f, drift = Offset(-.05f, .05f)))
         var light by mutableStateOf(GlassGlow(big = .25f, little = .9f, point = Offset(.2f, .8f)))
         compose.mainClock.autoAdvance = false
         compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f)) {
-                // One law for popup triggers and plain bodies: lift dp over the 160 dp long side, no depth term.
-                val lift = 1f + shape.lift / 160
+                // Independent P for the unchanged 160 × 80 dp fixture.
+                val lift = 1f + shape.lift * (356f / 29) / 160
                 val ax = exp(shape.strain) * lift
                 val ay = exp(-shape.strain) * lift
                 val dx = shape.drift.x * 160
@@ -308,9 +309,9 @@ class GlassTouchLightTest {
         val plain = mutableListOf<IntArray>()
         for (fixed in listOf(false, true)) {
             compose.runOnIdle { anchored = fixed }
-            for ((phase, lift) in listOf(16f, 14f / 3, 0f).withIndex()) {
+            for ((phase, lift) in listOf(1f, 7f / 24, 0f).withIndex()) {
                 compose.runOnIdle {
-                    shape = shape.copy(lift = lift, drift = Offset(-.05f, .05f) * (lift / 16f))
+                    shape = shape.copy(lift = lift, drift = Offset(-.05f, .05f) * lift)
                     light = light.copy(little = if (phase == 0) .9f else if (phase == 1) .3f else 0f,
                         big = if (phase == 2) 0f else .25f, scale = if (phase == 0) 1f else 4f)
                 }
