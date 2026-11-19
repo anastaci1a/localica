@@ -100,7 +100,7 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
         moving = emptySet()
     }
     val total = widths.values.fold(0.dp) { sum, width -> sum + width } + 8.dp * (items.size - 1).coerceAtLeast(0)
-    val shadowInset = glassShadowInset()
+    val shadowInset = glassLayoutInset()
     Box(modifier.fillMaxWidth().padding(vertical = ListPillVerticalInset).nestedScroll(HorizontalGestureOwner)
         .shadowViewportOutset(shadowInset).controlHorizontalScroll(scroll)
         .padding(vertical = shadowInset).padding(horizontal = horizontalInset).width(total).height(listPillTargetHeight())) {

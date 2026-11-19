@@ -65,7 +65,7 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
     val scope = rememberCoroutineScope()
     val reduced = LocalReducedMotion.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val shadowInset = glassShadowInset()
+    val shadowInset = glassLayoutInset()
     val drawing = rememberActionStripDrawing()
     val trace = LocalGlassContactTrace.current
     val traceName = "action-strip-${System.identityHashCode(scroll)}"
@@ -126,7 +126,7 @@ internal fun glassActionNavigationConstraints(constraints: Constraints, stripHei
 /** Inert counterpart of the scrolling strip, including its conditional footer. */
 @Composable
 internal fun GlassActionRowMeasurement(content: @Composable RowScope.() -> Unit) {
-    val inset = glassShadowInset()
+    val inset = glassLayoutInset()
     Layout(content = {
         Row(Modifier.shadowViewportOutset(inset, horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically, content = content)
