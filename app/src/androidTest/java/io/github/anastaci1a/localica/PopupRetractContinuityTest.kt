@@ -152,8 +152,6 @@ class PopupRetractContinuityTest {
             Box(Modifier.size(80.dp).preparedOrigin(preparation) { sample }.testTag("prepared")) {
                 Box(Modifier.fillMaxSize().drawBehind { if (preparation.withdrawal == null) opened++ else calls += "content"; drawRect(Color.Blue) })
             }
-            // A sibling in the same recording redraws the origin whenever the sample moves.
-            Box(Modifier.size(1.dp).drawBehind { sample.let { } })
         }
         compose.waitForIdle()
         assertTrue("Opening has no withdrawal callback and draws normally", opened > 0)
@@ -161,7 +159,8 @@ class PopupRetractContinuityTest {
         compose.runOnUiThread { preparation.beginOriginProof(7L); preparation.withdrawal = { calls += "withdraw" } }
         compose.waitForIdle()
         assertTrue("A current receipt placed away from the current progress neither withdraws nor draws stale pixels: $calls", calls.isEmpty())
-        compose.runOnIdle { sample = 0f }
+        // A new proof at the moved sample recomposes, relayouts and redraws the origin at the current progress.
+        compose.runOnIdle { sample = 0f; preparation.beginOriginProof(8L) }
         compose.waitForIdle()
         assertTrue("The qualified current draw withdrew: $calls", calls.isNotEmpty())
         assertEquals("Every source draw is preceded by its qualified withdrawal; no stale source pixels: $calls",
