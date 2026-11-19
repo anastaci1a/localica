@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
@@ -46,6 +47,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
                 Text(if (value.reducedMotion) "Reduce motion is on." else "Off: every animation in the app ignores the Developer options animator duration scale, including 0 (animations off). System animations, such as the keyboard, still follow it.",
                     style = MaterialTheme.typography.bodySmall)
             }
+            ChoicePreference("Popup motion", value.popupMotion, PopupMotionStyle.entries, { it.label }) { onChange(value.copy(popupMotion = it)) }
             ChoicePreference("Long scroll animation", value.longScroll, LongScrollStyle.entries, { it.label }) { onChange(value.copy(longScroll = it)) }
             Text("How Return to top and return-to-current cross a long distance. Fly-through rushes past the list cheaply; Jump, then glide lands near the target and glides in; Fade dims the list while it jumps. Reduce motion jumps straight there.", style = MaterialTheme.typography.bodySmall)
         }

@@ -39,6 +39,7 @@ enum class GlassMode { Normal, FlatNone }
 @Immutable data class SpringLaw(val omega: Float, val zeta: Float)
 /** The popup surface families of the #854 model. [Legacy] keeps the v0.33.21 popup spring ([UiSpec.expansion]). */
 enum class PopupKind { Menu, RowMenu, BottomMenu, Dialog, SelectionPill, Legacy }
+enum class PopupMotionStyle(val label: String) { EdgeSpring("Edge spring"), Fluid("Fluid") }
 enum class PopupMotionVariant { Base, CrossAxisSnap, Auto, Legacy }
 enum class PopupDirection { Open, Close, Gate }
 /** #854/#855 measured Apple popup motion. Every popup trajectory, test reference and admission bound derives from this.
@@ -46,12 +47,12 @@ enum class PopupDirection { Open, Close, Gate }
 @Immutable data class PopupMotionModel(val revision: String, val open: SpringLaw, val close: SpringLaw, val crossOpen: SpringLaw, val gate: SpringLaw,
     val snapAspect: Float, val preparedRamp: Float, val rampBlend: Float, val variants: Map<PopupKind,PopupMotionVariant>,
     /** The phase band [-band, 1 + band] every spring channel must stay in; admission and the engine's extremum proofs both read it. */
-    val band: Float = StockPopupExpansionBand) {
+    val band: Float = StockPopupExpansionBand, val centre: SpringLaw? = null, val centreBand: Float = band) {
     fun variant(kind: PopupKind): PopupMotionVariant = variants[kind] ?: PopupMotionVariant.Base
     internal val reversalReach by lazy { popupReversalReach(this) }
     /** One channel's law: the main axis by [direction]; only a [cross] open uses the snap law; close and gate run the main law on every edge. */
     @Suppress("UNUSED_PARAMETER") fun law(kind: PopupKind, direction: PopupDirection, cross: Boolean): SpringLaw =
-        if(cross && direction==PopupDirection.Open) crossOpen else when(direction) { PopupDirection.Open -> open; PopupDirection.Close -> close; PopupDirection.Gate -> gate }
+        if(cross && direction==PopupDirection.Open) centre ?: crossOpen else when(direction) { PopupDirection.Open -> open; PopupDirection.Close -> close; PopupDirection.Gate -> gate }
 }
 /** Provenance of [StockPopupMotion]: revision 855-ios262-60fps-interim (feedback/issues/855-apple-popup-motion/pass2/INTERIM-MODEL.md,
  * lead swap 2026-11-11), -r926: iOS 26.2 60 fps menu fits open (28, .78), close (20, 1) with the gate = close; open cross snap (120, 1) unchanged from
@@ -62,6 +63,8 @@ internal const val StockPopupMotionRevision = "855-ios262-60fps-interim-r926"
 internal val StockPopupMotion = PopupMotionModel(StockPopupMotionRevision, SpringLaw(28f,.78f), SpringLaw(20f,1f), SpringLaw(120f,1f), SpringLaw(20f,1f), 1.4f, .25f, .05f,
     mapOf(PopupKind.Menu to PopupMotionVariant.Base, PopupKind.RowMenu to PopupMotionVariant.Base, PopupKind.BottomMenu to PopupMotionVariant.CrossAxisSnap, PopupKind.Dialog to PopupMotionVariant.Base,
         PopupKind.SelectionPill to PopupMotionVariant.Base, PopupKind.Legacy to PopupMotionVariant.Legacy))
+// Provisional neutral law while #1083 pass 2 determines the fluid shape; replace only this spec.
+internal fun fluidPopupMotion() = StockPopupMotion.copy(centre = StockPopupMotion.open)
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
 const val MinimumAnimationSpeed = .5f
 const val MaximumAnimationSpeed = 1.5f
@@ -130,7 +133,7 @@ fun uiSpec(settings: InterfaceSettings, overrides: UiSpecData? = null, geometry:
     fun valid(ok: Boolean, key: String) { if(!ok) errors+=key }; fun bounded(v: Float,lo: Float,hi: Float)=v.isFinite() && v in lo..hi
     val rendererMode = GlassMode.valueOf(g.renderer.name)
     val space=frozen(b.space,o.space); val radius=frozen(b.radius,o.radius); val control=frozen(b.control,o.control); val material=frozen(MaterialRole.entries.associateWith { MaterialTokens(g.blur,g.whiteTint,g.shadowStrength,g.shadowSpread,g.contrast,g.liftShadowStrength,g.shapeDamping,g.depth,rendererMode) },o.material)
-    val clearance=frozen(b.clearance+mapOf(Clearance.ShadowInset to glassShadowInset(material.getValue(MaterialRole.Glass).shadowSpread)),o.clearance); val motion=frozen(b.motion,o.motion); val spring=frozen(b.spring,o.spring); val expansion=o.expansion?:b.expansion; val sheetExpansion=o.sheetExpansion?:b.sheetExpansion; val lyricsExpansion=o.lyricsExpansion?:b.lyricsExpansion; val selectionExpansion=o.selectionExpansion?:b.selectionExpansion; val popupMotion=o.popupMotion?:b.popupMotion; val speed=o.speed?:settings.animationSpeed
+    val clearance=frozen(b.clearance+mapOf(Clearance.ShadowInset to glassShadowInset(material.getValue(MaterialRole.Glass).shadowSpread)),o.clearance); val motion=frozen(b.motion,o.motion); val spring=frozen(b.spring,o.spring); val expansion=o.expansion?:b.expansion; val sheetExpansion=o.sheetExpansion?:b.sheetExpansion; val lyricsExpansion=o.lyricsExpansion?:b.lyricsExpansion; val selectionExpansion=o.selectionExpansion?:b.selectionExpansion; val popupMotion=o.popupMotion?:if(settings.popupMotion==PopupMotionStyle.Fluid) fluidPopupMotion() else b.popupMotion; val speed=o.speed?:settings.animationSpeed
     valid(space.values.all { bounded(it.value,0f,Float.MAX_VALUE) } && Space.entries.zipWithNext().all { (a,b)->space.getValue(a)<space.getValue(b) },"space"); valid(Radius.Pill !in radius && radius.values.all { bounded(it.value,0f,Float.MAX_VALUE) },"radius"); valid(control.values.all { it.value.isFinite() && it.value>0 },"control"); valid(clearance.values.all { bounded(it.value,0f,Float.MAX_VALUE) },"clearance")
     fun ease(e: EasingSpec)=bounded(e.x1,0f,1f) && bounded(e.x2,0f,1f) && e.y1.isFinite() && e.y2.isFinite() && e.maxSlope.isFinite()
     fun curve(c: UnitCurveSpec)=when(c) { is EasingSpec -> ease(c); is SpringCurveSpec -> bounded(c.span,1f,40f) && c.maxSlope.isFinite() }
@@ -159,15 +162,16 @@ internal fun springOvershoot(zeta: Double): Double = if(zeta>=1) 0.0 else exp(-P
 internal fun popupMotionAdmission(m: PopupMotionModel): List<String> {
     val errors=mutableListOf<String>(); val band=m.band
     if(!(band.isFinite() && band>0f && band<=.1f)) return listOf("band")
-    for((key,law) in listOf("open" to m.open,"close" to m.close,"crossOpen" to m.crossOpen,"gate" to m.gate)) {
-        if(!(law.omega.isFinite() && law.zeta.isFinite() && law.omega in 1f..400f && law.zeta in .5f..4f)) { errors+=key; continue }
-        if(key!="open" && law.zeta<1f) errors+="$key.overshoot"
-        if(key=="open" && springOvershoot(law.zeta.toDouble())>band) errors+="open.overshoot"
-        if(popupLawHorizon(law,MinimumAnimationSpeed.toDouble())>2.0) errors+="$key.horizon"
+    if(m.centre!=null && !(m.centreBand.isFinite() && m.centreBand>0f)) return listOf("centreBand")
+    for((key,law) in listOf("open" to m.open,"close" to m.close,"crossOpen" to m.crossOpen,"gate" to m.gate)+listOfNotNull(m.centre?.let { "centre" to it })) {
+        if(!(law.omega.isFinite() && law.zeta.isFinite() && law.omega in 1f..400f && law.zeta in (if(key=="centre") .3f else .5f)..4f)) { errors+=key; continue }
+        if(key!="open" && key!="centre" && law.zeta<1f) errors+="$key.overshoot"
+        if((key=="open" || key=="centre") && springOvershoot(law.zeta.toDouble())>(if(key=="centre") m.centreBand else band)) errors+="$key.overshoot"
+        if(popupLawHorizon(law,MinimumAnimationSpeed.toDouble(),if(key=="centre") 1.0+m.centreBand else 1.05)>2.0) errors+="$key.horizon"
     }
     if(!(m.snapAspect.isFinite() && m.snapAspect>1f)) errors+="snapAspect"
     if(!(m.preparedRamp.isFinite() && m.preparedRamp in 0f..(.5f) && m.rampBlend.isFinite() && m.rampBlend>0f && m.rampBlend<=.25f)) errors+="ramp"
-    if(errors.isEmpty()) for((pair,peak) in m.reversalReach) if(peak.start< -band || peak.endInclusive>1+band) errors+="reversal.$pair"
+    if(errors.isEmpty()) for((pair,peak) in m.reversalReach) { val limit=if(pair.startsWith("centre")) m.centreBand else band; if(peak.start< -limit || peak.endInclusive>1+limit) errors+="reversal.$pair" }
     if(PopupKind.entries.any { it !in m.variants } || m.variants[PopupKind.Legacy]!=PopupMotionVariant.Legacy || m.variants.any { (k,v) -> k!=PopupKind.Legacy && v==PopupMotionVariant.Legacy }) errors+="variants"
     return errors
 }
@@ -200,14 +204,15 @@ internal fun popupReversalReach(m: PopupMotionModel): Map<String,ClosedFloatingP
         var t=0.0; while(t<=horizon) { val (x,v)=springState(from,0.0,to,w1,z1,t); val e=springExtrema(x,v,back,second.omega.toDouble(),second.zeta.toDouble()); lo=min(lo,e.start); hi=max(hi,e.endInclusive); t+=.001 }
         return springExtrema(from,0.0,to,w1,z1).let { min(lo,it.start)..max(hi,it.endInclusive) }
     }
-    return mapOf("openClose" to reach(m.open,0.0,1.0,m.close,0.0),"closeOpen" to reach(m.close,1.0,0.0,m.open,1.0),
-        "openGate" to reach(m.open,0.0,1.0,m.gate,m.preparedRamp.toDouble()),"gateOpen" to reach(m.gate,0.0,m.preparedRamp.toDouble(),m.open,1.0))
+    fun pairs(open: SpringLaw,prefix: String)=mapOf(prefix+"openClose" to reach(open,0.0,1.0,m.close,0.0),prefix+"closeOpen" to reach(m.close,1.0,0.0,open,1.0),
+        prefix+"openGate" to reach(open,0.0,1.0,m.gate,m.preparedRamp.toDouble()),prefix+"gateOpen" to reach(m.gate,0.0,m.preparedRamp.toDouble(),open,1.0))
+    return pairs(m.open,"")+m.centre?.let { pairs(it,"centre") }.orEmpty()
 }
 /** The settle horizon of [spring] at [speed] from its worst admitted state, |x0| <= 1.05 and |v0| <= 1.1 omega_eff (A2.2). The parameter is not
  * named law: #884 reserves that name for motion-selecting arguments, and this is the spec's own admission math. */
-internal fun popupLawHorizon(spring: SpringLaw, speed: Double): Double {
+internal fun popupLawHorizon(spring: SpringLaw, speed: Double, extent: Double=1.05): Double {
     val w=spring.omega*speed; val shape=SpringProfileSpec(spring.zeta,(w*w).toFloat())
-    return listOf(-1.05,0.0,1.05).flatMap { x -> listOf(-1.1*w,0.0,1.1*w).map { v -> if(x==0.0 && v==0.0) 0.0 else springHorizon(shape,x,v,1.0,1.0) } }.max()
+    return listOf(-extent,0.0,extent).flatMap { x -> listOf(-1.1*w,0.0,1.1*w).map { v -> if(x==0.0 && v==0.0) 0.0 else springHorizon(shape,x,v,1.0,1.0) } }.max()
 }
 internal fun springHorizon(s: SpringProfileSpec, x0: Double = 1.05, v0: Double = vMax.toDouble(), range: Double = 1.0, speed: Double = 4.0/3): Double {
     val w=sqrt(s.stiffness.toDouble())*if(s.speedExponent==2) speed else 1.0; val z=s.dampingRatio.toDouble(); val x=x0/range; val v=v0/range; val critical=abs(v+w*x)

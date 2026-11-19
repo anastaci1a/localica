@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.navigation
 
+import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import java.util.UUID
 
 enum class MainTab(val label: String) {
@@ -86,6 +87,7 @@ data class InterfaceSettings(
     val grayTone: Float = .4f,
     val lyricDelayMs: Int = 0,
     val longScroll: LongScrollStyle = LongScrollStyle.FlyThrough,
+    val popupMotion: PopupMotionStyle = PopupMotionStyle.EdgeSpring,
 ) {
     /** The speed multiplier s; stored tenths outside 5..15 are repaired to the nearest step. */
     val animationSpeed: Float get() = animationSpeedTenths.coerceIn(MinimumAnimationSpeedTenths, MaximumAnimationSpeedTenths) / 10f

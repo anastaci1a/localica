@@ -79,8 +79,9 @@ internal fun settleEnvelope(x: Double,v: Double,w: Double,z: Double,range: Doubl
 }
 
 /** A phase projection with its physical edge's rebase residual, sharing the same finite plan. */
-internal class MappedEdge(private val phase: Trajectory,private val curve: Curve,private val start: Double,private val delta: Double,private val residual: Trajectory): Trajectory {
+internal class MappedEdge(private val phase: Trajectory,private val curve: Curve,private val start: Double,private val delta: Double,private val residual: Trajectory,private val second: Trajectory=phase,private val share: Double=0.0): Trajectory {
     override val kind=1; override val duration=residual.duration
-    override fun value(t: Double)=start+delta*curve.at(phase.value(t).toFloat())+residual.value(t)
-    override fun velocity(t: Double)=delta*curve.slope(phase.value(t).toFloat())*phase.velocity(t)+residual.velocity(t)
+    internal fun projection(t: Double,d: Boolean): Double { fun sample(p: Trajectory,weight: Double)=if(d) weight*curve.slope(p.value(t).toFloat())*p.velocity(t) else weight*curve.at(p.value(t).toFloat()); return when(share) { 0.0 -> sample(phase,delta); delta -> sample(second,delta); else -> sample(second,share)+sample(phase,delta-share) } }
+    override fun value(t: Double)=start+projection(t,false)+residual.value(t)
+    override fun velocity(t: Double)=projection(t,true)+residual.velocity(t)
 }
