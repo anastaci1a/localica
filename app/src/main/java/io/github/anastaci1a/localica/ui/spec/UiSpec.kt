@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import java.util.Collections
+import java.util.IdentityHashMap
 import kotlin.math.*
 
 /** Neutral extent for an absent inset; independent of configurable spacing. */
@@ -71,6 +72,7 @@ internal fun fluidIntermediateY(sourceY: Double, targetY: Double, ratio: Double,
     sourceY + (ratio * (targetY - sourceY)).coerceIn(-cap, cap)
 internal fun fluidStoredDelay(storedDelay: Double, speed: Double, amplify: Boolean) =
     storedDelay * speed * (if (amplify) 10.0 else 1.0)
+private fun fluidThroughTailDelay(growing: Boolean) = if (growing) 0.12 else 0.1
 internal class FluidPopupSpringSettings(val dampingRatio: Double, val response: Double) {
     val mass get() = 1.0
     val omega = 2 * PI / response
@@ -86,8 +88,8 @@ internal data class FluidContentSettings(
 ) {
     fun blurSequence(growing: Boolean): FluidContentBlurSequence? =
         if (lensingEnabled) FluidContentBlurSequence(
-            FluidContentBlurStep(0.0, blurInSpring),
-            FluidContentBlurStep(if (growing) 0.12 else 0.1, blurOutSpring),
+            FluidPopupStep(0.0, blurInSpring),
+            FluidPopupStep(fluidThroughTailDelay(growing), blurOutSpring),
         ) else null
 }
 internal val FluidContentDefaults = FluidContentSettings(
@@ -96,10 +98,10 @@ internal val FluidContentDefaults = FluidContentSettings(
     blurOutSpring = FluidPopupSpringSettings(dampingRatio = 0.8, response = 0.45),
     speed = 0.7, amplifyDelays = false, lensingEnabled = true,
 )
-internal data class FluidContentBlurStep(val storedDelay: Double, val spring: FluidPopupSpringSettings) {
+internal data class FluidPopupStep(val storedDelay: Double, val spring: FluidPopupSpringSettings) {
     fun scaledDelay(settings: FluidContentSettings) = fluidStoredDelay(storedDelay, settings.speed, settings.amplifyDelays)
 }
-internal data class FluidContentBlurSequence(val blurOut: FluidContentBlurStep, val blurIn: FluidContentBlurStep)
+internal data class FluidContentBlurSequence(val blurOut: FluidPopupStep, val blurIn: FluidPopupStep)
 internal data class FluidContentBlurRequest(val portalScale: Double, val gaussianRadius: Double)
 internal fun fluidContentBlurOut(height: Double, maxScale: () -> Double, minScale: () -> Double): FluidContentBlurRequest {
     val fraction = (height + (-215.0)) / 305.0
@@ -128,6 +130,69 @@ internal fun fluidDestinationBlend(
         else -> fraction
     }
     return FluidDestinationBlend(opacity, 0.0)
+}
+
+internal object FluidLensingSpec {
+    enum class Filter { GaussianBlur, DisplacementMap }
+    val filterOrder get() = Filter.entries
+
+    data class Request(val timing: FluidPopupStep, val gain: Double, val dimension: Double?)
+
+    fun shortDimension(scale: Double, width: Double, height: Double): Double {
+        val w = scale * width
+        val h = scale * height
+        return if (h < w) h else w
+    }
+
+    fun requests(
+        enabled: Boolean, growing: Boolean, smallerShort: Double, largerShort: Double,
+        largerAnchorY: Double, convertedLargerHeight: Double, changeSpring: FluidPopupSpringSettings,
+    ): List<Request> {
+        if (!enabled) return emptyList()
+        val d0 = if (largerAnchorY == 0.5) convertedLargerHeight else smallerShort
+        return listOf(
+            Request(FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.2)), 1.0, if (growing) d0 else largerShort),
+            Request(FluidPopupStep(0.0, changeSpring), 1.0, if (growing) largerShort else d0),
+            Request(FluidPopupStep(fluidThroughTailDelay(growing), FluidPopupSpringSettings(1.0, if (growing) 0.3 else 0.4)), 0.0, null),
+        )
+    }
+
+    const val trackStoredDelay = 0.0
+    const val trackedHitTestsAsFill = true
+    val trackedProperties = listOf("bounds", "position", "cornerRadius", "cornerRadii", "cornerCurve", "hidden", "meshTransform")
+
+    fun <T : Any> newTrackedSources(live: Iterable<T>, tracked: Iterable<T>): List<T> {
+        val seen = Collections.newSetFromMap(IdentityHashMap<T, Boolean>())
+        seen.addAll(tracked)
+        return live.filter(seen::add)
+    }
+
+    const val displacementFunction = 44
+    const val namedSourceTexture = 1
+
+    fun <T : Any> namedSource(layers: Iterable<T>, name: ByteArray?, layerName: (T) -> ByteArray?): T? =
+        name?.let { bytes -> layers.firstOrNull { layerName(it)?.contentEquals(bytes) == true } }
+
+    fun <T : Any> displacementSource(primaryPresent: Boolean, explicitImage: T?, namedSurface: () -> T?): T? =
+        if (primaryPresent) explicitImage ?: namedSurface() else null
+
+    fun amountUniform(transform: DoubleArray, width: Int, height: Int, renderScale: Float, inputAmount: Double = 1.0): FloatArray {
+        val amount = renderScale * inputAmount.toFloat()
+        val b0 = transform[0].toFloat()
+        val b1 = transform[4].toFloat()
+        val b2 = transform[1].toFloat()
+        val b3 = transform[5].toFloat()
+        fun lane(b: Float, z: Float, extent: Int) = (b * amount) / extent.toFloat() + z * 0f
+        return floatArrayOf(lane(b0, b2, width), lane(b1, b3, height), lane(b2, b0, width), lane(b3, b1, height))
+    }
+
+    fun usedExtent(usedX: Int, usedY: Int, width: Int, height: Int) =
+        ((usedX.toDouble() - 0.5) / width).toFloat() to ((usedY.toDouble() - 0.5) / height).toFloat()
+
+    fun offset(values: DoubleArray?): Pair<Float, Float> {
+        val x = values?.getOrNull(0)?.toFloat() ?: 0f
+        return x to (values?.getOrNull(1)?.toFloat() ?: x)
+    }
 }
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
 const val MinimumAnimationSpeed = .5f

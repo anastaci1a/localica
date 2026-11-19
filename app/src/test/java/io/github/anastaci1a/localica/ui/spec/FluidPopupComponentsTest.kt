@@ -127,4 +127,69 @@ class FluidPopupComponentsTest {
         assertEquals(FluidDestinationBlend(1.0, 0.0), fluidDestinationBlend(Double.NaN, false, false, false))
         assertEquals(0.1f.toRawBits(), fluidDestinationBlend(0.1, true, false, true).layerOpacity.toRawBits())
     }
+
+    @Test fun lensingRequestsSwapCapturedDimensionsAndReuseTheGrowthDelay() {
+        val middle = FluidPopupSpringSettings(0.9, 0.55)
+        val growing = FluidLensingSpec.requests(true, true, 25.0, 90.0, 0.5, 120.0, middle)
+        val shrinking = FluidLensingSpec.requests(true, false, 25.0, 90.0, 0.6, 120.0, middle)
+        assertEquals(listOf(120.0, 90.0, null), growing.map { it.dimension })
+        assertEquals(listOf(90.0, 25.0, null), shrinking.map { it.dimension })
+        assertEquals(listOf(1.0, 1.0, 0.0), growing.map { it.gain })
+        assertEquals(listOf(0.0, 0.0, 0.12), growing.map { it.timing.storedDelay })
+        assertEquals(listOf(0.0, 0.0, 0.1), shrinking.map { it.timing.storedDelay })
+        assertEquals(listOf(0.2, 0.55, 0.3), growing.map { it.timing.spring.response })
+        assertEquals(listOf(0.2, 0.55, 0.4), shrinking.map { it.timing.spring.response })
+        assertEquals(listOf(1.0, 0.9, 1.0), growing.map { it.timing.spring.dampingRatio })
+        assertTrue(growing[1].timing.spring === middle)
+        val content = requireNotNull(FluidContentDefaults.blurSequence(growing = true))
+        assertEquals(content.blurIn.scaledDelay(FluidContentDefaults).toRawBits(), growing[2].timing.scaledDelay(FluidContentDefaults).toRawBits())
+        assertTrue(FluidLensingSpec.requests(false, true, 25.0, 90.0, 0.5, 120.0, middle).isEmpty())
+        assertEquals(15.0, FluidLensingSpec.shortDimension(1.5, 40.0, 10.0), 0.0)
+        assertEquals(60.0, FluidLensingSpec.shortDimension(1.5, 40.0, Double.NaN), 0.0)
+        assertEquals((-0.0).toRawBits(), FluidLensingSpec.shortDimension(1.0, -0.0, 0.0).toRawBits())
+    }
+
+    @Test fun lensingSetupKeepsFilterOrderAndTracksByIdentity() {
+        assertEquals(listOf(FluidLensingSpec.Filter.GaussianBlur, FluidLensingSpec.Filter.DisplacementMap), FluidLensingSpec.filterOrder)
+        assertEquals(listOf("bounds", "position", "cornerRadius", "cornerRadii", "cornerCurve", "hidden", "meshTransform"), FluidLensingSpec.trackedProperties)
+        assertEquals(0.0.toRawBits(), FluidLensingSpec.trackStoredDelay.toRawBits())
+        assertTrue(FluidLensingSpec.trackedHitTestsAsFill)
+
+        data class Layer(val name: String)
+        val existing = Layer("same")
+        val new = Layer("same")
+        val other = Layer("other")
+        val additions = FluidLensingSpec.newTrackedSources(listOf(existing, new, new, other), listOf(existing))
+        assertEquals(2, additions.size)
+        assertTrue(additions[0] === new)
+        assertTrue(additions[1] === other)
+    }
+
+    @Test fun displacementSelectsTheFirstExactNameAndPrefersExplicitImages() {
+        val names = listOf(byteArrayOf(97), byteArrayOf(97, 0), byteArrayOf(97, 0))
+        val first = FluidLensingSpec.namedSource(names, byteArrayOf(97, 0)) { it }
+        assertTrue(first === names[1])
+        assertEquals(null, FluidLensingSpec.namedSource(names, null) { error("Name lookup without a key") })
+        assertEquals(null, FluidLensingSpec.displacementSource(false, "image") { error("No primary surface") })
+        assertEquals("image", FluidLensingSpec.displacementSource(true, "image") { error("Image takes precedence") })
+        assertEquals("child", FluidLensingSpec.displacementSource(true, null) { "child" })
+        assertEquals(44, FluidLensingSpec.displacementFunction)
+        assertEquals(1, FluidLensingSpec.namedSourceTexture)
+    }
+
+    @Test fun displacementUniformsPackTheOrderedLanesAndOptionalOffset() {
+        val transform = doubleArrayOf(2.0, 3.0, 99.0, 99.0, 5.0, 7.0)
+        val p = FluidLensingSpec.amountUniform(transform, 16, 8, 0.5f, -2.0)
+        assertEquals(listOf(-0.125f, -0.625f, -0.1875f, -0.875f).map(Float::toRawBits), p.map(Float::toRawBits))
+        assertEquals(0.0625f.toRawBits(), FluidLensingSpec.amountUniform(transform, 16, 8, 0.5f)[0].toRawBits())
+        transform[0] = 0.0
+        assertEquals(0f.toRawBits(), FluidLensingSpec.amountUniform(transform, 16, 8, 0.5f, -2.0)[0].toRawBits())
+        transform[1] = Double.POSITIVE_INFINITY
+        assertTrue(FluidLensingSpec.amountUniform(transform, 16, 8, 0.5f, -2.0)[0].isNaN())
+        assertEquals(0.78125f to 0.8125f, FluidLensingSpec.usedExtent(13, 7, 16, 8))
+        assertEquals(0f to 0f, FluidLensingSpec.offset(null))
+        assertEquals(0f to 0f, FluidLensingSpec.offset(doubleArrayOf()))
+        assertEquals(-0.0f to -0.0f, FluidLensingSpec.offset(doubleArrayOf(-0.0)))
+        assertEquals(2f to 3f, FluidLensingSpec.offset(doubleArrayOf(2.0, 3.0, 4.0)))
+    }
 }
