@@ -28,17 +28,6 @@ import java.io.File
 class GlassActionCentreTest {
     @get:Rule val compose = localicaComposeRule()
 
-    private fun descendants(info: LayoutInfo): List<LayoutInfo> {
-        val getter = info.javaClass.methods.firstOrNull { it.name.startsWith("getChildren") && it.parameterCount == 0 }
-            ?: return listOf(info)
-        val value = getter.invoke(info) ?: return listOf(info)
-        val children = if (value is List<*>) value.filterIsInstance<LayoutInfo>() else {
-            val content = value.javaClass.methods.first { it.name.startsWith("getContent") && it.parameterCount == 0 }
-            val size = value.javaClass.methods.first { it.name == "getSize" && it.parameterCount == 0 }
-            (content.invoke(value) as Array<*>).take(size.invoke(value) as Int).filterIsInstance<LayoutInfo>()
-        }
-        return listOf(info) + children.flatMap(::descendants)
-    }
 
     @Test fun menuAndStripFacesKeepTheirTouchBoxAndCentreTheirIcons() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -76,7 +65,7 @@ class GlassActionCentreTest {
                 compose.runOnIdle {
                     val button = node.layoutInfo.coordinates.boundsInRoot()
                     val face = requireNotNull(text.layoutInfo.parentInfo).coordinates.boundsInRoot()
-                    val icon = descendants(node.layoutInfo).first { kotlin.math.abs(it.width - 24 * density) < 1 && kotlin.math.abs(it.height - 24 * density) < 1 }
+                    val icon = glassLayoutDescendants(node.layoutInfo).first { kotlin.math.abs(it.width - 24 * density) < 1 && kotlin.math.abs(it.height - 24 * density) < 1 }
                         .coordinates.boundsInRoot()
                     fun rect(r: Rect) = JSONArray(listOf(r.left, r.top, r.right, r.bottom))
                     records.put(JSONObject().put("label", label).put("direction", layoutDirection.name).put("density", density)
@@ -97,4 +86,16 @@ class GlassActionCentreTest {
         assertEquals("Bottom-edge touch target remains active in both directions", 2, clicks)
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
     }
+}
+
+internal fun glassLayoutDescendants(info: LayoutInfo): List<LayoutInfo> {
+    val getter = info.javaClass.methods.firstOrNull { it.name.startsWith("getChildren") && it.parameterCount == 0 }
+        ?: return listOf(info)
+    val value = getter.invoke(info) ?: return listOf(info)
+    val children = if (value is List<*>) value.filterIsInstance<LayoutInfo>() else {
+        val content = value.javaClass.methods.first { it.name.startsWith("getContent") && it.parameterCount == 0 }
+        val size = value.javaClass.methods.first { it.name == "getSize" && it.parameterCount == 0 }
+        (content.invoke(value) as Array<*>).take(size.invoke(value) as Int).filterIsInstance<LayoutInfo>()
+    }
+    return listOf(info) + children.flatMap(::glassLayoutDescendants)
 }

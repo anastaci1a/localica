@@ -49,42 +49,6 @@ class GlassTouchLightTest {
             return pixels(image)
         } finally { image.asAndroidBitmap().recycle() }
     }
-    private fun referenceMask(radius: Float): Triple<IntArray, Int, Float> {
-        var sigma = radius
-        val limit = if (radius <= 4f) 2f else if (radius <= 8f) 4f else 8f
-        while (sigma > limit) sigma /= 2f
-        val n = ceil(2.5f * sigma).toInt()
-        val weights = (-n..n).map { exp(-it.toDouble() * it / (2.0 * sigma * sigma)) }
-        val coefficients = weights.map { (it * 16384 / weights.sum()).toInt() }
-        val side = 2 * (ceil(sigma).toInt() + ceil(sigma * 2.8199565410614014f + .5f).toInt() + 1) + 1
-        val disk = IntArray(side * side) { i ->
-            val x = (i % side - side / 2).toDouble(); val y = (i / side - side / 2).toDouble()
-            val r = sigma.toDouble(); val xx = max(0.0, abs(x) - .5); val yy = max(0.0, abs(y) - .5)
-            val area = if (xx * xx + yy * yy >= r * r) 0.0
-                else if ((abs(x) + .5).pow(2) + (abs(y) + .5).pow(2) <= r * r) 1.0
-                else {
-                    val left = max(x - .5, -r); val right = min(x + .5, r)
-                    var sum = 0.0
-                    // Independent vertical-strip integration of the circular source.
-                    for (sample in 0 until 8192) {
-                        val at = left + (sample + .5) * (right - left) / 8192
-                        val cap = sqrt(max(0.0, r * r - at * at))
-                        sum += max(0.0, min(y + .5, cap) - max(y - .5, -cap))
-                    }
-                    sum * (right - left) / 8192
-                }
-            (area.toFloat() * 255.99000549316406f).toInt()
-        }
-        fun convolve(input: IntArray, dx: Int, dy: Int) = IntArray(input.size) { i ->
-            var sum = 8192
-            for (j in -n..n) {
-                val x = i % side + j * dx; val y = i / side + j * dy
-                if (x in 0 until side && y in 0 until side) sum += coefficients[j + n] * input[y * side + x]
-            }
-            sum / 16384
-        }
-        return Triple(convolve(convolve(disk, 1, 0), 0, 1), side, radius / sigma)
-    }
 
     @Test fun fluidSurfaceAndGlowShareOneTransformThroughHoldReleaseAndAnchor() {
         val image = ImageBitmap(1, 1)
@@ -137,7 +101,7 @@ class GlassTouchLightTest {
         val localMatrix = arrayOf(doubleArrayOf(1.3937000036239624, -.357699990272522, -.035999998450279236),
             doubleArrayOf(-.1062999963760376, 1.1424000263214111, -.03610000014305115),
             doubleArrayOf(-.10639999806880951, -.35749998688697815, 1.4638999700546265))
-        val reference = referenceMask(60f)
+        val reference = touchLightReferenceMask(60f)
         val (disk, side, pixels) = reference
         fun maskAt(point: Offset, x: Int, y: Int): Double {
             val xx = (x + .5 - width * point.x) / pixels + side / 2.0 - .5
@@ -602,4 +566,41 @@ class GlassTouchLightTest {
             assertEquals(0f, shared.glow.value.little, 0f)
         }
     }
+}
+
+internal fun touchLightReferenceMask(radius: Float): Triple<IntArray, Int, Float> {
+    var sigma = radius
+    val limit = if (radius <= 4f) 2f else if (radius <= 8f) 4f else 8f
+    while (sigma > limit) sigma /= 2f
+    val n = ceil(2.5f * sigma).toInt()
+    val weights = (-n..n).map { exp(-it.toDouble() * it / (2.0 * sigma * sigma)) }
+    val coefficients = weights.map { (it * 16384 / weights.sum()).toInt() }
+    val side = 2 * (ceil(sigma).toInt() + ceil(sigma * 2.8199565410614014f + .5f).toInt() + 1) + 1
+    val disk = IntArray(side * side) { i ->
+        val x = (i % side - side / 2).toDouble(); val y = (i / side - side / 2).toDouble()
+        val r = sigma.toDouble(); val xx = max(0.0, abs(x) - .5); val yy = max(0.0, abs(y) - .5)
+        val area = if (xx * xx + yy * yy >= r * r) 0.0
+            else if ((abs(x) + .5).pow(2) + (abs(y) + .5).pow(2) <= r * r) 1.0
+            else {
+                val left = max(x - .5, -r); val right = min(x + .5, r)
+                var sum = 0.0
+                // Independent vertical-strip integration of the circular source.
+                for (sample in 0 until 8192) {
+                    val at = left + (sample + .5) * (right - left) / 8192
+                    val cap = sqrt(max(0.0, r * r - at * at))
+                    sum += max(0.0, min(y + .5, cap) - max(y - .5, -cap))
+                }
+                sum * (right - left) / 8192
+            }
+        (area.toFloat() * 255.99000549316406f).toInt()
+    }
+    fun convolve(input: IntArray, dx: Int, dy: Int) = IntArray(input.size) { i ->
+        var sum = 8192
+        for (j in -n..n) {
+            val x = i % side + j * dx; val y = i / side + j * dy
+            if (x in 0 until side && y in 0 until side) sum += coefficients[j + n] * input[y * side + x]
+        }
+        sum / 16384
+    }
+    return Triple(convolve(convolve(disk, 1, 0), 0, 1), side, radius / sigma)
 }
