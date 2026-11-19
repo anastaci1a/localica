@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.ui.geometry.Size
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.geometry.Offset
@@ -29,7 +30,7 @@ class GlassBodyClockTest {
         var active by mutableStateOf(true)
         var reduced by mutableStateOf(false)
         var strength by mutableFloatStateOf(1f)
-        val body = GlassBodyState()
+        val body = GlassBodyState().apply { momentum.extent = Size(44f, 44f) }
     }
     private suspend fun CoroutineScope.withBody(block: suspend Inputs.(suspend (Long) -> Unit) -> Unit) {
         val input = Inputs()

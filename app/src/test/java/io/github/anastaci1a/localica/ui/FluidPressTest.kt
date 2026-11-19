@@ -46,7 +46,7 @@ class FluidPressTest {
         assertEquals(.27, spec.response, 0.0); assertEquals(.625, spec.damping, 0.0)
         assertEquals(.032, spec.impulse, 0.0); assertEquals(.5, spec.releaseResponse, 0.0)
         assertEquals(.7, spec.releaseDamping, 0.0); assertEquals(.016, spec.releaseImpulse, 0.0)
-        assertEquals(FlexPress.Large, FlexSpec.dynamic(180f).lift)
+        assertEquals(FlexPress.Large.copy(points = 4f), FlexSpec.dynamic(180f).lift)
         val resized = GlassMomentum()
         resized.advance(0f, 0.0, contact = 1f)
         val v = depth(resized, "velocity").toDouble()
@@ -80,9 +80,10 @@ class FluidPressTest {
     }
 
     @Test fun repressCancelsPendingHangWithoutResettingPositionAndTransferRetainsTheDeadline() {
-        val body = GlassMomentum()
+        val body = GlassMomentum().apply { extent = Size(64f, 64f) }
         body.advance(0f, 0.0, contact = 1f); body.advance(0f, .03, contact = 1f); body.advance(0f, 0.0)
-        val copy = GlassMomentum().apply { blendFrom(body) }
+        val copy = GlassMomentum().apply { extent = Size(64f, 64f); blendFrom(body) }
+        assertTrue(body.shape.lift > 0f); assertEquals(body.shape, copy.shape)
         for (item in listOf(body, copy)) {
             val x = depth(item); val v = depth(item, "velocity")
             item.advance(0f, 0.0, contact = 1f)
@@ -90,7 +91,7 @@ class FluidPressTest {
             item.advance(0f, .3, contact = 1f)
             assertEquals(1f, depth(item, "target"), 0f)
         }
-        assertEquals(body.shape, copy.shape)
+        assertTrue(copy.shape.lift > 0f); assertEquals(body.shape, copy.shape)
         body.reset(); assertEquals(GlassShape(), body.shape); assertTrue(body.settled)
     }
 
@@ -135,7 +136,7 @@ class FluidPressTest {
             repeat(60) { body.advance(0f, 1.0 / 120, contact = 1f, point = Offset(.8f, .2f)) }
             assertTrue(body.shape.lift > 0f)
             assertEquals(Offset.Zero, body.shape.bodyTransform(Size(64 * density, 64 * density)).drift)
-            val pulled = GlassShape(strain = .12f, depth = -.2f, lift = ln(1.25f), drift = Offset(.1f, -.1f))
+            val pulled = GlassShape(strain = .12f, depth = -.2f, lift = .25f, drift = Offset(.1f, -.1f))
             assertEquals(Offset(6.4f * density, -6.4f * density), pulled.bodyTransform(Size(64 * density, 64 * density)).drift)
             assertEquals(Offset.Zero, pulled.bodyTransform(Size(300 * density, 200 * density), anchored = true).drift)
             assertEquals(1f, pulled.liftScale(anchored = true), 0f)
@@ -143,7 +144,7 @@ class FluidPressTest {
     }
     @Test fun travelOnlyDepthKeepsTheOriginalSolverAndShapeDamping() {
         for (side in listOf(44f, 160f)) for (damping in listOf(2f, 8f, 40f)) {
-            val body = GlassMomentum().apply { spec = FlexSpec.dynamic(side) }
+            val body = GlassMomentum().apply { spec = FlexSpec.dynamic(side); extent = Size(side, side) }
             body.advance(0f, 0.0, damping = damping)
             body.advance(4f, .01, damping = damping)
             val x = channel(body, "depth", "value").toDouble()
@@ -161,12 +162,13 @@ class FluidPressTest {
     }
 
     @Test fun governingBodyTransfersItsDeadlineAndFingerPressureKeepsOriginalBounds() {
-        val a = GlassMomentum(); val b = GlassMomentum()
+        val a = GlassMomentum().apply { extent = Size(64f, 64f) }; val b = GlassMomentum().apply { extent = Size(64f, 64f) }
         a.advance(0f, 0.0, contact = 1f); a.advance(0f, .12, contact = 1f); a.advance(0f, 0.0)
         b.advance(0f, 0.0, contact = 1f); b.advance(0f, .22, contact = 1f)
         val age = a.javaClass.getDeclaredField("liftAge").apply { isAccessible = true }
         for (weight in listOf(0f, .25f, .75f, 1f)) {
-            val joined = GlassMomentum().apply { blendFrom(a, b, weight) }
+            val joined = GlassMomentum().apply { extent = Size(64f, 64f); blendFrom(a, b, weight) }
+            assertTrue(a.shape.lift > 0f && joined.shape.lift > 0f)
             assertEquals(age.getDouble(if (weight < .5f) a else b), age.getDouble(joined), 0.0)
         }
         for (edge in listOf(-.22f, .12f)) for (point in listOf(Offset(0f, .5f), Offset(.5f, -1f))) {

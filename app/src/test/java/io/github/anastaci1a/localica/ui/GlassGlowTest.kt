@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
@@ -111,8 +112,8 @@ class GlassGlowTest {
 
     @Test fun shapeSettlementIsIndependentAndInvisibleGlowCannotHoldItOpen() {
         for (fps in listOf(30, 60, 120)) for (strength in listOf(0f, 1f)) {
-            val lit = GlassMomentum()
-            val plain = GlassMomentum()
+            val lit = GlassMomentum().apply { extent = Size(44f, 44f) }
+            val plain = GlassMomentum().apply { extent = Size(44f, 44f) }
             repeat(fps * 5) { frame ->
                 val contact = if (frame < fps / 3 || frame in fps..fps + fps / 4) 1f else 0f
                 step(lit, fps, Offset(.1f + frame % 3 * .4f, .5f), contact, strength)

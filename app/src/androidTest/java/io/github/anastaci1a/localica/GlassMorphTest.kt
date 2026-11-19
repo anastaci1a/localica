@@ -343,7 +343,7 @@ class GlassMorphTest {
     }
 
     @Test fun cancelledShapeClockRetainsItsBodyUntilANewOwnerFinishesNormally() {
-        val state = GlassBodyState()
+        val state = GlassBodyState().apply { momentum.extent = Size(44f, 44f) }
         var present by mutableStateOf(true)
         var contact by mutableFloatStateOf(1f)
         compose.mainClock.autoAdvance = false

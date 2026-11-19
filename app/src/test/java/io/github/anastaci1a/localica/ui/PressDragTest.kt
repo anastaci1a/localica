@@ -92,6 +92,55 @@ class PressDragTest {
             target[0]!!.let { s -> s.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(s) }, 0f)
     }
 
+    @Test fun heldLiftAddsTheSizeLawPointsToTheLongEdgeOnBothAxes() {
+        fun points(long: Double, short: Double) = if (long < 120) 16.0 else 16 - 12 * ((short - 44) / 116).coerceIn(0.0, 1.0)
+        val sizes = listOf(Size(44f, 44f), Size(119f, 119f), Size(120f, 120f), Size(120f, 44f), Size(328f, 40f), Size(40f, 328f), Size(160f, 160f), Size(240f, 102f))
+        for (size in sizes) for (density in listOf(1f, 2.625f, 3f)) {
+            val long = size.maxDimension.toDouble(); val short = size.minDimension.toDouble()
+            val body = GlassMomentum().apply { spec = FlexSpec.dynamic(long.toFloat(), short.toFloat()); extent = size }
+            body.advance(0f, 0.0, contact = 1f, point = Offset(.5f, .5f))
+            repeat(960) { body.advance(0f, 1.0 / 120, contact = 1f, point = Offset(.5f, .5f)) }
+            assertTrue("held press settles at its target size=$size", body.finishSettlement())
+            val pixels = Size(size.width * density, size.height * density)
+            val map = body.shape.bodyTransform(pixels)
+            val p = points(long, short)
+            assertEquals("uniform lift size=$size", map.scale.x, map.scale.y, 0f)
+            assertEquals("long edge grows by P size=$size", p * density, (if (size.width >= size.height) pixels.width * (map.scale.x - 1) else pixels.height * (map.scale.y - 1)).toDouble(), 1e-3)
+            assertEquals("short edge grows by P·S/L size=$size", p * short / long * density, (minOf(pixels.width * (map.scale.x - 1), pixels.height * (map.scale.y - 1))).toDouble(), 1e-3)
+            assertEquals(Offset.Zero, map.drift)
+        }
+        assertEquals(4f, FlexSpec.dynamic(160f, 160f).lift.points, 0f); assertEquals(16f, FlexSpec.dynamic(120f, 44f).lift.points, 0f)
+        assertEquals(16f, FlexSpec.Small.lift.points, 0f)
+        val slot = GlassMomentum().apply { spec = FlexSpec.dynamic(328f, 40f); extent = Size(328f, 40f) }
+        slot.advance(0f, 0.0, contact = 1f, point = Offset(.5f, .5f))
+        repeat(960) { slot.advance(0f, 1.0 / 120, contact = 1f, point = Offset(.5f, .5f)) }
+        slot.finishSettlement()
+        val half = 328f * slot.shape.bodyTransform(Size(328f, 40f)).scale.x / 2
+        assertEquals(8f, 180f - half, 1e-3f); assertEquals(352f, 180f + half, 1e-3f)
+        val unsized = GlassMomentum().apply { spec = FlexSpec.dynamic(328f, 40f) }
+        repeat(120) { unsized.advance(0f, 1.0 / 120, contact = 1f, point = Offset(.5f, .5f)) }
+        assertEquals(0f, unsized.shape.lift, 0f)
+    }
+
+    @Test fun ordinaryAxesDropTheAreaTermWhileConditionalAndAnchoredBodiesKeepTheirTransformBits() {
+        val size = Size(300f, 120f)
+        for (vertical in listOf(false, true)) for (shape in listOf(GlassShape(.1f, -.2f), GlassShape(-.07f, -.24f, lift = .05f, drift = Offset(.02f, -.01f)))) {
+            val s = if (vertical) -shape.strain else shape.strain
+            val map = shape.bodyTransform(size, vertical)
+            assertEquals(Offset(exp(s) * (1f + shape.lift), exp(-s) * (1f + shape.lift)), map.scale)
+            assertEquals(Offset(shape.drift.x * 300f, shape.drift.y * 120f), map.drift)
+            val anchored = shape.bodyTransform(size, vertical, anchored = true)
+            assertEquals(GlassBodyTransform(Offset(shape.scaleX(vertical) * exp(0f), shape.scaleY(vertical) * exp(0f))), anchored)
+        }
+        val conditional = GlassMomentum(FlexSpec.Small.copy(scaleGain = -(16f / 64f) / .24f)).apply { extent = Size(64f, 64f) }
+        conditional.advance(0f, 0.0, contact = 1f, point = Offset(.5f, .5f))
+        repeat(30) { conditional.advance(2f, 1.0 / 120, contact = 1f, point = Offset(.9f, .5f)) }
+        val shape = conditional.shape
+        assertEquals(0f, shape.lift, 0f); assertTrue(shape.scale != null && shape.depth < 0f)
+        for (vertical in listOf(false, true)) assertEquals(GlassBodyTransform(Offset(shape.scaleX(vertical) * exp(shape.lift), shape.scaleY(vertical) * exp(shape.lift)),
+            Offset(shape.drift.x * 64f, shape.drift.y * 64f)), shape.bodyTransform(Size(64f, 64f), vertical))
+    }
+
     @Test fun verticalBodiesStretchInScreenSpaceAndReleaseSettles() {
         val size = Size(44f, 44f); val to = Offset(.5f + 150f / 44, .2f)
         assertEquals(held(to).bodyTransform(size), held(to, vertical = true).bodyTransform(size, vertical = true))

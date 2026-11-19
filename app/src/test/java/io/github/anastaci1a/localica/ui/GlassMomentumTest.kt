@@ -2,13 +2,15 @@ package io.github.anastaci1a.localica.ui
 
 import org.junit.Assert.*
 import org.junit.Test
+import androidx.compose.ui.geometry.Size
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import kotlin.math.*
 
 class GlassMomentumTest {
+    private fun sized() = GlassMomentum().apply { extent = Size(44f, 44f) }
     @Test fun normalConvergencePublishesExactTargetsInsteadOfResidualLayoutRounding() {
         for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f)) {
-            val body = GlassMomentum()
+            val body = sized()
             repeat(fps) { body.advance(3f, (1f / fps).toDouble(), pressure = -.15f, contact = 1f, damping = damping) }
             var frames = 0
             do { body.advance(0f, (1f / fps).toDouble(), damping = damping); frames++ } while (!body.settled && frames < fps * 20)
@@ -22,9 +24,10 @@ class GlassMomentumTest {
     }
 
     @Test fun unfinishedSettlementPreservesTheShapeAndVelocityForTheNextOwner() {
-        val body = GlassMomentum(); val uninterrupted = GlassMomentum()
+        val body = sized(); val uninterrupted = sized()
         repeat(5) { for (item in listOf(body, uninterrupted)) item.advance(3f, (1f / 60).toDouble(), contact = 1f) }
         val shape = body.shape
+        assertTrue(shape.lift > 0f)
         assertFalse(body.finishSettlement())
         assertEquals(shape, body.shape)
         repeat(120) {
@@ -61,11 +64,12 @@ class GlassMomentumTest {
 
     @Test fun splittingRetainsReleaseEnergyAndSubsequentMotion() {
         for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f)) {
-            val joined = GlassMomentum()
+            val joined = sized()
             repeat(fps / 4) { joined.advance(2f, (1f / fps).toDouble(), contact = 1f, damping = damping) }
             repeat(3) { joined.advance(0f, (1f / fps).toDouble(), damping = damping) }
-            val split = GlassMomentum().apply { blendFrom(joined) }
+            val split = sized().apply { blendFrom(joined) }
             assertEquals(joined.shape, split.shape)
+            assertTrue(split.shape.lift > 0f)
             joined.advance(0f, 0.0, damping = damping)
             split.advance(0f, 0.0, damping = damping)
             repeat(fps) {
@@ -78,10 +82,11 @@ class GlassMomentumTest {
     }
 
     @Test fun rejoiningIsIndependentOfWhichHalfOwnsTheMergedClock() {
-        val left = GlassMomentum(); val right = GlassMomentum()
+        val left = sized(); val right = sized()
         repeat(20) { left.advance(2f, (1f / 120).toDouble(), contact = 1f); right.advance(-1f, (1f / 120).toDouble()) }
-        val joined = GlassMomentum().apply { blendFrom(left, right, .5f) }
-        val reversed = GlassMomentum().apply { blendFrom(right, left, .5f) }
+        val joined = sized().apply { blendFrom(left, right, .5f) }
+        val reversed = sized().apply { blendFrom(right, left, .5f) }
+        assertTrue(joined.shape.lift > 0f && reversed.shape.lift > 0f)
         left.blendFrom(left, right, .5f)
         for (body in listOf(joined, reversed, left)) body.advance(0f, 0.0)
         repeat(240) {
@@ -149,7 +154,7 @@ class GlassMomentumTest {
     }
 
     @Test fun heldAccelerationIsSymmetricAndConvergesToTheStationaryContactDepth() {
-        val forward = GlassMomentum(); val backward = GlassMomentum(); val stationary = GlassMomentum()
+        val forward = sized(); val backward = sized(); val stationary = sized()
         repeat(180) { for (body in listOf(forward, backward, stationary)) body.advance(0f, (1f / 60).toDouble(), contact = 1f) }
         var depthImpulse = 0f
         repeat(60) {
@@ -314,7 +319,7 @@ class GlassMomentumTest {
     }
 
     @Test fun invalidInputAndLiveDampingChangesKeepTheBodyFiniteAndContinuous() {
-        val body = GlassMomentum()
+        val body = sized()
         repeat(10) { body.advance(3f, (1f / 60).toDouble(), contact = 1f, damping = 2f) }
         val previous = body.shape
         body.advance(0f, 0.0, contact = 1f, damping = 40f)

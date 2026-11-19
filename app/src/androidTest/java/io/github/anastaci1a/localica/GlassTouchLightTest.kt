@@ -275,9 +275,10 @@ class GlassTouchLightTest {
         compose.mainClock.autoAdvance = false
         compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f)) {
-                val lift = if (anchored) 1f else exp(shape.lift)
-                val ax = exp(shape.strain - shape.depth / 2) * lift
-                val ay = exp(-shape.strain - shape.depth / 2) * lift
+                val lift = if (anchored) 1f else 1f + shape.lift
+                val area = if (anchored) shape.depth / 2 else 0f
+                val ax = exp(shape.strain - area) * lift
+                val ay = exp(-shape.strain - area) * lift
                 val dx = if (anchored) 0f else shape.drift.x * 160
                 val dy = if (anchored) 0f else shape.drift.y * 80
                 val mapped = if (wrong) light else light.copy(point = Offset(.5f + (light.point.x - .5f - dx / 160) / ax, .5f + (light.point.y - .5f - dy / 80) / ay))
@@ -385,6 +386,58 @@ class GlassTouchLightTest {
         compose.mainClock.advanceTimeBy(1500)
         compose.runOnIdle { assertEquals("re-press at the same point measures from its new DOWN", 0f, contact.state.output.value.drift.x, 1e-4f) }
         node.performTouchInput { up() }
+    }
+
+    @Test fun pressedBodiesGrowTheirLongEdgeByTheSizeLawAndTheInsetSearchSlotStaysInTheWindow() {
+        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+        val sizes = listOf(44 to 44, 120 to 44, 328 to 40)
+        val contacts = sizes.map { GlassContact() }
+        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f, touchLight = 0f)) {
+                Column(Modifier.width(360.dp).testTag("window"), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                    sizes.forEachIndexed { i, (w, h) -> Box(Modifier.padding(vertical = 24.dp)) {
+                        LiquidGlassSurface(Modifier.size(w.dp, h.dp).testTag("body-$i"), source = null, tint = Color.White,
+                            cornerRadius = (h / 2).dp, shadow = false, sharedContact = contacts[i])
+                    } }
+                }
+            }
+        } } } }
+        val window = compose.onNodeWithTag("window")
+        val frame = window.fetchSemanticsNode().boundsInRoot
+        val density = compose.density.density
+        compose.mainClock.autoAdvance = false
+        fun span(row: Int): Pair<Int, Int> {
+            val image = window.captureToImage(); val all = pixels(image)
+            val line = IntArray(image.width) { x -> listOf(0, 8, 16).maxOf { channel(all[row * image.width + x], it) } }
+            val half = line.max() / 2
+            return line.indexOfFirst { it > half } to line.indexOfLast { it > half }
+        }
+        for (mode in GlassRendererMode.entries) {
+            compose.runOnIdle { runtime.request(mode) }
+            compose.mainClock.advanceTimeBy(1500)
+            sizes.forEachIndexed { i, (w, h) ->
+                val body = compose.onNodeWithTag("body-$i")
+                val row = (body.fetchSemanticsNode().boundsInRoot.center.y - frame.top).roundToInt()
+                val rest = span(row)
+                body.performTouchInput { down(center) }
+                compose.mainClock.advanceTimeBy(2500)
+                compose.runOnIdle { assertTrue("held body settles mode=$mode i=$i", contacts[i].state.momentum.settled) }
+                val held = span(row)
+                body.performTouchInput { up() }
+                compose.mainClock.advanceTimeBy(10000)
+                val p = if (w < 120) 16f else 16f - 12f * ((h - 44f) / 116f).coerceIn(0f, 1f)
+                val growth = (held.second - held.first) - (rest.second - rest.first)
+                android.util.Log.i("Localica1080", "mode=$mode size=${w}x$h density=$density rest=$rest held=$held growth=$growth expected=${p * density}")
+                assertEquals("rest layout mode=$mode i=$i", w * density, (rest.second - rest.first + 1).toFloat(), 1.5f)
+                assertEquals("long edge grows by P mode=$mode i=$i", p * density, growth.toFloat(), 1.5f)
+                assertEquals("pressed body stays centred mode=$mode i=$i", (rest.first + rest.second) / 2f, (held.first + held.second) / 2f, 1f)
+                if (w == 328) {
+                    assertEquals("search slot rests at its 16 dp inset mode=$mode", 16 * density, rest.first.toFloat(), 1.5f)
+                    assertTrue("pressed search slot stays inside the window mode=$mode held=$held", held.first > 0 && held.second < frame.width - 1)
+                    assertEquals("pressed search slot keeps 8 dp to the window mode=$mode", 8 * density, held.first.toFloat(), 1.5f)
+                }
+            }
+        }
     }
 
     @Test fun nonScalingSurfaceObservesLightWithoutMovingItsForegroundOrTakingTheClick() {
@@ -525,8 +578,8 @@ class GlassTouchLightTest {
     }
 
     @Test fun oneOwnerSurvivesRepressAndHandoffWhileDisabledGlowSchedulesNothing() {
-        val shared = GlassBodyState()
-        val reference = GlassBodyState()
+        val shared = GlassBodyState().apply { momentum.extent = Size(40f, 40f) }
+        val reference = GlassBodyState().apply { momentum.extent = Size(40f, 40f) }
         val reads = AtomicInteger()
         var held by mutableStateOf(false)
         var modal by mutableStateOf(false)
@@ -585,7 +638,7 @@ class GlassTouchLightTest {
         }
         compose.mainClock.advanceTimeBy(1200)
         compose.runOnIdle { assertEquals(Offset(.6f, .4f), shared.glow.value.point) }
-        val model = compose.runOnIdle { GlassMomentum().also { it.blendFrom(shared.momentum) } }
+        val model = compose.runOnIdle { GlassMomentum().also { it.extent = Size(40f, 40f); it.blendFrom(shared.momentum) } }
         val before = compose.runOnIdle { shared.glow.value }
         compose.runOnIdle { modal = !modal; point = Offset(.1f, .9f) }
         compose.runOnIdle { assertEquals("handoff has no reset", before, shared.glow.value) }
@@ -594,7 +647,7 @@ class GlassTouchLightTest {
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
             assertEquals("handoff admission preserves energy: expected x=${model.glow.point.x} y=${model.glow.point.y}; actual x=${shared.glow.value.point.x} y=${shared.glow.value.point.y}", model.glow, shared.glow.value)
-            assertEquals(model.shape, shared.output.value)
+            assertTrue(shared.output.value.lift > 0f); assertEquals(model.shape, shared.output.value)
         }
         val handoffAdmission = compose.mainClock.currentTime
         compose.mainClock.advanceTimeByFrame()
@@ -603,11 +656,11 @@ class GlassTouchLightTest {
         model.finishSettlement()
         compose.runOnIdle {
             assertEquals("the first positive handoff interval advances exactly once", model.glow, shared.glow.value)
-            assertEquals(model.shape, shared.output.value)
+            assertTrue(shared.output.value.lift > 0f); assertEquals(model.shape, shared.output.value)
             held = false
         }
         compose.mainClock.advanceTimeBy(32)
-        val repressed = compose.runOnIdle { GlassMomentum().also { it.blendFrom(shared.momentum) } }
+        val repressed = compose.runOnIdle { GlassMomentum().also { it.extent = Size(40f, 40f); it.blendFrom(shared.momentum) } }
         compose.runOnIdle { point = Offset(.7f, .4f); held = true }
         repressed.advance(0f, .016 * ownerSpeed, contact = 1f, point = point)
         repressed.targetGlow(Offset(.7f, .4f), 1f, 1f)
@@ -615,6 +668,7 @@ class GlassTouchLightTest {
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
             assertEquals("re-press preserves retired energy and starts a fresh current record", repressed.glow, shared.glow.value)
+            assertTrue(shared.output.value.lift > 0f)
             held = false
         }
         compose.mainClock.advanceTimeBy(10000)

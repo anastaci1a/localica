@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.ui.geometry.Size
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.abs
@@ -17,7 +18,7 @@ class GlassReversalTest {
     @Test fun abruptHeldReversalIsSymmetricBoundedAndFrameRateStable() {
         val peaks = mutableListOf<Float>()
         for (fps in listOf(30, 60, 120)) {
-            val forward = GlassMomentum(); val backward = GlassMomentum()
+            val forward = GlassMomentum().apply { extent = Size(44f, 44f) }; val backward = GlassMomentum().apply { extent = Size(44f, 44f) }
             repeat(fps * 2) {
                 forward.advance(4f, (1f / fps).toDouble(), contact = 1f)
                 backward.advance(-4f, (1f / fps).toDouble(), contact = 1f)
@@ -42,7 +43,7 @@ class GlassReversalTest {
         assertEquals(1f, glassMotionSpeedChange(1f, -4f), 0f)
         assertEquals(-5f, glassMotionSpeedChange(4f, -1f), 0f)
         for (contact in listOf(0f, 1f)) {
-            val forward = GlassMomentum(); val backward = GlassMomentum()
+            val forward = GlassMomentum().apply { extent = Size(44f, 44f) }; val backward = GlassMomentum().apply { extent = Size(44f, 44f) }
             for (speed in listOf(1f, -4f, 4f, -1f, 30f, -30f, 1000f, -1000f, 0f)) {
                 repeat(6) {
                     forward.advance(speed, (1f / 60).toDouble(), contact = contact)
