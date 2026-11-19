@@ -4,6 +4,8 @@ import io.github.anastaci1a.localica.ui.spec.GlassShadowStrength
 import io.github.anastaci1a.localica.ui.spec.GlassShadowSpread
 import io.github.anastaci1a.localica.ui.spec.GlassContrast
 import io.github.anastaci1a.localica.ui.spec.GlassContrastWeightDefault
+import io.github.anastaci1a.localica.ui.spec.Radius
+import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 
 import io.github.anastaci1a.localica.ui.components.MaterialAreaReduction
 import io.github.anastaci1a.localica.ui.components.rememberMaterialAreaReduction
@@ -391,8 +393,9 @@ internal fun GlassPanel(modifier: Modifier = Modifier,
     val lightMix = source?.lightMix ?: 0f
     val material = rememberFrostedBackdrop(source, dark = lightMix >= .5f, lightMix = lightMix)
     val density = LocalDensity.current
-    SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { 28.dp.toPx() } }
-    LiquidGlassSurface(modifier, source = source, cornerRadius = 28.dp, pressFeedback = false, recording = material) {
+    val corner = StockUiSpec.radius.getValue(Radius.Panel)
+    SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { corner.toPx() } }
+    LiquidGlassSurface(modifier, source = source, cornerRadius = corner, pressFeedback = false, recording = material) {
         CompositionLocalProvider(LocalFrostedBackdrop provides material) { content() }
     }
 }
