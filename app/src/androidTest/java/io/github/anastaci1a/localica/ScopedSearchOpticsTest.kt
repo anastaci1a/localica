@@ -74,11 +74,11 @@ class ScopedSearchOpticsTest {
         val listening = ListeningQueue(name = "Optics", entries = tracks.map { QueueEntry(track = it) })
         val route = BrowseRoute(if (queue) MainTab.Queues else MainTab.Playlists,
             MediaRef(if (queue) MediaKind.Queue else MediaKind.Playlist, if (queue) listening.id else playlist.id), "Optics")
-        var lens by mutableStateOf(true)
-        compose.setContent { CompositionLocalProvider(LocalGlassVisible provides lens) { EngineTheme(reduced = true) {
+        val optics = DefaultRefractionFixture()
+        compose.setContent { EngineTheme(reduced = true) {
 
                 val backing = rememberFrostedBackdrop(Unit)
-                Box(Modifier.size(320.dp, 500.dp)) {
+                optics.Scene(Modifier.size(320.dp, 500.dp)) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backing)) {
                         val cell = 10.dp.toPx()
                         for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt())
@@ -93,7 +93,7 @@ class ScopedSearchOpticsTest {
                     }
                 }
 
-        } } }
+        } }
         val pill = compose.onNodeWithTag("list-search-pill")
         compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().isNotEmpty() }
         if (!queue) pill.performScrollTo()
@@ -111,9 +111,16 @@ class ScopedSearchOpticsTest {
             assertTrue("None presents a solid average behind the search foreground",
                 clear.maxOf { it.red } - clear.minOf { it.red } < .035f)
         }
-        // Depth shapes only the highlight. Hiding the lens shows the same scene unrefracted, and with no tint,
-        // contrast or blur only the refraction lookups separate the two captures.
-        compose.runOnIdle { if (android.os.Build.VERSION.SDK_INT >= 33) lens = false }
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            val reference = optics.capture(compose, pill, 0f)
+            val minimum = before.width * before.height / 20
+            optics.assertDisplacement(before, reference, .15f, minimum)
+            val withoutRefraction = optics.capture(compose, pill, 0f)
+            org.junit.Assert.assertThrows(AssertionError::class.java) {
+                optics.assertDisplacement(withoutRefraction, reference, .15f, minimum)
+            }
+            return
+        }
         compose.mainClock.advanceTimeBy(1200)
         val image = pill.captureToImage()
         val after = image.toPixelMap()
@@ -124,8 +131,6 @@ class ScopedSearchOpticsTest {
         var changed = 0
         for (y in 0 until before.height) for (x in 0 until before.width)
             if (kotlin.math.abs(before[x, y].red - after[x, y].red) > .15f) changed++
-        if (android.os.Build.VERSION.SDK_INT >= 33)
-            assertTrue("Scoped search needs spatial refraction, changed=$changed", changed > before.width * before.height / 20)
-        else org.junit.Assert.assertEquals("The average fallback stays stable", 0, changed)
+        org.junit.Assert.assertEquals("The average fallback stays stable", 0, changed)
     }
 }

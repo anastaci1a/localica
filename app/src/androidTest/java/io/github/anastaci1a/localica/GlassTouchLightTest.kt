@@ -458,26 +458,25 @@ class GlassTouchLightTest {
         compose.runOnIdle { assertFalse(contact.pressed) }
     }
 
-    @Test fun oneOwnerSurvivesRepressAndHandoffWhileDisabledGlowSchedulesNothing() {
+    @Test fun oneOwnerSurvivesRepressAndHandoffWithTheDefaultGlow() {
         val shared = GlassBodyState()
         val reference = GlassBodyState()
         val reads = AtomicInteger()
         var held by mutableStateOf(false)
         var modal by mutableStateOf(false)
         var point by mutableStateOf(Offset(.2f, .7f))
-        var lightEnabled by mutableStateOf(false)
         var reduced by mutableStateOf(false)
         var ownerSpeed = 1f
         compose.setContent { EngineTheme {
             CompositionLocalProvider( LocalReducedMotion provides reduced) {
                 val speed = LocalMotionSpeed.current
                 SideEffect { ownerSpeed = speed }
-                rememberGlassBody({ reads.incrementAndGet(); 0f }, contact = { if (held) 1f else 0f }, state = shared, lightContact = { if (lightEnabled && held) 1f else 0f },
+                rememberGlassBody({ reads.incrementAndGet(); 0f }, contact = { if (held) 1f else 0f }, state = shared,
                     active = { !modal }, point = { point })
-                rememberGlassBody({ reads.incrementAndGet(); 0f }, contact = { if (held) 1f else 0f }, state = shared, lightContact = { if (lightEnabled && held) 1f else 0f },
+                rememberGlassBody({ reads.incrementAndGet(); 0f }, contact = { if (held) 1f else 0f }, state = shared,
                     active = { modal }, point = { point })
-                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, lightContact = { if (lightEnabled && held) 1f else 0f }, active = { !modal }, point = { point })
-                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, lightContact = { if (lightEnabled && held) 1f else 0f }, active = { modal }, point = { point })
+                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { !modal }, point = { point })
+                rememberGlassBody({ 0f }, contact = { if (held) 1f else 0f }, state = reference, active = { modal }, point = { point })
                 Box(Modifier.size(40.dp))
             }
         } }
@@ -492,16 +491,15 @@ class GlassTouchLightTest {
             }
             compose.mainClock.advanceTimeByFrame()
             compose.runOnIdle {
-                assertEquals("disabled shape frame=$frame", reference.output.value, shared.output.value)
-                assertEquals("disabled clock convergence frame=$frame", reference.momentum.settled, shared.momentum.settled)
-                assertEquals(GlassGlow(), shared.glow.value)
+                assertEquals("default shape frame=$frame", reference.output.value, shared.output.value)
+                assertEquals("default clock convergence frame=$frame", reference.momentum.settled, shared.momentum.settled)
             }
         }
         compose.mainClock.advanceTimeBy(3000)
-        compose.runOnIdle { assertTrue(shared.momentum.settled); reads.set(0); point = Offset(.9f, .1f) }
+        compose.runOnIdle { assertTrue(shared.momentum.settled); reads.set(0) }
         compose.mainClock.advanceTimeBy(500)
-        assertEquals("disabled point changes do not wake either owner", 0, reads.get())
-        compose.runOnIdle { lightEnabled = true; held = true }
+        assertEquals("released default owners suspend", 0, reads.get())
+        compose.runOnIdle { point = Offset(.9f, .1f); held = true }
         compose.mainClock.advanceTimeBy(1200)
         val trackingStart = compose.runOnIdle { assertTrue(shared.momentum.settled); point = Offset(.6f, .4f); shared.glow.value.point }
         compose.mainClock.advanceTimeByFrame() // h=0 admission observes the point without advancing it.

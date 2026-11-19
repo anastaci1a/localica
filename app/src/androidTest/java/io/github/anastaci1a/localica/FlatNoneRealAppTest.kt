@@ -19,14 +19,12 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
 
-/** MainActivity, real browser recordings, native windows and playback under renderer None (#691). */
+/** MainActivity, real browser recordings, native windows and playback with the default material. */
 class FlatNoneRealAppTest {
     @Test fun librarySongsAlbumPlayerAndPopupsStayAlive() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val device = UiDevice.getInstance(instrumentation)
-        val events = java.util.Collections.synchronizedList(mutableListOf<String>())
-        instrumentation.runOnMainSync { io.github.anastaci1a.localica.ui.GlassWork.observer = { events.add(it) } }
         val preferences = InterfacePreferences(context)
         val original = preferences.read()
         val actionPreferences = PlayerActionPreferences(context)
@@ -53,7 +51,6 @@ class FlatNoneRealAppTest {
         fun checkpoint(name: String) {
             android.util.Log.i("FlatNoneRealApp", "checkpoint=$name")
             SystemClock.sleep(700)
-            assertEquals("Glass work at $name: $events", emptyList<String>(), events.toList())
             assertNotNull("Activity disappeared at $name", device.findObject(By.pkg(context.packageName)))
             assertNull("Crash dialog at $name", device.findObject(By.textContains("keeps stopping")))
             val base = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
@@ -102,7 +99,6 @@ class FlatNoneRealAppTest {
             walkFailure = failure
             throw failure
         } finally {
-            instrumentation.runOnMainSync { io.github.anastaci1a.localica.ui.GlassWork.observer = null }
             var retired = false
             val retirement = org.json.JSONObject().put("fixture", file.path)
             val cleanupFailure = runCatching { playback?.let { connection ->

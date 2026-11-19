@@ -56,10 +56,8 @@ class LiquidGlassTest {
         compose.mainClock.autoAdvance = true
     }
 
-    @Test fun adaptiveContrastPreservesBlackToGrayOrderingAtEveryStrength() {
+    @Test fun defaultMaterialPreservesBlackToGrayOrderingInBothPolarities() {
         org.junit.Assume.assumeTrue(Build.VERSION.SDK_INT >= 33)
-        var strength by mutableFloatStateOf(0f)
-        var whiteTint by mutableFloatStateOf(0f)
         var dark by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
             Box(Modifier.fillMaxSize()) {
@@ -71,24 +69,23 @@ class LiquidGlassTest {
                     refraction = 0f, inkOverride = if (dark) Color.White else Color.Black)
             }
          } }
-        for (polarity in listOf(false, true)) for (tint in listOf(0f, .2f, .6f, 1f)) for (contrast in listOf(0f, .4f, 1f)) {
-            compose.runOnIdle { dark = polarity; whiteTint = tint; strength = contrast }
+        for (polarity in listOf(false, true)) {
+            compose.runOnIdle { dark = polarity }
             val pixels = compose.onNodeWithTag("ramp").captureToImage().toPixelMap()
             val ramp = (0..15).map { pixels[(pixels.width * (it + .5f) / 16).toInt(), pixels.height / 2].red }
-            assertTrue("No tonal reversal (dark=$polarity tint=$tint contrast=$contrast): $ramp", ramp.zipWithNext().all { (a, b) -> a <= b + .005f })
+            assertTrue("No tonal reversal at the default (dark=$polarity): $ramp", ramp.zipWithNext().all { (a, b) -> a <= b + .005f })
         }
     }
 
     @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun tintLiftsShadowsMoreThanHighlightsWithoutBleachingYellow() {
         org.junit.Assume.assumeTrue("Per-pixel tone mapping requires runtime shaders", Build.VERSION.SDK_INT >= 33)
-        var tint by mutableFloatStateOf(0f)
+        val original = listOf(Color(.03f, .03f, .03f), Color(.4f, .4f, .4f), Color(.9f, .9f, .9f), Color.Yellow)
         compose.setContent { LocalicaTheme {
             Box(Modifier.fillMaxSize()) {
-                val source = rememberFrostedBackdrop(Unit)
+                val source = rememberFrostedBackdrop(Unit, dark = false)
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
-                    val colors = listOf(Color(.03f, .03f, .03f), Color(.4f, .4f, .4f), Color(.9f, .9f, .9f), Color.Yellow)
-                    colors.forEachIndexed { i, color -> drawRect(color, Offset(size.width * i / 4f, 0f), Size(size.width / 4f, size.height)) }
+                    original.forEachIndexed { i, color -> drawRect(color, Offset(size.width * i / 4f, 0f), Size(size.width / 4f, size.height)) }
                 }
                 LiquidGlassSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(96.dp).testTag("tonal-lens"), source, refraction = 0f)
             }
@@ -96,15 +93,14 @@ class LiquidGlassTest {
         fun colors() = compose.onNodeWithTag("tonal-lens").captureToImage().toPixelMap().let { pixels ->
             (0..3).map { pixels[(pixels.width * (it + .5f) / 4).toInt(), pixels.height / 2] }
         }
-        val original = colors()
-        compose.runOnIdle { tint = .18f }
         val toned = colors()
         val lift = (0..2).map { toned[it].red - original[it].red }
         assertTrue("Shadows receive a visible, stronger lift: $lift", lift[0] > .15f && lift[0] > lift[1] && lift[1] > lift[2])
-        assertTrue("Highlights remain close to their original brightness", lift[2] < .02f)
-        assertTrue("Bright yellow retains saturation: ${toned[3]}", toned[3].blue < .04f)
-        compose.runOnIdle { tint = 1f }
-        assertTrue("Full tint remains available", colors().all { it.red > .98f && it.green > .98f && it.blue > .98f })
+        // Frozen GlassFillRows: gray red = .7001953 + .3179475 * input; yellow = (1, 1, .4385375).
+        val expected = listOf(.7097337f, .8273743f, .9863481f)
+        for (i in expected.indices) assertEquals("Default face row $i", expected[i], toned[i].red, .02f)
+        assertEquals("Yellow keeps the model's blue channel", .4385375f, toned[3].blue, .04f)
+        assertTrue("Bright yellow retains its hue: ${toned[3]}", toned[3].red > toned[3].blue + .5f && toned[3].green > toned[3].blue + .5f)
     }
 
     @Test fun paddedBackdropDoesNotExpandAContentSizedControl() {
@@ -143,7 +139,7 @@ class LiquidGlassTest {
     @Test fun transparentListPixelsLeaveTheDrawerVisibleThroughTheLens() {
         lateinit var source: FrostedBackdrop
         compose.setContent { ClearGlassTheme { Box(Modifier.fillMaxSize().background(Color.Red)) {
-            source = rememberFrostedBackdrop(Unit)
+            source = rememberFrostedBackdrop(Unit, dark = true)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                 // A transparent list over a drawer must not replace that drawer with raw artwork.
                 drawRect(Color.Blue, Offset(size.width / 2, 0f), Size(size.width / 2, size.height))
@@ -163,8 +159,8 @@ class LiquidGlassTest {
                 interior.red > .97f && interior.green < .01f && interior.blue < .01f)
         } else {
             for (color in listOf(edge, interior)) {
-                assertEquals("Half-transparent average keeps the red drawer beneath it", .5f, color.red, .04f)
-                assertEquals("Blue occupies half of the sampled footprint", .5f, color.blue, .04f)
+                assertEquals("Half-transparent default tone keeps the red drawer beneath it", .5f + .5f * .0591f, color.red, .04f)
+                assertEquals("The default compressed blue occupies half of the sampled footprint", .5f * .75f, color.blue, .04f)
                 assertTrue("No white coating is introduced", color.green < .04f)
             }
         }
@@ -192,12 +188,18 @@ class LiquidGlassTest {
         val right = pixels[pixels.width * 3 / 4, y]
         assertTrue("Keep the red backdrop visible: $left", left.red > left.blue + .15f)
         assertTrue("Keep the blue backdrop visible: $right", right.blue > right.red + .15f)
-        if (dark) assertTrue("Clear lens centers must not acquire a white frost: $left / $right", left.green < .03f && right.green < .03f)
+        if (dark) {
+            // Frozen .06 tint and .25 quadratic compression, evaluated at red/blue luma.
+            assertEquals("Red keeps the default light-ink channel", .0473f, left.green, .03f)
+            assertEquals("Blue keeps the default light-ink channel", .0551f, right.green, .03f)
+        }
         else {
             assertEquals("Red backdrop receives the face row", .7001953f - .0599365f, left.green, .03f)
             assertEquals("Blue backdrop receives the face row", .7001953f - .0203705f, right.green, .03f)
         }
-        assertTrue("The outer shadow must not darken the transparent center: $left / $right", left.red > .97f && right.blue > .97f)
+        val dominant = if (dark) .75f else 1f
+        assertEquals("The shadow does not darken the modelled red center", dominant, left.red, .03f)
+        assertEquals("The shadow does not darken the modelled blue center", dominant, right.blue, .03f)
         val center = pixels[pixels.width / 2, y]
         assertTrue("Foreground must remain black and unfiltered: $center", center.red + center.green + center.blue < .05f)
         val previous = source.fallback

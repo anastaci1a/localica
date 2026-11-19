@@ -39,16 +39,16 @@ class FilterBackdropTest {
         val art = BrowseArtworkScope().apply {
             tracks.forEach { hold(it.id, listOf(it.uri), ArtworkCache.CachedArtwork(bitmap, 2048)) }
         }
-        var lens by mutableStateOf(true)
+        val optics = DefaultRefractionFixture()
         try {
-            compose.setContent { CompositionLocalProvider(LocalGlassVisible provides lens) { EngineTheme(reduced = true) {
+            compose.setContent { EngineTheme(reduced = true) {
                 CompositionLocalProvider(LocalBrowseArtwork provides art) {
-                    Box(Modifier.size(320.dp, 500.dp)) {
+                    optics.Scene(Modifier.size(320.dp, 500.dp)) {
                         BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
                             PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false, reducedMotion = true)
                     }
                 }
-            } } }
+            } }
             compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("browser-list").performScrollToIndex(3)
             // End Search autofocus and let the older Android snapshot refresh settle.
@@ -67,21 +67,19 @@ class FilterBackdropTest {
                 green += before[x, y].green; samples++
             }
             assertTrue("The lens must include the white fade, not reveal raw red/blue art: ${green / samples}", green / samples > .3f)
-            // Depth shapes only the highlight. Hiding the lens shows the same scene unrefracted, and with no tint,
-            // contrast or blur only the refraction lookups separate the two captures.
-            compose.runOnIdle { if (android.os.Build.VERSION.SDK_INT >= 33) lens = false }
-            compose.mainClock.advanceTimeBy(1200)
-            val after = filter.captureToImage().toPixelMap()
-            var refracted = 0
-            for (y in 0 until before.height) for (x in 0 until before.width) {
-                val a = before[x, y]; val b = after[x, y]
-                // Color differences exclude black lettering and neutral illumination.
-                if (kotlin.math.abs((a.red - a.blue) - (b.red - b.blue)) > .02f) refracted++
-            }
             if (android.os.Build.VERSION.SDK_INT >= 33) {
-                assertTrue("Filter optics must move colored source pixels, changed=$refracted", refracted > 30)
+                val reference = optics.capture(compose, filter, 0f)
+                optics.assertDisplacement(before, reference, .02f, 30)
+                val withoutRefraction = optics.capture(compose, filter, 0f)
+                org.junit.Assert.assertThrows(AssertionError::class.java) {
+                    optics.assertDisplacement(withoutRefraction, reference, .02f, 30)
+                }
             } else {
-                org.junit.Assert.assertEquals("The average fallback stays stable", 0, refracted)
+                val after = filter.captureToImage().toPixelMap()
+                var changed = 0
+                for (y in 0 until before.height) for (x in 0 until before.width)
+                    if (kotlin.math.abs((before[x, y].red - before[x, y].blue) - (after[x, y].red - after[x, y].blue)) > .02f) changed++
+                org.junit.Assert.assertEquals("The average fallback stays stable", 0, changed)
             }
         } finally { prefs.write(route, previous, false) }
     }

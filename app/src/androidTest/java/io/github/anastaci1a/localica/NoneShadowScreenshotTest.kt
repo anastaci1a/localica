@@ -75,8 +75,11 @@ class NoneShadowScreenshotTest {
         compose.runOnIdle { dark = false }
         // API 26-32 average materials draw nothing until the first scene readback lands; never compare that frame.
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source().snapshot != null }
+        compose.runOnIdle { assertFalse("The first source uses dark ink", source().dark); assertEquals(0f, source().lightMix, 0f) }
         val normal = screenshot()
         compose.runOnIdle { dark = true }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue("The second source uses light ink", source().dark); assertEquals(1f, source().lightMix, 0f) }
         val none = screenshot().also { assertTrue("The shared scene remains recorded", source().recorded) }
         sideBySide(name, normal, none)
         return normal to none
@@ -124,7 +127,10 @@ class NoneShadowScreenshotTest {
                 val delta = maxOf(kotlin.math.abs((p shr 16 and 255) - (q shr 16 and 255)),
                     kotlin.math.abs((p shr 8 and 255) - (q shr 8 and 255)), kotlin.math.abs((p and 255) - (q and 255)))
                 // Two levels allow the retained-raster handoff rounding seen without any renderer change.
-                if (delta > 2) { differing++; largest = maxOf(largest, delta); box.union(x, y) }
+                if (delta > 2) {
+                    if (differing < 32) println("Default polarity outside shadow: x=$x y=$y first=${Integer.toHexString(p)} second=${Integer.toHexString(q)} body=$body")
+                    differing++; largest = maxOf(largest, delta); box.union(x, y)
+                }
             }
         compose.runOnIdle { popup = true }
         capture("popup") { source }
@@ -139,7 +145,7 @@ class NoneShadowScreenshotTest {
         lateinit var source: FrostedBackdrop
 
         compose.setContent {  LocalicaTheme {
-            source = rememberFrostedBackdrop(Unit, dark = false)
+            source = rememberFrostedBackdrop(Unit, dark = dark)
             CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalSessionSelection provides remember { SessionSelection() }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     Page(source)

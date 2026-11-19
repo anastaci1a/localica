@@ -196,12 +196,14 @@ class PlayerTransitionTest {
         lateinit var scope: CoroutineScope
         lateinit var backdrop: FrostedBackdrop
         compose.setContent { LocalicaTheme {
-            // Isolate outline coverage from the independently tested brightness trim.
+            // White recording gives the default light-ink endpoint .75; the bare page remains magenta.
 
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.Magenta)) {
                     scope = rememberCoroutineScope()
                     backdrop = rememberFrostedBackdrop(Unit)
-                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(backdrop).background(Color.Magenta))
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(backdrop, displayCutout = {
+                        androidx.compose.ui.graphics.Path().apply { addRect(androidx.compose.ui.geometry.Rect(Offset.Zero, size)) }
+                    }).background(Color.White))
                     PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {},
                         visual = PlayerVisual(), glassBackdrop = backdrop)
                 }

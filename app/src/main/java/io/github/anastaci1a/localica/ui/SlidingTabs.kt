@@ -70,7 +70,6 @@ internal fun tabSlideBounds(fits: Boolean, scroll: Float, viewport: Float, cell:
 
 @Composable
 internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, activity: SelectorTrackActivity? = null, onSelect: (MainTab) -> Unit) {
-    val composite = rememberFrostedBackdrop(Unit, dark = source?.dark == true)
     val trackActivity = activity ?: rememberSelectorTrackActivity()
     DisposableEffect(trackActivity) { onDispose { trackActivity.clear() } }
     val page = pagePosition()
@@ -176,7 +175,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val selectorContour = remember(selectorFrame) { selectorFrame.contour() }
         // Fixed padded recording dimensions avoid size-driven captures during deformation.
         val recording = selectorTrackRecordingBounds(viewport, baseHeight, limits.crossClearance)
-        Box(Modifier.selectorTrackPlacement(recording).recordFrostedBackdrop(composite), contentAlignment = AbsoluteAlignment.TopLeft) {
+        Box(Modifier.selectorTrackPlacement(recording), contentAlignment = AbsoluteAlignment.TopLeft) {
             LiquidGlassSurface(Modifier.selectorTrackPlacement(track.translate(-recording.topLeft))
                 .testTag("tab-track-shell").pageGlassCaster(opacity = shadowOpacity), source,
                 pressFeedback = false, shadow = false, cornerRadius = with(density) { radius.toDp() },

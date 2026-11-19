@@ -31,6 +31,8 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import kotlin.math.floor
+import kotlin.math.ceil
+import kotlin.math.exp
 import kotlin.math.roundToInt
 
 /** Native source registration, not a reproduction of the private white-band report. */
@@ -146,8 +148,19 @@ class NestedGlassRegistrationTest {
                         val dx = inSource.x - floor(inSource.x / cell) * cell
                         val dy = inSource.y - floor(inSource.y / cell) * cell
                         if (dx < 4f || dx > cell - 4f || dy < 4f || dy > cell - 4f) continue
-                        add(scene.localPositionOf(lens, local) to
-                            cellColor(floor(inSource.x / cell).toInt(), floor(inSource.y / cell).toInt()))
+                        // The default material blurs before its face rows. Integrate the
+                        // procedural source in the independently mapped consumer basis.
+                        val radius = glassBackdropBlurRadius(compose.density.density) * .2f
+                        val sigma = .57735f * radius + .5f
+                        val reach = ceil(3f * sigma).toInt()
+                        var red = 0f; var green = 0f; var blue = 0f; var weight = 0f
+                        for (j in -reach..reach) for (i in -reach..reach) {
+                            val w = exp(-(i * i + j * j) / (2f * sigma * sigma))
+                            val c = cellColor(floor((inSource.x + i * phase.x) / cell).toInt(),
+                                floor((inSource.y + j * phase.y) / cell).toInt())
+                            red += c.red * w; green += c.green * w; blue += c.blue * w; weight += w
+                        }
+                        add(scene.localPositionOf(lens, local) to Color(red / weight, green / weight, blue / weight))
                     }
                 }
             }

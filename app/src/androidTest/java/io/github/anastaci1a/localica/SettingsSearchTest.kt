@@ -31,13 +31,13 @@ class SettingsSearchTest {
     @get:Rule val compose = localicaComposeRule()
 
     private fun show(initial: String? = null,
-        interfaceSettings: InterfaceSettings = InterfaceSettings()) {
+        interfaceSettings: InterfaceSettings = InterfaceSettings(), queueSettings: QueueSettings = QueueSettings()) {
         compose.setContent { LocalicaTheme {
             var settings by remember { mutableStateOf(interfaceSettings) }
 
                 FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = initial,
                     interfaceContent = { section -> InterfaceSettingsControls(settings, section) { settings = it } },
-                    playbackContent = { section -> QueueSettingsControls(QueueSettings(), section) {} })
+                    playbackContent = { section -> QueueSettingsControls(queueSettings, section) {} })
 
         } }
     }
@@ -149,7 +149,7 @@ class SettingsSearchTest {
     }
 
     @Test fun hiddenOptionJumpsToItsRevealingChoice() {
-        show()
+        show(queueSettings = QueueSettings(previousBehavior = PreviousBehavior.PreviousSong))
         compose.onNodeWithContentDescription("Search settings input").performTextInput("Restart threshold")
         compose.waitUntil(5000) {
             compose.onAllNodesWithTag("search-result:Restart threshold").fetchSemanticsNodes().isNotEmpty()
@@ -217,14 +217,15 @@ class SettingsSearchTest {
                 .putBoolean("expand-on-play", false).commit())
             val seeded = store.all.toMap()
             val restored = InterfacePreferences(context).read()
-            assertFalse(store.contains("glass-blur"))
+            val removed = setOf("glass-blur", "glass-depth", "glass-renderer")
+            removed.forEach { assertFalse("Removed Glass key $it", store.contains(it)) }
             assertEquals(-750, restored.lyricDelayMs)
             assertFalse(restored.expandOnPlay)
             show("Player", interfaceSettings = restored)
             compose.onNodeWithText("Expand player when a song starts").assertIsOff()
             compose.onNodeWithText("Correction: -750 ms").performScrollTo().assertIsDisplayed()
             compose.waitForIdle()
-            assertEquals(seeded, store.all)
+            assertEquals(seeded.filterKeys { it !in removed }, store.all)
         } finally {
             val editor = store.edit().clear()
             before.forEach { (key, value) -> when (value) {

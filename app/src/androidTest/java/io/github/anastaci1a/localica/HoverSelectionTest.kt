@@ -111,7 +111,8 @@ class HoverSelectionTest {
                     while (x < size.width) {
                         val red = ((x - rampStart) / ramp).coerceIn(0f, 1f)
                         val green = if ((x / stripe).toInt() % 2 == 0) .9f else .5f
-                        drawRect(Color(red, green, .6f), Offset(x, 0f), Size(1f, size.height))
+                        // The bare scene stays below the existing .55 bridge gate; the default face is above it.
+                        drawRect(Color(red, green, .5f), Offset(x, 0f), Size(1f, size.height))
                         x += 1f
                     }
                 }

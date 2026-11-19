@@ -308,7 +308,7 @@ class QueueHeaderMaterialBoundaryTest {
         .put("producerDrawReceipt", source.snapshotDraws?.toString() ?: "UNKNOWN")
 
     private fun capture(label: String, geometry: Geometry): Bitmap {
-        assertEquals(if (copies == 0) "ordinary-header" else "header-only-zero", label)
+        assertEquals(if (copies == 0) "ordinary-header" else "default-header-redraw", label)
         assertTrue("Only two fixed requests", copies < 2)
         val record = JSONObject().put("label", label).put("before", facts(geometry)).put("status", "copy-requested")
         records.put(record); copies++; writeManifest("running")

@@ -267,7 +267,10 @@ class ShadowContinuityTest {
                     Rect(body.center.x-8*d, body.bottom+36*d, body.center.x+8*d, body.bottom+38*d), .015f, "pressed button")
             }
         }
-        assertTrue("Press visibly moves the shadow", probe.luminances.max() - probe.luminances.min() > .01f)
+        val movement = probe.luminances.max() - probe.luminances.min()
+        val modelMovement = reference.luminances.max() - reference.luminances.min()
+        println("Default press shadow: region=$region body=$body actual=${probe.luminances} reference=${reference.luminances}")
+        assertTrue("Press visibly moves the shadow: actual=$movement reference=$modelMovement", movement > .01f)
         probe.assertContinuous(reference.maximumDelta + 2f/255f, "button press/release")
     }
 
