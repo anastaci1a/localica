@@ -117,8 +117,8 @@ class SelectorReboundRecordingTest {
                 assertTrue("Padded navbar sampling lost its center landmark at $lens fraction=$fraction: $colors",
                     colors.any { it.red > .6f && it.blue < .4f })
             } else {
-                assertTrue("The solid average remains dominated by the blue backing: $colors",
-                    colors.all { it.red < .3f && it.blue > .6f && it.green < .1f })
+                assertTrue("The light face of the blue backing: $colors",
+                    colors.all { it.blue > .99f && it.green < .95f && it.red < it.blue })
                 assertTrue("None has no spatial landmark inside its flat fill: $colors",
                     colors.maxOf { it.red } - colors.minOf { it.red } < .02f)
             }

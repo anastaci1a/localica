@@ -205,6 +205,7 @@ class SettingsOptionsTest {
             assertFalse(preferences.fullScanOnLaunch)
             compose.setContent { LocalicaTheme { FolderSettings(LibraryUiState(loading = false), {}, {}, {}) } }
             compose.onNode(hasSetTextAction()).performTextInput("Quick Scan")
+            compose.waitUntil(5_000) { compose.onAllNodesWithText("Scanner").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Scanner").performClick()
             compose.onNodeWithText("Quick Scan adds new songs.", substring = true).performScrollTo().assertIsDisplayed()
             compose.onNode(hasText("Quick Scan") and !isToggleable()).performScrollTo().assertExists()
