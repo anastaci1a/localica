@@ -19,10 +19,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.offset
 import io.github.anastaci1a.localica.ui.engine.*
-import kotlin.math.ceil
-import kotlin.math.floor
-import kotlin.math.roundToInt
-import kotlin.math.exp
 import kotlinx.coroutines.*
 
 /** Reserve the same extent that the shadow renderer actually draws. */

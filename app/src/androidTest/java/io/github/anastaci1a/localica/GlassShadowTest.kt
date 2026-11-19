@@ -34,6 +34,10 @@ import kotlin.math.roundToInt
 class GlassShadowTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun sharedFieldAdaptersKeepTheDownwardShadowMass() = verifyShadowMassCallers(compose, finalButtons = false)
+
+    @Test fun finalButtonsKeepVisibleShadowBelowAcrossSharedHosts() = verifyShadowMassCallers(compose, finalButtons = true)
+
     @Test fun deferredRingPathsMaterializeForTheCurrentGeometryOnly() {
         val cache = GlassShadowGeometry()
         val bodies = listOf(RoundRect(20f, 20f, 80f, 60f, CornerRadius(8f)))

@@ -15,6 +15,38 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class GlassShadowRasterTest {
+    @Test(timeout = 30000) fun directAndRetainedPrimitiveAndPathKeepTheDownwardMass() = runBlocking {
+        val failures = mutableListOf<String>()
+        for (d in listOf(2f, 2.48125f, 3f)) for (generic in listOf(false, true)) {
+            val width = (248 * d).toInt(); val height = (224 * d).toInt()
+            val body = RoundRect(72 * d, 88 * d, 176 * d, 136 * d, CornerRadius(24 * d))
+            val path = Path().apply { addRoundRect(body) }
+            val shadow = RetainedGlassShadow(this@runBlocking)
+            fun frame(retained: Boolean): ImageBitmap = ImageBitmap(width, height).also { image ->
+                CanvasDrawScope().draw(Density(d), LayoutDirection.Ltr, Canvas(image), Size(width.toFloat(), height.toFloat())) {
+                    if (retained) with(shadow) {
+                        if (generic) draw(path, Offset.Zero, 1f, 1f) else draw(listOf(body to 1f), 1f, 1f)
+                    } else glassShadows(if (generic) emptyList() else listOf(body to 1f), 1f, 1f,
+                        GlassShadowGeometry(), path = if (generic) path else null)
+                }
+            }
+            val reference = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMassReference(
+                width, height, body.left, body.top, body.right, body.bottom, 24 * d, d)
+            for (image in listOf(frame(false), frame(true))) {
+                val pixels = image.toPixelMap()
+                val mass = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMass(
+                    width, height, body.top, body.bottom) { x, y -> pixels[x, y].alpha.toDouble() }
+                if (!reference.accepts(mass)) failures += "d=$d generic=$generic live mass=$mass reference=$reference"
+            }
+            coroutineContext[Job]!!.children.toList().joinAll()
+            assertEquals(1, shadow.rasterizations)
+            val pixels = frame(true).toPixelMap()
+            val mass = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMass(
+                width, height, body.top, body.bottom) { x, y -> pixels[x, y].alpha.toDouble() }
+            if (!reference.accepts(mass)) failures += "d=$d generic=$generic retained mass=$mass reference=$reference"
+        }
+        assertTrue(failures.joinToString("\n"), failures.isEmpty())
+    }
     @Test(timeout = 10000) fun rasterIgnoresLiveNeighborExclusion() = runBlocking {
         val bodies = listOf(RoundRect(40f, 30f, 120f, 80f, CornerRadius(16f)) to 1f)
         val size = Size(200f, 140f)

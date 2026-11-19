@@ -41,11 +41,74 @@ import kotlin.math.roundToInt
  * Compare against one field at the current outline, not just registration counts. */
 class PopupShadowContinuityTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun restingNativePopupAndReturnedTriggerKeepTheDownwardMass() {
+        output = nativeEvidenceDirectory("shadow-mass-popup", InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
+        check(output.isDirectory || output.mkdirs())
+        compose.setContent { Fixture(nested = false) }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        val failures = mutableListOf<String>()
+        fun settle() { repeat(24) { compose.mainClock.advanceTimeBy(64); compose.waitForIdle() } }
+        fun measure(name: String, popup: Boolean) {
+            val nodes = if (popup) compose.popupGeometryNodes(anchor, open, output, name, 0) else emptyList()
+            val bounds = if (popup) nodes.minBy { it.boundsInRoot.width * it.boundsInRoot.height }.boundsInRoot else anchor.bounds
+            val origin = IntArray(2)
+            if (popup) compose.runOnIdle { requireNotNull(popupView).getLocationOnScreen(origin) }
+            val screen = bounds.translate(Offset(origin[0].toFloat(), origin[1].toFloat()))
+            val d = if (popup) requireNotNull(popupDensity) else compose.density.density
+            val rows = (16 * d).toInt()
+            val left = kotlin.math.ceil(screen.left).toInt()
+            val right = kotlin.math.floor(screen.right).toInt()
+            val top = kotlin.math.floor(screen.top).toInt() - rows
+            val bottom = kotlin.math.ceil(screen.bottom).toInt() + rows
+            val image = screenshot()
+            try {
+                assertTrue("The complete mass bands must fit the native display", left >= 0 && top >= 0 && right <= image.width && bottom <= image.height)
+                val referenceY = (screen.top - 64 * d).toInt()
+                assertTrue("Unshadowed backing must be inside app content", referenceY > 24 * d)
+                val background = AndroidColor.red(image.getPixel(screen.center.x.toInt(), referenceY)) / 255.0
+                assertTrue("Backing must carry contrast", background > .1)
+                val local = screen.translate(Offset(-left.toFloat(), -top.toFloat()))
+                val radius = if (popup) 28 * d else screen.height / 2
+                val contours = mutableListOf(io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.ShadowMassContour(
+                    local.left, local.top, local.right, local.bottom, radius))
+                if (!popup && neighboringBody != Rect.Zero) {
+                    val neighbor = neighboringBody.translate(Offset(-left.toFloat(), -top.toFloat()))
+                    contours += io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.ShadowMassContour(
+                        neighbor.left, neighbor.top, neighbor.right, neighbor.bottom, neighbor.height / 2)
+                }
+                val mass = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMass(
+                    right - left, bottom - top, local.top, local.bottom, rows) { x, y ->
+                    maxOf(0.0, 1 - AndroidColor.red(image.getPixel(left + x, top + y)) / (255 * background))
+                }
+                val reference = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMassReference(
+                    right - left, bottom - top, local.left, local.top, local.right, local.bottom, radius, d,
+                    code = 1 / (255 * background), bandDp = 16f, contours = contours)
+                File(output, "$name.txt").writeText("density=$d body=$screen background=$background " +
+                    "window=${System.identityHashCode(popupWindow ?: pageView)} generation=$stage " +
+                    "modal=${anchor.modalPresent} mass=$mass reference=$reference contours=$contours\n")
+                if (!reference.accepts(mass)) failures += "$name: native visible mass=$mass reference=$reference"
+            } finally { image.recycle() }
+        }
+        try {
+            settle(); measure("closed", false)
+            compose.runOnIdle { open = true }; settle()
+            assertNotNull(popupWindow)
+            measure("popup", true)
+            compose.runOnIdle { open = false }; settle()
+            assertNull(popupWindow)
+            assertFalse(anchor.modalPresent)
+            measure("returned", false)
+            assertTrue(failures.joinToString("\n"), failures.isEmpty())
+        } finally { compose.mainClock.autoAdvance = true }
+    }
     private var open by mutableStateOf(false)
     private var strength by mutableFloatStateOf(.8f)
     private lateinit var anchor: GlassAnchor
     private var popupView: View? = null
     private var popupWindow: Window? = null
+    private var popupDensity: Float? = null
     private var marker: FrameMarker? = null
     private lateinit var pageView: View
     private var pageMarker: FrameMarker? = null
@@ -493,14 +556,15 @@ class PopupShadowContinuityTest {
     @Composable private fun Menu() {
         GlassMenu(open, anchor, { open = false }) {
             val view = LocalView.current
+            val density = androidx.compose.ui.platform.LocalDensity.current.density
             val window = (view.parent as DialogWindowProvider).window
             DisposableEffect(window) {
                 val next = FrameMarker()
-                popupView = view; popupWindow = window; marker = next
+                popupView = view; popupWindow = window; popupDensity = density; marker = next
                 window.decorView.overlay.add(next)
                 onDispose {
                     window.decorView.overlay.remove(next)
-                    if (popupWindow === window) { popupView = null; popupWindow = null; marker = null }
+                    if (popupWindow === window) { popupView = null; popupWindow = null; popupDensity = null; marker = null }
                 }
             }
             ActionMenuItem("Scan music", icon = AppIcon.TabFolders, onClick = {})

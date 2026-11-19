@@ -404,7 +404,7 @@
         errorLine2="    ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragOverlay.kt"
-            line="64"
+            line="63"
             column="5"/>
     </issue>
 
@@ -437,7 +437,7 @@
         errorLine2="        ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/KeyedDragOverlay.kt"
-            line="146"
+            line="145"
             column="9"/>
     </issue>
 
