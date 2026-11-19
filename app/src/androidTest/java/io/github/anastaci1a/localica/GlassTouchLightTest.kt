@@ -7,6 +7,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
@@ -394,7 +395,7 @@ class GlassTouchLightTest {
         val contacts = sizes.map { GlassContact() }
         compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f, touchLight = 0f)) {
-                Column(Modifier.width(360.dp).testTag("window"), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                Column(Modifier.width(360.dp).testTag("window").drawBehind { drawRect(Color.Black) }, horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                     sizes.forEachIndexed { i, (w, h) -> Box(Modifier.padding(vertical = 24.dp)) {
                         LiquidGlassSurface(Modifier.size(w.dp, h.dp).testTag("body-$i"), source = null, tint = Color.White,
                             cornerRadius = (h / 2).dp, shadow = false, sharedContact = contacts[i])
@@ -408,7 +409,7 @@ class GlassTouchLightTest {
         compose.mainClock.autoAdvance = false
         fun span(row: Int): Pair<Int, Int> {
             val image = window.captureToImage(); val all = pixels(image)
-            val line = IntArray(image.width) { x -> listOf(0, 8, 16).maxOf { channel(all[row * image.width + x], it) } }
+            val line = IntArray(image.width) { x -> listOf(0, 8, 16).maxOf { abs(channel(all[row * image.width + x], it) - channel(all[row * image.width], it)) } }
             val half = line.max() / 2
             return line.indexOfFirst { it > half } to line.indexOfLast { it > half }
         }
