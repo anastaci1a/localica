@@ -11,6 +11,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.*
@@ -275,19 +276,24 @@ class GlassTouchLightTest {
         compose.mainClock.autoAdvance = false
         compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f)) {
-                // Independent P for the unchanged 160 × 80 dp fixture.
-                val lift = 1f + shape.lift * ((356f / 29) / 160)
+                val density = LocalDensity.current
+                val width = with(density) { 160.dp.roundToPx().toFloat() }
+                val height = with(density) { 80.dp.roundToPx().toFloat() }
+                val long = maxOf(width, height) / density.density
+                val short = minOf(width, height) / density.density
+                val points = ((596.0 - 3.0 * short) / 29.0).toFloat()
+                val lift = 1f + shape.lift * (points / long)
                 val ax = exp(shape.strain) * lift
                 val ay = exp(-shape.strain) * lift
-                val dx = shape.drift.x * 160
-                val dy = shape.drift.y * 80
-                val mapped = if (wrong) light else light.copy(point = Offset(.5f + (light.point.x - .5f - dx / 160) / ax, .5f + (light.point.y - .5f - dy / 80) / ay))
+                val dx = shape.drift.x * width
+                val dy = shape.drift.y * height
+                val mapped = if (wrong) light else light.copy(point = Offset(.5f + (light.point.x - .5f - dx / width) / ax, .5f + (light.point.y - .5f - dy / height) / ay))
                 SideEffect { direct.state.glow.value = light; anchor.contact.state.glow.value = light; reference.state.glow.value = mapped }
                 Box(Modifier.size(256.dp, 192.dp).testTag("nested-light")) {
                     Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xff24394d)) }
                     Box(Modifier.padding(40.dp)) {
                         if (manual) LiquidGlassSurface(Modifier.size(160.dp, 80.dp).drawWithContent {
-                            translate(dx.dp.toPx(), dy.dp.toPx()) { scale(ax, ay) { this@drawWithContent.drawContent() } }
+                            translate(dx, dy) { scale(ax, ay) { this@drawWithContent.drawContent() } }
                         }, source = null, tint = Color(0xff405060), cornerRadius = 0.dp, shadow = false,
                             pressFeedback = false, sharedContact = reference)
                         else LiquidGlassSurface(Modifier.size(160.dp, 80.dp).glassAnchor(if (anchored) anchor else null),
