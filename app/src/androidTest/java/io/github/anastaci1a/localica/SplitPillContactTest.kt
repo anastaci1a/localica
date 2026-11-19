@@ -247,12 +247,12 @@ class SplitPillContactTest {
                     val growth=(held.second-held.first)-(rest.second-rest.first)
                     assertEquals("$label held size law axis=$axis",p*density*length/size.maxDimension,growth.toDouble(),1.5)
                     if(index==2) assertTrue("Search measures its material, below the outer touch target",size.height<node.fetchSemanticsNode().boundsInRoot.height)
-                    node.performTouchInput { moveBy(if(axis==0) Offset(direction*100*density,0f) else Offset(0f,direction*100*density)) }
+                    node.performTouchInput { moveBy(if(axis==0) Offset(direction*150*density,0f) else Offset(0f,direction*150*density)) }
                     compose.mainClock.advanceTimeBy(2500)
                     val dragged=span()
                     val a=length/density
                     val o=(if(axis==0) origin?.x else origin?.y)?.toDouble() ?: .5
-                    val target=o+direction*100/a
+                    val target=o+direction*150/a
                     val travel=target-o; val u=abs(target.coerceIn(0.0,1.0)-o)
                     val f=sign(travel)*(a/d)*(u/4+abs(travel)-u)
                     val e=abs(f); val m=1+p/long
