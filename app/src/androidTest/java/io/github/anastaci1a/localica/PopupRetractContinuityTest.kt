@@ -49,28 +49,17 @@ class PopupRetractContinuityTest {
     /** R5 hard gate: retained consumer C records D then B ONCE; the source empties B and emits D -> empty B at its draw entry,
      * then records restored pixels into S. The dialog window presents again without C re-recording and shows no optics. */
     @Test fun retainedConsumerCannotSampleRestoredSourceAfterBodyWithdrawal() {
-        val outcomes = mutableListOf<String>()
-        for (sourceFirst in listOf(true, false)) for (control in Control.entries) {
-            val shown = retained(sourceFirst, control)
-            outcomes += "sourceFirst=$sourceFirst control=$control restored=${shown.first} cRecords=${shown.second}"
-            assertEquals("C is never re-recorded after the source restores: $outcomes", 0, shown.second)
-            if (control == Control.Withdraw) assertFalse("Retained C must not show the restored source: $outcomes", shown.first)
-        }
-        android.util.Log.i("PopupRetract", outcomes.joinToString("; "))
-        // Controls are reported for discrimination; the omitted withdrawal must expose the retained optic.
-        assertTrue("The no-withdrawal control must discriminate: $outcomes", outcomes.filter { "NoWithdraw" in it }.all { "restored=true" in it })
-    }
-
-    private fun retained(sourceFirst: Boolean, control: Control): Pair<Boolean, Int> {
-        val anchor = GlassAnchor()
+        var round by mutableIntStateOf(0)
+        var control = Control.Withdraw
+        var anchor = GlassAnchor()
         val events = Collections.synchronizedList(mutableListOf<String>())
-        val flight = GlassPopupFlight(anchor) { (it as? GlassBodyReceipt)?.let { r -> events += "${r.event}:${r.request}" } }
+        var flight = GlassPopupFlight(anchor) { (it as? GlassBodyReceipt)?.let { r -> events += "${r.event}:${r.request}" } }
         var restored by mutableStateOf(false)
         var tick by mutableIntStateOf(0)
-        var cRecords = 0
         var epoch by mutableIntStateOf(0)
+        var cRecords = 0
         lateinit var dialogView: View
-        compose.setContent {
+        compose.setContent { key(round) {
             val s = rememberGraphicsLayer(); val b = rememberGraphicsLayer(); val d = rememberGraphicsLayer()
             val optical = remember(b, d) { io.github.anastaci1a.localica.ui.engine.OpticalBody(b, d) }
             SideEffect { flight.body = optical }
@@ -100,19 +89,28 @@ class PopupRetractContinuityTest {
                     Canvas(Modifier.size(2.dp).align(Alignment.BottomEnd)) { drawRect(if (tick % 2 == 0) Color.Green else Color.Yellow) }
                 }
             }
-        }
-        compose.waitForIdle()
-        assertTrue("Before return, B lenses the pre-restoration source", displayed("consumer") { dialogView }.blue())
-        val recorded = cRecords
-        if (sourceFirst) {
-            compose.runOnIdle { restored = true }; compose.waitForIdle()
+        } }
+        val outcomes = mutableListOf<String>()
+        for (sourceFirst in listOf(true, false)) for (c in Control.entries) {
+            compose.runOnIdle {
+                control = c; anchor = GlassAnchor(); events.clear(); restored = false
+                flight = GlassPopupFlight(anchor) { (it as? GlassBodyReceipt)?.let { r -> events += "${r.event}:${r.request}" } }
+                round++
+            }
+            compose.waitForIdle()
+            assertTrue("Before return, B lenses the pre-restoration source", displayed("consumer") { dialogView }.blue())
+            val recorded = cRecords
+            if (sourceFirst) {
+                compose.runOnIdle { restored = true }; compose.waitForIdle()
+                compose.runOnIdle { tick++ }
+            } else compose.runOnIdle { tick++; restored = true }
+            compose.waitForIdle()
             compose.runOnIdle { tick++ }
-        } else compose.runOnIdle { tick++; restored = true }
-        compose.waitForIdle()
-        compose.runOnIdle { tick++ }
-        val shown = displayed("consumer") { dialogView }.red()
-        val records = cRecords - recorded
-        if (control == Control.Withdraw) {
+            val shown = displayed("consumer") { dialogView }.red()
+            outcomes += "sourceFirst=$sourceFirst control=$c restored=$shown cRecords=${cRecords - recorded}"
+            assertEquals("C is never re-recorded after the source restores: $outcomes", recorded, cRecords)
+            if (c != Control.Withdraw) continue
+            assertFalse("Retained C must not show the restored source: $outcomes", shown)
             assertEquals("Withdrawal reserved the request once", listOf("withdraw:1"), events.toList())
             // Repeated reclaim/refill/withdraw while S retains its D edge: D empties before B refills (no B -> S -> D -> B cycle).
             repeat(3) { cycle ->
@@ -125,10 +123,9 @@ class PopupRetractContinuityTest {
             }
             assertEquals(listOf("withdraw:1") + List(3) { listOf("unlink:0", "withdraw:1") }.flatten(), events.toList())
         }
-        compose.setContent { }
-        compose.waitForIdle()
-        android.util.Log.i("PopupRetract", "sourceFirst=$sourceFirst control=$control events=$events")
-        return shown to records
+        android.util.Log.i("PopupRetract", outcomes.joinToString("; "))
+        // The omitted withdrawal must expose the retained optic, or this oracle proves nothing.
+        assertTrue("The no-withdrawal control must discriminate: $outcomes", outcomes.filter { "NoWithdraw" in it }.all { "restored=true" in it })
     }
 
     /** R5 P2 + condition 4: the actual prepared adapter withdraws only at a qualified current draw; a stale frame draws nothing. */
@@ -205,7 +202,7 @@ class PopupRetractContinuityTest {
     private fun frames(what: String, limit: Int = 900, until: () -> Boolean) {
         compose.mainClock.autoAdvance = false
         try {
-            repeat(limit) { if (compose.runOnIdle(until)) return; compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            repeat(limit) { if (until()) return; compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
             fail("Timed out waiting for $what")
         } finally { compose.mainClock.autoAdvance = true }
     }
