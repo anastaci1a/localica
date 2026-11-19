@@ -15,7 +15,11 @@ This release replaces the shared glass optics in one place, so every glass surfa
 - **Glass shadow:** one shared shadow replaces the previous falloff: a soft shadow shifted 8 dp down with a 24 dp blur, drawn the same way under every glass surface. Shadow rasters no longer depend on live exclusions, and the larger shadow reach does not change layout padding or touch areas.
 - **Fluid press:** pressable glass lifts and leans toward the finger while held, then settles back with a spring on release. Pressing again during the settle continues from the current motion instead of restarting.
 - **Touch glow:** the light under the finger is replaced, including the rippling glow that follows a press as it moves. The light follows the finger smoothly, a broad glow fades in and out around the press, and its strength adapts to how bright the backdrop is. Switches light up only while they are physically touched.
-- App Kotlin/Java source changes from 53,520 to 53,907 lines: 852 added, 465 removed, net +387. Most of the growth is the new touch glow and fluid press; the old refraction and shadow code is removed.
+- **Popup return:** the popup shares its source glass appearance and returns through one shared drawing path. The existing popup rim stays; the extra coating is removed.
+- **Press expansion:** the lyrics header shadow follows the measured pressed surface.
+- **Press drag:** glass follows finger translation during a hold, then settles back on release.
+- **Build reliability:** device test dependencies are prepared once and reused by the test shards.
+- App Kotlin/Java source changes from 53,520 to 53,972 lines: 1,040 added, 588 removed, net +452. Growth comes from the shared touch glow, fluid press and popup return; the old refraction and shadow code is removed.
 - Refresh shard scheduling from complete v0.34.15 and v0.34.14 producers 44398792857 and 44336375980.
 
 ## Open items
@@ -28,8 +32,17 @@ This release replaces the shared glass optics in one place, so every glass surfa
 
 - [#1005](https://github.com/anastaci1a/localica/issues/1005): Shared glass refraction, colour fill, shadow, fluid press and touch glow are replaced in the shared glass surface. The broader interaction programme remains open.
 
+- [#1018](https://github.com/anastaci1a/localica/issues/1018) and [#1082](https://github.com/anastaci1a/localica/issues/1082): Device-test dependency preparation and reuse reduce repeated downloads.
+
+- [#748](https://github.com/anastaci1a/localica/issues/748): Shared popup return and presenting-page menu ink. Selection stacking remains disclosed below.
+- [#1075](https://github.com/anastaci1a/localica/issues/1075): Glass follows finger translation during a hold and settles on release.
+- [#1076](https://github.com/anastaci1a/localica/issues/1076): Lyrics-header shadow follows press expansion; the small surface-position difference remains unproven.
+
 ## Known issues and follow-ups
 
+- An Android 16 clear/refocus keyboard test has a known timeout. The requested comparison passed before and after the popup changes; assertions remain unchanged.
+- An Android 8 collapsed-player collection Back test can lose the injected system Back event. It passed 40 isolated repeats; the test-harness flake remains disclosed without an app change.
+- An Android 8 full-screen shuffle/Previous test times out at its unchanged 15-second playback wait. The same failure is present before the popup changes.
 - [#982](https://github.com/anastaci1a/localica/issues/982): Scoped search history tests can lose the editor node during text replacement.
 - [#1047](https://github.com/anastaci1a/localica/issues/1047): A parallel-build scalar allocation check can fail intermittently.
 - [#1049](https://github.com/anastaci1a/localica/issues/1049): Pinch slow-frame release coverage with animations enabled remains follow-up work.
@@ -40,10 +53,11 @@ This release replaces the shared glass optics in one place, so every glass surfa
 - [#1072](https://github.com/anastaci1a/localica/issues/1072): On Android 8, one touch-light pixel check exceeds its unchanged one-byte limit by one step because the test's rounding differs from the device's byte quantization. The limit is unchanged; this is disclosed as non-blocking.
 - [#1073](https://github.com/anastaci1a/localica/issues/1073): Glass refraction rows at the bottom edge can sample unrecorded backdrop padding, so a popup can intermittently show a slightly different colour along its bottom edge.
 - [#1074](https://github.com/anastaci1a/localica/issues/1074): Opening and closing glass popups is slower at the long tail on the A35: 90th and 95th percentile frame times rise by about 3 to 4 ms and garbage-collection pauses by about 5 ms compared with v0.34.15. Median frame time and list scrolling are unchanged.
+- [#1076](https://github.com/anastaci1a/localica/issues/1076): The roughly 0.02 px surface-position difference remains unproven.
 - GlassTouchLight leaves a residual in the lens refraction band after one press and release; backdrop source state remains under investigation. Assertions are unchanged.
 - SwitchTapOptics has an Android 8 colour classifier mismatch and unresolved Android 16 travel behavior. Assertions are unchanged.
 - On Android 16, the default Adjustable selector misses its unchanged colour bound (0.9294, 0.7686, 1); both overlay rebound checks also remain unresolved.
-- Popup selection pill overlap check S3 fails on Android 8 and Android 16. The check remains unchanged.
+- Popup selection pill overlap check S3 reports 51 wrong foreground pixels on Android 8 and 61 on Android 16. Its zero-wrong-pixel assertion remains unchanged.
 - [#1063](https://github.com/anastaci1a/localica/issues/1063): Investigate count validity when shuffle or repeat changes; this source finding has not been reproduced on a device.
 - [#1064](https://github.com/anastaci1a/localica/issues/1064): Add pending-scroll coverage for the list scrollbar path.
 - [#1065](https://github.com/anastaci1a/localica/issues/1065): Remove obsolete shuffle test diagnostics while preserving native refresh and assertions.
