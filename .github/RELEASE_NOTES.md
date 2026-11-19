@@ -16,10 +16,11 @@ This release replaces the shared glass optics in one place, so every glass surfa
 - **Fluid press:** pressable glass lifts and leans toward the finger while held, then settles back with a spring on release. Pressing again during the settle continues from the current motion instead of restarting.
 - **Touch glow:** the light under the finger is replaced, including the rippling glow that follows a press as it moves. The light follows the finger smoothly, a broad glow fades in and out around the press, and its strength adapts to how bright the backdrop is. Switches light up only while they are physically touched.
 - **Popup return:** the popup shares its source glass appearance and returns through one shared drawing path. The existing popup rim stays; the extra coating is removed.
+- **Popup refraction:** the refraction fades as the Sort and View popup returns to its trigger, removing the snap at the end. [#847](https://github.com/anastaci1a/localica/issues/847)
 - **Press expansion:** the lyrics header shadow follows the measured pressed surface.
 - **Press drag:** glass follows finger translation during a hold, then settles back on release.
 - **Build reliability:** device test dependencies are prepared once and reused by the test shards.
-- App Kotlin/Java source changes from 53,520 to 53,972 lines: 1,040 added, 588 removed, net +452. Growth comes from the shared touch glow, fluid press and popup return; the old refraction and shadow code is removed.
+- App Kotlin/Java source changes from 53,520 to 53,976 lines: 1,052 added, 596 removed, net +456. Growth comes from the shared touch glow, fluid press and popup return; the old refraction and shadow code is removed.
 - Refresh shard scheduling from complete v0.34.15 and v0.34.14 producers 44398792857 and 44336375980.
 
 ## Open items

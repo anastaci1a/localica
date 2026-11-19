@@ -6,7 +6,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GlassSurfacePresentationTest {
-    private val source = GlassSurfacePresentation(.3f, 1.4f, .23f, Color(0x3300FF00), .72f)
+    private val source = GlassSurfacePresentation(.3f, 1.4f, .23f, Color(0x3300FF00), .72f, lens = 0f)
     private val target = GlassSurfacePresentation(1f, 1f, 1f, Color.Transparent, 1.3f)
 
     @Test fun sourceEndpointIsTheRecordActuallyDrawn() {
@@ -19,6 +19,7 @@ class GlassSurfacePresentationTest {
         assertEquals(1.2f, half.refraction, 1e-6f)
         assertEquals(.615f, half.lightMix, 1e-6f)
         assertEquals(1.01f, half.depthScale, 1e-6f)
+        assertEquals("A source without a lens morphs its lens in with every other field (#847)", .5f, half.lens, 1e-6f)
         assertEquals(androidx.compose.ui.graphics.lerp(source.tint, target.tint, .5f), half.tint)
         // Reversible: the return passes the same records in reverse.
         target.towards(source, .5f).let { assertEquals(half.frost, it.frost, 1e-6f); assertEquals(half.lightMix, it.lightMix, 1e-6f) }
