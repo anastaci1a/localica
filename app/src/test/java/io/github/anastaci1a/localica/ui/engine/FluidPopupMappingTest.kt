@@ -103,4 +103,53 @@ class FluidPopupMappingTest {
         }
     }
 
+    @Test fun independentPhasePlumbingPreservesBothEdgeDerivativesAcrossReversalsRebasesAndNativeGates() {
+        // A distinct existing law exercises the plumbing without adopting held fluid constants.
+        val model = StockPopupMotion.copy(centre = StockPopupMotion.close)
+        val violations = SpringBandTelemetry.violations
+        for (hz in listOf(60, 120)) for (speed in listOf(.5f, 1f, 1.5f)) for (gated in listOf(false, true)) EngineHarness().use { h ->
+            h.setContext(hz, speed)
+            val basis = ExpansionBasis(Rect(300f, 100f, 400f, 150f), Rect(0f, 100f, 400f, 600f), 1f)
+            val rig = PopupRig(h, basis, PopupKind.Menu, model = model,
+                curve = if (gated) Curve.ramp(model.preparedRamp, model.rampBlend) else curve,
+                gate = if (gated) model.preparedRamp else null)
+            val owner = rig.owner
+            fun continuous(action: () -> Unit) {
+                val stamp = h.clock.stampNow
+                val before = rig.rect!!.channels.map { it.sampleAt(stamp) }
+                val p = owner.main.sampleAt(stamp); val q = owner.crossPhase()!!.sampleAt(stamp)
+                action()
+                val after = rig.rect.channels.map { it.sampleAt(stamp) }
+                before.zip(after).forEach { (a, b) ->
+                    assertEquals(a.value, b.value, 1e-4f); assertEquals(a.velocity, b.velocity, 1e-3f)
+                }
+                assertEquals(p, owner.main.sampleAt(stamp)); assertEquals(q, owner.crossPhase()!!.sampleAt(stamp))
+            }
+            owner.target(true)
+            for (seconds in listOf(.03, .08, .05, .12)) {
+                h.advance(seconds)
+                continuous { owner.target(!owner.expanded) }
+                h.advance(seconds / 2)
+                continuous { owner.setBasis(basis.copy(endBounds = Rect(20f, 80f, 420f, 650f))) }
+                continuous { owner.target(!owner.expanded) }
+            }
+            owner.target(true)
+            repeat(hz * 4) {
+                h.advance(1.0 / hz)
+                if (owner.awaitingNativeGate) continuous { assertTrue(owner.acknowledgeNativeGate(owner.nativeGeneration)) }
+            }
+            assertTrue(owner.retirementReady)
+            assertEquals(Rect(20f, 80f, 420f, 650f), rig.rect!!.valueAt(h.clock.stampNow))
+            owner.target(false)
+            repeat(hz * 4) {
+                h.advance(1.0 / hz)
+                if (owner.awaitingNativeGate) continuous { assertTrue(owner.acknowledgeNativeGate(owner.nativeGeneration)) }
+            }
+            assertTrue(owner.retirementReady)
+            assertEquals(basis.startBounds, rig.rect.valueAt(h.clock.stampNow))
+            owner.dispose()
+        }
+        assertEquals(violations, SpringBandTelemetry.violations)
+    }
+
 }
