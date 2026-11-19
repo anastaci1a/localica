@@ -2113,6 +2113,7 @@
             column="171"/>
     </issue>
 
+
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
@@ -2222,6 +2223,7 @@
             line="201"
             column="103"/>
     </issue>
+
 
     <issue
         id="LiteralUiSpacing"
@@ -3047,6 +3049,7 @@
             line="51"
             column="32"/>
     </issue>
+
 
     <issue
         id="LiteralUiSpacing"
@@ -4894,6 +4897,28 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
             line="125"
             column="60"/>
+    </issue>
+
+    <issue
+        id="LiteralUiSpacing"
+        message="Use validated Spec tokens"
+        errorLine1="        val shine = Stroke(2.6.dp.toPx())"
+        errorLine2="                           ~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PopupGlassRim.kt"
+            line="61"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="LiteralUiSpacing"
+        message="Use validated Spec tokens"
+        errorLine1="        val shade = Stroke(1.4.dp.toPx())"
+        errorLine2="                           ~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PopupGlassRim.kt"
+            line="62"
+            column="28"/>
     </issue>
 
     <issue
@@ -14543,6 +14568,10 @@
             column="124"/>
     </issue>
 
+
+
+
+
     <issue
         id="RawUiMotion"
         message="Use Engine trajectories"
@@ -15289,6 +15318,17 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
             line="430"
             column="68"/>
+    </issue>
+
+    <issue
+        id="ReplacePersistentShape"
+        message="Retarget a stable PersistentShape"
+        errorLine1="            val arc = Path().apply {"
+        errorLine2="                      ~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PopupGlassRim.kt"
+            line="39"
+            column="23"/>
     </issue>
 
     <issue

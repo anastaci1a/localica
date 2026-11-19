@@ -1075,7 +1075,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                         if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight())?.shape ?: body.value
                                         else body.value
                                     },
-                                    presentation = ::bodyMaterial, presentedRadius = ::radius)
+                                    presentation = ::bodyMaterial, presentedRadius = ::radius, panelRim = ::phase)
                             }
                         }
                         SurfaceLayer(Modifier.presentedAlpha { if (page) 1f else motion.foreground.at(phase()) }
