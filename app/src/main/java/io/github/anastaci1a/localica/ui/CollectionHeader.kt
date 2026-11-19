@@ -87,7 +87,7 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
                 Text(title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
                 subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center) }
                 val split = artist || playlist
-                val actionOutset = with(androidx.compose.ui.platform.LocalDensity.current) { glassShadowInset().roundToPx() }
+                val actionOutset = with(androidx.compose.ui.platform.LocalDensity.current) { glassLayoutInset().roundToPx() }
                 @Composable fun describeAction() {
                     val colors = IconButtonDefaults.iconButtonColors()
                     val foreground = controlStateColor(enabled, colors.contentColor, colors.disabledContentColor,

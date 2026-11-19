@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.glassLayoutInset
 import io.github.anastaci1a.localica.ui.spec.glassShadowInset
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 
@@ -26,6 +27,7 @@ import kotlinx.coroutines.*
 
 /** Reserve the same extent that the shadow renderer actually draws. */
 @Composable internal fun glassShadowInset(): Dp = glassShadowInset(LocalGlassAppearance.current.shadowSpread)
+@Composable internal fun glassLayoutInset(): Dp = glassLayoutInset(LocalGlassAppearance.current.shadowSpread)
 
 /** Lambda offset uses a surface-sized placement layer, clipping overflowing shadows
  * on legacy Android even without an alpha layer. Keep its placement-phase reads,
