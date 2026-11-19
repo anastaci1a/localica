@@ -10,7 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /** Appearance captured at an action whose dialog is declared in another composition scope.
@@ -98,10 +98,8 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
     val popupHome = trigger?.popupHome ?: appearance?.popupHome ?: LocalGlassPopupHome.current
     val source = appearance?.backdrop ?: LocalModalBackdrop.current ?: LocalFrostedBackdrop.current ?: host.backdrop
     val locals = currentCompositionLocalContext
-    // Dialog declarations may live outside the artwork theme containing their trigger.
-    // Detached callbacks carry their launching scope; ordinary unanchored windows
-    // follow current ambient ink, not a remembered anchor seed.
-    val ink = trigger?.ink?.takeIf { it.isSpecified } ?: appearance?.ink ?: LocalContentColor.current
+    // Detached callbacks retain their launching scene.
+    val ink = appearance?.ink ?: androidx.compose.ui.graphics.lerp(Color(0xFF202124), Color.White, source?.lightMix ?: 0f)
     val dark = ink.luminance() > .5f
     val resolvedContent: @Composable () -> Unit = {
         CompositionLocalProvider(LocalGlassDialogAppearance provides null, content = content)
@@ -116,7 +114,6 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
     }
     require(entry.heightSizing == heightSizing) { "Height sizing is fixed for a dialog presentation" }
     SideEffect {
-        if (trigger == null) origin.ink = ink
         if (origin.source == null) origin.source = source
         entry.locals = locals; entry.dismiss = onDismiss; entry.dark = dark
         entry.content = resolvedContent

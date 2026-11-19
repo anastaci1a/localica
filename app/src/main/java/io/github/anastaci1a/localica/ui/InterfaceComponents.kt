@@ -30,7 +30,6 @@ internal fun ActionIcon(resource: AppIcon, label: String, enabled: Boolean = tru
         val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Quiet action availability")
         // This anchor can previously have belonged to gallery artwork. The plain
         // icon returns to a temporary circle, not that artwork's rounded square.
-        anchor?.captureInk()
         val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
         // Outgoing plain drawings can remain visible without retaining a hit
         // target or changing their availability opacity during the exit fade.
@@ -42,10 +41,8 @@ internal fun ActionIcon(resource: AppIcon, label: String, enabled: Boolean = tru
             Icon(appIconPainter(resource), label, Modifier.size(iconSize))
         }
     } else if (glass) LiquidGlassSurface(modifier, pressFeedback = enabled) {
-        anchor?.captureInk()
         ActionIconButton(onClick, Modifier.fillMaxSize(), enabled = enabled) { Icon(appIconPainter(resource), label, Modifier.size(iconSize)) }
     } else ActionIconButton(onClick, modifier, enabled = enabled) {
-        anchor?.captureInk()
         // U04.02a: a plain button may take its glyph from a shared morph element (D09), labelled here as its own icon was.
         if (glyph != null) glyph(Modifier.size(iconSize).semantics { contentDescription = label })
         else Icon(appIconPainter(resource), label, Modifier.size(iconSize))

@@ -2003,7 +2003,7 @@
         errorLine2="                                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="144"
+            line="141"
             column="92"/>
     </issue>
 
@@ -2014,7 +2014,7 @@
         errorLine2="                                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="149"
+            line="146"
             column="92"/>
     </issue>
 
@@ -2277,7 +2277,7 @@
         errorLine2="                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="68"
+            line="65"
             column="54"/>
     </issue>
 
@@ -2288,7 +2288,7 @@
         errorLine2="                                                                       ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="68"
+            line="65"
             column="72"/>
     </issue>
 
@@ -2299,7 +2299,7 @@
         errorLine2="                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="83"
+            line="80"
             column="25"/>
     </issue>
 
@@ -2310,7 +2310,7 @@
         errorLine2="                                     ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="83"
+            line="80"
             column="38"/>
     </issue>
 
@@ -3026,7 +3026,7 @@
         errorLine2="                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="48"
+            line="47"
             column="53"/>
     </issue>
 
@@ -3037,7 +3037,7 @@
         errorLine2="                                                                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="49"
+            line="48"
             column="72"/>
     </issue>
 
@@ -3048,7 +3048,7 @@
         errorLine2="                              ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="50"
+            line="49"
             column="31"/>
     </issue>
 
@@ -3059,7 +3059,7 @@
         errorLine2="                                                ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="62"
+            line="61"
             column="49"/>
     </issue>
 
@@ -3070,7 +3070,7 @@
         errorLine2="                                                                                 ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="66"
+            line="65"
             column="82"/>
     </issue>
 
@@ -3081,7 +3081,7 @@
         errorLine2="                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="86"
+            line="85"
             column="20"/>
     </issue>
 
@@ -3092,7 +3092,7 @@
         errorLine2="                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="97"
+            line="96"
             column="20"/>
     </issue>
 
@@ -4742,7 +4742,7 @@
         errorLine2="                                                                                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="73"
+            line="72"
             column="88"/>
     </issue>
 
@@ -4753,7 +4753,7 @@
         errorLine2="                                                                                                                 ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="118"
+            line="117"
             column="114"/>
     </issue>
 
@@ -4764,7 +4764,7 @@
         errorLine2="                                                              ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="124"
+            line="123"
             column="63"/>
     </issue>
 
@@ -4775,7 +4775,7 @@
         errorLine2="                                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="125"
+            line="124"
             column="60"/>
     </issue>
 
@@ -5591,7 +5591,7 @@
         errorLine2="                                                                      ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SettingsComponents.kt"
-            line="77"
+            line="76"
             column="71"/>
     </issue>
 
@@ -5602,7 +5602,7 @@
         errorLine2="                                                                                                  ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SettingsComponents.kt"
-            line="95"
+            line="94"
             column="99"/>
     </issue>
 
@@ -5613,7 +5613,7 @@
         errorLine2="                                                                                                                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SettingsComponents.kt"
-            line="95"
+            line="94"
             column="116"/>
     </issue>
 
@@ -7011,7 +7011,7 @@
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="144"
+            line="141"
             column="17"/>
     </issue>
 
@@ -7022,7 +7022,7 @@
         errorLine2="                                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="145"
+            line="142"
             column="33"/>
     </issue>
 
@@ -7033,7 +7033,7 @@
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="149"
+            line="146"
             column="17"/>
     </issue>
 
@@ -7201,7 +7201,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="41"
+            line="40"
             column="9"/>
     </issue>
 
@@ -7212,7 +7212,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="68"
+            line="65"
             column="5"/>
     </issue>
 
@@ -7223,7 +7223,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="83"
+            line="80"
             column="5"/>
     </issue>
 
@@ -7388,7 +7388,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="48"
+            line="47"
             column="5"/>
     </issue>
 
@@ -7399,7 +7399,7 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="138"
+            line="137"
             column="9"/>
     </issue>
 
@@ -7410,7 +7410,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="139"
+            line="138"
             column="13"/>
     </issue>
 
@@ -8147,7 +8147,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="72"
+            line="71"
             column="13"/>
     </issue>
 
@@ -8158,7 +8158,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="99"
+            line="98"
             column="9"/>
     </issue>
 
@@ -8169,7 +8169,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="118"
+            line="117"
             column="9"/>
     </issue>
 
@@ -8180,7 +8180,7 @@
         errorLine2="                    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="127"
+            line="126"
             column="21"/>
     </issue>
 
@@ -8686,7 +8686,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SettingsComponents.kt"
-            line="95"
+            line="94"
             column="9"/>
     </issue>
 
@@ -10212,7 +10212,7 @@
         errorLine2="                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="41"
+            line="40"
             column="22"/>
     </issue>
 
@@ -14906,7 +14906,7 @@
         errorLine2="                             ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="444"
+            line="433"
             column="30"/>
     </issue>
 
@@ -15450,7 +15450,7 @@
         errorLine2="            ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="113"
+            line="112"
             column="13"/>
     </issue>
 

@@ -62,7 +62,6 @@ internal fun SettingsLink(title: String, summary: String? = null, icon: AppIcon?
 @Composable
 internal fun SettingsLink(markerColor: Color?, title: String, summary: String? = null, icon: AppIcon? = null, enabled: Boolean = true, anchor: GlassAnchor? = null,
     modifier: Modifier = Modifier, onClick: () -> Unit) {
-    anchor?.captureInk()
     // Retained modal foreground keeps the source composition’s ink and typography.
     val colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
     val headlineStyle = MaterialTheme.typography.bodyLarge
