@@ -136,6 +136,9 @@ internal object FluidLensingSpec {
     enum class Filter { GaussianBlur, DisplacementMap }
     val filterOrder get() = Filter.entries
 
+    fun <Image : Any> colorChain(content: Image, emit: (Filter, Image) -> Image?): Image =
+        filterOrder.fold(content) { color, filter -> emit(filter, color) ?: color }
+
     data class Request(val timing: FluidPopupStep, val gain: Double, val dimension: Double?)
 
     fun shortDimension(scale: Double, width: Double, height: Double): Double {
@@ -175,6 +178,22 @@ internal object FluidLensingSpec {
 
     fun <T : Any> displacementSource(primaryPresent: Boolean, explicitImage: T?, namedSurface: () -> T?): T? =
         if (primaryPresent) explicitImage ?: namedSurface() else null
+
+    data class Vertex(val contentX: Float, val contentY: Float, val mapX: Float, val mapY: Float)
+
+    fun namedMapQuad(
+        contentX: Int, contentY: Int, width: Int, height: Int, mapX: Int, mapY: Int,
+        contentScale: Float, mapScale: Float, fusedMultiplyAdd: (Float, Float, Float) -> Float,
+    ): List<Vertex> {
+        val ratio = mapScale / contentScale
+        val x0 = fusedMultiplyAdd(ratio, contentX.toFloat(), -mapX.toFloat())
+        val x1 = fusedMultiplyAdd(ratio, (contentX + width).toFloat(), -mapX.toFloat())
+        val y0 = fusedMultiplyAdd(ratio, contentY.toFloat(), -mapY.toFloat())
+        val y1 = fusedMultiplyAdd(ratio, (contentY + height).toFloat(), -mapY.toFloat())
+        val w = width.toFloat()
+        val h = height.toFloat()
+        return listOf(Vertex(0f, 0f, x0, y0), Vertex(w, 0f, x1, y0), Vertex(w, h, x1, y1), Vertex(0f, h, x0, y1))
+    }
 
     fun amountUniform(transform: DoubleArray, width: Int, height: Int, renderScale: Float, inputAmount: Double = 1.0): FloatArray {
         val amount = renderScale * inputAmount.toFloat()
