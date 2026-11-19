@@ -12,10 +12,10 @@ This release replaces the shared glass optics in one place, so every glass surfa
 
 - **Glass refraction:** the backdrop seen through glass now bends with a new edge profile: a stronger inward pull just inside the rim and a soft outward band just outside it. The previous crown and shoulder displacement is removed.
 - **Glass colour fill:** glass faces use fixed colour rows applied just before output, and the same face colour is used by both rendering paths. Light glass faces now always get dark ink, so text and icons stay readable over white backdrops and on popups shown over dark pages.
-- **Glass shadow:** one shared shadow replaces the previous falloff: a soft shadow shifted 8 dp down with a 24 dp blur, drawn the same way under every glass surface. Shadow rasters no longer depend on live exclusions.
+- **Glass shadow:** one shared shadow replaces the previous falloff: a soft shadow shifted 8 dp down with a 24 dp blur, drawn the same way under every glass surface. Shadow rasters no longer depend on live exclusions, and the larger shadow reach does not change layout padding or touch areas.
 - **Fluid press:** pressable glass lifts and leans toward the finger while held, then settles back with a spring on release. Pressing again during the settle continues from the current motion instead of restarting.
 - **Touch glow:** the light under the finger is replaced, including the rippling glow that follows a press as it moves. The light follows the finger smoothly, a broad glow fades in and out around the press, and its strength adapts to how bright the backdrop is. Switches light up only while they are physically touched.
-- App Kotlin/Java source changes from 53,520 to 53,903 lines: 843 added, 460 removed, net +383. Most of the growth is the new touch glow and fluid press; the old refraction and shadow code is removed.
+- App Kotlin/Java source changes from 53,520 to 53,907 lines: 852 added, 465 removed, net +387. Most of the growth is the new touch glow and fluid press; the old refraction and shadow code is removed.
 - Refresh shard scheduling from complete v0.34.15 and v0.34.14 producers 44398792857 and 44336375980.
 
 ## Open items
@@ -39,6 +39,7 @@ This release replaces the shared glass optics in one place, so every glass surfa
 - [#1070](https://github.com/anastaci1a/localica/issues/1070): SublistLoadingPlaceholderCaptureTest#albumLight can fail intermittently on Android 8.
 - [#1072](https://github.com/anastaci1a/localica/issues/1072): On Android 8, one touch-light pixel check exceeds its unchanged one-byte limit by one step because the test's rounding differs from the device's byte quantization. The limit is unchanged; this is disclosed as non-blocking.
 - [#1073](https://github.com/anastaci1a/localica/issues/1073): Glass refraction rows at the bottom edge can sample unrecorded backdrop padding, so a popup can intermittently show a slightly different colour along its bottom edge.
+- [#1074](https://github.com/anastaci1a/localica/issues/1074): Opening and closing glass popups is slower at the long tail on the A35: 90th and 95th percentile frame times rise by about 3 to 4 ms and garbage-collection pauses by about 5 ms compared with v0.34.15. Median frame time and list scrolling are unchanged.
 - [#1063](https://github.com/anastaci1a/localica/issues/1063): Investigate count validity when shuffle or repeat changes; this source finding has not been reproduced on a device.
 - [#1064](https://github.com/anastaci1a/localica/issues/1064): Add pending-scroll coverage for the list scrollbar path.
 - [#1065](https://github.com/anastaci1a/localica/issues/1065): Remove obsolete shuffle test diagnostics while preserving native refresh and assertions.
@@ -55,7 +56,6 @@ This release replaces the shared glass optics in one place, so every glass surfa
 - [#1033](https://github.com/anastaci1a/localica/issues/1033): Native track-switch latency remains unresolved; no A35 latency improvement is claimed.
 - [#1011](https://github.com/anastaci1a/localica/issues/1011): Native playback can advance between the Main-thread check and per-edit timeline messages.
 - [#1002](https://github.com/anastaci1a/localica/issues/1002), [#642](https://github.com/anastaci1a/localica/issues/642) and [#986](https://github.com/anastaci1a/localica/issues/986): Later glass adoption and qualified profile comparison remain open.
-- The performance ratchet remains pending. No frame-time or playback-latency improvement is claimed.
 - The 8.3 ms whole-frame A35 objective remains unmet and unchanged. This release makes no qualified frame-timing claim.
 
 ## Install
