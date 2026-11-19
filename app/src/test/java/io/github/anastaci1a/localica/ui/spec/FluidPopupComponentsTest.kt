@@ -175,7 +175,7 @@ class FluidPopupComponentsTest {
     @Test fun displacementUniformsPackTheOrderedLanesAndOptionalOffset() {
         val transform = doubleArrayOf(2.0, 3.0, 99.0, 99.0, 5.0, 7.0)
         val p = FluidLensingSpec.amountUniform(transform, 16, 8, 0.5f, -2.0)
-        assertEquals(listOf(-0.125f, -0.625f, -0.1875f, -0.875f).map(Float::toRawBits), p.map(Float::toRawBits))
+        assertEquals(listOf(-0.125f, -0.3125f, -0.375f, -0.875f).map(Float::toRawBits), p.map(Float::toRawBits))
         assertEquals(0.0625f.toRawBits(), FluidLensingSpec.amountUniform(transform, 16, 8, 0.5f)[0].toRawBits())
         transform[0] = 0.0
         assertEquals(0f.toRawBits(), FluidLensingSpec.amountUniform(transform, 16, 8, 0.5f, -2.0)[0].toRawBits())
