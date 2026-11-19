@@ -32,18 +32,23 @@ class GlassShadowRasterTest {
             }
             val reference = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMassReference(
                 width, height, body.left, body.top, body.right, body.bottom, 24 * d, d)
-            for (image in listOf(frame(false), frame(true))) {
+            val left = kotlin.math.ceil(body.left).toInt()
+            val columns = kotlin.math.floor(body.right).toInt() - left
+            val nearReference = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMassReference(
+                columns, height, body.left - left, body.top, body.right - left, body.bottom, 24 * d, d, bandDp = 16f)
+            fun verify(image: ImageBitmap, mode: String) {
                 val pixels = image.toPixelMap()
                 val mass = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMass(
                     width, height, body.top, body.bottom) { x, y -> pixels[x, y].alpha.toDouble() }
-                if (!reference.accepts(mass)) failures += "d=$d generic=$generic live mass=$mass reference=$reference"
+                if (!reference.accepts(mass)) failures += "d=$d generic=$generic $mode mass=$mass reference=$reference"
+                val near = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMass(
+                    columns, height, body.top, body.bottom, (16 * d).toInt()) { x, y -> pixels[left + x, y].alpha.toDouble() }
+                if (!nearReference.accepts(near)) failures += "d=$d generic=$generic $mode near mass=$near reference=$nearReference"
             }
+            for (image in listOf(frame(false), frame(true))) verify(image, "live")
             coroutineContext[Job]!!.children.toList().joinAll()
             assertEquals(1, shadow.rasterizations)
-            val pixels = frame(true).toPixelMap()
-            val mass = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMass(
-                width, height, body.top, body.bottom) { x, y -> pixels[x, y].alpha.toDouble() }
-            if (!reference.accepts(mass)) failures += "d=$d generic=$generic retained mass=$mass reference=$reference"
+            verify(frame(true), "retained")
         }
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
     }
