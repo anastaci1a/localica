@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui.spec
 
-/** iOS 26.6.2 _UIFlexInteraction springs/opacities; dp substitutes for pt. Small includes Ultra-small glow; response is seconds, damping is a ratio. */
+import androidx.compose.ui.unit.dp
+
 internal data class FlexSpec(val damping: Float, val response: Float,
     val trackingDamping: Float, val trackingResponse: Float, val bigOpacity: Float = 1f, val littleOpacity: Float = 1f,
     val scaleGain: Float? = null, val lift: FlexPress = FlexPress()) {
@@ -9,21 +10,24 @@ internal data class FlexSpec(val damping: Float, val response: Float,
         fun dynamic(longSide: Float, shortSide: Float = longSide): FlexSpec {
             if (longSide < 120f) return Small
             val t = ((longSide - 44f) / 116f).coerceIn(0f, 1f)
-            val u = ((shortSide - 44f) / 116f).coerceIn(0f, 1f)
-            return FlexSpec(.375f + .225f * t, .4f - .04f * t, .625f, .262f + .052f * t, 1f - u, .3f - .1f * u, lift = FlexPress.Large)
+            val u = ((shortSide.toDouble() - 44.0) / 116.0).coerceIn(0.0, 1.0)
+            return FlexSpec(.375f + .225f * t, .4f - .04f * t, .625f, .262f + .052f * t, (1.0 - u).toFloat(), ((1.0 - u) * .3 + u * .2).toFloat(), lift = FlexPress.Large)
         }
     }
 }
 
-/** Responses are extracted iOS defaults; spatial values/filter (uniform SrcOver) are provisional. */
 internal object FlexGlow {
+    val ThumbSize = 28.dp
+    val SwitchInset = 16.dp
     const val Show = .1f
     const val Hide = .5f
-    const val Follow = .15f
-    const val Gain = .12f
+    const val Travel = 50f
+    const val InitialResponse = .15f
+    const val TrackingResponse = .0015f
+    const val SmoothingResponse = 1f
     const val ExtentScale = .75f
     const val ExtentCap = 80f
-    val Falloff = listOf(0f to 1f, 1f to 0f)
+    fun radius(shortPixels: Float, density: Float) = minOf(ExtentScale * shortPixels / density, ExtentCap) * density
 }
 
 internal data class FlexPress(val response: Double = .27, val damping: Double = .625, val impulse: Double = .032,

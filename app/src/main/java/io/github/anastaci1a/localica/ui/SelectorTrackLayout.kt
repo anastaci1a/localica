@@ -35,7 +35,10 @@ import kotlin.math.floor
 @Composable internal fun Modifier.selectorTrackDrag(horizontal: Boolean, eligible: (Offset) -> Boolean,
     contact: (Boolean) -> Unit, onPreview: (Offset) -> Unit, onStart: () -> Unit,
     onDelta: (Float) -> Unit, option: () -> Int, onEnd: (owned: Boolean, cancelled: Boolean) -> Unit,
-    gestureKey: Any? = Unit, immediate: (Offset) -> Boolean = { false }, onTap: () -> Unit = {}): Modifier {
+    gestureKey: Any? = Unit, immediate: (Offset) -> Boolean = { false }, onTap: () -> Unit = {}, onPoint: (Offset) -> Unit = {}, onTravel: (Float) -> Unit = {}, onBegin: () -> Unit = {}): Modifier {
+    val pointChanged by rememberUpdatedState(onPoint)
+    val distance by rememberUpdatedState(onTravel)
+    val begin by rememberUpdatedState(onBegin)
     val pickup by rememberUpdatedState(immediate)
     val tap by rememberUpdatedState(onTap)
     val accepts by rememberUpdatedState(eligible)
@@ -52,7 +55,7 @@ import kotlin.math.floor
             // Finish down in Main: selectable may consume it, but does not own movement.
             val down = awaitFirstDown(requireUnconsumed = false)
             if (!accepts(down.position)) return@awaitEachGesture
-            touch(true); preview(down.position)
+            begin(); distance(0f); pointChanged(down.position); touch(true); preview(down.position)
             var started = false
             var released = false
             var pointer = down.id
@@ -83,6 +86,7 @@ import kotlin.math.floor
                         continue
                     }
                     val point = event.changes.firstOrNull { it.id == pointer } ?: break
+                    pointChanged(point.position); distance((point.position - down.position).getDistance() / density)
                     if (point.isConsumed) break
                     if (!started && event.changes.count { it.pressed } > 1) {
                         // Cancel selectable too: its tap detector otherwise waits for all ups.

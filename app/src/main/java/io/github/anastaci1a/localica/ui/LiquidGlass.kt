@@ -18,13 +18,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.geometry.Rect
+import io.github.anastaci1a.localica.ui.engine.ContactLightBacking
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -124,6 +126,8 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
     private val presentedExpansion: () -> GlassExpansion? = { null }, bodyOverride: FlexSpec? = null) {
     var pressed by mutableStateOf(false)
     var point by mutableStateOf(Offset(.5f, .5f))
+    var glowTravel by mutableFloatStateOf(0f)
+    var glowGeneration by mutableIntStateOf(0)
     var travel by mutableFloatStateOf(0f)
     val modal get() = inModal()
     var active by mutableStateOf(true)
@@ -148,7 +152,7 @@ internal fun rememberGlassContact(shared: GlassContact? = null, bodyOverride: Fl
     val contact = shared ?: remember { GlassContact(bodyOverride = bodyOverride) }
     val visible = LocalGlassVisible.current
     rememberGlassBody({ contact.travel + contact.expansion.value }, contact = { if (contact.pressed) 1f else 0f },
-        state = contact.state, active = { visible && contact.active && !contact.modal }, point = { contact.point }, vertical = { contact.vertical })
+        state = contact.state, active = { visible && contact.active && !contact.modal }, point = { contact.point }, vertical = { contact.vertical }, lightTravel = { contact.glowTravel }, generation = { contact.glowGeneration })
     return contact
 }
 
@@ -158,8 +162,11 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     presentation: () -> GlassShape = { contact.body.value }, admit: () -> Boolean = { true },
     transform: (Size) -> GlassBodyTransform = { presentation().bodyTransform(contact.point, it, contact.vertical) },
     onPressed: (Boolean) -> Unit = {}): Modifier {
-    return glassBody(transform).observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+    return glassBody(transform).glassTouch(contact, admit, onPressed)
 }
+
+@Composable private fun Modifier.glassTouch(contact: GlassContact, admit: () -> Boolean, onPressed: (Boolean) -> Unit = {}): Modifier =
+    observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }, onTravel = { contact.glowTravel = it }) { if (it) contact.glowGeneration++; contact.travel = 0f; contact.pressed = it; onPressed(it) }
 
 internal fun DrawScope.drawGlassBody(transform: GlassBodyTransform, content: DrawScope.() -> Unit) =
     translate(transform.drift.x, transform.drift.y) { scale(transform.scale.x, transform.scale.y, block = content) }
@@ -173,8 +180,9 @@ private fun Modifier.glassBody(transform: (Size) -> GlassBodyTransform) = drawWi
  * contact to a scrolling or moving ancestor, even while the finger stays on the control. */
 @Composable
 internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yieldToParent: Boolean = false,
-    onPoint: ((Offset) -> Unit)? = null, onPressed: (Boolean) -> Unit): Modifier {
+    onPoint: ((Offset) -> Unit)? = null, onTravel: ((Float) -> Unit)? = null, onPressed: (Boolean) -> Unit): Modifier {
     val reportPoint by rememberUpdatedState(onPoint)
+    val reportTravel by rememberUpdatedState(onTravel)
     val notify by rememberUpdatedState(onPressed)
     val admission by rememberUpdatedState(admit)
     val trace by rememberUpdatedState(LocalGlassContactTrace.current)
@@ -191,6 +199,7 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yield
                 down.consume()
                 return@awaitEachGesture
             }
+            reportTravel?.invoke(0f)
             reportPoint?.invoke(Offset(down.position.x / size.width, down.position.y / size.height))
             notify(true)
             var pressed = true
@@ -204,6 +213,7 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yield
                         runCatching { trace?.invoke(name, if (point.pressed) "held" else "up", point.position, point.isConsumed) }
                         if (pressed && point.pressed) reportPoint?.invoke(Offset(point.position.x / size.width, point.position.y / size.height))
                         val movement = point.position - down.position
+                        if (pressed && point.pressed) reportTravel?.invoke(movement.getDistance() / density)
                         if (pressed && point.pressed && intent != null) {
                             if (event.changes.count { it.pressed } > 1) intent.cancel()
                             val owner = intent.move(movement.x, movement.y, point.uptimeMillis - down.uptimeMillis)
@@ -253,6 +263,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val appearance = LocalGlassAppearance.current.normalized()
     // The page owns ink polarity. A control never flips independently as content
     // scrolls beneath it, and no GPU readback is needed to choose its foreground.
@@ -275,19 +286,19 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         } } ?: cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape
     }
     val reduced = LocalReducedMotion.current
-    val flex = FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density,
-        minOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density)
+    val flex = FlexSpec.dynamic(maxOf(surfaceSize.width, surfaceSize.height) / density.density,
+        minOf(surfaceSize.width, surfaceSize.height) / density.density)
     SideEffect {
         val momentum = contact.state.momentum
         momentum.spec = flex
         if (bodyOverride != null && anchor == null && sharedContact == null) {
-            val longSide = maxOf(surfaceSize.width, surfaceSize.height) / view.resources.displayMetrics.density
+            val longSide = maxOf(surfaceSize.width, surfaceSize.height) / density.density
             momentum.bodyOverride = bodyOverride.copy(scaleGain = if (longSide > 0f) -(16f / longSide) / .24f else null)
             contact.state.output.value = if (reduced) GlassShape() else momentum.shape
         }
         if (anchor != null) {
             anchor.depthScale = depthScale
-            anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
+            anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * density.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
         }
     }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
@@ -297,6 +308,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape,
         admit = contactAdmission, transform = appliedTransform) else if (anchor != null) Modifier.glassBody(appliedTransform) else Modifier)
+        .then(if (!pressFeedback && sharedContact == null && anchor == null) Modifier.glassTouch(contact, contactAdmission) else Modifier)
         .then(if (!shadow) Modifier else if (silhouette != null) Modifier.silhouetteGlassShadow(silhouette)
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
         .then(if (presentation == null) Modifier.clip(surfaceClip) else Modifier.graphicsLayer {
@@ -304,10 +316,12 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             clip = true
         })
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
-        val density = androidx.compose.ui.platform.LocalDensity.current
         val blurRadius = glassBackdropBlurRadius(density.density)
         val blur = blurRadius * (appearance.blur + (1f - appearance.blur) * frost)
         val padding = with(density) { 32.dp.toPx() }
+        ContactGlowBacking(Modifier.matchParentSize(), { contact.state.glow.value }, if (pressFeedback || anchor != null) contactShape else body, contact.vertical, rim, sample = {
+            source?.averageColor(location, androidx.compose.ui.geometry.Rect(Offset.Zero, Size(surfaceSize.width.toFloat(), surfaceSize.height.toFloat())))
+        }, transform = appliedTransform) {
         if (!flat && visible && source != null && Build.VERSION.SDK_INT >= 33) {
             // Crossing into panel scattering must not swap backing resolution in
             // one frame. Clear glass stays sharp; visible blur gradually permits
@@ -350,18 +364,21 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 styleReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint * (1f - read().panel.coerceIn(0f, 1f)), tone) } })
         }
         Canvas(Modifier.matchParentSize()) {
+            val panel = presentation?.invoke()?.panel?.coerceIn(0f, 1f) ?: panel
+            drawRect(if (flat) flatColor else tone.color(tint))
+            if (panel > 0f && renderer.backend == GlassBackend.Normal) drawFrostCoating(coatingLightMix, Color.Transparent, panel)
+        }
+        }
+        Canvas(Modifier.matchParentSize()) {
             val frame = presentation?.invoke()
             val cornerRadius = if (frame != null) frame.radius else cornerRadius
             val panel = frame?.panel?.coerceIn(0f, 1f) ?: panel
             val frost = frame?.frost?.coerceIn(0f, 1f) ?: frost
             val refraction = frame?.refraction ?: refraction
-            drawRect(if (flat) flatColor else tone.color(tint))
-            if (panel > 0f && renderer.backend == GlassBackend.Normal) drawFrostCoating(coatingLightMix, Color.Transparent, panel)
             val outline = silhouette?.frame(size)
             val splitRim = outline?.description?.rimSplit ?: 0f
             val bounds = androidx.compose.ui.geometry.Rect(Offset.Zero, size)
             val radius = cornerRadius?.toPx() ?: size.minDimension / 2f
-            drawContactGlow(contact.state.glow.value, contactShape, contact.vertical, tone, rim, appliedTransform(size))
             // Blend the control finish into the shared panel finish during the morph.
             // Flat panel walls have constant normals; diagonal glints stay on corners.
             val panelRimWeight = if (popupRim == null) 0f else panel
@@ -425,4 +442,41 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
         drawPath(silhouette, shine, alpha = opacity, style = Stroke(2.6.dp.toPx()))
         drawPath(silhouette, shade, alpha = opacity, style = Stroke(1.4.dp.toPx()))
     }
+}
+
+@Composable
+internal fun ContactGlowBacking(modifier: Modifier, glow: () -> GlassGlow, shape: () -> GlassShape, vertical: Boolean, cache: GlassRimCache,
+    sample: () -> Color?, transform: (Size) -> GlassBodyTransform = { shape().bodyTransform(Offset(.5f, .5f), it, vertical, anchored = true) }, geometry: DrawScope.() -> Pair<Rect, Float> = { Rect(Offset.Zero, size) to 0f }, content: @Composable () -> Unit) {
+    val background = MaterialTheme.colorScheme.background
+    ContactLightBacking(modifier, geometry = geometry, background = background, enabled = { val frame = glow(); frame.big > 0f || frame.little > 0f || frame.retiring.any { it.little > 0f } },
+        effect = { g -> cache.effect(glow(), transform(size), g.first, density, background, size.height, g.second) }, reduction = { cache.meanEffect(background) },
+        paint = { g -> contactGlowPasses(glow(), shape(), vertical, cache, g.first, sample()?.compositeOver(background) ?: background, transform(size), g.second) }, content = content)
+}
+
+internal fun DrawScope.contactGlowPasses(glow: GlassGlow, body: GlassShape, vertical: Boolean, cache: GlassRimCache,
+    bounds: Rect, sample: Color, transform: GlassBodyTransform? = null, corner: Float = 0f): List<io.github.anastaci1a.localica.ui.engine.ContactLightPass> {
+    if (bounds.isEmpty) return emptyList()
+    val white = cache.white(sample.luminance())
+    val radius = io.github.anastaci1a.localica.ui.spec.FlexGlow.radius(minOf(bounds.width, bounds.height), density)
+    val sigma = glowReducedRadius(radius)
+    return (listOf(GlassGlow(big = glow.big)) + glow.retiring + glow.copy(big = 0f, retiring = emptyList())).mapNotNull { frame ->
+        val local = frame.big == 0f; val alpha = if (local) frame.little else frame.big
+        if (alpha <= 0f) null else {
+            val point = bounds.topLeft + (transform ?: body.bodyTransform(Offset(.5f, .5f), bounds.size, vertical, anchored = true)).localPoint(frame.point, bounds.size)
+            val paint = cache.paint(local, white); val mask = if (local) cache.mask(sigma) else null
+            val pass: io.github.anastaci1a.localica.ui.engine.ContactLightPass = { backing ->
+                clipPath(cache.roundedPath(bounds, corner)) {
+                io.github.anastaci1a.localica.ui.engine.drawContactLight(this, bounds, point, radius / sigma * frame.scale,
+                    if (local) 0f else alpha, if (local) alpha else 0f, paint, paint, mask, cache.composite, backing)
+                }
+            }
+            pass
+        }
+    }
+}
+
+@Composable internal fun rememberGlassLight(contact: () -> Float, point: () -> Offset, travel: () -> Float, generation: () -> Int): GlassContact {
+    val light = remember { GlassContact() }
+    SideEffect { light.pressed = contact() > 0f; light.point = point(); light.glowTravel = travel(); light.glowGeneration = generation() }
+    return light
 }

@@ -45,8 +45,8 @@ class GlassBodyConfigurationTest {
     }
     private fun alphaTargets(contact: GlassContact): List<Float> {
         val body = contact.state.momentum
-        val lights = body.javaClass.getDeclaredField("light").apply { isAccessible = true }.get(body) as List<*>
-        return lights.take(2).map { it!!.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(it) }
+        val lights = glowChannels(body)
+        return lights.take(2).map { it.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(it) }.let { if (it.size == 1) it + 0f else it }
     }
 
     @Test fun measuredFreshActionAndSharedAnchorKeepTheirDistinctConfigurationAcrossResizeAndReducedMotion() {
@@ -94,6 +94,7 @@ class GlassBodyConfigurationTest {
             selected.single().also { it.pressed = true; anchor.contact.active = false }
         }
         compose.mainClock.advanceTimeBy(1200)
+        compose.mainClock.advanceTimeUntil { fresh.state.momentum.settled }
         val held = compose.runOnIdle {
             assertTrue(fresh.state.momentum.settled)
             assertEquals(1f, fresh.state.glow.value.big, 0f)

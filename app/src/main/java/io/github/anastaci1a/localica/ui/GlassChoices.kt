@@ -37,6 +37,8 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
     val direction = if (rtl) -1f else 1f
     var dragging by remember { mutableStateOf(false) }
     var pressed by remember { mutableStateOf(false) }
+    var lightPoint by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var lightTravel by remember { mutableFloatStateOf(0f) }; var lightGeneration by remember { mutableIntStateOf(0) }
     var raw by remember { mutableFloatStateOf(selected.toFloat()) }
     var pressure by remember { mutableFloatStateOf(0f) }
     var settleRequest by remember { mutableIntStateOf(0) }
@@ -88,7 +90,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
         Box(Modifier.fillMaxWidth().height(with(density) { baseHeight.toDp() }).selectableGroup()
             .testTag("choice-track-host").selectorTrackDrag(horizontal,
                 eligible = { point -> trackBounds.contains(point) },
-                contact = { pressed = it },
+                contact = { pressed = it }, onPoint = { lightPoint = it }, onTravel = { lightTravel = it }, onBegin = { lightGeneration++ },
                 onPreview = { point ->
                     // Preserve the grab offset on the moving lens; other options pick up
                     // at the finger using the undeformed host map, never animated geometry.
@@ -119,7 +121,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                     RoundedCornerShape(with(density) { radius.toDp() })))
             SelectionLens(Modifier.testTag("choice-lens"), position, vertical = !horizontal,
                 pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f },
-                placement = { lensFrame }, deformation = lensBody)
+                placement = { lensFrame }, deformation = lensBody, travel = { lightTravel }, generation = { lightGeneration }, point = { (lightPoint - lensFrame.bounds.topLeft).let { androidx.compose.ui.geometry.Offset(it.x / lensFrame.bounds.width, it.y / lensFrame.bounds.height) } })
             labels.indices.forEach { index ->
                 val cell = geometry.slot(index, labels.size, insets, !horizontal, rtl).cell
                 val contentBounds = if (horizontal) androidx.compose.ui.geometry.Rect(cell.left, cell.top + inset, cell.right, cell.bottom - inset)

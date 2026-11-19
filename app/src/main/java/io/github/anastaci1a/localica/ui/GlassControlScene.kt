@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui
 
 import android.os.Build
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.*
@@ -20,20 +21,25 @@ internal val LocalControlGeometryDraw = staticCompositionLocalOf<((LensGeometry)
 @Composable
 internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current,
-    geometry: DrawScope.() -> LensGeometry, body: () -> GlassShape,
+    geometry: DrawScope.() -> LensGeometry, body: () -> GlassShape, glow: () -> GlassGlow = { GlassGlow() },
     active: () -> Float = { 1f }, face: () -> Color = { Color.Transparent },
     prepare: () -> Boolean = { false },
     scene: DrawScope.() -> Unit) {
+    val rim = remember { GlassRimCache() }
     val flat = flatGlass()
     val flatColor = flatGlassColor()
     val geometryObserver = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) LocalControlGeometryDraw.current else null
+    val mean = remember { arrayOfNulls<Color>(1) }
     if (flat) {
+        ContactGlowBacking(modifier, glow, body, false, rim, sample = { mean[0] }, geometry = { geometry().let { it.bounds to it.corner } }) {
         // No recording, source subscription, lens, reduction or exclusive lease in None.
-        Canvas(modifier) {
+        Canvas(Modifier.fillMaxSize()) {
             scene()
             val shape = geometry()
             geometryObserver?.invoke(shape)
+            mean[0] = flatColor
             drawRoundRect(flatColor, shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
+        }
         }
         return
     }
@@ -45,16 +51,17 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
     if (sampled) BackdropLease(source)
     val location = remember { BackdropLocation() }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
-    val rim = remember { GlassRimCache() }
     val layer = if (optical && modern) rememberGlassLayer() else null
     val averageBitmap = if (optical && !modern) remember { arrayOfNulls<ImageBitmap>(1) } else null
     val onLensDraw = LocalControlLensDraw.current
     val opticalWork = LocalGlassOpticalWork.current
-    Canvas(modifier.backdropLocation(location)) {
+    ContactGlowBacking(modifier, glow, body, false, rim, sample = { mean[0] }, geometry = { geometry().let { it.bounds to it.corner } }) {
+    Canvas(Modifier.fillMaxSize().backdropLocation(location)) {
         val shape = geometry()
         geometryObserver?.invoke(shape)
         if (!optical) {
             scene()
+            mean[0] = face()
             drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
             return@Canvas
         }
@@ -90,11 +97,11 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
         }
         clipPath(silhouette, ClipOp.Difference) { scene() }
         onLensDraw?.invoke()
+        var average = Color.Transparent
         if (layer != null && modern) {
             opticalWork?.invoke()
             layer.renderEffect = lens.value?.effect(shifted, 0f, 1.35f * thickness, unit = density, flattening = flattening)
             layer.record(Density(density, fontScale), layoutDirection, extent) { recordScene() }
-            clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }
         } else if (averageBitmap != null && !shape.bounds.isEmpty) {
             val region = shape.bounds
             val sceneOffset = origin - region.topLeft
@@ -117,10 +124,14 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
             val image = bitmap.asAndroidBitmap()
             val pixels = IntArray(image.width * image.height).also { image.getPixels(it, 0, image.width, 0, 0, image.width, image.height) }
             val coveredArea = region.width * region.height * factor * factor
-            val average = averageGlassPixels(pixels, coveredArea)
-            clipPath(silhouette) { drawRect(average) }
+            average = averageGlassPixels(pixels, coveredArea)
         }
-        drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
-        drawGlassRim(shape.bounds, shape.corner, path = silhouette, opacity = active(), cache = rim)
+        mean[0] = if (average != Color.Transparent) average else face()
+        clipPath(silhouette) {
+            if (layer != null) translate(origin.x, origin.y) { drawLayer(layer) } else drawRect(average)
+            drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
+        }
     }
+    }
+    Canvas(modifier) { val shape = geometry(); drawGlassRim(shape.bounds, shape.corner, path = rim.roundedPath(shape.bounds, shape.corner), opacity = active(), cache = rim) }
 }

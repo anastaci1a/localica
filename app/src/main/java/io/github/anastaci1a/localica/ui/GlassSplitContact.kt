@@ -25,6 +25,7 @@ internal class GlassSplitContact(val left: GlassContact) {
         target.state.momentum.blendFrom(a.state.momentum, b.state.momentum, .5f,
             if (a.vertical == target.vertical) 1f else -1f,
             if (b.vertical == target.vertical) 1f else -1f)
+        target.glowGeneration = b.glowGeneration
         target.state.output.value = target.state.momentum.shape
         target.state.glow.value = target.state.momentum.glow
         target.state.previous = target.travel + target.expansion.value

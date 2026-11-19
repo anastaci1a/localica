@@ -44,7 +44,7 @@ class SelectorReboundRecordingTest {
             source = backing
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style,
                 overlayForeground = foreground, overlayDarkening = 0f, tabBlur = 0f, tabWhiteTint = 0f,
-                blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f, shapeDamping = 8f)) {
+                blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f, touchLight = 0f, shapeDamping = 8f)) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(240.dp, 112.dp).testTag("rebound-scene")) {
                         Canvas(Modifier.matchParentSize().recordFrostedBackdrop(backing)) {

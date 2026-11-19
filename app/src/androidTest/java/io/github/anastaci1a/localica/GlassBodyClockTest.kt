@@ -22,6 +22,7 @@ class GlassBodyClockTest {
     private class Inputs {
         var position by mutableFloatStateOf(0f)
         var contact by mutableFloatStateOf(0f)
+        var lightContact by mutableStateOf<Float?>(null)
         var point by mutableStateOf<Offset?>(null)
         var speed by mutableFloatStateOf(1f)
         var damping by mutableFloatStateOf(8f)
@@ -40,7 +41,7 @@ class GlassBodyClockTest {
             CompositionLocalProvider(LocalMotionSpeed provides input.speed, LocalReducedMotion provides input.reduced,
                 LocalGlassAppearance provides GlassAppearance(shapeDamping = input.damping, touchLight = input.strength)) {
                 rememberGlassBody({ input.position }, contact = { input.contact }, state = input.body,
-                    active = { input.active }, point = { input.point ?: Offset.Zero })
+                    active = { input.active }, point = { input.point ?: Offset.Zero }, lightContact = { input.lightContact ?: input.contact })
             }
         }
         suspend fun flush() { Snapshot.sendApplyNotifications(); repeat(4) { yield() } }
@@ -141,12 +142,14 @@ class GlassBodyClockTest {
                 set(body, channel, "value", 0f); set(body, channel, "velocity", 0f)
             }
             set(body, "depth", "value", -.23999f); set(body, "depth", "velocity", 0f)
-            val light = body.momentum.javaClass.getDeclaredField("light").apply { isAccessible = true }.get(body.momentum) as List<*>
+            val light = glowChannels(body.momentum)
             for ((index, item) in light.take(2).withIndex()) {
                 for ((field, value) in listOf("value" to if (index == 0) 0f else .3f,
                     "velocity" to 0f, "target" to if (index == 0) 0f else 1f))
                     item!!.javaClass.getDeclaredField(field).apply { isAccessible = true }.setFloat(item, value)
             }
+            body.momentum.javaClass.getDeclaredField("liftAge").apply { isAccessible = true }.setDouble(body.momentum, io.github.anastaci1a.localica.ui.spec.FlexPress.Hang)
+            seedGlowEpoch(body.momentum)
             frame(11_016_666_666L)
             assertEquals("eligible body completion does not wait for light", -.24f, value(body, "depth", "value"), 0f)
             assertEquals(0f, value(body, "depth", "velocity"), 0f)
@@ -154,7 +157,7 @@ class GlassBodyClockTest {
             val w = 2 * kotlin.math.PI / .1f
             val h = 8_333_333.0 * 2 / 1e9
             val expected = (1 + (.3f.toDouble() - 1) * (1 + w * h) * kotlin.math.exp(-w * h)).toFloat()
-            assertEquals("both alphas use Show from the prior little target", expected, body.glow.value.little, Math.ulp(expected))
+            assertEquals("local alpha uses its retained Show segment", expected, body.glow.value.little, Math.ulp(expected))
             val unfinishedLight = body.glow.value.little
             frame(11_024_999_999L)
             assertNotEquals("another channel's completion cannot retire the clock", unfinishedLight, body.glow.value.little)
@@ -179,10 +182,23 @@ class GlassBodyClockTest {
             contact = 1f; reduced = true; point = Offset(1.25f, -.25f)
             frame(45_000_000_000L)
             assertEquals(GlassShape(), body.output.value)
-            assertEquals(GlassGlow(1f, 1f, point!!), body.glow.value)
+            assertEquals(GlassGlow(1f, 1f, Offset(1f, 0f)), body.glow.value)
             strength = 0f
             frame(45_008_333_333L)
             assertEquals(GlassGlow(), body.glow.value)
+            reduced = false; strength = 1f; contact = 1f; lightContact = 1f; point = Offset(.5f, .5f)
+            frame(46_000_000_000L)
+            frame(46_016_666_666L) // New reduced-motion owner admits h=0.
+            frame(46_024_999_999L)
+            assertTrue("physical light begin is visible", body.glow.value.big > 0f)
+            lightContact = 0f
+            frame(46_033_333_332L)
+            assertEquals("body engagement remains independent", -.24f, value(body, "depth", "target"), 0f)
+            val channels = glowChannels(body.momentum)
+            fun target(channel: Any) = channel.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(channel)
+            assertEquals("broad terminal follows physical contact", 0f, target(channels[0]), 0f)
+            assertEquals("local terminal follows physical contact", 0f, target(channels[1]), 0f)
+            assertEquals("physical terminal selects q4 while body stays held", 4f, target(channels.last()), 0f)
         }
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -111,9 +112,12 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     } else touched
     val shown by animateFloatAsState(if (touchPreview.active) hoverShown else resting,
         if (touchPreview.active || reduced) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Slider position")
-    val body = rememberGlassBody({ shown }, { pressure }, { if (contact && !hovered) 1f else 0f })
+    val light = remember { GlassBodyState() }
+    var lightPoint by remember { mutableStateOf(Offset(.5f, .5f)) }
+    var lightTravel by remember { mutableFloatStateOf(0f) }; var lightGeneration by remember { mutableIntStateOf(0) }
+    val body = rememberGlassBody({ shown }, { pressure }, { if (contact && !hovered) 1f else 0f }, state = light, point = { lightPoint }, lightTravel = { lightTravel }, generation = { lightGeneration })
     // Down-time state for one contact.
-    val contactState = remember { floatArrayOf(0f) } // [grab offset]
+    val contactState = remember { floatArrayOf(0f, 0f, 0f) } // [grab offset]
     var feedback by remember { mutableStateOf<ControlDragHaptics?>(null) }
     fun geometry(): Pair<Float, Float> = with(density) {
         val width = layout[0]?.size?.width?.toFloat() ?: 1f
@@ -153,9 +157,13 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     }
     val touch = Modifier.sliderContact(enabled) { event ->
         val point = event.position
+        if (event is SliderContact.Move) lightTravel = (point - Offset(contactState[1], contactState[2])).getDistance() / density.density
+        val g = geometry(); val cx = g.first + g.second * (if (rtl) 1f - shown else shown)
+        lightPoint = with(density) { Offset(.5f + (point.x - cx) / FlexGlow.ThumbSize.toPx(), .5f + (point.y - InterfaceSliderHeight.toPx() / 2) / FlexGlow.ThumbSize.toPx()) }
         when (event) {
             is SliderContact.Down -> {
-                gesture++
+                gesture++; lightGeneration++; lightTravel = 0f
+                contactState[1] = point.x; contactState[2] = point.y
                 hovered = false
                 contact = true
                 feedback = ControlDragHaptics(haptics)
@@ -258,7 +266,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     }
     GlassControlScene(Modifier.matchParentSize().testTag("settings-slider-scene"), horizontalPadding = 32.dp,
         geometry = { thumbBounds(size.width).let { LensGeometry(it, it.height / 2) } },
-        body = { body.value }, active = { active }, face = { Color.White.copy(alpha = 1f - active) }) {
+        body = { body.value }, glow = { light.glow.value }, active = { active }, face = { Color.White.copy(alpha = 1f - active) }) {
         inset(14.dp.toPx(), 0f) {
             drawSliderTrack(shown, actualSteps, enabled, rtl, NavigationAccent, active, enabledProgress)
         }
@@ -329,7 +337,10 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
                 else androidx.compose.animation.core.FastOutSlowInEasing), label = "Switch lens")
     // A replaced/unready source cannot become a track-only lens during exit.
     val availableActive by remember(ready) { derivedStateOf { if (ready) active else 0f } }
-    val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active })
+    val light = remember { GlassBodyState() }
+    var lightPoint by remember { mutableStateOf(Offset(.5f, .5f)) }
+    var lightTravel by remember { mutableFloatStateOf(0f) }; var lightGeneration by remember { mutableIntStateOf(0) }
+    val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active }, state = light, point = { lightPoint }, lightTravel = { lightTravel }, generation = { lightGeneration }, lightContact = { if (pressed || dragging) 1f else 0f })
     val expansion = LocalGlassAppearance.current.controlExpansion
     val change by rememberUpdatedState(onChange)
     val haptics by rememberUpdatedState(rememberControlHaptics())
@@ -338,8 +349,9 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.directions())
-            pressed = true
+            pressed = true; lightGeneration++; lightTravel = 0f
             val initial = position.value
+            lightPoint = Offset(.5f + (down.position.x - (FlexGlow.SwitchInset + FlexGlow.ThumbSize * (if (rtl) 1f - initial else initial)).toPx()) / FlexGlow.ThumbSize.toPx(), .5f + (down.position.y - size.height / 2f) / FlexGlow.ThumbSize.toPx())
             var moved = false
             var released = false
             val feedback = ControlDragHaptics(haptics)
@@ -354,6 +366,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
                         break
                     }
                     val movement = point.position - down.position
+                    lightTravel = movement.getDistance() / density
                     if (!dragging) {
                         when (intent.move(movement.x, movement.y, point.uptimeMillis - down.uptimeMillis)) {
                             ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> break
@@ -368,7 +381,9 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
                     raw = initial + direction * dx / 28.dp.toPx()
                     pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
                     scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.snapTo(magneticChoicePosition(raw.coerceIn(0f, 1f))) }
-                    val option = if (position.value >= .5f) 1 else 0
+                    val shown = position.value
+                    lightPoint = Offset(.5f + (point.position.x - (FlexGlow.SwitchInset + FlexGlow.ThumbSize * (if (rtl) 1f - shown else shown)).toPx()) / FlexGlow.ThumbSize.toPx(), .5f + (point.position.y - size.height / 2f) / FlexGlow.ThumbSize.toPx())
+                    val option = if (shown >= .5f) 1 else 0
                     if (point.pressed) {
                         feedback.engage(option)
                         feedbackEngaged = true
@@ -395,7 +410,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
             val x = (16.dp + 28.dp * (if (rtl) 1f - fraction else fraction)).toPx() + glassWallTranslation(28.dp.toPx() * scale, shape.scaleX(), wall)
             LensGeometry(androidx.compose.ui.geometry.Rect(x - width / 2f, center.y - height / 2f,
                 x + width / 2f, center.y + height / 2f), height / 2f)
-        }, body = { body.value }, active = { availableActive }, face = { Color.White.copy(alpha = 1f - availableActive) }) {
+        }, body = { body.value }, glow = { light.glow.value }, active = { availableActive }, face = { Color.White.copy(alpha = 1f - availableActive) }) {
             drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
                 topLeft = Offset(0f, center.y - 16.dp.toPx()), size = Size(size.width, 32.dp.toPx()), cornerRadius = CornerRadius(16.dp.toPx()))
         }

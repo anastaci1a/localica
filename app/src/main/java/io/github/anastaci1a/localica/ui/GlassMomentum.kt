@@ -15,7 +15,8 @@ internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f, va
     val thickness get() = exp(depth)
 }
 
-internal data class GlassGlow(val big: Float = 0f, val little: Float = 0f, val point: Offset = Offset.Zero)
+internal data class GlassGlow(val big: Float = 0f, val little: Float = 0f, val point: Offset = Offset.Zero,
+    val scale: Float = 1f, val retiring: List<GlassGlow> = emptyList())
 
 internal fun glassFingerStrain(point: Offset): Float {
     val x = 2 * point.x.coerceIn(0f, 1f) - 1; val y = 2 * point.y.coerceIn(0f, 1f) - 1
@@ -117,7 +118,60 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
         lift.velocity += (w * w * impulse * (target - lift.target)).toFloat()
         lift.target = target
     }
-    private val light = List(4) { Spring() }
+    private class Local(point: Offset, alpha: Float) {
+        val light = List(5) { Spring() }
+        var elapsed = 0.0; var origin = 0f; var originVelocity = 0f; var response = FlexGlow.Show
+        val hidden get() = light[4].target == 4f
+        val output get() = GlassGlow(little = light[0].value, point = Offset(light[1].value, light[2].value), scale = light[4].value)
+        init {
+            light[0].target = alpha
+            light[1].target = point.x; light[2].target = point.y
+            light[1].finish(); light[2].finish()
+            light[3].value = FlexGlow.InitialResponse; light[3].target = FlexGlow.TrackingResponse
+            light[4].target = 1f; light[4].finish()
+        }
+        fun target(alpha: Float, response: Float, scale: Float) {
+            if (light[0].target != alpha || this.response != response) {
+                origin = light[0].value; originVelocity = light[0].velocity; elapsed = 0.0
+                light[0].target = alpha; this.response = response
+            }
+            light[4].target = scale
+        }
+        fun hide() = target(0f, FlexGlow.Hide, 4f)
+        fun advance(h: Double) {
+            elapsed += h
+            val w = 2 * PI / response
+            light[0].value = origin; light[0].velocity = originVelocity
+            light[0].advance(elapsed, w * w, 2 * w)
+            val smooth = 2 * PI / FlexGlow.SmoothingResponse
+            light[3].advance(h, smooth * smooth, 2 * smooth)
+            val follow = 2 * PI / light[3].value
+            light[1].advance(h, follow * follow, 2 * follow); light[2].advance(h, follow * follow, 2 * follow)
+            val scale = 2 * PI / FlexGlow.Hide
+            light[4].advance(h, scale * scale, 2 * scale)
+        }
+        val dead get(): Boolean {
+            if (!hidden || light[0].value != 0f) return false
+            val w = 2 * PI / response; val a = abs(origin.toDouble()); val b = abs(originVelocity + w * origin)
+            val t = if (b == 0.0) elapsed else maxOf(elapsed, 1 / w - a / b)
+            return ((a + b * t) * exp(-w * t)).toFloat() == 0f
+        }
+        val settled get() = !hidden && light.all { it.settled }
+        fun finish() {
+            if (hidden) return
+            if (light[0].settled) { light[0].finish(); origin = light[0].value; originVelocity = 0f; elapsed = 0.0 }
+            for (i in 1..4) if (light[i].settled) light[i].finish()
+        }
+        fun copy(weight: Float) = Local(Offset.Zero, 0f).also { copy ->
+            light.indices.forEach { copy.light[it].blendFrom(light[it], light[it], 0f) }
+            for (field in listOf(copy.light[0])) { field.value *= weight; field.velocity *= weight; field.target *= weight }
+            copy.origin = origin * weight; copy.originVelocity = originVelocity * weight; copy.elapsed = elapsed; copy.response = response
+        }
+    }
+    private val broad = Spring()
+    private var broadResponse = FlexGlow.Hide
+    private val locals = mutableListOf<Local>()
+    private var glowGeneration = 0
     private var travelVelocity = 0f
     private var stiffness = (2 * PI / (bodyOverride ?: spec).response).pow(2)
     private var resistance = (2 * sqrt(stiffness) * (bodyOverride ?: spec).damping).toFloat()
@@ -129,27 +183,39 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
     } ?: depth.settled
     val scaleX get() = shape.scaleX()
     val scaleY get() = shape.scaleY()
-    val glow get() = GlassGlow(light[0].value, light[1].value, Offset(light[2].value, light[3].value))
-    val settled get() = motion.settled && pressure.settled && depthSettled && light.all { it.settled } && lift.settled && liftAge >= liftSpec.hang
+    val glow get() = (locals.lastOrNull()?.output ?: GlassGlow()).copy(big = broad.value, retiring = locals.dropLast(1).map { it.output })
+    val settled get() = motion.settled && pressure.settled && depthSettled && broad.settled && locals.all { it.settled } && lift.settled && liftAge >= liftSpec.hang
 
     /** Each output finishes independently while the shared clock waits for all channels. */
     fun finishSettlement(): Boolean {
         if (motion.settled && pressure.settled && depthSettled) { motion.finish(); pressure.finish(); depth.finish() }
         if (lift.settled && liftAge >= liftSpec.hang) lift.finish()
-        light.forEach { if (it.settled) it.finish() }
+        if (broad.settled) broad.finish()
+        locals.forEach { it.finish() }
         return settled
     }
 
-    fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f; lift.reset(); liftAge = FlexPress.Hang; liftSpec = (bodyOverride ?: spec).lift; light.forEach { it.reset() } }
+    fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f; lift.reset(); liftAge = FlexPress.Hang; liftSpec = (bodyOverride ?: spec).lift; broad.reset(); locals.clear(); broadResponse = FlexGlow.Hide }
 
-    fun targetGlow(point: Offset?, contact: Float, strength: Float, snap: Boolean = false) {
-        if (point == null || strength == 0f) { light.forEach { it.reset() }; return }
-        val down = contact > 0f && light[1].target == 0f
-        if (contact > 0f) { light[2].target = point.x; light[3].target = point.y }
-        if (down) { light[2].finish(); light[3].finish() } // Localica acquisition/re-press policy; U2 is deferred.
-        light[0].target = if (contact > 0f) spec.bigOpacity * strength else 0f
-        light[1].target = if (contact > 0f) spec.littleOpacity * strength else 0f
-        if (snap) light.forEach { it.finish() }
+    fun targetGlow(point: Offset?, contact: Float, strength: Float, snap: Boolean = false, travel: Float = 0f, generation: Int = 0) {
+        if (point == null || strength == 0f) { broad.reset(); locals.clear(); return }
+        broadResponse = if (contact > 0f) FlexGlow.Show else FlexGlow.Hide
+        broad.target = if (contact > 0f) spec.bigOpacity * strength else 0f
+        if (contact > 0f) {
+            val target = Offset(point.x.coerceIn(0f, 1f), point.y.coerceIn(0f, 1f))
+            if (generation != glowGeneration || locals.lastOrNull()?.hidden != false) {
+                locals.lastOrNull()?.hide(); locals.add(Local(target, spec.littleOpacity * strength))
+            }
+            val local = locals.last()
+            local.light[1].target = target.x; local.light[2].target = target.y
+            if (local.light[4].target == 1f) local.target(spec.littleOpacity * strength, FlexGlow.Show, 1f)
+            if (travel > FlexGlow.Travel) local.target(spec.littleOpacity * strength / 2, FlexGlow.Hide, 2f)
+        } else locals.lastOrNull()?.hide()
+        glowGeneration = generation
+        if (snap) {
+            broad.finish(); locals.forEach { it.light.forEach { channel -> channel.finish() } }
+            locals.removeAll { it.hidden }; locals.forEach { it.finish() }
+        }
     }
 
     /** A separating/rejoining body transfers stored energy as well as its shape.
@@ -163,7 +229,14 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
         lift.blendFrom(a.lift, b.lift, fraction)
         val governing = if (fraction < .5f) a else b
         liftAge = governing.liftAge; liftSpec = governing.liftSpec
-        light.indices.forEach { light[it].blendFrom(a.light[it], b.light[it], fraction) }
+        broad.blendFrom(a.broad, b.broad, fraction)
+        if (this !== a || a !== b) {
+            val adopted = if (a === b) a.locals.map { it.copy(1f) } else a.locals.map { it.copy(1f - fraction) } + b.locals.map { it.copy(fraction) }
+            locals.clear(); locals.addAll(adopted)
+            locals.dropLast(1).forEach { if (!it.hidden) it.hide() }
+        }
+        broadResponse = b.broadResponse
+        glowGeneration = b.glowGeneration
         travelVelocity = a.travelVelocity + (b.travelVelocity - a.travelVelocity) * fraction
     }
 
@@ -190,9 +263,9 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
             liftAge = if (release) liftSpec.hang else minOf(liftSpec.hang, liftAge + seconds)
             if (release) liftTarget(0f)
             advanceLift(seconds - wait)
-            val alphaOmega = 2 * PI / if (light[1].target > 0f) FlexGlow.Show else FlexGlow.Hide
-            val centerOmega = 2 * PI / FlexGlow.Follow
-            for (i in light.indices) { val w = if (i < 2) alphaOmega else centerOmega; light[i].advance(seconds, w * w, 2 * w) }
+            val broadOmega = 2 * PI / broadResponse
+            broad.advance(seconds, broadOmega * broadOmega, 2 * broadOmega)
+            locals.forEach { it.advance(seconds) }; locals.removeAll { it.dead }
         }
         if (seconds > 0.0) {
             val speed = if (velocity.isFinite()) velocity.coerceIn(-30f, 30f) else 0f

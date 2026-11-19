@@ -79,6 +79,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     val lens = remember { Animatable(page) }
     var dragging by remember { mutableStateOf(false) }
     var pressed by remember { mutableStateOf(false) }
+    var lightPoint by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var lightTravel by remember { mutableFloatStateOf(0f) }; var lightGeneration by remember { mutableIntStateOf(0) }
     var raw by remember { mutableFloatStateOf(page) }
     var pressure by remember { mutableFloatStateOf(0f) }
     var logicalWall by remember { mutableFloatStateOf(1f) }
@@ -209,7 +211,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             .markTabFingerRelease(fingerRelease).selectorTrackDrag(horizontal = true,
                 eligible = { point -> if (fits) viewportBounds.contains(point) else
                     selectorVisibleLensContains(point, selectorFrame, contentOffset, viewportBounds) },
-                contact = { pressed = it },
+                contact = { pressed = it }, onPoint = { lightPoint = it }, onTravel = { lightTravel = it }, onBegin = { lightGeneration++ },
                 onPreview = { point ->
                     val content = point.copy(x = point.x + if (fits) 0f else contentOffset)
                     val under = atlasGeometry.logicalPositionAt(content, tabs.size, 0f, vertical = false, rtl = rtl)
@@ -296,7 +298,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                         preserveAppearance = true, depthScale = BottomPillDepthScale,
                         tint = if (appearance.tabStyle == TabLensStyle.Overlay) Color.Black.copy(alpha = appearance.overlayDarkening) else Color.Transparent,
                         pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f },
-                        placement = { selectorFrame }, deformation = selectorBody)
+                        placement = { selectorFrame }, deformation = selectorBody, travel = { lightTravel }, generation = { lightGeneration }, point = { (lightPoint - selectorFrame.bounds.topLeft).let { Offset(it.x / selectorFrame.bounds.width, it.y / selectorFrame.bounds.height) } })
 
                 }
             }
