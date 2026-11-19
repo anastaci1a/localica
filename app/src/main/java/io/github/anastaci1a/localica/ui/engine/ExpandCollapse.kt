@@ -61,8 +61,10 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     internal fun usePopupLaw(model: PopupMotionModel,kind: PopupKind) {
         clock.checkMutation(); check(!disposed); val variant=model.variant(kind)
         popupLaw=if(variant==PopupMotionVariant.Legacy) null else ResolvedPopupLaw(model,kind,variant)
-        if(cross==null && (model.centre!=null || variant in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto))) cross=MotionFloat(clock,motion.rawValue(clock.stampNow).toFloat(),1f,key=key to "cross").also { it.onRest={ notifyLifecycle() } }
+        if(popupLaw==null || model.centre==null && variant !in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto)) { cross?.dispose(); cross=null }
+        if(cross==null && popupLaw!=null && (model.centre!=null || variant in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto))) cross=MotionFloat(clock,motion.rawValue(clock.stampNow).toFloat(),1f,key=key to "cross").also { it.onRest={ notifyLifecycle() } }
     }
+    internal fun refreshPopupLaw() { if(!logical && retirementReady) popupLaw?.takeIf { it.model!=clock.spec.popupMotion }?.let { usePopupLaw(clock.spec.popupMotion,it.kind) } }
     private fun timeScale()=contact?.let { it.timeScale?:rootTimeScale() }?:localTimeScale?:rootTimeScale()
     private var held by mutableStateOf(false)
     private var basis by mutableStateOf<ExpansionBasis?>(null); override val canContact: Boolean get()=if(held || boundCurve!=null || popupLaw!=null) false else basis?.let { b -> clock.context?.let { ctx -> b.edgeTravelPx>=1f && finiteExpansionFinish(capturedSpec(),b.edgeTravelPx.toDouble()/ctx.fullPlayerReferenceTravelPx,ctx.displayIntervalSeconds.toDouble()) } }?:false; private var bound: MotionRect?=null; private var boundCurve: Curve?=null; private var nativeBoundary: Float?=null; private var nativeSide=false; private var pendingNative by mutableStateOf<Boolean?>(null); internal var nativeGeneration=0L; private set; internal var pendingBasis: ExpansionBasis?=null; private set; internal var pendingTarget: Boolean?=null; private set
@@ -261,7 +263,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
 /** U07.00 (D41–D43): a popup's one expansion, driven only by its components PopupState. The basis (presented home → envelope) comes with the presenter's measurement; an earlier intent waits for it. U04.02a: retained faces (MorphFaces, presence, panel) start the same owner at [initial]. */
 @Stable internal class PopupMotion(private val clock: UiClock,spec: ExpansionSpec,key: Any,initial: Boolean=false,kind: PopupKind=PopupKind.Legacy) { internal val expansion=ExpandCollapse(clock,spec,initial,key to "popup").also { it.usePopupLaw(clock.spec.popupMotion,kind) }; private var placed=false; private var shown=initial
     internal var bounds by mutableStateOf<MotionRect?>(null); private set
-    internal fun show(visible: Boolean) { clock.checkMutation(); if(placed) expansion.target(visible); shown=visible }
+    internal fun show(visible: Boolean) { clock.checkMutation(); expansion.refreshPopupLaw(); if(placed) expansion.target(visible); shown=visible }
     internal fun place(basis: ExpansionBasis) {
         expansion.setBasis(basis)
         if(!placed) {

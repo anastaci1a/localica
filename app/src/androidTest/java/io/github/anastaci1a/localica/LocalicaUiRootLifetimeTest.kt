@@ -15,6 +15,7 @@ import java.io.File
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.components.rememberPopupSharedContent
 import io.github.anastaci1a.localica.ui.engine.*
 import io.github.anastaci1a.localica.ui.spec.*
 import org.junit.Assert.*
@@ -104,4 +105,51 @@ class LocalicaUiRootLifetimeTest {
         }
         checkRecord(MotionAccess.Reduced, 1.5f)
     }
+    @Test fun popupStyleChangesApplyAtTheNextPresentationOfTheSameTrigger() {
+        val root = LocalicaUiRootState(InterfaceSettings())
+        var open by mutableStateOf(false)
+        lateinit var motion: PopupWindowMotion
+        lateinit var spec: ResolvedUiSpec
+        compose.setContent { LocalicaUiRoot(root) { LocalicaTheme {
+            val anchor = rememberGlassAnchor()
+            val shared = rememberPopupSharedContent(anchor) { Text("Style title") }
+            val resolved = LocalUiSpec.current
+            SideEffect { motion = shared.motion; spec = resolved }
+            Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                Box(Modifier.padding(32.dp).size(48.dp).glassAnchor(anchor)) { shared.Compact() }
+                GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center, sharedContent = shared) {
+                    Column(Modifier.fillMaxWidth().height(180.dp)) {
+                        shared.Expanded()
+                        Text("Style body")
+                    }
+                }
+            }
+        } } }
+        fun rest(shown: Boolean) {
+            compose.waitUntil(5000) { compose.runOnUiThread { if (shown) motion.openAtRest else !open && motion.expansion.retirementReady } }
+            compose.waitForIdle()
+        }
+        val original = motion
+        for (style in listOf(PopupMotionStyle.Fluid, PopupMotionStyle.EdgeSpring)) {
+            compose.runOnIdle { root.settings.value = root.settings.value.copy(popupMotion = style) }
+            compose.runOnIdle {
+                assertEquals(style == PopupMotionStyle.Fluid, spec.spec.popupMotion.centre != null)
+                open = true
+            }
+            compose.onNodeWithText("Style body").assertIsDisplayed()
+            rest(true)
+            compose.runOnIdle {
+                assertSame("The existing popup owner survives the setting change", original, motion)
+                assertEquals(style == PopupMotionStyle.Fluid, motion.expansion.popupLaw!!.model.centre != null)
+                root.settings.value = root.settings.value.copy(popupMotion = if (style == PopupMotionStyle.Fluid) PopupMotionStyle.EdgeSpring else PopupMotionStyle.Fluid)
+            }
+            compose.runOnIdle {
+                assertEquals("An admitted presentation retains its style", style == PopupMotionStyle.Fluid, motion.expansion.popupLaw!!.model.centre != null)
+                open = false
+            }
+            rest(false)
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Style body").fetchSemanticsNodes().isEmpty() }
+        }
+    }
+
 }
