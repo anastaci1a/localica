@@ -14,8 +14,8 @@ internal fun glowWhite(luminance: Float): Float {
 internal class GlassRimCache {
     private val effect by lazy { if (android.os.Build.VERSION.SDK_INT >= 33) ContactLightEffect() else null }
     fun meanEffect(background: Color) = if (android.os.Build.VERSION.SDK_INT >= 33) effect?.mean(background) else null
-    fun effect(glow: GlassGlow, scale: Offset, bounds: Rect, density: Float, background: Color, height: Float, corner: Float, translation: Offset = Offset.Zero): RenderEffect? =
-        if (android.os.Build.VERSION.SDK_INT >= 33 && !bounds.isEmpty) effect?.effect(glow, scale, bounds, density, mask(glowReducedRadius(FlexGlow.radius(minOf(bounds.width, bounds.height), density))), background, height, corner, translation) else null
+    fun effect(glow: GlassGlow, transform: GlassBodyTransform, bounds: Rect, density: Float, background: Color, height: Float, corner: Float): RenderEffect? =
+        if (android.os.Build.VERSION.SDK_INT >= 33 && !bounds.isEmpty) effect?.effect(glow, transform, bounds, density, mask(glowReducedRadius(FlexGlow.radius(minOf(bounds.width, bounds.height), density))), background, height, corner) else null
     private var center: Offset? = null
     private var tone: GlassTone? = null
     private var brushes: GlassRimBrushes? = null
@@ -117,9 +117,9 @@ private class ContactLightEffect {
         mean.setFloatUniform("background", background.red, background.green, background.blue)
         return android.graphics.RenderEffect.createRuntimeShaderEffect(mean, "scene").asComposeRenderEffect().also { meanEffect = it }
     }
-    fun effect(glow: GlassGlow, scale: Offset, bounds: Rect, density: Float,
-        mask: ImageBitmap, background: Color, height: Float, corner: Float, translation: Offset): RenderEffect? {
-        val key = listOf(glow, scale, bounds, density, mask, background, height, corner, translation)
+    fun effect(glow: GlassGlow, transform: GlassBodyTransform, bounds: Rect, density: Float,
+        mask: ImageBitmap, background: Color, height: Float, corner: Float): RenderEffect? {
+        val key = listOf(glow, transform, bounds, density, mask, background, height, corner)
         if (key == previous) return cached
         previous = key
         var result: android.graphics.RenderEffect? = null
@@ -159,7 +159,7 @@ private class ContactLightEffect {
             val shader = passes[slot++]; val matrix = matrices[if (local) 1 else 0]
             for (row in 0..2) shader.setFloatUniform("row$row", matrix[row * 5], matrix[row * 5 + 1], matrix[row * 5 + 2], matrix[row * 5 + 4])
             val radius = FlexGlow.radius(minOf(bounds.width, bounds.height), density)
-            val point = glowCentre(frame.point, bounds, scale, translation)
+            val point = bounds.topLeft + transform.localPoint(frame.point, bounds.size)
             shader.setFloatUniform("light", point.x, point.y, radius / glowReducedRadius(radius) * frame.scale, mask.width.toFloat())
             shader.setFloatUniform("bounds", bounds.left, bounds.top, bounds.right, bounds.bottom)
             shader.setFloatUniform("extent", bounds.right, height); shader.setFloatUniform("corner", corner)

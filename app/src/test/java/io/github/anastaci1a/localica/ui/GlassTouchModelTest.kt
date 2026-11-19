@@ -155,7 +155,7 @@ class GlassTouchModelTest {
             val scale = Offset(shape.scaleX(), shape.scaleY())
             val drift = glassContactDrift(raw, bounds.size, scale)
             val tracked = Offset(.7f, .3f)
-            val local = glowCentre(tracked, bounds, scale, drift)
+            val local = bounds.topLeft + GlassBodyTransform(scale, drift).localPoint(tracked, bounds.size)
             val expected = listOf(bounds.left.toDouble() + bounds.width.toDouble() * tracked.x,
                 bounds.top.toDouble() + bounds.height.toDouble() * tracked.y)
             for (axis in 0..1) {

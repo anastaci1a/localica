@@ -112,9 +112,9 @@ class GlassTouchLightTest {
                 var draws = 0
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
                     val witness = object : DrawScope by this {
-                        override fun drawCircle(brush: Brush, radius: Float, center: Offset, alpha: Float,
+                        override fun drawImage(image: ImageBitmap, topLeft: Offset, alpha: Float,
                             style: DrawStyle, colorFilter: ColorFilter?, blendMode: BlendMode) {
-                            val mapped = floatArrayOf(center.x, center.y)
+                            val mapped = floatArrayOf(topLeft.x + image.width / 2f, topLeft.y + image.height / 2f)
                             @Suppress("DEPRECATION")
                             val matrix = drawContext.canvas.nativeCanvas.matrix
                             matrix.mapPoints(mapped)
@@ -124,7 +124,7 @@ class GlassTouchLightTest {
                         }
                     }
                     witness.drawGlassBody(applied) {
-                        drawContactGlow(GlassGlow(0f, 1f, tracked), { shape }, vertical, GlassTone(), GlassRimCache(), applied)
+                        for (pass in contactGlowPasses(GlassGlow(0f, 1f, tracked), shape, vertical, GlassRimCache(), Rect(Offset.Zero, size), Color(0xff405060), applied)) pass {}
                     }
                 }
                 assertEquals("one nested local draw", 1, draws)
@@ -254,8 +254,7 @@ class GlassTouchLightTest {
                 val ay = exp(-shape.strain - shape.depth / 2) * lift
                 val dx = (direct.point.x - .5f) * 160 * (lift - 1)
                 val dy = (direct.point.y - .5f) * 80 * (lift - 1)
-                val inverse = if (wrong) shape.copy(lift = 0f) else shape.copy(scale = exp(-shape.depth / 2) * lift, lift = 0f)
-                val mapped = if (wrong) light else light.copy(point = light.point - Offset(dx / 160, dy / 80))
+                val mapped = if (wrong) light else light.copy(point = Offset(.5f + (light.point.x - .5f - dx / 160) / ax, .5f + (light.point.y - .5f - dy / 80) / ay))
                 SideEffect { direct.state.glow.value = light; anchor.contact.state.glow.value = light; reference.state.glow.value = mapped }
                 Box(Modifier.size(256.dp, 192.dp).testTag("nested-light")) {
                     Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xff24394d)) }
@@ -263,7 +262,7 @@ class GlassTouchLightTest {
                         if (manual) LiquidGlassSurface(Modifier.size(160.dp, 80.dp).drawWithContent {
                             translate(dx.dp.toPx(), dy.dp.toPx()) { scale(ax, ay) { this@drawWithContent.drawContent() } }
                         }, source = null, tint = Color(0xff405060), cornerRadius = 0.dp, shadow = false,
-                            pressFeedback = false, sharedContact = reference, body = { inverse })
+                            pressFeedback = false, sharedContact = reference)
                         else LiquidGlassSurface(Modifier.size(160.dp, 80.dp).glassAnchor(if (anchored) anchor else null),
                             source = null, tint = Color(0xff405060), cornerRadius = 0.dp, shadow = false,
                             sharedContact = direct, contactPresentation = { shape })

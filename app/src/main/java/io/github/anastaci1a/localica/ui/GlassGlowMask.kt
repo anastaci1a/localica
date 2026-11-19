@@ -57,7 +57,3 @@ internal fun glowMatrix(local: Boolean, white: Float): FloatArray {
     if (local) for (i in 0..14) matrix[i] = clean(matrix[i] * gain)
     return matrix
 }
-
-internal fun glowCentre(point: Offset, bounds: Rect, scale: Offset, drift: Offset) = Offset(
-    bounds.center.x + (bounds.width * (point.x - .5f) - drift.x) / scale.x,
-    bounds.center.y + (bounds.height * (point.y - .5f) - drift.y) / scale.y)
