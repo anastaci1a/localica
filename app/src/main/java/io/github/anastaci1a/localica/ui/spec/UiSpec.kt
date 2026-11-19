@@ -194,6 +194,44 @@ internal object FluidLensingSpec {
         return x to (values?.getOrNull(1)?.toFloat() ?: x)
     }
 }
+
+internal object FluidTerminalSpec {
+    enum class Request {
+        TearDownPlatter, RemovePlatterContainer, CompleteAlongside,
+        ReleaseSharedPortals, ClearMorphables, ClearMorphAnimations, ClearHidingAssertions,
+        FlashScrollIndicators, ClearFocusedPortaling, SuspendClipping, ReleaseFocusedPortals, RestoreClipping,
+    }
+
+    fun completeGroup(dismissing: Boolean, hasCallback: Boolean, hasAlongside: Boolean): List<Request> = buildList {
+        if (hasCallback) {
+            if (dismissing) {
+                add(Request.TearDownPlatter)
+                add(Request.RemovePlatterContainer)
+            }
+            if (hasAlongside) add(Request.CompleteAlongside)
+        }
+        add(Request.ReleaseSharedPortals)
+        add(Request.ClearMorphables)
+        add(Request.ClearMorphAnimations)
+        add(Request.ClearHidingAssertions)
+    }
+
+    fun completeAppearance(success: Boolean, dismissing: Boolean, menuPresent: Boolean, focusedPortaling: Boolean?): List<Request> = buildList {
+        if (!success || dismissing || !menuPresent) return@buildList
+        add(Request.FlashScrollIndicators)
+        if (focusedPortaling != null) {
+            if (focusedPortaling) {
+                add(Request.ClearFocusedPortaling)
+                add(Request.SuspendClipping)
+                add(Request.ReleaseFocusedPortals)
+            }
+            add(Request.RestoreClipping)
+        }
+    }
+
+    fun immediateUnhideSites(through: Boolean, dismissingToDrag: Boolean, hasStashedPreview: Boolean, transitionLoop: Boolean) =
+        (!through && dismissingToDrag && hasStashedPreview) to (!through && transitionLoop)
+}
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
 const val MinimumAnimationSpeed = .5f
 const val MaximumAnimationSpeed = 1.5f

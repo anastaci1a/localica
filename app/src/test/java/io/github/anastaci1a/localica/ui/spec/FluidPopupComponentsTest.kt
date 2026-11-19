@@ -192,4 +192,45 @@ class FluidPopupComponentsTest {
         assertEquals(-0.0f to -0.0f, FluidLensingSpec.offset(doubleArrayOf(-0.0)))
         assertEquals(2f to 3f, FluidLensingSpec.offset(doubleArrayOf(2.0, 3.0, 4.0)))
     }
+
+    @Test fun throughCompletionRunsDismissalCallbackBeforeClearingRetainedContent() {
+        val release = listOf(
+            FluidTerminalSpec.Request.ReleaseSharedPortals,
+            FluidTerminalSpec.Request.ClearMorphables,
+            FluidTerminalSpec.Request.ClearMorphAnimations,
+            FluidTerminalSpec.Request.ClearHidingAssertions,
+        )
+        assertEquals(listOf(
+            FluidTerminalSpec.Request.TearDownPlatter,
+            FluidTerminalSpec.Request.RemovePlatterContainer,
+            FluidTerminalSpec.Request.CompleteAlongside,
+        ) + release, FluidTerminalSpec.completeGroup(dismissing = true, hasCallback = true, hasAlongside = true))
+        assertEquals(listOf(FluidTerminalSpec.Request.CompleteAlongside) + release,
+            FluidTerminalSpec.completeGroup(dismissing = false, hasCallback = true, hasAlongside = true))
+        assertEquals(release, FluidTerminalSpec.completeGroup(dismissing = true, hasCallback = false, hasAlongside = true))
+        assertEquals(listOf(FluidTerminalSpec.Request.TearDownPlatter, FluidTerminalSpec.Request.RemovePlatterContainer) + release,
+            FluidTerminalSpec.completeGroup(dismissing = true, hasCallback = true, hasAlongside = false))
+    }
+
+    @Test fun successfulAppearanceRestoresClippingAfterFocusedPortalsAreReleased() {
+        assertEquals(listOf(
+            FluidTerminalSpec.Request.FlashScrollIndicators, FluidTerminalSpec.Request.ClearFocusedPortaling,
+            FluidTerminalSpec.Request.SuspendClipping, FluidTerminalSpec.Request.ReleaseFocusedPortals,
+            FluidTerminalSpec.Request.RestoreClipping,
+        ), FluidTerminalSpec.completeAppearance(success = true, dismissing = false, menuPresent = true, focusedPortaling = true))
+        assertEquals(listOf(FluidTerminalSpec.Request.FlashScrollIndicators, FluidTerminalSpec.Request.RestoreClipping),
+            FluidTerminalSpec.completeAppearance(success = true, dismissing = false, menuPresent = true, focusedPortaling = false))
+        assertEquals(listOf(FluidTerminalSpec.Request.FlashScrollIndicators),
+            FluidTerminalSpec.completeAppearance(success = true, dismissing = false, menuPresent = true, focusedPortaling = null))
+        assertTrue(FluidTerminalSpec.completeAppearance(false, false, true, true).isEmpty())
+        assertTrue(FluidTerminalSpec.completeAppearance(true, true, true, true).isEmpty())
+        assertTrue(FluidTerminalSpec.completeAppearance(true, false, false, true).isEmpty())
+    }
+
+    @Test fun guardedThroughSkipsBothImmediateUnhideSites() {
+        assertEquals(false to false, FluidTerminalSpec.immediateUnhideSites(true, true, true, true))
+        assertEquals(true to false, FluidTerminalSpec.immediateUnhideSites(false, true, true, false))
+        assertEquals(false to true, FluidTerminalSpec.immediateUnhideSites(false, true, false, true))
+        assertEquals(false to false, FluidTerminalSpec.immediateUnhideSites(false, false, true, false))
+    }
 }
