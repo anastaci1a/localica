@@ -38,6 +38,8 @@ class PopupRetractTintTest {
     @Test fun sourcedPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = true)
     @Test fun sourcedRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = true)
     @Test fun flatPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = false, GlassRendererMode.FlatNone)
+    @Test fun flatRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = false, GlassRendererMode.FlatNone)
+    @Test fun flatSourcedPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = true, GlassRendererMode.FlatNone)
     @Test fun flatSourcedRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = true, GlassRendererMode.FlatNone)
 
     private fun retract(pill: Boolean, sourced: Boolean, mode: GlassRendererMode = GlassRendererMode.Normal) {
