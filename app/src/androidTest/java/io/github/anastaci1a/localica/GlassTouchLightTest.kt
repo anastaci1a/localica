@@ -106,8 +106,8 @@ class GlassTouchLightTest {
                 val applied = shape.bodyTransform(extent, 1f, vertical)
                 val s = if (vertical) -shape.strain else shape.strain
                 val p = if (extent.maxDimension < 120f) 16f else 4f
-                assertEquals((1f + shape.lift * p / extent.maxDimension) * exp(s), applied.scale.x, 1e-6f)
-                assertEquals((1f + shape.lift * p / extent.maxDimension) * exp(-s), applied.scale.y, 1e-6f)
+                assertEquals((1f + shape.lift * (p / extent.maxDimension)) * exp(s), applied.scale.x, 0f)
+                assertEquals((1f + shape.lift * (p / extent.maxDimension)) * exp(-s), applied.scale.y, 0f)
                 if (shape.lift > 0f) assertTrue("translated contact drifts", applied.drift.getDistance() > 0f)
                 var draws = 0
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
@@ -276,7 +276,7 @@ class GlassTouchLightTest {
         compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f)) {
                 // Independent P for the unchanged 160 × 80 dp fixture.
-                val lift = 1f + shape.lift * (356f / 29) / 160
+                val lift = 1f + shape.lift * ((356f / 29) / 160)
                 val ax = exp(shape.strain) * lift
                 val ay = exp(-shape.strain) * lift
                 val dx = shape.drift.x * 160
@@ -326,7 +326,7 @@ class GlassTouchLightTest {
                     assertTrue("the witness rejects missing lift and raw drift", incorrect > 2)
                 }
                 if (!fixed) plain += actual
-                else assertTrue("a popup trigger draws the plain body geometry phase=$phase", difference(plain[phase], actual) <= 2)
+                else assertArrayEquals("a popup trigger draws the plain body geometry phase=$phase", plain[phase], actual)
             }
         }
     }

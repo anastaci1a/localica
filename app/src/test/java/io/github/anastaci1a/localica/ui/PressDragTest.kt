@@ -130,7 +130,9 @@ class PressDragTest {
         // A 328 dp search bar with 16 dp window insets stays inside a 360 dp window.
         val half = 328f * settled(Size(328f, 40f)).bodyTransform(Size(328f, 40f), 1f).scale.x / 2
         assertEquals(8f, 180f - half, 1e-3f); assertEquals(352f, 180f + half, 1e-3f)
-        assertEquals(Offset(1f, 1f), settled(Size(64f, 64f)).bodyTransform(Size.Zero, 2f).scale)
+        for (size in listOf(Size.Zero, Size(0f, 64f), Size(64f, 0f)))
+            for (shape in listOf(GlassShape(lift = 1f), GlassShape(pressDepth = -.24f)))
+                for (density in listOf(1f, 2f)) assertEquals("empty size=$size density=$density", Offset(1f, 1f), shape.bodyTransform(size, density).scale)
     }
 
     @Test fun aHeldBodyUsesCurrentSizePointsWithoutARepublish() {

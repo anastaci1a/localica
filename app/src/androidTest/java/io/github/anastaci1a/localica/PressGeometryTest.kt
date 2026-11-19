@@ -70,7 +70,6 @@ class PressGeometryTest {
             compose.mainClock.advanceTimeBy(1500)
             val body = compose.onNodeWithTag("body")
             val row = (body.fetchSemanticsNode().boundsInRoot.center.y - window.fetchSemanticsNode().boundsInRoot.top).roundToInt()
-            // The action button owns its private contact; its settling is pinned by the JVM override test.
             val momentum = (anchors[i]?.contact ?: contacts[i])?.state?.momentum
             val rest = span(row)
             body.performTouchInput { down(center) }
@@ -81,7 +80,8 @@ class PressGeometryTest {
             val dragged = span(row)
             body.performTouchInput { up() }
             compose.mainClock.advanceTimeBy(10000)
-            compose.runOnIdle { assertTrue("${e.name} settles after release mode=$mode", momentum?.settled != false) }
+            compose.runOnIdle { momentum?.let { assertTrue("${e.name} settles after release mode=$mode", it.settled) } }
+            assertEquals("${e.name} rendered span returns after release mode=$mode", rest, span(row))
             val long = maxOf(e.w, e.h); val short = minOf(e.w, e.h)
             val p = if (long < 120) 16f else 16f - 12f * ((short - 44f) / 116f).coerceIn(0f, 1f)
             val growth = (held.second - held.first) - (rest.second - rest.first)
