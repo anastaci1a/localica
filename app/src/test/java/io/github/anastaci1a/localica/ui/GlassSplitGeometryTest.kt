@@ -55,10 +55,10 @@ class GlassSplitGeometryTest {
         val bodies = splitPillBodies(Size(120f, 60f), .5f)
         for (shape in listOf(GlassShape(.08f, -.16f), GlassShape(-.06f, .1f))) {
             bodies.forEachIndexed { index, body ->
-                val joined = body.deformed(shape, Offset(60f, 30f))
+                val scale = GlassBodyTransform(Offset(shape.scaleX(), shape.scaleY()))
+                val joined = body.deformed(scale, Offset(60f, 30f))
                 val side = if (index == 0) -1f else 1f
-                val separate = body.deformed(shape, Offset((body.left + body.right) / 2f, 30f),
-                    Offset(side * 30f * (shape.scaleX() - 1f), 0f))
+                val separate = body.deformed(scale.copy(drift = Offset(side * 30f * (shape.scaleX() - 1f), 0f)), Offset((body.left + body.right) / 2f, 30f))
                 assertEquals(joined.left, separate.left, .00001f)
                 assertEquals(joined.right, separate.right, .00001f)
                 assertEquals(joined.top, separate.top, .00001f)
