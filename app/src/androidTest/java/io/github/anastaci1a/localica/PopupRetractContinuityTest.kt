@@ -165,6 +165,17 @@ class PopupRetractContinuityTest {
         assertTrue("The qualified current draw withdrew: $calls", calls.isNotEmpty())
         assertEquals("Every source draw is preceded by its qualified withdrawal; no stale source pixels: $calls",
             calls.size / 2, calls.windowed(2, 2).count { it == listOf("withdraw", "content") })
+        // Receipts are checked independently of progress: at the current progress, a stale captured receipt neither
+        // withdraws nor draws, while the same call with the current receipt does (so this check discriminates).
+        val direct = mutableListOf<String>()
+        compose.runOnUiThread {
+            val scope = androidx.compose.ui.graphics.drawscope.CanvasDrawScope()
+            preparation.withdrawal = { direct += "withdraw" }
+            preparation.drawSource(scope, 0f, preparation.originReceipt - 1) { direct += "stale content" }
+            assertTrue("A stale captured receipt at the current progress neither withdraws nor draws: $direct", direct.isEmpty())
+            preparation.drawSource(scope, 0f, preparation.originReceipt) { direct += "content" }
+            assertEquals(listOf("withdraw", "content"), direct)
+        }
         compose.runOnIdle { preparation.reset() }
         assertNull("Disposal/reset clears only this owner's callback", preparation.withdrawal)
     }
