@@ -40,6 +40,10 @@ This release replaces the shared glass optics in one place, so every glass surfa
 - [#1072](https://github.com/anastaci1a/localica/issues/1072): On Android 8, one touch-light pixel check exceeds its unchanged one-byte limit by one step because the test's rounding differs from the device's byte quantization. The limit is unchanged; this is disclosed as non-blocking.
 - [#1073](https://github.com/anastaci1a/localica/issues/1073): Glass refraction rows at the bottom edge can sample unrecorded backdrop padding, so a popup can intermittently show a slightly different colour along its bottom edge.
 - [#1074](https://github.com/anastaci1a/localica/issues/1074): Opening and closing glass popups is slower at the long tail on the A35: 90th and 95th percentile frame times rise by about 3 to 4 ms and garbage-collection pauses by about 5 ms compared with v0.34.15. Median frame time and list scrolling are unchanged.
+- GlassTouchLight leaves a residual in the lens refraction band after one press and release; backdrop source state remains under investigation. Assertions are unchanged.
+- SwitchTapOptics has an Android 8 colour classifier mismatch and unresolved Android 16 travel behavior. Assertions are unchanged.
+- On Android 16, the default Adjustable selector misses its unchanged colour bound (0.9294, 0.7686, 1); both overlay rebound checks also remain unresolved.
+- Popup selection pill overlap check S3 fails on Android 8 and Android 16. The check remains unchanged.
 - [#1063](https://github.com/anastaci1a/localica/issues/1063): Investigate count validity when shuffle or repeat changes; this source finding has not been reproduced on a device.
 - [#1064](https://github.com/anastaci1a/localica/issues/1064): Add pending-scroll coverage for the list scrollbar path.
 - [#1065](https://github.com/anastaci1a/localica/issues/1065): Remove obsolete shuffle test diagnostics while preserving native refresh and assertions.
