@@ -133,7 +133,7 @@ class GlassBodyConformanceTest {
             for (short in listOf(0f, 44f, 64f, 160f)) for (strength in listOf(0f, .5f, 1f)) {
                 val t = ((long - 44f) / 116f).coerceIn(0f, 1f)
                 val u = ((short.toDouble() - 44) / 116).coerceIn(0.0, 1.0)
-                val expected = if (long < 120f) FlexSpec(.375f, .4f, .625f, .262f) else FlexSpec(.375f + .225f * t, .4f - .04f * t, .625f, .262f + .052f * t, fusedTestValue(1 - u, 1.0, u * 0.0).toFloat(), fusedTestValue(1 - u, .3, u * .2).toFloat(), lift = FlexPress.Large)
+                val expected = if (long < 120f) FlexSpec(.375f, .4f, .625f, .262f) else FlexSpec(.375f + .225f * t, .4f - .04f * t, .625f, .262f + .052f * t, fusedTestValue(1 - u, 1.0, u * 0.0).toFloat(), fusedTestValue(1 - u, .3, u * .2).toFloat(), lift = FlexPress.Large, distance = (6000 + 18000 * u).toFloat())
                 val body = GlassMomentum(FlexSpec.Small).apply { spec = FlexSpec.dynamic(long, short) }
                 assertEquals(expected, body.spec)
                 body.advance(0f, 0.0, contact = 1f, damping = 40f)

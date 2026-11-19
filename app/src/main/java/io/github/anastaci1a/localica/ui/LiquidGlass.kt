@@ -160,7 +160,7 @@ internal fun rememberGlassContact(shared: GlassContact? = null, bodyOverride: Fl
 @Composable
 internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     presentation: () -> GlassShape = { contact.body.value }, admit: () -> Boolean = { true },
-    transform: (Size) -> GlassBodyTransform = { presentation().bodyTransform(contact.point, it, contact.vertical) },
+    transform: (Size) -> GlassBodyTransform = { presentation().bodyTransform(it, contact.vertical) },
     onPressed: (Boolean) -> Unit = {}): Modifier {
     return glassBody(transform).glassTouch(contact, admit, onPressed)
 }
@@ -279,7 +279,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact, bodyOverride)
     val contactShape = contactPresentation ?: modifier.glassSurfaceContactPresentation() ?: { contact.body.value }
     val appliedTransform: (Size) -> GlassBodyTransform = { extent -> if (pressFeedback || anchor != null)
-        contactShape().bodyTransform(contact.point, extent, contact.vertical, anchored = anchor != null) else GlassBodyTransform() }
+        contactShape().bodyTransform(extent, contact.vertical, anchored = anchor != null) else GlassBodyTransform() }
     val surfaceClip = remember(silhouette, cornerRadius) {
         silhouette?.let { outline -> androidx.compose.foundation.shape.GenericShape { extent, _ ->
             addPath(outline.frame(extent).path)
@@ -290,7 +290,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         minOf(surfaceSize.width, surfaceSize.height) / density.density)
     SideEffect {
         val momentum = contact.state.momentum
-        momentum.spec = flex
+        momentum.spec = flex; momentum.extent = Size(surfaceSize.width / density.density, surfaceSize.height / density.density)
         if (bodyOverride != null && anchor == null && sharedContact == null) {
             val longSide = maxOf(surfaceSize.width, surfaceSize.height) / density.density
             momentum.bodyOverride = bodyOverride.copy(scaleGain = if (longSide > 0f) -(16f / longSide) / .24f else null)
@@ -446,7 +446,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
 
 @Composable
 internal fun ContactGlowBacking(modifier: Modifier, glow: () -> GlassGlow, shape: () -> GlassShape, vertical: Boolean, cache: GlassRimCache,
-    sample: () -> Color?, transform: (Size) -> GlassBodyTransform = { shape().bodyTransform(Offset(.5f, .5f), it, vertical, anchored = true) }, geometry: DrawScope.() -> Pair<Rect, Float> = { Rect(Offset.Zero, size) to 0f }, content: @Composable () -> Unit) {
+    sample: () -> Color?, transform: (Size) -> GlassBodyTransform = { shape().bodyTransform(it, vertical, anchored = true) }, geometry: DrawScope.() -> Pair<Rect, Float> = { Rect(Offset.Zero, size) to 0f }, content: @Composable () -> Unit) {
     val background = MaterialTheme.colorScheme.background
     ContactLightBacking(modifier, geometry = geometry, background = background, enabled = { val frame = glow(); frame.big > 0f || frame.little > 0f || frame.retiring.any { it.little > 0f } },
         effect = { g -> cache.effect(glow(), transform(size), g.first, density, background, size.height, g.second) }, reduction = { cache.meanEffect(background) },
@@ -462,7 +462,7 @@ internal fun DrawScope.contactGlowPasses(glow: GlassGlow, body: GlassShape, vert
     return (listOf(GlassGlow(big = glow.big)) + glow.retiring + glow.copy(big = 0f, retiring = emptyList())).mapNotNull { frame ->
         val local = frame.big == 0f; val alpha = if (local) frame.little else frame.big
         if (alpha <= 0f) null else {
-            val point = bounds.topLeft + (transform ?: body.bodyTransform(Offset(.5f, .5f), bounds.size, vertical, anchored = true)).localPoint(frame.point, bounds.size)
+            val point = bounds.topLeft + (transform ?: body.bodyTransform(bounds.size, vertical, anchored = true)).localPoint(frame.point, bounds.size)
             val paint = cache.paint(local, white); val mask = if (local) cache.mask(sigma) else null
             val pass: io.github.anastaci1a.localica.ui.engine.ContactLightPass = { backing ->
                 clipPath(cache.roundedPath(bounds, corner)) {

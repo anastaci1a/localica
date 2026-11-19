@@ -114,17 +114,11 @@ class FluidPressTest {
         }
     }
 
-    @Test fun heldFingerStrainIsSymmetricAndReturnsThroughTheExistingPressureSpring() {
-        assertEquals(0f, glassFingerStrain(Offset(.5f, .5f)), 0f)
-        assertEquals(.05f, glassFingerStrain(Offset(1f, .5f)), 0f)
-        assertEquals(-.05f, glassFingerStrain(Offset(.5f, 0f)), 0f)
-        for (x in listOf(0f, .2f, .5f, 1f)) for (y in listOf(0f, .3f, 1f)) {
-            assertEquals(glassFingerStrain(Offset(x, y)), glassFingerStrain(Offset(1 - x, 1 - y)), 1e-7f)
-            assertEquals(glassFingerStrain(Offset(x, y)), -glassFingerStrain(Offset(y, x)), 1e-7f)
-        }
-        val body = GlassMomentum()
-        body.advance(0f, 0.0, contact = 1f, point = Offset(1f, .5f))
-        body.advance(0f, .1, contact = 1f, point = Offset(1f, .5f))
+    @Test fun contactStrainReturnsThroughTheExistingPressureSpring() {
+        val body = GlassMomentum().apply { extent = Size(64f, 64f) }
+        body.advance(0f, 0.0, contact = 1f, point = Offset(.5f, .5f))
+        body.advance(0f, 0.0, contact = 1f, point = Offset(1.5f, .5f))
+        body.advance(0f, .1, contact = 1f, point = Offset(1.5f, .5f))
         assertTrue(body.strain > 0f)
         val held = channel(body, "pressure", "value")
         body.advance(0f, 0.0)
@@ -134,27 +128,17 @@ class FluidPressTest {
         assertTrue(body.finishSettlement()); assertEquals(GlassShape(), body.shape)
     }
 
-    @Test fun driftUsesOnlyOwnerLiftAndAnchorsNeverTranslate() {
+    @Test fun stationaryPressNeverDriftsAndAnchorsNeverTranslate() {
         for (density in listOf(2f, 2.48125f, 3f)) {
-            val size = Size(64 * density, 64 * density)
-            val point = Offset(.8f, .2f)
-            val drift = glassContactDrift(point, size, Offset(1.25f, .95f))
-            assertEquals(4.8f * density, drift.x, 1e-5f)
-            assertEquals(-4.8f * density, drift.y, 1e-5f)
-            val rest = glassContactDrift(point, size, Offset(1f, 1f))
-            assertEquals(0f, rest.x, 0f); assertEquals(0f, rest.y, 0f)
-            assertEquals(Offset.Zero, glassContactDrift(Offset(.5f, .5f), size, Offset(1.25f, 1.25f)))
-            val strainOnly = GlassShape(strain = .12f, depth = -.2f)
-            val restLift = strainOnly.liftScale()
-            val travelDrift = glassContactDrift(point, size, Offset(restLift, restLift))
-            assertEquals(0f, travelDrift.x, 0f); assertEquals(0f, travelDrift.y, 0f)
-            val lifted = strainOnly.copy(lift = ln(1.25f))
-            assertEquals(1.25f, lifted.liftScale(), 0f)
-            val anchorLift = lifted.liftScale(anchored = true)
-            assertEquals(1f, anchorLift, 0f)
-            val anchorDrift = glassContactDrift(point, Size(300 * density, 200 * density), Offset(anchorLift, anchorLift))
-            assertEquals(0f, anchorDrift.x, 0f); assertEquals(0f, anchorDrift.y, 0f)
-
+            val body = GlassMomentum().apply { extent = Size(64f, 64f) }
+            body.advance(0f, 0.0, contact = 1f, point = Offset(.8f, .2f))
+            repeat(60) { body.advance(0f, 1.0 / 120, contact = 1f, point = Offset(.8f, .2f)) }
+            assertTrue(body.shape.lift > 0f)
+            assertEquals(Offset.Zero, body.shape.bodyTransform(Size(64 * density, 64 * density)).drift)
+            val pulled = GlassShape(strain = .12f, depth = -.2f, lift = ln(1.25f), drift = Offset(.1f, -.1f))
+            assertEquals(Offset(6.4f * density, -6.4f * density), pulled.bodyTransform(Size(64 * density, 64 * density)).drift)
+            assertEquals(Offset.Zero, pulled.bodyTransform(Size(300 * density, 200 * density), anchored = true).drift)
+            assertEquals(1f, pulled.liftScale(anchored = true), 0f)
         }
     }
     @Test fun travelOnlyDepthKeepsTheOriginalSolverAndShapeDamping() {
@@ -185,10 +169,12 @@ class FluidPressTest {
             val joined = GlassMomentum().apply { blendFrom(a, b, weight) }
             assertEquals(age.getDouble(if (weight < .5f) a else b), age.getDouble(joined), 0.0)
         }
-        for (edge in listOf(-.22f, .12f)) for (point in listOf(Offset(0f, .5f), Offset(.5f, 0f))) {
-            val body = GlassMomentum()
-            body.advance(0f, 0.0, pressure = edge, contact = 1f, point = point)
-            assertEquals((edge + glassFingerStrain(point)).coerceIn(-.22f, .12f), channel(body, "pressure", "target"), 0f)
+        for (edge in listOf(-.22f, .12f)) for (point in listOf(Offset(0f, .5f), Offset(.5f, -1f))) {
+            val body = GlassMomentum().apply { extent = Size(64f, 64f) }
+            body.advance(0f, 0.0, pressure = edge * 2, contact = 1f, point = Offset(.5f, .5f))
+            body.advance(0f, 0.0, pressure = edge * 2, contact = 1f, point = point)
+            val flex = glassContactFlex(point, Offset(.5f, .5f), Offset(64f, 64f) / 2000f)
+            assertEquals(edge + abs(flex.x) - abs(flex.y), channel(body, "pressure", "target"), 1e-7f)
         }
     }
 

@@ -33,14 +33,14 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     val shadow = rememberGlassSilhouette { size ->
         val bodies = pill.bodies(size)
         val joined = contacts.joined
-        if (!preparation.separated) bodies.map { it.deformed(joined.body.value.bodyTransform(joined.point, size, joined.vertical), size.center) }
+        if (!preparation.separated) bodies.map { it.deformed(joined.body.value.bodyTransform(size, joined.vertical), size.center) }
         else {
             val separation = originGap(preparation.progress)
             val common = contacts.presentation(contacts.left, contacts.right, 0f).scaleX(contacts.left.vertical)
             bodies.mapIndexed { index, body ->
                 val (contact, other) = if (index == 0) contacts.left to contacts.right else contacts.right to contacts.left
                 val shift = (if (index == 0) -1f else 1f) * size.height / 2f * (common - 1f) * (1f - separation)
-                val drawn = contacts.presentation(contact, other, separation).bodyTransform(contact.point, body.boundingRect.size, contact.vertical, anchored = index == 0)
+                val drawn = contacts.presentation(contact, other, separation).bodyTransform(body.boundingRect.size, contact.vertical, anchored = index == 0)
                 body.deformed(drawn.copy(drift = drawn.drift + Offset(shift, 0f)), body.center)
             }
         }
