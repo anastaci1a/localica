@@ -1927,16 +1927,6 @@
             column="91"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="    SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { 28.dp.toPx() } }"
-        errorLine2="                                                                                                                   ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="419"
-            column="116"/>
-    </issue>
 
 
 
