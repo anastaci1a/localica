@@ -55,4 +55,54 @@ class FluidPopupComponentsTest {
             assertEquals(expected[2].toRawBits(), spring.damping.toRawBits())
         }
     }
+
+    @Test fun throughBlurUsesTheOppositeNamedSpringSlots() {
+        val defaults = FluidContentDefaults
+        assertEquals(1.2.toRawBits(), defaults.minScale.toRawBits())
+        assertEquals(1.65.toRawBits(), defaults.maxScale.toRawBits())
+        assertEquals(0.3.toRawBits(), defaults.blurInSpring.response.toRawBits())
+        assertEquals(0.45.toRawBits(), defaults.blurOutSpring.response.toRawBits())
+        assertEquals(1.0.toRawBits(), defaults.blurInSpring.dampingRatio.toRawBits())
+        assertEquals(0.8.toRawBits(), defaults.blurOutSpring.dampingRatio.toRawBits())
+
+        val supplied = defaults.copy(
+            blurInSpring = FluidPopupSpringSettings(dampingRatio = 0.9, response = 0.2),
+            blurOutSpring = FluidPopupSpringSettings(dampingRatio = 0.6, response = 0.4),
+            speed = 1.25, amplifyDelays = true,
+        )
+        val grows = requireNotNull(supplied.blurSequence(growing = true))
+        val shrinks = requireNotNull(supplied.blurSequence(growing = false))
+        assertEquals(supplied.blurInSpring, grows.blurOut.spring)
+        assertEquals(supplied.blurOutSpring, grows.blurIn.spring)
+        assertEquals(supplied.blurInSpring, shrinks.blurOut.spring)
+        assertEquals(supplied.blurOutSpring, shrinks.blurIn.spring)
+        assertEquals(0.0.toRawBits(), grows.blurOut.storedDelay.toRawBits())
+        assertEquals(0.12.toRawBits(), grows.blurIn.storedDelay.toRawBits())
+        assertEquals(0.1.toRawBits(), shrinks.blurIn.storedDelay.toRawBits())
+        assertEquals(1.5.toRawBits(), grows.blurIn.scaledDelay(supplied).toRawBits())
+        assertEquals(1.25.toRawBits(), shrinks.blurIn.scaledDelay(supplied).toRawBits())
+        assertEquals(null, supplied.copy(lensingEnabled = false).blurSequence(growing = true))
+    }
+
+    @Test fun blurRequestsUseTheCapturedHeightAndKeepBothRecipients() {
+        val reads = mutableListOf<String>()
+        val cases = listOf(
+            100.0 to 1.65,
+            215.0 to 1.65,
+            367.5 to 1.4249999999999998,
+            520.0 to 1.2,
+            600.0 to 1.2,
+            Double.NaN to 1.2,
+        )
+        for ((height, scale) in cases) {
+            reads.clear()
+            val request = fluidContentBlurOut(
+                height, maxScale = { reads += "max"; 1.65 }, minScale = { reads += "min"; 1.2 },
+            )
+            assertEquals(listOf("max", "min"), reads)
+            assertEquals(scale.toRawBits(), request.portalScale.toRawBits())
+            assertEquals(4.0.toRawBits(), request.gaussianRadius.toRawBits())
+        }
+        assertEquals(FluidContentBlurRequest(1.0, 0.0), FluidContentBlurIn)
+    }
 }

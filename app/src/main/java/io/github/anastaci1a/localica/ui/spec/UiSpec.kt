@@ -78,6 +78,35 @@ internal class FluidPopupSpringSettings(val dampingRatio: Double, val response: 
     val damping = 2 * dampingRatio * omega
 }
 internal val FluidMainEjectDefaults = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
+
+internal data class FluidContentSettings(
+    val minScale: Double, val maxScale: Double,
+    val blurInSpring: FluidPopupSpringSettings, val blurOutSpring: FluidPopupSpringSettings,
+    val speed: Double, val amplifyDelays: Boolean, val lensingEnabled: Boolean,
+) {
+    fun blurSequence(growing: Boolean): FluidContentBlurSequence? =
+        if (lensingEnabled) FluidContentBlurSequence(
+            FluidContentBlurStep(0.0, blurInSpring),
+            FluidContentBlurStep(if (growing) 0.12 else 0.1, blurOutSpring),
+        ) else null
+}
+internal val FluidContentDefaults = FluidContentSettings(
+    minScale = 1.2, maxScale = 1.65,
+    blurInSpring = FluidPopupSpringSettings(dampingRatio = 1.0, response = 0.3),
+    blurOutSpring = FluidPopupSpringSettings(dampingRatio = 0.8, response = 0.45),
+    speed = 0.7, amplifyDelays = false, lensingEnabled = true,
+)
+internal data class FluidContentBlurStep(val storedDelay: Double, val spring: FluidPopupSpringSettings) {
+    fun scaledDelay(settings: FluidContentSettings) = fluidStoredDelay(storedDelay, settings.speed, settings.amplifyDelays)
+}
+internal data class FluidContentBlurSequence(val blurOut: FluidContentBlurStep, val blurIn: FluidContentBlurStep)
+internal data class FluidContentBlurRequest(val portalScale: Double, val gaussianRadius: Double)
+internal fun fluidContentBlurOut(height: Double, maxScale: () -> Double, minScale: () -> Double): FluidContentBlurRequest {
+    val fraction = (height + (-215.0)) / 305.0
+    val t = if (fraction.isNaN()) 1.0 else fraction.coerceIn(0.0, 1.0)
+    return FluidContentBlurRequest((1.0 - t) * maxScale() + t * minScale(), 4.0)
+}
+internal val FluidContentBlurIn = FluidContentBlurRequest(1.0, 0.0)
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
 const val MinimumAnimationSpeed = .5f
 const val MaximumAnimationSpeed = 1.5f
