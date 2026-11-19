@@ -176,6 +176,7 @@ class SplitPillContactTest {
         lateinit var host: android.view.View
         compose.setContent { host=androidx.compose.ui.platform.LocalView.current; CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { EngineTheme(clear=true) {
             MaterialTheme(colorScheme=lightColorScheme()) {
+                CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(touchLight=0f)) {
                 Box(Modifier.size(360.dp,560.dp).background(Color.Black).testTag("production-press-scene")) {
                     when(item) {
                         0 -> PopupActionPill(pill,source=null,modifier=Modifier.align(Alignment.Center).height(CompactControlSize),
@@ -184,6 +185,7 @@ class SplitPillContactTest {
                         1 -> CollectionHeader("Album",null,PlayerVisual(),false,true,{clicks++},{})
                         else -> Box(Modifier.align(Alignment.Center).width(328.dp)) { ListSearchPill("Search album",{clicks++},anchor=search) }
                     }
+                }
                 }
             }
         } } }
