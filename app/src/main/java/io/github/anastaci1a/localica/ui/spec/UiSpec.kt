@@ -65,6 +65,12 @@ internal val StockPopupMotion = PopupMotionModel(StockPopupMotionRevision, Sprin
         PopupKind.SelectionPill to PopupMotionVariant.Base, PopupKind.Legacy to PopupMotionVariant.Legacy))
 // Provisional neutral law while #1083 pass 2 determines the fluid shape; replace only this spec.
 internal fun fluidPopupMotion() = StockPopupMotion.copy(centre = StockPopupMotion.open)
+internal fun fluidPreviewMorphs(compact: Boolean, overlapsPreview: () -> Boolean) =
+    compact && overlapsPreview()
+internal fun fluidIntermediateY(sourceY: Double, targetY: Double, ratio: Double, cap: Double) =
+    sourceY + (ratio * (targetY - sourceY)).coerceIn(-cap, cap)
+internal fun fluidStoredDelay(storedDelay: Double, speed: Double, amplify: Boolean) =
+    storedDelay * speed * (if (amplify) 10.0 else 1.0)
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
 const val MinimumAnimationSpeed = .5f
 const val MaximumAnimationSpeed = 1.5f
