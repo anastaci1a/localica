@@ -42,7 +42,7 @@ class SelectorReboundRecordingTest {
             view = LocalView.current
             val backing = rememberFrostedBackdrop(Unit)
             source = backing
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style,
+            CompositionLocalProvider(LocalGlassAppearance provides if (style == TabLensStyle.Adjustable) GlassAppearance() else GlassAppearance(tabStyle = style,
                 overlayForeground = foreground, overlayDarkening = 0f, tabBlur = 0f, tabWhiteTint = 0f,
                 blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f, touchLight = 0f, shapeDamping = 8f)) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
