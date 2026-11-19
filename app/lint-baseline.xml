@@ -1093,7 +1093,7 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="    val shadowInset = glassShadowInset().coerceAtLeast(12.dp)"
+        errorLine1="    val shadowInset = glassLayoutInset().coerceAtLeast(12.dp)"
         errorLine2="                                                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowseSortDialog.kt"
