@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui.spec
 
+import java.util.IdentityHashMap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -239,5 +240,124 @@ class FluidPopupComponentsTest {
         val padding = FluidGaussianSpec.edgePadding(1.0, 2.0, 0.5, 2.0)
         assertEquals(0x40333333, padding.first.toRawBits())
         assertEquals(0x41333333, padding.second.toRawBits())
+    }
+
+    @Test fun trackedCornerDefaultAndMatchesPreserveTheEncodedCurve() {
+        assertEquals(0, FluidCornerSpec.freshCurve(0x07e7ffff))
+        assertEquals(1, FluidCornerSpec.freshCurve(0x07e80000))
+        assertEquals(0f.toRawBits(), FluidCornerSpec.matchedRadius(-5.0).toRawBits())
+        assertEquals((-0f).toRawBits(), FluidCornerSpec.matchedRadius(-0.0).toRawBits())
+        val vector = FluidCornerSpec.matchedRadii(doubleArrayOf(3.0, 9.0, -5.0, 10.0, 7.0, 11.0, 8.0, 12.0))
+        val lanes = FluidCornerSpec.rawRadii(null, false, vector, Float.NaN, 10.0)
+        assertEquals(listOf(3f, 0f, 7f, 8f), lanes?.toList())
+        val automatic = FluidCornerSpec.rawRadii(null, false, null, Float.fromBits(0x7fe00000), 10.0)
+        assertEquals(List(4) { 5f }, automatic?.toList())
+        assertEquals(List(4) { 0f }, FluidCornerSpec.rawRadii(null, false, null, Float.NaN, 10.0)?.toList())
+        assertEquals(null, FluidCornerSpec.rawRadii(null, true, vector, 3f, 10.0))
+    }
+
+    @Test fun trackedCornerBoundsChooseUniformAndSignedUnevenPayloads() {
+        val uniform = FluidCornerSpec.boundsEncoding(floatArrayOf(-1f, 0f, 0.009f, 0.01f), 2f, 0, 6f, 8f)
+        assertEquals(21, uniform.imageFunction)
+        assertEquals(4f, uniform.family, 0f)
+        assertEquals(listOf(1f, 1f, 0.02f, 0f), uniform.radii.toList())
+        val rounded = FluidCornerSpec.boundsEncoding(FloatArray(4) { 5f }, 2f, 1, 0f, 10f)
+        assertEquals(listOf(1f, 0f, 10f, 0f), rounded.radii.toList())
+        val uneven = FluidCornerSpec.boundsEncoding(floatArrayOf(1f, 2f, 3f, 4f), 2f, 1, 6f, 8f)
+        assertEquals(22, uneven.imageFunction)
+        assertEquals(5f, uneven.family, 0f)
+        assertEquals(listOf(-2f, -4f, -6f, -8f), uneven.radii.toList())
+        assertEquals(0x402875696e58a32fL, uneven.expansion.toRawBits())
+        assertFalse(uneven.splitsIntoRect(0.0, uneven.expansion))
+        assertTrue(uneven.splitsIntoRect(0.0, Math.nextUp(uneven.expansion)))
+    }
+
+    @Test fun trackedCornerDispatchKeepsImageAndCompositionSelectionsSeparate() {
+        assertTrue(FluidCornerSpec.scansOverlap(parentAdmitted = true, disableOption = false))
+        assertFalse(FluidCornerSpec.scansOverlap(parentAdmitted = true, disableOption = true))
+        assertTrue(FluidCornerSpec.inlinesBounds(parentAllowsInline = true, eligibleBoundsUnionChildren = 1))
+        assertFalse(FluidCornerSpec.inlinesBounds(parentAllowsInline = true, eligibleBoundsUnionChildren = 2))
+        assertEquals(20, FluidCornerSpec.rectImageFunction)
+        assertEquals(66, FluidCornerSpec.inlineEffectTexture)
+        assertEquals(58, FluidCornerSpec.groupTexture(subtract = false, roiDirect = false, roiOverlap = true))
+        assertEquals(1, FluidCornerSpec.groupTexture(subtract = false, roiDirect = true, roiOverlap = true))
+        assertEquals(59, FluidCornerSpec.groupTexture(subtract = true, roiDirect = true, roiOverlap = true))
+    }
+
+    @Test fun destinationPresentationKeepsFullKeysAndUnroundedValues() {
+        val submitted = mutableListOf<Pair<String, Long>>()
+        val value = fluidDestinationBlend(0.37, crossBlur = true, allOpaque = false, lastDestination = true)
+        value.present { key, sample -> submitted += key.key to sample.toRawBits() }
+        assertEquals(listOf("opacity" to 0.37.toRawBits(), "filters.gaussianBlur.inputRadius" to 2.52.toRawBits()), submitted)
+        assertEquals("sublayerTransform", FluidPopupChannel.ContentZoom.key)
+        assertEquals(FluidPopupChannel.Value.Transform, FluidPopupChannel.ContentZoom.value)
+        assertEquals(FluidPopupChannel.Value.ScaledScalar, FluidPopupChannel.GaussianRadius.value)
+        value.present(null)
+    }
+
+    @Test fun typedThresholdsKeepThePointScaleAndGeometryOverloadsDistinct() {
+        assertEquals(0.1111111111111111.toRawBits(), fluidRadiusEpsilonSquared(3.0).toRawBits())
+        val fixed = fluidZoomEpsilonSquared(2.0, null, false, 0.0, 0.0)
+        assertEquals(listOf(0.0001, 0.000001, 0.25, 0.000001, 0.000001), fixed.toList())
+        val empty = fluidZoomEpsilonSquared(2.0, 0.0 to 1.0, true, 0.5, 0.5)
+        assertEquals(fixed.toList(), empty.toList())
+        val spatial = fluidZoomEpsilonSquared(25.0, 6.0 to 8.0, false, 0.5, 0.5)
+        assertEquals(listOf(0.000064, 0.000064, 0.0016, 0.000064, 0.000064), spatial.toList())
+        assertTrue(fluidLensSuppressesAction(0.0, 0.05, null, bypass = false))
+        assertTrue(fluidLensSuppressesAction(0.0, 0.05, 0.0, bypass = false))
+        assertFalse(fluidLensSuppressesAction(0.0, 0.05, 1.0, bypass = false))
+        assertFalse(fluidLensSuppressesAction(0.0, 0.05, null, bypass = true))
+        assertFalse(fluidLensSuppressesAction(0.0, Double.NaN, null, bypass = false))
+        assertEquals("effect.height", FluidPopupChannel.LensHeight.key)
+        assertEquals("filters.displacementMap.inputAmount", FluidPopupChannel.LensAmount.key)
+        assertEquals(FluidPopupChannel.Value.CoarseScalar, FluidPopupChannel.LensHeight.value)
+        assertEquals(FluidPopupChannel.LensHeight.value, FluidPopupChannel.LensAmount.value)
+    }
+
+    @Test fun registrationRepeatsPreparationAndKeepsTheFirstOpacityMatchPerIdentity() {
+        data class Layer(val label: Int)
+        val from = Layer(0)
+        val to = Layer(0)
+        val first = Layer(1)
+        val duplicate = Layer(2)
+        val third = Layer(3)
+        val masks = mutableListOf<Boolean>()
+        val tracked = mutableListOf<Layer>()
+        val portals = IdentityHashMap<Layer, Layer>()
+        FluidLensingSpec.registerPortals(listOf(first, duplicate, third), true, portals,
+            { if (it === third) to else from }, { it }, { _, mask -> masks += mask }, { tracked += it }, { _, outer -> outer },
+        )
+        assertEquals(listOf(false, false, false), masks)
+        assertEquals(listOf(first, duplicate, third), tracked)
+        assertEquals(2, portals.size)
+        assertTrue(portals[from] === first)
+        assertTrue(portals[to] === third)
+    }
+
+    @Test fun endpointAndTerminalOperationsPreserveTheThroughOrder() {
+        val calls = mutableListOf<String>()
+        val hide = { item: String -> calls += item; item.takeUnless { it == "to" } }
+        assertEquals(listOf("from"), fluidHoldEndpoints("from", "to", hide))
+        fluidCompleteGroup(
+            { fluidCompleteTransition(true, { calls += "teardown" }, { calls += "remove" }, { calls += "alongside" }) },
+            { calls += "portals" }, { calls += "morphables" }, { calls += "animations" }, { calls += "hiding" },
+        )
+        assertEquals(listOf("from", "to", "teardown", "remove", "alongside", "portals", "morphables", "animations", "hiding"), calls)
+    }
+
+    @Test fun displacementUsesNamedFreshInputsAndIndependentSurfaceCoordinates() {
+        val lens = FluidLensingSpec
+        assertEquals(6, lens.displacementVertexType)
+        assertEquals(20.0, lens.freshHeight, 0.0)
+        assertEquals(-0.001, lens.freshAmount, 0.0)
+        assertEquals(0f to 0f, lens.freshOffset)
+        assertEquals(0.125f to 0.75f, lens.surfaceCoordinates(4f, 4f, 32, 16, true, 0, true))
+        assertEquals(0.5f to 0.125f, lens.surfaceCoordinates(4f, 4f, 8, 32, true, 9, true))
+        assertTrue(lens.skipsDisplacementSample(Float.fromBits(0x3b808080)))
+        assertFalse(lens.skipsDisplacementSample(Float.fromBits(0x3b808081)))
+        assertEquals("DisplacementMap(GaussianBlur(color))", lens.colorChain("color") { filter, input -> "$filter($input)" })
+        assertEquals("DisplacementMap(color)", lens.colorChain("color") { filter, input ->
+            if (filter == FluidLensingSpec.Filter.GaussianBlur) null else "$filter($input)"
+        })
     }
 }
