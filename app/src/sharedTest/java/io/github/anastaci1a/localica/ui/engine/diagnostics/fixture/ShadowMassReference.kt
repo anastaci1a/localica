@@ -32,11 +32,12 @@ internal data class ShadowMassContour(val left: Float, val top: Float, val right
 internal fun shadowMassReference(width: Int, height: Int, left: Float, top: Float, right: Float,
     bottom: Float, radius: Float, density: Float, spread: Float = 1f, shiftDp: Float = 8f,
     code: Double = 1.0 / 255, bandDp: Float = Float.POSITIVE_INFINITY,
-    contours: List<ShadowMassContour> = listOf(ShadowMassContour(left, top, right, bottom, radius))): ShadowMassReference {
+    contours: List<ShadowMassContour> = listOf(ShadowMassContour(left, top, right, bottom, radius)),
+    scaleX: Float = 1f, scaleY: Float = 1f): ShadowMassReference {
     fun alpha(x: Int, y: Int): Double {
         val distance = contours.minOf { c ->
-            val qx = abs(x + .5 - (c.left + c.right) / 2) - ((c.right - c.left) / 2 - c.radius)
-            val qy = abs(y + .5 - (c.top + c.bottom) / 2 - shiftDp * density) - ((c.bottom - c.top) / 2 - c.radius)
+            val qx = abs(x + .5 - (c.left + c.right) / 2) / scaleX - ((c.right - c.left) / (2 * scaleX) - c.radius)
+            val qy = abs((y + .5 - (c.top + c.bottom) / 2) / scaleY - shiftDp * density) - ((c.bottom - c.top) / (2 * scaleY) - c.radius)
             hypot(max(qx, 0.0), max(qy, 0.0)) + min(max(qx, qy), 0.0) - c.radius
         }
         val v = (distance / (24 * density * spread)).coerceIn(-2.0, 2.0)

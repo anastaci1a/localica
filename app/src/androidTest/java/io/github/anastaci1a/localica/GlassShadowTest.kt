@@ -38,6 +38,9 @@ class GlassShadowTest {
 
     @Test fun finalButtonsKeepVisibleShadowBelowAcrossSharedHosts() = verifyShadowMassCallers(compose, finalButtons = true)
 
+    @Test fun pressedAndReleasedButtonsKeepTheDownwardShadowMass() =
+        verifyShadowMassCallers(compose, finalButtons = true, motion = true)
+
     @Test fun deferredRingPathsMaterializeForTheCurrentGeometryOnly() {
         val cache = GlassShadowGeometry()
         val bodies = listOf(RoundRect(20f, 20f, 80f, 60f, CornerRadius(8f)))

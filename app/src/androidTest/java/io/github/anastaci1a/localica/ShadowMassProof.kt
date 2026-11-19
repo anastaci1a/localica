@@ -26,7 +26,8 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
-internal fun verifyShadowMassCallers(rule: ComposeContentTestRule, finalButtons: Boolean) {
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+internal fun verifyShadowMassCallers(rule: ComposeContentTestRule, finalButtons: Boolean, motion: Boolean = false) {
     var kind by mutableStateOf("private")
     var shown by mutableStateOf(false)
     var level by mutableFloatStateOf(1f)
@@ -97,12 +98,17 @@ internal fun verifyShadowMassCallers(rule: ComposeContentTestRule, finalButtons:
     } }
     val cases = if (finalButtons) listOf("private", "shared", "anchored", "strip", "presence", "panel")
         else listOf("clear", "receiver", "compound", "split", "native", "selection", "stock")
-    val output = nativeEvidenceDirectory("shadow-mass", androidx.test.platform.app.InstrumentationRegistry
+    val output = nativeEvidenceDirectory(if (motion) "shadow-mass-motion" else "shadow-mass", androidx.test.platform.app.InstrumentationRegistry
         .getInstrumentation().targetContext.cacheDir)
     check(output.isDirectory || output.mkdirs())
     val failures = mutableListOf<String>()
+    var held = false
+    val autoAdvance = rule.mainClock.autoAdvance
+    try {
+    if (motion) rule.mainClock.autoAdvance = false
     for (background in listOf(1f, .5f)) for (caller in cases) {
         rule.runOnIdle { kind = caller; level = background; shown = false; translated = false }
+        if (motion) rule.mainClock.advanceTimeByFrame()
         rule.waitForIdle()
         val root = rule.onNodeWithTag("mass-window")
         val scene = rule.onNodeWithTag("mass-scene").fetchSemanticsNode().boundsInRoot
@@ -112,17 +118,63 @@ internal fun verifyShadowMassCallers(rule: ComposeContentTestRule, finalButtons:
             checkNativeShadowMarker(control)
             val baseline = control.image.toPixelMap()
             rule.runOnIdle { shown = true }
-            rule.mainClock.advanceTimeBy(1200)
+            if (!motion) rule.mainClock.advanceTimeBy(1200)
+            else rule.mainClock.advanceTimeByFrame()
             rule.waitForIdle()
-            for (move in listOf(false, true)) {
-                rule.runOnIdle { translated = move }
-                rule.mainClock.advanceTimeBy(64)
+            val phases = if (motion) listOf("live", "rest", "press", "mid-press", "release", "mid-release", "recovered")
+                else listOf("false", "true")
+            for (phase in phases) {
+                val move = phase == "true"
+                val target = rule.onNodeWithTag("mass-body")
+                if (!motion) {
+                    rule.runOnIdle { translated = move }
+                    rule.mainClock.advanceTimeBy(64)
+                } else when (phase) {
+                    "rest" -> rule.mainClock.advanceTimeBy(1200)
+                    "press" -> { target.performTouchInput { down(center) }; held = true; rule.mainClock.advanceTimeBy(32) }
+                    "mid-press", "mid-release" -> rule.mainClock.advanceTimeBy(64)
+                    "release" -> { target.performTouchInput { up() }; held = false; rule.mainClock.advanceTimeBy(32) }
+                    "recovered" -> rule.mainClock.advanceTimeBy(1600)
+                }
                 rule.waitForIdle()
-                val body = rule.onNodeWithTag("mass-body").fetchSemanticsNode().boundsInRoot
+                val semantics = target.fetchSemanticsNode()
+                val layoutBody = semantics.boundsInRoot
+                val owners = if (motion) shadowMassOwners(semantics) else null
+                var transform = GlassBodyTransform()
+                var prepared = false
+                var rasterizations = emptyList<Int>()
+                var active = 0
                 val actual = capture.capture { screen ->
-                    ShadowDrawState(clock.stampNow.sequence, 0,
-                        listOf(RoundRect(body.translate(screen.topLeft - rootBounds.topLeft),
-                            CornerRadius(body.height / 2)) to 1f), Color(background, background, background))
+                    val contact = owners?.first
+                    transform = contact?.body?.value?.bodyTransform(contact.point, layoutBody.size,
+                        contact.vertical, anchored = caller == "anchored") ?: GlassBodyTransform()
+                    val half = Offset(layoutBody.width * transform.scale.x / 2, layoutBody.height * transform.scale.y / 2)
+                    val presented = Rect(layoutBody.center + transform.drift - half, layoutBody.center + transform.drift + half)
+                    val caches = owners?.second?.filter { shadowMassField(it, "requested") != null }.orEmpty()
+                    if (motion) check(caches.isNotEmpty()) { "No actual shadow cache in $caller" }
+                    prepared = caches.isNotEmpty() && caches.all { cache ->
+                        shadowMassField(cache, "raster")?.let { shadowMassField(it, "key") } == shadowMassField(cache, "requested")
+                    }
+                    rasterizations = caches.map { it.rasterizations }
+                    active = clock.activeCount
+                    ShadowDrawState(clock.stampNow.sequence, if (prepared) 1 else 0,
+                        listOf(RoundRect(presented.translate(screen.topLeft - rootBounds.topLeft),
+                            CornerRadius(layoutBody.height * transform.scale.x / 2, layoutBody.height * transform.scale.y / 2)) to 1f),
+                        Color(background, background, background), transform.scale.x, transform.scale.y)
+                }
+                val drawn = actual.nativeWindows.single().state
+                val body = drawn.bodies.single().first.let { Rect(it.left, it.top, it.right, it.bottom) }
+                    .translate(rootBounds.topLeft - checkNotNull(actual.sceneBounds).topLeft)
+                if (motion) {
+                    if (phase == "live") check(drawn.epoch == 0L) { "$caller initial frame was not live" }
+                    if (phase == "rest" || phase == "recovered") check(drawn.epoch == 1L && rasterizations.all { it > 0 }) {
+                        "$caller $phase was not prepared: $rasterizations"
+                    }
+                    if (phase in listOf("press", "mid-press", "release", "mid-release")) {
+                        check(active > 0 && (kotlin.math.abs(drawn.scaleX - 1f) + kotlin.math.abs(drawn.scaleY - 1f)) > .0001f) {
+                            "$caller $phase did not present an active deformed body: $drawn active=$active"
+                        }
+                    }
                 }
                 val screen = checkNotNull(actual.sceneBounds)
                 checkNativeShadowMarker(actual)
@@ -135,8 +187,13 @@ internal fun verifyShadowMassCallers(rule: ComposeContentTestRule, finalButtons:
                     val b = baseline[x0 + x, y0 + y]; val a = pixels[x0 + x, y0 + y]
                     max(0.0, ((b.red - a.red) + (b.green - a.green) + (b.blue - a.blue)).toDouble() / (3 * background))
                 }
+                val caster = if (motion && caller == "shared") layoutBody.translate(-scene.topLeft) else local
+                val sx = if (motion && caller != "shared") drawn.scaleX else 1f
+                val sy = if (motion && caller != "shared") drawn.scaleY else 1f
+                val radius = layoutBody.height / 2
+                val contour = ShadowMassContour(caster.left, caster.top, caster.right, caster.bottom, radius)
                 val reference = shadowMassReference(width, height, local.left, local.top, local.right, local.bottom,
-                    local.height / 2, rule.density.density, code = 1.0 / (255 * background))
+                    radius, rule.density.density, code = 1.0 / (255 * background), contours = listOf(contour), scaleX = sx, scaleY = sy)
                 val start = ceil(local.left).toInt()
                 val columns = floor(local.right).toInt() - start
                 val near = shadowMass(columns, height, local.top, local.bottom, (16 * rule.density.density).toInt()) { x, y ->
@@ -144,11 +201,15 @@ internal fun verifyShadowMassCallers(rule: ComposeContentTestRule, finalButtons:
                     max(0.0, ((b.red - a.red) + (b.green - a.green) + (b.blue - a.blue)).toDouble() / (3 * background))
                 }
                 val nearReference = shadowMassReference(columns, height, local.left - start, local.top,
-                    local.right - start, local.bottom, local.height / 2, rule.density.density,
-                    code = 1.0 / (255 * background), bandDp = 16f)
-                val label = "$caller-$background-$move"
+                    local.right - start, local.bottom, radius, rule.density.density,
+                    code = 1.0 / (255 * background), bandDp = 16f,
+                    contours = listOf(contour.copy(left = contour.left - start, right = contour.right - start)), scaleX = sx, scaleY = sy)
+                val label = "$caller-$background-$phase"
                 File(output, "$label.json").writeText(JSONObject().put("caller", caller).put("background", background)
-                    .put("translated", move).put("density", rule.density.density).put("body", body.toString())
+                    .put("translated", move).put("phase", phase).put("density", rule.density.density).put("body", body.toString())
+                    .put("layoutBody", layoutBody.toString()).put("scaleX", drawn.scaleX).put("scaleY", drawn.scaleY)
+                    .put("prepared", drawn.epoch == 1L).put("rasterizations", rasterizations.toString()).put("activeMotions", active)
+                    .put("caster", caster.toString()).put("fieldScaleX", sx).put("fieldScaleY", sy)
                     .put("scene", scene.toString()).put("windows", actual.windowIds.toString())
                     .put("generation", actual.drawGeneration).put("native", actual.nativeWindows.toString())
                     .put("above", mass.above).put("below", mass.below).put("ratio", mass.ratio)
@@ -163,5 +224,39 @@ internal fun verifyShadowMassCallers(rule: ComposeContentTestRule, finalButtons:
             }
         }
     }
+    } finally {
+        try { if (held) rule.onNodeWithTag("mass-body").performTouchInput { cancel() } }
+        finally { rule.mainClock.autoAdvance = autoAdvance }
+    }
     assertTrue(failures.joinToString("\n"), failures.isEmpty())
+}
+
+/** Passive inspection of the existing modifier captures; never changes a contact or cache. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+private fun shadowMassOwners(node: androidx.compose.ui.semantics.SemanticsNode): Pair<GlassContact, List<RetainedGlassShadow>> {
+    val contacts = linkedSetOf<GlassContact>()
+    val caches = linkedSetOf<RetainedGlassShadow>()
+    val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
+    fun visit(value: Any?, depth: Int) {
+        if (value == null || !seen.add(value)) return
+        when (value) {
+            is GlassContact -> contacts += value
+            is RetainedGlassShadow -> caches += value
+            else -> if (depth > 0 && (value is Function<*> || value is Modifier.Element))
+                value.javaClass.declaredFields.filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) }.forEach {
+                    it.isAccessible = true; visit(it.get(value), depth - 1)
+                }
+        }
+    }
+    var layout: androidx.compose.ui.layout.LayoutInfo? = node.layoutInfo
+    while (layout != null) {
+        layout.getModifierInfo().forEach { visit(it.modifier, 5) }
+        layout = layout.parentInfo
+    }
+    check(contacts.size == 1 && caches.isNotEmpty()) { "Expected one real contact and its field cache: contacts=$contacts caches=$caches" }
+    return contacts.single() to caches.toList()
+}
+
+private fun shadowMassField(owner: Any, name: String): Any? = owner.javaClass.getDeclaredField(name).let {
+    it.isAccessible = true; it.get(owner)
 }
