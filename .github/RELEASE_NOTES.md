@@ -24,6 +24,7 @@ This release replaces the shared glass optics in one place, so every glass surfa
 
 ## Open items
 
+- The flat-average lens bypass remains active for some backdrops. Removing it is follow-up work (RM02).
 - The Depth setting now changes only the highlight. Changing Depth or pressing no longer changes how much the backdrop bends.
 - Sliders and switches keep their own press shape and existing lens bounds; joining them to the shared fluid press is follow-up work.
 - Glass faces on dark pages use the light colour rows with dark ink; dedicated dark-appearance rows are follow-up work.
@@ -34,12 +35,20 @@ This release replaces the shared glass optics in one place, so every glass surfa
 
 - [#1018](https://github.com/anastaci1a/localica/issues/1018) and [#1082](https://github.com/anastaci1a/localica/issues/1082): Device-test dependency preparation and reuse reduce repeated downloads.
 
-- [#748](https://github.com/anastaci1a/localica/issues/748): Shared popup return and presenting-page menu ink. Selection stacking remains disclosed below.
+- [#748](https://github.com/anastaci1a/localica/issues/748): Shared popup return and readable menu text and icons over dark pages.
 - [#1075](https://github.com/anastaci1a/localica/issues/1075): Glass follows finger translation during a hold and settles on release.
 - [#1076](https://github.com/anastaci1a/localica/issues/1076): Lyrics-header shadow follows press expansion; the small surface-position difference remains unproven.
 
+- [#1077](https://github.com/anastaci1a/localica/issues/1077) — Restored Sort and View panel sizing and kept sort-direction labels on one line.
+
+## Held changes
+
+- [#1081](https://github.com/anastaci1a/localica/issues/1081) — Live lens geometry is deferred.
+
 ## Known issues and follow-ups
 
+- Sort retains the unused space between its direction control and footer that was present in v0.34.15.
+- The overlap between a returning popup and the next dialog has yet to be verified.
 - An Android 16 clear/refocus keyboard test has a known timeout. The requested comparison passed before and after the popup changes; assertions remain unchanged.
 - An Android 8 collapsed-player collection Back test can lose the injected system Back event. It passed 40 isolated repeats; the test-harness flake remains disclosed without an app change.
 - An Android 8 full-screen shuffle/Previous test times out at its unchanged 15-second playback wait. The same failure is present before the popup changes.
@@ -53,6 +62,7 @@ This release replaces the shared glass optics in one place, so every glass surfa
 - [#1072](https://github.com/anastaci1a/localica/issues/1072): On Android 8, one touch-light pixel check exceeds its unchanged one-byte limit by one step because the test's rounding differs from the device's byte quantization. The limit is unchanged; this is disclosed as non-blocking.
 - [#1073](https://github.com/anastaci1a/localica/issues/1073): Glass refraction rows at the bottom edge can sample unrecorded backdrop padding, so a popup can intermittently show a slightly different colour along its bottom edge.
 - [#1074](https://github.com/anastaci1a/localica/issues/1074): Opening and closing glass popups is slower at the long tail on the A35: 90th and 95th percentile frame times rise by about 3 to 4 ms and garbage-collection pauses by about 5 ms compared with v0.34.15. Median frame time and list scrolling are unchanged.
+- In a separate A35 component comparison for #1074, touch glow increased main-thread CPU time by 42.79 ms and estimated Java allocations by 1.06 MB per popup open-and-close cycle.
 - [#1076](https://github.com/anastaci1a/localica/issues/1076): The roughly 0.02 px surface-position difference remains unproven.
 - GlassTouchLight leaves a residual in the lens refraction band after one press and release; backdrop source state remains under investigation. Assertions are unchanged.
 - SwitchTapOptics has an Android 8 colour classifier mismatch and unresolved Android 16 travel behavior. Assertions are unchanged.
