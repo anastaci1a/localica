@@ -177,18 +177,21 @@ class NestedGlassRegistrationTest {
         var pose by mutableStateOf(poses[0])
         var power by mutableFloatStateOf(0f)
         var stage by mutableIntStateOf(0)
+        val draws = mutableListOf<Pair<Int, BackdropSamplingObservation>>()
         lateinit var view: View
         lateinit var scene: LayoutCoordinates
         lateinit var backing: LayoutCoordinates
         lateinit var lens: LayoutCoordinates
         compose.setContent { LocalicaTheme {
             view = LocalView.current
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
+            CompositionLocalProvider(LocalBackdropSamplingObserver provides { draw ->
+                Snapshot.withoutReadObservation { draws += stage to draw }
+            }, LocalGlassAppearance provides GlassAppearance(
                 blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
                 val source = rememberFrostedBackdrop(Unit, dark = false)
                 Box(Modifier.size(360.dp, 200.dp).testTag("live-body-scene").onGloballyPositioned { scene = it }) {
                     Canvas(Modifier.fillMaxSize().onGloballyPositioned { backing = it }.recordFrostedBackdrop(source)) {
-                        val cell = 8.dp.toPx()
+                        val cell = 16.dp.toPx()
                         for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt())
                             drawRect(cellColor(x, y), Offset(x * cell, y * cell), Size(cell, cell))
                     }
@@ -202,7 +205,7 @@ class NestedGlassRegistrationTest {
                 }
             }
         } }
-        val cell = 8f * compose.density.density
+        val cell = 16f * compose.density.density
         fun cellAt(p: Offset) = cellColor(floor(p.x / cell).toInt(), floor(p.y / cell).toInt())
         fun clearOfEdges(p: Offset) = listOf(p.x, p.y).all { (it - floor(it / cell) * cell) in 3f..cell - 3f }
         for (shown in elements) for (shape in poses) for (refraction in listOf(0f, 1f)) {
@@ -210,7 +213,6 @@ class NestedGlassRegistrationTest {
             compose.waitForIdle()
             val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("live-body-scene"), stage) { view }
             var discriminating = 0
-            var profileDifferences = 0
             val samples = compose.runOnIdle {
                 val size = Size(lens.size.width.toFloat(), lens.size.height.toFloat())
                 val uniform = shape.scale ?: 1f
@@ -222,12 +224,18 @@ class NestedGlassRegistrationTest {
                 val extent = Size(size.width * scale.x, size.height * scale.y)
                 val corner = shown.corner?.let { it.value * compose.density.density }
                 val geometry = LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, extent), corner ?: extent.minDimension / 2)
-                val restGeometry = LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, size), corner ?: size.minDimension / 2)
                 fun field(point: Offset) = shown.silhouette?.frame(extent)?.opticalField(point) ?: geometry.field(point)
-                fun restField(point: Offset) = shown.silhouette?.frame(size)?.opticalField(point) ?: restGeometry.field(point)
+                val expectedCorners = listOf(Offset.Zero, Offset(size.width, 0f),
+                    Offset(size.width, size.height), Offset(0f, size.height)).map { backing.localPositionOf(lens, live(it)) }
+                val rendered = draws.filter { it.first == stage }
+                assertTrue("The sampler drew the current pose", rendered.isNotEmpty())
+                for ((_, draw) in rendered) expectedCorners.zip(draw.consumerCornersInSource).forEach { (expected, actual) ->
+                    assertEquals("Live sampling corner x", expected.x, actual.x, .04f)
+                    assertEquals("Live sampling corner y", expected.y, actual.y, .04f)
+                }
                 buildList {
-                    for (y in 3..17) for (x in 3..17) {
-                        val rest = Offset(size.width * x / 20f, size.height * y / 20f)
+                    for (y in 6..34) for (x in 6..34) {
+                        val rest = Offset(size.width * x / 40f, size.height * y / 40f)
                         val radius = minOf(size.width, size.height) / 2
                         val cap = Offset(rest.x.coerceIn(radius, size.width - radius), size.height / 2)
                         if ((rest - cap).getDistance() > radius * .7f) continue
@@ -238,9 +246,6 @@ class NestedGlassRegistrationTest {
                         val stretched = backing.localPositionOf(lens, rest)
                         if (!clearOfEdges(inBacking) || !clearOfEdges(stretched)) continue
                         if (cellAt(inBacking) != cellAt(stretched)) discriminating++
-                        val staleProfile = backing.localPositionOf(lens, live(rest +
-                            GlassRefractionReference.at(restField(rest), compose.density.density).inner * refraction))
-                        if (clearOfEdges(staleProfile) && cellAt(staleProfile) != cellAt(inBacking)) profileDifferences++
                         val expected = cellAt(inBacking)
                         val face = FloatArray(3) { glassFillChannel(it, expected.red, expected.green, expected.blue).coerceAtMost(1f) }
                         add(scene.localPositionOf(lens, livePoint) to referenceHighlight(face, opticalField, geometry.span,
@@ -251,8 +256,6 @@ class NestedGlassRegistrationTest {
             val where = "${shown.name} pose=$shape power=$refraction"
             assertTrue("Enough interior landmarks for $where", samples.size >= 4)
             if (shape != poses[0]) assertTrue("The oracle separates live from stretched sampling for $where", discriminating >= 2)
-            if (shape != poses[0] && refraction > 0f)
-                assertTrue("The oracle separates live from stretched refraction profiles for $where", profileDifferences >= 2)
             for ((point, expected) in samples) {
                 val actual = pixels[point.x.roundToInt(), point.y.roundToInt()]
                 val message = "$where point=$point expected=$expected actual=$actual"
