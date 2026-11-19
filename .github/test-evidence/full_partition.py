@@ -161,7 +161,8 @@ def expected_for(root, api):
             ('blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp', 33),
         ],
         'GlassBodyOpticsTest': [
-            ('normalAndSingleToneKernelPixelsMatchIndependentFrozenRendererAtMatchedInputs', 33),
+            ('kernelSamplesTheSharedRefractionLookups', 33),
+            ('kernelHighlightFollowsTheShapeNormal', 33),
         ],
         'GlassOpticsTest': [
             ('changingDepthBendsARecordedGridAndKeepsTheOutsideUntouched', 33),
