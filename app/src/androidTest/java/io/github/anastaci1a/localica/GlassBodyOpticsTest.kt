@@ -156,7 +156,7 @@ private fun renderS1Kernel(bitmap: Bitmap, effect: RenderEffect, width: Int = 11
 }
 
 /** Kotlin transcription of the kernel's highlight over an opaque face colour. */
-private fun referenceHighlight(color: FloatArray, field: LensField, span: Float, depth: Float, flattening: Float,
+internal fun referenceHighlight(color: FloatArray, field: LensField, span: Float, depth: Float, flattening: Float,
     tone: GlassTone, power: Float): FloatArray {
     val trim = if (tone.trim * tone.weight > 1f) 1f / tone.weight else tone.trim
     val mixLight = tone.lightMix.coerceIn(0f, 1f)

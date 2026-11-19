@@ -175,6 +175,7 @@ class NestedGlassRegistrationTest {
         val poses = listOf(GlassShape(), GlassShape(scale = 1.25f), GlassShape(strain = .15f, scale = 1.1f, drift = Offset(.06f, -.04f)))
         var element by mutableStateOf(elements[0])
         var pose by mutableStateOf(poses[0])
+        var power by mutableFloatStateOf(0f)
         var stage by mutableIntStateOf(0)
         lateinit var view: View
         lateinit var scene: LayoutCoordinates
@@ -194,7 +195,7 @@ class NestedGlassRegistrationTest {
                     val shown = element
                     key(shown) {
                         LiquidGlassSurface(Modifier.align(Alignment.Center).size(shown.width.dp, shown.height.dp)
-                            .onGloballyPositioned { lens = it }, source = source, refraction = 0f, cornerRadius = shown.corner,
+                            .onGloballyPositioned { lens = it }, source = source, refraction = power, cornerRadius = shown.corner,
                             silhouette = shown.silhouette, shadow = false, contactPresentation = { pose })
                     }
                     PresentationMarker { stage }
@@ -204,11 +205,12 @@ class NestedGlassRegistrationTest {
         val cell = 8f * compose.density.density
         fun cellAt(p: Offset) = cellColor(floor(p.x / cell).toInt(), floor(p.y / cell).toInt())
         fun clearOfEdges(p: Offset) = listOf(p.x, p.y).all { (it - floor(it / cell) * cell) in 3f..cell - 3f }
-        for (shown in elements) for (shape in poses) {
-            compose.runOnIdle { element = shown; pose = shape; stage++ }
+        for (shown in elements) for (shape in poses) for (refraction in listOf(0f, 1f)) {
+            compose.runOnIdle { element = shown; pose = shape; power = refraction; stage++ }
             compose.waitForIdle()
             val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("live-body-scene"), stage) { view }
             var discriminating = 0
+            var profileDifferences = 0
             val samples = compose.runOnIdle {
                 val size = Size(lens.size.width.toFloat(), lens.size.height.toFloat())
                 val uniform = shape.scale ?: 1f
@@ -216,28 +218,45 @@ class NestedGlassRegistrationTest {
                 // The body's live box: rest point about the centre, then the drift in body fractions.
                 fun live(rest: Offset) = Offset(size.width / 2 + (rest.x - size.width / 2) * scale.x + shape.drift.x * size.width,
                     size.height / 2 + (rest.y - size.height / 2) * scale.y + shape.drift.y * size.height)
+                val origin = live(Offset.Zero)
+                val extent = Size(size.width * scale.x, size.height * scale.y)
+                val corner = shown.corner?.let { it.value * compose.density.density }
+                val geometry = LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, extent), corner ?: extent.minDimension / 2)
+                val restGeometry = LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, size), corner ?: size.minDimension / 2)
+                fun field(point: Offset) = shown.silhouette?.frame(extent)?.opticalField(point) ?: geometry.field(point)
+                fun restField(point: Offset) = shown.silhouette?.frame(size)?.opticalField(point) ?: restGeometry.field(point)
                 buildList {
-                    for (fy in listOf(.3f, .5f, .7f)) for (fx in listOf(.2f, .3f, .4f, .5f, .6f, .7f, .8f)) {
-                        val rest = Offset(size.width * fx, size.height * fy)
+                    for (y in 3..17) for (x in 3..17) {
+                        val rest = Offset(size.width * x / 20f, size.height * y / 20f)
                         val radius = minOf(size.width, size.height) / 2
                         val cap = Offset(rest.x.coerceIn(radius, size.width - radius), size.height / 2)
                         if ((rest - cap).getDistance() > radius * .7f) continue
-                        val inBacking = backing.localPositionOf(lens, live(rest))
+                        val livePoint = live(rest)
+                        val opticalField = field(livePoint - origin)
+                        val offset = GlassRefractionReference.at(opticalField, compose.density.density).inner * refraction
+                        val inBacking = backing.localPositionOf(lens, livePoint + offset)
                         val stretched = backing.localPositionOf(lens, rest)
                         if (!clearOfEdges(inBacking) || !clearOfEdges(stretched)) continue
                         if (cellAt(inBacking) != cellAt(stretched)) discriminating++
-                        add(scene.localPositionOf(lens, live(rest)) to cellAt(inBacking))
+                        val staleProfile = backing.localPositionOf(lens, live(rest +
+                            GlassRefractionReference.at(restField(rest), compose.density.density).inner * refraction))
+                        if (clearOfEdges(staleProfile) && cellAt(staleProfile) != cellAt(inBacking)) profileDifferences++
+                        val expected = cellAt(inBacking)
+                        val face = FloatArray(3) { glassFillChannel(it, expected.red, expected.green, expected.blue).coerceAtMost(1f) }
+                        add(scene.localPositionOf(lens, livePoint) to referenceHighlight(face, opticalField, geometry.span,
+                            1.35f, 0f, GlassTone(), refraction))
                     }
                 }
             }
-            val where = "${shown.name} pose=$shape"
+            val where = "${shown.name} pose=$shape power=$refraction"
             assertTrue("Enough interior landmarks for $where", samples.size >= 4)
             if (shape != poses[0]) assertTrue("The oracle separates live from stretched sampling for $where", discriminating >= 2)
+            if (shape != poses[0] && refraction > 0f)
+                assertTrue("The oracle separates live from stretched refraction profiles for $where", profileDifferences >= 2)
             for ((point, expected) in samples) {
                 val actual = pixels[point.x.roundToInt(), point.y.roundToInt()]
                 val message = "$where point=$point expected=$expected actual=$actual"
-                for (channel in 0..2) assertEquals(message, io.github.anastaci1a.localica.ui.glassFillChannel(channel,
-                    expected.red, expected.green, expected.blue).coerceAtMost(1f), listOf(actual.red, actual.green, actual.blue)[channel], .08f)
+                for (channel in 0..2) assertEquals(message, expected[channel], listOf(actual.red, actual.green, actual.blue)[channel], .08f)
             }
         }
     }

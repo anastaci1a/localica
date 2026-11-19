@@ -15701,7 +15701,7 @@
         errorLine2="                                                             ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="116"
+            line="110"
             column="62"/>
     </issue>
 
@@ -15712,7 +15712,7 @@
         errorLine2="                                                                          ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="130"
+            line="124"
             column="75"/>
     </issue>
 
@@ -15723,7 +15723,7 @@
         errorLine2="                                                                                              ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="130"
+            line="124"
             column="95"/>
     </issue>
 
@@ -15734,7 +15734,7 @@
         errorLine2="                                                                            ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="133"
+            line="127"
             column="77"/>
     </issue>
 
@@ -15745,7 +15745,7 @@
         errorLine2="                                                                            ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="157"
+            line="151"
             column="77"/>
     </issue>
 
@@ -15756,7 +15756,7 @@
         errorLine2="                                                                      ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="175"
+            line="169"
             column="71"/>
     </issue>
 
@@ -15767,7 +15767,7 @@
         errorLine2="                                                                                          ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="175"
+            line="169"
             column="91"/>
     </issue>
 
@@ -15778,7 +15778,7 @@
         errorLine2="                                                                             ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="178"
+            line="172"
             column="78"/>
     </issue>
 
@@ -15789,7 +15789,7 @@
         errorLine2="                                                                                ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="203"
+            line="209"
             column="81"/>
     </issue>
 
@@ -15800,7 +15800,7 @@
         errorLine2="                                                             ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="205"
+            line="211"
             column="62"/>
     </issue>
 
