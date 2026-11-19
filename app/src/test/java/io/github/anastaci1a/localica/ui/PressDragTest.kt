@@ -45,7 +45,7 @@ class PressDragTest {
     @Test fun nearEndTravelsFartherThanTheHeldFarEnd() {
         val size = Size(132f, 132f)
         fun edges(shape: GlassShape): Pair<Float, Float> {
-            val map = shape.bodyTransform(size)
+            val map = shape.bodyTransform(size, 1f)
             fun world(u: Float) = size.width / 2 + map.scale.x * (u - size.width / 2) + map.drift.x
             return world(size.width) to world(0f)
         }
@@ -94,12 +94,76 @@ class PressDragTest {
 
     @Test fun verticalBodiesStretchInScreenSpaceAndReleaseSettles() {
         val size = Size(44f, 44f); val to = Offset(.5f + 150f / 44, .2f)
-        assertEquals(held(to).bodyTransform(size), held(to, vertical = true).bodyTransform(size, vertical = true))
+        assertEquals(held(to).bodyTransform(size, 1f), held(to, vertical = true).bodyTransform(size, 1f, vertical = true))
         val body = GlassMomentum().apply { extent = size }
         body.advance(0f, 0.0, contact = 1f, point = Offset(.5f, .5f))
         repeat(60) { body.advance(0f, 1.0 / 120, contact = 1f, point = to) }
         assertTrue(body.shape.drift.x > 0f)
         repeat(600) { body.advance(0f, 1.0 / 120) }
         assertTrue(body.finishSettlement()); assertEquals(GlassShape(), body.shape)
+    }
+
+    private fun settled(size: Size, to: Offset = Offset(.5f, .5f)) = GlassMomentum().apply { spec = FlexSpec.dynamic(size.maxDimension, size.minDimension); extent = size }.run {
+        advance(0f, 0.0, contact = 1f, point = Offset(.5f, .5f))
+        repeat(960) { advance(0f, 1.0 / 120, contact = 1f, point = to) }
+        assertTrue("held press settles size=$size", finishSettlement())
+        shape
+    }
+
+    @Test fun heldLiftAddsTheSizeLawPointsToTheLongEdgeOfEveryBodyAsDrawn() {
+        fun points(long: Double, short: Double) = if (long < 120) 16.0 else 16 - 12 * ((short - 44) / 116).coerceIn(0.0, 1.0)
+        // Circle buttons, the album play button, the Sort/View pill, the split pill, wide bars and the scoped search bar.
+        val sizes = listOf(Size(51.2f, 51.2f), Size(64f, 64f), Size(110f, 51.2f), Size(119f, 119f), Size(120f, 120f), Size(120f, 44f),
+            Size(144f, 64f), Size(328f, 40f), Size(40f, 328f), Size(160f, 160f), Size(240f, 102f))
+        for (size in sizes) for (density in listOf(1f, 2.625f, 3f)) {
+            val long = size.maxDimension.toDouble(); val short = size.minDimension.toDouble()
+            val pixels = Size(size.width * density, size.height * density)
+            val map = settled(size).bodyTransform(pixels, density)
+            val p = points(long, short)
+            assertEquals("uniform lift size=$size", map.scale.x, map.scale.y, 0f)
+            assertEquals("long edge grows by P size=$size", p * density, (maxOf(pixels.width * (map.scale.x - 1), pixels.height * (map.scale.y - 1))).toDouble(), 1e-3 * density)
+            assertEquals("short edge grows by P·S/L size=$size", p * short / long * density, (minOf(pixels.width * (map.scale.x - 1), pixels.height * (map.scale.y - 1))).toDouble(), 1e-3 * density)
+            assertEquals(Offset.Zero, map.drift)
+        }
+        assertEquals(4f, FlexSpec.dynamic(160f, 160f).lift.points, 0f); assertEquals(16f, FlexSpec.dynamic(120f, 44f).lift.points, 0f)
+        assertEquals(16f, FlexSpec.Small.lift.points, 0f)
+        // A 328 dp search bar with 16 dp window insets stays inside a 360 dp window.
+        val half = 328f * settled(Size(328f, 40f)).bodyTransform(Size(328f, 40f), 1f).scale.x / 2
+        assertEquals(8f, 180f - half, 1e-3f); assertEquals(352f, 180f + half, 1e-3f)
+        assertEquals(Offset(1f, 1f), settled(Size(64f, 64f)).bodyTransform(Size.Zero, 2f).scale)
+    }
+
+    @Test fun aHeldBodyDrawnAtANewSizeGrowsByTheSameDpWithoutARepublish() {
+        val shape = settled(Size(104f, 48f))
+        for ((size, density) in listOf(Size(104f, 48f) to 2f, Size(240f, 104f) to 2f, Size(240f, 104f) to 3f)) {
+            val map = shape.bodyTransform(Size(size.width * density, size.height * density), density)
+            assertEquals("size=$size", 16f * density, size.width * density * (map.scale.x - 1), 1e-3f * density)
+        }
+    }
+
+    @Test fun popupTriggersAndPlainBodiesNearEndTravelsFartherOnEveryClass() {
+        for (size in listOf(Size(51.2f, 51.2f), Size(64f, 64f), Size(110f, 51.2f), Size(144f, 64f), Size(328f, 40f))) {
+            fun edges(shape: GlassShape): Pair<Float, Float> {
+                val map = shape.bodyTransform(size, 1f)
+                fun world(u: Float) = size.width / 2 + map.scale.x * (u - size.width / 2) + map.drift.x
+                return world(size.width) to world(0f)
+            }
+            val (stillNear, stillFar) = edges(settled(size))
+            val (pulledNear, pulledFar) = edges(settled(size, Offset(.5f + 150f / size.width, .5f)))
+            val nearMove = pulledNear - stillNear; val farMove = pulledFar - stillFar
+            assertTrue("size=$size far end follows far=$farMove", farMove > 0f)
+            assertTrue("size=$size near=$nearMove far=$farMove", nearMove > 2f * farMove)
+        }
+    }
+
+    @Test fun overrideBodiesTakeTheirPointsFromTheSameSelector() {
+        for (size in listOf(Size(51.2f, 51.2f), Size(160f, 51.2f), Size(240f, 102f))) {
+            val p = FlexSpec.dynamic(size.maxDimension, size.minDimension).lift.points
+            val body = GlassMomentum(FlexSpec.Small.copy(scaleGain = -(p / size.maxDimension) / .24f)).apply { extent = size }
+            body.advance(0f, 0.0, contact = 1f, point = Offset(.5f, .5f))
+            repeat(960) { body.advance(0f, 1.0 / 120, contact = 1f, point = Offset(.5f, .5f)) }
+            body.finishSettlement()
+            assertEquals("size=$size", p, size.maxDimension * (body.shape.bodyTransform(size, 1f).scale.x - 1), 1e-3f)
+        }
     }
 }

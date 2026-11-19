@@ -11,7 +11,6 @@ import kotlin.math.*
 internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f, val scale: Float? = null, val lift: Float = 0f, val drift: Offset = Offset.Zero) {
     fun scaleX(vertical: Boolean = false) = scale?.let { it * exp(if (vertical) -strain else strain) } ?: exp((if (vertical) -strain else strain) - depth / 2)
     fun scaleY(vertical: Boolean = false) = scale?.let { it * exp(if (vertical) strain else -strain) } ?: exp((if (vertical) strain else -strain) - depth / 2)
-    fun liftScale(anchored: Boolean = false) = if (anchored) 1f else exp(lift)
     val thickness get() = exp(depth)
 }
 
@@ -30,10 +29,14 @@ internal data class GlassBodyTransform(val scale: Offset = Offset(1f, 1f), val d
         size.height * (.5f + (point.y - .5f) / scale.y) - drift.y / scale.y)
 }
 
-internal fun GlassShape.bodyTransform(size: Size, vertical: Boolean = false, anchored: Boolean = false): GlassBodyTransform {
-    val lift = liftScale(anchored)
-    return GlassBodyTransform(Offset(scaleX(vertical) * lift, scaleY(vertical) * lift),
-        if (anchored) Offset.Zero else Offset(drift.x * size.width, drift.y * size.height))
+/** Selector lenses and switch thumbs: depth-scaled axes about the centre, no lift or drift. */
+internal fun GlassShape.lensTransform(vertical: Boolean) = GlassBodyTransform(Offset(scaleX(vertical), scaleY(vertical)))
+
+/** The one drawn press geometry of every glass body: [GlassShape.lift] adds that many dp to the long side being drawn. */
+internal fun GlassShape.bodyTransform(size: Size, density: Float, vertical: Boolean = false): GlassBodyTransform {
+    val s = if (vertical) -strain else strain
+    val m = scale ?: size.maxDimension.let { if (it > 0f) 1f + lift * density / it else 1f }
+    return GlassBodyTransform(Offset(m * exp(s), m * exp(-s)), Offset(drift.x * size.width, drift.y * size.height))
 }
 
 /** Compensation for center-based scaling: the contacting edge stays on its wall. */
@@ -176,7 +179,7 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
     private var stiffness = (2 * PI / (bodyOverride ?: spec).response).pow(2)
     private var resistance = (2 * sqrt(stiffness) * (bodyOverride ?: spec).damping).toFloat()
     val strain get() = .12f * tanh(motion.value / .12f) + pressure.value
-    private fun shape(strain: Float, depth: Float, lift: Float, drift: Offset) = GlassShape(strain, .24f * tanh(depth / .24f), bodyOverride?.scaleGain?.let { 1f + it * depth }, lift * liftSpec.gain, drift)
+    private fun shape(strain: Float, depth: Float, lift: Float, drift: Offset) = GlassShape(strain, .24f * tanh(depth / .24f), bodyOverride?.scaleGain?.let { 1f + it * depth }, lift * liftSpec.points, drift)
     val shape get() = shape(strain, depth.value, lift.value, Offset(drift[0].value, drift[1].value))
     private val depthSettled get() = bodyOverride?.scaleGain?.let {
         (it.toDouble() * (depth.target.toDouble() - depth.value)).pow(2) + (it.toDouble() * depth.velocity * resistance / stiffness).pow(2) <= 1e-6
@@ -288,7 +291,7 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
         val held = contact.isFinite() && contact > 0f || abs(this.pressure.target) > .0001f
         depth.target = -.24f * (if (contact.isFinite()) contact.coerceIn(0f, 1f) else 0f) - abs(edge) * .3f
         liftSpec = (bodyOverride ?: spec).lift
-        val target = if (contact.isFinite() && liftSpec.gain != 0f) contact.coerceIn(0f, 1f) else 0f
+        val target = if (contact.isFinite() && liftSpec.points != 0f) contact.coerceIn(0f, 1f) else 0f
         if (target > 0f) {
             if (lift.target == 0f || liftAge < 0.0) liftAge = 0.0
             liftTarget(target)

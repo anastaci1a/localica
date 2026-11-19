@@ -173,7 +173,7 @@ class LyricsHeaderActionsTest {
             compose.runOnIdle {
                 val pose = requireNotNull(anchor.originPresentation)(measured)
                 assertTrue("Held mid-separation shifts the pivot (${pose.horizontalShift})", kotlin.math.abs(pose.horizontalShift) > .01f)
-                val drawn = pose.shape.bodyTransform(Size(measured, measured), pose.vertical, anchored = true)
+                val drawn = pose.shape.bodyTransform(Size(measured, measured), density, pose.vertical)
                 val square = androidx.compose.ui.geometry.RoundRect(0f, 0f, measured, measured, androidx.compose.ui.geometry.CornerRadius(measured / 2f))
                 val want = square.deformed(drawn.copy(drift = drawn.drift + Offset(pose.horizontalShift, 0f)), Offset(measured / 2f, measured / 2f))
                 val got = requireNotNull(anchor.shadowPlane).casters.mapNotNull { (it.shape as io.github.anastaci1a.localica.ui.engine.LayoutShape).laidOut() }.minBy { it.left }
