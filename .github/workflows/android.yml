@@ -104,7 +104,7 @@ jobs:
     outputs:
       test-apks-sha256: ${{ steps.test-apks.outputs.sha256 }}
     env:
-      # Shared main-branch dependency cache for the focused, compatibility and warm-cache jobs (#681).
+      # Shared main-branch dependency cache (#681); this job also warms and saves the entry every device-tests shard restores.
       GRADLE_BUILD_ACTION_CACHE_KEY_JOB: localica-test-apks
       GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE: shared
     steps:
@@ -114,6 +114,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          cache-read-only: false
+          cache-overwrite-existing: true
       - name: Restore development signing key
         if: github.event_name != 'pull_request'
         env:
@@ -128,7 +131,7 @@ jobs:
         # Test APK producers only; unit tests and lint run in static-checks, the R8 APK in build.
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-        run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
+        run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
       - name: Freeze shared instrumentation APKs
         id: test-apks
         run: echo "sha256=$(python3 .github/shared-test-apks.py freeze --output native-test-apks)" >> "$GITHUB_OUTPUT"
@@ -272,8 +275,8 @@ jobs:
       LOCALICA_SCROLL_PERFORMANCE: ${{ github.event_name == 'workflow_dispatch' && inputs.scroll_performance && 'true' || '' }}
       LOCALICA_LIVE_EVIDENCE: 'true'
       LOCALICA_PREBUILT_TEST_APKS: 'true'
-      # One shared entry per train instead of per-shard entries (#681).
-      GRADLE_BUILD_ACTION_CACHE_KEY_JOB: localica-device-tests
+      # Shards only read the entry test-apks warmed for this SHA; none resolves from the network or saves (#681).
+      GRADLE_BUILD_ACTION_CACHE_KEY_JOB: localica-test-apks
       GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE: shared
     strategy:
       fail-fast: false
@@ -287,6 +290,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          cache-read-only: true
+      - name: Record restored dependency files
+        run: bash .github/dependency-cache-audit.sh snapshot
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
@@ -336,6 +343,9 @@ jobs:
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
             python3 .github/emulator-readiness.py --normalize-navigation
             LOCALICA_SHARD_COUNT=$LOCALICA_DEVICE_SHARDS bash .github/run-device-tests.sh
+      - name: Record downloaded dependency files
+        if: ${{ !cancelled() }}
+        run: bash .github/dependency-cache-audit.sh report
       - name: Cache the installed SDK system image
         if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
         uses: ./.github/actions/system-image-cache

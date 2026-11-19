@@ -34,7 +34,7 @@ CACHE_KEYS = {
     ('android.yml', 'compatibility'): 'localica-test-apks',
     ('android.yml', 'static-checks'): 'localica-static-checks',
     ('android.yml', 'build'): 'localica-distribution',
-    ('android.yml', 'device-tests'): 'localica-device-tests',
+    ('android.yml', 'device-tests'): 'localica-test-apks',
     ('prototype.yml', 'build'): 'localica-static-checks',
     # prototype.yml performance.env: separate task family; never evict the ordinary static-checks entry.
     ('prototype.yml', 'performance'): 'localica-performance',
@@ -49,6 +49,7 @@ WARM_WRITERS = {
     'localica-static-checks': ('dependency-cache.yml', 'static-checks'),
     'localica-test-apks': ('dependency-cache.yml', 'test-apks'),
 }
+DEVICE_SHARDS = ('android.yml', 'device-tests')
 AUDITED = [key for key in CACHE_KEYS if key[0] in ('prototype.yml', 'dependency-cache.yml')]
 
 
@@ -166,12 +167,25 @@ class SharedDependencyCacheContract(unittest.TestCase):
             writer_tasks = compile_tasks(writer)
             self.assertTrue(writer_tasks)
             for (reader_workflow, reader_name), reader_key in CACHE_KEYS.items():
-                if reader_key != key or (reader_workflow, reader_name) == (workflow, writer_name):
+                if reader_key != key or (reader_workflow, reader_name) in ((workflow, writer_name), DEVICE_SHARDS):
                     continue
                 with self.subTest(reader=(reader_workflow, reader_name)):
                     reader_tasks = compile_tasks(load(reader_workflow)['jobs'][reader_name])
                     self.assertTrue(reader_tasks)
                     self.assertLessEqual(reader_tasks, writer_tasks)
+
+    def test_device_shards_only_restore_the_entry_their_test_apks_job_warms(self):
+        # 24 shards resolving on their own hit Maven Central 429s; one warm writer per run, retried, serves them all.
+        android = load('android.yml')['jobs']
+        shards, writer = android['device-tests'], android['test-apks']
+        self.assertIn('test-apks', shards['needs'])
+        self.assertEqual({'cache-read-only': True}, next(s for s in shards['steps'] if uses(s) == SETUP_GRADLE)['with'])
+        self.assertEqual([], compile_steps(shards), 'shards never resolve outside the device run')
+        self.assertIs(False, next(s for s in writer['steps'] if uses(s) == SETUP_GRADLE)['with']['cache-read-only'])
+        self.assertLessEqual({':app:warmDeviceDependencies'}, compile_tasks(writer))
+        self.assertLess(step_index(shards, lambda s: run(s) == SNAPSHOT),
+                        step_index(shards, lambda s: 'run-device-tests.sh' in s.get('with', {}).get('script', '')))
+        self.assertIn('!cancelled()', next(s for s in shards['steps'] if run(s) == REPORT)['if'])
 
     def test_performance_cache_is_isolated_and_all_declared_targets_are_accounted_for(self):
         # prototype.yml performance.env and Compile selected performance targets and check source.
