@@ -45,7 +45,8 @@ class PopupShadowContinuityTest {
     @Test fun restingNativePopupAndReturnedTriggerKeepTheDownwardMass() {
         output = nativeEvidenceDirectory("shadow-mass-popup", InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
         check(output.isDirectory || output.mkdirs())
-        compose.setContent { Fixture(nested = false) }
+        strength = 1f
+        compose.setContent { Fixture(nested = false, spread = 1f) }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         val failures = mutableListOf<String>()
@@ -448,7 +449,7 @@ class PopupShadowContinuityTest {
         }
     }
 
-    @Composable private fun Fixture(nested: Boolean, sharedReference: Boolean = false) {
+    @Composable private fun Fixture(nested: Boolean, sharedReference: Boolean = false, spread: Float = .6f) {
         LocalicaTheme {
             val page = LocalView.current
             DisposableEffect(page) {
@@ -458,7 +459,7 @@ class PopupShadowContinuityTest {
                 onDispose { page.rootView.overlay.remove(next); pageMarker = null }
             }
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
-                shadowStrength = strength, shadowSpread = .6f, shapeDamping = 2f), LocalReducedMotion provides false) {
+                shadowStrength = strength, shadowSpread = spread, shapeDamping = 2f), LocalReducedMotion provides false) {
                 val source = rememberFrostedBackdrop(Unit, dark = false)
                 val modal = rememberFrostedBackdrop(Unit, dark = false)
                 val group = rememberShadowPlane()
