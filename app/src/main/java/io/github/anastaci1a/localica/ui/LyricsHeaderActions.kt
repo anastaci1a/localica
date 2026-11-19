@@ -8,6 +8,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.boundingRect
+import androidx.compose.ui.geometry.center
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -22,27 +24,24 @@ import io.github.anastaci1a.localica.ui.layout.LyricsHeaderJoinedLayout
 internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: GlassAnchor,
     preparation: GlassOriginPreparation, onShow: () -> Unit, onSources: () -> Unit, onHide: () -> Unit) {
     val contacts = remember(anchor) { GlassSplitContact(anchor.contact) }
-    fun horizontal(shape: GlassShape, contact: GlassContact) =
-        if (contact.vertical) shape.copy(strain = -shape.strain) else shape
     val separated=preparation.separated
     val surface = rememberLyricsHeaderSurface(reveal) { preparation.progress }
     // A fast source tap can finish the still-growing two-action header without
     // substituting a full-width pill at the beginning of preparation.
     val pill = rememberSplitPill { preparation.progress }
+    // Each body casts through the transform its surface draws with, lift and drift included (the anchored left body has neither).
     val shadow = rememberGlassSilhouette { size ->
-        val p = preparation.progress
         val bodies = pill.bodies(size)
-        if (!preparation.separated) bodies.map { it.deformed(contacts.joined.body.value, Offset(size.width / 2f, size.height / 2f)) }
+        val joined = contacts.joined
+        if (!preparation.separated) bodies.map { it.deformed(joined.body.value.bodyTransform(joined.point, size, joined.vertical), size.center) }
         else {
-            val separation = originGap(p)
-            val common = horizontal(contacts.presentation(contacts.left, contacts.right, 0f), contacts.left)
-            bodies.mapIndexedNotNull { index, body ->
-                run {
-                    val shape = if (index == 0) horizontal(contacts.presentation(contacts.left, contacts.right, separation), contacts.left)
-                        else horizontal(contacts.presentation(contacts.right, contacts.left, separation), contacts.right)
-                    val shift = (if (index == 0) -1f else 1f) * size.height / 2f * (common.scaleX() - 1f) * (1f - separation)
-                    body.deformed(shape, Offset((body.left + body.right) / 2f, size.height / 2f), Offset(shift, 0f))
-                }
+            val separation = originGap(preparation.progress)
+            val common = contacts.presentation(contacts.left, contacts.right, 0f).scaleX(contacts.left.vertical)
+            bodies.mapIndexed { index, body ->
+                val (contact, other) = if (index == 0) contacts.left to contacts.right else contacts.right to contacts.left
+                val shift = (if (index == 0) -1f else 1f) * size.height / 2f * (common - 1f) * (1f - separation)
+                val drawn = contacts.presentation(contact, other, separation).bodyTransform(contact.point, body.boundingRect.size, contact.vertical, anchored = index == 0)
+                body.deformed(drawn.copy(drift = drawn.drift + Offset(shift, 0f)), body.center)
             }
         }
     }

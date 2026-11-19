@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
@@ -114,6 +115,64 @@ class LyricsHeaderActionsTest {
             }
             compose.onNodeWithContentDescription("Lyrics sources").assertExists()
             compose.onNodeWithContentDescription("Hide lyrics").assertExists()
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    /** #1076: the header's shadow plane draws over its glass, so its cast body must be the pressed,
+     * expanded body. Every pixel the held glass covers matches a shadowless render of the same frame. */
+    @Test fun heldExpandedHeaderCastsNoShadowInsideItsBody() {
+        val backdrop = Color(0xFF3F6FB0)
+        var shadows by mutableStateOf(true)
+        lateinit var backing: FrostedBackdrop
+        compose.setContent { EngineTheme {
+            val anchor = rememberGlassAnchor()
+            val preparation = rememberGlassOriginPreparation()
+            backing = rememberFrostedBackdrop(Unit)
+            Box(Modifier.fillMaxSize()) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backing)) { drawRect(backdrop) }
+                CompositionLocalProvider(LocalFrostedBackdrop provides backing, LocalGlassAppearance provides
+                    LocalGlassAppearance.current.copy(shadowStrength = if (shadows) 1f else 0f)) {
+                    Box(Modifier.padding(48.dp)) { LyricsHeaderActions(false, 0f, anchor, preparation, {}, {}, {}) }
+                }
+            }
+        } }
+        compose.waitForIdle()
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing.snapshot != null }
+        val rest = compose.onNodeWithTag("player-lyrics-pill").fetchSemanticsNode().boundsInRoot
+        val margin = rest.height.toInt()
+        val left = (rest.left.toInt() - margin).coerceAtLeast(0); val top = (rest.top.toInt() - margin).coerceAtLeast(0)
+        fun shot(): IntArray {
+            val image = compose.onRoot().captureToImage().asAndroidBitmap()
+            val width = minOf(rest.width.toInt() + 2 * margin, image.width - left); val height = minOf(rest.height.toInt() + 2 * margin, image.height - top)
+            return IntArray(width * height + 2).also { image.getPixels(it, 0, width, left, top, width, height); it[it.size - 2] = width; it[it.size - 1] = height }
+        }
+        fun difference(a: Int, b: Int) = maxOf(kotlin.math.abs(android.graphics.Color.red(a) - android.graphics.Color.red(b)),
+            kotlin.math.abs(android.graphics.Color.green(a) - android.graphics.Color.green(b)), kotlin.math.abs(android.graphics.Color.blue(a) - android.graphics.Color.blue(b)))
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithContentDescription("Show lyrics").performTouchInput { down(Offset(width * .3f, height * .35f)) }
+            compose.mainClock.advanceTimeBy(2000)
+            val cast = shot()
+            compose.runOnIdle { shadows = false }
+            compose.mainClock.advanceTimeBy(100)
+            val bare = shot()
+            compose.runOnIdle { shadows = true }
+            compose.mainClock.advanceTimeBy(100)
+            val again = shot()
+            val width = cast[cast.size - 2]; val height = cast[cast.size - 1]
+            val pixels = width * height
+            assertEquals("The held frame is settled", 0, (0 until pixels).count { difference(cast[it], again[it]) > 3 })
+            val covered = BooleanArray(pixels) { difference(bare[it], backdrop.toArgb()) > 10 }
+            // Erode the glass coverage so antialiased silhouette pixels never decide the result.
+            fun inside(x: Int, y: Int) = (-3..3).all { dy -> (-3..3).all { dx ->
+                val px = x + dx; val py = y + dy; px in 0 until width && py in 0 until height && covered[py * width + px] } }
+            val restLeft = rest.left.toInt() - left; val restRight = rest.right.toInt() - left
+            val expanded = (0 until height).any { y -> inside(restLeft - 4, y) || inside(restRight + 3, y) }
+            assertTrue("The held glass expands past its resting bounds", expanded)
+            assertTrue("The shadow plane draws", (0 until pixels).any { difference(cast[it], bare[it]) > 3 })
+            val shaded = (0 until pixels).count { difference(cast[it], bare[it]) > 3 && inside(it % width, it / width) }
+            assertEquals("Shadow pixels inside the expanded glass body", 0, shaded)
+            compose.onNodeWithContentDescription("Show lyrics").performTouchInput { cancel() }
         } finally { compose.mainClock.autoAdvance = true }
     }
 
