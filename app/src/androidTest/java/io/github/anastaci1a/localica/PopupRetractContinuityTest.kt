@@ -36,7 +36,7 @@ class PopupRetractContinuityTest {
 
     /** Composed-display pixel at the centre of [view]'s [tag] node: what the compositor actually shows. With [tick], only a
      * screenshot whose "tick" marker shows that dialog frame (green even, yellow odd) qualifies; a stale frame never does. */
-    private fun displayed(tag: String, view: () -> View, tick: Int? = null, captureLabel: String? = null): Int {
+    private fun displayed(tag: String, view: () -> View, tick: Int? = null): Int {
         compose.waitForIdle()
         fun center(t: String) = compose.onNodeWithTag(t, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
         val target = center(tag); val marker = if (tick == null) null else center("tick")
@@ -47,15 +47,7 @@ class PopupRetractContinuityTest {
             try {
                 val current = marker == null || screen.getPixel(origin[0] + marker.x.toInt(), origin[1] + marker.y.toInt()).let {
                     android.graphics.Color.green(it) > 200 && (android.graphics.Color.red(it) > 200) == (tick!! % 2 == 1) }
-                if (current) {
-                    if (captureLabel != null && InstrumentationRegistry.getArguments().getString("retainPopupCaptures") == "true") {
-                        val dir = java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "popup-retract-captures").apply { mkdirs() }
-                        val file = java.io.File(dir, "$captureLabel-tick-$tick.png")
-                        file.outputStream().use { screen.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-                        android.util.Log.i("PopupRetractCapture", "label=$captureLabel tick=$tick path=$file")
-                    }
-                    return screen.getPixel(origin[0] + target.x.toInt(), origin[1] + target.y.toInt())
-                }
+                if (current) return screen.getPixel(origin[0] + target.x.toInt(), origin[1] + target.y.toInt())
             } finally { screen.recycle() }
             Thread.sleep(50)
         }
@@ -125,7 +117,7 @@ class PopupRetractContinuityTest {
             } else compose.runOnIdle { tick++; restored = true }
             compose.waitForIdle()
             compose.runOnIdle { tick++ }
-            val shown = displayed("consumer", { dialogView }, tick, "sourceFirst-$sourceFirst-control-$c").red()
+            val shown = displayed("consumer", { dialogView }, tick).red()
             outcomes += "sourceFirst=$sourceFirst control=$c restored=$shown cRecords=${cRecords - recorded}"
             assertEquals("C is never re-recorded after the source restores: $outcomes", recorded, cRecords)
             if (c != Control.Withdraw) continue
