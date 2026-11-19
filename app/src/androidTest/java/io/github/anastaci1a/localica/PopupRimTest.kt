@@ -39,9 +39,9 @@ class PopupRimTest {
                 Canvas(Modifier.fillMaxSize()) {
                     drawRect(Color(0xFF24262A))
                 }
-                LiquidGlassSurface(Modifier.fillMaxSize(), source = null, cornerRadius = 28.dp,
-                    panelProgress = 1f, panelDark = true, inkOverride = Color.White,
-                    refraction = 0f, shadow = false, pressFeedback = false)
+                // The open popup's own material route (#748): one record; the popup rim stays (D13 deferred).
+                LiquidGlassSurface(Modifier.fillMaxSize(), source = null, cornerRadius = 28.dp, shadow = false, pressFeedback = false,
+                    presentation = { GlassSurfacePresentation(1f, 0f, 1f, Color.Transparent, 1f) }, presentedRadius = { 28.dp }, panelRim = { 1f })
                 PresentationMarker { 1 }
             } }
         }

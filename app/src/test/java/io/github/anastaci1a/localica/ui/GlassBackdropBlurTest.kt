@@ -45,9 +45,11 @@ class GlassBackdropBlurTest {
     @Test fun sharedRendererConsumesTheRadiusWithoutAnotherDensityConversion() {
         val source = File("src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt").readText()
         assertTrue(source.contains("val blurRadius = glassBackdropBlurRadius(density.density)"))
-        assertTrue(source.contains("val blur = blurRadius * (appearance.blur + (1f - appearance.blur) * frost)"))
-        assertTrue(source.contains("resolutionReader = presentation?.let { read -> { val b = blurRadius * (appearance.blur + (1f - appearance.blur) * read().frost.coerceIn(0f, 1f))"))
-        assertTrue(source.contains("val blur = frame?.let { blurRadius * (appearance.blur + (1f - appearance.blur) * it.frost.coerceIn(0f, 1f)) } ?: blur"))
+        // #748: one material record feeds every blur reader through the same law.
+        assertTrue(source.contains("fun blur(record: GlassSurfacePresentation) = blurRadius * (appearance.blur + (1f - appearance.blur) * record.frost)"))
+        assertTrue(source.contains("val scattering = ((blur(record) - 1f) / 5f).coerceIn(0f, 1f)"))
+        assertTrue(source.contains("resolutionReader = presentation?.let { read -> { resolution(read()) } }"))
+        assertTrue(source.contains("val blur = blur(frame)"))
         val call = source.substringAfter("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")
             .substringBefore("else if (blur > 0f)")
         assertTrue(call.contains("\n                    blur * resolution,"))

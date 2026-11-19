@@ -23,6 +23,11 @@ internal class GlassOriginPreparation(private val projection: io.github.anastaci
     private var drawnReceipt = -1
     private var presentedReceipt by mutableIntStateOf(-1)
     private var presentedProgress = Float.NaN
+    /** Installed by the closing popup (#748 R5): withdraws its optical body on the source DrawScope, before the source draws. */
+    var withdrawal: ((androidx.compose.ui.graphics.drawscope.DrawScope) -> Unit)? = null
+    /** Draws the source: the receipts qualify this actual layout pass after the current proof began; the engine checks its progress. */
+    fun drawSource(scope: androidx.compose.ui.graphics.drawscope.DrawScope, sample: Float, receipt: Int, content: () -> Unit) =
+        projection.drawOrigin(scope, sample, receipt == originReceipt && placedReceipt == receipt && placedProgress == sample, withdrawal, content)
 
     // Receipts describe the real origin at this gate generation, not an elapsed frame count.
     fun beginOriginProof(flight: Long) {
@@ -47,6 +52,7 @@ internal class GlassOriginPreparation(private val projection: io.github.anastaci
         placedProgress = Float.NaN
         drawnProgress = Float.NaN
         proofFlight = null
+        withdrawal = null
         originReceipt++
     }
 }
@@ -74,9 +80,11 @@ internal fun rememberGlassOriginPreparation(): GlassOriginPreparation {
             child.place(0,0); placed[0]=sample; preparation.placed(sample,receipt)
         }
     }.drawWithContent {
-        drawContent()
         val sample=placed[0]
-        preparation.drawn(sample,receipt)
-        view.post { preparation.presented(sample,receipt) }
+        preparation.drawSource(this, sample, receipt) {
+            drawContent()
+            preparation.drawn(sample,receipt)
+            view.post { preparation.presented(sample,receipt) }
+        }
     }
 }

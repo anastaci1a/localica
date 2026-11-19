@@ -208,6 +208,7 @@ class GlassGlowTest {
         val source = File(root, "LiquidGlass.kt").readText()
         val start = source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")
         val effect = source.substring(start, source.indexOf("\n                else if", start))
-        assertEquals("2632ed4118b4a56ee57a5bfa3e877239b52d130ae0650f85ffaf11a082132e64", sha(effect.toByteArray()))
+        // Re-pinned for #748: depth/power/tone read the one material record and the D13/RM01 white-tint fade is deleted; kernel unchanged.
+        assertEquals("25bd1e042f1820f425790952550ca323046beb263de21d74875f9b12da954b7e", sha(effect.toByteArray()))
     }
 }

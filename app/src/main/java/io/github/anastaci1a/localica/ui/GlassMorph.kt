@@ -29,6 +29,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -123,14 +125,17 @@ internal class GlassAnchor : PopupTakeoverOwner {
     var triggerMounted by mutableStateOf(false)
     var restoredDrawn = false
     var restoredDrawRequest by mutableLongStateOf(0L)
-    var restoredDrawReceipt = -1L
+    /** The return request whose optical body the restored source took at its draw entry (R5). Not completed-draw proof. */
+    var restoredBodyReceipt by mutableLongStateOf(-1L)
     var restoredPresentedReceipt by mutableLongStateOf(-1L)
     var bounds by mutableStateOf(Rect.Zero)
     // The shared shadow group its trigger casts into, if any.
     var shadowPlane: io.github.anastaci1a.localica.ui.engine.ShadowPlane? = null
     var source: FrostedBackdrop? = null
     var face by mutableStateOf<(@Composable () -> Unit)?>(null)
-    var depthScale = RaisedGlassDepthScale
+    /** The live record its glass surface draws; null for a geometry-only source (#748). */
+    var material by mutableStateOf<State<GlassSurfacePresentation>?>(null)
+    val depthScale get() = material?.value?.depthScale ?: RaisedGlassDepthScale
     var cornerRadius: androidx.compose.ui.unit.Dp? = null
     private var triggerRole by mutableStateOf<TriggerRole<*, *>>(TriggerRole.Surface)
     fun bindRole(role: TriggerRole<*, *>) { triggerRole = role }
@@ -222,6 +227,22 @@ internal class GlassPopupFlight(private val anchor: GlassAnchor? = null, private
         reportGlass(receipts) { GlassTransitionReceipt(System.identityHashCode(this), next.gen, "${from.takeover}/${from.presenter}", event, "${next.takeover}/${next.presenter}") }
     }
     var layer by mutableStateOf<GraphicsLayer?>(null)
+    /** R5 optical body (B and D; the native field stays outside it) and the closing request's withdrawal at an ordinary source's draw entry. */
+    var body: OpticalBody? = null
+    var sourceDraw: ((DrawScope) -> Unit)? = null
+    fun withdrawBody(scope: DrawScope, request: Long) {
+        val a = anchor ?: return
+        val take = a.restoredBodyReceipt != request
+        if (take) { a.restoredBodyReceipt = request; reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "withdraw", request) } }
+        body?.withdraw(scope, take)
+    }
+    fun refillBody(scope: DrawScope, optics: DrawScope.() -> Unit) { if (body?.refill(scope, optics) == true)
+        reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "unlink", anchor?.restoredDrawRequest ?: -1L) } }
+    /** A source draw that did not complete returns its reservation; the popup's next draw refills B. */
+    fun rearmBody(request: Long) {
+        val a = anchor?.takeIf { it.restoredBodyReceipt == request } ?: return
+        a.restoredBodyReceipt = -1L; reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "rearm", request) }
+    }
     var origin = Offset.Zero
     private var homeOrigin = Offset.Zero
     /** The home's projection offset: it tracks the home except while Taken, so the frame both presenters draw (C1) lines up. */
@@ -407,10 +428,11 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor?, source: FrostedBackdrop?
         .drawWithContent {
             val restoreRequest = anchor.restoredDrawRequest
             if (!anchor.hidden) {
-                drawContent()
+                val flight = anchor.popup
+                flight?.sourceDraw?.invoke(this)
+                var drawn = false; try { drawContent(); drawn = true } finally { if (!drawn) flight?.rearmBody(restoreRequest) }
                 anchor.restoredDrawn = true
-                anchor.restoredDrawReceipt = restoreRequest
-                view.post { if (anchor.restoredDrawReceipt == restoreRequest) anchor.restoredPresentedReceipt = restoreRequest }
+                view.post { if (anchor.restoredDrawRequest == restoreRequest) anchor.restoredPresentedReceipt = restoreRequest }
             }
         }
         .then(if (anchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)
@@ -645,11 +667,16 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 } else if (motion.expansion.nativeOpening == false) {
                     modalWindow?.glassInput(false)
                     gestures.deactivate()
-                    continuousOrigin?.beginOriginProof(generation)
                     anchor.restoredDrawn = false
                     val receipt = ++anchor.restoredDrawRequest
+                    continuousOrigin?.beginOriginProof(generation)
+                    // R5: only this request's actual source draw entry takes the optical body.
+                    val withdrawal: (DrawScope) -> Unit = { if (anchor.popup === popupFlight && popupFlight.gen == gen && !motion.shown && popupFlight.takeover == Restoring &&
+                        motion.expansion.nativeGateCurrent(generation, false) && anchor.restoredDrawRequest == receipt) popupFlight.withdrawBody(it, receipt) }
+                    if (continuousOrigin != null) continuousOrigin.withdrawal = withdrawal else popupFlight.sourceDraw = withdrawal
                     popupFlight.advance(gen, PopupEvent.AtHome)
-                    awaitTriggerReturn {
+                    // The request ends at its return or the six-frame allowance; a newer request keeps its own withdrawal.
+                    try { awaitTriggerReturn {
                         snapshotFlow { !anchor.triggerMounted || anchor.restoredPresentedReceipt == receipt }.first { it }
                         if (!gateCurrent()) return@awaitTriggerReturn
                         continuousOrigin?.awaitDrawn { anchor.triggerMounted }
@@ -668,7 +695,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 if (fieldReady) break
                             }
                         }
-                    }
+                    } } finally { if (continuousOrigin?.withdrawal === withdrawal) continuousOrigin.withdrawal = null
+                        if (popupFlight.sourceDraw === withdrawal) popupFlight.sourceDraw = null }
                     if (!gateCurrent()) continue@gateLoop
                     // Keep one frame in which the restored trigger is drawn while this modal
                     // still owns the window, so a reopen there reclaims the same dialog (#858).
@@ -722,22 +750,26 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val samplingSource = departingSource.takeIf { homeSampleReady } ?: currentSource
     val homeSource = if (retired(anchor.source)) currentSource else anchor.source
     val flightLayer = rememberGraphicsLayer()
+    val opticalBody = rememberOpticalBody()
     DisposableEffect(popupHome, popupFlight, flightLayer) {
         popupFlight.layer = flightLayer
+        popupFlight.body = opticalBody
         popupHome?.flights?.add(popupFlight)
         onDispose {
             popupHome?.flights?.remove(popupFlight)
             // Resource lifetime, not an open's step: the registration (and below, the window) leaving resets whichever open holds it now.
-            popupFlight.layer = null; popupFlight.advance(popupFlight.state.gen, PopupEvent.HomeLeft)
+            popupFlight.layer = null; popupFlight.body = null; popupFlight.advance(popupFlight.state.gen, PopupEvent.HomeLeft)
         }
     }
     SideEffect { if (!returningInline) popupFlight.advance(gen, PopupEvent.HomeReturns) }
-    // The full-scene recording can span pages with different ink. Its material
-    // metadata must not override an explicit trigger. Detached menus instead
-    // follow current ambient ink, rather than their anchor's remembered seed.
-    val panelInk = anchor.ink.takeIf { anchor.bounds != Rect.Zero && it != Color.Unspecified }
-        ?: LocalContentColor.current
-    val panelDark = darkOverride ?: if (panelInk != Color.Unspecified) panelInk.luminance() > .5f else currentSource?.dark == true
+    // One popup appearance owner (#748): an explicit host intent, then the source's own material, its measured page,
+    // the caller's page and the detached sampling scene, which can span pages, last; the theme only without any page.
+    // The measurement is read first, as at base: this popup recomposes as its trigger moves, whatever owns its appearance.
+    val measured = anchor.bounds != Rect.Zero
+    val popupLightMix = darkOverride?.let { if (it) 1f else 0f } ?: anchor.material?.value?.lightMix
+        ?: anchor.source?.takeIf { measured }?.lightMix ?: LocalFrostedBackdrop.current?.lightMix
+        ?: currentSource?.lightMix ?: if (MaterialTheme.colorScheme.surface.luminance() < .5f) 1f else 0f
+    val panelDark = popupLightMix >= .5f
     val parentPanels = LocalChildPanels.current
     val childPanels = remember { mutableIntStateOf(0) }
     val countsAsPanel = continuousOrigin == null || popupFlight.modalPresent
@@ -902,17 +934,25 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 fun startHeight() = start().height.takeIf { it > 0f } ?: with(density) { CompactControlSize.toPx() }
                 fun homeRadius() = anchor.cornerRadius?.let { it * anchor.presentedScale } ?: with(density) { (startHeight() / 2).toDp() }
                 fun radius() = if (page) PageCornerRadius else if (detached) PopupCornerRadius else popupCornerRadius(homeRadius(), PopupCornerRadius, geometry())
+                // The body morphs from the very record its source surface draws; a geometry-only or quiet source is zero at home.
+                val sourceMaterial = anchor.material.takeUnless { anchor.quiet || detached }
+                val quietOptics = anchor.quiet || sourceMaterial == null && !detached
+                fun bodyMaterial(): GlassSurfacePresentation {
+                    val target = GlassSurfacePresentation(1f, 1f, popupLightMix, Color.Transparent, anchor.depthScale)
+                    val source = sourceMaterial?.value ?: return target.copy(frost = phase(), refraction = if (quietOptics) motion.quietStrength.at(phase()) else 1f)
+                    return source.towards(target, motion.expansion.boundedProgress(motion.geometryCurve))
+                }
                 val foregroundTargetHeight = if (viewportSized) viewportTargetHeight else targetHeight
                 SideEffect { if (hasViewport) anchor.contact.vertical = kotlin.math.abs(foregroundTargetHeight - startHeight()) > kotlin.math.abs(targetWidth - startWidth()) }
                 val dark = panelDark
                 // Parent pixels invalidate the recording; they must not cancel its in-flight
                 // thumbnail readback. Restart only when the sampling owner changes.
-                val material = rememberFrostedBackdrop(listOf(samplingSource, visible, LocalGlassAppearance.current), dark = dark)
+                val material = rememberFrostedBackdrop(listOf(samplingSource, visible, LocalGlassAppearance.current), dark = dark, lightMix = popupLightMix)
                 SideEffect { material.parent = samplingSource; material.materialOnly = true }
                 // This recording is sampled only by a later nested modal. Its
                 // material already has a shared raster; don't allocate and redraw
                 // another full-panel texture throughout every opening/closing.
-                val completePanel = rememberFrostedBackdrop(window, dark = dark, retainRaster = false)
+                val completePanel = rememberFrostedBackdrop(window, dark = dark, lightMix = popupLightMix, retainRaster = false)
                 SideEffect { completePanel.parent = samplingSource }
                 // An empty search owns the keyboard: its target keeps the keyboard's reported
                 // destination until the keyboard actually descends. A query rests on the final viewport.
@@ -997,26 +1037,27 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         }
                         // Composite field and material once, with the original padded footprint.
                         nativeField.draw(this,surfaceOpacity(),wellStrength *
-                            (if(anchor.quiet) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
+                            (if(quietOptics) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
                             radius().toPx(),shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
                             shadowReceiver[0],shadowExclusion[0]) {
-                            // The restored trigger draws into the sampled recording; once it has presented,
-                            // this body must not lens it. Waiting for the receipt keeps the pill covered (#847).
-                            if (continuousOrigin == null && !visible && !popupFlight.expanded &&
-                                anchor.restoredPresentedReceipt == anchor.restoredDrawRequest) return@draw
-                            translate(left = pose?.horizontalShift ?: 0f) {
-                                scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
-                                    this@drawWithContent.drawContent()
-                                    wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
+                            // R5 (#847): B holds every popup optic until the restored source takes it at its draw entry.
+                            if (visible || popupFlight.expanded || anchor.restoredBodyReceipt != anchor.restoredDrawRequest)
+                                popupFlight.refillBody(this@drawWithContent) {
+                                    translate(left = pose?.horizontalShift ?: 0f) {
+                                        scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
+                                            this@drawWithContent.drawContent()
+                                            wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
+                                        }
+                                    }
                                 }
-                            }
+                            opticalBody.draw(this@drawWithContent)
                         }
                     }
                         .graphicsLayer { shape=RoundedCornerShape(radius()); clip=true }.glassPopupHome(childHome)
                         .recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
                         SurfaceLayer(Modifier.presentedAlpha {
-                            if (anchor.quiet) motion.quietContent.at(phase()) else 1f
+                            if (quietOptics) motion.quietContent.at(phase()) else 1f
                         }.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
@@ -1031,20 +1072,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                         else if (anchor.samplingLocation.coordinates?.isAttached == true) anchor.samplingFootprint()
                                         else anchor.lastSamplingFootprint
                                     }),
-                                    panelDark = dark,
-                                    // Material and popup foreground share the resolved page polarity,
-                                    // including explicit overrides and detached dialogs. The trigger's
-                                    // original foreground is rendered separately during its return.
-                                    inkOverride = if (dark) Color.White else Color(0xFF202124),
                                     pressFeedback = false, shadow = false,
                                     body = {
                                         if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight())?.shape ?: body.value
                                         else body.value
                                     },
-                                    depthScale = anchor.depthScale,
-                                    presentation = {
-                                        GlassSurfacePresentation(radius(), phase(), phase(), if (anchor.quiet) motion.quietStrength.at(phase()) else 1f)
-                                    })
+                                    presentation = ::bodyMaterial, presentedRadius = ::radius, panelRim = ::phase)
                             }
                         }
                         SurfaceLayer(Modifier.presentedAlpha { if (page) 1f else motion.foreground.at(phase()) }
@@ -1053,7 +1086,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             .then(if (!motion.shown || !foregroundReady) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
                                 awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
                             } else Modifier)) {
-                            CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides if (dark) Color.White else Color(0xFF202124),
+                            CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides lerp(Color(0xFF202124), Color.White, popupLightMix),
                                 LocalModalBackdrop provides completePanel,
                                 LocalChildPanels provides childPanels,
                                 LocalPopupScrollEdges provides !page,
@@ -1063,7 +1096,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 LocalGlassPopupHome provides childHome,
                                 LocalPopupDismiss provides dismissNow,
                                 LocalGlassPanelReady provides (visible && admittedDraw && (placement == GlassPlacement.Search || panelReady))) {
-                                GlassPanelTheme(dark, content)
+                                GlassPanelTheme(popupLightMix, content)
                             }
                         }
                         SurfaceLayer(Modifier.presentedAlpha { motion.face.at(phase()) }

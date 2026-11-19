@@ -14,6 +14,12 @@ import androidx.compose.runtime.*
     fun clear() { phase=null }
     internal fun publishStructure(p: Float) { separated=p>=.5f; active=p>0f }
     fun captured(separated: Boolean): Float=value.let { if((it>=.5f)==separated) it else Float.NaN }
+    /** #748 R5: while a closing popup holds the body, only a [placed] draw at the current phase withdraws it and draws; a stale one draws nothing. */
+    fun drawOrigin(scope: androidx.compose.ui.graphics.drawscope.DrawScope, sample: Float, placed: Boolean,
+        withdrawal: ((androidx.compose.ui.graphics.drawscope.DrawScope) -> Unit)?, content: () -> Unit) {
+        if (withdrawal != null) { if (!placed || sample != value) return; withdrawal(scope) }
+        content()
+    }
 }
 
 @Composable internal fun rememberOriginPhaseProjection(): OriginPhaseProjection {

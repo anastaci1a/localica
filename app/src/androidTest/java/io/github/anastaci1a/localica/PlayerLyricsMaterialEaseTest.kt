@@ -39,11 +39,10 @@ class PlayerLyricsMaterialEaseTest {
     private var initialMix = 0f
     @Volatile private var outsideSourceIdentity = 0
     @Volatile private var tone = Float.NaN
-    @Volatile private var coating = Float.NaN
     @Volatile private var panelInk = Float.NaN
     @Volatile private var backdropMix = Float.NaN
 
-    private class Frame(val shared: Float, val tone: Float, val coating: Float, val panel: Float, val backdrop: Float)
+    private class Frame(val shared: Float, val tone: Float, val panel: Float, val backdrop: Float)
     private val frames = ArrayList<Frame>()
 
     private fun mount() {
@@ -53,14 +52,14 @@ class PlayerLyricsMaterialEaseTest {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalDensity provides Density(1f),
                 LocalPlayerInkCompositionObserver provides { inkComposition = it }, LocalGlassSurfaceDrawObserver provides { glassDrawProbe?.invoke(it); (it as? GlassSurfaceDrawObservation)?.let {
-                if (it.source?.identity == outsideSourceIdentity && !it.inkOverridden) { tone = it.toneLightMix; coating = it.coatingLightMix } } }) {
+                if (it.source?.identity == outsideSourceIdentity && !it.inkOverridden) tone = it.toneLightMix } }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val mix = owner.lightMix
                     val backdrop = rememberFrostedBackdrop(Unit, enabled = false, dark = mix >= .5f, lightMix = mix, retainRaster = false)
                     SideEffect { outsideSourceIdentity = System.identityHashCode(backdrop); backdropMix = backdrop.lightMix }
                     GlassPanelTheme(mix) { val ink = LocalContentColor.current; SideEffect { panelInk = ink.red } }
                     // A surface outside the player that samples the shared backdrop, as the browse chrome and Queue do.
-                    LiquidGlassSurface(Modifier.size(48.dp), source = backdrop, panelProgress = 1f, cornerRadius = 12.dp) { Text("x") }
+                    LiquidGlassSurface(Modifier.size(48.dp), source = backdrop, cornerRadius = 12.dp) { Text("x") }
                     BoxWithConstraints(Modifier.width(300.dp).height(minOf(560.dp, maxHeight))) {
                         PlayerSurface(PlaybackState(connected = true, title = "Region", artist = "Artwork", durationMs = 120000),
                             true, {}, settings, remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
@@ -93,10 +92,10 @@ class PlayerLyricsMaterialEaseTest {
         // Owner -> backdrop and backdrop -> material publish through separate composition
         // bridges. Each bridge follows adjacent phase samples of its own source.
         follows("glass tone", tone, backdropMix, previousBackdrop)
-        follows("coating", coating, backdropMix, previousBackdrop)
+        // D13 (#748) deleted the coating channel; its adjacency, span and monotonic checks are retired, not replaced by tone.
         follows("panel ink", panelInk, lerp(Color(0xFF202124), Color.White, owner.lightMix).red,
             lerp(Color(0xFF202124), Color.White, previous).red)
-        frames += Frame(owner.lightMix, tone, coating, panelInk, backdropMix)
+        frames += Frame(owner.lightMix, tone, panelInk, backdropMix)
     }
 
     private fun check(name: String, values: List<Float>, towardLight: Boolean) {
@@ -112,7 +111,7 @@ class PlayerLyricsMaterialEaseTest {
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { lyrics = open }; repeat(1) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
         frames.clear()
-        frames += Frame(owner.lightMix, tone, coating, panelInk, backdropMix)
+        frames += Frame(owner.lightMix, tone, panelInk, backdropMix)
         compose.runOnIdle {
             initialMix = owner.lightMix
             pendingTarget = if (towardLight) 1f else 0f
@@ -122,7 +121,6 @@ class PlayerLyricsMaterialEaseTest {
         check("shared polarity", frames.map { it.shared }, towardLight)
         check("outside backdrop", frames.map { it.backdrop }, towardLight)
         check("glass tone", frames.map { it.tone }, towardLight)
-        check("panel coating", frames.map { it.coating }, towardLight)
         // The panel theme ink runs from dark ink (red .1255) to white; normalise to the 0..1 fraction.
         check("panel theme ink", frames.map { ((it.panel - .1255f) / .8745f).coerceIn(0f, 1f) }, towardLight)
         // The player foreground and every material read the same presented fraction.
