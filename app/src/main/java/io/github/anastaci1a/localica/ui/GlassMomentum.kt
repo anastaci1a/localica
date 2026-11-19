@@ -28,6 +28,17 @@ internal fun glassContactDrift(point: Offset, size: Size, scale: Offset): Offset
         (point.y.coerceIn(0f, 1f) - .5f) * size.height * lift)
 }
 
+internal data class GlassBodyTransform(val scale: Offset = Offset(1f, 1f), val drift: Offset = Offset.Zero) {
+    fun localPoint(point: Offset, size: Size) = Offset(
+        size.width * (.5f + (point.x - .5f) / scale.x) - drift.x / scale.x,
+        size.height * (.5f + (point.y - .5f) / scale.y) - drift.y / scale.y)
+}
+
+internal fun GlassShape.bodyTransform(point: Offset, size: Size, vertical: Boolean = false, anchored: Boolean = false): GlassBodyTransform {
+    val lift = liftScale(anchored)
+    return GlassBodyTransform(Offset(scaleX(vertical) * lift, scaleY(vertical) * lift), glassContactDrift(point, size, Offset(lift, lift)))
+}
+
 /** Compensation for center-based scaling: the contacting edge stays on its wall. */
 internal fun glassWallTranslation(extent: Float, scale: Float, wall: Float): Float =
     wall.coerceIn(-1f, 1f) * extent * (1f - scale) / 2
