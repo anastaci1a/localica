@@ -449,11 +449,11 @@ internal fun ContactGlowBacking(modifier: Modifier, glow: () -> GlassGlow, shape
     val background = MaterialTheme.colorScheme.background
     ContactLightBacking(modifier, geometry = geometry, background = background, enabled = { val frame = glow(); frame.big > 0f || frame.little > 0f || frame.retiring.any { it.little > 0f } },
         effect = { g -> cache.effect(glow(), transform(size), g.first, density, background, size.height, g.second) }, reduction = { cache.meanEffect(background) },
-        paint = { g -> contactGlowPasses(glow(), shape(), vertical, cache, g.first, sample()?.compositeOver(background) ?: background, transform(size)) }, content = content)
+        paint = { g -> contactGlowPasses(glow(), shape(), vertical, cache, g.first, sample()?.compositeOver(background) ?: background, transform(size), g.second) }, content = content)
 }
 
 internal fun DrawScope.contactGlowPasses(glow: GlassGlow, body: GlassShape, vertical: Boolean, cache: GlassRimCache,
-    bounds: Rect, sample: Color, transform: GlassBodyTransform? = null): List<io.github.anastaci1a.localica.ui.engine.ContactLightPass> {
+    bounds: Rect, sample: Color, transform: GlassBodyTransform? = null, corner: Float = 0f): List<io.github.anastaci1a.localica.ui.engine.ContactLightPass> {
     if (bounds.isEmpty) return emptyList()
     val white = cache.white(sample.luminance())
     val radius = io.github.anastaci1a.localica.ui.spec.FlexGlow.radius(minOf(bounds.width, bounds.height), density)
@@ -464,8 +464,10 @@ internal fun DrawScope.contactGlowPasses(glow: GlassGlow, body: GlassShape, vert
             val point = bounds.topLeft + (transform ?: body.bodyTransform(Offset(.5f, .5f), bounds.size, vertical, anchored = true)).localPoint(frame.point, bounds.size)
             val paint = cache.paint(local, white); val mask = if (local) cache.mask(sigma) else null
             val pass: io.github.anastaci1a.localica.ui.engine.ContactLightPass = { backing ->
+                clipPath(cache.roundedPath(bounds, corner)) {
                 io.github.anastaci1a.localica.ui.engine.drawContactLight(this, bounds, point, radius / sigma * frame.scale,
                     if (local) 0f else alpha, if (local) alpha else 0f, paint, paint, mask, cache.composite, backing)
+                }
             }
             pass
         }

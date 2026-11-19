@@ -221,6 +221,20 @@ class GlassTouchLightTest {
         } } }
         val node = compose.onNodeWithTag("native-light")
         val idleImage = node.captureToImage(); val idle = pixels(idleImage)
+        fun exteriorUnchanged(actual: IntArray) {
+            val bounds = Rect(idleImage.width / 4f, idleImage.height / 6f, idleImage.width * .75f, idleImage.height * 5 / 6f)
+            val radius = idleImage.width * 12f / 128f
+            var corners = 0
+            for (y in 0 until idleImage.height) for (x in 0 until idleImage.width) {
+                val dx = maxOf(bounds.left + radius - (x + .5f), 0f, x + .5f - (bounds.right - radius))
+                val dy = maxOf(bounds.top + radius - (y + .5f), 0f, y + .5f - (bounds.bottom - radius))
+                if (dx * dx + dy * dy > (radius + 1) * (radius + 1)) {
+                    assertEquals("outside rounded host x=$x y=$y", idle[y * idleImage.width + x], actual[y * idleImage.width + x])
+                    if (bounds.contains(Offset(x + .5f, y + .5f))) corners++
+                }
+            }
+            assertTrue("rounded corner witnesses are inside the bounding rectangle", corners > 0)
+        }
         val local = GlassGlow(little = 1f, point = Offset(.5f, .5f))
         compose.runOnIdle { light = local }
         val held = pixels(node.captureToImage())
@@ -229,10 +243,22 @@ class GlassTouchLightTest {
             if (x < idleImage.width / 5 || x >= idleImage.width * 4 / 5)
                 assertEquals("outside bounded host x=$x y=$y", idle[y * idleImage.width + x], held[y * idleImage.width + x])
         }
+        exteriorUnchanged(held)
         compose.runOnIdle { light = GlassGlow(retiring = listOf(local)) }
         assertArrayEquals("a retiring record uses the same native paint", held, pixels(node.captureToImage()))
         compose.runOnIdle { light = GlassGlow(big = .7f, little = .8f, point = Offset(.5f, .5f), retiring = listOf(local.copy(little = .6f))) }
-        assertFalse("ordered broad and local passes contribute", held.contentEquals(pixels(node.captureToImage())))
+        val combined = pixels(node.captureToImage())
+        assertFalse("ordered broad and local passes contribute", held.contentEquals(combined))
+        exteriorUnchanged(combined)
+        val software = ImageBitmap(idleImage.width, idleImage.height)
+        try {
+            CanvasDrawScope().draw(Density(idleImage.width / 128f), LayoutDirection.Ltr, Canvas(software), Size(software.width.toFloat(), software.height.toFloat())) {
+                drawTouchLightFixture(GlassGlow(big = .7f, little = .8f, retiring = listOf(local)), GlassShape(), false, GlassRimCache(),
+                    Rect(size.width / 4, size.height / 6, size.width * .75f, size.height * 5 / 6), corner = 12.dp.toPx()) { drawImage(idleImage) }
+            }
+            exteriorUnchanged(pixels(software))
+            assertFalse("software light is visible inside the host", idle.contentEquals(pixels(software)))
+        } finally { software.asAndroidBitmap().recycle() }
         compose.runOnIdle { light = GlassGlow() }
         assertArrayEquals("idle removes every native pass", idle, pixels(node.captureToImage()))
     }

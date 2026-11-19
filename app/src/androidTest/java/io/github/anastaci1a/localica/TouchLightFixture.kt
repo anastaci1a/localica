@@ -23,12 +23,12 @@ internal fun seedGlowEpoch(body: GlassMomentum) {
 
 /** Execute the production pass list against successive immutable destinations. */
 internal fun DrawScope.drawTouchLightFixture(glow: GlassGlow, shape: GlassShape, vertical: Boolean,
-    cache: GlassRimCache, bounds: Rect = Rect(Offset.Zero, size), sample: Color = Color(0xff405060), backing: DrawScope.() -> Unit) {
+    cache: GlassRimCache, bounds: Rect = Rect(Offset.Zero, size), sample: Color = Color(0xff405060), corner: Float = 0f, backing: DrawScope.() -> Unit) {
     var image = ImageBitmap(kotlin.math.ceil(size.width).toInt(), kotlin.math.ceil(size.height).toInt())
     fun draw(target: ImageBitmap, block: DrawScope.() -> Unit) = CanvasDrawScope().draw(Density(density), layoutDirection, Canvas(target), size, block)
     try {
         draw(image, backing)
-        for (pass in contactGlowPasses(glow, shape, vertical, cache, bounds, sample)) {
+        for (pass in contactGlowPasses(glow, shape, vertical, cache, bounds, sample, corner = corner)) {
             val prior = image
             image = ImageBitmap(prior.width, prior.height)
             draw(image) { drawImage(prior); pass { drawImage(prior) } }
