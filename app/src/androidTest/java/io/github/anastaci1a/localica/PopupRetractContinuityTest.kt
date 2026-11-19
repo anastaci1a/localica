@@ -71,7 +71,8 @@ class PopupRetractContinuityTest {
         lateinit var dialogView: View
         compose.setContent {
             val s = rememberGraphicsLayer(); val b = rememberGraphicsLayer(); val d = rememberGraphicsLayer()
-            SideEffect { flight.body = b; flight.dependency = d }
+            val optical = remember(b, d) { io.github.anastaci1a.localica.ui.engine.OpticalBody(b, d) }
+            SideEffect { flight.body = optical }
             Box(Modifier.size(120.dp).testTag("source").drawWithContent {
                 val restoring = restored
                 s.record {
@@ -91,7 +92,7 @@ class PopupRetractContinuityTest {
                     Box(Modifier.size(120.dp).testTag("consumer").drawWithContent {
                         epoch.let { cRecords++ }
                         flight.refillBody(this) { drawLayer(s) }
-                        flight.drawBody(this)
+                        optical.draw(this)
                     })
                     // A sibling forces new dialog frames without re-recording C.
                     Canvas(Modifier.size(2.dp).align(Alignment.BottomEnd)) { drawRect(if (tick % 2 == 0) Color.Green else Color.Yellow) }

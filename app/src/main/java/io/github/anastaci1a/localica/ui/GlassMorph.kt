@@ -227,35 +227,21 @@ internal class GlassPopupFlight(private val anchor: GlassAnchor? = null, private
         reportGlass(receipts) { GlassTransitionReceipt(System.identityHashCode(this), next.gen, "${from.takeover}/${from.presenter}", event, "${next.takeover}/${next.presenter}") }
     }
     var layer by mutableStateOf<GraphicsLayer?>(null)
-    /** R5: optical body B holds every popup optical command; dependency D is empty or holds only empty B. Consumers draw D, then B. */
-    var body: GraphicsLayer? = null
-    var dependency: GraphicsLayer? = null
-    private var linked = false
+    /** R5: the optical body (B and its dependency D) of this presentation; the native field stays outside it. */
+    var body: OpticalBody? = null
     /** The current closing request's withdrawal at an ordinary source's draw entry. */
     var sourceDraw: ((DrawScope) -> Unit)? = null
     /** The source takes [request]'s body at its draw entry: B empties and D -> empty B enters its graph before its content. */
     fun withdrawBody(scope: DrawScope, request: Long) {
-        val a = anchor ?: return; val b = body ?: return; val d = dependency ?: return
-        if (a.restoredBodyReceipt != request) with(scope) {
-            a.restoredBodyReceipt = request
-            b.record { }
-            d.record { drawLayer(b) }
-            linked = true
-            reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this@GlassPopupFlight), "withdraw", request) }
-        }
-        scope.drawLayer(d)
+        val a = anchor ?: return
+        val take = a.restoredBodyReceipt != request
+        if (take) a.restoredBodyReceipt = request
+        body?.withdraw(scope, take)
+        if (take) reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "withdraw", request) }
     }
-    /** The popup's own draw: D empties before B records optics again, in this one step, so no B -> S -> D -> B cycle forms. */
     fun refillBody(scope: DrawScope, optics: DrawScope.() -> Unit) {
-        val b = body ?: return; val d = dependency ?: return
-        if (linked) with(scope) {
-            d.record { }
-            linked = false
-            reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this@GlassPopupFlight), "unlink", anchor?.restoredDrawRequest ?: -1L) }
-        }
-        with(scope) { b.record(block = optics) }
+        if (body?.refill(scope, optics) == true) reportGlass(receipts) { GlassBodyReceipt(System.identityHashCode(this), "unlink", anchor?.restoredDrawRequest ?: -1L) }
     }
-    fun drawBody(scope: DrawScope) { dependency?.let(scope::drawLayer); body?.let(scope::drawLayer) }
     /** A source draw that did not complete returns its reservation; the popup's next draw refills B. */
     fun rearmBody(request: Long) {
         val a = anchor ?: return
@@ -776,16 +762,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val samplingSource = departingSource.takeIf { homeSampleReady } ?: currentSource
     val homeSource = if (retired(anchor.source)) currentSource else anchor.source
     val flightLayer = rememberGraphicsLayer()
-    val bodyLayer = rememberGraphicsLayer()
-    val dependencyLayer = rememberGraphicsLayer()
+    val opticalBody = rememberOpticalBody()
     DisposableEffect(popupHome, popupFlight, flightLayer) {
         popupFlight.layer = flightLayer
-        popupFlight.body = bodyLayer; popupFlight.dependency = dependencyLayer
+        popupFlight.body = opticalBody
         popupHome?.flights?.add(popupFlight)
         onDispose {
             popupHome?.flights?.remove(popupFlight)
             // Resource lifetime, not an open's step: the registration (and below, the window) leaving resets whichever open holds it now.
-            popupFlight.layer = null; popupFlight.body = null; popupFlight.dependency = null
+            popupFlight.layer = null; popupFlight.body = null
             popupFlight.advance(popupFlight.state.gen, PopupEvent.HomeLeft)
         }
     }
@@ -964,7 +949,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val sourceMaterial = anchor.material.takeUnless { anchor.quiet || detached }
                 val quietOptics = anchor.quiet || sourceMaterial == null && !detached
                 fun bodyMaterial() = GlassSurfacePresentation(1f, 1f, popupLightMix, Color.Transparent, anchor.depthScale).let { target ->
-                    sourceMaterial?.value?.towards(target, geometry().coerceIn(0f, 1f))
+                    sourceMaterial?.value?.towards(target, motion.expansion.boundedProgress(motion.geometryCurve))
                         ?: target.copy(frost = phase(), refraction = if (quietOptics) motion.quietStrength.at(phase()) else 1f)
                 }
                 val foregroundTargetHeight = if (viewportSized) viewportTargetHeight else targetHeight
@@ -1075,7 +1060,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                         }
                                     }
                                 }
-                            popupFlight.drawBody(this@drawWithContent)
+                            opticalBody.draw(this@drawWithContent)
                         }
                     }
                         .graphicsLayer { shape=RoundedCornerShape(radius()); clip=true }.glassPopupHome(childHome)
