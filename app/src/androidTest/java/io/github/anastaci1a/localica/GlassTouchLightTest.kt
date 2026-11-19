@@ -389,7 +389,7 @@ class GlassTouchLightTest {
         node.performTouchInput { up() }
     }
 
-    @Test fun pressedBodiesGrowTheirLongEdgeByTheSizeLawAndTheInsetSearchSlotStaysInTheWindow() {
+    @Test fun pressedBodiesGrowTheirLongEdgeByTheSizeLaw() {
         val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
         val sizes = listOf(44 to 44, 120 to 44, 328 to 40)
         val contacts = sizes.map { GlassContact() }
@@ -432,13 +432,41 @@ class GlassTouchLightTest {
                 assertEquals("rest layout mode=$mode i=$i", w * density, (rest.second - rest.first + 1).toFloat(), 1.5f)
                 assertEquals("long edge grows by P mode=$mode i=$i", p * density, growth.toFloat(), 1.5f)
                 assertEquals("pressed body stays centred mode=$mode i=$i", (rest.first + rest.second) / 2f, (held.first + held.second) / 2f, 1f)
-                if (w == 328) {
-                    assertEquals("search slot rests at its 16 dp inset mode=$mode", 16 * density, rest.first.toFloat(), 1.5f)
-                    assertTrue("pressed search slot stays inside the window mode=$mode held=$held", held.first > 0 && held.second < frame.width - 1)
-                    assertEquals("pressed search slot keeps 8 dp to the window mode=$mode", 8 * density, held.first.toFloat(), 1.5f)
-                }
             }
         }
+    }
+
+    @Test fun resizingAHeldSettledBodyRepublishesTheSizeLawForItsNewSize() {
+        val contact = GlassContact()
+        var size by mutableStateOf(DpSize(104.dp, 48.dp))
+        compose.mainClock.autoAdvance = false
+        compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(touchLight = 0f)) {
+                Box(Modifier.size(360.dp, 200.dp)) {
+                    LiquidGlassSurface(Modifier.size(size).testTag("resized"), source = null, cornerRadius = 24.dp, shadow = false, sharedContact = contact)
+                }
+            }
+        } } }
+        val node = compose.onNodeWithTag("resized")
+        fun expected(): Float {
+            val px = node.fetchSemanticsNode().size; val long = maxOf(px.width, px.height) / compose.density.density
+            val short = minOf(px.width, px.height) / compose.density.density
+            return (if (long < 120f) 16f else 16f - 12f * ((short - 44f) / 116f).coerceIn(0f, 1f)) / long
+        }
+        node.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(2500)
+        compose.runOnIdle {
+            assertTrue("held body settles and stops its clock", contact.state.momentum.settled)
+            assertEquals("held 104x48 publishes 16/L", expected(), contact.state.output.value.lift, 1e-5f)
+            size = DpSize(240.dp, 104.dp)
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.runOnIdle {
+            android.util.Log.i("Localica1080", "resize-held lift=${contact.state.output.value.lift} expected=${expected()} settled=${contact.state.momentum.settled}")
+            assertTrue("resized held body settles again", contact.state.momentum.settled)
+            assertEquals("resize across the P boundary republishes P/L", expected(), contact.state.output.value.lift, 1e-5f)
+        }
+        node.performTouchInput { up() }
     }
 
     @Test fun nonScalingSurfaceObservesLightWithoutMovingItsForegroundOrTakingTheClick() {

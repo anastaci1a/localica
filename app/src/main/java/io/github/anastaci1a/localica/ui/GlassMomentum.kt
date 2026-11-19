@@ -4,6 +4,7 @@ import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import io.github.anastaci1a.localica.ui.spec.FlexPress
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Size
 import kotlin.math.*
 
@@ -63,7 +64,7 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
         set(value) { field = value?.copy(lift = FlexPress.None) }
     var spec = FlexSpec.Small
     /** Body size in dp and the touch-down point that contact translation is measured from. */
-    var extent = Size.Zero
+    var extent by mutableStateOf(Size.Zero)
     var origin = Offset(.5f, .5f)
     private class Spring {
         var value = 0f
