@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -28,8 +27,7 @@ class GlassOpticsTest {
         org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)
         var material by mutableStateOf(true)
         lateinit var source: FrostedBackdrop
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
-            GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+        compose.setContent { LocalicaTheme {
             source = rememberFrostedBackdrop(Unit)
             val isMaterial = material
             SideEffect { source.materialOnly = isMaterial; source.materialCorner = 0f }
@@ -42,7 +40,7 @@ class GlassOpticsTest {
                 LiquidGlassSurface(Modifier.fillMaxSize().testTag("sampled-material"), source,
                     cornerRadius = 24.dp, pressFeedback = false)
             }
-        } } }
+         } }
         val averaged = compose.onNodeWithTag("sampled-material").captureToImage().toPixelMap()
         for (y in 3..5) for (x in 3..5) {
             val pixel = averaged[averaged.width * x / 8, averaged.height * y / 8]
@@ -65,8 +63,7 @@ class GlassOpticsTest {
     @Test fun changingDepthBendsARecordedGridAndKeepsTheOutsideUntouched() {
         var power by mutableFloatStateOf(1f)
         lateinit var source: FrostedBackdrop
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
-            GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f, depth = .6f)) {
+        compose.setContent { LocalicaTheme {
             Box(Modifier.size(320.dp, 420.dp).testTag("optics")) {
                 source = rememberFrostedBackdrop(Unit)
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -82,7 +79,7 @@ class GlassOpticsTest {
                     }
                 }
             }
-        } } }
+         } }
         val node = compose.onNodeWithTag("optics")
         if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val before = node.captureToImage().toPixelMap()

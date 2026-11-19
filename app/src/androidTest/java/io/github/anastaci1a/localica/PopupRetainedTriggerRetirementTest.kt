@@ -80,7 +80,7 @@ class PopupRetainedTriggerRetirementTest {
         val nativeGeneration: Long?, val homeMatches: Boolean)
 
     private data class SceneNode(val id: Int, val layer: Int?, val parent: Int?, val sampled: List<Int>,
-        val recordedChildren: List<Int>, val recordings: Int, val recorded: Boolean, val rendererGeneration: Int?)
+        val recordedChildren: List<Int>, val recordings: Int, val recorded: Boolean)
     private data class FlightNode(val id: Int, val layer: Int?, val prepared: Boolean, val handedOff: Boolean,
         val wasProjected: Boolean, val projectionActive: Boolean)
     private data class HomeNode(val id: Int, val backdrop: Int?, val children: List<Int>, val departing: Boolean,
@@ -101,9 +101,8 @@ class PopupRetainedTriggerRetirementTest {
             val parent = value.parent
             val sampled = value.recordedChildren.toList()
             val children = value.recordedLayoutChildren.toList()
-            nodes += SceneNode(id(value), if (value.hasGlassLayer) id(value.layer) else null,
-                parent?.let(::id), sampled.map(::id), children.map(::id), value.recordings, value.recorded,
-                value.recordedGeneration?.let(::id))
+            nodes += SceneNode(id(value), id(value.layer),
+                parent?.let(::id), sampled.map(::id), children.map(::id), value.recordings, value.recorded)
             source(parent); sampled.forEach(::source); children.forEach(::source)
         }
         fun home(value: GlassPopupHome?) {

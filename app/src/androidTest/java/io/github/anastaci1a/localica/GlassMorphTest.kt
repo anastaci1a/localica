@@ -224,8 +224,7 @@ class GlassMorphTest {
             var open by mutableStateOf(false)
             lateinit var anchor: GlassAnchor
             compose.setContent { EngineTheme(reduced = true) {
-                CompositionLocalProvider(LocalReducedMotion provides true, LocalGlassMorphWorkObserver provides work.observer, LocalGlassAppearance provides
-                    io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
+                CompositionLocalProvider(LocalReducedMotion provides true, LocalGlassMorphWorkObserver provides work.observer) {
                     Box(Modifier.fillMaxSize().background(Color(0xFF808080))) {
                         anchor = rememberGlassAnchor()
                         Box(Modifier.align(Alignment.BottomEnd)
@@ -377,8 +376,7 @@ class GlassMorphTest {
         lateinit var outsidePlane: io.github.anastaci1a.localica.ui.engine.ShadowPlane
         compose.setContent { LocalicaTheme { EngineRecord {
             outsidePlane = io.github.anastaci1a.localica.ui.engine.rememberShadowPlane()
-            CompositionLocalProvider(LocalGlassAppearance provides
-                io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f),
+            CompositionLocalProvider(
                 LocalSurfaceShadows provides outsidePlane, LocalPageShadows provides outsidePlane) {
                 GlassMorphPopup(true, rememberGlassAnchor(), {}, fitContent = false) {
                     popupView = androidx.compose.ui.platform.LocalView.current
@@ -476,8 +474,7 @@ class GlassMorphTest {
         lateinit var anchor: GlassAnchor
         var popupView: android.view.View? = null
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides
-                io.github.anastaci1a.localica.navigation.GlassAppearance(shapeDamping = 2f)) {
+
                 Box(Modifier.fillMaxSize()) {
                     anchor = rememberGlassAnchor()
                     LiquidGlassSurface(Modifier.align(Alignment.BottomEnd).padding(24.dp)
@@ -487,7 +484,7 @@ class GlassMorphTest {
                         Box(Modifier.fillMaxWidth().height(220.dp)) { Text("Persistent surface") }
                     }
                 }
-            }
+
         } }
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { open = true }

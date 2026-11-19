@@ -28,7 +28,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -42,7 +41,6 @@ import kotlin.math.roundToInt
 class PopupShadowContinuityTest {
     @get:Rule val compose = createComposeRule()
     private var open by mutableStateOf(false)
-    private var strength by mutableFloatStateOf(.8f)
     private lateinit var anchor: GlassAnchor
     private var popupView: View? = null
     private var popupWindow: Window? = null
@@ -67,7 +65,6 @@ class PopupShadowContinuityTest {
      * page and popup windows at identical geometry on every open and return, so their
      * shared gap must not switch between union and stacked coverage at either handoff. */
     @Test fun sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles() {
-        strength = 2f
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
@@ -380,7 +377,7 @@ class PopupShadowContinuityTest {
             assertNotSame(window, popupWindow)
             verifyField("replacement-window")
         } finally {
-            compose.runOnIdle { open = false; strength = .8f }
+            compose.runOnIdle { open = false }
             compose.mainClock.autoAdvance = true
         }
     }
@@ -394,8 +391,7 @@ class PopupShadowContinuityTest {
                 page.rootView.overlay.add(next)
                 onDispose { page.rootView.overlay.remove(next); pageMarker = null }
             }
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
-                shadowStrength = strength, shadowSpread = .6f, shapeDamping = 2f), LocalReducedMotion provides false) {
+            CompositionLocalProvider( LocalReducedMotion provides false) {
                 val source = rememberFrostedBackdrop(Unit, dark = false)
                 val modal = rememberFrostedBackdrop(Unit, dark = false)
                 val group = rememberShadowPlane()
@@ -479,7 +475,7 @@ class PopupShadowContinuityTest {
             referenceShift = with(density) { 192.dp.roundToPx().toFloat() }
         }
         Box(Modifier.fillMaxSize().onGloballyPositioned { referenceOrigin = it.backdropPosition(page) }
-            .shadowPlaneHost(plane, strength, .6f)) {
+            .shadowPlaneHost(plane, strength, 1f)) {
             repeat(2) { index ->
                 val key = remember { Any() }
                 Box(Modifier.matchParentSize().glassCaster(plane, key,

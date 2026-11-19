@@ -17,7 +17,6 @@ import io.github.anastaci1a.localica.ui.layout.SettingsPageColumn
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import kotlinx.coroutines.flow.first
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -28,10 +27,9 @@ import io.github.anastaci1a.localica.scanner.ScanPreferences
 private data class SettingsDestination(val title: String, val parent: String?, val icon: AppIcon, val summary: String)
 private data class SettingsPageRoute(val title: String, val folderUri: String?, val iconPackId: String?)
 private val settingsDestinations = listOf(
-    SettingsDestination("Interface", null, AppIcon.SettingsInterface, "Navigation, player, icons, glass, and motion"),
+    SettingsDestination("Interface", null, AppIcon.SettingsInterface, "Navigation, player, icons, and motion"),
     SettingsDestination("Appearance", "Interface", AppIcon.SettingsAppearance, "Typography and interface gray"),
     SettingsDestination("Icon packs", "Interface", AppIcon.SettingsIconPacks, "Import, switch, and view icons"),
-    SettingsDestination("Glass", "Interface", AppIcon.SettingsGlass, "Blur, white tint, and floating shadows"),
     SettingsDestination("Navigation", "Interface", AppIcon.SettingsNavigation, "Main tabs, Back history, and exit confirmation"),
     SettingsDestination("Player", "Interface", AppIcon.SettingsPlayer, "Artwork, gestures, and player actions"),
     SettingsDestination("Motion", "Interface", AppIcon.SettingsMotion, "Animation speed and reduced motion"),
@@ -93,7 +91,6 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     var path by rememberSaveable(stateSaver = settingsPathSaver) { mutableStateOf(settingsPath(initialCategory)) }
     var iconPackId by rememberSaveable { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<SettingSpec?>(null) }
-    val glass = LocalGlassAppearance.current
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     var search by rememberSaveable { mutableStateOf("") }
@@ -157,13 +154,9 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         "Quick Scan on launch" to if (preferences.scanOnLaunch) "On" else "Off",
                         "Full scan on launch" to if (preferences.fullScanOnLaunch) "On" else "Off")
                     SettingsSearchResults(search, values) { result ->
-                        var target = result.setting
-                        var destination = result.page
-                        if (glass.renderer != GlassRendererMode.Normal &&
-                            "Glass" in SettingsCatalog.path(destination) && destination != "Glass") {
-                            target = SettingsCatalog.entries.first { it.id == "Glass renderer" }
-                            destination = "Glass"
-                        }
+                        val target = result.setting
+                        val destination = result.page
+
                         focusManager.clearFocus()
                         keyboard?.hide()
                         search = ""
@@ -184,7 +177,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                             LibraryDataSettings(it.library)
                         }
                     }
-                    "Navigation", "Player", "Motion", "Glass", "Glass appearance", "Glass advanced", "Navigation selector", "Appearance" -> interfaceContent(page)
+                    "Navigation", "Player", "Motion", "Appearance" -> interfaceContent(page)
                     "Icon packs" -> IconPackSettings { id -> iconPackId = id; path = path + "Pack icons" }
                     "Pack icons" -> IconPackViewer(shown.iconPackId)
                     "Playback and queues" -> {

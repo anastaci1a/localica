@@ -31,15 +31,15 @@ class PopupBrowseReturnReferenceTest {
     @get:Rule val compose = localicaComposeRule()
     private val frames by lazy { PopupWindowEvidence(compose) }
     @org.junit.After fun removeMarkers() = frames.dispose()
-    @Test fun normalDepartingMenuLayerReference() = capture(GlassRendererMode.Normal)
+    @Test fun normalDepartingMenuLayerReference() = capture()
 
-    private fun capture(mode: GlassRendererMode) {
+    private fun capture() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
-        val output = File(nativeEvidenceDirectory("popup-browse-return-reference", context.getExternalFilesDir(null)), mode.name).apply { mkdirs() }
+        val output = File(nativeEvidenceDirectory("popup-browse-return-reference", context.getExternalFilesDir(null)), "Default").apply { mkdirs() }
         val rows = JSONArray()
-        val report = JSONObject().put("source", BuildConfig.SOURCE_SHA).put("renderer", mode.name).put("frames", rows)
+        val report = JSONObject().put("source", BuildConfig.SOURCE_SHA).put("renderer", "Default").put("frames", rows)
             .put("api", android.os.Build.VERSION.SDK_INT).put("fingerprint", android.os.Build.FINGERPRINT)
             .put("model", android.os.Build.MODEL).put("density", context.resources.displayMetrics.density)
         fun save() = File(output, "frames.json").writeText(report.toString(2))
@@ -51,7 +51,7 @@ class PopupBrowseReturnReferenceTest {
         var open by mutableStateOf(false)
         var departing by mutableStateOf(false)
         try {
-            preferences.write(InterfaceSettings(reducedMotion = false, animationSpeedTenths = 10, glass = GlassAppearance(renderer = mode)))
+            preferences.write(InterfaceSettings(reducedMotion = false, animationSpeedTenths = 10))
             compose.setContent { LocalicaTheme {
                 home = rememberGlassPopupHome(departing)
                 val page = rememberFrostedBackdrop(home, dark = false).also { fixtureBackdrop = it }

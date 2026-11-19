@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassContrast
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
@@ -19,7 +21,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
-import io.github.anastaci1a.localica.navigation.TabLensStyle
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
@@ -69,7 +70,7 @@ internal fun tabSlideBounds(fits: Boolean, scroll: Float, viewport: Float, cell:
 
 @Composable
 internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, activity: SelectorTrackActivity? = null, onSelect: (MainTab) -> Unit) {
-    val renderer = currentGlassRendererGeneration()
+    val composite = rememberFrostedBackdrop(Unit, dark = source?.dark == true)
     val trackActivity = activity ?: rememberSelectorTrackActivity()
     DisposableEffect(trackActivity) { onDispose { trackActivity.clear() } }
     val page = pagePosition()
@@ -89,7 +90,6 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     var chosen by remember { mutableIntStateOf(tabs.indexOf(active).coerceAtLeast(0)) }
     val selected by rememberUpdatedState(onSelect)
     val haptics by rememberUpdatedState(rememberControlHaptics())
-    val appearance = LocalGlassAppearance.current
     var requested by remember { mutableStateOf<Int?>(null) }
     fun focus(index: Int, notify: Boolean = true) {
         chosen = index
@@ -123,11 +123,6 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         }
         if (!dragging && requested != null && abs(page - requested!!) < .001f) requested = null
     }
-    val composite = rememberFrostedBackdrop(appearance, dark = source?.dark == true)
-    val refractForeground = !flatGlass() && appearance.tabStyle == TabLensStyle.Overlay && appearance.overlayForeground
-    val average = glassAverageProgress()
-    val recordForeground = refractForeground
-    val decorated = rememberFrostedBackdrop(appearance, enabled = recordForeground, dark = false)
     val labelStyle = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     val minimumWidth = maxOf(68.dp, with(density) {
@@ -151,7 +146,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val maximumExtension = with(density) { SelectorMaximumExtension.toPx() }
         val rawGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, stretch, logicalWall,
             false, rtl, reduced, overflow = !fits, maximumExtension = maximumExtension,
-            heldCrossInset = inset.takeIf { (pressed || dragging) && appearance.tabStyle != TabLensStyle.Classic },
+            heldCrossInset = inset.takeIf { pressed || dragging },
             heldContact = if (tabs.size == 1) 1f else abs(glassWallAffinity(lens.value, tabs.lastIndex.toFloat())))
         val insets = SelectorTrackInsets(0f, inset, inset)
         val atlasGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, 0f, 1f,
@@ -161,10 +156,10 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             else androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
         val selectorBody = rememberGlassBody({ lens.value }, { pressure }, { if (pressed || dragging) 1f else 0f })
         val rawFrame = rawGeometry.lens(lens.value, tabs.size, insets, false, rtl,
-            if (appearance.tabStyle == TabLensStyle.Classic) GlassShape() else selectorBody.value, rawTrack.height / 2f)
+            selectorBody.value, rawTrack.height / 2f)
         val restGeometry = rawGeometry.copy(stretch = 0f, heldCrossInset = null)
         val restFrame = restGeometry.restFrame(tabs.size, insets, false, baseHeight / 2f)
-        val coupled = fits && appearance.tabStyle != TabLensStyle.Classic
+        val coupled = fits
         val limits = SelectorReturnLimits(maximumExtension, inset, rawGeometry.wall)
         val frame = rememberSelectorCrossFrame(rawFrame.returnFrame(rawGeometry, false), restFrame,
             pressed || dragging, shell.value == GlassShape() && selectorBody.value == GlassShape(),
@@ -286,46 +281,17 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             }
             @Composable fun Lens() {
                 val modifier = Modifier.testTag("tab-selector")
-                if (appearance.tabStyle == TabLensStyle.Classic) {
-                    Box(Modifier.selectorTrackPlacement(selectorFrame.bounds).then(modifier).background(Color.Black.copy(alpha = appearance.classicOpacity),
-                        androidx.compose.foundation.shape.GenericShape { size, _ -> addRoundRect(selectorContour.outlineAt(size)) }))
-                } else CompositionLocalProvider(LocalGlassAppearance provides appearance.copy(
-                    blur = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabBlur,
-                    whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
-                    contrast = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.contrast)) {
                     SelectionLens(modifier, lens,
-                        if (appearance.tabStyle == TabLensStyle.Overlay) { if (refractForeground) decorated else composite } else source,
-                        preserveAppearance = true, depthScale = BottomPillDepthScale,
-                        tint = if (appearance.tabStyle == TabLensStyle.Overlay) Color.Black.copy(alpha = appearance.overlayDarkening) else Color.Transparent,
+                        source,
+                        depthScale = BottomPillDepthScale,
                         pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f },
                         placement = { selectorFrame }, deformation = selectorBody, travel = { lightTravel }, generation = { lightGeneration }, point = { (lightPoint - selectorFrame.bounds.topLeft).let { Offset(it.x / selectorFrame.bounds.width, it.y / selectorFrame.bounds.height) } })
 
-                }
             }
             Box(Modifier.width(width * tabs.size).fillMaxHeight(), contentAlignment = AbsoluteAlignment.TopLeft) {
-                if (!refractForeground) Lens()
-                val foregroundRecording = selectorTrackRecordingBounds(geometry.travel, baseHeight, limits.crossClearance)
-                val foregroundContent = androidx.compose.ui.geometry.Rect(
-                    0f, 0f, geometry.travel, baseHeight).translate(-foregroundRecording.topLeft)
-                Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundRecording)
-                    .recordFrostedBackdrop(decorated, composite, displayBacking = false)
-                    else Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
-                    // Record padded visual overflow without changing the gesture or
-                    // scrolling host. Both sample origin and label coordinates move once.
-                    Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundContent)
-                        else Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
-                        Labels(MaterialTheme.colorScheme.onSurfaceVariant, true)
-                        Labels(NavigationAccent, false)
-                    }
-                }
-                if (refractForeground) {
-                    Lens()
-                    // None averages material, not the foreground labels. Restore the
-                    // selected ink continuously as the optical renderer blends out.
-                    Box(Modifier.fillMaxSize().graphicsLayer { alpha = average.value }) {
-                        Labels(NavigationAccent, false)
-                    }
-                }
+                Lens()
+                Labels(MaterialTheme.colorScheme.onSurfaceVariant, true)
+                Labels(NavigationAccent, false)
             }
         }
         }

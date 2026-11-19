@@ -24,7 +24,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -57,8 +56,7 @@ class NestedGlassRegistrationTest {
             view = LocalView.current
             scroll = rememberScrollState()
             scope = rememberCoroutineScope()
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
-                blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+
                 source = rememberFrostedBackdrop(Unit, dark = false)
                 Box(Modifier.size(320.dp, 400.dp).testTag("nested-registration-scene")
                     .onGloballyPositioned { scene = it }) {
@@ -91,7 +89,7 @@ class NestedGlassRegistrationTest {
                     // Independent native-frame identity; never poll for passing optics.
                     PresentationMarker { stage }
                 }
-            }
+
         } }
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val cell = 24f * compose.density.density
@@ -205,8 +203,7 @@ class NestedGlassRegistrationTest {
         var fit by mutableFloatStateOf(.5f)
         compose.setContent { LocalicaTheme {
             view = LocalView.current
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
-                blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+
                 val source = rememberFrostedBackdrop(Unit, dark = false)
                 SideEffect { source.materialOnly = true; source.materialCorner = 0f }
                 Box(Modifier.size(320.dp, 240.dp).testTag("scaled-material-scene")) {
@@ -222,7 +219,7 @@ class NestedGlassRegistrationTest {
                     }
                     PresentationMarker { stage }
                 }
-            }
+
         } }
         for ((index, scale) in listOf(.5f, .65f, .5f).withIndex()) {
             compose.runOnIdle { fit = scale; stage = index + 1 }
@@ -324,9 +321,7 @@ class NestedGlassRegistrationTest {
             }
         }
         compose.setContent { LocalicaTheme { CompositionLocalProvider(
-            LocalReducedMotion provides false, LocalMotionSpeed provides 1f,
-            LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = 0f,
-                contrast = 0f, shadowStrength = 0f)) {
+            LocalReducedMotion provides false, LocalMotionSpeed provides 1f) {
             Box(Modifier.size(320.dp, 400.dp)) {
                 // A real display-list producer, not a bitmap or an alternate readback.
                 // API26 exercises its registration only; no CPU snapshot is requested.
@@ -491,9 +486,7 @@ class NestedGlassRegistrationTest {
             }
         }
         compose.setContent { LocalicaTheme { CompositionLocalProvider(
-            LocalReducedMotion provides false, LocalMotionSpeed provides 1f,
-            LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = 0f,
-                contrast = 0f, shadowStrength = 0f)) {
+            LocalReducedMotion provides false, LocalMotionSpeed provides 1f) {
             Box(Modifier.size(320.dp, 400.dp)) {
                 source = rememberFrostedBackdrop(Unit, enabled = false, dark = false, retainRaster = false)
                 SideEffect { source.materialOnly = true; source.materialCorner = 0f }

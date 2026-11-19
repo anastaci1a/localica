@@ -64,8 +64,8 @@ class PlayerHeaderShadowTest {
         val white = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(-1) }.asImageBitmap()
         val visual = PlayerVisual(white, PlayerPalette(Color.White, Color.White, Color.White))
         compose.setContent { LocalicaTheme {
-            val appearance = GlassAppearance(shadowStrength = 1f, shadowSpread = 1f, contrast = 0f)
-            CompositionLocalProvider(LocalGlassAppearance provides appearance) {
+
+
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.White)) {
                     density = LocalDensity.current
                     statusBarBottom = with(density) { WindowInsets.statusBars.asPaddingValues().calculateTopPadding().toPx() }
@@ -74,7 +74,7 @@ class PlayerHeaderShadowTest {
                     frame = playerSurfaceFrame(maxWidth, maxHeight,
                         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), 80.dp, progress.value, corners)
                     PlayerSurface(PlaybackState(connected = true, title = "Evening", artist = "Artist", durationMs = 120000),
-                        expanded, { expanded = it }, InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground, glass = appearance),
+                        expanded, { expanded = it }, InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground),
                         progress, {}, {}, {}, {}, {}, {}, lyricsOpen = lyrics, onLyrics = { lyrics = it }, visual = visual)
                     val caches = remember(scope) { List(2) { RetainedGlassShadow(scope) } }
                     // Entire-scene reference alpha has no tight header target. Preserve the real outer contour.
@@ -95,7 +95,7 @@ class PlayerHeaderShadowTest {
                         }
                     }
                 }
-            }
+
         } }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false

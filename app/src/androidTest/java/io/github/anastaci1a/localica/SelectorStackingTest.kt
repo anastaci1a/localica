@@ -18,9 +18,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.MainTab
-import io.github.anastaci1a.localica.navigation.TabLensStyle
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -46,9 +44,7 @@ class SelectorStackingTest {
             backing = source
             var selected by remember { mutableStateOf(MainTab.Songs) }
             val tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs)
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
-                tabStyle = TabLensStyle.Classic, classicOpacity = 1f,
-                blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(308.dp, 112.dp).testTag("stacking-scene")) {
                         Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source)) { drawRect(Color.Blue) }
@@ -66,7 +62,7 @@ class SelectorStackingTest {
                         PresentationMarker { stage }
                     }
                 }
-            }
+
         } }
         if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing?.snapshot != null }
         compose.waitForIdle()

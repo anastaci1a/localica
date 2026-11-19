@@ -227,7 +227,7 @@ class CompositorAdoptionTest {
         var front by mutableStateOf(0)
         val planes = mutableSetOf<ShadowPlane>()
         compose.setContent { LocalicaTheme { EngineRecord {
-            CompositionLocalProvider(LocalGlassAppearance provides io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
+
                 Box(Modifier.size(260.dp, 140.dp).background(Color.White).testTag("strip")) {
                     GlassShadowScope(Modifier.fillMaxSize()) {
                         LocalSurfaceShadows.current?.let { planes += it }
@@ -238,7 +238,7 @@ class CompositorAdoptionTest {
                         } }
                     }
                 }
-            }
+
         } } }
         fun field() = compose.onNodeWithTag("strip").captureToImage().toPixelMap()
         val before = field()

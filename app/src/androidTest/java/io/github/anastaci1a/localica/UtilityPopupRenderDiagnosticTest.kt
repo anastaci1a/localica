@@ -34,7 +34,6 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -60,7 +59,6 @@ class UtilityPopupRenderDiagnosticTest {
 
     private enum class Scene(val dark: Boolean) { Light(false), Dark(true), Pattern(false) }
     private var open by mutableStateOf(false)
-    private var strength by mutableFloatStateOf(GlassAppearance().shadowStrength)
     private var pageStage by mutableIntStateOf(1)
     private lateinit var anchor: GlassAnchor
     private lateinit var group: ShadowPlane
@@ -199,7 +197,7 @@ class UtilityPopupRenderDiagnosticTest {
             trace.put(stateJson().put("observation", "first-trigger-owned-frame"))
             assertTrue("Actual pill keeps its depth through handoff", abs(after.depth - before.depth) < .03f)
             assertTrue("Actual pill keeps its strain through handoff", abs(after.strain - before.strain) < .03f)
-            assertFalse("Low damping still rebounds after the window returns", anchor.contact.state.momentum.settled)
+            assertFalse("The body still rebounds after the window returns", anchor.contact.state.momentum.settled)
             // Ownership transfers before Compose disposes the Dialog on API 26.
             // Preserve the first-frame body assertions above; separately finish
             // disposal before asking the compositor to prove the window is gone.
@@ -211,18 +209,18 @@ class UtilityPopupRenderDiagnosticTest {
             assertTrue("The actual utility body eventually sleeps", anchor.contact.state.momentum.settled)
             assertEquals(GlassShape(), anchor.contact.body.value)
 
-            compose.runOnIdle { strength = 0f }
+            compose.runOnIdle { modalSource.refresh() }
             settleEndpoint()
-            val noShadowRest = capture("app-shadow-off-rest", save = true)
+            val noShadowRest = capture("default-redraw-rest", save = true)
             assertMatchedGeometry(returned, noShadowRest, "closed app-shadow control")
             beforeOpenRequest = modalSource.snapshotReadbackRequest
             compose.onNodeWithContentDescription("More").performClick()
             settleEndpoint(beforeOpenRequest)
-            val noShadowOpen = capture("app-shadow-off-open", save = true)
+            val noShadowOpen = capture("default-redraw-open", save = true)
             assertMatchedGeometry(firstOpen, noShadowOpen, "expanded app-shadow control")
             report.put("matchedPairs", JSONArray().put("first-open / repeated-open")
-                .put("rest / returned-rest").put("returned-rest / app-shadow-off-rest")
-                .put("first-open / app-shadow-off-open"))
+                .put("rest / returned-rest").put("returned-rest / default-redraw-rest")
+                .put("first-open / default-redraw-open"))
             report.put("status", if (diagnostic) "structural assertions passed; optical profiles require inspection"
                 else "mandatory native presentation and ownership assertions passed; optical profiling not requested")
         } catch (failure: Throwable) {
@@ -254,8 +252,8 @@ class UtilityPopupRenderDiagnosticTest {
 
     @Composable private fun Fixture(scene: Scene) {
         LocalicaTheme {
-            val appearance = GlassAppearance(shapeDamping = 2f, shadowStrength = strength)
-            CompositionLocalProvider(LocalGlassAppearance provides appearance, LocalReducedMotion provides false,
+
+            CompositionLocalProvider( LocalReducedMotion provides false,
                 LocalContentColor provides if (scene.dark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black) {
                 val browse = rememberFrostedBackdrop(scene, dark = scene.dark)
                 val modal = rememberFrostedBackdrop(scene, dark = scene.dark)
@@ -597,7 +595,7 @@ class UtilityPopupRenderDiagnosticTest {
             .put("scaleX", body.scaleX(anchor.contact.vertical)).put("scaleY", body.scaleY(anchor.contact.vertical))
             .put("vertical", anchor.contact.vertical).put("settled", anchor.contact.state.momentum.settled)
             .put("hidden", anchor.hidden).put("modalPresent", anchor.modalPresent).put("restoredDrawn", anchor.restoredDrawn)
-            .put("shadowInModal", anchor.modalPresent).put("appShadowStrength", strength)
+            .put("shadowInModal", anchor.modalPresent).put("appShadowStrength", 1f)
             .put("groupEntries", group.casters.size).put("activeGroupBodies", group.casters.count { (it.key as? GlassAnchor)?.modalPresent != true })
             .put("browseRecorded", browseSource.recorded).put("modalRecorded", modalSource.recorded)
             .put("browseRevision", browseSource.revision).put("modalRevision", modalSource.revision)

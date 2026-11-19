@@ -28,11 +28,9 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** #624: None replaces only the optical material fill. Shadows use the same GlassSettings
- * values through the same code path in both renderers, including while switching. */
+/** Material polarity can change without changing the default shadow field. */
 class NoneShadowParityTest {
     @get:Rule val compose = localicaComposeRule()
-    private val appearance = GlassAppearance(shadowStrength = .6f, shadowSpread = .7f, liftShadowStrength = 1.5f)
 
     /** [tolerance] is in 8-bit levels: 0 demands identical pixels. */
     private fun outsideBodies(a: PixelMap, b: PixelMap, bodies: List<Rect>, label: String, tolerance: Int = 0) {
@@ -47,14 +45,15 @@ class NoneShadowParityTest {
             if (delta > (tolerance + .5f) / 255) { differing++; largest = maxOf(largest, delta); box.union(x, y) }
         }
         assertTrue("$label: the fixture must actually draw a shadow band ($shadowed px)", shadowed > 200)
-        assertEquals("$label: shadow pixels differ between Normal and None (largest ${largest * 255}/255 within $box)", 0, differing)
+        assertEquals("$label: shadow pixels differ across source polarity (largest ${largest * 255}/255 within $box)", 0, differing)
     }
 
-    @Test fun floatingPillAndPanelShadowsMatchAcrossAContinuousSwitch() {
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
-        compose.setContent { CompositionLocalProvider(LocalDensity provides Density(1f),
-            LocalGlassRendererRuntime provides runtime, LocalGlassAppearance provides appearance) { LocalicaTheme {
-            val page = rememberFrostedBackdrop(Unit, dark = false)
+    @Test fun floatingPillAndPanelShadowsSurviveSourcePolarityChange() {
+
+        var dark by mutableStateOf(false)
+        lateinit var page: FrostedBackdrop
+        compose.setContent { CompositionLocalProvider(LocalDensity provides Density(1f)) { LocalicaTheme {
+            page = rememberFrostedBackdrop(Unit, dark = dark)
             Box(Modifier.size(320.dp, 360.dp).testTag("stage")) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(page)) { drawRect(Color.White) }
                 CompositionLocalProvider(LocalFrostedBackdrop provides page) {
@@ -68,37 +67,31 @@ class NoneShadowParityTest {
         val settledNormal = compose.onNodeWithTag("stage").captureToImage().toPixelMap()
         compose.mainClock.autoAdvance = false
         try {
-            // The frame-by-frame reference is taken under the same paused clock as the switch frames.
+            // Frame comparisons use the same paused clock.
             compose.mainClock.advanceTimeByFrame()
             val normal = compose.onNodeWithTag("stage").captureToImage().toPixelMap()
-            compose.runOnIdle { runtime.request(GlassRendererMode.FlatNone) }
-            // Every frame of the blend: no shadow blip while the fill crossfades.
+            compose.runOnIdle { dark = true }
+            // The material changes polarity while its shadow stays fixed.
             repeat(24) { frame ->
                 compose.mainClock.advanceTimeByFrame()
-                outsideBodies(normal, compose.onNodeWithTag("stage").captureToImage().toPixelMap(), bodies, "switch frame $frame")
+                outsideBodies(normal, compose.onNodeWithTag("stage").captureToImage().toPixelMap(), bodies, "polarity frame $frame")
             }
         } finally { compose.mainClock.autoAdvance = true }
         compose.waitForIdle(); Thread.sleep(300); compose.waitForIdle()
         // Between two settled captures the retained shadow raster replaces the live rings; their
-        // rounding differs by up to 2 levels whatever the renderer (identical on API 26, where both
-        // requests resolve to None). Every frame of the switch itself is compared exactly above.
-        outsideBodies(settledNormal, compose.onNodeWithTag("stage").captureToImage().toPixelMap(), bodies, "settled None", 2)
+        // rounding differs by up to 2 levels. Every paused frame is compared exactly above.
+        val light = compose.onNodeWithTag("stage").captureToImage().toPixelMap()
+        assertTrue("Polarity changes the material inside the panel",
+            kotlin.math.abs(settledNormal[160, 240].red - light[160, 240].red) > 1f / 255f)
+        outsideBodies(settledNormal, light, bodies, "settled light ink", 2)
     }
 
-    @Test fun liftAndGlassShadowConfigurationIsIndependentOfTheRenderer() {
-        val seen = mutableMapOf<GlassRendererMode, LiftShadow>()
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+    @Test fun liftAndGlassShadowsUseTheSameDefaultStrengthAndSpread() {
         var lift: LiftShadow? = null
-        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
-            LocalGlassAppearance provides appearance) { LocalicaTheme { lift = rememberLiftShadow() } } }
-        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.FlatNone)) {
-            compose.runOnIdle { runtime.request(mode) }
-            compose.waitForIdle()
-            seen[mode] = requireNotNull(lift)
-        }
-        assertEquals(seen[GlassRendererMode.Normal], seen[GlassRendererMode.FlatNone])
-        assertEquals(appearance.shadowStrength * appearance.liftShadowStrength, seen.getValue(GlassRendererMode.FlatNone).strength, 1e-6f)
-        assertEquals(appearance.shadowSpread, seen.getValue(GlassRendererMode.FlatNone).spread, 1e-6f)
+        compose.setContent { LocalicaTheme { lift = rememberLiftShadow() } }
+        val actual = compose.runOnIdle { requireNotNull(lift) }
+        assertEquals(1f, actual.strength, 1e-6f)
+        assertEquals(1f, actual.spread, 1e-6f)
     }
     /** #852: the settled comparison must hold the same shadow branch in both captures. A
      * [RetainedGlassShadow] draws live rings until its raster is prepared off Main (after a
@@ -133,19 +126,21 @@ class NoneShadowParityTest {
         fun receipt() = drawn().joinToString { "${System.identityHashCode(it)}:${it.rasterizations}:${prepared(it)}" }
     }
 
-    @Test fun queueDrawerEdgeShadowMatchesInNoneAndNormal() {
+    @Test fun queueDrawerEdgeShadowSurvivesSourcePolarityChange() {
         val tracks = (1..12).map { Track("shadow:$it", "Queue song $it", artist = "Artist", fileName = "$it.mp3", relativePath = "$it.mp3") }
         val queue = QueueEdits.create(tracks, 0, "Queue shadow")
         val state = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
         val library = LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false)
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+
+        lateinit var page: FrostedBackdrop
+        var dark by mutableStateOf(false)
         val shadows = PreparedShadows()
         compose.setContent {
             val tables = remember { mutableSetOf<CompositionData>() }
             shadows.bind(currentComposer.compositionData, tables)
-            CompositionLocalProvider(LocalInspectionTables provides tables, LocalGlassRendererRuntime provides runtime,
-            LocalGlassAppearance provides appearance) { LocalicaTheme {
-            val source = rememberFrostedBackdrop(Unit, dark = false)
+            CompositionLocalProvider(LocalInspectionTables provides tables) { LocalicaTheme {
+            val source = rememberFrostedBackdrop(Unit, dark = dark)
+            SideEffect { page = source }
             CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalSessionSelection provides remember { SessionSelection() }) {
                 BoxWithConstraints(Modifier.fillMaxSize().testTag("screen")) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.White) }
@@ -171,9 +166,9 @@ class NoneShadowParityTest {
         }
         val normal = settled()
         val top = compose.onNodeWithTag("queue-surface").fetchSemanticsNode().boundsInRoot.top
-        compose.runOnIdle { runtime.request(GlassRendererMode.FlatNone) }
+        compose.runOnIdle { page.dark = true }
         val none = settled()
-        assertEquals("The drawer edge must not move with the renderer", top,
+        assertEquals("The drawer edge must not move with source polarity", top,
             compose.onNodeWithTag("queue-surface").fetchSemanticsNode().boundsInRoot.top)
         // The band above the drawer edge holds only its shadow over the static scene.
         val bandHeight = 40
@@ -186,6 +181,6 @@ class NoneShadowParityTest {
                 kotlin.math.abs(p.blue - q.blue) > .5f / 255) differing++
         }
         assertTrue("The drawer must cast an edge shadow ($shadowed px)", shadowed > 50)
-        assertEquals("Queue drawer edge shadow differs between Normal and None", 0, differing)
+        assertEquals("Queue drawer edge shadow differs across source polarity", 0, differing)
     }
 }

@@ -1,5 +1,10 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassShadowStrength
+import io.github.anastaci1a.localica.ui.spec.GlassShadowSpread
+import io.github.anastaci1a.localica.ui.spec.GlassContrast
+import io.github.anastaci1a.localica.ui.spec.GlassContrastWeightDefault
+
 import io.github.anastaci1a.localica.ui.components.MaterialAreaReduction
 import io.github.anastaci1a.localica.ui.components.rememberMaterialAreaReduction
 import io.github.anastaci1a.localica.ui.components.materialReductionExtent
@@ -47,27 +52,18 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-internal data class GlassBackdropCapture(val renderer: GlassRendererGeneration,
-    val snapshot: ImageBitmap, val fallback: ImageBitmap, val extent: IntSize = IntSize(snapshot.width, snapshot.height))
+internal data class GlassBackdropCapture(val snapshot: ImageBitmap, val fallback: ImageBitmap, val extent: IntSize = IntSize(snapshot.width, snapshot.height))
 
 /** A recorded scene, independent of every surface that samples it. Never record a surface
  * into its own source: the player and its lyric background use separate sources. */
 @Stable
-internal class FrostedBackdrop(private val glassLayer: GraphicsLayer?, dark: Boolean,
-    private val renderer: GlassRendererRuntime? = null) {
-    val hasGlassLayer get() = glassLayer != null
-    val layer get() = requireNotNull(glassLayer) { "Flat None has no glass layer" }
-    private val glassReadback = if (hasGlassLayer) RetainedLayerReadback() else null
-    val readback get() = requireNotNull(glassReadback) { "Flat None has no glass readback" }
+internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
+    val readback = RetainedLayerReadback()
     // Actual recorded-layer containment, independent of the sampling parent chain.
     private val recordingDebug = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingDebug() else null
     val recordedLayoutChildren get() = requireNotNull(recordingDebug).layoutChildren
     val recordedChildren get() = requireNotNull(recordingDebug).children
-    private val defaultRenderer = defaultGlassRendererGeneration()
-    val rendererGeneration get() = renderer?.generation ?: defaultRenderer
-    private val allocatedGeneration = rendererGeneration
-    // Layerless descriptors have no released GraphicsLayer to reveal an old owner.
-    val isRetired get() = if (hasGlassLayer) layer.isReleased else rendererGeneration != allocatedGeneration
+    val isRetired get() = layer.isReleased
     private val captureLock = Mutex()
     var parent by mutableStateOf<FrostedBackdrop?>(null)
     var materialOnly by mutableStateOf(false)
@@ -84,7 +80,7 @@ internal class FrostedBackdrop(private val glassLayer: GraphicsLayer?, dark: Boo
         set(value) { location.fallback = value }
     var size by mutableStateOf(IntSize.Zero)
     private var completed by mutableStateOf<GlassBackdropCapture?>(null)
-    val capture get() = completed?.takeIf { it.renderer == rendererGeneration }
+    val capture get() = completed
     val fallback get() = capture?.fallback
     val snapshot get() = capture?.snapshot
     val snapshotExtent get() = capture?.extent ?: size
@@ -98,12 +94,11 @@ internal class FrostedBackdrop(private val glassLayer: GraphicsLayer?, dark: Boo
     var snapshotDraws: BackdropReadbackDraws? = null
     var lastReadbackAbort: String? = null
     var lastReadbackProgress: String? = null
-    var recordedGeneration by mutableStateOf<GlassRendererGeneration?>(null)
+    var recorded by mutableStateOf(false)
     var recordedSize = IntSize.Zero
     // Completed live recordings invalidate retained consumers, including those in another window.
     var recordings by mutableIntStateOf(0)
     val recordedFrames = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
-    val recorded get() = recordedGeneration != null
     fun refresh() { revision++; recordedFrames.trySend(Unit) }
 
     /** Serialize the separate thumbnail through native ownership. The displayed producer
@@ -118,16 +113,16 @@ internal class FrostedBackdrop(private val glassLayer: GraphicsLayer?, dark: Boo
         readback.capture(captureLayer, graphics, density, direction, copy)
     }
 
-    fun publish(renderer: GlassRendererGeneration, snapshot: ImageBitmap, fallback: ImageBitmap,
+    fun publish(snapshot: ImageBitmap, fallback: ImageBitmap,
         request: Int, draws: BackdropReadbackDraws?, extent: IntSize = size): Boolean {
-        if (rendererGeneration != renderer) return false
+        if (isRetired) return false
         snapshotReadbackRequest = request; snapshotDraws = draws
         // Reading an average can redraw its producer through a parent recording.
         // Equal thumbnail pixels must not publish new observable state forever.
-        val previous = completed?.takeIf { it.renderer == renderer }?.snapshot
+        val previous = completed?.snapshot
         if (previous != null && previous.width == snapshot.width && previous.height == snapshot.height &&
             capture?.extent == extent && previous.asAndroidBitmap().sameAs(snapshot.asAndroidBitmap())) return true
-        completed = GlassBackdropCapture(renderer, snapshot, fallback, extent)
+        completed = GlassBackdropCapture(snapshot, fallback, extent)
         return true
     }
 
@@ -219,10 +214,8 @@ internal fun DrawScope.withBackdropRegistration(registration: BackdropRegistrati
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true, lightMix: Float? = null,
     retainRaster: Boolean = true): FrostedBackdrop {
-    val flat = flatGlass()
-    val layer = if (flat) null else rememberGlassLayer()
-    val runtime = LocalGlassRendererRuntime.current
-    val source = remember(layer, runtime) { FrostedBackdrop(layer, dark, runtime) }
+    val layer = rememberGlassLayer()
+    val source = remember(layer) { FrostedBackdrop(layer, dark) }
     val graphicsContext = LocalGraphicsContext.current
     val currentDensity by rememberUpdatedState(LocalDensity.current)
     val currentDirection by rememberUpdatedState(LocalLayoutDirection.current)
@@ -230,11 +223,10 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // Sampled scenes retain pixels so sibling lenses never replay all their children.
     val sampled = source.consumers > 0
     SideEffect {
-        if (source.hasGlassLayer && !source.layer.isReleased) source.layer.compositingStrategy = if (retainRaster && sampled) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+        if (!source.layer.isReleased) source.layer.compositingStrategy = if (retainRaster && sampled) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
             else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
         source.lightMix = lightMix ?: if (dark) 1f else 0f
     }
-    if (flat) return source
     // Older Android has no runtime shader. Read a tiny shared scene thumbnail;
     // consumers average their own footprint without blur or mesh preparation.
     val thumbnail = if (Build.VERSION.SDK_INT < 33) rememberGlassLayer() else null
@@ -255,7 +247,6 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 val draws = ticket?.awaitDraws()
                 if (ticket != null && (draws == null || !ticket.isCurrent())) continue
                 val extent = source.size
-                val generation = source.rendererGeneration
                 fun valid() = source.recorded && source.size == extent && !source.layer.isReleased && !thumbnail.isReleased
                 val capturedRecording = source.recordings
                 val capturedRevision = source.revision
@@ -271,7 +262,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 val pixels = withContext(Dispatchers.Default) { softwareGlassSnapshot(image, IntSize(32, 32)) }
                 currentCoroutineContext().ensureActive()
                 val padded = materialReductionExtent(extent)
-                if (valid()) source.publish(generation, pixels, pixels, request, draws,
+                if (valid()) source.publish(pixels, pixels, request, draws,
                     IntSize(padded.width.coerceAtLeast(32), padded.height.coerceAtLeast(32)))
                 completedRecording = capturedRecording
                 completedRevision = capturedRevision
@@ -313,7 +304,7 @@ internal object BackdropRecordingAncestry {
 /** Lifetime of a sampling edge in the backdrop graph; no per-frame registration. */
 @Composable
 internal fun BackdropLease(source: FrostedBackdrop?) {
-    if (flatGlass()) return
+
     DisposableEffect(source) {
         if (source != null) { GlassWork.event("lease"); source.consumers++ }
         onDispose { if (source != null) source.consumers-- }
@@ -332,8 +323,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
     enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null,
     readbackRequest: (() -> Int)? = null, onRecorded: ((Int) -> Unit)? = null,
     displayBacking: Boolean = true): Modifier {
-    if (flatGlass()) return this
-    val renderer = currentGlassRendererGeneration()
+
     // Modifier ancestry remains available when HWUI reuses an independently retained child.
     // It describes recording containment, never the scene's sampling parent.
     val scope = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) remember(source, enabled) { BackdropRecordingScope(source) } else null
@@ -380,7 +370,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             source.recordedSize = extent
             androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { source.recordings++ }
             source.recordedFrames.trySend(Unit)
-            source.recordedGeneration = renderer.takeIf { backing == null || backing.recorded }
+            source.recorded = backing == null || backing.recorded
             if (request != null) onRecorded?.invoke(request)
             // A transparent optical overlay replaces the source beneath its body;
             // retain the complete source for sampling, omit only its direct display.
@@ -400,29 +390,26 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
 internal fun FrostedSurface(modifier: Modifier = Modifier, shape: RoundedCornerShape = Corners.panel,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
     tint: Color = Color.Transparent, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
-    val renderer = currentGlassRendererGeneration()
-    val flat = renderer.backend == GlassBackend.FlatNone
-    val flatColor = flatGlassColor()
-    if (renderer.backend == GlassBackend.AverageFallback) BackdropLease(source)
+    val backend = effectiveGlassBackend(android.os.Build.VERSION.SDK_INT)
+    if (backend == GlassBackend.AverageFallback) BackdropLease(source)
     val location = remember { BackdropLocation() }
     val lightMix = source?.lightMix ?: 0f
     val dark = lightMix >= .5f
-    val appearance = LocalGlassAppearance.current.normalized()
-    val tone = GlassTone.mixed(appearance.contrast, appearance.contrastWeight, lightMix)
+    val tone = GlassTone.mixed(GlassContrast, GlassContrastWeightDefault, lightMix)
     val toneRenderer = remember { lazy { if (Build.VERSION.SDK_INT >= 33) GlassToneRenderer() else null } }
     val fallbackColor = tone.color(MaterialTheme.colorScheme.surface)
-    val foreground = if (flat) MaterialTheme.colorScheme.onSurface else lerp(MaterialTheme.colorScheme.onSurface, Color.White, lightMix)
+    val foreground = lerp(MaterialTheme.colorScheme.onSurface, Color.White, lightMix)
     // Descendant lenses sample the finished panel material, never the art below it.
     // Keep controls outside this recording to prevent feedback through nested lenses.
     val material = rememberFrostedBackdrop(tone, dark = dark, lightMix = lightMix)
     val density = LocalDensity.current
     SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { 28.dp.toPx() } }
-    ShadowPlanePanel(modifier, shape, shadow, appearance.shadowStrength, appearance.shadowSpread, Modifier.clip(shape)
+    ShadowPlanePanel(modifier, shape, shadow, GlassShadowStrength, GlassShadowSpread, Modifier.clip(shape)
         .backdropLocation(location)
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = .8f + (.38f - .8f) * lightMix),
             Color.White.copy(alpha = .06f), Color.White.copy(alpha = .17f))), shape)) {
         Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {
-        if (!flat && source != null) {
+        if (source != null) {
             val blur = with(LocalDensity.current) { 22.dp.toPx() }
             if (Build.VERSION.SDK_INT >= 33) {
                 FilteredBackdrop(Modifier.matchParentSize(), source, location, .5f, blur * 1.5f,
@@ -432,9 +419,8 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: RoundedCornerS
             } else AverageBackdrop(Modifier.matchParentSize(), source, location, MaterialAverageStyle(0f, tone, opaque = true, broad = true))
         }
         Canvas(Modifier.matchParentSize()) {
-            if (flat) { drawRect(flatColor); return@Canvas }
             if (source == null) drawRect(fallbackColor)
-            if (renderer.backend == GlassBackend.AverageFallback) drawRect(tone.color(tint))
+            if (backend == GlassBackend.AverageFallback) drawRect(tone.color(tint))
             else drawFrostCoating(lightMix, tone.color(tint), 1f, compact)
         }
         }

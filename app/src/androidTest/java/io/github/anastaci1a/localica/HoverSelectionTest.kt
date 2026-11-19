@@ -115,7 +115,7 @@ class HoverSelectionTest {
                         x += 1f
                     }
                 }
-                CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalGlassAppearance provides io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 2f)) {
+                CompositionLocalProvider(LocalFrostedBackdrop provides source) {
                     ConnectedSelectionHost(Modifier.fillMaxSize()) {
                         scene = checkNotNull(LocalSelectionScene.current)
                         Column(Modifier.padding(horizontal = 24.dp, vertical = 80.dp)) {

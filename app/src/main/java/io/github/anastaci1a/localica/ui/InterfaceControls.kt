@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassControlExpansion
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -103,7 +105,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val currentEase by rememberUpdatedState(ease)
     // Hovering X morphs the clear lens back into the resting white circle.
     val active by animateFloatAsState(if (contact && !hovered) 1f else 0f, ease, label = "Slider contact")
-    val expansion = LocalGlassAppearance.current.controlExpansion
+    val expansion = GlassControlExpansion
     val resting = sliderPosition(value, valueRange, curve)
     val touched = touchPreview.shown(finger ?: resting)
     // Entering X eases to the original value; leaving eases back to the finger.
@@ -326,7 +328,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
         pressed || dragging || (!reduced && (position.isRunning || position.value != if (checked) 1f else 0f))
     } }
     val source = LocalFrostedBackdrop.current
-    val ready = flatGlass() || source == null || if (android.os.Build.VERSION.SDK_INT >= 33)
+    val ready = source == null || if (android.os.Build.VERSION.SDK_INT >= 33)
         source.recorded && !source.layer.isReleased else source.snapshot != null
     // Start the lease at commitment, but retain the opaque resting face until
     // the first real recording is sampleable. Logical travel never waits for it.
@@ -341,7 +343,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     var lightPoint by remember { mutableStateOf(Offset(.5f, .5f)) }
     var lightTravel by remember { mutableFloatStateOf(0f) }; var lightGeneration by remember { mutableIntStateOf(0) }
     val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active }, state = light, point = { lightPoint }, lightTravel = { lightTravel }, generation = { lightGeneration }, lightContact = { if (pressed || dragging) 1f else 0f })
-    val expansion = LocalGlassAppearance.current.controlExpansion
+    val expansion = GlassControlExpansion
     val change by rememberUpdatedState(onChange)
     val haptics by rememberUpdatedState(rememberControlHaptics())
     val parent = rememberControlScrollContext()

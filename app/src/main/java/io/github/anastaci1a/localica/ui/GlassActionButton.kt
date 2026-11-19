@@ -83,7 +83,7 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
         // drawing outside that clip so shadows and Presence keep their own owners.
         Box(drawing.replay(shadowInset).clipToBounds()) {
         Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner)
-            .shadowViewportOutset(shadowInset, horizontal = true)
+            .stripContentOutset(horizontal = true)
             .then(drawing.record())
             .then(if (trace == null) Modifier else Modifier.onGloballyPositioned { coordinates ->
                 runCatching { trace(traceName, "viewport size=${coordinates.size} bounds=${coordinates.boundsInRoot()}",
@@ -128,7 +128,7 @@ internal fun glassActionNavigationConstraints(constraints: Constraints, stripHei
 internal fun GlassActionRowMeasurement(content: @Composable RowScope.() -> Unit) {
     val inset = glassLayoutInset()
     Layout(content = {
-        Row(Modifier.shadowViewportOutset(inset, horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Row(Modifier.stripContentOutset(horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically, content = content)
         // The live footer uses standard IconButtons: a 40dp container with the
         // same Material minimum-interactive constraint, without input or effects.

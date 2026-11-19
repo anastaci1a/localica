@@ -22,21 +22,21 @@ class SettingsSearchEntryReductionTest {
     private var mounted by mutableStateOf(true)
     private lateinit var focus: SettingsSearchFocus
     private lateinit var clock: UiClock
-    private fun alpha() = compose.onNodeWithTag("setting:Glass renderer", useUnmergedTree = true)
+    private fun alpha() = compose.onNodeWithTag("setting:Previous button", useUnmergedTree = true)
         .fetchSemanticsNode().config[SettingsHighlightAlpha]
     private fun transition(atMillis: Long) {
         compose.setContent { EngineTheme(reduced = reduced) {
             clock = LocalUiClock.current
             val scroll = rememberScrollState()
-            focus = remember { SettingsSearchFocus("Glass", scroll) }
+            focus = remember { SettingsSearchFocus("Playback and queues", scroll) }
             CompositionLocalProvider(LocalSettingsSearchFocus provides focus, LocalReducedMotion provides reduced) {
-                if (mounted) SettingsEntry("Glass renderer") { Box(Modifier.width(300.dp).height(80.dp)) }
+                if (mounted) SettingsEntry("Previous button") { Box(Modifier.width(300.dp).height(80.dp)) }
             }
         } }
         compose.waitForIdle()
         assertEquals(0, clock.activeCount)
         compose.mainClock.autoAdvance = false
-        compose.runOnIdle { focus.highlighted = "Glass renderer" }
+        compose.runOnIdle { focus.highlighted = "Previous button" }
         compose.mainClock.advanceTimeBy(atMillis)
         assertTrue("The requested phase must be visible before reduction", alpha() > 0f)
         assertEquals(1, clock.activeCount)
@@ -51,14 +51,14 @@ class SettingsSearchEntryReductionTest {
         assertEquals(0, clock.activeCount)
         compose.runOnIdle { focus.highlighted = null }
         compose.mainClock.advanceTimeByFrame()
-        compose.runOnIdle { focus.highlighted = "Glass renderer" }
+        compose.runOnIdle { focus.highlighted = "Previous button" }
         compose.mainClock.advanceTimeBy(80)
         assertTrue(alpha() > 0f)
         compose.runOnIdle { focus.highlighted = null }
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
         assertEquals(0, clock.activeCount)
-        compose.runOnIdle { focus.highlighted = "Glass renderer" }
+        compose.runOnIdle { focus.highlighted = "Previous button" }
         compose.mainClock.advanceTimeBy(80)
         assertEquals(1, clock.activeCount)
         compose.runOnIdle { mounted = false }

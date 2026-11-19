@@ -1,5 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassContrastWeightDefault
+import io.github.anastaci1a.localica.ui.spec.GlassContrastWeightMax
+import io.github.anastaci1a.localica.ui.spec.GlassContrastWeightMin
+
 import android.graphics.Bitmap
 import android.util.LruCache
 import androidx.compose.runtime.*
@@ -10,8 +14,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import io.github.anastaci1a.localica.navigation.GlassContrastWeightMax
-import io.github.anastaci1a.localica.navigation.GlassContrastWeightMin
 import kotlin.math.pow
 
 /** The trim actually applied at weight [p] (#633). Both laws have slope 1 − t·p·y^(p−1) ≥ 1 − t·p, so ordering
@@ -23,7 +25,7 @@ internal fun effectiveGlassTrim(t: Float, p: Float): Float = if (t * p > 1f) 1f 
  * [lightInk] is the polarity being approached and [arrival] how far the tone has travelled to it from the opposite
  * polarity (1 = arrived). Both polarities are exact endpoints; between them the mapping is their linear mix, so a
  * polarity change can ease with an animation instead of switching in one frame. */
-internal data class GlassTone(val trim: Float = 0f, val weight: Float = 2f, val lightInk: Boolean = false, val arrival: Float = 1f,
+internal data class GlassTone(val trim: Float = 0f, val weight: Float = GlassContrastWeightDefault, val lightInk: Boolean = false, val arrival: Float = 1f,
     /** Backdrop grading (#576): an OKLab lightness shift from [BackdropGrade]. Nonzero replaces the curve above. */
     val shift: Float = 0f) {
     /** True when this tone leaves pixels untouched. */

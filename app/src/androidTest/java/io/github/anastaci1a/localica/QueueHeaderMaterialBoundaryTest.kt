@@ -40,15 +40,10 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 
-/** Header-only shadow attribution control, NOT a seam fix or an optical acceptance test.
- * Exactly TWO original native activity-window copies: ordinary nonzero header strength, then 0.
- * Both states use the opt-in provider so changing its value cannot switch composition branches.
- * The null/default production route remains without that provider. No material/geometry change,
- * extra source readback, capture retry, pixel-driven readiness or optical pass/fail threshold.
- * Native draw/owner state is not atomic with PixelCopy and does not attest GPU/raster consumption. */
+/** Two original native-window copies verify the default header keeps geometry and owners across redraw.
+ * Boundary-band measurements are diagnostic, without an optical acceptance threshold. */
 class QueueHeaderMaterialBoundaryTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
-    private val appearance = GlassAppearance()
     private val tracks = (1..18).map { Track("queue-boundary:$it", "Boundary song $it",
         artist = "Boundary artist", fileName = "$it.mp3", relativePath = "$it.mp3") }
     private val queue = QueueEdits.create(tracks, 0, "Boundary queue")
@@ -56,24 +51,24 @@ class QueueHeaderMaterialBoundaryTest {
     private val library = LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false)
     private val selection = SessionSelection()
     private val progress = Animatable(1f)
-    private var strength by mutableFloatStateOf(appearance.shadowStrength)
+    private var redraw by mutableIntStateOf(0)
     private var mounted by mutableStateOf(true)
     private lateinit var root: View
     private lateinit var backing: FrostedBackdrop
     private lateinit var material: FrostedBackdrop
     private lateinit var host: GlassDialogs
     private var scene: BrowseBackdropScene? = null
-    private var ambient: GlassAppearance? = null
+    private var ambient: FrostedBackdrop? = null
     private var settledCallbacks = 0
     private var minimizeCallbacks = 0
-    private data class Draw(val count: Int, val uptime: Long, val requestedStrength: Float)
+    private data class Draw(val count: Int, val uptime: Long, val revision: Int)
     private val drawn = AtomicReference<Draw?>()
     private lateinit var output: File
     private val records = JSONArray()
     private var copies = 0
 
-    @Test fun ordinaryAndHeaderZeroShadowsRetainOwnersAndRecordPairedBoundaryBands() {
-        assertTrue("Ordinary control is known nonzero, not an already-disabled comparison", appearance.shadowStrength > 0f)
+    @Test fun defaultHeaderRetainsOwnersAndBoundaryBandsAcrossRedraw() {
+        assertTrue("The fixed shadow model is nonzero", io.github.anastaci1a.localica.ui.spec.GlassShadowStrength > 0f)
         val context = compose.activity
         output = File(requireNotNull(context.getExternalFilesDir(null)), "queue-header-boundary/api${Build.VERSION.SDK_INT}-${SystemClock.uptimeMillis()}")
         assertTrue(output.mkdirs())
@@ -82,7 +77,7 @@ class QueueHeaderMaterialBoundaryTest {
         }
         val tree = compose.runOnUiThread { compose.activity.window.decorView.viewTreeObserver }
         val listener = ViewTreeObserver.OnDrawListener {
-            drawn.set(Draw((drawn.get()?.count ?: 0) + 1, SystemClock.uptimeMillis(), strength))
+            drawn.set(Draw((drawn.get()?.count ?: 0) + 1, SystemClock.uptimeMillis(), redraw))
         }
         var first: Bitmap? = null
         var second: Bitmap? = null
@@ -97,23 +92,23 @@ class QueueHeaderMaterialBoundaryTest {
                 val view = LocalView.current
                 val ordinaryHost = requireNotNull(LocalGlassDialogs.current)
                 SideEffect { backing = source; root = view; host = ordinaryHost }
-                CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalGlassAppearance provides appearance,
+                CompositionLocalProvider(LocalFrostedBackdrop provides source,
                     LocalSessionSelection provides selection,
                     LocalBrowseBackdropObserver provides { value, present ->
                         if (present) scene = value else if (scene === value) scene = null
                     }) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
-                        Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source)) { drawRect(Color(0xFF8099AA)) }
+                        Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source)) { redraw; drawRect(Color(0xFF8099AA)) }
                         // Same ordinary player clipping wrapper as the existing real QueueSaveOrigin fixture.
                         PlayerClippedOverlay({ 1f }, 80.dp) {
                             QueueSurface(progress, InterfaceSettings(), { settledCallbacks++ }) {
                                 val currentMaterial = requireNotNull(LocalFrostedBackdrop.current)
-                                val outsideHeader = LocalGlassAppearance.current
+                                val outsideHeader = LocalFrostedBackdrop.current
                                 SideEffect { material = currentMaterial; ambient = outsideHeader }
                                 Box(Modifier.weight(1f)) {
                                     CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) {
                                         QueueScreen(state, null, library, onMinimize = { minimizeCallbacks++ },
-                                            playerOpen = false, headerShadowStrengthOverride = strength)
+                                            playerOpen = false)
                                     }
                                 }
                             }
@@ -124,15 +119,15 @@ class QueueHeaderMaterialBoundaryTest {
             contentInstalled = true
             compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${queue.entries.first().id}").fetchSemanticsNodes().size == 1 }
             compose.onNodeWithTag("media-${queue.entries.first().id}").assertIsDisplayed()
-            awaitDraw(after = 0, expected = appearance.shadowStrength)
+            awaitDraw(after = 0, expected = 0)
             val ordinary = geometry()
             first = capture("ordinary-header", ordinary)
             val previousDraw = requireNotNull(drawn.get()).count
-            compose.runOnIdle { strength = 0f }
-            awaitDraw(after = previousDraw, expected = 0f)
-            val noHeaderShadow = geometry()
+            compose.runOnIdle { redraw++ }
+            awaitDraw(after = previousDraw, expected = 1)
+            val redrawn = geometry()
             assertSameOwnersAndGeometry(ordinary, noHeaderShadow)
-            second = capture("header-only-zero", noHeaderShadow)
+            second = capture("default-header-redraw", noHeaderShadow)
             // Both complete originals have already been saved and hashed before reading any pixels.
             writePairedBands(requireNotNull(first), requireNotNull(second), ordinary)
             assertEquals("Exactly two copies; no replacement capture", 2, copies)
@@ -173,18 +168,17 @@ class QueueHeaderMaterialBoundaryTest {
         }
     }
 
-    private fun awaitDraw(after: Int, expected: Float) {
+    private fun awaitDraw(after: Int, expected: Int) {
         compose.waitForIdle()
         compose.awaitExpectedWindowFocus(compose.onNodeWithTag("queue-surface"))
         compose.waitUntil(5000) { compose.runOnUiThread {
             val page = scene
             val draw = drawn.get()
-            // Both renderers sample the foreground scene the lens refracts (#624): None averages
-            // its refraction preimage, so it keeps the same foreground lease and snapshot.
+            // Legacy Android averages the same recorded foreground used by modern lenses.
             val parentMaterialReady = Build.VERSION.SDK_INT >= 33 ||
                 backing.fallback != null && material.snapshot != null && page?.source?.snapshot != null
             root.isAttachedToWindow && root.isLaidOut && root.hasWindowFocus() && !root.isLayoutRequested &&
-                draw != null && draw.count > after && draw.requestedStrength == expected &&
+                draw != null && draw.count > after && draw.revision == expected &&
                 backing.recorded && material.recorded && page?.source?.recorded == true &&
                 page.layers.size == 1 && page.layers.single().source.recorded &&
                 // Existing producer admission only; never sample a pixel or request a new readback.
@@ -193,10 +187,10 @@ class QueueHeaderMaterialBoundaryTest {
         compose.runOnIdle {
             assertEquals("Normal request resolves to the platform's actual backend",
                 if (Build.VERSION.SDK_INT >= 33) GlassBackend.Normal else GlassBackend.AverageFallback,
-                material.rendererGeneration.backend)
-            assertTrue("Both renderers keep the foreground sampling lease", requireNotNull(scene).source.consumers > 0)
+                effectiveGlassBackend(Build.VERSION.SDK_INT))
+            assertTrue("The shared material keeps the foreground sampling lease", requireNotNull(scene).source.consumers > 0)
             android.util.Log.i("QueueHeaderMaterialBoundary", "api=${Build.VERSION.SDK_INT} " +
-                "backend=${material.rendererGeneration.backend} parentConsumers=${material.consumers} " +
+                "backend=${effectiveGlassBackend(Build.VERSION.SDK_INT)} parentConsumers=${material.consumers} " +
                 "foregroundConsumers=${requireNotNull(scene).source.consumers} " +
                 "parentSnapshot=${material.snapshot != null} foregroundSnapshot=${requireNotNull(scene).source.snapshot != null}")
             assertEquals("Drawer remains at its open endpoint", 1f, progress.value, 0f)
@@ -205,7 +199,7 @@ class QueueHeaderMaterialBoundaryTest {
             assertEquals(0, minimizeCallbacks)
             assertTrue(host.entries.isEmpty())
             assertTrue(selection.entries.isEmpty())
-            assertEquals("Ambient material settings outside header remain identical", appearance, ambient)
+            assertSame("Header inherits the drawer material owner", material, ambient)
             assertSame(backing, material.parent)
             assertSame(material, requireNotNull(scene).source.parent)
         }
@@ -285,7 +279,7 @@ class QueueHeaderMaterialBoundaryTest {
         val screen = IntArray(2).also(root::getLocationOnScreen)
         val draw = drawn.get()
         JSONObject().put("uptime", SystemClock.uptimeMillis()).put("nonAtomicWithPixelCopy", true)
-            .put("requestedHeaderStrength", strength).put("unchangedAmbientAppearance", ambient.toString())
+            .put("redraw", redraw).put("unchangedAmbientAppearance", ambient.toString())
             .put("rootIdentity", id(root)).put("windowIdentity", id(compose.activity.window)).put("tokenIdentity", id(root.windowToken))
             .put("rootOriginOnScreen", JSONArray(screen.toList())).put("rootOriginInWindow", point(g.rootOriginInWindow))
             .put("windowSize", JSONArray(listOf(compose.activity.window.decorView.width, compose.activity.window.decorView.height)))
@@ -305,7 +299,7 @@ class QueueHeaderMaterialBoundaryTest {
     }
 
     private fun sourceFacts(source: FrostedBackdrop) = JSONObject().put("identity", id(source)).put("parentIdentity", id(source.parent))
-        .put("backend", source.rendererGeneration.backend.name).put("samplingConsumers", source.consumers)
+        .put("backend", effectiveGlassBackend(Build.VERSION.SDK_INT).name).put("samplingConsumers", source.consumers)
         .put("size", JSONArray(listOf(source.size.width, source.size.height))).put("originOnScreen", point(source.origin))
         .put("registrationToScreen", source.location.registrationToScreen()?.toString() ?: "UNKNOWN")
         .put("recorded", source.recorded).put("materialOnly", source.materialOnly).put("revision", source.revision)
@@ -378,9 +372,9 @@ class QueueHeaderMaterialBoundaryTest {
     private fun writeManifest(status: String, failure: String? = null) {
         File(output, "manifest.json").writeText(JSONObject().put("status", status).put("failure", failure ?: JSONObject.NULL)
             .put("api", Build.VERSION.SDK_INT).put("declaredCaptures", 2).put("copyAttempts", copies).put("records", records)
-            .put("ordinaryShadowStrength", appearance.shadowStrength).put("ordinaryAppearance", appearance.toString())
+            .put("ordinaryShadowStrength", 1f).put("ordinaryAppearance", "Default")
             .put("fixture", "Real QueueSurface + QueueScreen + PlayerClippedOverlay, open Animatable endpoint, fixed 18-occurrence queue, ordinary selection/host, controller absent and unchanged; opaque 0xFF8099AA recorded backdrop")
-            .put("control", "Both states opt into header-only provider, normal configured strength then 0. Null/default path checked statically, not a third capture. Search/list/outer drawer appearance unchanged.")
+            .put("control", "Both states use the shared default material. A source redraw retains the same Queue, search, list, and outer drawer owners.")
             .put("boundary", "Measured viewport recording origin plus independent common ancestor/header control/Search/list layout bounds; no fixed y. Numeric CSV only after BOTH original images are retained.")
             .put("limits", "No optical seam-fix/pass threshold. No physical presentation, native source/raster-consumption or private pointer-dispatch proof. Owner snapshots are non-atomic with PixelCopy. Production source readbacks only; none requested by test.")
             .toString(2))

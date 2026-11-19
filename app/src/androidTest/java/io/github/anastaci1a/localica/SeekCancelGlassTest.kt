@@ -13,7 +13,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.ui.*
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -26,12 +25,12 @@ import kotlin.math.sqrt
 class SeekCancelGlassTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun cancelTargetRefractsTheUiBehindItAndOnlyTheSceneRecordingDoesSo() = verifyScene(GlassRendererMode.Normal)
+    @Test fun cancelTargetRefractsTheUiBehindItAndOnlyTheSceneRecordingDoesSo() = verifyScene()
 
 
-    private fun verifyScene(mode: GlassRendererMode) {
-        val optical = mode == GlassRendererMode.Normal && android.os.Build.VERSION.SDK_INT >= 33
-        val runtime = GlassRendererRuntime(mode)
+    private fun verifyScene() {
+        val optical = android.os.Build.VERSION.SDK_INT >= 33
+
         var drawn: GlassSurfaceDrawObservation? = null
         var chosenScene by mutableStateOf(false)
         var progress by mutableFloatStateOf(1f)
@@ -39,8 +38,7 @@ class SeekCancelGlassTest {
         lateinit var artRecording: FrostedBackdrop
         lateinit var sceneRecording: FrostedBackdrop
         val state = SeekCancelTargetState()
-        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(LocalReducedMotion provides true,
-            LocalGlassRendererRuntime provides runtime, LocalGlassSurfaceDrawObserver provides { glassDrawProbe?.invoke(it); (it as? GlassSurfaceDrawObservation)?.let { o -> drawn = o } }) {
+        compose.setContent { EngineTheme(reduced = true) { CompositionLocalProvider(LocalReducedMotion provides true, LocalGlassSurfaceDrawObserver provides { glassDrawProbe?.invoke(it); (it as? GlassSurfaceDrawObservation)?.let { o -> drawn = o } }) {
             artRecording = rememberFrostedBackdrop("art", dark = false)
             sceneRecording = rememberFrostedBackdrop("scene", dark = false)
             Box(Modifier.size(300.dp)) {
@@ -102,7 +100,7 @@ class SeekCancelGlassTest {
         if (optical) {
             assertTrue("The UI behind the X is refracted: scene=$withUi artwork-only=$artOnly", withUi.first > artOnly.first + .03f * .3179475f)
         } else {
-            assertTrue("$mode has no stripe detail on this API: $withUi", withUi.first < .04f)
+            assertTrue("Default has no stripe detail on this API: $withUi", withUi.first < .04f)
             assertTrue("The averaged scene replaces the darker artwork: scene=$withUi artwork=$artOnly", withUi.second > artOnly.second + .1f)
         }
         compose.runOnIdle { progress = .5f }; compose.waitForIdle()

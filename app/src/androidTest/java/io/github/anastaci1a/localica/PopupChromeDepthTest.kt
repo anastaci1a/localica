@@ -36,8 +36,6 @@ import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.navigation.InterfacePreferences
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.navigation.MainTab
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 import io.github.anastaci1a.localica.playback.PlaybackState
@@ -67,9 +65,9 @@ class PopupChromeDepthTest {
     @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsScan() { overflow("Scan music") }
     @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsBack() { overflow("Back") }
     @Test fun plainOverflowCloseStaysAboveMiniPlayerAndTabsOutsideTap() { overflow("Outside tap") }
-    @Test fun normalHomeProjectionIsOutsideItsSampledBackdrop() { cleanBackdrop(GlassRendererMode.Normal) }
-    @Test fun normalDepartingBrowseMenuStaysAboveTabs() { nonChromeMenu(GlassRendererMode.Normal) }
-    @Test fun normalSelectionPillKeepsItsShellDepth() { selectionPill(GlassRendererMode.Normal) }
+    @Test fun normalHomeProjectionIsOutsideItsSampledBackdrop() { cleanBackdrop() }
+    @Test fun normalDepartingBrowseMenuStaysAboveTabs() { nonChromeMenu() }
+    @Test fun normalSelectionPillKeepsItsShellDepth() { selectionPill() }
     @Test fun collapsedShellControlsRemainAccessible() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
@@ -132,7 +130,7 @@ class PopupChromeDepthTest {
         var composedOpen = false
         val nativeWatch = ViewTreeObserver.OnDrawListener { nativeDraws++ }
         try {
-            preferences.write(InterfaceSettings(reducedMotion = false, glass = GlassAppearance(renderer = GlassRendererMode.Normal)))
+            preferences.write(InterfaceSettings(reducedMotion = false))
             compose.setContent { LocalicaTheme {
                 host = LocalView.current
                 home = rememberGlassPopupHome(departing)
@@ -240,29 +238,26 @@ class PopupChromeDepthTest {
         }
     }
 
-    @Test fun normalSelectionPillPixelsCoverOverlappingTabs() = selectionOverlap(GlassRendererMode.Normal)
+    @Test fun normalSelectionPillPixelsCoverOverlappingTabs() = selectionOverlap()
 
-    private fun selectionOverlap(mode: GlassRendererMode) {
+    private fun selectionOverlap() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
         val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
-            "${mode.name}/selection-stacking").apply { mkdirs() }
+            "${"Default"}/selection-stacking").apply { mkdirs() }
         lateinit var host: View
         var tabsVisible by mutableStateOf(false)
         var selectionVisible by mutableStateOf(true)
         val track = Track("identity:overlap", "Overlap song", fileName = "overlap.mp3", relativePath = "overlap.mp3")
         try {
-            preferences.write(InterfaceSettings(reducedMotion = true, glass = GlassAppearance(renderer = mode)))
+            preferences.write(InterfaceSettings(reducedMotion = true))
             compose.setContent { LocalicaTheme {
                 host = LocalView.current
                 val home = rememberGlassPopupHome(false)
                 val page = rememberFrostedBackdrop(home, dark = false)
                 val panel = rememberFloatingSelectionPanel(selectionVisible, true)
-                CompositionLocalProvider(LocalFrostedBackdrop provides page,
-                    LocalGlassAppearance provides GlassAppearance(renderer = mode,
-                        tabStyle = io.github.anastaci1a.localica.navigation.TabLensStyle.Classic,
-                        classicOpacity = 1f, blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+                CompositionLocalProvider(LocalFrostedBackdrop provides page) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         // Deliberate collision, as in SelectorStackingTest: use the
                         // shell's real shared controls and ordering with no motion override.
@@ -327,16 +322,16 @@ class PopupChromeDepthTest {
         } finally { preferences.write(previous) }
     }
 
-    private fun selectionPill(mode: GlassRendererMode) {
+    private fun selectionPill() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
         val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
-            "${mode.name}/selection-pill").apply { mkdirs() }
+            "Default/selection-pill").apply { mkdirs() }
         lateinit var host: View
         try {
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Albums, MainTab.Artists, MainTab.Songs, MainTab.Playlists),
-                reducedMotion = true, glass = GlassAppearance(renderer = mode)))
+                reducedMotion = true))
             val tracks = (1..2).map { Track("identity:depth-$it", "Song $it", artist = "Shared artist", album = "Shared album",
                 fileName = "$it.mp3", relativePath = "$it.mp3") }
             compose.setContent { LocalicaTheme {
@@ -358,18 +353,18 @@ class PopupChromeDepthTest {
                 (owner as Activity).window
             }
             original(activity, output, "selection-and-tabs").recycle()
-            File(output, "scene.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA).put("renderer", mode.name)
+            File(output, "scene.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA).put("renderer", "Default")
                 .put("api", Build.VERSION.SDK_INT).put("reducedMotion", true).put("selection", pill.toString()).put("tabs", tabs.toString())
                 .put("density", host.resources.displayMetrics.density).toString(2))
         } finally { preferences.write(previous) }
     }
 
-    private fun nonChromeMenu(mode: GlassRendererMode) {
+    private fun nonChromeMenu() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
         val outputRoot = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
-            "${mode.name}/non-chrome-menu").apply { mkdirs() }
+            "Default/non-chrome-menu").apply { mkdirs() }
         var output = File(outputRoot, "offset-0").apply { mkdirs() }
         var trial by mutableIntStateOf(0)
         lateinit var clock: io.github.anastaci1a.localica.ui.engine.UiClock
@@ -400,7 +395,7 @@ class PopupChromeDepthTest {
         var phaseControl = JSONArray()
         var receipts = JSONArray()
         try {
-            preferences.write(InterfaceSettings(glass = GlassAppearance(renderer = mode)))
+            preferences.write(InterfaceSettings())
             compose.setContent { LocalicaTheme { key(trial) {
                 clock = io.github.anastaci1a.localica.ui.engine.LocalUiClock.current
                 host = LocalView.current
@@ -565,7 +560,7 @@ class PopupChromeDepthTest {
                     .put("presentedNanos", compose.runOnUiThread { clock.stamp.nanos }).put("flightPhase", phase).put("phaseBits", phase.toRawBits()).put("geometryPhase", geometryProgress)
                     .put("attached", attached).put("prepared", flight.prepared).put("triggerHidden", fixtureAnchor.hidden))
                 File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
-                    .put("renderer", mode.name).put("stepMs", 4).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
+                    .put("renderer", "Default").put("stepMs", 4).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
                 if (!attached) break
                 if (phase < .1f || phase >= 1f || !flight.prepared || !flight.handedOff || leaving || home.departing) continue
                 val bounds = panelBounds()
@@ -630,7 +625,7 @@ class PopupChromeDepthTest {
                         .put("moving", moving).put("prepared", flight.prepared).put("handedOff", flight.handedOff)
                         .put("leaving", leaving).put("homeDeparting", home.departing).put("badRows", JSONArray(badRows.toList())))
                     File(output, "frames.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
-                        .put("renderer", mode.name).put("samples", receipts).toString(2))
+                        .put("renderer", "Default").put("samples", receipts).toString(2))
                     if (enforcedContrast) assertTrue("Every enforced-contrast changed pixel is inside the navigation inset: $badRows",
                         badRows.all { it >= navigationInsetTop })
                     if (Build.VERSION.SDK_INT == 36 && !enforcedContrast && phase.toRawBits() == .73084176f.toRawBits())
@@ -654,10 +649,10 @@ class PopupChromeDepthTest {
                 } finally { modal.recycle(); root.recycle(); layer.recycle(); source.recycle(); oldSource?.recycle() }
             }
             File(output, "phase-control.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
-                .put("renderer", mode.name).put("stepMs", 4).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
+                .put("renderer", "Default").put("stepMs", 4).put("samples", phaseControl).put("qualifiedFrames", qualifiedPhases.size).put("distinctPresentedPhaseBits", JSONArray(qualifiedPhases.toList())).toString(2))
             trials.put(JSONObject().put("requestedOffsetMs", offsetMs).put("intent", intent).put("samples", receipts))
             File(outputRoot, "offset-matrix.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
-                .put("renderer", mode.name).put("trials", trials).put("distinctQualifiedPhaseBits", JSONArray(qualifiedPhases.toList()))
+                .put("renderer", "Default").put("trials", trials).put("distinctQualifiedPhaseBits", JSONArray(qualifiedPhases.toList()))
                 .put("distinctQualifiedPhases", qualifiedPhases.size).put("originalWindowCount", originalWindowCount)
                 .put("distinctQualifiedBounds", JSONArray(qualifiedBounds.map { JSONArray(it) })).toString(2))
             if (enforcedContrast) {
@@ -678,18 +673,18 @@ class PopupChromeDepthTest {
         }
     }
 
-    private fun cleanBackdrop(mode: GlassRendererMode) {
+    private fun cleanBackdrop() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
         val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
-            "${mode.name}/clean-backdrop").apply { mkdirs() }
+            "Default/clean-backdrop").apply { mkdirs() }
         lateinit var host: View
         lateinit var home: GlassPopupHome
         lateinit var flight: GlassPopupFlight
         lateinit var page: FrostedBackdrop
         try {
-            preferences.write(InterfaceSettings(glass = GlassAppearance(renderer = mode)))
+            preferences.write(InterfaceSettings())
             compose.setContent { LocalicaTheme {
                 host = LocalView.current
                 home = rememberGlassPopupHome(false)
@@ -728,7 +723,7 @@ class PopupChromeDepthTest {
                     val samplePixel = sampled.getPixel(x, y)
                     val displayPixel = root.getPixel(rootX, rootY)
                     File(output, "clean-$frame.json").writeText(JSONObject().put("source", BuildConfig.SOURCE_SHA)
-                        .put("renderer", mode.name).put("projected", flight.wasProjected)
+                        .put("renderer", "Default").put("projected", flight.wasProjected)
                         .put("samplePixel", samplePixel).put("displayPixel", displayPixel).toString(2))
                     assertTrue("The home projection is actually displayed", flight.wasProjected)
                     assertEquals("Displayed flight control is magenta", Color.MAGENTA, displayPixel)
@@ -738,20 +733,20 @@ class PopupChromeDepthTest {
         } finally { preferences.write(previous) }
     }
 
-    private fun overflow(destination: String, mode: GlassRendererMode = GlassRendererMode.Normal) {
+    private fun overflow(destination: String) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
         val output = File(nativeEvidenceDirectory("popup-chrome-depth", context.getExternalFilesDir(null)),
-            "${mode.name}/" + destination.replace(' ', '-')).apply { mkdirs() }
+            "Default/" + destination.replace(' ', '-')).apply { mkdirs() }
         val samples = JSONArray()
-        val report = JSONObject().put("source", BuildConfig.SOURCE_SHA).put("destination", destination).put("renderer", mode.name)
+        val report = JSONObject().put("source", BuildConfig.SOURCE_SHA).put("destination", destination).put("renderer", "Default")
             .put("samples", samples).put("status", "preparing").put("captureOrder", "popup-before-activity")
             .put("comparison", "Opaque overflow-window pixels over the bar regions, per frame")
         fun save() { File(output, "frames.json").writeText(report.toString(2)) }
         var baseline: Bitmap? = null
         try {
-            preferences.write(InterfaceSettings(reducedMotion = false, animationSpeedTenths = 10, glass = GlassAppearance(renderer = mode)))
+            preferences.write(InterfaceSettings(reducedMotion = false, animationSpeedTenths = 10))
             val track = Track("file:///missing-667.mp3", "One", artist = "Test", album = "One",
                 fileName = "missing-667.mp3", relativePath = "missing-667.mp3")
             lateinit var host: View

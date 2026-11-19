@@ -112,8 +112,7 @@ class CollectionControlsBackdropTest {
             LaunchedEffect(source) {
                 snapshotFlow { source.snapshot }.filterNotNull().collect { if (firstSnapshot == null) firstSnapshot = it }
             }
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(depth = .6f, blur = 0f,
-                whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+
                 Box(Modifier.size(320.dp, 360.dp)) {
                     Column(Modifier.fillMaxSize().recordBrowseBackdropLayer(page, viewport)
                         .background(Color.Black).clipToBounds().listTopFade()
@@ -130,7 +129,7 @@ class CollectionControlsBackdropTest {
                     }
                     BrowseBackdropRecording(page, null)
                 }
-            }
+
         } }
         compose.waitUntil(10_000) {
             scene?.let { it.source.recorded && it.layers.single().source.recorded &&

@@ -41,7 +41,7 @@ One progress drives geometry and masks. Navigation observes thresholds only; Que
 
 One page-wide black/white decision follows the actual backing, including crossfades. Matching tone preparation must finish before a new decision publishes; otherwise the last verified decision remains, initially white. Ink changes do not retone the backing, and asynchronous presentation is not atomic.
 
-One interpolated light-mix fraction serves text, glass and frost. Lyric emphasis keeps its own clock. Brightness trim preserves brightness order by limiting applied trim to the reciprocal of weighting. [Settings](../interface/settings.md#glass-settings) owns ranges. Prepared backdrops appear on expansion's first frame and remain until replaced.
+One interpolated light-mix fraction serves text, glass and frost. Lyric emphasis keeps its own clock. Brightness trim preserves brightness order by limiting applied trim to the reciprocal of weighting. The shared specification fixes material trim at 25% and weighting at 2. Prepared backdrops appear on expansion's first frame and remain until replaced.
 
 ## Shadows
 
@@ -78,8 +78,6 @@ Moving sibling groups share one shape-aware shadow; pages and modal descendants 
 [PlayerContrastTest](../../app/src/test/java/io/github/anastaci1a/localica/ui/PlayerContrastTest.kt).
 
 [PlayerBackdropGradingTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerBackdropGradingTest.kt).
-
-[BrightnessWeightingTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/BrightnessWeightingTest.kt).
 
 [PlayerLyricsThemeEaseTest](../../app/src/androidTest/java/io/github/anastaci1a/localica/PlayerLyricsThemeEaseTest.kt).
 

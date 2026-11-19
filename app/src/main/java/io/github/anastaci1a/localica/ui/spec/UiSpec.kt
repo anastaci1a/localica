@@ -17,10 +17,9 @@ enum class Radius { Artwork, Card, Menu, LargeArtwork, Panel, Pill }
 enum class ControlSize { NavigationPill, Compact, MiniArtwork, CollapsedQueue, DragBubble, Icon, PreferenceRow, PreferenceCompact, SettingsIcon }
 enum class Clearance { FloatingGap, LiftMax, LiftClearance, ShadowInset, BottomChrome }
 enum class MotionProfile { Control, ControlOff, Selection, Hover, Reveal, ResolutionBlend, Floating, Heading, ArtworkLayout, CropRetention, Marquee, Scroll, SettingsHighlight, SettingsScroll, LyricEmphasis }
-enum class SpringProfile { GlassMorph, Page, GlassMode }
+enum class SpringProfile { GlassMorph, Page }
 enum class MaterialRole { Glass, Panel, Selection, DragPane, Page, Scrim }
 enum class MotionAccess { Standard, Reduced }
-enum class GlassMode { Normal, FlatNone }
 /** A unit motion curve from 0 to 1 over u in [0,1]: a cubic Bezier [EasingSpec] or a [SpringCurveSpec]. */
 @Immutable sealed interface UnitCurveSpec { val maxSlope: Float }
 @Immutable data class EasingSpec(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : UnitCurveSpec { override val maxSlope: Float by lazy { slopeBound(this) } }
@@ -65,16 +64,29 @@ internal val StockPopupMotion = PopupMotionModel(StockPopupMotionRevision, Sprin
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
 const val MinimumAnimationSpeed = .5f
 const val MaximumAnimationSpeed = 1.5f
+internal const val GlassBlurDefault = .2f
+internal const val GlassWhiteTint = .06f
+internal const val GlassShadowStrength = 1f
+internal const val GlassShadowSpread = 1f
+internal const val GlassContrast = .25f
+internal const val GlassContrastWeightMin = 1f
+internal const val GlassContrastWeightDefault = 2f
+internal const val GlassContrastWeightMax = 8f
+internal const val GlassShapeDamping = 8f
+internal const val GlassDepth = 1.35f
+internal const val GlassControlExpansion = 1.75f
+internal const val GlassLiftShadowStrength = 1f
+internal const val GlassTouchLight = 1f
 internal const val GlassShadowShift = 8f
 internal const val GlassShadowMaskRadius = 24f
 internal const val GlassShadowFill = .20f
 internal fun glassShadowReach(spread: Float) = 2f * GlassShadowMaskRadius * spread
 internal fun glassShadowInset(spread: Float) = (glassShadowReach(spread) + GlassShadowShift).dp
 /** Layout padding and hit areas beside a shadow: independent of the draw reach (22.8 dp at the default multiplier). */
-internal fun glassLayoutInset(spread: Float) = (6f + 16.8f * spread).dp
-@Immutable data class MaterialTokens(val blur: Float, val whiteTint: Float, val shadowStrength: Float, val shadowSpread: Float, val contrast: Float, val liftShadowStrength: Float, val shapeDamping: Float, val depth: Float, val mode: GlassMode)
+internal val GlassLayoutInset = 22.8f.dp
+@Immutable data class MaterialTokens(val blur: Float, val whiteTint: Float, val shadowStrength: Float, val shadowSpread: Float, val contrast: Float, val liftShadowStrength: Float, val shapeDamping: Float, val depth: Float)
 @Immutable class UiSpec internal constructor(val space: Map<Space,Dp>, val radius: Map<Radius,Dp>, val control: Map<ControlSize,Dp>, val clearance: Map<Clearance,Dp>, val motion: Map<MotionProfile,MotionSpec>, val spring: Map<SpringProfile,SpringProfileSpec>, val expansion: ExpansionSpec, val material: Map<MaterialRole,MaterialTokens>, val access: MotionAccess, internal val geometry: ExpansionGeometryDomain?=null, val sheetExpansion: ExpansionSpec=expansion, val lyricsExpansion: ExpansionSpec=expansion, val selectionExpansion: ExpansionSpec=expansion, val popupMotion: PopupMotionModel=StockPopupMotion, val speed: Float=1f)
-@Immutable data class UiSpecData(val space: Map<Space,Dp>? = null, val radius: Map<Radius,Dp>? = null, val control: Map<ControlSize,Dp>? = null, val clearance: Map<Clearance,Dp>? = null, val motion: Map<MotionProfile,MotionSpec>? = null, val spring: Map<SpringProfile,SpringProfileSpec>? = null, val expansion: ExpansionSpec? = null, val material: Map<MaterialRole,MaterialTokens>? = null, val access: MotionAccess? = null, val sheetExpansion: ExpansionSpec? = null, val lyricsExpansion: ExpansionSpec? = null, val selectionExpansion: ExpansionSpec? = null, val popupMotion: PopupMotionModel? = null, val speed: Float? = null)
+@Immutable data class UiSpecData(val space: Map<Space,Dp>? = null, val radius: Map<Radius,Dp>? = null, val control: Map<ControlSize,Dp>? = null, val clearance: Map<Clearance,Dp>? = null, val motion: Map<MotionProfile,MotionSpec>? = null, val spring: Map<SpringProfile,SpringProfileSpec>? = null, val expansion: ExpansionSpec? = null, val access: MotionAccess? = null, val sheetExpansion: ExpansionSpec? = null, val lyricsExpansion: ExpansionSpec? = null, val selectionExpansion: ExpansionSpec? = null, val popupMotion: PopupMotionModel? = null, val speed: Float? = null)
 sealed interface SpecResult { data class Accepted(val spec: UiSpec) : SpecResult; data class Rejected(val reasons: List<String>) : SpecResult }
 const val SettleThreshold = .0003f
 const val SettleVelocityThreshold = .003f
@@ -124,13 +136,12 @@ internal const val StockPopupExpansionBand = .05f
 private val StockPopupExpansion = ExpansionSpec(SpringCurveSpec(PopupSpringSpan),PopupSpringMs,.500401615f,1.41952128f,.73607278f,0f,PopupSpringMs,.25f,.5f,StockPopupExpansionBand)
 val StockUiSpec: UiSpec = UiSpec(dimensions(Space.entries,listOf(1f,4f,8f,12f,16f,24f,28f)), dimensions(Radius.entries.dropLast(1),listOf(8f,16f,20f,24f,28f)), dimensions(ControlSize.entries,listOf(64f,51.2f,32f,64f,28f,24f,56f,48f,24f)), dimensions(Clearance.entries,listOf(8f,4f,1f,56f,80f)),
     frozen<MotionProfile,MotionSpec>(MotionProfile.entries.take(10).zip(listOf(180,270,220,220,300,240,300,165,300,225).mapIndexed { i,d -> MotionProfileSpec(d,if(i in listOf(0,1,2,3,6)) slow else fast) }).toMap()+mapOf(MotionProfile.LyricEmphasis to MotionProfileSpec(350,fast),MotionProfile.Marquee to MarqueeSpec(1800,220,260,30f,EasingSpec(1f/3,0f,2f/3,1f)),MotionProfile.Scroll to ListMotionSpec(350,500,120,fast,linear),MotionProfile.SettingsScroll to SettingsScrollSpec(262,175,fast),MotionProfile.SettingsHighlight to SettingsHighlightSpec(150,450,600,1200,.18f,fast)),null),
-    frozen(mapOf(SpringProfile.GlassMorph to SpringProfileSpec(1f,90f,2),SpringProfile.Page to SpringProfileSpec(.85f,380f),SpringProfile.GlassMode to SpringProfileSpec(1f,90f,2)),null), StockPopupExpansion, frozen(MaterialRole.entries.associateWith { MaterialTokens(.2f,.06f,1f,1f,.25f,1f,8f,1.35f,GlassMode.Normal) },null),MotionAccess.Standard,null,StockSheetExpansion,StockLyricsExpansion,StockSelectionExpansion)
+    frozen(mapOf(SpringProfile.GlassMorph to SpringProfileSpec(1f,90f,2),SpringProfile.Page to SpringProfileSpec(.85f,380f)),null), StockPopupExpansion, frozen(MaterialRole.entries.associateWith { MaterialTokens(GlassBlurDefault,GlassWhiteTint,GlassShadowStrength,GlassShadowSpread,GlassContrast,GlassLiftShadowStrength,GlassShapeDamping,GlassDepth) },null),MotionAccess.Standard,null,StockSheetExpansion,StockLyricsExpansion,StockSelectionExpansion)
 fun uiSpec(settings: InterfaceSettings, overrides: UiSpecData? = null, geometry: ExpansionGeometryDomain? = null): SpecResult {
-    val o=overrides?:UiSpecData(); val b=StockUiSpec; val g=settings.glass.normalized(); val errors=mutableListOf<String>()
+    val o=overrides?:UiSpecData(); val b=StockUiSpec; val errors=mutableListOf<String>()
     fun valid(ok: Boolean, key: String) { if(!ok) errors+=key }; fun bounded(v: Float,lo: Float,hi: Float)=v.isFinite() && v in lo..hi
-    val rendererMode = GlassMode.valueOf(g.renderer.name)
-    val space=frozen(b.space,o.space); val radius=frozen(b.radius,o.radius); val control=frozen(b.control,o.control); val material=frozen(MaterialRole.entries.associateWith { MaterialTokens(g.blur,g.whiteTint,g.shadowStrength,g.shadowSpread,g.contrast,g.liftShadowStrength,g.shapeDamping,g.depth,rendererMode) },o.material)
-    val clearance=frozen(b.clearance+mapOf(Clearance.ShadowInset to glassShadowInset(material.getValue(MaterialRole.Glass).shadowSpread)),o.clearance); val motion=frozen(b.motion,o.motion); val spring=frozen(b.spring,o.spring); val expansion=o.expansion?:b.expansion; val sheetExpansion=o.sheetExpansion?:b.sheetExpansion; val lyricsExpansion=o.lyricsExpansion?:b.lyricsExpansion; val selectionExpansion=o.selectionExpansion?:b.selectionExpansion; val popupMotion=o.popupMotion?:b.popupMotion; val speed=o.speed?:settings.animationSpeed
+    val space=frozen(b.space,o.space); val radius=frozen(b.radius,o.radius); val control=frozen(b.control,o.control); val material=b.material
+    val clearance=frozen(b.clearance,o.clearance); val motion=frozen(b.motion,o.motion); val spring=frozen(b.spring,o.spring); val expansion=o.expansion?:b.expansion; val sheetExpansion=o.sheetExpansion?:b.sheetExpansion; val lyricsExpansion=o.lyricsExpansion?:b.lyricsExpansion; val selectionExpansion=o.selectionExpansion?:b.selectionExpansion; val popupMotion=o.popupMotion?:b.popupMotion; val speed=o.speed?:settings.animationSpeed
     valid(space.values.all { bounded(it.value,0f,Float.MAX_VALUE) } && Space.entries.zipWithNext().all { (a,b)->space.getValue(a)<space.getValue(b) },"space"); valid(Radius.Pill !in radius && radius.values.all { bounded(it.value,0f,Float.MAX_VALUE) },"radius"); valid(control.values.all { it.value.isFinite() && it.value>0 },"control"); valid(clearance.values.all { bounded(it.value,0f,Float.MAX_VALUE) },"clearance")
     fun ease(e: EasingSpec)=bounded(e.x1,0f,1f) && bounded(e.x2,0f,1f) && e.y1.isFinite() && e.y2.isFinite() && e.maxSlope.isFinite()
     fun curve(c: UnitCurveSpec)=when(c) { is EasingSpec -> ease(c); is SpringCurveSpec -> bounded(c.span,1f,40f) && c.maxSlope.isFinite() }
@@ -141,7 +152,6 @@ fun uiSpec(settings: InterfaceSettings, overrides: UiSpecData? = null, geometry:
     valid(speed.isFinite() && speed in MinimumAnimationSpeed..MaximumAnimationSpeed,"speed")
     // The model's own band: admission and the engine's extremum proofs read the same value (#854 review S2).
     for(reason in popupMotionAdmission(popupMotion)) errors+="popupMotion.$reason"
-    for((key,m) in material) with(m) { valid(listOf(blur,whiteTint).all { bounded(it,0f,1f) } && listOf(shadowStrength,shadowSpread).all { bounded(it,0f,2f) } && bounded(contrast,0f,.5f) && bounded(liftShadowStrength,.5f,1.5f) && bounded(shapeDamping,2f,40f) && bounded(depth,.6f,2f),"material.$key") }
     return if(errors.isNotEmpty()) SpecResult.Rejected(errors.toList()) else SpecResult.Accepted(UiSpec(space,radius,control,clearance,motion,spring,expansion,material,if(settings.reducedMotion || o.access==MotionAccess.Reduced) MotionAccess.Reduced else o.access?:MotionAccess.Standard,geometry,sheetExpansion,lyricsExpansion,selectionExpansion,popupMotion,speed))
 }
 /** U11.00 root ingress: a rejected payload falls back to the stock catalog with the same access, speed and measured geometry.

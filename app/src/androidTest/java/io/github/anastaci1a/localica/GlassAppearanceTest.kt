@@ -52,60 +52,12 @@ class GlassAppearanceTest {
         assertTrue("Frost must scatter stripes, not show an unfiltered parent: $low..$high", high - low < .12f)
     }
 
-    @Test fun contrastMigrationKeepsExplicitOffAndInitializesTheNewCurve() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val prefs = InterfacePreferences(context)
-        val original = prefs.read()
-        val store = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
-        try {
-            store.edit().remove("glass-contrast-trim").putFloat("glass-contrast", 0f).commit()
-            assertEquals(0f, prefs.read().glass.contrast, 0f)
-            store.edit().putFloat("glass-contrast", .8f).commit()
-            assertEquals(.25f, prefs.read().glass.contrast, 0f)
-            prefs.write(original.copy(glass = GlassAppearance(contrast = .4f, contrastWeight = 1.2f, classicOpacity = .3f)))
-            assertEquals(.4f, InterfacePreferences(context).read().glass.contrast, 0f)
-            assertEquals(1.2f, InterfacePreferences(context).read().glass.contrastWeight, 0f)
-            assertEquals(.3f, InterfacePreferences(context).read().glass.classicOpacity, 0f)
-        } finally { prefs.write(original) }
-    }
-
-    @Test fun preferencesPersistIndependentlyAndClampInvalidValues() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val prefs = InterfacePreferences(context)
-        val original = prefs.read()
-        try {
-            val store = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
-            store.edit().remove("glass-shadow-strength-multiplier").remove("glass-shadow-spread-multiplier")
-                .putFloat("glass-shadow-strength", .12f).putFloat("glass-shadow-spread", .6f).commit()
-            assertEquals(1f, prefs.read().glass.shadowStrength, 0f)
-            assertEquals(1f, prefs.read().glass.shadowSpread, 0f)
-            store.edit().putFloat("glass-shadow-strength", .06f).putFloat("glass-shadow-spread", .3f).commit()
-            assertEquals(.5f, prefs.read().glass.shadowStrength, 0f)
-            assertEquals(.5f, prefs.read().glass.shadowSpread, 0f)
-            store.edit().putFloat("glass-shadow-strength", 1f).putFloat("glass-shadow-spread", 1f).commit()
-            assertEquals(2f, prefs.read().glass.shadowStrength, 0f)
-            assertEquals(1f / .6f, prefs.read().glass.shadowSpread, 0f)
-            val glass = GlassAppearance(.73f, .18f, .04f, .91f, .35f, TabLensStyle.Overlay, .81f, .23f, 3f, 1.7f, 1.4f, .22f,
-                controlExpansion = 1.9f, overlayDarkening = .2f, overlayForeground = true)
-            prefs.write(original.copy(glass = glass))
-            assertEquals(glass, InterfacePreferences(context).read().glass)
-            prefs.write(original.copy(glass = GlassAppearance(-1f, 2f, Float.NaN, Float.POSITIVE_INFINITY)))
-            assertEquals(GlassAppearance(0f, 1f, 1f, 1f), prefs.read().glass)
-            prefs.write(original.copy(glass = GlassAppearance(controlExpansion = Float.NaN, overlayDarkening = 2f)))
-            assertEquals(1.75f, prefs.read().glass.controlExpansion, 0f)
-            assertEquals(.5f, prefs.read().glass.overlayDarkening, 0f)
-            prefs.write(original.copy(glass = GlassAppearance()))
-            assertEquals(GlassAppearance(), prefs.read().glass)
-        } finally { prefs.write(original) }
-    }
-
     @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
-    @Test fun blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp() {
-        var appearance by mutableStateOf(GlassAppearance(0f, 0f, 0f, 0f, contrast = 0f))
+    @Test fun defaultFrostKeepsForegroundSharpAndPageInk() {
         var expansion by mutableFloatStateOf(0f)
         lateinit var source: FrostedBackdrop
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides appearance) {
+
                 Box(Modifier.fillMaxSize().background(Color.White).testTag("scene")) {
                     source = rememberFrostedBackdrop(Unit, dark = true)
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -118,55 +70,21 @@ class GlassAppearanceTest {
                             .background(androidx.compose.material3.LocalContentColor.current).testTag("adaptive-ink"))
                     }
                 }
-            }
+
         } }
         fun nearBoundary(): Color {
             val pixels = compose.onNodeWithTag("glass").captureToImage().toPixelMap()
             return pixels[pixels.width / 2 - 5, pixels.height / 2]
         }
-        val clear = nearBoundary()
-        assertTrue("Zero blur preserves the red side: $clear", clear.red > .95f && clear.blue < .05f)
         compose.runOnIdle { expansion = 1f }
-        if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback != null }
-        compose.waitUntil(5000) { nearBoundary().blue > .2f }
-        compose.runOnIdle { expansion = 0f }
-        compose.waitUntil(5000) { nearBoundary().blue < .05f }
-        compose.runOnIdle { appearance = appearance.copy(blur = 1f) }
-        if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.snapshot != null }
         compose.waitUntil(5000) { nearBoundary().blue > .2f }
         val blurred = nearBoundary()
         assertTrue("Frost scatters both sides: $blurred", blurred.red > .2f && blurred.blue > .2f)
-        compose.runOnIdle { appearance = appearance.copy(whiteTint = .5f) }
-        compose.waitUntil(5000) { nearBoundary().green > blurred.green + .3f }
-        val tinted = nearBoundary()
-        val luminance = .2126f * blurred.red + .7152f * blurred.green + .0722f * blurred.blue
-        val lifted = 1f - (1f - luminance) * .5f / (1f - .5f * luminance)
-        val mix = (lifted - luminance) / (1f - luminance)
-        assertEquals("White tint follows the ordered shadow lift independently of scattering",
-            blurred.green + (1f - blurred.green) * mix, tinted.green, .025f)
         val adaptive = compose.onNodeWithTag("adaptive-ink").captureToImage().toPixelMap()
         val contrasting = adaptive[adaptive.width / 2, adaptive.height / 4]
-        assertTrue("User tint cannot independently flip this page’s white foreground: $contrasting", contrasting.red > .98f)
+        assertTrue("Default frost keeps this page’s white foreground: $contrasting", contrasting.red > .98f)
         val ink = compose.onNodeWithTag("ink").captureToImage().toPixelMap()
         val black = ink[ink.width / 2, ink.height * 3 / 4]
         assertTrue("Foreground is never blurred or tinted: $black", black.red + black.green + black.blue < .03f)
-        compose.runOnIdle { appearance = GlassAppearance(0f, 0f, 1f, 1f, contrast = 0f) }
-        // Older adapters prepare a shared optical snapshot off Main. Wait for
-        // the requested clear material, as above for blur/tint, before comparing.
-        compose.waitUntil(5000) { nearBoundary().red > .95f && nearBoundary().blue < .05f }
-        assertTrue("Shadow cannot darken the clear center", nearBoundary().red > .95f)
-        fun outsideBrightness(): Float {
-            val scene = compose.onNodeWithTag("scene").captureToImage().toPixelMap()
-            val glass = compose.onNodeWithTag("glass").captureToImage()
-            val pixel = scene[scene.width / 2 + 60, scene.height / 2 + glass.height / 2 + 20]
-            return pixel.red + pixel.green + pixel.blue
-        }
-        val broad = outsideBrightness()
-        compose.runOnIdle { appearance = appearance.copy(shadowSpread = 0f) }
-        val tight = outsideBrightness()
-        assertTrue("Spread extends the shadow without tinting its center: $broad vs $tight", tight > broad + .02f)
-        compose.runOnIdle { appearance = appearance.copy(shadowSpread = 1f, shadowStrength = 0f) }
-        val off = outsideBrightness()
-        assertTrue("Zero strength removes even a broad shadow: $off", off > .98f)
     }
 }

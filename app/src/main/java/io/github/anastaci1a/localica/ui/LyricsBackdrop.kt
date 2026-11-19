@@ -36,15 +36,14 @@ internal class LyricsBackdropScene(val source: FrostedBackdrop, alpha: () -> Flo
     schedule: (Long, () -> Unit) -> (() -> Unit)) {
     val layers = mutableStateListOf<LyricsBackdropLayer>()
     var compositeDraws: Map<Any, BackdropProducerDraws> = emptyMap()
-    private val glassReadback = if (source.hasGlassLayer) BackdropReadback({ Snapshot.withoutReadObservation {
+    val readback = BackdropReadback({ Snapshot.withoutReadObservation {
         BackdropReadbackScene(listOf(alpha(), source.size, source.location.placement),
             layers.filter { it.alpha() > 0f }.associate { layer ->
                 layer to
                 BackdropReadbackProducer(listOf(layer.alpha(), layer.source.size,
                     layer.source.location.placement, layer.contentKey()), layer.hasMask)
             })
-    } }, schedule) else null
-    val readback get() = requireNotNull(glassReadback) { "Flat None has no glass readback barrier" }
+    } }, schedule)
 
     fun recorded(layer: LyricsBackdropLayer, request: Int) {
         layer.recordedReadbackRequest = request
@@ -96,10 +95,8 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
         val cancel: () -> Unit = { handler.removeCallbacks(runnable) }
         cancel
     } }
-    val flat = flatGlass()
     val displayCutout: DrawScope.() -> Path? = { Path().apply { addRect(Rect(Offset.Zero, size)) } }
     val observer by rememberUpdatedState(LocalLyricsBackdropObserver.current)
-    if (!flat) {
         SideEffect { source.parent = backing; source.readbackBarrier = scene.readback; observer?.invoke(scene, true) }
         DisposableEffect(scene) { onDispose {
             scene.readback.dispose()
@@ -118,12 +115,11 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
                 source.refresh()
             }
         }
-    }
     Box(modifier, propagateMinConstraints = true) {
         CompositionLocalProvider(LocalLyricsBackdropScene provides scene, content = content)
         // Compose the real artwork plus all retained Crossfade documents for sampling
         // only. Displaying this backing again would strengthen translucent player art.
-        if (!flat) Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = displayCutout,
+        Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = displayCutout,
             readbackRequest = { source.readbackRequest }, onRecorded = { request ->
             scene.readback.compositeRecorded(request, scene.compositeDraws)
         }).then(LyricsReadbackDraw(scene.readback))) {
@@ -158,7 +154,7 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
 @Composable
 internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () -> Float,
     contentKey: () -> Any?): Modifier {
-    if (flatGlass()) return lyricsViewportMask()
+
     // This display list is replayed by the shared scene, never read back independently.
     val source = rememberFrostedBackdrop(Unit, enabled = false, retainRaster = false)
     val currentAlpha by rememberUpdatedState(alpha)

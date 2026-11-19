@@ -16,9 +16,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.MainTab
-import io.github.anastaci1a.localica.navigation.TabLensStyle
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -33,18 +31,14 @@ class SelectorReboundRecordingTest {
     private var source: FrostedBackdrop? = null
     private var stage by mutableIntStateOf(0)
 
-    @Test fun overlayKeepsItsLandmarkDuringCoupledRebound() = rebound(TabLensStyle.Overlay, false)
-    @Test fun foregroundOverlayKeepsItsLandmarkDuringCoupledRebound() = rebound(TabLensStyle.Overlay, true)
-    @Test fun adjustableGlassKeepsItsLandmarkDuringCoupledRebound() = rebound(TabLensStyle.Adjustable, false)
+            @Test fun adjustableGlassKeepsItsLandmarkDuringCoupledRebound() = rebound()
 
-    private fun rebound(style: TabLensStyle, foreground: Boolean) {
+    private fun rebound() {
         compose.setContent { LocalicaTheme {
             view = LocalView.current
             val backing = rememberFrostedBackdrop(Unit)
             source = backing
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style,
-                overlayForeground = foreground, overlayDarkening = 0f, tabBlur = 0f, tabWhiteTint = 0f,
-                blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f, touchLight = 0f, shapeDamping = 8f)) {
+
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(240.dp, 112.dp).testTag("rebound-scene")) {
                         Canvas(Modifier.matchParentSize().recordFrostedBackdrop(backing)) {
@@ -61,7 +55,7 @@ class SelectorReboundRecordingTest {
                         PresentationMarker { stage }
                     }
                 }
-            }
+
         } }
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.snapshot != null }
         compose.waitForIdle()

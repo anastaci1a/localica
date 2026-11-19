@@ -202,13 +202,13 @@ private object PrewarmRole
  * only a settled full player can finish. Uses the same sampler and grade as the settled measurement.
  */
 @Composable internal fun PrewarmPlayerBackdrop(owner: PlayerBackgroundPolarityState, visual: PlayerVisual,
-    geometry: PlayerBackgroundGeometry?, grading: Boolean) {
+    geometry: PlayerBackgroundGeometry?) {
     val barrier = LocalPlayerBackgroundPreparationBarrier.current
     // A known grade, measured or prewarmed, needs no new geometry; only its pixels are re-checked.
     val known = owner.grade(null, visual)
-    LaunchedEffect(owner, visual, if (known == null) geometry else null, known, grading, barrier) {
-        // Missing art keeps its own neutral grade; Off draws untoned and needs nothing prepared.
-        if (!grading || visual.artwork == null || visual.loading) return@LaunchedEffect
+    LaunchedEffect(owner, visual, if (known == null) geometry else null, known, barrier) {
+        // Missing art keeps its own neutral grade.
+        if (visual.artwork == null || visual.loading) return@LaunchedEffect
         val grade = known ?: run {
             val endpoint = geometry ?: return@LaunchedEffect
             barrier?.invoke()

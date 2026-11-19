@@ -102,9 +102,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
     observePlacement: () -> Unit = {}, visibleItemKeys: (() -> Set<Any>)? = null,
     scene: SelectionScene = remember { SelectionScene() }, liftEdges: LiftEdges = LiftEdges.Horizontal,
     content: @Composable () -> Unit) {
-    val flatColor = if (flatGlass()) flatGlassColor() else null
     val liftStyle = rememberLiftShadow()
-    val averageProgress = glassAverageProgress()
     // Older Android uses the shared solid-average path.
     val blurEffects = Build.VERSION.SDK_INT >= 33
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
@@ -184,7 +182,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 val parts = orderedMembers.map { lifts[it] }
                 val strengths = { a: Int, b: Int -> min(parts[a].progress, parts[b].progress) }
                 val opacity = members.maxOf { opacities[it] }
-                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = orderedMembers.map { opacities[it] }, splitRestComponents = true, lift = liftStyle, averageProgress = averageProgress.value, flatColor = flatColor)
+                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = orderedMembers.map { opacities[it] }, splitRestComponents = true, lift = liftStyle)
                 members.forEach { member ->
                     val item = hovering.getOrNull(member) ?: return@forEach
                     val lift = lifts[member]
@@ -201,25 +199,21 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
 }
 
 /** One surface's retained blur/shadow resources; each active subset has its own recording. */
-internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope: kotlinx.coroutines.CoroutineScope, val flat: Boolean = false) {
-    private val opticalLayer = if (flat) null else graphics.createGraphicsLayer().also { GlassWork.event("layer") }
-    private val averageLayer = if (flat) null else graphics.createGraphicsLayer().also { GlassWork.event("layer") }
+internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope: kotlinx.coroutines.CoroutineScope) {
+    private val opticalLayer = graphics.createGraphicsLayer().also { GlassWork.event("layer") }
     val output get() = requireNotNull(opticalLayer)
-    val flatOutput get() = requireNotNull(averageLayer)
-    val average = if (!flat && Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null
     private val lifetime=kotlinx.coroutines.Job(scope.coroutineContext[kotlinx.coroutines.Job])
     val shadow=RetainedGlassShadow(kotlinx.coroutines.CoroutineScope(scope.coroutineContext+lifetime))
     /** Root adapter for callers outside the D04 allowance (HoverDrag): the same retained renderer call. */
     fun androidx.compose.ui.graphics.drawscope.DrawScope.drawShadow(bodies: List<Pair<androidx.compose.ui.geometry.RoundRect,Float>>,strength: Float,spread: Float,color: androidx.compose.ui.graphics.Color)=with(shadow) { draw(bodies,strength,spread,color=color) }
-    fun release() { lifetime.cancel();opticalLayer?.let(graphics::releaseGraphicsLayer);averageLayer?.let(graphics::releaseGraphicsLayer) }
+    fun release() { lifetime.cancel();opticalLayer?.let(graphics::releaseGraphicsLayer) }
 }
 
 internal class HoverGroupRenderer(private val graphics: GraphicsContext,private val scope: kotlinx.coroutines.CoroutineScope) {
     val outlines=SelectionOpacityPathCache()
     private val surfaces=mutableMapOf<List<Int>,HoverSurfaceRenderer>()
-    fun surface(members: List<Int>, flat: Boolean = false): HoverSurfaceRenderer {
-        surfaces[members]?.takeIf { it.flat != flat }?.let { it.release(); surfaces.remove(members) }
-        return surfaces.getOrPut(members) { HoverSurfaceRenderer(graphics,scope,flat) }
+    fun surface(members: List<Int>): HoverSurfaceRenderer {
+        return surfaces.getOrPut(members) { HoverSurfaceRenderer(graphics,scope) }
     }
     fun retain(members: Set<List<Int>>) {
         val unused=surfaces.keys.filter { it !in members }
@@ -233,7 +227,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     backing: FrostedBackdrop?, location: BackdropLocation, blurEffects: Boolean,
     density: androidx.compose.ui.unit.Density, direction: LayoutDirection, gap: Float,
     sampleOffset: Offset = Offset.Zero, shadow: Boolean = true, opacity: Float = 1f,
-    itemOpacity: List<Float>? = null, splitRestComponents: Boolean = false, lift: LiftShadow, averageProgress: Float = 0f, flatColor: Color? = null) {
+    itemOpacity: List<Float>? = null, splitRestComponents: Boolean = false, lift: LiftShadow) {
     if(parts.isEmpty()) { group.release();return }
     val progress=parts.maxOf { it.progress }*opacity.coerceIn(0f,1f)
     if(progress<=0f) { group.release();return }
@@ -246,8 +240,8 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     group.retain(layers.flatMap { layer -> layer.groups.map { it.members } }.toSet())
     if(layers.isEmpty())return
     fun DrawScope.paint(layer: SelectionOutlineLayer) {
-        for(outline in layer.groups) drawHoverSurface(group.surface(outline.members, flatColor != null),outline.members.map { parts[it] },
-            outline,progress,backing,location,blurEffects,density,direction,sampleOffset,shadow,lift,averageProgress,flatColor)
+        for(outline in layer.groups) drawHoverSurface(group.surface(outline.members),outline.members.map { parts[it] },
+            outline,progress,backing,location,blurEffects,density,direction,sampleOffset,shadow,lift)
     }
     if(layers.size==1 && layers[0].weight==1f) { paint(layers[0]);return }
     val padding=if(shadow)glassShadowInset(lift.spread).toPx()+2f else gap/2f
@@ -266,13 +260,12 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
 private fun DrawScope.drawHoverSurface(surface: HoverSurfaceRenderer,parts: List<HoverGeometry>,
     outline: SelectionOutlineGroup,progress: Float,backing: FrostedBackdrop?,location: BackdropLocation,
     blurEffects: Boolean,density: androidx.compose.ui.unit.Density,direction: LayoutDirection,
-    sampleOffset: Offset,shadow: Boolean,lift: LiftShadow,averageProgress: Float,flatColor: Color?) {
+    sampleOffset: Offset,shadow: Boolean,lift: LiftShadow) {
     val path=outline.path
     val rest=parts.map { SelectionRegion(it.rest.bounds,it.rest.corner) }
     if(shadow)with(surface.shadow) {
         draw(outline.localPath,outline.origin,lift.strength*progress,lift.spread,color=lift.color)
     }
-    if (flatColor != null) { drawPath(path, flatColor, alpha = progress); return }
     val source = backing?.takeIf { it.recorded && !it.layer.isReleased } ?: return
     if (blurEffects) location.observeRecordingAcrossWindows(source)
     val registration = source.location.registrationTo(location) ?: return
@@ -285,9 +278,7 @@ private fun DrawScope.drawHoverSurface(surface: HoverSurfaceRenderer,parts: List
     }) { withBackdropRegistration(registration, draw) }
     val blur = HoverLift.Blur.toPx() * progress
     clipPath(path) {
-        val blending = averageProgress > 0f && averageProgress < 1f
-        if (blending) drawContext.canvas.saveLayer(path.getBounds(), Paint())
-        if (blurEffects && averageProgress < 1f && blur > .5f) {
+        if (blurEffects && blur > .5f) {
             // Blur a crop larger than the outline, then clip: edges sample real backdrop.
             val crop = path.getBounds().inflate(blur * 2f).intersect(Rect(Offset.Zero, size))
             if (!crop.isEmpty) {
@@ -296,32 +287,16 @@ private fun DrawScope.drawHoverSurface(surface: HoverSurfaceRenderer,parts: List
                 output.record(density, direction, IntSize(ceil(crop.width).toInt(), ceil(crop.height).toInt())) {
                     translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }
                 }
-                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress * (1f - averageProgress) }) }
+                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress }) }
             }
         } else if (!blurEffects) {
             val average = source.averageColor(location, path.getBounds())
             if (average != null) drawPath(path, average, alpha = progress)
-        } else if (averageProgress < 1f) {
-            drawContext.canvas.saveLayer(path.getBounds(), Paint().apply { alpha = progress * (1f - averageProgress) })
+        } else {
+            drawContext.canvas.saveLayer(path.getBounds(), Paint().apply { alpha = progress })
             magnified { drawLayer(source.layer) }
             drawContext.canvas.restore()
         }
-        if (blurEffects && averageProgress > 0f && Build.VERSION.SDK_INT >= 33) {
-            val crop = path.getBounds()
-            val output = surface.flatOutput
-            output.renderEffect = surface.average?.effect()
-            output.record(density, direction, IntSize(8, 8)) {
-                scale(8f / crop.width, 8f / crop.height, Offset.Zero) {
-                    translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }
-                }
-            }
-            output.alpha = progress * averageProgress
-            output.blendMode = if (blending) BlendMode.Plus else BlendMode.SrcOver
-            translate(crop.left, crop.top) {
-                scale(crop.width / 8f, crop.height / 8f, Offset.Zero) { drawLayer(output) }
-            }
-        }
-        if (blending) drawContext.canvas.restore()
     }
 }
 

@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
@@ -101,10 +102,11 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
     }
     val total = widths.values.fold(0.dp) { sum, width -> sum + width } + 8.dp * (items.size - 1).coerceAtLeast(0)
     val shadowInset = glassLayoutInset()
+    val drawing = rememberActionStripDrawing()
     Box(modifier.fillMaxWidth().padding(vertical = ListPillVerticalInset).nestedScroll(HorizontalGestureOwner)
-        .shadowViewportOutset(shadowInset).controlHorizontalScroll(scroll)
+        .then(drawing.replay(shadowInset, horizontal = false)).clipToBounds()) {
+    GlassShadowScope(Modifier.fillMaxWidth().stripContentOutset().then(drawing.record()).controlHorizontalScroll(scroll)
         .padding(vertical = shadowInset).padding(horizontal = horizontalInset).width(total).height(listPillTargetHeight())) {
-        GlassShadowScope(Modifier.fillMaxSize()) {
         items.forEach { item -> key(item) {
             val selection by animateControlStateFloat(if (item in selected) .07f else 0f, item in selected, "Library filter selection", reducedMotion)
             val anchor = rememberGlassAnchor()
@@ -123,6 +125,6 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
                 overlay(item, anchor)
             }
         } }
-        }
+    }
     }
 }

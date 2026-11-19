@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassShadowStrength
+import io.github.anastaci1a.localica.ui.spec.GlassShadowSpread
+
 import io.github.anastaci1a.localica.ui.spec.glassShadowInset
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 import io.github.anastaci1a.localica.ui.components.PopupSharedContent
@@ -520,9 +523,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val receiverField = remember { GlassShadowReceiverField() }
     val shadowReceiver = remember { arrayOfNulls<GlassShadowReceiver>(1) }
     val shadowExclusion = remember { arrayOfNulls<GlassShadowExclusion>(1) }
-    val shadowSpread = LocalGlassAppearance.current.shadowSpread
+    val shadowSpread = GlassShadowSpread
     val wellCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
-    val wellStrength = LocalGlassAppearance.current.shadowStrength
+    val wellStrength = GlassShadowStrength
     val speed = LocalMotionSpeed.current
     val progress = popupFlight.progress
     val continuousOrigin = originPreparation.takeUnless { placement == GlassPlacement.Search }
@@ -700,12 +703,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     if (popupHome?.mounted == false) SideEffect { popupFlight.advance(gen, PopupEvent.Gone) }
     val basis = popupFlight.basis
     if (!popupFlight.present || popupHome?.mounted == false || basis == null) return
-    // Flat None retires the optical descriptor without retiring this window.
-    // Rebind in this composition, before drawing, rather than restarting its
-    // flight or waiting for an effect to publish a replacement source.
-    val flat = flatGlass()
-    fun retired(backdrop: FrostedBackdrop?) = backdrop != null &&
-        (backdrop.hasGlassLayer == flat || backdrop.isRetired)
+    fun retired(backdrop: FrostedBackdrop?) = backdrop?.isRetired == true
     val currentSource = basis.source?.takeUnless(::retired)
         ?: ambientSource?.takeUnless(::retired)
         ?: anchor.source?.takeUnless(::retired)
@@ -717,7 +715,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     // Ordinary popup input must not continuously capture the full-screen
     // backdrop: that readback can starve drag cleanup and fresh fling admission.
     BackdropLease(departingSource)
-    val homeSampleReady = flatGlass() || (departingSource?.recorded == true &&
+    val homeSampleReady = (departingSource?.recorded == true &&
         (android.os.Build.VERSION.SDK_INT >= 33 || departingSource.fallback != null))
     val samplingSource = departingSource.takeIf { homeSampleReady } ?: currentSource
     val homeSource = if (retired(anchor.source)) currentSource else anchor.source
@@ -907,7 +905,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val dark = panelDark
                 // Parent pixels invalidate the recording; they must not cancel its in-flight
                 // thumbnail readback. Restart only when the sampling owner changes.
-                val material = rememberFrostedBackdrop(listOf(samplingSource, visible, LocalGlassAppearance.current), dark = dark)
+                val material = rememberFrostedBackdrop(listOf(samplingSource, visible), dark = dark)
                 SideEffect { material.parent = samplingSource; material.materialOnly = true }
                 // This recording is sampled only by a later nested modal. Its
                 // material already has a shared raster; don't allocate and redraw

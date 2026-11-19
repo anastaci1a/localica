@@ -33,8 +33,7 @@ class ScopedSearchOpticsTest {
     fun searchLensRedrawsWhenItsListBackdropArrivesLater() {
         var loaded by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = .4f,
-                contrast = 0f, shadowStrength = 0f)) {
+
                 val source = rememberFrostedBackdrop(Unit, enabled = false)
                 Box(Modifier.size(320.dp, 100.dp)) {
                     if (loaded) Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Red) }
@@ -42,7 +41,7 @@ class ScopedSearchOpticsTest {
                         ListSearchPill("Delayed list", {}, Modifier.padding(12.dp).testTag("delayed-pill"))
                     }
                 }
-            }
+
         } }
         compose.waitForIdle()
         compose.runOnIdle { loaded = true }
@@ -75,11 +74,9 @@ class ScopedSearchOpticsTest {
         val listening = ListeningQueue(name = "Optics", entries = tracks.map { QueueEntry(track = it) })
         val route = BrowseRoute(if (queue) MainTab.Queues else MainTab.Playlists,
             MediaRef(if (queue) MediaKind.Queue else MediaKind.Playlist, if (queue) listening.id else playlist.id), "Optics")
-        var depth by mutableFloatStateOf(.6f)
         var lens by mutableStateOf(true)
         compose.setContent { CompositionLocalProvider(LocalGlassVisible provides lens) { EngineTheme(reduced = true) {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(depth = depth, blur = 0f,
-                whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+
                 val backing = rememberFrostedBackdrop(Unit)
                 Box(Modifier.size(320.dp, 500.dp)) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backing)) {
@@ -95,7 +92,7 @@ class ScopedSearchOpticsTest {
                             reducedMotion = true)
                     }
                 }
-            }
+
         } } }
         val pill = compose.onNodeWithTag("list-search-pill")
         compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().isNotEmpty() }
@@ -116,7 +113,7 @@ class ScopedSearchOpticsTest {
         }
         // Depth shapes only the highlight. Hiding the lens shows the same scene unrefracted, and with no tint,
         // contrast or blur only the refraction lookups separate the two captures.
-        compose.runOnIdle { if (android.os.Build.VERSION.SDK_INT >= 33) lens = false else depth = 2f }
+        compose.runOnIdle { if (android.os.Build.VERSION.SDK_INT >= 33) lens = false }
         compose.mainClock.advanceTimeBy(1200)
         val image = pill.captureToImage()
         val after = image.toPixelMap()
@@ -129,6 +126,6 @@ class ScopedSearchOpticsTest {
             if (kotlin.math.abs(before[x, y].red - after[x, y].red) > .15f) changed++
         if (android.os.Build.VERSION.SDK_INT >= 33)
             assertTrue("Scoped search needs spatial refraction, changed=$changed", changed > before.width * before.height / 20)
-        else org.junit.Assert.assertEquals("None ignores optical depth", 0, changed)
+        else org.junit.Assert.assertEquals("The average fallback stays stable", 0, changed)
     }
 }

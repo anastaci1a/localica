@@ -39,13 +39,10 @@ class FilterBackdropTest {
         val art = BrowseArtworkScope().apply {
             tracks.forEach { hold(it.id, listOf(it.uri), ArtworkCache.CachedArtwork(bitmap, 2048)) }
         }
-        var depth by mutableFloatStateOf(.7f)
         var lens by mutableStateOf(true)
         try {
             compose.setContent { CompositionLocalProvider(LocalGlassVisible provides lens) { EngineTheme(reduced = true) {
-                CompositionLocalProvider(LocalBrowseArtwork provides art,
-                    LocalGlassAppearance provides GlassAppearance(depth = depth, blur = 0f, whiteTint = 0f,
-                        contrast = 0f, shadowStrength = 0f)) {
+                CompositionLocalProvider(LocalBrowseArtwork provides art) {
                     Box(Modifier.size(320.dp, 500.dp)) {
                         BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
                             PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false, reducedMotion = true)
@@ -58,7 +55,6 @@ class FilterBackdropTest {
             if (search) pressSystemBack()
             compose.mainClock.advanceTimeBy(1200)
             // Exercise a ready lens independently of the separate first-recording race.
-            compose.runOnIdle { depth = .6f }
             val filter = compose.onNodeWithTag("filter-Songs")
             val capture = filter.captureToImage()
             val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -73,7 +69,7 @@ class FilterBackdropTest {
             assertTrue("The lens must include the white fade, not reveal raw red/blue art: ${green / samples}", green / samples > .3f)
             // Depth shapes only the highlight. Hiding the lens shows the same scene unrefracted, and with no tint,
             // contrast or blur only the refraction lookups separate the two captures.
-            compose.runOnIdle { if (android.os.Build.VERSION.SDK_INT >= 33) lens = false else depth = 2f }
+            compose.runOnIdle { if (android.os.Build.VERSION.SDK_INT >= 33) lens = false }
             compose.mainClock.advanceTimeBy(1200)
             val after = filter.captureToImage().toPixelMap()
             var refracted = 0
@@ -85,7 +81,7 @@ class FilterBackdropTest {
             if (android.os.Build.VERSION.SDK_INT >= 33) {
                 assertTrue("Filter optics must move colored source pixels, changed=$refracted", refracted > 30)
             } else {
-                org.junit.Assert.assertEquals("None does not move pixels when refraction depth changes", 0, refracted)
+                org.junit.Assert.assertEquals("The average fallback stays stable", 0, refracted)
             }
         } finally { prefs.write(route, previous, false) }
     }

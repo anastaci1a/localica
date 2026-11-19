@@ -31,8 +31,7 @@ class PlayerLyricsMaterialEaseTest {
     @get:Rule val compose = createComposeRule()
     private val owner = PlayerBackgroundPolarityState()
     private var lyrics by mutableStateOf(false)
-    private var settings by mutableStateOf(InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground,
-        glass = GlassAppearance(contrast = .3f)))
+    private var settings by mutableStateOf(InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground))
     @Volatile private var inkComposition: PlayerInkComposition? = null
     private var reference: LyricsPhaseReference? = null
     private var pendingTarget: Float? = null

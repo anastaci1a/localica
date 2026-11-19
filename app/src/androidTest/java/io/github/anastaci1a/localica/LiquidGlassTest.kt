@@ -61,8 +61,7 @@ class LiquidGlassTest {
         var strength by mutableFloatStateOf(0f)
         var whiteTint by mutableFloatStateOf(0f)
         var dark by mutableStateOf(false)
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
-            io.github.anastaci1a.localica.navigation.GlassAppearance(blur = 0f, whiteTint = whiteTint, contrast = strength, shadowStrength = 0f)) {
+        compose.setContent { LocalicaTheme {
             Box(Modifier.fillMaxSize()) {
                 val source = rememberFrostedBackdrop(Unit, dark = dark)
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -71,7 +70,7 @@ class LiquidGlassTest {
                 LiquidGlassSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(80.dp).testTag("ramp"), source,
                     refraction = 0f, inkOverride = if (dark) Color.White else Color.Black)
             }
-        } } }
+         } }
         for (polarity in listOf(false, true)) for (tint in listOf(0f, .2f, .6f, 1f)) for (contrast in listOf(0f, .4f, 1f)) {
             compose.runOnIdle { dark = polarity; whiteTint = tint; strength = contrast }
             val pixels = compose.onNodeWithTag("ramp").captureToImage().toPixelMap()
@@ -84,8 +83,7 @@ class LiquidGlassTest {
     @Test fun tintLiftsShadowsMoreThanHighlightsWithoutBleachingYellow() {
         org.junit.Assume.assumeTrue("Per-pixel tone mapping requires runtime shaders", Build.VERSION.SDK_INT >= 33)
         var tint by mutableFloatStateOf(0f)
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
-            io.github.anastaci1a.localica.navigation.GlassAppearance(blur = 0f, whiteTint = tint, contrast = 0f, shadowStrength = 0f)) {
+        compose.setContent { LocalicaTheme {
             Box(Modifier.fillMaxSize()) {
                 val source = rememberFrostedBackdrop(Unit)
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -94,7 +92,7 @@ class LiquidGlassTest {
                 }
                 LiquidGlassSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(96.dp).testTag("tonal-lens"), source, refraction = 0f)
             }
-        } } }
+         } }
         fun colors() = compose.onNodeWithTag("tonal-lens").captureToImage().toPixelMap().let { pixels ->
             (0..3).map { pixels[(pixels.width * (it + .5f) / 4).toInt(), pixels.height / 2] }
         }
@@ -215,7 +213,7 @@ class LiquidGlassTest {
 
 @Composable
 internal fun ClearGlassTheme(content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalGlassAppearance provides io.github.anastaci1a.localica.navigation.GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f)) {
+
         LocalicaTheme(content = content)
-    }
+
 }

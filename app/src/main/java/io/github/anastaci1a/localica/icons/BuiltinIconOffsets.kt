@@ -63,7 +63,6 @@ internal object BuiltinIconOffsets {
         "settings.interface" to 0.0f,
         "settings.appearance" to -0.70955944f,
         "settings.icon_packs" to 0.0f,
-        "settings.glass" to -0.66645193f,
         "settings.navigation" to 0.0f,
         "settings.player" to 0.085879326f,
         "settings.motion" to 0.0f,
