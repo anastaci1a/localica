@@ -95,15 +95,16 @@ class SeekCancelGlassTest {
         compose.runOnIdle { chosenScene = false }; compose.waitForIdle()
         awaitSource(artRecording)
         val artOnly = sample()
+        val fillGain = io.github.anastaci1a.localica.ui.glassFillChannel(0, 1f, 1f, 1f) - io.github.anastaci1a.localica.ui.glassFillChannel(0, 0f, 0f, 0f)
         compose.runOnIdle { chosenScene = true }; compose.waitForIdle()
         compose.runOnIdle { assertSame("A fully open player refracts its scene", sceneRecording, selected) }
         awaitSource(sceneRecording)
         val withUi = sample()
         if (optical) {
-            assertTrue("The UI behind the X is refracted: scene=$withUi artwork-only=$artOnly", withUi.first > artOnly.first + .03f * .3179475f)
+            assertTrue("The UI behind the X is refracted: scene=$withUi artwork-only=$artOnly", withUi.first > artOnly.first + .03f * fillGain)
         } else {
             assertTrue("$mode has no stripe detail on this API: $withUi", withUi.first < .04f)
-            assertTrue("The averaged scene replaces the darker artwork: scene=$withUi artwork=$artOnly", withUi.second > artOnly.second + .1f)
+            assertTrue("The averaged scene replaces the darker artwork: scene=$withUi artwork=$artOnly", withUi.second > artOnly.second + .1f * fillGain)
         }
         compose.runOnIdle { progress = .5f }; compose.waitForIdle()
         compose.runOnIdle { assertSame("Before the scene is recorded the artwork recording is used", artRecording, selected) }

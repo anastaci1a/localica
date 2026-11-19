@@ -42,7 +42,7 @@ class SelectorReboundRecordingTest {
             view = LocalView.current
             val backing = rememberFrostedBackdrop(Unit)
             source = backing
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style,
+            CompositionLocalProvider(LocalGlassAppearance provides if (style == TabLensStyle.Adjustable) GlassAppearance() else GlassAppearance(tabStyle = style,
                 overlayForeground = foreground, overlayDarkening = 0f, tabBlur = 0f, tabWhiteTint = 0f,
                 blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f, touchLight = 0f, shapeDamping = 8f)) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -74,13 +74,13 @@ class SelectorReboundRecordingTest {
         try {
             host.performTouchInput { down(Offset(width / 6f, centerY)); held = true; moveBy(Offset(-150f, 0f), 100) }
             compose.mainClock.advanceTimeBy(400)
-            landmark(bounds())
+            landmark(bounds(), style)
             host.performTouchInput { up(); held = false }
             val frames = mutableListOf<Rect>()
             repeat(24) {
                 compose.mainClock.advanceTimeBy(32)
                 frames += bounds()
-                landmark(frames.last())
+                landmark(frames.last(), style)
                 assertEquals("Recording clearance never changes resting input bounds", hostRest, host.getUnclippedBoundsInRoot())
             }
             assertTrue("Circular navbar lens must have visible width rebound", frames.maxOf { it.width } - frames.minOf { it.width } > 1f)
@@ -93,7 +93,7 @@ class SelectorReboundRecordingTest {
             val final = bounds()
             assertEquals(rest.width, final.width, 1f)
             assertEquals(rest.height, final.height, 1f)
-            landmark(final)
+            landmark(final, style)
         } finally {
             try {
                 if (held) host.performTouchInput { cancel() }
@@ -103,7 +103,7 @@ class SelectorReboundRecordingTest {
         }
     }
 
-    private fun landmark(lens: Rect) {
+    private fun landmark(lens: Rect, style: TabLensStyle) {
         compose.runOnIdle { stage = (stage + 1) % 32 }
         val scene = compose.onNodeWithTag("rebound-scene")
         val origin = scene.fetchSemanticsNode().boundsInRoot.topLeft
@@ -115,7 +115,7 @@ class SelectorReboundRecordingTest {
             val colors = (y - 1..y + 1).map { pixels[x, it] }
             if (Build.VERSION.SDK_INT >= 33) {
                 assertTrue("Padded navbar sampling lost its center landmark at $lens fraction=$fraction: $colors",
-                    colors.any { it.red > .6f && it.blue < .4f })
+                    colors.any { it.red > .6f && it.blue < if (style == TabLensStyle.Adjustable) glassFillChannel(2, 1f, 0f, 0f) + .4f * (glassFillChannel(2, 0f, 0f, 1f) - glassFillChannel(2, 0f, 0f, 0f)) else .4f })
             } else {
                 assertTrue("The light face of the blue backing: $colors",
                     colors.all { it.blue > .99f && it.green < .95f && it.red < it.blue })
