@@ -948,9 +948,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 // The body morphs from the very record its source surface draws; a geometry-only or quiet source is zero at home.
                 val sourceMaterial = anchor.material.takeUnless { anchor.quiet || detached }
                 val quietOptics = anchor.quiet || sourceMaterial == null && !detached
-                fun bodyMaterial() = GlassSurfacePresentation(1f, 1f, popupLightMix, Color.Transparent, anchor.depthScale).let { target ->
-                    sourceMaterial?.value?.towards(target, motion.expansion.boundedProgress(motion.geometryCurve))
-                        ?: target.copy(frost = phase(), refraction = if (quietOptics) motion.quietStrength.at(phase()) else 1f)
+                fun bodyMaterial(): GlassSurfacePresentation {
+                    val target = GlassSurfacePresentation(1f, 1f, popupLightMix, Color.Transparent, anchor.depthScale)
+                    val source = sourceMaterial?.value ?: return target.copy(frost = phase(), refraction = if (quietOptics) motion.quietStrength.at(phase()) else 1f)
+                    return source.towards(target, motion.expansion.boundedProgress(motion.geometryCurve))
                 }
                 val foregroundTargetHeight = if (viewportSized) viewportTargetHeight else targetHeight
                 SideEffect { if (hasViewport) anchor.contact.vertical = kotlin.math.abs(foregroundTargetHeight - startHeight()) > kotlin.math.abs(targetWidth - startWidth()) }
