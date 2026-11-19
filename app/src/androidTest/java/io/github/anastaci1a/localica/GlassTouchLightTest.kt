@@ -238,14 +238,14 @@ class GlassTouchLightTest {
     }
 
     @Test fun nestedSurfaceUsesTheAppliedLiftDriftAndAnchorTransform() {
-        val direct = GlassContact().apply { active = false; point = Offset(.25f, .75f) }
+        val direct = GlassContact().apply { active = false; point = Offset(.1f, .9f) }
         val anchor = GlassAnchor().apply { contact.active = false; contact.point = direct.point }
         val reference = GlassContact().apply { active = false }
         var anchored by mutableStateOf(false)
         var manual by mutableStateOf(false)
         var wrong by mutableStateOf(false)
         var shape by mutableStateOf(GlassShape(strain = .08f, depth = -.16f, lift = .12f))
-        var light by mutableStateOf(GlassGlow(big = .25f, little = .9f, point = Offset(.65f, .35f)))
+        var light by mutableStateOf(GlassGlow(big = .25f, little = .9f, point = Offset(.2f, .8f)))
         compose.mainClock.autoAdvance = false
         compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f)) {
@@ -293,7 +293,11 @@ class GlassTouchLightTest {
                 val error = difference(actual, expected)
                 android.util.Log.i("Localica642", "nested-transform anchored=$fixed phase=$phase max=$error")
                 assertTrue("independent nested affine reference anchored=$fixed phase=$phase error=$error", error <= 2)
-                if (!fixed && phase == 0) assertTrue("the witness rejects missing lift and raw drift", difference(actual, capture(true, true)) > 2)
+                if (!fixed && phase == 0) {
+                    val incorrect = difference(actual, capture(true, true))
+                    android.util.Log.i("Localica642", "nested-transform negative max=$incorrect")
+                    assertTrue("the witness rejects missing lift and raw drift", incorrect > 2)
+                }
                 if (fixed && phase == 0) {
                     compose.runOnIdle { shape = shape.copy(lift = 0f) }
                     assertArrayEquals("anchors ignore nonzero lift and stale raw contact", actual, capture(false))
