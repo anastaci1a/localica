@@ -38,4 +38,21 @@ class FluidPopupComponentsTest {
         assertEquals(0.125.toRawBits(), fluidStoredDelay(0.1, 1.25, false).toRawBits())
         assertEquals(0.0.toRawBits(), fluidStoredDelay(0.1, 0.0, false).toRawBits())
     }
+
+    @Test fun convertsSuppliedSpringSettingsWithUnitMass() {
+        assertEquals(0.75.toRawBits(), FluidMainEjectDefaults.dampingRatio.toRawBits())
+        assertEquals(0.5.toRawBits(), FluidMainEjectDefaults.response.toRawBits())
+        val cases = listOf(
+            FluidMainEjectDefaults to doubleArrayOf(1.0, 157.91367041742973, 18.84955592153876),
+            FluidPopupSpringSettings(0.8, 0.7) to doubleArrayOf(1.0, 80.56819919256618, 14.361566416410483),
+            FluidPopupSpringSettings(1.0, 0.3) to doubleArrayOf(1.0, 438.6490844928604, 41.88790204786391),
+            FluidPopupSpringSettings(0.4, 0.22847946571562133) to doubleArrayOf(1.0, 756.2499999999998, 22.0),
+            FluidPopupSpringSettings(0.75, 0.35) to doubleArrayOf(1.0, 322.27279677026473, 26.927937030769655),
+        )
+        for ((spring, expected) in cases) {
+            assertEquals(expected[0].toRawBits(), spring.mass.toRawBits())
+            assertEquals(expected[1].toRawBits(), spring.stiffness.toRawBits())
+            assertEquals(expected[2].toRawBits(), spring.damping.toRawBits())
+        }
+    }
 }

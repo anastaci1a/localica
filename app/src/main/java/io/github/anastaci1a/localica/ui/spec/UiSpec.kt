@@ -71,6 +71,13 @@ internal fun fluidIntermediateY(sourceY: Double, targetY: Double, ratio: Double,
     sourceY + (ratio * (targetY - sourceY)).coerceIn(-cap, cap)
 internal fun fluidStoredDelay(storedDelay: Double, speed: Double, amplify: Boolean) =
     storedDelay * speed * (if (amplify) 10.0 else 1.0)
+internal class FluidPopupSpringSettings(val dampingRatio: Double, val response: Double) {
+    val mass get() = 1.0
+    val omega = 2 * PI / response
+    val stiffness = omega * omega
+    val damping = 2 * dampingRatio * omega
+}
+internal val FluidMainEjectDefaults = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
 /** #860: the slowest and fastest animation speed. Every engine duration divides by the speed and every spring omega multiplies by it. */
 const val MinimumAnimationSpeed = .5f
 const val MaximumAnimationSpeed = 1.5f
