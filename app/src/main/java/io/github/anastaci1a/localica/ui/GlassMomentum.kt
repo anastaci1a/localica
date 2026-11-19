@@ -4,7 +4,6 @@ import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import io.github.anastaci1a.localica.ui.spec.FlexPress
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Size
 import kotlin.math.*
 
@@ -64,7 +63,7 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
         set(value) { field = value?.copy(lift = FlexPress.None) }
     var spec = FlexSpec.Small
     /** Body size in dp and the touch-down point that contact translation is measured from. */
-    var extent by mutableStateOf(Size.Zero)
+    var extent = Size.Zero
     var origin = Offset(.5f, .5f)
     private class Spring {
         var value = 0f
@@ -177,7 +176,7 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
     private var stiffness = (2 * PI / (bodyOverride ?: spec).response).pow(2)
     private var resistance = (2 * sqrt(stiffness) * (bodyOverride ?: spec).damping).toFloat()
     val strain get() = .12f * tanh(motion.value / .12f) + pressure.value
-    private fun shape(strain: Float, depth: Float, lift: Float, drift: Offset) = GlassShape(strain, .24f * tanh(depth / .24f), bodyOverride?.scaleGain?.let { 1f + it * depth }, extent.maxDimension.let { if (it > 0f) lift * liftSpec.points / it else 0f }, drift)
+    private fun shape(strain: Float, depth: Float, lift: Float, drift: Offset) = GlassShape(strain, .24f * tanh(depth / .24f), bodyOverride?.scaleGain?.let { 1f + it * depth }, extent.maxDimension.let { if (it > 0f) lift * (bodyOverride ?: spec).lift.points / it else 0f }, drift)
     val shape get() = shape(strain, depth.value, lift.value, Offset(drift[0].value, drift[1].value))
     private val depthSettled get() = bodyOverride?.scaleGain?.let {
         (it.toDouble() * (depth.target.toDouble() - depth.value)).pow(2) + (it.toDouble() * depth.velocity * resistance / stiffness).pow(2) <= 1e-6

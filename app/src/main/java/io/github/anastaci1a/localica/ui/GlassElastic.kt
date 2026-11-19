@@ -50,7 +50,7 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
     LaunchedEffect(state, reduced, speed) {
         val body = state.momentum
         var runner: Job? = null
-        snapshotFlow { listOf(input(), force(), touch(), damping, ownsClock(), if (touch() > 0f || strength > 0f) glowPoint?.invoke() else null, verticalAxis(), strength, if (strength > 0f) distance() else 0f, begin(), illuminate(), body.extent) }.collect {
+        snapshotFlow { listOf(input(), force(), touch(), damping, ownsClock(), if (touch() > 0f || strength > 0f) glowPoint?.invoke() else null, verticalAxis(), strength, if (strength > 0f) distance() else 0f, begin(), illuminate()) }.collect {
             if (!ownsClock()) { runner?.cancel(); runner = null; return@collect }
             if (reduced) { body.reset(); body.targetGlow(glowPoint?.invoke(), illuminate(), strength, snap = true, travel = distance(), generation = begin()); state.glow.value = body.glow; result.value = GlassShape(); state.previous = input(); return@collect }
             if (runner?.isActive != true) runner = launch {

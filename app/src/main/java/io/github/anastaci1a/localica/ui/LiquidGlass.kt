@@ -290,12 +290,13 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         minOf(surfaceSize.width, surfaceSize.height) / density.density)
     SideEffect {
         val momentum = contact.state.momentum
-        momentum.spec = flex; momentum.extent = Size(surfaceSize.width / density.density, surfaceSize.height / density.density)
+        val extent = Size(surfaceSize.width / density.density, surfaceSize.height / density.density)
+        val resized = momentum.extent != extent; momentum.spec = flex; momentum.extent = extent
         if (bodyOverride != null && anchor == null && sharedContact == null) {
             val longSide = maxOf(surfaceSize.width, surfaceSize.height) / density.density
             momentum.bodyOverride = bodyOverride.copy(scaleGain = if (longSide > 0f) -(16f / longSide) / .24f else null)
             contact.state.output.value = if (reduced) GlassShape() else momentum.shape
-        }
+        } else if (resized && anchor == null && !reduced) contact.state.output.value = momentum.shape
         if (anchor != null) {
             anchor.depthScale = depthScale
             anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * density.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
