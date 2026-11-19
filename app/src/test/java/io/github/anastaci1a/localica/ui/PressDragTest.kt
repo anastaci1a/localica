@@ -77,6 +77,21 @@ class PressDragTest {
         assertEquals(0f, override.shape.lift, 0f)
     }
 
+    @Test fun fastDragMeasuresFromTheDownPointEvenWhenTheFirstSampleIsOutside() {
+        val reach = Offset(44f, 44f) / 2000f
+        val body = GlassMomentum().apply { extent = Size(44f, 44f); origin = Offset(.5f, .5f) }
+        body.advance(0f, 0.0, contact = 1f, point = Offset(1.5f, .5f))
+        body.advance(0f, 1.0 / 120, contact = 1f, point = Offset(1.6f, .5f))
+        val target = GlassMomentum::class.java.getDeclaredField("drift").apply { isAccessible = true }.get(body) as List<*>
+        val x = target[0]!!.let { s -> s.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(s) }
+        assertEquals(glassContactFlex(Offset(1.6f, .5f), Offset(.5f, .5f), reach).x, x, 0f)
+        assertTrue("pull keeps its direction", x > 0f)
+        body.origin = Offset(.2f, .5f)
+        body.advance(0f, 1.0 / 120, contact = 1f, point = Offset(.2f, .5f))
+        assertEquals("a new DOWN re-anchors without a sampled release", 0f,
+            target[0]!!.let { s -> s.javaClass.getDeclaredField("target").apply { isAccessible = true }.getFloat(s) }, 0f)
+    }
+
     @Test fun verticalBodiesStretchInScreenSpaceAndReleaseSettles() {
         val size = Size(44f, 44f); val to = Offset(.5f + 150f / 44, .2f)
         assertEquals(held(to).bodyTransform(size), held(to, vertical = true).bodyTransform(size, vertical = true))
