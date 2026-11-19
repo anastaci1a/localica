@@ -219,17 +219,19 @@ class FullPartitionTest(unittest.TestCase):
         methods = [('ScopedSearchOpticsTest', 'searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
                    ('FloatingImeLifecycleTest', 'actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
                    ('GlassReadabilityTest', 'entireGlassUsesTheBoundedCurveWithoutTintingItsForeground', 33),
-                   ('GlassBodyOpticsTest', 'normalAndSingleToneKernelPixelsMatchIndependentFrozenRendererAtMatchedInputs', 33),
+                   ('GlassBodyOpticsTest', 'kernelSamplesTheSharedRefractionLookups', 33),
+                   ('GlassBodyOpticsTest', 'kernelHighlightFollowsTheShapeNormal', 33),
                    ('GlassToneShaderParityTest', 'shaderMatchesKotlinAtSamplePoints', 33)]
-        for cls, method, minimum in methods:
+        for cls in dict.fromkeys(cls for cls, _, _ in methods):
             (folder/(cls+'.kt')).write_text('package io.github.anastaci1a.localica\nimport org.junit.Test\nclass '+cls+
-                ' { @Test @androidx.test.filters.SdkSuppress(minSdkVersion = '+str(minimum)+') fun '+method+'() {} }')
+                ' { '+''.join('@Test @androidx.test.filters.SdkSuppress(minSdkVersion = '+str(minimum)+') fun '+method+'() {} '
+                             for owner, method, minimum in methods if owner == cls)+'}')
         legacy = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
         modern = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
-        self.assertEqual(5, len(legacy['sdk_omissions']))
+        self.assertEqual(6, len(legacy['sdk_omissions']))
         self.assertEqual(4, len(legacy['expected']))
         self.assertEqual([], modern['sdk_omissions'])
-        self.assertEqual(9, len(modern['expected']))
+        self.assertEqual(10, len(modern['expected']))
         self.assertEqual({row['id'] for row in legacy['sdk_omissions']}, set(modern['expected'])-set(legacy['expected']))
         path = folder/'FloatingImeLifecycleTest.kt'
         original = path.read_text()
