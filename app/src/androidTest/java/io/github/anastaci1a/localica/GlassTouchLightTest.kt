@@ -91,8 +91,8 @@ class GlassTouchLightTest {
     @Test fun fluidSurfaceAndGlowShareOneTransformThroughHoldReleaseAndAnchor() {
         val image = ImageBitmap(1, 1)
         val raw = Offset(.8f, .2f); val tracked = Offset(.3f, .7f)
-        val body = GlassMomentum()
-        body.advance(0f, 0.0, contact = 1f, point = raw)
+        val body = GlassMomentum().apply { extent = Size(96f, 80f) }
+        body.advance(0f, 0.0, contact = 1f, point = Offset(.5f, .5f)); body.advance(0f, 0.0, contact = 1f, point = raw)
         val frames = mutableListOf<GlassShape>()
         for ((seconds, contact) in listOf(.05 to 1f, .3 to 1f, 0.0 to 0f, .05 to 0f, .2 to 0f, .5 to 0f)) {
             body.advance(0f, seconds, contact = contact, point = raw)
@@ -103,12 +103,12 @@ class GlassTouchLightTest {
         try {
             for (shape in frames) for (vertical in listOf(false, true)) for (anchored in listOf(false, true)) {
                 val extent = if (anchored) Size(300f, 240f) else Size(96f, 80f)
-                val applied = shape.bodyTransform(raw, extent, vertical, anchored)
+                val applied = shape.bodyTransform(extent, vertical, anchored)
                 if (anchored) {
                     assertEquals(0f, applied.drift.x, 0f); assertEquals(0f, applied.drift.y, 0f)
                     assertEquals(shape.scaleX(vertical), applied.scale.x, 0f)
                     assertEquals(shape.scaleY(vertical), applied.scale.y, 0f)
-                } else if (shape.lift > 0f) assertTrue("off-centre lift drifts", applied.drift.getDistance() > 0f)
+                } else if (shape.lift > 0f) assertTrue("translated contact drifts", applied.drift.getDistance() > 0f)
                 var draws = 0
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
                     val witness = object : DrawScope by this {
@@ -270,7 +270,7 @@ class GlassTouchLightTest {
         var anchored by mutableStateOf(false)
         var manual by mutableStateOf(false)
         var wrong by mutableStateOf(false)
-        var shape by mutableStateOf(GlassShape(strain = .08f, depth = -.16f, lift = .12f))
+        var shape by mutableStateOf(GlassShape(strain = .08f, depth = -.16f, lift = .12f, drift = Offset(-.05f, .05f)))
         var light by mutableStateOf(GlassGlow(big = .25f, little = .9f, point = Offset(.2f, .8f)))
         compose.mainClock.autoAdvance = false
         compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
@@ -278,8 +278,8 @@ class GlassTouchLightTest {
                 val lift = if (anchored) 1f else exp(shape.lift)
                 val ax = exp(shape.strain - shape.depth / 2) * lift
                 val ay = exp(-shape.strain - shape.depth / 2) * lift
-                val dx = (direct.point.x - .5f) * 160 * (lift - 1)
-                val dy = (direct.point.y - .5f) * 80 * (lift - 1)
+                val dx = if (anchored) 0f else shape.drift.x * 160
+                val dy = if (anchored) 0f else shape.drift.y * 80
                 val mapped = if (wrong) light else light.copy(point = Offset(.5f + (light.point.x - .5f - dx / 160) / ax, .5f + (light.point.y - .5f - dy / 80) / ay))
                 SideEffect { direct.state.glow.value = light; anchor.contact.state.glow.value = light; reference.state.glow.value = mapped }
                 Box(Modifier.size(256.dp, 192.dp).testTag("nested-light")) {
@@ -309,7 +309,7 @@ class GlassTouchLightTest {
             compose.runOnIdle { anchored = fixed }
             for ((phase, lift) in listOf(.12f, .035f, 0f).withIndex()) {
                 compose.runOnIdle {
-                    shape = shape.copy(lift = lift)
+                    shape = shape.copy(lift = lift, drift = Offset(-.05f, .05f) * (lift / .12f))
                     light = light.copy(little = if (phase == 0) .9f else if (phase == 1) .3f else 0f,
                         big = if (phase == 2) 0f else .25f, scale = if (phase == 0) 1f else 4f)
                 }
@@ -329,6 +329,62 @@ class GlassTouchLightTest {
                 }
             }
         }
+    }
+
+    @Test fun composedPressDragStretchesPastTheOldBoxOnBothTravelAxes() {
+        val contacts = listOf(GlassContact(), GlassContact().apply { vertical = true })
+        fun reach(c: GlassContact) = with(c.state.momentum) { Offset(extent.width, extent.height) / spec.distance }
+        compose.mainClock.autoAdvance = false
+        compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
+            Row(Modifier.size(480.dp, 120.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                contacts.forEachIndexed { i, contact ->
+                    LiquidGlassSurface(Modifier.size(44.dp).testTag("drag-$i"), source = null, cornerRadius = 22.dp, shadow = false, sharedContact = contact)
+                }
+            }
+        } } }
+        for (i in contacts.indices) {
+            compose.onNodeWithTag("drag-$i").performTouchInput { down(center); repeat(8) { moveBy(Offset(width.toFloat(), 0f)) } }
+            compose.mainClock.advanceTimeBy(1500)
+            compose.runOnIdle {
+                val shape = contacts[i].state.output.value
+                val applied = shape.bodyTransform(Size(44f, 44f), contacts[i].vertical)
+                assertTrue("pull drifts past the old box i=$i drift=${shape.drift}", shape.drift.x > .5f * (exp(.12f) - 1))
+                assertEquals(0f, shape.drift.y, 0f)
+                assertEquals("fast drag measures from DOWN i=$i", glassContactFlex(contacts[i].point, Offset(.5f, .5f), reach(contacts[i])).x, shape.drift.x, 1e-4f)
+                assertTrue("stretch follows the pull in screen space i=$i scale=${applied.scale}", applied.scale.x > applied.scale.y)
+            }
+            // A new DOWN between frames re-anchors at the down point, not at a later sampled point.
+            compose.onNodeWithTag("drag-$i").performTouchInput { up(); down(Offset(width * .25f, height / 2f)); repeat(3) { moveBy(Offset(-width.toFloat(), 0f)) } }
+            compose.mainClock.advanceTimeBy(1500)
+            compose.runOnIdle {
+                val expected = glassContactFlex(contacts[i].point, Offset(.25f, .5f), reach(contacts[i]))
+                assertEquals("re-press measures from its own DOWN i=$i", expected.x, contacts[i].state.output.value.drift.x, 1e-4f)
+            }
+            compose.onNodeWithTag("drag-$i").performTouchInput { up() }
+        }
+    }
+
+    @Test fun disabledLightRePressAtTheSamePointRetargetsFromItsOwnDown() {
+        val contact = GlassContact()
+        compose.mainClock.autoAdvance = false
+        compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(touchLight = 0f)) {
+                Box(Modifier.size(160.dp)) {
+                    LiquidGlassSurface(Modifier.size(44.dp).testTag("quiet"), source = null, cornerRadius = 22.dp, shadow = false, sharedContact = contact)
+                }
+            }
+        } } }
+        val node = compose.onNodeWithTag("quiet")
+        node.performTouchInput { down(center); moveBy(Offset(width * .3f, 0f)) }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.runOnIdle {
+            assertTrue("inside drag drifts", contact.state.output.value.drift.x > 0f)
+            assertTrue("held drag settles and stops its clock", contact.state.momentum.settled)
+        }
+        node.performTouchInput { up(); down(Offset(width * .8f, height / 2f)) }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.runOnIdle { assertEquals("re-press at the same point measures from its new DOWN", 0f, contact.state.output.value.drift.x, 1e-4f) }
+        node.performTouchInput { up() }
     }
 
     @Test fun nonScalingSurfaceObservesLightWithoutMovingItsForegroundOrTakingTheClick() {

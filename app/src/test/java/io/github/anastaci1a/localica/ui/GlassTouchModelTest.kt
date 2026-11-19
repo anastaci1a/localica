@@ -151,9 +151,9 @@ class GlassTouchModelTest {
     @Test fun inverseCentreCancelsTheSingleBodyMapAcrossDensities() {
         for (density in listOf(2f, 2.48125f, 3f)) for (raw in listOf(Offset(.1f, .8f), Offset(1.25f, -.25f))) {
             val bounds = Rect(7f * density, 11f * density, 103f * density, 91f * density)
-            val shape = GlassShape(.08f, -.2f)
+            val shape = GlassShape(.08f, -.2f, drift = glassContactFlex(raw, Offset(.5f, .5f), Offset(.05f, .05f)))
             val scale = Offset(shape.scaleX(), shape.scaleY())
-            val drift = glassContactDrift(raw, bounds.size, scale)
+            val drift = shape.bodyTransform(bounds.size).drift
             val tracked = Offset(.7f, .3f)
             val local = bounds.topLeft + GlassBodyTransform(scale, drift).localPoint(tracked, bounds.size)
             val expected = listOf(bounds.left.toDouble() + bounds.width.toDouble() * tracked.x,

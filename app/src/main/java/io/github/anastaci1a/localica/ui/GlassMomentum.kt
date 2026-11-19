@@ -8,7 +8,7 @@ import androidx.compose.ui.geometry.Size
 import kotlin.math.*
 
 /** Optical cap depth with an optional independently derived body scale. */
-internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f, val scale: Float? = null, val lift: Float = 0f) {
+internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f, val scale: Float? = null, val lift: Float = 0f, val drift: Offset = Offset.Zero) {
     fun scaleX(vertical: Boolean = false) = scale?.let { it * exp(if (vertical) -strain else strain) } ?: exp((if (vertical) -strain else strain) - depth / 2)
     fun scaleY(vertical: Boolean = false) = scale?.let { it * exp(if (vertical) strain else -strain) } ?: exp((if (vertical) strain else -strain) - depth / 2)
     fun liftScale(anchored: Boolean = false) = if (anchored) 1f else exp(lift)
@@ -18,15 +18,10 @@ internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f, va
 internal data class GlassGlow(val big: Float = 0f, val little: Float = 0f, val point: Offset = Offset.Zero,
     val scale: Float = 1f, val retiring: List<GlassGlow> = emptyList())
 
-internal fun glassFingerStrain(point: Offset): Float {
-    val x = 2 * point.x.coerceIn(0f, 1f) - 1; val y = 2 * point.y.coerceIn(0f, 1f) - 1
-    return .05f * (x * x - y * y)
-}
-
-internal fun glassContactDrift(point: Offset, size: Size, scale: Offset): Offset {
-    val lift = maxOf(0f, maxOf(scale.x, scale.y) - 1f)
-    return Offset((point.x.coerceIn(0f, 1f) - .5f) * size.width * lift,
-        (point.y.coerceIn(0f, 1f) - .5f) * size.height * lift)
+/** Signed per-axis strain from travel since touch-down; travel inside the body counts a quarter. */
+internal fun glassContactFlex(point: Offset, origin: Offset, reach: Offset): Offset {
+    fun axis(p: Float, o: Float, k: Float): Float { val t = p - o; val u = abs(p.coerceIn(0f, 1f) - o); return sign(t) * k * (u / 4 + abs(t) - u) }
+    return Offset(axis(point.x, origin.x, reach.x), axis(point.y, origin.y, reach.y))
 }
 
 internal data class GlassBodyTransform(val scale: Offset = Offset(1f, 1f), val drift: Offset = Offset.Zero) {
@@ -35,9 +30,10 @@ internal data class GlassBodyTransform(val scale: Offset = Offset(1f, 1f), val d
         size.height * (.5f + (point.y - .5f) / scale.y) - drift.y / scale.y)
 }
 
-internal fun GlassShape.bodyTransform(point: Offset, size: Size, vertical: Boolean = false, anchored: Boolean = false): GlassBodyTransform {
+internal fun GlassShape.bodyTransform(size: Size, vertical: Boolean = false, anchored: Boolean = false): GlassBodyTransform {
     val lift = liftScale(anchored)
-    return GlassBodyTransform(Offset(scaleX(vertical) * lift, scaleY(vertical) * lift), glassContactDrift(point, size, Offset(lift, lift)))
+    return GlassBodyTransform(Offset(scaleX(vertical) * lift, scaleY(vertical) * lift),
+        if (anchored) Offset.Zero else Offset(drift.x * size.width, drift.y * size.height))
 }
 
 /** Compensation for center-based scaling: the contacting edge stays on its wall. */
@@ -66,6 +62,9 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
     var bodyOverride = bodyOverride?.copy(lift = FlexPress.None)
         set(value) { field = value?.copy(lift = FlexPress.None) }
     var spec = FlexSpec.Small
+    /** Body size in dp and the touch-down point that contact translation is measured from. */
+    var extent = Size.Zero
+    var origin = Offset(.5f, .5f)
     private class Spring {
         var value = 0f
         var velocity = 0f
@@ -108,6 +107,7 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
     private val pressure = Spring()
     private val depth = Spring()
     private val lift = Spring()
+    private val drift = List(2) { Spring() }
     private var liftAge = FlexPress.Hang
     private var liftSpec = (this.bodyOverride ?: spec).lift
     private val liftResponse get() = if (lift.target != 0f) liftSpec.response else liftSpec.releaseResponse
@@ -176,26 +176,26 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
     private var stiffness = (2 * PI / (bodyOverride ?: spec).response).pow(2)
     private var resistance = (2 * sqrt(stiffness) * (bodyOverride ?: spec).damping).toFloat()
     val strain get() = .12f * tanh(motion.value / .12f) + pressure.value
-    private fun shape(strain: Float, depth: Float, lift: Float) = GlassShape(strain, .24f * tanh(depth / .24f), bodyOverride?.scaleGain?.let { 1f + it * depth }, lift * liftSpec.gain)
-    val shape get() = shape(strain, depth.value, lift.value)
+    private fun shape(strain: Float, depth: Float, lift: Float, drift: Offset) = GlassShape(strain, .24f * tanh(depth / .24f), bodyOverride?.scaleGain?.let { 1f + it * depth }, lift * liftSpec.gain, drift)
+    val shape get() = shape(strain, depth.value, lift.value, Offset(drift[0].value, drift[1].value))
     private val depthSettled get() = bodyOverride?.scaleGain?.let {
         (it.toDouble() * (depth.target.toDouble() - depth.value)).pow(2) + (it.toDouble() * depth.velocity * resistance / stiffness).pow(2) <= 1e-6
     } ?: depth.settled
     val scaleX get() = shape.scaleX()
     val scaleY get() = shape.scaleY()
     val glow get() = (locals.lastOrNull()?.output ?: GlassGlow()).copy(big = broad.value, retiring = locals.dropLast(1).map { it.output })
-    val settled get() = motion.settled && pressure.settled && depthSettled && broad.settled && locals.all { it.settled } && lift.settled && liftAge >= liftSpec.hang
+    val settled get() = motion.settled && pressure.settled && drift.all { it.settled } && depthSettled && broad.settled && locals.all { it.settled } && lift.settled && liftAge >= liftSpec.hang
 
     /** Each output finishes independently while the shared clock waits for all channels. */
     fun finishSettlement(): Boolean {
-        if (motion.settled && pressure.settled && depthSettled) { motion.finish(); pressure.finish(); depth.finish() }
+        if (motion.settled && pressure.settled && drift.all { it.settled } && depthSettled) { motion.finish(); pressure.finish(); depth.finish(); drift.forEach { it.finish() } }
         if (lift.settled && liftAge >= liftSpec.hang) lift.finish()
         if (broad.settled) broad.finish()
         locals.forEach { it.finish() }
         return settled
     }
 
-    fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f; lift.reset(); liftAge = FlexPress.Hang; liftSpec = (bodyOverride ?: spec).lift; broad.reset(); locals.clear(); broadResponse = FlexGlow.Hide }
+    fun reset() { motion.reset(); pressure.reset(); depth.reset(); drift.forEach { it.reset() }; travelVelocity = 0f; lift.reset(); liftAge = FlexPress.Hang; liftSpec = (bodyOverride ?: spec).lift; broad.reset(); locals.clear(); broadResponse = FlexGlow.Hide }
 
     fun targetGlow(point: Offset?, contact: Float, strength: Float, snap: Boolean = false, travel: Float = 0f, generation: Int = 0) {
         if (point == null || strength == 0f) { broad.reset(); locals.clear(); return }
@@ -225,10 +225,11 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
         val fraction = weight.coerceIn(0f, 1f)
         motion.blendFrom(a.motion, b.motion, fraction, aAxis, bAxis)
         pressure.blendFrom(a.pressure, b.pressure, fraction, aAxis, bAxis)
+        drift.forEachIndexed { i, it -> it.blendFrom(a.drift[i], b.drift[i], fraction) }
         depth.blendFrom(a.depth, b.depth, fraction)
         lift.blendFrom(a.lift, b.lift, fraction)
         val governing = if (fraction < .5f) a else b
-        liftAge = governing.liftAge; liftSpec = governing.liftSpec
+        liftAge = governing.liftAge; liftSpec = governing.liftSpec; origin = governing.origin
         broad.blendFrom(a.broad, b.broad, fraction)
         if (this !== a || a !== b) {
             val adopted = if (a === b) a.locals.map { it.copy(1f) } else a.locals.map { it.copy(1f - fraction) } + b.locals.map { it.copy(fraction) }
@@ -244,15 +245,17 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
         val fraction = weight.coerceIn(0f, 1f)
         fun mix(a: Float, b: Float) = a + (b - a) * fraction
         return shape(.12f * tanh(mix(motion.value, other.motion.value * otherAxis) / .12f) +
-            mix(pressure.value, other.pressure.value * otherAxis), mix(depth.value, other.depth.value), mix(lift.value, other.lift.value))
+            mix(pressure.value, other.pressure.value * otherAxis), mix(depth.value, other.depth.value), mix(lift.value, other.lift.value),
+            Offset(mix(drift[0].value, other.drift[0].value), mix(drift[1].value, other.drift[1].value)))
     }
 
-    fun advance(velocity: Float, seconds: Double, pressure: Float = 0f, contact: Float = 0f, impulseScale: Float = 1f, damping: Float = GlassSpringParameters.DEFAULT_DAMPING, point: Offset? = null) {
+    fun advance(velocity: Float, seconds: Double, pressure: Float = 0f, contact: Float = 0f, impulseScale: Float = 1f, damping: Float = GlassSpringParameters.DEFAULT_DAMPING, point: Offset? = null, vertical: Boolean = false) {
         if (!seconds.isFinite() || seconds < 0.0) return
         if (seconds > 0.0) {
             motion.advance(seconds, stiffness, resistance.toDouble())
             this.pressure.advance(seconds, stiffness, resistance.toDouble())
             depth.advance(seconds, stiffness, resistance.toDouble())
+            drift.forEach { it.advance(seconds, stiffness, resistance.toDouble()) }
             val wait = if (liftAge < 0.0) minOf(seconds, -liftAge) else 0.0
             fun advanceLift(dt: Double) {
                 val w = 2 * PI / liftResponse
@@ -278,7 +281,10 @@ internal class GlassMomentum(bodyOverride: FlexSpec? = null) {
             travelVelocity = speed
         } else travelVelocity = 0f
         val edge = if (pressure.isFinite()) pressure.coerceIn(-.22f, .12f) else 0f
-        this.pressure.target = (edge + if (contact > 0f && point != null && point.x.isFinite() && point.y.isFinite()) glassFingerStrain(point) else 0f).coerceIn(-.22f, .12f)
+        val touch = point?.takeIf { contact > 0f && it.x.isFinite() && it.y.isFinite() }
+        val flex = if (touch != null) glassContactFlex(touch, origin, Offset(extent.width, extent.height) / spec.distance) else Offset.Zero
+        drift[0].target = flex.x; drift[1].target = flex.y
+        this.pressure.target = edge + (abs(flex.x) - abs(flex.y)) * if (vertical) -1 else 1
         val held = contact.isFinite() && contact > 0f || abs(this.pressure.target) > .0001f
         depth.target = -.24f * (if (contact.isFinite()) contact.coerceIn(0f, 1f) else 0f) - abs(edge) * .3f
         liftSpec = (bodyOverride ?: spec).lift
