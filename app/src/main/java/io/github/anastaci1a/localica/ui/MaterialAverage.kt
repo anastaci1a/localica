@@ -82,7 +82,11 @@ internal class MaterialAverageRenderer(private val reduced: Boolean = false, pri
             """
             }}
             float alpha = opaque > 0.5 ? 1.0 : min(mean.a / coverage, 1.0);
-            return half4(half3((face > 0.5 ? glassColor(mean.rgb / max(mean.a, 0.0001), whiteTint, tone) : glassTone(mean.rgb / max(mean.a, 0.0001), whiteTint, tone)) * alpha), half(alpha));
+            // The light face sees the mean flattened over its white page, so it is opaque; the graded roles keep coverage.
+            float3 color = mean.rgb / max(mean.a, 0.0001);
+            float m = face > 0.5 ? clamp(tone.z, 0.0, 1.0) : 1.0;
+            float shown = mix(1.0, alpha, m);
+            return half4(half3(mix(glassColor(color * alpha + (1.0 - alpha), whiteTint, float3(tone.xy, 0.0)), glassTone(color, whiteTint, tone), m) * shown), half(shown));
         }
     """.trimIndent())
     private var previous: MaterialAverageStyle? = null

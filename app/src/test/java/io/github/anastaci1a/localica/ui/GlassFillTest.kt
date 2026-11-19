@@ -38,11 +38,13 @@ class GlassFillTest {
             }
             for (alpha in listOf(0f, .25f, 1f)) {
                 val mapped = MaterialAverageStyle(.5f, GlassTone(.5f, 2f, false)).color(Color(rgb[0], rgb[1], rgb[2], alpha))
-                assertEquals(alpha, mapped.alpha, 1f / 255)
+                assertEquals("The light face is opaque", 1f, mapped.alpha, 0f)
+                val flat = rgb.map { it * alpha + 1f - alpha }
                 for ((channel, actual) in listOf(mapped.red, mapped.green, mapped.blue).withIndex())
-                    assertEquals(glassFillChannel(channel, rgb[0], rgb[1], rgb[2]).coerceIn(0f, 1f), actual, 1f / 255)
+                    assertEquals(glassFillChannel(channel, flat[0], flat[1], flat[2]).coerceIn(0f, 1f), actual, 1f / 255)
+                val content = Color(rgb[0], rgb[1], rgb[2], alpha)
                 assertTrue("Dark ink keeps 7:1 on the composited light face: ${rgb.toList()} $alpha",
-                    contrast(composite(MaterialAverageStyle(0f, GlassTone()).color(Color(rgb[0], rgb[1], rgb[2], alpha)), Color.White), Color(0xFF202124)) >= 7f)
+                    contrast(composite(MaterialAverageStyle(0f, GlassTone()).color(content), composite(content, Color.White)), Color(0xFF202124)) >= 7f)
             }
         }
     }
@@ -68,8 +70,17 @@ class GlassFillTest {
 
     @Test fun translucentBlackFaceStaysReadableOnEitherPage() {
         val black = Color.Black.copy(alpha = .25f)
-        assertTrue(contrast(composite(MaterialAverageStyle(0f, GlassTone()).color(black), Color.White), Color(0xFF202124)) >= 4.5f)
-        assertTrue(contrast(composite(MaterialAverageStyle(.06f, GlassTone(.25f, 2f, true)).color(black), Color.Black), Color.White) >= 4.5f)
+        // Layers: page, then displayed content, then the face.
+        assertTrue(contrast(composite(MaterialAverageStyle(0f, GlassTone()).color(black), composite(black, Color.White)), Color(0xFF202124)) >= 4.5f)
+        assertTrue(contrast(composite(MaterialAverageStyle(.06f, GlassTone(.25f, 2f, true)).color(black), composite(black, Color.Black)), Color.White) >= 4.5f)
+        assertTrue("Half opaque black, half transparent, over the black half",
+            contrast(composite(MaterialAverageStyle(0f, GlassTone()).color(Color.Black.copy(alpha = .5f)), Color.Black), Color(0xFF202124)) >= 4.5f)
+        // The lens keeps per-pixel coverage: black at any alpha, its face composited over the displayed pixel on a white page.
+        for (step in 0..20) {
+            val pixel = Color.Black.copy(alpha = step / 20f)
+            val face = Color(glassFillChannel(0, 0f, 0f, 0f), glassFillChannel(1, 0f, 0f, 0f), glassFillChannel(2, 0f, 0f, 0f), pixel.alpha)
+            assertTrue("Lens black at alpha ${pixel.alpha}", contrast(composite(face, composite(pixel, Color.White)), Color(0xFF202124)) >= 4.5f)
+        }
         assertTrue("Dark artwork on a light page", contrast(MaterialAverageStyle(0f, GlassTone()).color(Color.Black), Color(0xFF202124)) >= 4.5f)
     }
 
