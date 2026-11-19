@@ -311,7 +311,7 @@ class PopupChromeDepthTest {
                             val px = x + location[0]; val py = y + location[1]
                             val expected = alone.getPixel(px, py)
                             val behind = tabs.getPixel(px, py)
-                            if (expected == Color.BLUE && abs(Color.blue(expected) - Color.blue(behind)) > 40) {
+                            if (Color.blue(expected) == 255 && Color.red(expected) < 200 && expected != behind) {
                                 discriminating++
                                 if (combined.getPixel(px, py) != expected) wrong++
                             }

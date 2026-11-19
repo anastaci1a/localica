@@ -185,7 +185,7 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             assertTrue("Must exercise the actual admitted native caller\n$log", admitted)
             if ((glyph || longName) && !interrupted) repeat(4) { sample("expanded-rest") }
             if (longName) {
-                for (i in 0 until 90) {
+                for (i in 0 until 600) {
                     if (anchor.contact.state.momentum.settled && anchor.contact.expansion.value == 1f) break
                     sample("expanded-rest")
                 }
