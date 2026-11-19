@@ -1083,12 +1083,12 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="    val shadowInset = glassLayoutInset().coerceAtLeast(12.dp)"
-        errorLine2="                                                       ~~~~~">
+        errorLine1="    val shadowInset = io.github.anastaci1a.localica.ui.spec.GlassLayoutInset.coerceAtLeast(12.dp)"
+        errorLine2="                                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowseSortDialog.kt"
             line="38"
-            column="56"/>
+            column="92"/>
     </issue>
 
     <issue
@@ -1938,27 +1938,7 @@
             column="116"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="        .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = .8f + (.38f - .8f) * lightMix),"
-        errorLine2="                ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="422"
-            column="17"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="            val blur = with(LocalDensity.current) { 22.dp.toPx() }"
-        errorLine2="                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="426"
-            column="53"/>
-    </issue>
 
     <issue
         id="LiteralUiSpacing"
@@ -2200,16 +2180,6 @@
             column="21"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="    val Blur = 6.dp"
-        errorLine2="               ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/HoverLift.kt"
-            line="31"
-            column="16"/>
-    </issue>
 
     <issue
         id="LiteralUiSpacing"
@@ -4819,27 +4789,7 @@
             column="60"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="        val shine = Stroke(2.6.dp.toPx())"
-        errorLine2="                           ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PopupGlassRim.kt"
-            line="61"
-            column="28"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="        val shade = Stroke(1.4.dp.toPx())"
-        errorLine2="                           ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PopupGlassRim.kt"
-            line="62"
-            column="28"/>
-    </issue>
 
     <issue
         id="LiteralUiSpacing"
@@ -6942,16 +6892,6 @@
             column="9"/>
     </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="        Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {"
-        errorLine2="        ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="424"
-            column="9"/>
-    </issue>
 
     <issue
         id="NonPresetScreenLayout"
@@ -11048,16 +10988,6 @@
     </issue>
 
 
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
-        errorLine1="            drawContext.canvas.saveLayer(path.getBounds(), Paint().apply { alpha = progress })"
-        errorLine2="                               ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="296"
-            column="32"/>
-    </issue>
 
     <issue
         id="RawShadowOrZOrder"
@@ -12808,16 +12738,6 @@
             column="82"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.spring&lt;Float>(1f, 90f * speed * speed, visibilityThreshold = .0001f)"
-        errorLine2="                                                                              ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassElastic.kt"
-            line="19"
-            column="79"/>
-    </issue>
 
     <issue
         id="RawUiMotion"
@@ -14992,24 +14912,14 @@
     <issue
         id="ReplacePersistentShape"
         message="Retarget a stable PersistentShape"
-        errorLine1="    val silhouette = path ?: cache?.roundedPath(bounds, radius) ?: Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(radius))) }"
-        errorLine2="                                                                   ~~~~">
+        errorLine1="    val silhouette = path ?: Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(radius))) }"
+        errorLine2="                             ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="430"
-            column="68"/>
+            line="444"
+            column="30"/>
     </issue>
 
-    <issue
-        id="ReplacePersistentShape"
-        message="Retarget a stable PersistentShape"
-        errorLine1="            val arc = Path().apply {"
-        errorLine2="                      ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PopupGlassRim.kt"
-            line="39"
-            column="23"/>
-    </issue>
 
     <issue
         id="ReplacePersistentShape"
@@ -15298,16 +15208,6 @@
             column="50"/>
     </issue>
 
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="            magnified { drawLayer(source.layer) }"
-        errorLine2="                        ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="305"
-            column="25"/>
-    </issue>
 
 
 
