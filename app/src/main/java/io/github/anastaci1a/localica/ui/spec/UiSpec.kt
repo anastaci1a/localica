@@ -7,7 +7,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import java.util.Collections
-import java.util.IdentityHashMap
 import kotlin.math.*
 
 /** Neutral extent for an absent inset; independent of configurable spacing. */
@@ -133,22 +132,13 @@ internal fun fluidDestinationBlend(
 }
 
 internal object FluidGaussianSpec {
-    data class EdgeInputs(val mode: Int, val bounds: DoubleArray?)
+    fun decodeBounds(encoded: DoubleArray?): DoubleArray? =
+        encoded?.takeIf { it.size >= 4 }?.let { doubleArrayOf(it[0], it[1], it[2] - it[0], it[3] - it[1]) }
 
-    fun edgeInputs(
-        normalizeEdges: Int = 0, hardEdges: Int = 0, encodedBounds: DoubleArray? = null,
-        layerBounds: () -> DoubleArray? = { null },
-    ): EdgeInputs {
-        val explicit = encodedBounds?.takeIf { it.size >= 4 }?.let {
-            doubleArrayOf(it[0], it[1], it[2] - it[0], it[3] - it[1])
-        }
-        val mode = when {
-            normalizeEdges != 0 -> 2
-            hardEdges != 0 || explicit != null -> 1
-            else -> 0
-        }
-        val bounds = explicit ?: if (normalizeEdges != 0 || hardEdges != 0) layerBounds() else null
-        return EdgeInputs(mode, bounds)
+    fun edgeMode(normalizeEdges: Int, hardEdges: Int, explicitBounds: Boolean): Int = when {
+        normalizeEdges != 0 -> 2
+        hardEdges != 0 || explicitBounds -> 1
+        else -> 0
     }
 
     fun effectiveRadius(inputRadius: Double, fillRadius: Double) =
@@ -166,9 +156,6 @@ internal object FluidGaussianSpec {
 internal object FluidLensingSpec {
     enum class Filter { GaussianBlur, DisplacementMap }
     val filterOrder get() = Filter.entries
-
-    fun <Image : Any> colorChain(content: Image, emit: (Filter, Image) -> Image?): Image =
-        filterOrder.fold(content) { color, filter -> emit(filter, color) ?: color }
 
     data class Request(val timing: FluidPopupStep, val gain: Double, val dimension: Double?)
 
@@ -195,20 +182,8 @@ internal object FluidLensingSpec {
     const val trackedHitTestsAsFill = true
     val trackedProperties = listOf("bounds", "position", "cornerRadius", "cornerRadii", "cornerCurve", "hidden", "meshTransform")
 
-    fun <T : Any> newTrackedSources(live: Iterable<T>, tracked: Iterable<T>): List<T> {
-        val seen = Collections.newSetFromMap(IdentityHashMap<T, Boolean>())
-        seen.addAll(tracked)
-        return live.filter(seen::add)
-    }
-
     const val displacementFunction = 44
     const val namedSourceTexture = 1
-
-    fun <T : Any> namedSource(layers: Iterable<T>, name: ByteArray?, layerName: (T) -> ByteArray?): T? =
-        name?.let { bytes -> layers.firstOrNull { layerName(it)?.contentEquals(bytes) == true } }
-
-    fun <T : Any> displacementSource(primaryPresent: Boolean, explicitImage: T?, namedSurface: () -> T?): T? =
-        if (primaryPresent) explicitImage ?: namedSurface() else null
 
     data class Vertex(val contentX: Float, val contentY: Float, val mapX: Float, val mapY: Float)
 
@@ -246,39 +221,6 @@ internal object FluidLensingSpec {
 }
 
 internal object FluidTerminalSpec {
-    enum class Request {
-        TearDownPlatter, RemovePlatterContainer, CompleteAlongside,
-        ReleaseSharedPortals, ClearMorphables, ClearMorphAnimations, ClearHidingAssertions,
-        FlashScrollIndicators, ClearFocusedPortaling, SuspendClipping, ReleaseFocusedPortals, RestoreClipping,
-    }
-
-    fun completeGroup(dismissing: Boolean, hasCallback: Boolean, hasAlongside: Boolean): List<Request> = buildList {
-        if (hasCallback) {
-            if (dismissing) {
-                add(Request.TearDownPlatter)
-                add(Request.RemovePlatterContainer)
-            }
-            if (hasAlongside) add(Request.CompleteAlongside)
-        }
-        add(Request.ReleaseSharedPortals)
-        add(Request.ClearMorphables)
-        add(Request.ClearMorphAnimations)
-        add(Request.ClearHidingAssertions)
-    }
-
-    fun completeAppearance(success: Boolean, dismissing: Boolean, menuPresent: Boolean, focusedPortaling: Boolean?): List<Request> = buildList {
-        if (!success || dismissing || !menuPresent) return@buildList
-        add(Request.FlashScrollIndicators)
-        if (focusedPortaling != null) {
-            if (focusedPortaling) {
-                add(Request.ClearFocusedPortaling)
-                add(Request.SuspendClipping)
-                add(Request.ReleaseFocusedPortals)
-            }
-            add(Request.RestoreClipping)
-        }
-    }
-
     fun immediateUnhideSites(through: Boolean, dismissingToDrag: Boolean, hasStashedPreview: Boolean, transitionLoop: Boolean) =
         (!through && dismissingToDrag && hasStashedPreview) to (!through && transitionLoop)
 }

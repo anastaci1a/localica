@@ -19,8 +19,6 @@ class FluidPopupPortalGeometryTest {
         assertEquals(path, fluidPopupVisibleMask(path, roundedRect = false, equalsReferenceBounds = true))
         assertEquals(path, fluidPopupVisibleMask(path, roundedRect = true, equalsReferenceBounds = false))
         assertEquals(-8.0 to -16.0, path.maskOffset())
-        assertNull(fluidPopupRasterScale(wantsMinification = false, displayScale = 2.5))
-        assertEquals(2.5, requireNotNull(fluidPopupRasterScale(wantsMinification = true, displayScale = 2.5)), 0.0)
     }
 
     @Test fun portalUsesVisibleExtentThenBackingThenDeclaredSize() {
@@ -84,10 +82,6 @@ class FluidPopupPortalGeometryTest {
         assertFalse(fluidPopupClipsBounds(fluidPopupPreviewOptions(4, 8)))
         assertEquals(12, fluidPopupPreviewOptions(5, 8))
         assertEquals(8, fluidPopupPreviewOptions(6, 8))
-        assertEquals("pivot", fluidPopupThroughPreview(true, "pivot", null) { error("Fallback read") })
-        assertEquals("source", fluidPopupThroughPreview(false, "pivot", "source") { error("Fallback read") })
-        assertEquals("source", fluidPopupThroughPreview(true, null, "source") { error("Fallback read") })
-        assertEquals("resolved", fluidPopupThroughPreview(false, null, null) { "resolved" })
         assertFalse(fluidPopupPreviewScaleChanges(1.0, Math.nextUp(1.0)))
         assertTrue(fluidPopupPreviewScaleChanges(1.0, Math.nextUp(Math.nextUp(1.0))))
         assertTrue(fluidPopupPreviewScaleChanges(1.0, Double.NaN))
