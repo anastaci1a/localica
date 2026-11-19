@@ -8785,11 +8785,11 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="        Box(Modifier.selectorTrackPlacement(recording).recordFrostedBackdrop(composite), contentAlignment = AbsoluteAlignment.TopLeft) {"
+        errorLine1="        Box(Modifier.selectorTrackPlacement(recording), contentAlignment = AbsoluteAlignment.TopLeft) {"
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SlidingTabs.kt"
-            line="183"
+            line="178"
             column="9"/>
     </issue>
 
