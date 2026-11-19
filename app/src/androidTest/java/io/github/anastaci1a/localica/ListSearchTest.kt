@@ -66,7 +66,9 @@ class ListSearchTest {
             val density = compose.density.density
             val row = kotlin.math.round(bounds.center.y).toInt()
             fun line() = root.captureToImage().toPixelMap().let { map -> List(map.width) { map[it, row] } }
-            val rest = line()
+            var rest = line(); var stable = false
+            repeat(20) { if (!stable) { compose.mainClock.advanceTimeBy(500); val next = line(); stable = next == rest; rest = next } }
+            assertTrue("rest row is identical across 500 ms before pressing", stable)
             pill.performTouchInput { down(center) }
             compose.mainClock.advanceTimeBy(2500)
             val held = line()
@@ -77,11 +79,12 @@ class ListSearchTest {
                 (maxOf(kotlin.math.abs(a.red - b.red), kotlin.math.abs(a.green - b.green), kotlin.math.abs(a.blue - b.blue)) * 255).toInt()
             val diff = IntArray(rest.size) { d(rest[it], held[it]) }
             val left = bounds.left.toInt(); val right = kotlin.math.ceil(bounds.right).toInt()
-            val leftHalf = diff.take(left).max() / 2; val rightHalf = diff.drop(right).max() / 2
+            val leftFloor = maxOf(diff[0], diff[1]); val rightFloor = maxOf(diff[diff.size - 1], diff[diff.size - 2])
+            val leftHalf = leftFloor + (diff.take(left).max() - leftFloor) / 2; val rightHalf = rightFloor + (diff.drop(right).max() - rightFloor) / 2
             val heldLeft = (0 until left).firstOrNull { diff[it] > leftHalf } ?: -1
             val heldRight = (right until diff.size).lastOrNull { diff[it] > rightHalf } ?: -1
             android.util.Log.i("Localica1080", "production pill window=${diff.size} density=$density rest=${bounds.left}..${bounds.right} held=$heldLeft..$heldRight " +
-                "outer=${leftHalf * 2}/${rightHalf * 2} leftBand=${diff.slice(maxOf(0, heldLeft - 3)..minOf(left, heldLeft + 3)).toList()} edge0=${diff[0]} edgeEnd=${diff.last()}")
+                "floor=$leftFloor/$rightFloor threshold=$leftHalf/$rightHalf outerMax=${diff.take(left).max()}/${diff.drop(right).max()} leftOutside=${diff.take(left).toList()} leftBand=${diff.slice(maxOf(0, heldLeft - 3)..minOf(left, heldLeft + 3)).toList()} edge0=${diff[0]} edgeEnd=${diff.last()}")
             assertEquals("left edge moves out 8 points", 8 * density, bounds.left - heldLeft, 1.5f)
             assertEquals("right edge moves out 8 points", 8 * density, heldRight + 1 - bounds.right, 1.5f)
             assertTrue("pressed pill stays inside the window", heldLeft > 0 && heldRight < diff.size - 1)
