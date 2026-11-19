@@ -46,7 +46,7 @@ class FluidPressTest {
         assertEquals(.27, spec.response, 0.0); assertEquals(.625, spec.damping, 0.0)
         assertEquals(.032, spec.impulse, 0.0); assertEquals(.5, spec.releaseResponse, 0.0)
         assertEquals(.7, spec.releaseDamping, 0.0); assertEquals(.016, spec.releaseImpulse, 0.0)
-        assertEquals(FlexPress.Large, FlexSpec.dynamic(180f).lift)
+        assertEquals(FlexPress.Large.copy(points = 4f), FlexSpec.dynamic(180f).lift)
         val resized = GlassMomentum()
         resized.advance(0f, 0.0, contact = 1f)
         val v = depth(resized, "velocity").toDouble()

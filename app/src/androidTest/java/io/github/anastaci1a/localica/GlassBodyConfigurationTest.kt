@@ -57,10 +57,11 @@ class GlassBodyConfigurationTest {
         lateinit var tables: Set<CompositionData>
         val anchor = GlassAnchor()
         val decoy = GlassContact()
+        fun gain(longSide: Float) = -((if (longSide < 120f) 16f else (16.0 - 12.0 * 20 / 116).toFloat()) / longSide) / .24f
         fun published(contact: GlassContact, longSide: Float) {
             compose.mainClock.advanceTimeUntil {
                 contact.state.momentum.spec == FlexSpec.dynamic(longSide, 64f) &&
-                    contact.state.momentum.bodyOverride?.scaleGain == -(16f / longSide) / .24f &&
+                    contact.state.momentum.bodyOverride?.scaleGain == gain(longSide) &&
                     anchor.contact.state.momentum.spec == FlexSpec.dynamic(sharedWidth, 160f)
             }
         }
@@ -105,7 +106,7 @@ class GlassBodyConfigurationTest {
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
             assertEquals("idle size assignment preserves settled raw state", held, raw(fresh))
-            assertEquals(1.125f, fresh.body.value.scaleX(), 0f)
+            assertEquals(1f + gain(128f) * -.24f, fresh.body.value.scaleX(), 0f)
             assertEquals("idle resize does not wake or retarget glow", 1f, fresh.state.glow.value.big, 0f)
             assertEquals("idle layout does not consume the newly assigned opacity targets", heldTargets, alphaTargets(fresh))
             fresh.active = false
@@ -118,15 +119,15 @@ class GlassBodyConfigurationTest {
         published(fresh, 64f)
         compose.runOnIdle {
             assertEquals(initial, raw(fresh))
-            assertEquals(-(16f / 64f) / .24f, fresh.state.momentum.bodyOverride!!.scaleGain)
+            assertEquals(gain(64f), fresh.state.momentum.bodyOverride!!.scaleGain)
             assertEquals(1.125f, fresh.body.value.scaleX(), 0f)
             width = 128f
         }
         published(fresh, 128f)
         compose.runOnIdle {
             assertEquals(initial, raw(fresh))
-            assertEquals(1.0625f, fresh.body.value.scaleX(), 0f)
-            assertEquals(-(16f / 128f) / .24f, fresh.state.momentum.bodyOverride!!.scaleGain)
+            assertEquals(1f + gain(128f) * -.12f, fresh.body.value.scaleX(), 0f)
+            assertEquals(gain(128f), fresh.state.momentum.bodyOverride!!.scaleGain)
             assertEquals(FlexSpec.Small.response, fresh.state.momentum.bodyOverride!!.response, 0f)
             assertEquals(FlexSpec.dynamic(128f, 64f), fresh.state.momentum.spec)
             assertEquals(FlexSpec.dynamic(160f, 160f), anchor.contact.state.momentum.spec)
@@ -149,7 +150,7 @@ class GlassBodyConfigurationTest {
         }
         published(fresh, 128f)
         compose.runOnIdle {
-            assertEquals(-(16f / 128f) / .24f, fresh.state.momentum.bodyOverride!!.scaleGain)
+            assertEquals(gain(128f), fresh.state.momentum.bodyOverride!!.scaleGain)
             assertEquals(FlexSpec.Small.trackingResponse, fresh.state.momentum.bodyOverride!!.trackingResponse, 0f)
             assertNotEquals("running resize preserves live motion instead of resetting", listOf(0f, 0f), moving)
             assertNotEquals("live velocity is retained through publication", 0f, raw(fresh)[7])
