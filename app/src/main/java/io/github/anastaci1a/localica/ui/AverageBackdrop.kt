@@ -101,9 +101,13 @@ internal fun MaterialAverageStyle.color(mean: Color): Color {
     val y = .2126f * mean.red + .7152f * mean.green + .0722f * mean.blue
     val lifted = 1f - (1f - y) * (1f - tint) / (1f - tint * y).coerceAtLeast(.0001f)
     val amount = ((lifted - y) / (1f - y).coerceAtLeast(.0001f)).coerceIn(0f, 1f)
-    return tone.color(lerp(mean, Color.White.copy(alpha = mean.alpha), amount)).let {
-        if (opaque) it.copy(alpha = 1f) else it
-    }
+    val graded = tone.color(lerp(mean, Color.White.copy(alpha = mean.alpha), amount))
+    val m = if (broad) 1f else tone.lightMix
+    // The light face sees the recording flattened over its white page, so its mean is opaque.
+    val a = mean.alpha
+    fun face(i: Int, c: Float) = (glassFillChannel(i, mean.red * a + 1f - a, mean.green * a + 1f - a, mean.blue * a + 1f - a) * (1f - m) + c * m).coerceIn(0f, 1f)
+    val color = if (m >= 1f) graded else Color(face(0, graded.red), face(1, graded.green), face(2, graded.blue), 1f - m + a * m)
+    return if (opaque) color.copy(alpha = 1f) else color
 }
 
 @Composable

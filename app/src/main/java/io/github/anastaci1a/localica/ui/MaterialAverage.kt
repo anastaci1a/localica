@@ -23,11 +23,11 @@ internal fun FrostedBackdrop.canAverage(localCorners: List<Offset>): Boolean {
         size.width.toFloat(), size.height.toFloat(), materialCorner, localCorners)
 }
 
-internal data class MaterialAverageStyle(val whiteTint: Float, val tone: GlassTone, val opaque: Boolean = false)
+internal data class MaterialAverageStyle(val whiteTint: Float, val tone: GlassTone, val opaque: Boolean = false, val broad: Boolean = false)
 
 /** True when this scene is, or lies inside, a finished panel material (a frosted panel or
  * popup body). That material already carries its panel's tint and tone, so None does not
- * apply them a second time to what it samples there. Which pixels are sampled is decided
+ * apply them a second time; a light-appearance face still applies its rows. Which pixels are sampled is decided
  * by the material's full bounds, never by this provenance. */
 internal fun FrostedBackdrop.withinFinishedMaterial(): Boolean {
     var current: FrostedBackdrop? = this
@@ -41,7 +41,7 @@ internal fun FrostedBackdrop.withinFinishedMaterial(): Boolean {
 
 /** The colour mapping None applies to a mean sampled from [backing]. */
 internal fun MaterialAverageStyle.forBacking(backing: FrostedBackdrop): MaterialAverageStyle =
-    if (backing.withinFinishedMaterial()) MaterialAverageStyle(0f, GlassTone(), opaque) else this
+    if (backing.withinFinishedMaterial()) copy(whiteTint = 0f, tone = tone.copy(trim = 0f, shift = 0f)) else this
 
 /** An 8×8 GPU crop becomes one uniform color before scaling to the control.
  * No readback, full-control ray tracing, or full-panel averaging texture.
@@ -54,6 +54,7 @@ internal class MaterialAverageRenderer(private val reduced: Boolean = false, pri
     private val shader = RuntimeShader("""
         uniform shader scene;
         uniform float whiteTint;
+        uniform float face;
         uniform float3 tone;
         uniform float coverage;
         uniform float opaque;
@@ -81,7 +82,11 @@ internal class MaterialAverageRenderer(private val reduced: Boolean = false, pri
             """
             }}
             float alpha = opaque > 0.5 ? 1.0 : min(mean.a / coverage, 1.0);
-            return half4(half3(glassColor(mean.rgb / max(mean.a, 0.0001), whiteTint, tone) * alpha), half(alpha));
+            // The light face sees the mean flattened over its white page, so it is opaque; the graded roles keep coverage.
+            float3 color = mean.rgb / max(mean.a, 0.0001);
+            float m = face > 0.5 ? clamp(tone.z, 0.0, 1.0) : 1.0;
+            float shown = mix(1.0, alpha, m);
+            return half4(half3(mix(glassColor(color * alpha + (1.0 - alpha), whiteTint, float3(tone.xy, 0.0)), glassTone(color, whiteTint, tone), m) * shown), half(shown));
         }
     """.trimIndent())
     private var previous: MaterialAverageStyle? = null
@@ -97,6 +102,7 @@ internal class MaterialAverageRenderer(private val reduced: Boolean = false, pri
         previousCoverage = coverage
         previousTaps = taps
         shader.setFloatUniform("whiteTint", style.whiteTint)
+        shader.setFloatUniform("face", if (style.broad) 0f else 1f)
         shader.setFloatUniform("tone", style.tone.trim, style.tone.weight, style.tone.lightMix)
         shader.setFloatUniform("coverage", coverage)
         shader.setFloatUniform("opaque", if (uniformOpaque && style.opaque) 1f else 0f)

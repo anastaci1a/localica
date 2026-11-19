@@ -80,7 +80,9 @@ class GlassBodyOpticsTest {
             bitmap.setPixels(IntArray(128 * 128) { i -> 0xff000000.toInt() or ((i % 128 * 2) shl 16) or ((i / 128 * 2) shl 8) }, 0, 128, 0, 0, 128, 128)
             for (unit in listOf(1f, 1.25f)) for (corner in listOf(24f, 12f)) {
                 val geometry = LensGeometry(Rect(20f, 20f, 108f, 68f), corner)
-                val pixels = renderS1Kernel(bitmap, LensRenderer().effect(geometry, 0f, 1.35f, unit, illumination = 0f), 128, 128)
+                // A light-ink tone with no trim maps colour unchanged, so the coordinates read back as encoded.
+                val pixels = renderS1Kernel(bitmap, LensRenderer().effect(geometry, 0f, 1.35f, unit, illumination = 0f,
+                    tone = GlassTone(lightInk = true)), 128, 128)
                 var checked = 0
                 for (y in 20 until 68) for (x in 20 until 108) {
                     val p = Offset(x + .5f, y + .5f)
