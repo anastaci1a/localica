@@ -164,6 +164,84 @@ class NestedGlassRegistrationTest {
         }
     }
 
+    /** #1081: a pressed, stretched or drifted body shows the backdrop under its live box, not its rest box scaled. */
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
+    @Test fun deformedBodiesSampleTheBackdropUnderTheirLiveBox() {
+        class Element(val name: String, val width: Float, val height: Float, val corner: androidx.compose.ui.unit.Dp?,
+            val silhouette: GlassSilhouette? = null)
+        val elements = listOf(Element("circle", 64f, 64f, null), Element("pill", 160f, 48f, 24.dp),
+            Element("wide-bar", 280f, 40f, 12.dp),
+            Element("silhouette", 200f, 48f, null, GlassSilhouette { GlassSilhouetteGeometry(splitPillBodies(it, 0f)) }))
+        val poses = listOf(GlassShape(), GlassShape(scale = 1.25f), GlassShape(strain = .15f, scale = 1.1f, drift = Offset(.06f, -.04f)))
+        var element by mutableStateOf(elements[0])
+        var pose by mutableStateOf(poses[0])
+        var stage by mutableIntStateOf(0)
+        lateinit var view: View
+        lateinit var scene: LayoutCoordinates
+        lateinit var backing: LayoutCoordinates
+        lateinit var lens: LayoutCoordinates
+        compose.setContent { LocalicaTheme {
+            view = LocalView.current
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
+                blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+                val source = rememberFrostedBackdrop(Unit, dark = false)
+                Box(Modifier.size(360.dp, 200.dp).testTag("live-body-scene").onGloballyPositioned { scene = it }) {
+                    Canvas(Modifier.fillMaxSize().onGloballyPositioned { backing = it }.recordFrostedBackdrop(source)) {
+                        val cell = 8.dp.toPx()
+                        for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt())
+                            drawRect(cellColor(x, y), Offset(x * cell, y * cell), Size(cell, cell))
+                    }
+                    val shown = element
+                    key(shown) {
+                        LiquidGlassSurface(Modifier.align(Alignment.Center).size(shown.width.dp, shown.height.dp)
+                            .onGloballyPositioned { lens = it }, source = source, refraction = 0f, cornerRadius = shown.corner,
+                            silhouette = shown.silhouette, shadow = false, contactPresentation = { pose })
+                    }
+                    PresentationMarker { stage }
+                }
+            }
+        } }
+        val cell = 8f * compose.density.density
+        fun cellAt(p: Offset) = cellColor(floor(p.x / cell).toInt(), floor(p.y / cell).toInt())
+        fun clearOfEdges(p: Offset) = listOf(p.x, p.y).all { (it - floor(it / cell) * cell) in 3f..cell - 3f }
+        for (shown in elements) for (shape in poses) {
+            compose.runOnIdle { element = shown; pose = shape; stage++ }
+            compose.waitForIdle()
+            val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("live-body-scene"), stage) { view }
+            var discriminating = 0
+            val samples = compose.runOnIdle {
+                val size = Size(lens.size.width.toFloat(), lens.size.height.toFloat())
+                val uniform = shape.scale ?: 1f
+                val scale = Offset(uniform * kotlin.math.exp(shape.strain), uniform * kotlin.math.exp(-shape.strain))
+                // The body's live box: rest point about the centre, then the drift in body fractions.
+                fun live(rest: Offset) = Offset(size.width / 2 + (rest.x - size.width / 2) * scale.x + shape.drift.x * size.width,
+                    size.height / 2 + (rest.y - size.height / 2) * scale.y + shape.drift.y * size.height)
+                buildList {
+                    for (fy in listOf(.3f, .5f, .7f)) for (fx in listOf(.2f, .3f, .4f, .5f, .6f, .7f, .8f)) {
+                        val rest = Offset(size.width * fx, size.height * fy)
+                        val radius = minOf(size.width, size.height) / 2
+                        val cap = Offset(rest.x.coerceIn(radius, size.width - radius), size.height / 2)
+                        if ((rest - cap).getDistance() > radius * .7f) continue
+                        val inBacking = backing.localPositionOf(lens, live(rest))
+                        val stretched = backing.localPositionOf(lens, rest)
+                        if (!clearOfEdges(inBacking) || !clearOfEdges(stretched)) continue
+                        if (cellAt(inBacking) != cellAt(stretched)) discriminating++
+                        add(scene.localPositionOf(lens, live(rest)) to cellAt(inBacking))
+                    }
+                }
+            }
+            val where = "${shown.name} pose=$shape"
+            assertTrue("Enough interior landmarks for $where", samples.size >= 4)
+            if (shape != poses[0]) assertTrue("The oracle separates live from stretched sampling for $where", discriminating >= 2)
+            for ((point, expected) in samples) {
+                val actual = pixels[point.x.roundToInt(), point.y.roundToInt()]
+                val message = "$where point=$point expected=$expected actual=$actual"
+                for (channel in 0..2) assertEquals(message, io.github.anastaci1a.localica.ui.glassFillChannel(channel,
+                    expected.red, expected.green, expected.blue).coerceAtMost(1f), listOf(actual.red, actual.green, actual.blue)[channel], .08f)
+            }
+        }
+    }
+
     @Test fun missingAndDetachedLocationsCannotBorrowIdentityRegistration() {
         var mounted by mutableStateOf(true)
         var source: FrostedBackdrop? = null

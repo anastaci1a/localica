@@ -346,7 +346,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution(own.value), padding,
                 homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint, tone), homeBounds, homeFootprint,
                 resolutionReader = presentation?.let { read -> { resolution(read()) } },
-                averageReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint, toneOf(read())) } }) { extent, resolution, flatWeight ->
+                averageReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint, toneOf(read())) } }, body = appliedTransform) { extent, resolution, flatWeight ->
                 val frame = material()
                 val cornerRadius = presentedRadius?.invoke() ?: cornerRadius
                 val blur = blur(frame)
