@@ -187,20 +187,32 @@ internal object FluidLensingSpec {
     const val displacementFunction = 44
     const val namedSourceTexture = 1
 
-    data class Vertex(val contentX: Float, val contentY: Float, val mapX: Float, val mapY: Float)
+    data class Vertex(
+        val x: Float, val y: Float,
+        val contentX: Float, val contentY: Float, val mapX: Float, val mapY: Float,
+    )
 
     fun namedMapQuad(
         contentX: Int, contentY: Int, width: Int, height: Int, mapX: Int, mapY: Int,
         contentScale: Float, mapScale: Float, fusedMultiplyAdd: (Float, Float, Float) -> Float,
     ): List<Vertex> {
         val ratio = mapScale / contentScale
-        val x0 = fusedMultiplyAdd(ratio, contentX.toFloat(), -mapX.toFloat())
-        val x1 = fusedMultiplyAdd(ratio, (contentX + width).toFloat(), -mapX.toFloat())
-        val y0 = fusedMultiplyAdd(ratio, contentY.toFloat(), -mapY.toFloat())
-        val y1 = fusedMultiplyAdd(ratio, (contentY + height).toFloat(), -mapY.toFloat())
+        val left = contentX.toFloat()
+        val right = (contentX + width).toFloat()
+        val top = contentY.toFloat()
+        val bottom = (contentY + height).toFloat()
+        val x0 = fusedMultiplyAdd(ratio, left, -mapX.toFloat())
+        val x1 = fusedMultiplyAdd(ratio, right, -mapX.toFloat())
+        val y0 = fusedMultiplyAdd(ratio, top, -mapY.toFloat())
+        val y1 = fusedMultiplyAdd(ratio, bottom, -mapY.toFloat())
         val w = width.toFloat()
         val h = height.toFloat()
-        return listOf(Vertex(0f, 0f, x0, y0), Vertex(w, 0f, x1, y0), Vertex(w, h, x1, y1), Vertex(0f, h, x0, y1))
+        return listOf(
+            Vertex(contentScale * left, contentScale * top, 0f, 0f, x0, y0),
+            Vertex(contentScale * right, contentScale * top, w, 0f, x1, y0),
+            Vertex(contentScale * right, contentScale * bottom, w, h, x1, y1),
+            Vertex(contentScale * left, contentScale * bottom, 0f, h, x0, y1),
+        )
     }
 
     fun amountUniform(transform: DoubleArray, width: Int, height: Int, renderScale: Float, inputAmount: Double = 1.0): FloatArray {

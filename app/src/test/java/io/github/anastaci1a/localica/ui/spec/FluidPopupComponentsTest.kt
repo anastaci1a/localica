@@ -204,10 +204,10 @@ class FluidPopupComponentsTest {
     @Test fun namedMapQuadKeepsCoordinatePairsAndFusedRounding() {
         val quad = FluidLensingSpec.namedMapQuad(10, -4, 8, 6, 4, 3, 0.5f, 1f, Math::fma)
         assertEquals(listOf(
-            FluidLensingSpec.Vertex(0f, 0f, 16f, -11f),
-            FluidLensingSpec.Vertex(8f, 0f, 32f, -11f),
-            FluidLensingSpec.Vertex(8f, 6f, 32f, 1f),
-            FluidLensingSpec.Vertex(0f, 6f, 16f, 1f),
+            FluidLensingSpec.Vertex(5f, -2f, 0f, 0f, 16f, -11f),
+            FluidLensingSpec.Vertex(9f, -2f, 8f, 0f, 32f, -11f),
+            FluidLensingSpec.Vertex(9f, 1f, 8f, 6f, 32f, 1f),
+            FluidLensingSpec.Vertex(5f, 1f, 0f, 6f, 16f, 1f),
         ), quad)
         val cancellation = FluidLensingSpec.namedMapQuad(
             8_388_609, 0, 1, 1, 8_388_610, 0, 1f, Math.nextUp(1f), Math::fma,
@@ -215,6 +215,7 @@ class FluidPopupComponentsTest {
         assertEquals(0x34000000, cancellation[0].mapX.toRawBits())
         val wrapped = FluidLensingSpec.namedMapQuad(Int.MAX_VALUE - 3, 0, 8, 1, 0, 0, 1f, 1f, Math::fma)
         assertEquals(Int.MIN_VALUE.toFloat().toRawBits(), wrapped[1].mapX.toRawBits())
+        assertEquals(Int.MIN_VALUE.toFloat().toRawBits(), wrapped[1].x.toRawBits())
     }
 
     @Test fun gaussianEdgesKeepModeAndOptionalBoundsSeparate() {
