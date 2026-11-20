@@ -157,6 +157,13 @@ class FluidPopupComponentsTest {
         assertEquals(listOf(1.0, 1.0, 0.0), growing.map { it.gain })
         assertEquals(listOf(0.0, 0.0, 0.12), growing.map { it.timing.storedDelay })
         assertEquals(listOf(0.0, 0.0, 0.1), shrinking.map { it.timing.storedDelay })
+        for (request in growing + shrinking) {
+            val controls = request.propertyControls
+            assertEquals(0.0.toRawBits(), controls.delay.toRawBits())
+            assertEquals(null, controls.startingVelocity)
+            assertFalse(controls.interactive)
+            assertFalse(controls.additive)
+        }
         assertEquals(listOf(0.2, 0.55, 0.3), growing.map { it.timing.spring.response })
         assertEquals(listOf(0.2, 0.42, 0.4), shrinking.map { it.timing.spring.response })
         assertEquals(listOf(1.0, 0.9, 1.0), growing.map { it.timing.spring.dampingRatio })

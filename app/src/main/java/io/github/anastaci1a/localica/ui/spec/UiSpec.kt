@@ -102,6 +102,10 @@ internal val FluidContentDefaults = FluidContentSettings(
 internal data class FluidPopupStep(val storedDelay: Double, val spring: FluidPopupSpringSettings) {
     fun dueThreshold(effectiveSpeed: Double, amplify: Boolean, drag: Double) = fluidStoredDelay(storedDelay, effectiveSpeed, amplify) * drag
 }
+internal data class FluidPropertySpringControls(
+    val delay: Double, val startingVelocity: Double?, val interactive: Boolean, val additive: Boolean,
+)
+
 internal enum class FluidGeometryAction { CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick }
 internal data class FluidGeometryStep(val action: FluidGeometryAction, val timing: FluidPopupStep)
 
@@ -211,7 +215,11 @@ internal object FluidLensingSpec {
     fun <Image : Any> colorChain(content: Image, emit: (Filter, Image) -> Image?): Image =
         filterOrder.fold(content) { color, filter -> emit(filter, color) ?: color }
 
-    data class Request(val timing: FluidPopupStep, val gain: Double, val dimension: Double?)
+    private val lensPropertyControls = FluidPropertySpringControls(delay = 0.0, startingVelocity = null, interactive = false, additive = false)
+
+    data class Request(val timing: FluidPopupStep, val gain: Double, val dimension: Double?) {
+        val propertyControls get() = lensPropertyControls
+    }
 
     fun shortDimension(scale: Double, width: Double, height: Double): Double {
         val w = scale * width
