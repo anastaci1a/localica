@@ -1166,7 +1166,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             val preview = motion.whenFluid {
                                 with(density) {
                                     FluidPopupPreview(home, windowOrigin, if (detached) popupRadius.toPx() else homeRadius().toPx(),
-                                        popupRadius.toPx(), TransformOrigin.Center.pivotFractionY.toDouble(), view.scaleY.toDouble())
+                                        popupRadius.toPx(), TransformOrigin.Center.pivotFractionY.toDouble(), view.scaleY.toDouble(),
+                                        sourceIsGlass = anchor.material != null)
                                 }
                             }
                             motion.place(home, envelope, density.density, detached = detached, preview = preview)

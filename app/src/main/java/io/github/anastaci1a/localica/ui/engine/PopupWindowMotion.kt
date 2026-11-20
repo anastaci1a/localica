@@ -57,6 +57,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         val outline: PopupOutline<Rect>? = null, val request: Pair<FluidTimelineStep,Double>? = null)
     private var placement: FluidPlacement? = null
     internal fun outlineBodies()=expansion.outlineBodies()
+    internal fun outlineContentInputs()=placement?.outline?.contentInputs
     internal fun apertureRadius(density: Density, fallback: ()->Dp)=expansion.outlineRadius()?.let { with(density) { it.toDp() } }?:fallback()
     var fluidBlurRadius by mutableDoubleStateOf(0.0); private set
     var fluidLensHeight by mutableDoubleStateOf(FluidLensingSpec.freshHeight); private set

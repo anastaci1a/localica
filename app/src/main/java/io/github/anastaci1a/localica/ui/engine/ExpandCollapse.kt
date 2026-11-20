@@ -97,7 +97,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         var request: OutlineRequest?=null; val kickRequests=arrayOfNulls<Pair<Float,FluidPopupSpringSettings>>(2)
         fun rect(slot: Int)=if(slot==0) requireNotNull(bound) else companion
         private fun scalar(initial: Double)=FluidPropertyMotion(clock,Double::equals,initial=initial,
-            snapReduced={ false },completion={ finished -> if(finished) notifyLifecycle() })
+            snapReduced={ false },completion={ notifyLifecycle() })
     }
     private var outline by mutableStateOf<Outline?>(null)
     internal val hasOutline get()=outline!=null

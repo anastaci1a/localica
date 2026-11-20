@@ -5,6 +5,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
+import io.github.anastaci1a.localica.ui.spec.FluidOutlineContentInputs
+import io.github.anastaci1a.localica.ui.spec.FluidOutlineItemInputs
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
 import io.github.anastaci1a.localica.ui.spec.PopupOutline
@@ -146,6 +148,7 @@ internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, ancho
 internal data class FluidPopupPreview(
     val pivot: Rect, val root: Offset, val homeRadius: Float, val popupRadius: Float,
     val anchorY: Double, val hostScaleY: Double,
+    val sourceIsGlass: Boolean = false,
 ) : PopupOutlinePreview<Rect> {
     override fun prepare(home: Rect, envelope: Rect, density: Float, opening: Boolean): PopupOutline<Rect> =
         PreparedFluidOutline(home, envelope, density, opening, this)
@@ -159,6 +162,10 @@ private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, priva
     private val popup = points(end)
     private val pivot = points(preview.pivot)
     override val hostScaleY get() = preview.hostScaleY
+    override val contentInputs = FluidOutlineContentInputs(
+        home = FluidOutlineItemInputs(preview.sourceIsGlass),
+        popup = FluidOutlineItemInputs(isGlass = true),
+    )
     override val growing = if (opening) fluidPopupContentGrows(home, popup) else fluidPopupContentGrows(popup, home)
     override val apertureSlot get()=if (growing) 0 else 1
     private val smaller = if (growing == opening) home else popup

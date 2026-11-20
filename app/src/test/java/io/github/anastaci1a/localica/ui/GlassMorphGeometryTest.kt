@@ -258,6 +258,20 @@ class GlassMorphGeometryTest {
         assertEquals(1 to 0f, closing.kick(UnkickSource))
     }
 
+    @Test fun dismissalPreviewCarriesItsMaterialAndUsesTheExistingClip() {
+        val home = Rect(35f, 40f, 123f, 84f)
+        val menu = Rect(35f, 40f, 285f, 400f)
+        val preview = FluidPopupPreview(home, Offset.Zero, 22f, 24f, 0.5, 1.0)
+        assertFalse(preview.prepare(home, menu, 1f, opening = true).contentInputs.home.isGlass)
+        val items = preview.copy(sourceIsGlass = true).prepare(home, menu, 1f, opening = false).contentInputs
+        for (item in listOf(items.home, items.popup)) {
+            assertTrue(item.isGlass)
+            assertNull(item.matchedViewIdentifier)
+            assertEquals(0, item.contentScaleAxis)
+            assertFalse(item.prefersUnclippedContents)
+        }
+    }
+
     @Test fun freshViewCentresAndContentKeepTheSourcePoseUntilTheFirstTick() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
         val home = Rect(35f, 40f, 123f, 84f)
         val menu = Rect(35f, 40f, 285f, 400f)

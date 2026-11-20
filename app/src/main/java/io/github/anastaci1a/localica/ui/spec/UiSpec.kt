@@ -136,9 +136,19 @@ internal interface PopupOutline<Bounds> {
     val growing: Boolean
     val apertureSlot: Int
     val hostScaleY: Double
+    val contentInputs: FluidOutlineContentInputs
     fun outline(action: FluidTimelineAction): List<PopupOutlinePose<Bounds>>?
     fun kick(action: FluidTimelineAction): Pair<Int,Float>?
 }
+
+internal data class FluidOutlineItemInputs(
+    val isGlass: Boolean,
+    val matchedViewIdentifier: Any? = null,
+    val contentScaleAxis: Int = 0,
+    val prefersUnclippedContents: Boolean = false,
+)
+
+internal data class FluidOutlineContentInputs(val home: FluidOutlineItemInputs, val popup: FluidOutlineItemInputs)
 
 internal data class PopupOutlinePose<Bounds>(val bounds: Bounds, val radius: Float, val scale: Float, val preservesCenter: Boolean = false)
 
