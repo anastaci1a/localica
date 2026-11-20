@@ -516,12 +516,12 @@ class FluidPopupComponentsTest {
         }
         assertEquals(2, ordinary.first().writeOptions)
         assertEquals(3, final.first().writeOptions)
-        assertEquals(FluidGaussianSpec.NarrowTexel.Zero, ordinary.last().texel(inside = false, edgePolicy = 0))
-        assertEquals(FluidGaussianSpec.NarrowTexel.ClampedSource, ordinary.last().texel(inside = false, edgePolicy = 1))
-        assertEquals(FluidGaussianSpec.NarrowTexel.ExistingDestination, final.last().texel(inside = false, edgePolicy = 0))
-        assertEquals(FluidGaussianSpec.NarrowTexel.ExistingDestination, final.last().texel(inside = false, edgePolicy = 1))
-        assertEquals(FluidGaussianSpec.NarrowTexel.GaussianColor, final.last().texel(inside = true, edgePolicy = 0))
-        assertEquals(FluidGaussianSpec.NarrowTexel.GaussianColor, ordinary.last().texel(inside = true, edgePolicy = 0))
+        assertEquals(FluidGaussianSpec.ComputeTexel.Zero, ordinary.last().texel(inside = false, edgePolicy = 0))
+        assertEquals(FluidGaussianSpec.ComputeTexel.ClampedSource, ordinary.last().texel(inside = false, edgePolicy = 1))
+        assertEquals(FluidGaussianSpec.ComputeTexel.ExistingDestination, final.last().texel(inside = false, edgePolicy = 0))
+        assertEquals(FluidGaussianSpec.ComputeTexel.ExistingDestination, final.last().texel(inside = false, edgePolicy = 1))
+        assertEquals(FluidGaussianSpec.ComputeTexel.FilteredColor, final.last().texel(inside = true, edgePolicy = 0))
+        assertEquals(FluidGaussianSpec.ComputeTexel.FilteredColor, ordinary.last().texel(inside = true, edgePolicy = 0))
     }
 
     @Test fun gaussianTileDecimationUsesLiveAdmissionAndTheNamedThreadDivisors() {
@@ -550,6 +550,16 @@ class FluidPopupComponentsTest {
         assertEquals(listOf(7u to 5u, 7u to 5u, 3u to 2u), passes.map { it.threads })
         assertEquals(listOf(0x0005fffc, 0x0001fffe, 0xffffffff.toInt()), passes.map { it.offsetLanes })
         assertEquals(0.25f to 0.5f, passes.last().gainInputs)
+        assertEquals(listOf(false, true, true), passes.map { it.quadFold })
+        fun taps(pass: FluidGaussianSpec.TileDecimationPass) = buildList {
+            pass.forEachTap(-1, 3) { x, y, weight -> add(Triple(x, y, weight)) }
+        }
+        assertEquals(
+            listOf(Triple(65534, 6, 0x3400), Triple(65535, 6, 0x3400), Triple(65534, 7, 0x3400), Triple(65535, 7, 0x3400)),
+            taps(passes.first()),
+        )
+        assertEquals(taps(passes.first()).map { (x, y, _) -> Triple(x, y, 0x2c00) }, taps(passes[1]))
+        assertEquals((65532..65535).flatMap { x -> (12..15).map { y -> Triple(x, y, 0x2400) } }, taps(passes.last()))
         assertEquals(null, tile(factors.first(), encoder = false))
         assertEquals(null, tile(factors.first(), destinationFlags = 8))
         assertEquals(null, tile(factors.first(), sourceFlags = 0x40))
@@ -596,6 +606,39 @@ class FluidPopupComponentsTest {
         assertTrue(draw.all { it.computeFunction == null })
         assertEquals(compute[1].offsets, draw[1].offsets)
         assertEquals(listOf(0.25f to 0.5f, 0.25f to 1.5f, 0.75f to 0.5f, 0.75f to 1.5f), draw.last().offsets)
+    }
+
+    @Test fun gaussianBoxDownsamplePreservesTapOrderAndDestinationWriteMode() {
+        val factors = FluidGaussianSpec.Decimation.entries
+        fun box(size: FluidGaussianSpec.Decimation, compute: Boolean) =
+            requireNotNull(FluidGaussianSpec.boxDecimation(size, compute, true, 2f to 1f, 0.25f to 0.5f))
+        val compute = factors.map { box(it, true) }
+        assertEquals(listOf(2, 3, 3), compute.map { it.computeWriteOptions })
+        assertEquals(null, box(factors[1], false).computeWriteOptions)
+        assertEquals(FluidGaussianSpec.ComputeTexel.Zero, compute.first().computeTexel(inside = false, edgePolicy = 0))
+        assertEquals(FluidGaussianSpec.ComputeTexel.ClampedSource, compute.last().computeTexel(inside = false, edgePolicy = 1))
+        assertEquals(FluidGaussianSpec.ComputeTexel.FilteredColor, compute.last().computeTexel(inside = true, edgePolicy = 0))
+        compute.first().forEachWeightedTap { _, _, _, _ -> error("The factor-2 copy does not fold taps") }
+
+        data class Tap(val x: Float, val y: Float, val weight: Float, val uvFirst: Boolean)
+        fun taps(pass: FluidGaussianSpec.BoxDecimationPass) = buildList {
+            pass.forEachWeightedTap { x, y, weight, uvFirst -> add(Tap(x, y, weight, uvFirst)) }
+        }
+        assertEquals(listOf(
+            Tap(-1f, 1f, 0.25f, true), Tap(1f, 1f, 0.25f, false),
+            Tap(-1f, -1f, 0.25f, false), Tap(1f, -1f, 0.25f, false),
+        ), taps(compute[1]))
+        val eight = taps(compute.last())
+        assertEquals(16, eight.size)
+        assertEquals(listOf(0, 4, 8), eight.indices.filter { eight[it].uvFirst })
+        val groups = listOf(1f to 1f, 1f to -1f, -1f to 1f, -1f to -1f)
+        assertEquals(groups.flatMap { (sx, sy) -> compute.last().offsets.map { (x, y) -> x * sx to y * sy } },
+            eight.map { it.x to it.y })
+        assertTrue(eight.all { it.weight.toRawBits() == 0x3d800000 })
+        val drawEight = box(factors.last(), false)
+        assertEquals(groups.flatMap { (sx, sy) -> drawEight.offsets.map { (x, y) -> x * sx to y * sy } },
+            taps(drawEight).map { it.x to it.y })
+        assertTrue(taps(drawEight).none { it.uvFirst })
     }
 
     @Test fun gaussianIdentityAndPaddingUseTheSameOrderedRadius() {

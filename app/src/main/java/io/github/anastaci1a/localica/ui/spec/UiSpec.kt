@@ -440,8 +440,10 @@ internal object FluidGaussianSpec {
             jointTiles && simdShuffleAndFill && edgeMode != 1 && !hasShape && !reinterpretedSource
     }
 
-    enum class Decimation(val factor: Int, val textureFunction: Int, val computeFunction: Int, val threadDivisor: UInt) {
-        By2(2, 1, 0x25, 2u), By4(4, 0x1b, 0x0d, 2u), By8(8, 0x1d, 0x0f, 4u);
+    enum class Decimation(
+        val factor: Int, val textureFunction: Int, val computeFunction: Int, val threadDivisor: UInt, val tileWeightBits: Int,
+    ) {
+        By2(2, 1, 0x25, 2u, 0x3400), By4(4, 0x1b, 0x0d, 2u, 0x2c00), By8(8, 0x1d, 0x0f, 4u, 0x2400);
     }
 
     fun admitsTileDecimation(
@@ -451,8 +453,24 @@ internal object FluidGaussianSpec {
         capabilities.jointTiles && isCurrentSurface && (sourceLevel and 15) >= size.factor
 
     data class TileDecimationPass(
-        val function: String, val threads: Pair<UInt, UInt>, val offsetLanes: Int, val gainInputs: Pair<Float, Float>,
-    )
+        val size: Decimation, val threads: Pair<UInt, UInt>, val offsetLanes: Int, val gainInputs: Pair<Float, Float>,
+    ) {
+        val function get() = "tile_downsample_${size.factor}"
+        val quadFold get() = size != Decimation.By2
+
+        fun forEachTap(threadX: Int, threadY: Int, emit: (x: Int, y: Int, halfWeightBits: Int) -> Unit) {
+            val weight = size.tileWeightBits
+            if (size == Decimation.By8) {
+                for (x in 0..3) for (y in 0..3) {
+                    emit(((threadX shl 2) or x) and 0xffff, ((threadY shl 2) or y) and 0xffff, weight)
+                }
+            } else {
+                for (y in 0..1) for (x in 0..1) {
+                    emit(((threadX shl 1) or x) and 0xffff, ((threadY shl 1) or y) and 0xffff, weight)
+                }
+            }
+        }
+    }
 
     fun tileDecimation(
         size: Decimation, encoderLive: Boolean, destinationFlags: Int, sourceFlags: Int,
@@ -467,7 +485,7 @@ internal object FluidGaussianSpec {
         val y = sourceOrigin.second / size.factor - destinationOrigin.second
         val offsets = (x and 0xffff) or (y shl 16)
         return TileDecimationPass(
-            "tile_downsample_${size.factor}", width to height, offsets,
+            size, width to height, offsets,
             (destinationScale / sourceScale) to (1f / contextScale),
         )
     }
@@ -475,7 +493,30 @@ internal object FluidGaussianSpec {
     data class BoxDecimationPass(
         val textureFunction: Int, val computeFunction: Int?, val scale: Pair<Float, Float>,
         val offsets: List<Pair<Float, Float>>, val weights: List<Float>?,
-    )
+    ) {
+        val computeWriteOptions get() = when (computeFunction) {
+            null -> null
+            Decimation.By2.computeFunction -> 2
+            else -> 3
+        }
+
+        fun computeTexel(inside: Boolean, edgePolicy: Int) = selectComputeTexel(inside, finalPass = false, edgePolicy)
+
+        fun forEachWeightedTap(emit: (offsetX: Float, offsetY: Float, weight: Float, uvFirst: Boolean) -> Unit) {
+            val compute = computeFunction != null
+            if (weights != null) {
+                offsets.forEachIndexed { index, (x, y) -> emit(x, y, weights[index], compute && index == 0) }
+            } else if (textureFunction == Decimation.By8.textureFunction) {
+                for (group in 0..3) {
+                    offsets.forEachIndexed { index, (x, y) ->
+                        val dx = if ((group and 2) == 0) x else -x
+                        val dy = if ((group and 1) == 0) y else -y
+                        emit(dx, dy, 0.0625f, compute && index == 0 && group != 3)
+                    }
+                }
+            }
+        }
+    }
 
     fun boxDecimation(
         size: Decimation, compute: Boolean, directBox4Supported: Boolean,
@@ -498,17 +539,19 @@ internal object FluidGaussianSpec {
     }
 
     enum class NarrowWidth { Taps7, Taps11, Taps15, Taps19, Taps23, Taps27 }
-    enum class NarrowTexel { GaussianColor, Zero, ClampedSource, ExistingDestination }
+    enum class ComputeTexel { FilteredColor, Zero, ClampedSource, ExistingDestination }
+
+    private fun selectComputeTexel(inside: Boolean, finalPass: Boolean, edgePolicy: Int) = when {
+        inside -> ComputeTexel.FilteredColor
+        finalPass -> ComputeTexel.ExistingDestination
+        edgePolicy == 0 -> ComputeTexel.Zero
+        else -> ComputeTexel.ClampedSource
+    }
 
     class NarrowComputePass(val function: Int, val textureFunction: Int, private val finalPass: Boolean) {
         val writeOptions get() = if (finalPass) 3 else 2
 
-        fun texel(inside: Boolean, edgePolicy: Int) = when {
-            inside -> NarrowTexel.GaussianColor
-            finalPass -> NarrowTexel.ExistingDestination
-            edgePolicy == 0 -> NarrowTexel.Zero
-            else -> NarrowTexel.ClampedSource
-        }
+        fun texel(inside: Boolean, edgePolicy: Int) = selectComputeTexel(inside, finalPass, edgePolicy)
     }
 
     fun narrowCompute(width: NarrowWidth, finalRequested: Boolean, destinationFlags: Int): NarrowComputePass {
