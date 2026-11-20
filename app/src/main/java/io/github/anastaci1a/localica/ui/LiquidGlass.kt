@@ -458,7 +458,7 @@ internal fun ContactGlowBacking(modifier: Modifier, glow: () -> GlassGlow, shape
     sample: () -> Color?, transform: (Size) -> GlassBodyTransform = { shape().lensTransform(vertical) }, geometry: DrawScope.() -> Pair<Rect, Float> = { Rect(Offset.Zero, size) to 0f }, content: @Composable () -> Unit) {
     val background = MaterialTheme.colorScheme.background
     ContactLightBacking(modifier, geometry = geometry, background = background, enabled = { val frame = glow(); frame.big > 0f || frame.little > 0f || frame.retiring.any { it.little > 0f } },
-        effect = { g -> cache.effect(glow(), transform(size), g.first, density, background, size.height, g.second) }, reduction = { cache.meanEffect(background) },
+        effect = { g -> cache.effect(glow(), transform(size), g.first, density, background, size.height, g.second, GlassBodyTransform::localPoint) }, reduction = { cache.meanEffect(background) },
         paint = { g -> contactGlowPasses(glow(), shape(), vertical, cache, g.first, sample()?.compositeOver(background) ?: background, transform(size), g.second) }, content = content)
 }
 
