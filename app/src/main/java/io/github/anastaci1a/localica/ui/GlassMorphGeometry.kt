@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction
 import io.github.anastaci1a.localica.ui.spec.Space
 import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 import io.github.anastaci1a.localica.ui.spec.fluidThroughGrows
@@ -64,9 +65,12 @@ internal fun fluidPopupContentGrows(from: PopupPortalBounds, to: PopupPortalBoun
 
 internal enum class PopupThroughItem { From, Pivot, To }
 
-internal fun popupThroughSlots(from: PopupPortalBounds, to: PopupPortalBounds, fromPhase: Boolean): Pair<PopupThroughItem, PopupThroughItem> {
+internal fun popupThroughSlots(from: PopupPortalBounds, to: PopupPortalBounds, fromPhase: Boolean) =
+    popupThroughSlots(fluidPopupContentGrows(from, to), fromPhase)
+
+private fun popupThroughSlots(growing: Boolean, fromPhase: Boolean): Pair<PopupThroughItem, PopupThroughItem> {
     val endpoint = if (fromPhase) PopupThroughItem.From else PopupThroughItem.To
-    return if (fluidPopupContentGrows(from, to) == fromPhase) PopupThroughItem.Pivot to endpoint else endpoint to PopupThroughItem.Pivot
+    return if (growing == fromPhase) PopupThroughItem.Pivot to endpoint else endpoint to PopupThroughItem.Pivot
 }
 
 internal data class FluidOutlineOverride(
@@ -78,6 +82,25 @@ internal data class FluidOutlineStep(val endpoint: FluidOutlineOverride?, val co
 internal data class FluidGrowingOutlineTargets(
     val collapsedSource: FluidOutlineStep, val overrounded: FluidOutlineStep, val fullyExpanded: FluidOutlineStep,
 )
+
+internal fun fluidOutlineRequests(
+    action: FluidTimelineAction, growing: Boolean, growth: FluidGrowingOutlineTargets?, returnOutline: FluidOutlineStep?,
+): List<Pair<PopupThroughItem, FluidOutlineOverride?>>? {
+    val source = when (action) {
+        FluidTimelineAction.Source, FluidTimelineAction.CollapsedSource -> true
+        FluidTimelineAction.ExpandedOverrounded, FluidTimelineAction.FullyExpanded -> false
+        else -> return null
+    }
+    val outline = if (!growing) returnOutline else when (action) {
+        FluidTimelineAction.CollapsedSource -> growth?.collapsedSource
+        FluidTimelineAction.ExpandedOverrounded -> growth?.overrounded
+        FluidTimelineAction.FullyExpanded -> growth?.fullyExpanded
+        else -> null
+    }
+    val (first, second) = popupThroughSlots(growing, fromPhase = source == growing)
+    fun request(role: PopupThroughItem) = role to if (role == PopupThroughItem.Pivot) outline?.companion else outline?.endpoint
+    return listOf(request(first), request(second))
+}
 
 /** The two source rectangles are in the smaller root. The two conversions resolve each target's container. */
 internal fun fluidGrowingOutlineTargets(
