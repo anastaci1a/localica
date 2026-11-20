@@ -332,10 +332,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             shape = if (silhouette != null) surfaceClip else presentedRadius()?.let { RoundedCornerShape(it) } ?: CircleShape
             clip = true
         })
-        .backdropLocation(location).onGloballyPositioned {
-            contact.state.admitSize(it.size, density.density, bodyOverride.takeIf { anchor == null && sharedContact == null }, anchor != null, reduced)
-            surfaceSize = it.size
-        }, propagateMinConstraints = true) {
+        .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
         val blurRadius = glassBackdropBlurRadius(density.density)
         fun blur(record: GlassSurfacePresentation) = blurRadius * (GlassBlurDefault + (1f - GlassBlurDefault) * record.frost)
         val padding = with(density) { 32.dp.toPx() }

@@ -38,9 +38,9 @@ class PopupRetractTintTest {
     @Test fun sourcedPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = true)
     @Test fun sourcedRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = true)
     @Test fun flatPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = false, "retired-preference-cleanup")
-    @Test fun flatRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = false, "fixed-default-control")
-    @Test fun flatSourcedPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = true, "fixed-default-control")
-    @Test fun flatSourcedRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = true, "fixed-default-control")
+    @Test fun flatRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = false, "retired-preference-cleanup")
+    @Test fun flatSourcedPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = true, "retired-preference-cleanup")
+    @Test fun flatSourcedRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = true, "retired-preference-cleanup")
 
     private fun retract(pill: Boolean, sourced: Boolean, case: String = "default") {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
