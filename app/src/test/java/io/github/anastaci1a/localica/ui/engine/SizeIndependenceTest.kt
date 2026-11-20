@@ -56,7 +56,7 @@ class SizeIndependenceTest {
             motion.show(true); motion.place(home, envelope, 1f, detached = true)
             assertTrue(motion.expansion.awaitingNativeGate)
             motion.expansion.acknowledgeNativeGate(motion.expansion.nativeGeneration)
-            val rect = motion.bounds as MotionRect; val start = h.clock.stampNow
+            val rect = requireNotNull(motion.rectangle); val start = h.clock.stampNow
             val window = SpringOracle.window(listOf(doubleArrayOf(0.0, 0.0, 1.0, w, z, 1.0)), 1.0, (1f / hz).toDouble()); var k = 0
             val a = edgesOf(home); val b = edgesOf(envelope)
             while (true) {
