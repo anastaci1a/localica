@@ -401,6 +401,11 @@ internal class FluidMorphCompletion {
     }
 }
 
+/** The host forwards the request release after its state has been installed. */
+internal fun releaseFluidMorphRequest(stateInstalled: Boolean, release: (() -> Unit)?) {
+    if (stateInstalled) release?.invoke()
+}
+
 internal fun completeFluidTimeline(
     callback: (() -> Unit)?, prepareCleanup: () -> Unit, removeViews: () -> Unit,
     clearOwnerState: () -> Unit, setState: (Int) -> Unit, resetTimeline: () -> Unit, removeTrackedSdf: () -> Unit,
