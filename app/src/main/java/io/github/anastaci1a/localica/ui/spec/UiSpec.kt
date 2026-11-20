@@ -260,7 +260,18 @@ internal object FluidKickSpec {
 internal data class FluidContentBlurSequence(
     val blurOut: FluidPopupStep<FluidPopupSpringSettings>, val blurIn: FluidPopupStep<FluidPopupSpringSettings>,
 )
-internal data class FluidContentBlurRequest(val portalScale: Double, val gaussianRadius: Double)
+internal data class FluidContentBlurRequest(val portalScale: Double, val gaussianRadius: Double) {
+    fun zoomMatrix() = fluidZoomDiagonal(portalScale, portalScale, 1.0)
+    fun typedZoom() = FluidZoomTransform.fromPlanarScale(portalScale)
+}
+
+private fun fluidZoomDiagonal(x: Double, y: Double, z: Double) = DoubleArray(16).apply {
+    this[0] = x
+    this[5] = y
+    this[10] = z
+    this[15] = 1.0
+}
+
 internal fun fluidContentBlurOut(height: Double, maxScale: () -> Double, minScale: () -> Double): FluidContentBlurRequest {
     val fraction = (height + (-215.0)) / 305.0
     val t = if (fraction.isNaN()) 1.0 else fraction.coerceIn(0.0, 1.0)
@@ -271,7 +282,7 @@ internal val FluidContentBlurIn = FluidContentBlurRequest(1.0, 0.0)
 internal object FluidSharedBlurSpec {
     const val additive = false
 
-    fun zoomOrigin(model: DoubleArray?) = model ?: DoubleArray(16) { if (it % 5 == 0) 1.0 else 0.0 }
+    fun zoomOrigin(model: DoubleArray?) = model ?: FluidContentBlurIn.zoomMatrix()
     fun radiusOrigin(model: Double?) = model ?: 0.0
 
     fun publishRadius(publication: FluidScalarPublication, write: (Double, Double, Boolean) -> Unit) {
@@ -284,11 +295,36 @@ internal object FluidSharedBlurSpec {
 
 /** Decomposed rotation, scale, translation, shear and perspective, in that order. */
 internal class FluidZoomTransform(private val components: DoubleArray, val rotationDirection: Int) {
+    companion object {
+        fun fromPlanarScale(scale: Double): FluidZoomTransform? {
+            val squared = scale * scale
+            if (!(scale > 0.0 && squared > 0.0 && squared.isFinite())) return null
+            val extent = sqrt(squared)
+            val normalized = scale * (1.0 / extent)
+            val typed = DoubleArray(16)
+            typed[0] = atan2(0.0, 1.0)
+            typed[1] = asin(-0.0)
+            typed[2] = atan2(0.0, normalized)
+            typed[3] = extent
+            typed[4] = extent
+            typed[5] = 1.0
+            typed[15] = 1.0
+            return FluidZoomTransform(typed, 0)
+        }
+    }
+
     init {
         require(components.size == 16)
     }
 
     operator fun get(index: Int) = components[index]
+
+    fun diagonalMatrix(): DoubleArray? {
+        if ((0..2).any { this[it] != 0.0 } || (6..11).any { this[it] != 0.0 }) return null
+        if ((12..14).any { this[it].toRawBits() != 0L } || this[15] != 1.0) return null
+        if ((3..5).any { !(this[it] > 0.0 && this[it].isFinite()) }) return null
+        return fluidZoomDiagonal(this[3], this[4], this[5])
+    }
 }
 
 internal class FluidZoomValues(
