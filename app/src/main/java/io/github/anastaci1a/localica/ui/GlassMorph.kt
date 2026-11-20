@@ -12,7 +12,6 @@ import io.github.anastaci1a.localica.ui.layout.lyricsHeaderWidth
 import io.github.anastaci1a.localica.ui.spec.PopupViewportInsets
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
 import io.github.anastaci1a.localica.ui.spec.PopupKind
-import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec
 import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 
 import androidx.compose.animation.core.spring
@@ -1175,8 +1174,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                         val blur = motion.fluidBlurRadius
                                         val lensHeight = motion.fluidLensHeight
                                         val amount = motion.fluidLensAmount
-                                        val atRest = FluidGaussianSpec.isIdentity(blur) && amount == FluidLensingSpec.freshAmount &&
-                                            (lensHeight == 0f || lensHeight == FluidLensingSpec.freshHeight.toFloat())
+                                        val atRest = FluidLensingSpec.isForegroundAtRest(blur, lensHeight, amount)
                                         renderEffect = if (atRest) null else foregroundLens.value?.effect(
                                             LensGeometry(Rect(-foregroundX.toFloat(), -foregroundY.toFloat(),
                                                 (width - foregroundX).toFloat(), (height - foregroundY).toFloat()), with(density) { radius().toPx() }),

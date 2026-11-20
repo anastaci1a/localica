@@ -284,7 +284,7 @@ class GlassGlowTest {
             |        uniform float warpMode;
         """.trimMargin() + "\n")
         replaceExact("""
-            |        // Popup content warp: the glass map (distance below zero inside, outward unit normal,
+            |        // Popup content warp: the glass map (distance above zero inside, outward unit normal,
             |        // full coverage) evaluated inline, then the displacement sample it masks.
             |        half4 warped(float2 p, float3 f) {
             |            float2 n = dot(f.yz, f.yz) > 0.0 ? -normalize(f.yz) : float2(0);
@@ -303,7 +303,9 @@ class GlassGlowTest {
         replaceExact("            if (warpMode > 0.5) return warped(p, f);\n")
         replaceExact(", warp: LensWarp? = null")
         replaceExact("        val words = warp?.uniforms(unit)\n")
-        replaceExact(" + (words ?: FloatArray(0))")
+        replaceExact("    private var lastWarp: FloatArray? = null\n")
+        replaceExact(" && words.contentEquals(lastWarp)")
+        replaceExact("        lastWarp = words\n")
         replaceExact("""
             |        val w = words ?: FloatArray(12)
             |        shader.setFloatUniform("mapShape", w[0], w[1], w[2], w[3])
