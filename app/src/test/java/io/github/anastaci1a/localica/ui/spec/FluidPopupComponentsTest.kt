@@ -409,6 +409,27 @@ class FluidPopupComponentsTest {
         assertEquals(2, FluidGaussianSpec.edgeMode(1, 0, explicitBounds = false))
     }
 
+    @Test fun narrowGaussianUsesTheFinalProgramOnlyForAnAdmittedDestination() {
+        val widths = FluidGaussianSpec.NarrowWidth.entries
+        val ordinary = widths.map { FluidGaussianSpec.narrowCompute(it, false, 0x80000000.toInt()) }
+        val final = widths.map { FluidGaussianSpec.narrowCompute(it, true, 0x80000000.toInt()) }
+        assertEquals((0x12..0x17).toList(), ordinary.map { it.function })
+        assertEquals((0x18..0x1d).toList(), final.map { it.function })
+        assertEquals((0x21..0x26).toList(), ordinary.map { it.textureFunction })
+        assertEquals(ordinary.map { it.textureFunction }, final.map { it.textureFunction })
+        for (flags in listOf(0, 0x20000000, 0xa0000000.toInt())) {
+            assertEquals(0x12, FluidGaussianSpec.narrowCompute(widths.first(), true, flags).function)
+        }
+        assertEquals(2, ordinary.first().writeOptions)
+        assertEquals(3, final.first().writeOptions)
+        assertEquals(FluidGaussianSpec.NarrowTexel.Zero, ordinary.last().texel(inside = false, edgePolicy = 0))
+        assertEquals(FluidGaussianSpec.NarrowTexel.ClampedSource, ordinary.last().texel(inside = false, edgePolicy = 1))
+        assertEquals(FluidGaussianSpec.NarrowTexel.ExistingDestination, final.last().texel(inside = false, edgePolicy = 0))
+        assertEquals(FluidGaussianSpec.NarrowTexel.ExistingDestination, final.last().texel(inside = false, edgePolicy = 1))
+        assertEquals(FluidGaussianSpec.NarrowTexel.GaussianColor, final.last().texel(inside = true, edgePolicy = 0))
+        assertEquals(FluidGaussianSpec.NarrowTexel.GaussianColor, ordinary.last().texel(inside = true, edgePolicy = 0))
+    }
+
     @Test fun gaussianIdentityAndPaddingUseTheSameOrderedRadius() {
         assertTrue(FluidGaussianSpec.isIdentity(FluidContentBlurIn.gaussianRadius))
         assertTrue(FluidGaussianSpec.isIdentity(Double.NaN))
