@@ -1425,11 +1425,24 @@ class FluidPopupComponentsTest {
         assertTrue(angular.advance(0.03, ScalarSpringUse.Parameter).value < 0.0)
     }
 
+    @Test fun sharedZoomSetterComparesAllSixteenLanesWithOrderedEquality() {
+        val identity = FluidContentBlurIn.zoomMatrix()
+        assertTrue(FluidSharedBlurSpec.skipsZoomMutation(identity, identity.copyOf().also { it[1] = -0.0 }))
+        for (lane in identity.indices) {
+            val changed = identity.copyOf().also { it[lane] = Math.nextUp(it[lane]) }
+            assertFalse(FluidSharedBlurSpec.skipsZoomMutation(identity, changed))
+            val unordered = identity.copyOf().also { it[lane] = Double.NaN }
+            assertFalse(FluidSharedBlurSpec.skipsZoomMutation(unordered, unordered))
+        }
+        assertFalse(FluidSharedBlurSpec.skipsZoomMutation(identity, DoubleArray(15)))
+    }
+
     @Test fun sharedBlurOriginsAndPublishedRadiusPreserveTheTypedBody() {
-        val identity = FluidSharedBlurSpec.zoomOrigin(null)
+        assertEquals(null, FluidSharedBlurSpec.zoomOrigin(null) { null })
+        val identity = requireNotNull(FluidSharedBlurSpec.zoomOrigin(null, FluidContentBlurIn::zoomMatrix))
         assertEquals(listOf(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0), identity.toList())
         val zoom = identity.copyOf().also { it[0] = 1.2 }
-        assertTrue(FluidSharedBlurSpec.zoomOrigin(zoom) === zoom)
+        assertTrue(FluidSharedBlurSpec.zoomOrigin(zoom) { error("Model value already present") } === zoom)
         assertEquals(0.0.toRawBits(), FluidSharedBlurSpec.radiusOrigin(null).toRawBits())
         assertEquals((-0.0).toRawBits(), FluidSharedBlurSpec.radiusOrigin(-0.0).toRawBits())
         assertFalse(FluidSharedBlurSpec.additive)
