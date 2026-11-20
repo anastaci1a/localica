@@ -28,6 +28,8 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     val stampNow: FrameStamp get() { checkOwner(); return FrameStamp(maxOf(nowNanos(),last.nanos),last.sequence) }
     val activeCount: Int get()=active.size
     internal val presentedStamp: FrameStamp get()=last
+    /** #1083: the platform drag coefficient is the window's duration scale; a non-positive scale reads as 1. */
+    internal val fluidDrag: Double get()=context?.durationScale?.takeIf { it>0f }?.toDouble()?:1.0
     internal val isObserving: Boolean get()=observing
     internal fun checkMutation() { checkOwner(); check(!observing) { "An observer cannot drive presentation" } }
     internal fun allocateId(): Long { checkMutation(); return ++nextId }
@@ -48,6 +50,44 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
             if(observers.isNotEmpty()) observe { val frame=active.toList(); observers.forEach { it.onFrame(last,frame) } } } }
         } } finally { active.clear() }
     }
+}
+/** #1083: a through popup's ordered actions on the shared clock, whose frames replace the reference's 16 ms drain timer. A hold takes the
+ * first action and waits for its lifecycle owner; with animations off (Reduced) the effective speed 0 admits the whole queue. */
+internal class FluidTimelineMotion(private val clock: UiClock,private val run: (FluidTimelineStep,Double)->Unit): ActiveMotion {
+    override val id=clock.allocateId(); override val presented get()=true; override val settled get()=actions.isEmpty()
+    private val actions=ArrayDeque<FluidTimelineStep>(); private var started=clock.presentedStamp; private var speed=0.0; private var amplify=false; private var timing=false
+    internal var holding=false; private set
+    fun replace(steps: List<FluidTimelineStep>) { clock.checkMutation(); actions.replaceFluidTimeline(steps) }
+    fun start(suppliedSpeed: Double,amplifyDelays: Boolean,hold: Boolean) {
+        clock.checkMutation(); if(timing || holding) return
+        started=clock.stampNow; speed=if(clock.context?.access==MotionAccess.Reduced) 0.0 else suppliedSpeed; amplify=amplifyDelays; holding=hold
+        drain(started); if(!hold && actions.isNotEmpty()) { timing=true; clock.register(this) }
+    }
+    private fun drain(stamp: FrameStamp)=actions.drainFluidTimeline((stamp.nanos-started.nanos)/1e9,speed,amplify,{ clock.fluidDrag },holding,run)
+    override fun frame(stamp: FrameStamp)=drain(stamp)
+    override fun endsAt(stamp: FrameStamp)=actions.isEmpty()
+    override fun finish(stamp: FrameStamp) { timing=false }
+    override fun reduce(stamp: FrameStamp) { clock.unregister(this); timing=false; speed=0.0; drain(stamp) }
+}
+/** #1083: one running property entry on the shared clock. Each frame advances the installed spring by the frame delta over the drag, finishes
+ * on the projected error and publishes through [write]; [completion] belongs to the lifecycle owner. */
+internal class FluidPropertyMotion(private val clock: UiClock,private val epsilonSquared: Double,private val sameValue: (Double,Double)->Boolean,
+    private val write: (FluidScalarSpringBody)->Unit,private val completion: ()->Unit={}): ActiveMotion {
+    override val id=clock.allocateId(); override val presented get()=true; override var settled=true; private set
+    private var entry: FluidScalarSpringEntry?=null; private lateinit var spring: FluidPopupSpringSettings; private var time=FluidPropertyFrameTime(0.0,0.0,0.0); private val publication=FluidScalarPublication()
+    fun animate(requestedStart: Double,target: Double,controls: FluidPropertySpringControls,spring: FluidPopupSpringSettings) {
+        clock.checkMutation(); val old=entry; entry=controls.immediateEntry(requestedStart,target,old,old?.target,spring,null); this.spring=spring
+        if(settled) { settled=false; time=time.primed(clock.stampNow.nanos/1e9) { clock.context?.displayIntervalSeconds?.toDouble()?:0.0 }; clock.register(this) }
+    }
+    private fun publish(next: FluidScalarSpringEntry) { publication.queueTick(next.body,next.target,settled,sameValue); publication.consume(write) }
+    override fun frame(stamp: FrameStamp) {
+        val current=entry?:return; time=time.advance(stamp.nanos/1e9)
+        val next=spring.advanceUnsmoothed(current,time.entryDelta(0.0,clock.fluidDrag)); entry=next
+        settled=next.body.finished(next.target,spring.velocityScalingFactor,epsilonSquared,false); publish(next)
+    }
+    override fun endsAt(stamp: FrameStamp)=settled
+    override fun finish(stamp: FrameStamp) { entry=null; completion() }
+    override fun reduce(stamp: FrameStamp) { clock.unregister(this); settled=true; entry?.let(::publish); finish(stamp) }
 }
 @Composable internal fun ProvideUiClock(content: @Composable ()->Unit) {
     val inherited=LocalClockOwner.current
