@@ -90,7 +90,7 @@ internal class FluidPopupSpringSettings(
         if (!(dt > 0.0)) return entry
         val state = entry.body.value to entry.body.velocity
         val (scale, velocity) = SpringKernel.fromInstalled(stiffness, installedDamping)
-            .advanceTransform(state, entry.target, FluidPlanarZoomValues)
+            .advanceTransform(state, entry.target, dt, FluidPlanarZoomValues)
         return entry.copy(body = FluidScalarSpringBody(scale, velocity),
             intermediate = FluidScalarSpringBody(entry.target, 0.0))
     }
