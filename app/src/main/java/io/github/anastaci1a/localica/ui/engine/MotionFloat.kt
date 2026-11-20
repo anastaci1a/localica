@@ -22,6 +22,7 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
     internal val kind: Int get()=segment.kind
     override val target: Float get()=destination.floatValue
     override val settled: Boolean get()=segment.kind==0
+    override val reducesWithAccess get()=(descriptor as? SpringPlan)?.reducesWithAccess!=false
     init { clock.checkMutation(); require(initial.isFinite() && range.isFinite() && range>0 && (bounds==null || initial.toDouble() in bounds)); id=clock.allocateId(); clock.events?.let { sink -> clock.observe { sink.created(this); sink.joined(this,MotionJoin(0,started,Kinematic(initial,0f),Kinematic(initial,0f),0,0,"Initial")) } } }
     // Compose keeps evaluator velocity in play-time units; only timed elapsed is scaled.
     // Driven values and their input velocities always retain real timestamp units.
@@ -29,11 +30,11 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
         val seconds=(stamp.nanos-start.nanos)/1e9
         if(trajectory.kind !in 1..2) return seconds
         val scale=clock.context?.durationScale?:1f
-        if(scale==0f) return trajectory.duration
+        if(scale==0f && (trajectory as? Damped)?.plan?.reducesWithAccess!=false) return trajectory.duration
         val startedAt=start.springCorrectionSeconds
         val sampledAt=stamp.springCorrectionSeconds
         if(trajectory.kind==2 && startedAt!=null && sampledAt!=null) return seconds+(sampledAt-startedAt)
-        return seconds/scale
+        return if(scale==0f) seconds else seconds/scale
     }
     private fun raw(stamp: FrameStamp,derivative: Boolean): Double { var selected=segment; var start=started; var old=past; while(stamp.nanos<start.nanos && old!=null) { selected=old.trajectory; start=old.started; old=old.previous }; val t=elapsed(selected,start,stamp); return if(derivative) selected.velocity(t) else selected.value(t) }
     internal fun rawValue(stamp: FrameStamp)=raw(stamp,false)

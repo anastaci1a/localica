@@ -123,4 +123,36 @@ class FluidPopupClockTest {
         rig.configure(MotionAccess.Reduced); assertEquals(FluidScalarSpringBody(2.0, 0.0), written.last()); assertEquals(0, rig.clock.activeCount)
         rig.close()
     }
+
+    @Test fun anInvalidatedPropertyDeliversItsPendingSampleBeforeTheReplacementAdvances() {
+        val rig=Rig()
+        val published=mutableListOf<FluidScalarSpringBody>()
+        val completion=mutableListOf<Boolean>()
+        val motion=FluidPropertyMotion(rig.clock, Double::equals, { published += it }) { completion += it }
+        val controls=FluidPropertySpringControls(0.0, null, interactive=false, additive=false)
+        val spring=FluidPopupSpringSettings(1.0, 0.2)
+        motion.animate(0.0, 1.0, controls, spring, 1e-6)
+        var sampleBeforeRetarget: FluidScalarSpringBody?=null
+        rig.clock.register(object: ActiveMotion {
+            override val id=rig.clock.allocateId()
+            override val presented=true
+            override val settled=false
+            override fun frame(stamp: FrameStamp) {
+                sampleBeforeRetarget=motion.sample()
+                motion.animate(0.0, 2.0, controls, spring, 1e-6)
+            }
+            override fun endsAt(stamp: FrameStamp)=true
+            override fun finish(stamp: FrameStamp) {}
+            override fun reduce(stamp: FrameStamp) {}
+        })
+        rig.frame(16_000_000L)
+        assertEquals(listOf(false), completion)
+        assertEquals(listOf(sampleBeforeRetarget), published)
+        assertEquals(sampleBeforeRetarget, motion.sample())
+        assertEquals(2.0, motion.target, 0.0)
+        rig.frame(32_000_000L)
+        assertEquals(2, published.size)
+        assertTrue(published.last().value > requireNotNull(sampleBeforeRetarget).value)
+        rig.close()
+    }
 }

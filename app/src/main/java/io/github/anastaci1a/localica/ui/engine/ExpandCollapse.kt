@@ -94,7 +94,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         // The last edge and kick requests: committed unless held, and replayed by [resumeOutline] at release.
         var edges: Pair<List<Pair<MotionFloat,Float>>,FluidPopupSpringSettings>?=null; val kickRequests=arrayOfNulls<Pair<Float,FluidPopupSpringSettings>>(2)
         fun rect(slot: Int)=if(slot==0) requireNotNull(bound) else companion
-        private fun kickProperty(initial: Double)=FluidPropertyMotion(clock,Double::equals,completion={ notifyLifecycle() },initial=initial)
+        private fun kickProperty(initial: Double)=FluidPropertyMotion(clock,Double::equals,initial=initial,
+            snapReduced={ false },completion={ finished -> if(finished) notifyLifecycle() })
     }
     private var outline by mutableStateOf<Outline?>(null)
     internal val hasOutline get()=outline!=null
@@ -206,21 +207,23 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         if(targets.isEmpty()) return
         drawn=null
         val stamp=clock.stampNow; val ctx=context(); val display=ctx.displayIntervalSeconds.toDouble()
-        val immediate=snap || ctx.access==MotionAccess.Reduced
-        val states=if(immediate) emptyList() else targets.map { (m,q) ->
+        val geometry=fluidOutlineGeometrySpring(spring,ctx.access)
+        val scales=outline?.scales
+        val states=if(snap) emptyList() else targets.map { (m,q) ->
+            val law=if(scales?.contains(m)==true) spring else geometry
             val x=m.rawValue(stamp)
             val from=if(m.kind==2) m.target.toDouble() else x
-            val v=spring.velocityWithImpulse(m.rawVelocity(stamp),q.toDouble()-from)
-            doubleArrayOf(x,v,q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble())
+            val v=law.velocityWithImpulse(m.rawVelocity(stamp),q.toDouble()-from)
+            doubleArrayOf(x,v,q.toDouble(),law.omega,law.dampingRatio,m.range.toDouble())
         }
         val moving=states.filter { it[0]!=it[2] || it[1]!=0.0 }
-        val plan=if(moving.isEmpty()) null else SpringPlan.of(stamp,1.0,display,moving)
+        val plan=if(moving.isEmpty()) null else SpringPlan.of(stamp,1.0,display,moving,reducesWithAccess=false)
         commitAtomic(targets.mapIndexed { index,(m,q) ->
             val segment=if(plan==null) Rest(q.toDouble()) else {
-                val (x,v)=states[index]
-                Damped(x,v,q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble(),display,plan.finish,plan.tauOut,plan)
+                val (x,v,_,omega,damping)=states[index]
+                Damped(x,v,q.toDouble(),omega,damping,m.range.toDouble(),display,plan.finish,plan.tauOut,plan)
             }
-            m to m.prepareSegment(segment,q,stamp,plan,if(immediate) "Reduced" else "Continuous")
+            m to m.prepareSegment(segment,q,stamp,plan,if(snap) "Initial" else "Continuous")
         })
     }
     // The bodies sampled at one frame stamp: the field and every radius reader of that frame share one construction.

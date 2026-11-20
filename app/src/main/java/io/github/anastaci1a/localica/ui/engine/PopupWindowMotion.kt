@@ -61,7 +61,9 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     var fluidBlurRadius by mutableDoubleStateOf(0.0); private set
     var fluidLensHeight by mutableDoubleStateOf(FluidLensingSpec.freshHeight); private set
     var fluidLensAmount by mutableDoubleStateOf(FluidLensingSpec.freshAmount); private set
-    private val fluidBlur = FluidPropertyMotion(clock, Double::equals, { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidBlurRadius = radius } })
+    private fun snapsReducedFluid() = placement?.outline == null
+    private val fluidBlur = FluidPropertyMotion(clock, Double::equals,
+        { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidBlurRadius = radius } }, snapReduced=::snapsReducedFluid)
     private val lensHeight = FluidPropertyMotion(clock, Double::equals, { sample ->
         FluidLensingSpec.publishSample(sample) { height, _, _, _, _ -> fluidLensHeight = height }
     })
@@ -69,7 +71,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         FluidLensingSpec.publishSample(sample) { amount, _, _, _, _ -> fluidLensAmount = amount }
     })
     private val fluidBlurControls = FluidPropertySpringControls(0.0, null, false, false)
-    private val fluidTimeline = FluidTimelineMotion(clock) { step, speed ->
+    private val fluidTimeline = FluidTimelineMotion(clock, ::snapsReducedFluid) { step, speed ->
         deliverOutline(step,speed)
         val radius = when (step.action) {
             FluidTimelineAction.BlurOut -> FluidSharedBlurSpec.blurOutRadius
@@ -172,7 +174,6 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         fluidTimeline.replace(fluidThroughQueue(growing, FluidMainEject, FluidContent) {
             FluidLensingSpec.requests(FluidContent.lensingEnabled, growing, short(smaller), short(larger), FluidMainEject, FluidMainAbsorb)
         })
-        if(outline!=null) for(slot in 0..1) expansion.kickOutline(slot,FluidKickSpec.unkickTarget.toFloat(),FluidMainAbsorb.scaledResponses(FluidContent.speed))
         fluidTimeline.start(FluidContent.speed, FluidContent.amplifyDelays, holding)
     }
     fun updateSpeed(speed: Float) = expansion.updateSpeed(speed)

@@ -41,6 +41,7 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     internal fun checkMutation() { checkOwner(); check(!observing) { "An observer cannot drive presentation" } }
     internal fun allocateId(): Long { checkMutation(); return ++nextId }
     internal fun register(motion: ActiveMotion) { checkMutation(); if(active.add(motion)) wake.trySend(Unit) }
+    internal fun isRegistered(motion: ActiveMotion) = motion in active
     internal fun unregister(motion: ActiveMotion) { checkMutation(); active.remove(motion) }
     internal fun observe(block: ()->Unit) { checkOwner(); check(!observing); observing=true; try { Snapshot.withoutReadObservation(block) } finally { observing=false } }
     internal fun configure(value: EngineContext,data: UiSpec) { checkMutation(); val previous=context; val reduced=previous?.access!=MotionAccess.Reduced && value.access==MotionAccess.Reduced; context=value; spec=data; if(previous!=null && previous.durationScale!=value.durationScale) state.value=pacedStamp(last.nanos,last.sequence); if(reduced) { val s=stampNow; while(true) { val motion=active.firstOrNull { it.reducesWithAccess }?:break; motion.reduce(s) } } }
@@ -53,15 +54,27 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
             source.awaitFrame { nanos -> checkMutation(); if(nanos>last.nanos) {
             last=pacedStamp(nanos,last.sequence+1); state.value=last
             // Finishing a motion may retire a surface or admit a queued transfer, changing other active owners.
-            active.toList().forEach { motion -> if(motion in active) motion.frame(last); if(motion in active && motion.endsAt(last)) { active.remove(motion); motion.finish(last) } }
+            val motions=active.toList()
+            motions.forEach { motion ->
+                if(motion in active) motion.frame(last)
+                if(motion !is FluidPropertyMotion && motion in active && motion.endsAt(last)) { active.remove(motion); motion.finish(last) }
+            }
+            motions.forEach { motion ->
+                if(motion is FluidPropertyMotion && motion in active) {
+                    motion.consumeSample()
+                    if(motion in active && motion.endsAt(last)) { active.remove(motion); motion.finish(last) }
+                }
+            }
             if(observers.isNotEmpty()) observe { val frame=active.toList(); observers.forEach { it.onFrame(last,frame) } } } }
         } } finally { active.clear() }
     }
 }
 /** #1083: a through popup's ordered actions on the shared clock, whose frames replace a 16 ms drain timer. A hold takes the
  * first action and waits for its lifecycle owner; with animations off (Reduced) the effective speed 0 admits the whole queue. */
-internal class FluidTimelineMotion(private val clock: UiClock,private val run: (FluidTimelineStep,Double)->Unit): ActiveMotion {
+internal class FluidTimelineMotion(private val clock: UiClock,private val snapReduced: ()->Boolean={ true },
+    private val run: (FluidTimelineStep,Double)->Unit): ActiveMotion {
     override val id=clock.allocateId(); override val presented get()=true; override val settled get()=actions.isEmpty()
+    override val reducesWithAccess get()=snapReduced()
     private val actions=ArrayDeque<FluidTimelineStep>(); private var started=clock.presentedStamp; private var speed=0.0; private var amplify=false; private var timing=false
     internal var holding=false; private set
     /** A new morph resets the timeline: unadmitted actions are discarded and the next [start] is admitted. */
@@ -74,7 +87,8 @@ internal class FluidTimelineMotion(private val clock: UiClock,private val run: (
     fun hold() { clock.checkMutation(); clock.unregister(this); timing=false; holding=true }
     fun release() { clock.checkMutation(); if(holding) { holding=false; begin() } }
     private fun begin() { started=clock.stampNow; drain(started); if(!holding && actions.isNotEmpty()) { timing=true; clock.register(this) } }
-    private fun drain(stamp: FrameStamp)=actions.drainFluidTimeline((stamp.nanos-started.nanos)/1e9,if(clock.context?.access==MotionAccess.Reduced) 0.0 else speed,amplify,{ clock.fluidDrag },holding,run)
+    private fun drain(stamp: FrameStamp)=actions.drainFluidTimeline((stamp.nanos-started.nanos)/1e9,
+        if(reducesWithAccess && clock.context?.access==MotionAccess.Reduced) 0.0 else speed,amplify,{ clock.fluidDrag },holding,run)
     override fun frame(stamp: FrameStamp)=drain(stamp)
     override fun endsAt(stamp: FrameStamp)=actions.isEmpty()
     override fun finish(stamp: FrameStamp) { timing=false }
@@ -83,36 +97,59 @@ internal class FluidTimelineMotion(private val clock: UiClock,private val run: (
 /** #1083: one running property entry on the shared clock. Each frame advances the installed spring by the frame delta over the drag, finishes
  * on the projected error and publishes through [write]; [completion] belongs to the lifecycle owner. */
 internal class FluidPropertyMotion(private val clock: UiClock,private val sameValue: (Double,Double)->Boolean,
-    private val write: (FluidScalarSpringBody)->Unit={},initial: Double=0.0,private val completion: ()->Unit={}): ActiveMotion {
+    private val write: (FluidScalarSpringBody)->Unit={},initial: Double=0.0,private val snapReduced: ()->Boolean={ true },
+    private val completion: (Boolean)->Unit={}): ActiveMotion {
     override val id=clock.allocateId(); override val presented get()=true
+    override val reducesWithAccess get()=snapReduced()
     override var settled by mutableStateOf(true); private set
     private var entry by mutableStateOf(rest(initial))
     private lateinit var spring: FluidPopupSpringSettings
+    private var admittedAfter=Long.MIN_VALUE
     private var epsilonSquared=0.0; private var time=FluidPropertyFrameTime(0.0,0.0,0.0); private val publication=FluidScalarPublication()
     val target get()=entry.target
     fun sample()=entry.body
     private fun rest(value: Double)=FluidScalarSpringBody(value,0.0).let { FluidScalarSpringEntry(it,value,it) }
-    fun stop() { clock.unregister(this); entry=rest(entry.body.value); settled=true }
+    fun stop() { clock.unregister(this); publication.consume {}; entry=rest(entry.body.value); settled=true }
     /** [epsilonSquared] is the finish threshold at the request's point scale; with animations off the entry lands on its target at once. */
     fun animate(requestedStart: Double,target: Double,controls: FluidPropertySpringControls,spring: FluidPopupSpringSettings,epsilonSquared: Double) {
         clock.checkMutation()
-        val old=entry.takeUnless { settled }
+        val replacing=clock.isRegistered(this)
+        val old=entry.takeIf { replacing && !settled }
         val admission=if(old==null && controls.startingVelocity==null && spring.retargetImpulse>0.0)
             controls.copy(startingVelocity=spring.velocityWithImpulse(0.0,1.0)) else controls
-        entry=admission.immediateEntry(requestedStart,target,old,old?.target,spring,null)
+        val request=admission.immediateEntry(requestedStart,target,old,old?.target,spring,null)
+        if(replacing) {
+            val previous=entry
+            clock.unregister(this)
+            completion(false)
+            if(entry!==previous || clock.isRegistered(this)) return
+        }
+        entry=request
         this.spring=spring; this.epsilonSquared=epsilonSquared
-        if(clock.context?.access==MotionAccess.Reduced) { reduce(clock.stampNow); return }
-        if(settled) { settled=false; time=time.primed(clock.stampNow.nanos/1e9) { clock.context?.displayIntervalSeconds?.toDouble()?:0.0 }; clock.register(this) }
+        if(reducesWithAccess && clock.context?.access==MotionAccess.Reduced) { reduce(clock.stampNow); return }
+        if(!replacing) time=time.primed(clock.stampNow.nanos/1e9) { clock.context?.displayIntervalSeconds?.toDouble()?:0.0 }
+        admittedAfter=clock.presentedStamp.sequence
+        settled=false
+        clock.register(this)
     }
-    private fun publish(next: FluidScalarSpringEntry) { publication.queueTick(next.body,next.target,settled,sameValue); publication.consume(write) }
+    private fun queueSample(next: FluidScalarSpringEntry)=publication.queueTick(next.body,next.target,settled,sameValue)
+    fun consumeSample()=publication.consume(write)
     override fun frame(stamp: FrameStamp) {
+        if(stamp.sequence<=admittedAfter) return
         time=time.advance(stamp.nanos/1e9)
         val next=spring.advanceUnsmoothed(entry,time.entryDelta(0.0,clock.fluidDrag)); entry=next
-        settled=next.body.finished(next.target,spring.velocityScalingFactor,epsilonSquared,false); publish(next)
+        settled=next.body.finished(next.target,spring.velocityScalingFactor,epsilonSquared,false); queueSample(next)
     }
     override fun endsAt(stamp: FrameStamp)=settled
-    override fun finish(stamp: FrameStamp) { entry=rest(entry.target); completion() }
-    override fun reduce(stamp: FrameStamp) { clock.unregister(this); settled=true; publish(entry); finish(stamp) }
+    override fun finish(stamp: FrameStamp) { entry=rest(entry.target); completion(true) }
+    override fun reduce(stamp: FrameStamp) {
+        clock.unregister(this)
+        val stopped=entry
+        settled=true
+        queueSample(stopped)
+        consumeSample()
+        if(entry===stopped) finish(stamp)
+    }
 }
 @Composable internal fun ProvideUiClock(content: @Composable ()->Unit) {
     val inherited=LocalClockOwner.current

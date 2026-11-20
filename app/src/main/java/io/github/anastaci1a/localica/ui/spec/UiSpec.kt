@@ -116,6 +116,7 @@ internal data class FluidSpringModifiers(
 internal val FluidMainEject = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
 internal val FluidMainAbsorb = FluidPopupSpringSettings(dampingRatio = 0.8, response = 0.7)
 private val FluidSourceOutlineSpring = FluidPopupSpringSettings(0.8, 0.3, retargetImpulse = 0.016, trackingResponse = 0.3)
+private val FluidReducedSourceGeometrySpring = FluidPopupSpringSettings(1.0, 0.15, retargetImpulse = 0.0001, trackingResponse = 0.3)
 
 @Immutable data class PopupSecondPhase(val spring: SpringLaw, val band: Float, val edgeShares: (DoubleArray) -> DoubleArray)
 
@@ -307,6 +308,8 @@ internal fun FluidTimelineStep.geometrySpringBinding(effectiveSpeed: Double) =
     FluidGeometrySpringBinding(propertySpring(effectiveSpeed))
 
 internal fun fluidOutlineSpring(resolved: FluidPopupSpringSettings?) = resolved ?: FluidSourceOutlineSpring
+internal fun fluidOutlineGeometrySpring(spring: FluidPopupSpringSettings, access: MotionAccess) =
+    if (access == MotionAccess.Reduced && spring === FluidSourceOutlineSpring) FluidReducedSourceGeometrySpring else spring
 
 internal fun fluidThroughQueue(
     growing: Boolean, mainEject: FluidPopupSpringSettings, content: FluidContentSettings,

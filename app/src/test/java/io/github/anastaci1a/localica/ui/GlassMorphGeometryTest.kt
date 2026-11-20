@@ -152,7 +152,7 @@ class GlassMorphGeometryTest {
         assertTrue(popup.expansion.retirementReady)
     }
 
-    @Test fun reducedMotionFinishesBothSlotsOnTheSameFrame() = fluidWindow(MotionAccess.Reduced, 24f) { h, popup, input ->
+    @Test fun reducedMotionRunsBothPreparedSlotsToTheirEndpoints() = fluidWindow(MotionAccess.Reduced, 24f) { h, popup, input ->
         for (opening in listOf(true, false)) {
             popup.show(opening)
             popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input)
@@ -163,8 +163,7 @@ class GlassMorphGeometryTest {
                 bodies?.forEachIndexed { i, body -> if (previous?.get(i) != body) changed[i] = frame }
                 previous = bodies
             }
-            // Reduced requests commit Rest to both slots atomically, so neither slot settles on a later frame than the other.
-            assertEquals(changed[0], changed[1])
+            assertTrue("Both reduced-motion slots continue beyond the admission frame", changed.all { it > 0 })
             val endpoint = if (opening) Rect(0f, 0f, 120f, 80f) else input.pivot
             assertEquals(endpoint, requireNotNull(popup.bounds).value())
             assertTrue(requireNotNull(previous).any { it.boundingRect == endpoint })
@@ -210,6 +209,26 @@ class GlassMorphGeometryTest {
             h.advance(1.0 / 120)
         }
         assertTrue(gated)
+        assertTrue(popup.expansion.retirementReady)
+    }
+
+    @Test fun reopeningDuringCloseRetainsBothPhysicalSlots() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
+        val menu=Rect(0f, 0f, 120f, 80f)
+        popup.show(true)
+        h.frames(popup, 480)
+        popup.show(false)
+        popup.place(input.pivot, menu, 1f, preview=input)
+        h.frames(popup, 3)
+        val before=requireNotNull(popup.outlineBodies())
+        val aperture=requireNotNull(popup.bounds)
+        val stamp=h.clock.stampNow
+        assertNotEquals(0f, aperture.top.velocityAt(stamp), 0f)
+        popup.show(true)
+        popup.place(input.pivot, menu, 1f, preview=input)
+        assertEquals(before, popup.outlineBodies())
+        assertNotEquals(0f, aperture.top.velocityAt(stamp), 0f)
+        h.frames(popup, 480)
+        assertEquals(menu, aperture.value())
         assertTrue(popup.expansion.retirementReady)
     }
 
@@ -301,17 +320,37 @@ class GlassMorphGeometryTest {
         assertEquals(180f, slots[1].boundingRect.center.y, 0f)
     }
 
-    @Test fun invertedSourceUsesTheRetainedSlotCenter() = fluidWindow(MotionAccess.Reduced, 24f) { _, popup, _ ->
+    @Test fun invertedSourceUsesTheRetainedSlotCenter() = fluidWindow(MotionAccess.Reduced, 24f) { h, popup, _ ->
         val expansion = popup.expansion
         val spring = fluidOutlineSpring(null)
         val before = PopupOutlinePose(Rect(50f, 20f, 90f, 60f), 20f, 1f)
         expansion.replaceOutline(listOf(before, before), 0, 1.0, spring)
         val inverted = PopupOutlinePose(Rect(0f, 0f, 250f, 250f), 125f, 0.25f, preservesCenter = true)
         expansion.replaceOutline(listOf(inverted, before), 0, 1.0, spring)
+        h.frames(popup, 480)
         val after = requireNotNull(popup.outlineBodies()).first()
         assertEquals(Offset(70f, 40f), after.boundingRect.center)
         assertEquals(62.5f, after.width, 0f)
         assertEquals(31.25f, after.topLeftCornerRadius.x, 0f)
+    }
+
+    @Test fun reducedSourceSeparatesGeometryAndTransformImpulses() = fluidWindow(MotionAccess.Reduced, 24f) { h, popup, _ ->
+        h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Reduced, durationScale = 0f), h.clock.spec)
+        val expansion = popup.expansion
+        val spring = fluidOutlineSpring(null)
+        val pose = PopupOutlinePose(Rect(0f, 0f, 250f, 360f), 24f, 1f)
+        expansion.replaceOutline(listOf(pose, pose), 0, 1.0, spring)
+        val next = pose.copy(bounds = pose.bounds.translate(Offset(12f, 0f)), scale = 2f)
+        expansion.replaceOutline(listOf(next, pose), 0, 1.0, spring)
+        val aperture = requireNotNull(popup.bounds)
+        val stamp = h.clock.stampNow
+        val left = aperture.left.velocityAt(stamp)
+        val right = aperture.right.velocityAt(stamp)
+        val geometryImpulse = 0.0001 * (2 * Math.PI / 0.15) * (2 * Math.PI / 0.15)
+        val transformImpulse = 0.016 * (2 * Math.PI / 0.3) * (2 * Math.PI / 0.3)
+        assertEquals((12 * geometryImpulse).toFloat(), (left + right) * 0.5f, 0.0001f)
+        assertEquals((250 * transformImpulse).toFloat(), right - left, 0.001f)
+        assertEquals(pose.bounds, aperture.valueAt(stamp))
     }
 
     @Test fun kickPropertiesFinishIndependentlyOnTheirProjectedError() {

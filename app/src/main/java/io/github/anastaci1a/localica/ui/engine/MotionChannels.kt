@@ -12,15 +12,15 @@ import kotlin.math.*
 @Stable interface MotionColorView { fun value(): Color; fun valueAt(stamp: FrameStamp): Color }
 internal data class EasedPlan(val stamp: FrameStamp,val core: UnitCurveSpec,val duration: Double,val sigma: Double,val tauIn: Double,val tauOut: Double=min(duration/8,sigma*.064)) { fun segment(x: Double,v: Double,q: Double,bounds: ClosedFloatingPointRange<Double>?=null)=Eased(x,v,q,core,duration,sigma,bounds,tauIn,this,tauOut).also { require(it.tauIn==tauIn && it.tauOut==tauOut) { "All bound channels must use the source plan" } } }
 /** #854: one spring intent's shared finish frame and terminal bridge (U05 A2.2a), the analog of [EasedPlan]. */
-internal class SpringPlan(val stamp: FrameStamp,val finish: Double,val tauOut: Double,val sigma: Double) {
+internal class SpringPlan(val stamp: FrameStamp,val finish: Double,val tauOut: Double,val sigma: Double,val reducesWithAccess: Boolean=true) {
     init { require(finish.isFinite() && finish>0 && tauOut.isFinite() && tauOut>0 && tauOut<=finish && sigma.isFinite() && sigma>0) }
     fun segment(x: Double,v: Double,q: Double,law: SpringLaw,range: Double,display: Double)=Damped(x,v,q,law.omega/sigma,law.zeta.toDouble(),range,display,finish,tauOut,this)
     companion object {
         /** finish = max(2 frames, every channel's settle envelope); tauOut = min(finish/8, .064 sigma, 1/slowest pole). Each state is x, v, q, omega_eff, zeta, range. */
-        fun of(stamp: FrameStamp,sigma: Double,display: Double,states: List<DoubleArray>): SpringPlan {
+        fun of(stamp: FrameStamp,sigma: Double,display: Double,states: List<DoubleArray>,reducesWithAccess: Boolean=true): SpringPlan {
             val finish=states.maxOf { settleEnvelope(it[0]-it[2],it[1],it[3],it[4],it[5]) }.coerceAtLeast(2*display)
             val slowest=states.minOf { val w=it[3]; val z=it[4]; if(z>1) w/(z+sqrt(z*z-1)) else z*w }
-            return SpringPlan(stamp,finish,minOf(finish/8,.064*sigma,1/slowest),sigma)
+            return SpringPlan(stamp,finish,minOf(finish/8,.064*sigma,1/slowest),sigma,reducesWithAccess)
         }
     }
 }
