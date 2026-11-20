@@ -8,6 +8,8 @@ import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.unit.IntSize
+import io.github.anastaci1a.localica.ui.spec.FluidContentBlurIn
 import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec
 import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 
@@ -36,6 +38,11 @@ internal class LensRenderer {
         uniform float circleMode;
         uniform float4 circleCenters;
         uniform float splitInnerRadius;
+        uniform float4 mapShape;
+        uniform float2 mapAngle;
+        uniform float4 warp;
+        uniform float2 warpClamp;
+        uniform float warpMode;
         $GlassColorShader
         float3 circleField(float2 p, float2 center) {
             float2 local = p - center;
@@ -134,8 +141,24 @@ internal class LensRenderer {
             float t = clamp(inside / law.y, 0.0, 1.0);
             return law.x * (1.0 - sqrt(t * (2.0 - t)));
         }
+        // Popup content warp: the glass map (distance below zero inside, outward unit normal,
+        // full coverage) evaluated inline, then the displacement sample it masks.
+        half4 warped(float2 p, float3 f) {
+            float2 n = dot(f.yz, f.yz) > 0.0 ? -normalize(f.yz) : float2(0);
+            float u = f.x - mapShape.z;
+            float z = u - mapShape.w;
+            float w = max(abs(n.x) + abs(n.y), 0.0001);
+            float mask = z < -5.0 ? 0.0 : clamp(z / w + 0.5, 0.0, 1.0);
+            if (mask < 0.00392156886) return half4(0);
+            float r = clamp(u / mapShape.x, 0.0, 1.0);
+            float lift = mix(r < 1.0 ? 1.0 - 0.2929 : 1.0, sqrt(1.0 - (1.0 - r) * (1.0 - r)), mapShape.y);
+            float2 normal = float2(dot(n, float2(mapAngle.x, -mapAngle.y)), dot(n, mapAngle.yx));
+            float2 m = (1.0 - lift) * normal * clamp((mapShape.x - u) / w + 0.5, 0.0, 1.0);
+            return scene.eval(min(warpClamp, p + float2(dot(m, warp.xy), dot(m, warp.zw)))) * half(mask);
+        }
         half4 main(float2 p) {
             float3 f = geometry(p);
+            if (warpMode > 0.5) return warped(p, f);
             if (f.x < outerMix.y) return scene.eval(p);
             float2 inward = dot(f.yz, f.yz) > 0.0 ? normalize(f.yz) : float2(0);
             half4 sampled = scene.eval(p - inward * (profile(refraction.xy, f.x) * power));
@@ -178,14 +201,15 @@ internal class LensRenderer {
         whiteTint: Float = 0f, illumination: Float = 1f, map: LensDistanceMap? = null,
         origin: Offset = Offset.Zero, flattening: Float = 0f,
         tone: GlassTone = GlassTone(), fieldWeight: Float = 1f,
-        circles: Pair<Offset, Offset>? = null, splitInner: Float? = null): RenderEffect {
+        circles: Pair<Offset, Offset>? = null, splitInner: Float? = null, warp: LensWarp? = null): RenderEffect {
         val r = geometry.bounds
+        val words = warp?.uniforms(unit)
         val state = floatArrayOf(r.left, r.top, r.right, r.bottom, geometry.corner, unit, blur,
             depth.coerceIn(.05f, 4f), power, whiteTint, illumination, origin.x, origin.y,
             map?.scale ?: 1f, map?.range ?: 1f, flattening, tone.trim, tone.weight, tone.lightMix,
             fieldWeight.coerceIn(0f, 1f), if (circles == null) 0f else 1f,
             circles?.first?.x ?: 0f, circles?.first?.y ?: 0f,
-            circles?.second?.x ?: 0f, circles?.second?.y ?: 0f, splitInner ?: -1f)
+            circles?.second?.x ?: 0f, circles?.second?.y ?: 0f, splitInner ?: -1f) + (words ?: FloatArray(0))
         if (state.contentEquals(last) && fieldBitmap === map?.bitmap) return requireNotNull(cached)
         last = state
         shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
@@ -211,6 +235,12 @@ internal class LensRenderer {
         shader.setFloatUniform("fieldOrigin", origin.x + (map?.origin?.x ?: 0f), origin.y + (map?.origin?.y ?: 0f))
         shader.setFloatUniform("fieldScale", map?.scale ?: 1f)
         shader.setFloatUniform("fieldRange", map?.range ?: 1f)
+        val w = words ?: FloatArray(12)
+        shader.setFloatUniform("mapShape", w[0], w[1], w[2], w[3])
+        shader.setFloatUniform("mapAngle", w[4], w[5])
+        shader.setFloatUniform("warp", w[6], w[7], w[8], w[9])
+        shader.setFloatUniform("warpClamp", w[10], w[11])
+        shader.setFloatUniform("warpMode", if (warp == null) 0f else 1f)
         if (fieldBitmap !== map?.bitmap) {
             fieldBitmap = map?.bitmap
             shader.setInputBuffer("field", BitmapShader(map?.bitmap ?: emptyField, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
@@ -230,9 +260,23 @@ internal class LensRenderer {
     }
 }
 
-/** The shared filter order: an elided (identity) blur passes the scene straight to the lens. */
+/** Popup content warp inputs: the glass map's model values and the displacement filter's amount,
+ * content transform and used pixel extent. [uniforms] packs the two shaders' words in upload order. */
+internal class LensWarp(val height: Double, val amount: Double, val effectOffset: Float, val used: IntSize,
+    val transform: DoubleArray = FluidContentBlurIn.zoomMatrix(), val curvature: Float = 1f, val angle: Float = 0f,
+    val maskOffset: Float = 0f) {
+    fun uniforms(unit: Float): FloatArray {
+        val (limitX, limitY) = FluidLensingSpec.usedExtent(used.width, used.height, 1, 1)
+        return floatArrayOf(height.toFloat() * unit, curvature.coerceIn(0f, 1f), effectOffset * unit, maskOffset * unit,
+            kotlin.math.cos(angle), kotlin.math.sin(angle)) + FluidLensingSpec.amountUniform(transform, 1, 1, unit, amount) +
+            floatArrayOf(limitX, limitY)
+    }
+}
+
+/** The shared filter order: an elided (identity) blur passes the scene straight to the lens.
+ * The lens evaluates its map inline, so no separate named map surface is retained. */
 internal fun <E : Any> lensChain(blur: E?, lens: E, chain: (outer: E, inner: E) -> E): E =
-    FluidLensingSpec.colorChain(emptyList<E>()) { filter, applied ->
+    FluidLensingSpec.colorChain(emptyList<E>(), { null }) { filter, applied, _ ->
         when (filter) {
             FluidLensingSpec.Filter.GaussianBlur -> blur?.let(::listOf)
             FluidLensingSpec.Filter.DisplacementMap -> applied + lens
