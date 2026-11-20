@@ -174,6 +174,54 @@ class ReleaseVerificationTest(unittest.TestCase):
              self.assertRaisesRegex(ValueError, 'hosted API 26 held method did not pass'):
             module.verify_native_scope(repository, self.sha, touched_packet, {('26', touched_failure):'b'*64})
 
+    def test_native_scope_accepts_only_disclosed_source_bound_inherited_assertions(self):
+        from unittest.mock import patch
+
+        affected = 'io.github.anastaci1a.localica.PopupChromeDepthTest'
+        method = affected + '#normalSelectionPillPixelsCoverOverlappingTabs'
+        notes = '- `PopupChromeDepthTest#normalSelectionPillPixelsCoverOverlappingTabs` reported 61–69 pixels.'
+        held = {('36', method): 'b'*64}
+        entry = dict(method=method, base_sha='4d0d8bdf93b75c28fd230c353d0feec77058d141', final_sha=self.sha,
+                     base_receipt_sha256='c'*64, final_receipt_sha256='d'*64,
+                     base_assertion_sha256='e'*64, final_assertion_sha256='e'*64)
+        packet = dict(affected_classes=[affected], carried_classes=[], scoped_runs=[10], carried_scoped_runs=[],
+                      local={api: dict(sha=self.sha, exit=0, receipt_sha256='a'*64,
+                                       classes=[affected], passed_methods=[]) for api in ('26', '36')})
+        coverage = ({'26': {affected}, '36': set()}, {'26': set(), '36': set()})
+
+        cases = (
+            ('inherited', {}, notes, None),
+            ('changed signature', {'final_assertion_sha256': 'f'*64}, notes, 'differs from its approved base'),
+            ('untrusted base', {'base_sha': 'b'*40}, notes, 'differs from its approved base'),
+            ('stale source', {'final_sha': 'b'*40}, notes, 'differs from its approved base'),
+            ('missing base receipt', {'base_receipt_sha256': ''}, notes, 'differs from its approved base'),
+            ('missing final receipt', {'final_receipt_sha256': ''}, notes, 'differs from its approved base'),
+            ('wrong method', {'method': affected + '#other'}, notes, 'Invalid inherited local method outcome'),
+            ('no method disclosure', {}, '- PopupChromeDepthTest ran.', 'missing from release notes'),
+        )
+        with patch.object(module, 'scoped_native_coverage', return_value=coverage):
+            for name, overrides, release_notes, error in cases:
+                with self.subTest(name=name):
+                    local = packet['local']['36']
+                    local['inherited_methods'] = [dict(entry, **overrides)]
+                    if error:
+                        with self.assertRaisesRegex(ValueError, error):
+                            module.verify_native_scope('anastaci1a/localica', self.sha, packet, held, release_notes)
+                    else:
+                        module.verify_native_scope('anastaci1a/localica', self.sha, packet, held, release_notes)
+
+            local['inherited_methods'] = [entry, entry]
+            with self.assertRaisesRegex(ValueError, 'Invalid inherited local method outcome'):
+                module.verify_native_scope('anastaci1a/localica', self.sha, packet, held, notes)
+            local['inherited_methods'] = [entry]
+            local['passed_methods'] = [method]
+            with self.assertRaisesRegex(ValueError, 'Invalid inherited local method outcome'):
+                module.verify_native_scope('anastaci1a/localica', self.sha, packet, held, notes)
+            del local['inherited_methods']
+            packet['local']['26']['inherited_methods'] = [entry]
+            with self.assertRaisesRegex(ValueError, 'Invalid inherited local method outcome'):
+                module.verify_native_scope('anastaci1a/localica', self.sha, packet, held, notes)
+
     def test_scoped_native_coverage_admits_only_authenticated_passes(self):
         from io import BytesIO
         import json
@@ -266,7 +314,8 @@ class ReleaseVerificationTest(unittest.TestCase):
                     output.assert_not_called()
                 else:
                     module.select_v03416('anastaci1a/localica', self.sha, self.tree)
-                    native_scope.assert_called_once_with('anastaci1a/localica', self.sha, body, held)
+                    notes = (ROOT/'.github/RELEASE_NOTES.md').read_text(encoding='utf-8')
+                    native_scope.assert_called_once_with('anastaci1a/localica', self.sha, body, held, notes)
                     self.assertEqual(output.call_args.args[:2], (9, body['apk_sha256']))
 
     def test_delta_workflow_keeps_distribution_and_compatibility_gates(self):

@@ -21,6 +21,11 @@ REQUIRED_JOBS = (
     'build', 'test-apks', 'static-checks', 'device-tests-summary', 'compatibility (26)', 'compatibility (36)',
     'distribution-smoke (26)', 'distribution-smoke (36)',
 ) + tuple(f'device-tests ({api}, {shard})' for api in (26, 36) for shard in range(DEVICE_SHARDS))
+INHERITED_BASES = {
+    '4d0d8bdf93b75c28fd230c353d0feec77058d141',  # Held release build
+    'df1f3e3c9650f2bf5b29d7864f9182c97e4689b8',  # Pre-press integration build
+    '830f133db21e0211c1eca2e825b2ca90877e4dc0',  # Frozen release base
+}
 
 
 def require(condition, reason):
@@ -201,7 +206,7 @@ def scoped_native_coverage(repository, commit, scoped_runs):
     return covered, passed
 
 
-def verify_native_scope(repository, commit, packet, failed):
+def verify_native_scope(repository, commit, packet, failed, notes=''):
     # The maintainer's reviewed dependency partition identifies the classes eligible for reuse.
     final_classes = set(packet['affected_classes'])
     carried_classes = set(packet['carried_classes'])
@@ -226,9 +231,26 @@ def verify_native_scope(repository, commit, packet, failed):
         require(all(carried_classes <= classes for classes in carried_coverage.values()), 'Carried hosted class gap')
     for api in ('26', '36'):
         local = packet['local'][api]
+        passed = set(local['passed_methods'])
+        inherited = set()
+        for entry in local.get('inherited_methods', []):
+            method = entry['method']
+            require(api == '36' and (api, method) in failed and method not in passed | inherited,
+                    'Invalid inherited local method outcome')
+            digests = (entry['base_receipt_sha256'], entry['final_receipt_sha256'],
+                       entry['base_assertion_sha256'], entry['final_assertion_sha256'])
+            require(entry['base_sha'] in INHERITED_BASES
+                    and entry['final_sha'] == commit
+                    and all(isinstance(digest, str) and re.fullmatch('[0-9a-f]{64}', digest) for digest in digests)
+                    and entry['base_assertion_sha256'] == entry['final_assertion_sha256'],
+                    'Inherited local method evidence differs from its approved base')
+            name = method.removeprefix('io.github.anastaci1a.localica.')
+            require(f'`{name}`' in notes, 'Inherited local method missing from release notes')
+            inherited.add(method)
+        required = {method for sdk, method in failed if sdk == api}
         require(local['sha'] == commit and local['exit'] == 0 and re.fullmatch('[0-9a-f]{64}', local['receipt_sha256'])
                 and final_classes <= set(local['classes'])
-                and all(method in local['passed_methods'] for sdk, method in failed if sdk == api),
+                and required <= passed | inherited,
                 'Final local gate or held-failure verification incomplete')
 
 
@@ -271,7 +293,8 @@ def select_v03416(repository, commit, tree):
     final_artifacts = pages(f'repos/{repository}/actions/runs/{final["id"]}/artifacts', 'artifacts')
     delivery = artifact(final_artifacts, 'localica-debug', final, final_jobs['build'])
 
-    verify_native_scope(repository, commit, packet, failed)
+    notes = Path(__file__).with_name('RELEASE_NOTES.md').read_text(encoding='utf-8')
+    verify_native_scope(repository, commit, packet, failed, notes)
     provisional_phone = packet['provisional_a35']
     require(provisional_phone['sha'] == provisional['head_sha'] and provisional_phone['restore_exit'] == 0
             and re.fullmatch('[0-9a-f]{64}', provisional_phone['receipt_sha256']), 'Invalid provisional A35 receipt')
