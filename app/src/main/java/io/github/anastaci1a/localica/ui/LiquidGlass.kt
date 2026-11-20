@@ -377,7 +377,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 val blur = blur(frame)
                 val thickness = body().thickness * (if (pressFeedback || anchor != null) contactShape().thickness else 1f)
                 if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(
-                    requireNotNull(geometry), blur * resolution,
+                    requireNotNull(geometry),
+                    blur * resolution,
                     appearance.depth * frame.depthScale * thickness,
                     unit = density.density * resolution,
                     power = frame.refraction, whiteTint = appearance.whiteTint, illumination = 1f - flatWeight,
