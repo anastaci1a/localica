@@ -67,6 +67,18 @@ internal fun popupThroughSlots(from: PopupPortalBounds, to: PopupPortalBounds, f
     return if (fluidPopupContentGrows(from, to) == fromPhase) PopupThroughItem.Pivot to endpoint else endpoint to PopupThroughItem.Pivot
 }
 
+/** Both prepared rectangles use the smaller endpoint's root coordinates. */
+internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, anchorY: Double, genieScale: Double?): Double {
+    val larger = standardized()
+    val center = genieScale ?: if (anchorY != 0.5) anchorY else {
+        val fraction = (pivot.midY - larger.y) / larger.height
+        if (fraction.isNaN()) 1.0 else fraction.coerceIn(0.0, 1.0)
+    }
+    val fraction = (larger.height + (-60.0)) / 140.0
+    val scale = if (fraction.isNaN()) 1.0 else fraction.coerceIn(0.5, 1.0)
+    return (center - (1.0 - center)) * (-80.0 * scale)
+}
+
 internal data class PopupPortalPlacement(val bounds: PopupPortalBounds, val x: Double, val y: Double)
 
 internal fun fluidPopupPortalPlacement(

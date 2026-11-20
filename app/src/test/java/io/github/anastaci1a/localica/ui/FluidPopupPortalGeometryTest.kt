@@ -99,6 +99,19 @@ class FluidPopupPortalGeometryTest {
         assertEquals(PopupThroughItem.Pivot to PopupThroughItem.To, popupThroughSlots(smaller, tied, fromPhase = false))
     }
 
+    @Test fun growingKickUsesTheLargerAnchorOrThePivotInTheSameRoot() {
+        val larger = PopupPortalBounds(0.0, 100.0, 90.0, 200.0)
+        val pivot = PopupPortalBounds(0.0, 140.0, 45.0, 20.0)
+        assertEquals(40.0, larger.growingKickTarget(pivot, 0.5, null), 0.0)
+        assertEquals(-40.0, larger.growingKickTarget(pivot, 0.75, null), 0.0)
+        assertEquals(60.0, larger.growingKickTarget(pivot, 0.75, 0.125), 0.0)
+        assertEquals(-20.0, larger.copy(height = 60.0).growingKickTarget(pivot, 0.75, null), 0.0)
+        assertEquals(-30.0, larger.copy(height = 165.0).growingKickTarget(pivot, 0.75, null), 0.0)
+        assertEquals(-40.0, larger.copy(height = Double.NaN).growingKickTarget(pivot, 0.75, null), 0.0)
+        assertEquals(-80.0, larger.growingKickTarget(pivot.copy(y = Double.NaN), 0.5, null), 0.0)
+        assertEquals((-0.0).toRawBits(), larger.growingKickTarget(pivot.copy(y = 190.0), 0.5, null).toRawBits())
+    }
+
     @Test fun presentedPlacementUsesLiveInsetsAndAxisSpecificBounds() {
         val apertureInsets = PopupPortalInsets(10.0, 8.0, 6.0, 4.0)
         val itemInsets = PopupPortalInsets(2.0, 3.0, 4.0, 5.0)
