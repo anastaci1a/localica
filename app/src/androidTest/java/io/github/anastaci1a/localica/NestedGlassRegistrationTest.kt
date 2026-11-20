@@ -14,9 +14,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
@@ -25,18 +28,140 @@ import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
+import io.github.anastaci1a.localica.navigation.GlassBlurDefault
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /** Native source registration, not a reproduction of the private white-band report. */
 class NestedGlassRegistrationTest {
     @get:Rule val compose = createComposeRule()
+
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
+    @Test fun pressedLensRegistersNestedSourceAtHalfResolution() {
+        val strain = .19f
+        val drift = Offset(.28f, .12f)
+        val frost = .5f
+        val redStart = 50.dp
+        val redWidth = 190.dp
+        lateinit var view: View
+        lateinit var scene: LayoutCoordinates
+        lateinit var backing: LayoutCoordinates
+        lateinit var lens: LayoutCoordinates
+        compose.setContent { LocalicaTheme {
+            view = LocalView.current
+            val source = rememberFrostedBackdrop(Unit, dark = false)
+            Box(Modifier.size(312.dp, 215.dp).testTag("live-registration-scene")
+                .onGloballyPositioned { scene = it }) {
+                Box(Modifier.offset(12.dp, 22.dp).size(280.dp, 174.dp).graphicsLayer {
+                    scaleX = .94f; scaleY = .89f
+                    transformOrigin = TransformOrigin(0f, 0f)
+                }) {
+                    Canvas(Modifier.fillMaxSize().onGloballyPositioned { backing = it }
+                        .recordFrostedBackdrop(source)) {
+                        drawRect(Brush.horizontalGradient(listOf(Color(.02f, 0f, .25f), Color(.98f, 0f, .25f)),
+                            startX = redStart.toPx(), endX = (redStart + redWidth).toPx()))
+                        drawRect(Brush.verticalGradient(listOf(Color(0f, .08f, 0f), Color(0f, .92f, 0f))),
+                            blendMode = BlendMode.Plus)
+                    }
+                    Canvas(Modifier.fillMaxSize()) { drawRect(Color.Black) }
+                    LiquidGlassSurface(Modifier.offset(38.dp, 32.dp).size(176.dp, 88.dp)
+                        .graphicsLayer {
+                            scaleX = .90f; scaleY = .94f
+                            transformOrigin = TransformOrigin(0f, 0f)
+                        }.onGloballyPositioned { lens = it },
+                        source = source, cornerRadius = 12.dp, frostProgress = frost, shadow = false,
+                        contactPresentation = { GlassShape(strain = strain, drift = drift) })
+                }
+                PresentationMarker { 1 }
+            }
+        } }
+        val density = compose.density
+        val visibleBlur = GlassBlurDefault + (1f - GlassBlurDefault) * frost
+        assertTrue("Blur reaches the half-resolution plateau", glassBackdropBlurRadius(density.density) * visibleBlur >= 6f)
+        val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("live-registration-scene"), 1) { view }
+        val landmarks = compose.runOnIdle {
+            val center = Offset(lens.size.width / 2f, lens.size.height / 2f)
+            fun sourceRamp(point: Offset): List<Float> {
+                val sample = backing.localPositionOf(lens, point)
+                val red = with(density) { .02f + .96f * (sample.x - redStart.toPx()) / redWidth.toPx() }
+                val green = .08f + .84f * sample.y / backing.size.height
+                return (0..2).map { glassFillChannel(it, red, green, .25f).coerceAtMost(1f) }
+            }
+            buildList {
+                // These points stay beyond the 12 dp warp band. Blur preserves the interior ramp.
+                for (x in listOf(.30f, .50f, .70f)) for (y in listOf(.30f, .50f, .70f)) {
+                    val rest = Offset(lens.size.width * x, lens.size.height * y)
+                    val local = rest - center
+                    val live = center + Offset(local.x * exp(strain) + drift.x * lens.size.width,
+                        local.y * exp(-strain) + drift.y * lens.size.height)
+                    add(Triple(scene.localPositionOf(lens, live), sourceRamp(live), sourceRamp(rest)))
+                }
+            }
+        }
+        val cap = .08f
+        val discriminators = landmarks.count { (_, live, rest) -> live.indices.any { abs(live[it] - rest[it]) > cap } }
+        assertTrue("At least four landmarks distinguish dropping the press inverse, got $discriminators", discriminators >= 4)
+        var rejected = 0
+        for ((point, expected, rest) in landmarks) {
+            val color = pixels[point.x.roundToInt(), point.y.roundToInt()]
+            val actual = listOf(color.red, color.green, color.blue)
+            for (channel in actual.indices) {
+                assertEquals("Half-resolution live registration at $point channel $channel", expected[channel], actual[channel], cap)
+            }
+            if (actual.indices.any { abs(actual[it] - rest[it]) > cap }) rejected++
+        }
+        assertTrue("Native pixels reject the uncanceled press transform at four landmarks, got $rejected", rejected >= 4)
+        android.util.Log.i("LOCALICA_PROOF", "LIVE_REGISTRATION resolution=0.5 landmarks=${landmarks.size} discriminators=$discriminators rejected=$rejected")
+    }
+
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
+    @Test fun reportNormalRestPixelsForPillAndFixedCornerBar() {
+        lateinit var view: View
+        compose.setContent { LocalicaTheme {
+            view = LocalView.current
+            val source = rememberFrostedBackdrop(Unit, dark = false)
+            Box(Modifier.size(312.dp, 190.dp).testTag("rest-optics-scene")) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                    val cell = 8.dp.toPx()
+                    for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt()) {
+                        drawRect(cellColor(x, y), Offset(x * cell, y * cell), Size(cell, cell))
+                    }
+                }
+                LiquidGlassSurface(Modifier.offset(25.dp, 34.dp).size(160.dp, 48.dp).testTag("rest-pill"),
+                    source = source, pressFeedback = false, shadow = false)
+                LiquidGlassSurface(Modifier.offset(16.dp, 110.dp).size(280.dp, 40.dp).testTag("rest-bar"),
+                    source = source, cornerRadius = 12.dp, pressFeedback = false, shadow = false)
+                PresentationMarker { 1 }
+            }
+        } }
+        val scene = compose.onNodeWithTag("rest-optics-scene")
+        val pixels = capturePresentedPopupPixels(compose, scene, 1) { view }
+        val origin = scene.fetchSemanticsNode().boundsInRoot.topLeft
+        for (tag in listOf("rest-pill", "rest-bar")) {
+            val bounds = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot.translate(-origin)
+            val left = bounds.left.roundToInt()
+            val right = bounds.right.roundToInt()
+            val top = bounds.top.roundToInt()
+            val bottom = bounds.bottom.roundToInt()
+            android.util.Log.i("LOCALICA_PROOF", "REST_BOUNDS $tag $left $top $right $bottom")
+            for (y in top until bottom) {
+                val rgb = buildString {
+                    for (x in left until right) {
+                        append((pixels[x, y].toArgb() and 0xFFFFFF).toString(16).padStart(6, '0'))
+                    }
+                }
+                android.util.Log.i("LOCALICA_PROOF", "REST_RGB $tag $y $rgb")
+            }
+        }
+    }
 
     @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun transformedGlassSamplesItsSceneThroughForwardReverseFitAndScrolling() {
