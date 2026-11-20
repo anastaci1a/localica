@@ -4,6 +4,8 @@ import io.github.anastaci1a.localica.ui.components.TriggerRole
 
 import io.github.anastaci1a.localica.ui.engine.*
 import io.github.anastaci1a.localica.ui.spec.MotionAccess
+import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
+import io.github.anastaci1a.localica.navigation.InterfaceSettings
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -22,6 +24,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.ComposeTestRule
@@ -31,6 +36,7 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.roundToInt
 
 // Bulk clock advancement monopolizes the UI thread, delaying native Dialog attachment.
 // Yield Android idleness between opening frames without waiting for a desired morph
@@ -60,6 +66,53 @@ internal fun ComposeTestRule.advanceMorphOpening(
 
 class GlassMorphTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun fluidForegroundKeepsItsFinalLayoutInsideTheMovingAperture() {
+        val root = LocalicaUiRootState(InterfaceSettings(
+            popupMotion = PopupMotionStyle.Fluid, respectSystemAnimationScale = false,
+        ))
+        var open by mutableStateOf(false)
+        var foreground: LayoutCoordinates? = null
+        compose.setContent { LocalicaUiRoot(root) { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides false) {
+                Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                    val anchor = rememberGlassAnchor()
+                    Box(Modifier.padding(32.dp).size(48.dp).glassAnchor(anchor))
+                    GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center) {
+                        Box(Modifier.fillMaxWidth().height(180.dp).onGloballyPositioned { foreground = it })
+                    }
+                }
+            }
+        } } }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { open = true }
+        try {
+            val initialLayoutHeight = (1..30).firstNotNullOfOrNull {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                compose.runOnUiThread {
+                    val coordinates = foreground?.takeIf { it.isAttached } ?: return@runOnUiThread null
+                    val measuredHeight = coordinates.size.height
+                    val visibleHeight = coordinates.boundsInWindow().height.roundToInt()
+                    if (visibleHeight <= 0 || visibleHeight >= measuredHeight) return@runOnUiThread null
+                    val origin = coordinates.localToWindow(Offset.Zero)
+                    val bottom = coordinates.localToWindow(Offset(0f, measuredHeight.toFloat()))
+                    assertEquals("The foreground keeps unit scale inside the moving aperture",
+                        measuredHeight, bottom.y.roundToInt() - origin.y.roundToInt())
+                    measuredHeight
+                }
+            }
+            assertNotNull("The opening presents a genuinely clipped foreground", initialLayoutHeight)
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            compose.runOnUiThread {
+                assertEquals("The first clipped layout must equal the settled layout",
+                    initialLayoutHeight, requireNotNull(foreground).size.height)
+            }
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+    }
 
     @Test fun omittedAnchorInputsDoNotClobberEarlierSameFrameWriters() {
         lateinit var anchor: GlassAnchor
