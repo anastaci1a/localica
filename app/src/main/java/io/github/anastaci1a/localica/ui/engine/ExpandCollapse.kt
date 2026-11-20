@@ -85,6 +85,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         val edges: List<Pair<MotionFloat,Float>>,val scales: List<Float>,val spring: FluidPopupSpringSettings,
     )
     private inner class Outline(poses: List<PopupOutlinePose<Rect>>,val boundSlot: Int,hostScaleY: Double) {
+        val firstClipFrame=clock.presentedStamp.sequence
         val companion=MotionRect(clock,poses[1].bounds,requireNotNull(bound).ranges).also { it.claim(this@ExpandCollapse) }
         val radii=poses.map { MotionFloat(clock,0f,companion.ranges.top) }
         val scales=poses.map { scalar(it.scale.toDouble()) }
@@ -95,6 +96,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         var aperture by mutableIntStateOf(boundSlot); var hostScaleY=hostScaleY
         val presentedSlot get()=if(aperture==boundSlot || !physicalRest) boundSlot else aperture
         var request: OutlineRequest?=null; val kickRequests=arrayOfNulls<Pair<Float,FluidPopupSpringSettings>>(2)
+        fun usesModelClip(stamp: FrameStamp?)=stamp?.sequence==firstClipFrame
         fun rect(slot: Int)=if(slot==0) requireNotNull(bound) else companion
         private fun scalar(initial: Double)=FluidPropertyMotion(clock,Double::equals,initial=initial,
             snapReduced={ false },completion={ notifyLifecycle() })
@@ -110,14 +112,15 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         private fun projected(i: Int)=object: MotionValue {
             private val axis=i%2
             private val side=if(i<2) -1f else 1f
-            private fun value(read: (MotionFloat)->Float, property: (FluidPropertyMotion)->Double): Float {
+            private fun value(read: (MotionFloat)->Float, property: (FluidPropertyMotion)->Double, stamp: FrameStamp?=null): Float {
                 val o=outline?:return read(boundEdge(i))
                 val slot=slot(o)
                 val edges=o.rect(slot).channels
-                val base=read(edges[i])
+                val clip=if(o.usesModelClip(stamp)) MotionFloat::target else read
+                val base=clip(edges[i])
                 val scale=property(o.scales[slot]).toFloat()
                 val translation=if(axis==1) FluidKickSpec.translationY(property(o.kicks[slot]),property(o.kickScales[slot])).toFloat() else 0f
-                val span=(base-read(edges[i xor 2]))*side
+                val span=(base-clip(edges[i xor 2]))*side
                 return base+(abs(scale)*span.coerceAtLeast(0f)-span)*side*0.5f+translation
             }
             private fun velocity(read: (MotionFloat)->Kinematic): Float {
@@ -144,10 +147,10 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
                 edges[i].settled && edges[i xor 2].settled &&
                     o.scales[slot].settled && (axis!=1 || o.kicks[slot].settled && o.kickScales[slot].settled)
             } ?: boundEdge(i).settled
-            override fun value()=value({ it.value() },{ it.sample().value })
+            override fun value()=value({ it.value() },{ it.sample().value },clock.stamp)
             override fun velocity()=velocity { it.sample() }
             override fun sample()=Kinematic(value(),velocity())
-            override fun valueAt(stamp: FrameStamp)=value({ it.valueAt(stamp) },{ it.sample().value })
+            override fun valueAt(stamp: FrameStamp)=value({ it.valueAt(stamp) },{ it.sample().value },stamp)
             override fun velocityAt(stamp: FrameStamp)=velocity { it.sampleAt(stamp) }
             override fun sampleAt(stamp: FrameStamp)=Kinematic(valueAt(stamp),velocityAt(stamp))
         }
@@ -245,7 +248,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     private fun Outline.presentedRadius(slot: Int,rect: Rect): Float {
         val scale=abs(scales[slot].sample().value)
         val side=minOf(rect.width,rect.height).coerceAtLeast(0f)
-        return FluidCornerSpec.clampRadius(radii[slot].value().toDouble()*scale,side*0.5).toFloat()
+        val radius=if(usesModelClip(clock.stamp)) radii[slot].target else radii[slot].value()
+        return FluidCornerSpec.clampRadius(radius.toDouble()*scale,side*0.5).toFloat()
     }
     internal fun clearOutline() {
         outline?.let { o -> o.owned.forEach { it.onRest=null; it.dispose() }; o.properties.forEach { it.stop() } }

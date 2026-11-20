@@ -272,7 +272,7 @@ class GlassMorphGeometryTest {
         }
     }
 
-    @Test fun freshViewCentresAndContentKeepTheSourcePoseUntilTheFirstTick() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
+    @Test fun freshClipDisplaysTheDrainTargetsBeforeTheSourceSeedAdvances() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
         val home = Rect(35f, 40f, 123f, 84f)
         val menu = Rect(35f, 40f, 285f, 400f)
         popup.show(true)
@@ -281,13 +281,14 @@ class GlassMorphGeometryTest {
         assertTrue(popup.expansion.awaitingNativeGate)
         popup.acknowledgeNativeGate(popup.expansion.nativeGeneration)
         val initial = requireNotNull(popup.outlineBodies())
-        assertEquals(79f, initial[0].boundingRect.center.x, 0f)
-        assertEquals(62f, initial[0].boundingRect.center.y, 0f)
+        assertEquals(160f, initial[0].boundingRect.center.x, 0f)
+        assertEquals(220f, initial[0].boundingRect.center.y, 0f)
         assertEquals(15.277778f, initial[0].width, 0.00002f)
-        assertEquals(15.277778f, initial[0].height, 0.00002f)
+        assertEquals(22f, initial[0].height, 0.00002f)
         assertEquals(7.638889f, initial[0].topLeftCornerRadius.x, 0.00002f)
-        assertEquals(home, initial[1].boundingRect)
+        assertEquals(Rect(77f, 80f, 121f, 124f), initial[1].boundingRect)
         assertEquals(22f, initial[1].topLeftCornerRadius.x, 0f)
+        assertEquals(initial[0].boundingRect, requireNotNull(popup.bounds).value())
         h.advance(1.0 / 120)
         val first = requireNotNull(popup.outlineBodies())[0]
         assertEquals(19.912427f, first.width, 0.00002f)
