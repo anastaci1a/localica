@@ -27,7 +27,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
-import io.github.anastaci1a.localica.ui.engine.deformed
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
@@ -183,16 +182,6 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
 
 @Composable private fun Modifier.glassTouch(contact: GlassContact, admit: () -> Boolean, onPressed: (Boolean) -> Unit = {}): Modifier =
     observeGlassContact(admit, yieldToParent = true, onPoint = { contact.point = it }, onTravel = { contact.glowTravel = it }) { if (it) { contact.glowGeneration++; contact.state.momentum.origin = contact.point }; contact.travel = 0f; contact.pressed = it; onPressed(it) }
-
-internal fun LensGeometry.deformed(transform: GlassBodyTransform, pivot: Offset): LensGeometry =
-    if (transform.scale == Offset(1f, 1f) && transform.drift == Offset.Zero) this
-    else LensGeometry.fromBodies(bodies.map { it.deformed(transform, pivot) })
-
-internal fun LensGeometry.recorded(resolution: Float, padding: Float): LensGeometry {
-    val origin = bounds.topLeft
-    val translation = Offset(padding - origin.x, padding - origin.y) * resolution
-    return deformed(GlassBodyTransform(Offset(resolution, resolution), translation), Offset.Zero)
-}
 
 internal fun DrawScope.drawGlassBody(transform: GlassBodyTransform, content: DrawScope.() -> Unit) =
     translate(transform.drift.x, transform.drift.y) { scale(transform.scale.x, transform.scale.y, block = content) }
