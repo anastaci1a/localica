@@ -306,7 +306,7 @@ internal data class FluidGeometrySpringBinding(val sharedSpring: FluidPopupSprin
 internal fun FluidTimelineStep.geometrySpringBinding(effectiveSpeed: Double) =
     FluidGeometrySpringBinding(propertySpring(effectiveSpeed))
 
-internal fun fluidPositionSpring(resolved: FluidPopupSpringSettings?) = resolved ?: FluidSourceOutlineSpring
+internal fun fluidOutlineSpring(resolved: FluidPopupSpringSettings?) = resolved ?: FluidSourceOutlineSpring
 
 internal fun fluidThroughQueue(
     growing: Boolean, mainEject: FluidPopupSpringSettings, content: FluidContentSettings,

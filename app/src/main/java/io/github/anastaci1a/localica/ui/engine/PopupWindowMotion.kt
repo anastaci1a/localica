@@ -145,9 +145,6 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
             placement?.request?.let { (step,speed) -> deliverOutline(step,speed) }
         }
         startFluid()
-        if (holding) placement?.let { p ->
-            p.request?.first?.action?.let { p.outline?.outline(it) }?.let(expansion::layoutHeldOutlineSource)
-        }
     }
     private fun deliverOutline(step: FluidTimelineStep,speed: Double) {
         val current=placement?:return
@@ -155,7 +152,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         val spring=step.geometrySpringBinding(speed).sharedSpring
         outline.outline(step.action)?.let { poses ->
             placement=current.copy(request=step to speed)
-            expansion.replaceOutline(poses,outline.apertureSlot,outline.hostScaleY,fluidPositionSpring(spring))
+            expansion.replaceOutline(poses,outline.apertureSlot,outline.hostScaleY,fluidOutlineSpring(spring))
         }
         outline.kick(step.action)?.let { (slot,target) -> expansion.kickOutline(slot,target,requireNotNull(spring)) }
     }

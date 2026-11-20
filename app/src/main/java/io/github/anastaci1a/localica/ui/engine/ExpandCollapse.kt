@@ -77,18 +77,14 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     private inner class Outline(poses: List<PopupOutlinePose<Rect>>,val boundSlot: Int,hostScaleY: Double) {
         val companion=MotionRect(clock,poses[1].bounds,requireNotNull(bound).ranges).also { it.claim(this@ExpandCollapse) }
         val radii=poses.map { MotionFloat(clock,0f,companion.ranges.top) }
-        val content=List(2) { List(2) { MotionFloat(clock,0f,companion.ranges.top) } }
         val scales=poses.map { MotionFloat(clock,it.scale,1f) }
         val kicks=List(2) { MotionFloat(clock,FluidKickSpec.unkickTarget.toFloat(),companion.ranges.top) }
-        val owned=companion.channels.toList()+radii+content.flatten()+scales+kicks
+        val owned=companion.channels.toList()+radii+scales+kicks
         var aperture by mutableIntStateOf(boundSlot); var hostScaleY by mutableDoubleStateOf(hostScaleY)
         val presentedSlot get()=if(aperture==boundSlot || !physicalRest) boundSlot else aperture
         // The last edge and kick requests: committed unless held, and replayed by [resumeOutline] at release.
         var edges: Pair<List<Pair<MotionFloat,Float>>,FluidPopupSpringSettings>?=null; val kickRequests=arrayOfNulls<Pair<Float,FluidPopupSpringSettings>>(2)
         fun rect(slot: Int)=if(slot==0) requireNotNull(bound) else companion
-        fun contentTargets(poses: List<PopupOutlinePose<Rect>>) = poses.flatMapIndexed { slot, pose ->
-            listOf(radii[slot] to pose.radius, content[slot][0] to pose.bounds.width, content[slot][1] to pose.bounds.height)
-        }
     }
     private var outline by mutableStateOf<Outline?>(null)
     internal val hasOutline get()=outline!=null
@@ -100,7 +96,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         private fun slot(o: Outline)=physicalSlot ?: (o.presentedSlot xor o.boundSlot)
         private fun projected(i: Int)=object: MotionValue {
             private val axis=i%2
-            private val half=if(i<2) -0.5f else 0.5f
+            private val side=if(i<2) -1f else 1f
             private fun value(read: (MotionFloat)->Float): Float {
                 val o=outline?:return read(boundEdge(i))
                 val slot=slot(o)
@@ -108,9 +104,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
                 val base=read(edges[i])
                 val scale=read(o.scales[slot])
                 val kick=if(axis==1) FluidKickSpec.translationY(read(o.kicks[slot]).toDouble(),o.hostScaleY*scale).toFloat() else 0f
-                val contentHalf=half*abs(scale)*read(o.content[slot][axis]).coerceAtLeast(0f)
-                val viewHalf=(base-read(edges[i xor 2]))*0.5f
-                return base+(contentHalf-viewHalf)+kick
+                val span=(base-read(edges[i xor 2]))*side
+                return base+(abs(scale)*span.coerceAtLeast(0f)-span)*side*0.5f+kick
             }
             private fun velocity(read: (MotionFloat)->Kinematic): Float {
                 val o=outline?:return read(boundEdge(i)).velocity
@@ -120,19 +115,19 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
                 val other=read(edges[i xor 2])
                 val scale=read(o.scales[slot])
                 val scaleVelocity=if(scale.value<0f) -scale.velocity else scale.velocity
-                val span=read(o.content[slot][axis])
-                val spanVelocity=if(span.value<0f) 0f else span.velocity
+                val span=(base.value-other.value)*side
+                val spanVelocity=if(span<0f) 0f else (base.velocity-other.velocity)*side
                 val kick=if(axis==1) read(o.kicks[slot]).let {
                     (o.hostScaleY*(scale.value*it.velocity+scale.velocity*it.value)).toFloat()
                 } else 0f
                 return (base.velocity+other.velocity)*0.5f+
-                    half*(abs(scale.value)*spanVelocity+scaleVelocity*span.value.coerceAtLeast(0f))+kick
+                    side*0.5f*(abs(scale.value)*spanVelocity+scaleVelocity*span.coerceAtLeast(0f))+kick
             }
             override val target get()=value { it.target }
             override val settled get()=outline?.let { o ->
                 val slot=slot(o)
                 val edges=o.rect(slot).channels
-                edges[i].settled && edges[i xor 2].settled && o.content[slot][axis].settled &&
+                edges[i].settled && edges[i xor 2].settled &&
                     o.scales[slot].settled && (axis!=1 || o.kicks[slot].settled)
             } ?: boundEdge(i).settled
             override fun value()=value { it.value() }
@@ -156,14 +151,15 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
             o.owned.forEach { it.onRest={ notifyLifecycle() } }
         }
         current.aperture=aperture; current.hostScaleY=hostScaleY; drawn=null
-        val view=ordered.flatMapIndexed { slot, pose ->
+        val targets=ordered.flatMapIndexed { slot, pose ->
+            // The axes share a law, so these edges encode the centre and the presented content extent.
             val r=pose.bounds
-            current.rect(slot).channels.zip(listOf(r.left,r.top,r.right,r.bottom))+(current.scales[slot] to pose.scale)
+            current.rect(slot).channels.zip(listOf(r.left,r.top,r.right,r.bottom))+
+                listOf(current.radii[slot] to pose.radius,current.scales[slot] to pose.scale)
         }
         if(existing==null) {
-            retargetOutline(view,spring,snap=true)
+            retargetOutline(targets,spring,snap=true)
         } else if(!held || current.edges!=null) {
-            val targets=view+current.contentTargets(ordered)
             val previous=current.edges
             current.edges=targets to spring
             if(!held) {
@@ -171,11 +167,6 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
                 retargetOutline(if(unchanged==null) targets else targets-unchanged.first.toSet(),spring)
             }
         }
-    }
-    internal fun layoutHeldOutlineSource(poses: List<PopupOutlinePose<Rect>>) {
-        val current=outline?.takeIf { held && it.edges==null }?:return
-        val ordered=if(current.boundSlot==0) poses else poses.asReversed()
-        retargetOutline(current.contentTargets(ordered),fluidPositionSpring(null),snap=true)
     }
     internal fun kickOutline(slot: Int,target: Float,spring: FluidPopupSpringSettings) { outline?.let { val i=slot xor it.boundSlot; it.kickRequests[i]=target to spring; if(!held) resumeKick(it,i) } }
     private fun resumeEdges(o: Outline) { o.edges?.let { (targets,spring) -> retargetOutline(targets,spring) } }

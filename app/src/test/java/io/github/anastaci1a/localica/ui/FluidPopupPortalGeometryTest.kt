@@ -75,4 +75,13 @@ class FluidPopupPortalGeometryTest {
         assertEquals(-80.0, larger.growingKickTarget(pivot.copy(y = Double.NaN), 0.5, null), 0.0)
         assertEquals((-0.0).toRawBits(), larger.growingKickTarget(pivot.copy(y = 190.0), 0.5, null).toRawBits())
     }
+
+    @Test fun sourceInsetNarrowerThanThePivotKeepsTheUnderlyingHostPose() {
+        val smaller = PopupPortalBounds(0.0, 0.0, 40.0, 20.0)
+        val pivot = PopupPortalBounds(0.0, 0.0, 88.0, 44.0)
+        val larger = PopupPortalBounds(0.0, 0.0, 250.0, 360.0)
+        val targets = fluidOutlineTargets(smaller, larger, pivot, { it }, { it })
+        assertNull(targets.sourcePivot)
+        assertEquals(PopupPortalBounds(34.0, 12.0, 20.0, 20.0), targets.collapsedSource.bounds)
+    }
 }

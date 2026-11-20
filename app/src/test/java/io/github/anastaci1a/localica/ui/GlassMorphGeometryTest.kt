@@ -15,7 +15,7 @@ import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import io.github.anastaci1a.localica.ui.spec.PopupOutlinePose
-import io.github.anastaci1a.localica.ui.spec.fluidPositionSpring
+import io.github.anastaci1a.localica.ui.spec.fluidOutlineSpring
 import io.github.anastaci1a.localica.ui.spec.SpecResult
 import io.github.anastaci1a.localica.ui.spec.uiSpec
 import java.security.MessageDigest
@@ -223,8 +223,9 @@ class GlassMorphGeometryTest {
         val expanded = PopupOutlinePose(menu, 24f, 1f)
         assertEquals(listOf(pivot, source), opening.outline(Source))
         assertEquals(listOf(pivot, collapsed), opening.outline(CollapsedSource))
-        assertEquals(listOf(expanded.copy(radius = 250f), companion), opening.outline(ExpandedOverrounded))
-        assertEquals(listOf(expanded, companion), opening.outline(FullyExpanded))
+        val overrounded = requireNotNull(opening.outline(ExpandedOverrounded))
+        assertEquals(listOf(expanded.copy(radius = 250f), companion), overrounded)
+        assertEquals(listOf(overrounded[0].copy(radius = 24f), overrounded[1]), opening.outline(FullyExpanded))
         assertEquals(listOf(expanded, companion), closing.outline(FullyExpanded))
         assertEquals(listOf(pivot, source), closing.outline(Source))
         assertEquals(0 to 70.22222f, opening.kick(Kick))
@@ -235,7 +236,7 @@ class GlassMorphGeometryTest {
         assertEquals(1 to 0f, closing.kick(UnkickSource))
     }
 
-    @Test fun freshViewCentresSnapAndContentBoundsGrowFromZero() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
+    @Test fun freshViewCentresAndContentKeepTheSourcePoseUntilTheFirstTick() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
         val home = Rect(35f, 40f, 123f, 84f)
         val menu = Rect(35f, 40f, 285f, 400f)
         popup.show(true)
@@ -246,28 +247,30 @@ class GlassMorphGeometryTest {
         val initial = requireNotNull(popup.outlineBodies())
         assertEquals(79f, initial[0].boundingRect.center.x, 0f)
         assertEquals(62f, initial[0].boundingRect.center.y, 0f)
-        assertEquals(home.center, initial[1].boundingRect.center)
-        assertTrue(initial.all { it.width == 0f && it.height == 0f && it.topLeftCornerRadius.x == 0f })
+        assertEquals(15.277778f, initial[0].width, 0.00002f)
+        assertEquals(15.277778f, initial[0].height, 0.00002f)
+        assertEquals(7.638889f, initial[0].topLeftCornerRadius.x, 0.00002f)
+        assertEquals(home, initial[1].boundingRect)
+        assertEquals(22f, initial[1].topLeftCornerRadius.x, 0f)
         h.advance(1.0 / 120)
         val first = requireNotNull(popup.outlineBodies())[0]
-        assertEquals(0.18385033f, first.width, 0.00002f)
-        assertEquals(0.26474447f, first.height, 0.00002f)
-        assertEquals(0.09192516f, first.topLeftCornerRadius.x, 0.00002f)
+        assertEquals(17.713926f, first.width, 0.00002f)
+        assertEquals(17.79482f, first.height, 0.00002f)
+        assertEquals(8.856963f, first.topLeftCornerRadius.x, 0.00002f)
         assertEquals(first.boundingRect, requireNotNull(popup.bounds).value())
     }
 
-    @Test fun aFreshHeldSourcePublishesItsContentOnLayout() = fluidWindow(MotionAccess.Standard, 24f) { _, popup, _ ->
+    @Test fun aFreshHeldSourceKeepsItsInstalledContent() = fluidWindow(MotionAccess.Standard, 24f) { _, popup, _ ->
         val bounds = Rect(0f, 0f, 250f, 360f)
         val pose = PopupOutlinePose(bounds, 24f, 0.25f)
         val poses = listOf(pose, pose)
         val expansion = popup.expansion
         expansion.hold()
         expansion.replaceOutline(poses, 0, 1.0, FluidMainEject)
-        assertTrue(requireNotNull(popup.outlineBodies()).all { it.width == 0f })
-        expansion.layoutHeldOutlineSource(poses)
         val shaped = requireNotNull(popup.outlineBodies())
         assertTrue(shaped.all { it.width == 62.5f && it.height == 90f && it.topLeftCornerRadius.x == 6f })
         expansion.release()
+        assertEquals(shaped, popup.outlineBodies())
     }
 
     @Test fun kickDisplacementUsesTheInstantaneousSlotScale() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, _ ->
@@ -284,7 +287,7 @@ class GlassMorphGeometryTest {
         val scale = 0.25 + 0.75 * progress
         val kt = 2.0 * Math.PI / 0.2 / 120
         val kick = 40.0 * (1.0 - (1.0 + kt) * kotlin.math.exp(-kt))
-        assertEquals((250.0 * progress * scale).toFloat(), slots[0].width, 0.00002f)
+        assertEquals((250.0 * scale).toFloat(), slots[0].width, 0.00002f)
         assertEquals((180.0 + scale * kick * 2.0).toFloat(), slots[0].boundingRect.center.y, 0.00002f)
         assertEquals(180f, slots[1].boundingRect.center.y, 0f)
     }
@@ -293,7 +296,7 @@ class GlassMorphGeometryTest {
         val bounds = Rect(0f, 0f, 250f, 360f)
         val pose = PopupOutlinePose(bounds, 24f, 1f)
         val expansion = popup.expansion
-        val spring = fluidPositionSpring(null)
+        val spring = fluidOutlineSpring(null)
         val aperture = requireNotNull(popup.bounds)
         fun centreVelocity() = with(h.clock.stampNow) { (aperture.left.velocityAt(this) + aperture.right.velocityAt(this)) * 0.5f }
         fun request(dx: Float) {

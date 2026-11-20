@@ -623,7 +623,7 @@ class FluidPopupComponentsTest {
         assertEquals(spring.retargetImpulse.toRawBits(), scaled.retargetImpulse.toRawBits())
     }
 
-    @Test fun geometryStepUsesTheSharedScaledSpringAndOnlyFallsBackForAbsentPositionSpring() {
+    @Test fun geometryStepUsesTheSharedScaledSpringOrTheUnscaledSourceSettings() {
         val content = FluidContent.copy(lensingEnabled = false)
         val route = fluidThroughQueue(true, FluidMainEject, content) { error("Lensing disabled") }
         val expected = listOf(CollapsedSource to 0.21, ExpandedOverrounded to 0.35, FullyExpanded to 0.35)
@@ -631,7 +631,7 @@ class FluidPopupComponentsTest {
             val binding = route.first { it.action == action }.geometrySpringBinding(0.7)
             val shared = requireNotNull(binding.sharedSpring)
             assertTrue(binding.tracksPresentationLayer)
-            assertTrue(fluidPositionSpring(shared) === shared)
+            assertTrue(fluidOutlineSpring(shared) === shared)
             assertEquals(response.toRawBits(), shared.response.toRawBits())
             assertEquals(0.105.toRawBits(), shared.trackingResponse.toRawBits())
             assertEquals(0.0.toRawBits(), shared.retargetImpulse.toRawBits())
@@ -639,7 +639,7 @@ class FluidPopupComponentsTest {
         val unresolved = route.first().geometrySpringBinding(0.7)
         assertEquals(null, unresolved.sharedSpring)
         assertTrue(unresolved.tracksPresentationLayer)
-        val fallback = fluidPositionSpring(null)
+        val fallback = fluidOutlineSpring(null)
         assertEquals(0.8, fallback.dampingRatio, 0.0)
         assertEquals(0.3, fallback.response, 0.0)
         assertEquals(0.3, fallback.trackingResponse, 0.0)
