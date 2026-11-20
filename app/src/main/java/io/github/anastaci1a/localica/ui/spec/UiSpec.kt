@@ -78,6 +78,11 @@ internal class FluidPopupSpringSettings(val dampingRatio: Double, val response: 
     val omega = 2 * PI / response
     val stiffness = omega * omega
     val damping = 2 * dampingRatio * omega
+    private val installedDamping = (sqrt(stiffness) + sqrt(stiffness)) * dampingRatio
+    val velocityScalingFactor get() = installedDamping / stiffness
+    fun advance(body: FluidScalarSpringBody, target: Double, dt: Double) =
+        SpringKernel(sqrt(stiffness), dampingRatio, installedDamping).advanceBody(body, target, dt)
+
     fun scaledResponses(multiplier: Double, trackingResponse: Double) = (multiplier * response) to (multiplier * trackingResponse)
 }
 internal val FluidMainEjectDefaults = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
@@ -123,7 +128,14 @@ internal data class FluidPropertySpringControls(
     }
 }
 
-internal data class FluidScalarSpringBody(val value: Double, val velocity: Double)
+internal data class FluidScalarSpringBody(val value: Double, val velocity: Double) {
+    fun finished(target: Double, velocityScalingFactor: Double, epsilonSquared: Double, hasPending: Boolean): Boolean {
+        if (hasPending) return false
+        if (!value.isFinite() || !velocity.isFinite()) return true
+        val combined = (target - value) + (velocity * velocityScalingFactor)
+        return !combined.isFinite() || abs(combined) <= epsilonSquared
+    }
+}
 
 internal enum class FluidGeometryAction { CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick }
 internal data class FluidGeometryStep(val action: FluidGeometryAction, val timing: FluidPopupStep)
@@ -527,10 +539,58 @@ internal fun popupMotionAdmission(m: PopupMotionModel): List<String> {
 }
 /** #854 (rule 12): the one closed-form damped spring. The engine's Damped flies it and the admission below composes it (the spec
  * layer cannot depend on the engine). Overdamped laws use expm1, so near-critical laws keep their precision. */
-internal class SpringKernel(private val omega: Double,private val zeta: Double) {
-    private val a=zeta*omega; private val wd=omega*sqrt(abs(1-zeta*zeta)); internal val slow=if(zeta>1) omega/(zeta+sqrt(zeta*zeta-1)) else a; private val fast=if(zeta>1) omega*(zeta+sqrt(zeta*zeta-1)) else omega
+internal class SpringKernel(private val omega: Double, private val zeta: Double, installedDamping: Double? = null) {
+    private val installed = installedDamping != null
+    private val a = installedDamping?.times(0.5) ?: zeta * omega
+    private val underdamped = if (installed) a < omega else zeta < 1.0
+    private val critical = if (installed) a == omega else zeta == 1.0
+    private val wd = if (installed) sqrt(abs(omega * omega - a * a)) else omega * sqrt(abs(1 - zeta * zeta))
+    internal val slow = if (zeta > 1) omega / (zeta + sqrt(zeta * zeta - 1)) else a
+    private val fast = if (zeta > 1) omega * (zeta + sqrt(zeta * zeta - 1)) else omega
+
     /** The offset from the target ([d] false) or the velocity ([d] true) [t] seconds after offset [offset] and velocity [v]. */
-    fun response(offset: Double,v: Double,t: Double,d: Boolean): Double = when { zeta<1 -> { val c=(v+a*offset)/wd; exp(-a*t)*(if(d) v*cos(wd*t)-(a*c+offset*wd)*sin(wd*t) else offset*cos(wd*t)+c*sin(wd*t)) }; zeta==1.0 -> exp(-omega*t)*(if(d) v-omega*(v+omega*offset)*t else offset+(v+omega*offset)*t); else -> { val difference=fast-slow; val b=-(v+slow*offset)/difference; val extra=expm1(-difference*t); exp(-slow*t)*(if(d) -slow*offset+b*(-slow*extra-difference*exp(-difference*t)) else offset+b*extra) } }
+    fun response(offset: Double, v: Double, t: Double, d: Boolean): Double {
+        if (underdamped) {
+            val b = if (installed) (1 / wd) * (a * offset + v) else (v + a * offset) / wd
+            val angle = wd * t
+            val cosine = cos(angle)
+            val sine = sin(angle)
+            val envelope = exp(-a * t)
+            val displacement = offset * cosine + b * sine
+            if (!d) return envelope * displacement
+            if (installed) return envelope * ((wd * (cosine * b)) - (wd * (offset * sine))) - envelope * (displacement * a)
+            return envelope * (v * cosine - (a * b + offset * wd) * sine)
+        }
+        if (critical) {
+            val b = v + a * offset
+            val displacement = offset + b * t
+            val envelope = exp(-a * t)
+            if (!d) return envelope * displacement
+            if (installed) return envelope * b - envelope * (displacement * a)
+            return envelope * (v - a * b * t)
+        }
+        if (installed) {
+            val b = (1 / wd) * (a * offset + v)
+            val angle = wd * t
+            val sinh = sinh(angle)
+            val cosh = cosh(angle)
+            val envelope = exp(-a * t)
+            val displacement = cosh * offset + sinh * b
+            return if (d) envelope * ((wd * (offset * sinh)) + (wd * (cosh * b))) - envelope * (displacement * a)
+            else envelope * displacement
+        }
+        val difference = fast - slow
+        val b = -(v + slow * offset) / difference
+        val extra = expm1(-difference * t)
+        return exp(-slow * t) * if (d) -slow * offset + b * (-slow * extra - difference * exp(-difference * t)) else offset + b * extra
+    }
+
+    internal fun advanceBody(body: FluidScalarSpringBody, target: Double, dt: Double): FluidScalarSpringBody {
+        if (dt <= 0.0 || (body.value == target && body.velocity == 0.0)) return body
+        val offset = body.value - target
+        return FluidScalarSpringBody(target + response(offset, body.velocity, dt, false), response(offset, body.velocity, dt, true))
+    }
+
     /** The first velocity zeros, possibly negative (later underdamped extrema shrink by the overshoot factor each half period). */
     fun velocityZeros(offset: Double,v: Double): List<Double> = when { zeta<1 -> { val c=(v+a*offset)/wd; val first=(atan2(v,a*c+offset*wd)%PI+PI)%PI; (0..2).map { (first+it*PI)/wd } }
         zeta==1.0 -> { val d=omega*(v+omega*offset); if(d!=0.0) listOf(v/d) else emptyList() }

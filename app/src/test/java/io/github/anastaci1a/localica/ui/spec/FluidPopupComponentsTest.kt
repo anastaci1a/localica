@@ -200,6 +200,38 @@ class FluidPopupComponentsTest {
         assertEquals(FluidScalarSpringBody(20.0, 2.5), controls.immediateBody(20.0, 25.0, null, null, spring, 0.0, null))
     }
 
+    @Test fun installedSpringUsesTheRecoveredThreeBodyBranches() {
+        val body = FluidScalarSpringBody(2.0, 1.3)
+        val cases = listOf(
+            doubleArrayOf(10.0, 7.0, 0.023, 2.277141109672307, 22.1331732458615),
+            doubleArrayOf(12.0, 24.0, 0.019, 2.2432583584385632, 22.580950056268875),
+            doubleArrayOf(9.0, 24.0, 0.031, 2.334434614188172, 18.071557887997244),
+        )
+        for ((omega, damping, dt, value, velocity) in cases) {
+            val kernel = SpringKernel(omega, damping / (omega + omega), installedDamping = damping)
+            val next = kernel.advanceBody(body, 12.0, dt)
+            assertEquals(value, next.value, 1e-12 * maxOf(1.0, kotlin.math.abs(value)))
+            assertEquals(velocity, next.velocity, 1e-12 * maxOf(1.0, kotlin.math.abs(velocity)))
+            assertTrue(kernel.advanceBody(body, 12.0, 0.0) === body)
+        }
+    }
+
+    @Test fun installedPropertyScalesFinishVelocityWithItsPhysicalDamping() {
+        val spring = FluidPopupSpringSettings(0.68, 0.37)
+        assertEquals(0.08008676736384175.toRawBits(), spring.velocityScalingFactor.toRawBits())
+        val dueBody = FluidScalarSpringBody(3.0, -80.43776178513674)
+        val next = spring.advance(dueBody, -7.0, 0.019)
+        assertEquals(1.3359182287897973, next.value, 1e-12 * 1.3359182287897973)
+        assertEquals(-92.34064472028794, next.velocity, 1e-12 * 92.34064472028794)
+        val rest = FluidScalarSpringBody(-7.0, -0.0)
+        assertTrue(spring.advance(rest, -7.0, 0.019) === rest)
+        val cancel = FluidScalarSpringBody(2.0, 4.0)
+        assertTrue(cancel.finished(1.0, 0.25, 0.0, hasPending = false))
+        assertFalse(cancel.finished(1.0, 0.25, 0.0, hasPending = true))
+        assertFalse(cancel.finished(1.001, 0.25, 0.0001, hasPending = false))
+        assertTrue(FluidScalarSpringBody(1.0, Double.POSITIVE_INFINITY).finished(1.0, 0.25, 0.0, hasPending = false))
+    }
+
     @Test fun actionThresholdAppliesDragAfterSpeedAndAmplification() {
         val step = FluidPopupStep(0.1, FluidMainEjectDefaults)
         assertEquals(0.21.toRawBits(), step.dueThreshold(0.7, true, 0.3).toRawBits())
