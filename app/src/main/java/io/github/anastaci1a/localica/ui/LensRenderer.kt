@@ -9,6 +9,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
 
+internal val fluidContentBlurEffect: ((radius: Double) -> RenderEffect?)? = null
+
 /** One material kernel for every glass shape. The geometry adapter supplies distance
  * and inward gradient; every shape gets the same refraction law (GlassRefraction). */
 @RequiresApi(33)

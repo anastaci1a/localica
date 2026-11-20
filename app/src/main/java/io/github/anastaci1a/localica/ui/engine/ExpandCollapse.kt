@@ -170,7 +170,9 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     private fun nativeWaiting(q: Boolean)=if(nativeBoundary==null) null else if(awaitingNativeGate || held && pendingNative!=null) pendingNative else q.takeIf { it!=nativeSide }
     /** Each edge's travel on the second phase: a centre share or the existing cross-axis snap. */
     private fun shares(law: ResolvedPopupLaw,b: ExpansionBasis): DoubleArray {
-        if(cross==null) return DoubleArray(4); if(law.model.centre!=null) return DoubleArray(4) { if(it%2==1) (b.delta(1)+b.delta(3))/2 else 0.0 }; val mainX=b.edgeIndex%2==0; val crossEdges=if(mainX) intArrayOf(1,3) else intArrayOf(0,2)
+        if(cross==null) return DoubleArray(4)
+        law.model.centre?.let { return it.edgeShares(DoubleArray(4, b::delta)) }
+        val mainX=b.edgeIndex%2==0; val crossEdges=if(mainX) intArrayOf(1,3) else intArrayOf(0,2)
         val snaps=crossEdges.any { b.delta(it)!=0.0 } && when(law.variant) { PopupMotionVariant.CrossAxisSnap -> true
             PopupMotionVariant.Auto -> { val main=if(mainX) b.endBounds.width else b.endBounds.height; val other=if(mainX) b.endBounds.height else b.endBounds.width; main>0f && other/main>law.model.snapAspect }
             else -> false }
@@ -201,7 +203,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         residualStates?.forEachIndexed { i,s -> val l=edgeLaw(i); states+=doubleArrayOf(s[0],s[1],0.0,l.omega/sigma,l.zeta.toDouble(),edges!![i].range.toDouble()) }
         val plan=SpringPlan.of(stamp,sigma,display,states); val band=law.model.band.toDouble()
         val phase=plan.segment(x,v,target,mainLaw,1.0,display).also { proven(it.extrema.start>=-band && it.extrema.endInclusive<=1+band,"phase ${it.extrema}") }
-        val crossBand=if(law.model.centre!=null) law.model.centreBand.toDouble() else band
+        val crossBand=law.model.centre?.band?.toDouble() ?: band
         val crossPhase=c?.let { plan.segment(cx,cv,target,crossLaw,1.0,display).also { t -> proven(t.extrema.start>=-crossBand && t.extrema.endInclusive<=1+crossBand || law.model.centre==null && !law.model.admitsCross(c.settled,q),"cross ${t.extrema}") } }
         val entries=mutableListOf(motion to motion.prepareSegment(phase,target.toFloat(),stamp,plan,policy)); if(c!=null) entries+=c to c.prepareSegment(crossPhase!!,target.toFloat(),stamp,plan,policy)
         if(rect!=null) {

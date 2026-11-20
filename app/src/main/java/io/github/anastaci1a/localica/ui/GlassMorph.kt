@@ -1164,8 +1164,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         layout(width, height) {
                             backing.place(0, 0)
                             foreground.placeWithLayer((width - foreground.width) / 2, if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2) {
-                                val fit = popupContentScale(width,height,foreground.width,foreground.height,page || placement == GlassPlacement.Search || motion.expansion.popupLaw?.model?.centre != null)
-                                scaleX = fit; scaleY = fit
+                                if (motion.fluid) {
+                                    renderEffect = fluidContentBlurEffect?.invoke(motion.fluidBlurRadius)
+                                } else {
+                                    val fit = popupContentScale(width,height,foreground.width,foreground.height,page || placement == GlassPlacement.Search)
+                                    scaleX = fit; scaleY = fit
+                                }
                             }
                             // A retained face may contain a Material Surface with a pointer node.
                             // Alpha and cleared semantics do not remove that invisible hit target.

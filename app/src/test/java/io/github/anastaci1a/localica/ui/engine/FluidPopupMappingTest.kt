@@ -58,11 +58,12 @@ class FluidPopupMappingTest {
         assertEquals(PopupMotionStyle.EdgeSpring, InterfaceSettings().popupMotion)
         for (style in PopupMotionStyle.entries) {
             val spec = (uiSpec(InterfaceSettings(popupMotion = style)) as SpecResult.Accepted).spec
-            assertEquals(style == PopupMotionStyle.Fluid, spec.popupMotion.centre != null)
+            assertEquals(style == PopupMotionStyle.Fluid, spec.popupMotion.style == PopupMotionStyle.Fluid)
             for (kind in PopupKind.entries) EngineHarness().use { h ->
                 val basis = ExpansionBasis(Rect(10f, 10f, 40f, 40f), Rect(0f, 0f, 300f, 600f), 1f)
                 val rig = PopupRig(h, basis, kind, model = spec.popupMotion)
-                assertEquals(kind != PopupKind.Legacy && (style == PopupMotionStyle.Fluid || kind == PopupKind.BottomMenu), rig.owner.crossPhase() != null)
+                assertEquals(if (kind == PopupKind.Legacy) null else style, rig.owner.popupLaw?.model?.style)
+                assertEquals(kind != PopupKind.Legacy && (spec.popupMotion.centre != null || kind == PopupKind.BottomMenu), rig.owner.crossPhase() != null)
                 rig.owner.target(true); h.advance(2.0)
                 assertEquals(basis.endBounds, rig.rect!!.valueAt(h.clock.stampNow))
                 rig.owner.target(false); h.advance(2.0)
@@ -95,8 +96,8 @@ class FluidPopupMappingTest {
                 assertEquals(before, popup.bounds!!.channels.map { it.sampleAt(h.clock.stampNow) })
                 popup.show(false); h.advance(2.0)
                 popup.show(true)
-                assertEquals(next == PopupMotionStyle.Fluid, popup.expansion.popupLaw!!.model.centre != null)
-                assertEquals(next == PopupMotionStyle.Fluid, popup.expansion.crossPhase() != null)
+                assertEquals(next == PopupMotionStyle.Fluid, popup.expansion.popupLaw!!.model.style == PopupMotionStyle.Fluid)
+                assertEquals(spec(next).popupMotion.centre != null, popup.expansion.crossPhase() != null)
                 h.advance(2.0)
             }
             popup.expansion.dispose()
@@ -105,7 +106,11 @@ class FluidPopupMappingTest {
 
     @Test fun independentPhasePlumbingPreservesBothEdgeDerivativesAcrossReversalsRebasesAndNativeGates() {
         // A distinct existing law exercises the plumbing without adopting held fluid constants.
-        val model = StockPopupMotion.copy(centre = StockPopupMotion.close)
+        val phase = PopupSecondPhase(StockPopupMotion.close, StockPopupMotion.band) { edges ->
+            val vertical = (edges[1] + edges[3]) * 0.5
+            doubleArrayOf(0.0, vertical, 0.0, vertical)
+        }
+        val model = StockPopupMotion.copy(centre = phase)
         val violations = SpringBandTelemetry.violations
         for (hz in listOf(60, 120)) for (speed in listOf(.5f, 1f, 1.5f)) for (gated in listOf(false, true)) EngineHarness().use { h ->
             h.setContext(hz, speed)

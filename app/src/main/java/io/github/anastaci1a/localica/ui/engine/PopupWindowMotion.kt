@@ -2,8 +2,8 @@ package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Rect
-import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
-import io.github.anastaci1a.localica.ui.spec.PopupKind
+import io.github.anastaci1a.localica.ui.spec.*
+import kotlin.math.abs
 
 /** #920: a popup's one stored takeover phase (SPEC.md section 2); every takeover flag is a view of it. */
 internal enum class PopupTakeover { Closed, Admitting, InWindow, Restoring }
@@ -20,7 +20,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
  * receipt releases its gate; changing the envelope rebases those same edges. */
 @Stable internal class PopupWindowMotion(
     private val clock: UiClock, spec: ExpansionSpec, key: Any, prepared: Boolean, quiet: Boolean, val kind: PopupKind = PopupKind.Legacy
-) {
+) : ActiveMotion {
     val expansion = ExpandCollapse(clock, spec, false, key).also { it.usePopupLaw(clock.spec.popupMotion, kind) }
     private val model = clock.spec.popupMotion
     /** Whether this window runs the #854 spring model rather than the Legacy v0.33.21 popup law. */
@@ -52,6 +52,21 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private var nativeWindow: java.lang.ref.WeakReference<Any>? = null
     private var firstNativeMeasurement = false
     private var nativeHost: java.lang.ref.WeakReference<ShadowPlane>? = null
+    private val pendingFluid = ArrayDeque<FluidTimelineStep>()
+    private var fluidOrigin: FrameStamp? = null
+    private var fluidTick: FrameStamp? = null
+    private var fluidIntent: Boolean? = null
+    private var fluidHeight = 0.0
+    private var fluidBasis: ExpansionBasis? = null
+    private var blurSpring: FluidPopupSpringSettings? = null
+    private var blurEntry = FluidScalarSpringEntry(FluidScalarSpringBody(0.0, 0.0), 0.0, FluidScalarSpringBody(0.0, 0.0))
+    private val blurControls = FluidPropertySpringControls(0.0, null, false, false)
+    private var blurPublication = FluidScalarPublication()
+    var fluidBlurRadius by mutableDoubleStateOf(0.0); private set
+    val fluid get() = expansion.popupLaw?.model?.style == PopupMotionStyle.Fluid
+    override val id by lazy(LazyThreadSafetyMode.NONE) { clock.allocateId() }
+    override val presented get() = fluidOrigin != null
+    override val settled get() = pendingFluid.isEmpty() && blurSpring == null
     init { expansion.nativeGate(gate) }
     fun attached(window: Any, host: ShadowPlane) {
         nativeHost = java.lang.ref.WeakReference(host)
@@ -60,9 +75,29 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
             nativeWindow = java.lang.ref.WeakReference(window)
         }
     }
-    fun show(visible: Boolean) { expansion.refreshPopupLaw(); shown = visible; if (rectangle != null) expansion.target(visible) }
-    fun hold() { holding = true; if (rectangle != null) expansion.hold() }
-    fun release() { holding = false; expansion.release() }
+    fun show(visible: Boolean) {
+        expansion.refreshPopupLaw()
+        shown = visible
+        if (rectangle != null) expansion.target(visible)
+        startFluid()
+    }
+    fun hold() {
+        holding = true
+        if (fluid) clock.unregister(this)
+        if (rectangle != null) expansion.hold()
+    }
+    fun release() {
+        val wasHolding = holding
+        holding = false
+        expansion.release()
+        if (wasHolding && !settled) {
+            val now = clock.stampNow
+            fluidOrigin = now
+            fluidTick = now
+            drainFluid(now, false)
+            if (!settled) clock.register(this)
+        }
+    }
     fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false) {
         if (shown || openingEnvelope == null) openingEnvelope = envelope
         val capturedEnvelope = requireNotNull(openingEnvelope)
@@ -81,10 +116,83 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         firstNativeMeasurement = false
         expansion.target(shown)
         if (holding) expansion.hold()
+        fluidBasis = basis
+        startFluid()
+    }
+    private fun startFluid() {
+        val basis = fluidBasis ?: return
+        if (!fluid || fluidIntent == shown || (fluidIntent == null && !shown)) return
+        fluidIntent = shown
+        if (clock.context?.access == MotionAccess.Reduced) {
+            reduce(clock.stampNow)
+            return
+        }
+        val from = if (shown) basis.startBounds else basis.endBounds
+        val to = if (shown) basis.endBounds else basis.startBounds
+        val growing = from.width.toDouble() * from.height < to.width.toDouble() * to.height
+        fluidHeight = maxOf(abs(from.height.toDouble()), abs(to.height.toDouble()))
+        val inputs = FluidPopupRuntimeInputs
+        val eject = inputs.liveMainEject ?: FluidMainEjectDefaults
+        val absorb = inputs.liveMainAbsorb ?: inputs.constructorMainAbsorb
+        val content = FluidContentDefaults
+        pendingFluid.replaceFluidTimeline(fluidThroughQueue(growing, eject, content) {
+            FluidLensingSpec.requests(content.lensingEnabled, growing, eject, absorb) { changing ->
+                inputs.lensDimension?.invoke(growing, changing)
+            }
+        })
+        val now = clock.stampNow
+        fluidOrigin = now
+        fluidTick = now
+        drainFluid(now, holding)
+        if (!settled && !holding) clock.register(this)
+    }
+
+    private fun drainFluid(stamp: FrameStamp, firstOnly: Boolean) {
+        val origin = fluidOrigin ?: return
+        val content = FluidContentDefaults
+        pendingFluid.drainFluidTimeline((stamp.nanos - origin.nanos) / 1e9, FluidPopupRuntimeInputs.effectiveSpeed ?: content.speed, content.amplifyDelays,
+            { clock.context?.durationScale?.toDouble() ?: 1.0 }, firstOnly) { step, speed ->
+            val blur = when (step.action) {
+                FluidTimelineAction.BlurOut -> fluidContentBlurOut(fluidHeight, { content.maxScale }, { content.minScale })
+                FluidTimelineAction.BlurIn -> FluidContentBlurIn
+                else -> null
+            }
+            if (blur != null) {
+                blurSpring = step.propertySpring(speed)
+                blurEntry = blurControls.immediateEntry(fluidBlurRadius, blur.gaussianRadius, blurEntry, blurEntry.target, blurSpring, null)
+            }
+        }
+    }
+
+    override fun frame(stamp: FrameStamp) {
+        val before = fluidTick ?: stamp
+        fluidTick = stamp
+        blurSpring?.let { spring ->
+            blurEntry = spring.advanceUnsmoothed(blurEntry, (stamp.nanos - before.nanos) / 1e9)
+            val body = blurEntry.body
+            val complete = body.finished(blurEntry.target, spring.velocityScalingFactor, FluidPopupRuntimeInputs.radiusEpsilonSquared, false)
+            blurPublication.queueTick(body, blurEntry.target, complete, Double::equals)
+            FluidSharedBlurSpec.publishRadius(blurPublication) { radius, _, _ -> fluidBlurRadius = radius }
+            if (complete) blurSpring = null
+        }
+        if (!holding) drainFluid(stamp, false)
+    }
+
+    override fun endsAt(stamp: FrameStamp) = settled
+    override fun finish(stamp: FrameStamp) { fluidOrigin = null; fluidTick = null }
+    override fun reduce(stamp: FrameStamp) {
+        pendingFluid.clear()
+        blurSpring = null
+        blurPublication = FluidScalarPublication()
+        fluidBlurRadius = 0.0
+        val zero = FluidScalarSpringBody(0.0, 0.0)
+        blurEntry = FluidScalarSpringEntry(zero, 0.0, zero)
+        finish(stamp)
+        clock.unregister(this)
     }
     fun updateSpeed(speed: Float) = expansion.updateSpeed(speed)
     fun updateSpec(spec: ExpansionSpec) = expansion.updateSpec(spec)
-    fun dispose() = expansion.dispose()
+    fun dispose() { reduce(clock.stampNow); expansion.dispose() }
 }
 
 /** #854: a popup's kind follows its placement and its trigger's role, which bind after the first composition, but it changes only

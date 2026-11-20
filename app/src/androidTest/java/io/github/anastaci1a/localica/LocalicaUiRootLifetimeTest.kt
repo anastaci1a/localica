@@ -133,18 +133,18 @@ class LocalicaUiRootLifetimeTest {
         for (style in listOf(PopupMotionStyle.Fluid, PopupMotionStyle.EdgeSpring)) {
             compose.runOnIdle { root.settings.value = root.settings.value.copy(popupMotion = style) }
             compose.runOnIdle {
-                assertEquals(style == PopupMotionStyle.Fluid, spec.spec.popupMotion.centre != null)
+                assertEquals(style == PopupMotionStyle.Fluid, spec.spec.popupMotion.style == PopupMotionStyle.Fluid)
                 open = true
             }
             compose.onNodeWithText("Style body").assertIsDisplayed()
             rest(true)
             compose.runOnIdle {
                 assertSame("The existing popup owner survives the setting change", original, motion)
-                assertEquals(style == PopupMotionStyle.Fluid, motion.expansion.popupLaw!!.model.centre != null)
+                assertEquals(style == PopupMotionStyle.Fluid, motion.expansion.popupLaw!!.model.style == PopupMotionStyle.Fluid)
                 root.settings.value = root.settings.value.copy(popupMotion = if (style == PopupMotionStyle.Fluid) PopupMotionStyle.EdgeSpring else PopupMotionStyle.Fluid)
             }
             compose.runOnIdle {
-                assertEquals("An admitted presentation retains its style", style == PopupMotionStyle.Fluid, motion.expansion.popupLaw!!.model.centre != null)
+                assertEquals("An admitted presentation retains its style", style == PopupMotionStyle.Fluid, motion.expansion.popupLaw!!.model.style == PopupMotionStyle.Fluid)
                 open = false
             }
             rest(false)
