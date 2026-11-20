@@ -586,7 +586,7 @@ class FluidPopupComponentsTest {
         val events = mutableListOf<String>()
         runFluidPropertyFrame(
             targetTimestamp = 1.02,
-            preparedTransaction = false,
+            preparationFlags = 2,
             solve = {
                 assertTrue(events.isEmpty())
                 events += "solve"
@@ -595,7 +595,7 @@ class FluidPopupComponentsTest {
                     events += "complete true"
                     callbacks += { events += "cleanup" }
                 }
-                true
+                1
             },
             consumeSamples = {
                 publication.consume {
@@ -614,6 +614,41 @@ class FluidPopupComponentsTest {
         )
         assertEquals(listOf("solve", "sample", "complete true", "cleanup", "flush"), events)
         assertTrue(callbacks.isEmpty())
+    }
+
+    @Test fun groupFlushUsesTheLowFlagBitAndAnOrderedEligibilityThreshold() {
+        val cases = listOf(
+            Triple(0, Double.NaN, false to false),
+            Triple(2, Math.nextDown(1.0), false to false),
+            Triple(2, 1.0, false to true),
+            Triple(3, 1.0, true to true),
+        )
+        for ((preparation, change, expected) in cases) {
+            runFluidPropertyFrame(1.02, preparation, { 4 }, {}, mutableListOf(), { change }) { time, transaction, eligible ->
+                assertEquals(1.02.toRawBits(), time.toRawBits())
+                assertEquals(expected, transaction to eligible)
+            }
+        }
+    }
+
+    @Test fun liveLensModifiersWriteHeightAndOnlyTheFirstNamedAmountInRenderOrder() {
+        val filters = listOf("gaussianBlur", "displacementMap", null, "displacementMap")
+        val amounts = mutableListOf<Pair<Int, Long>>()
+        val heights = mutableListOf<Int>()
+        fun apply(channel: FluidPopupChannel, sample: Double?, kind: Int = 7, names: List<String?> = filters) =
+            FluidLensingSpec.applyPresentation(channel, sample, kind, names, { heights += it.toRawBits() }) { slot, value ->
+                amounts += slot to value.toRawBits()
+            }
+
+        val value = Math.nextUp(3.0)
+        apply(FluidPopupChannel.LensHeight, value, kind = 6)
+        apply(FluidPopupChannel.LensHeight, null)
+        apply(FluidPopupChannel.LensHeight, value)
+        apply(FluidPopupChannel.LensAmount, value, names = listOf("gaussianBlur", null))
+        apply(FluidPopupChannel.LensAmount, null)
+        apply(FluidPopupChannel.LensAmount, value)
+        assertEquals(listOf(3f.toRawBits()), heights)
+        assertEquals(listOf(1 to value.toRawBits()), amounts)
     }
 
     @Test fun lensPublicationPreservesPendingOnEqualityAndClearsBeforeTheCallback() {
