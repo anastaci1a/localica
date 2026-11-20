@@ -126,6 +126,28 @@ internal fun fluidPopupDestinationScale(
 internal fun fluidPopupAutoAxis(oldWidth: Double, oldHeight: Double, targetWidth: Double, targetHeight: Double) =
     if (kotlin.math.abs(targetHeight - oldHeight) / oldHeight < kotlin.math.abs(targetWidth - oldWidth) / oldWidth) 2 else 1
 
+internal fun fluidPopupLayoutAxis(
+    topInsets: PopupPortalInsets, preferred: Int, current: Int, itemSize: PopupPortalBounds,
+    presentedBounds: () -> PopupPortalBounds?,
+): Int? {
+    if (preferred == current || topInsets.top != 0.0 || topInsets.leading != 0.0 || topInsets.bottom != 0.0 || topInsets.trailing != 0.0) return null
+    val target = itemSize.standardized()
+    val old = presentedBounds()?.standardized() ?: target
+    return fluidPopupAutoAxis(old.width, old.height, target.width, target.height)
+}
+
+internal fun requestFluidContentSize(
+    topInsets: PopupPortalInsets, writeInsets: (PopupPortalInsets) -> Unit,
+    readBounds: () -> PopupPortalBounds?, readModelInsets: () -> PopupPortalInsets,
+    insetSize: (PopupPortalBounds?, PopupPortalInsets) -> Pair<Double, Double>,
+    writeWidth: (Double) -> Unit, writeHeight: (Double) -> Unit,
+) {
+    writeInsets(topInsets)
+    val (width, height) = insetSize(readBounds(), readModelInsets())
+    writeWidth(width)
+    writeHeight(height)
+}
+
 /** Runs inside the presentation owner's destination update. The prepared miss is allocated only when needed. */
 internal fun <Destination, Item> updateFluidPopupDestination(
     destinations: MutableList<Destination>, item: Item, matchesItemId: (Destination, Item) -> Boolean,
@@ -145,6 +167,20 @@ internal fun <Destination, Item> updateFluidPopupDestination(
     return destination
 }
 
-internal fun <Destination> List<Destination>.requestFluidDestinationProgress(request: (Destination, Double) -> Unit) {
-    forEachIndexed { index, destination -> request(destination, if (index == lastIndex) 1.0 else 0.0) }
+internal fun <Destination : Any> List<Destination>.fluidLayoutTop(hasOverrideBounds: Boolean): Destination? =
+    if (hasOverrideBounds) null else lastOrNull()
+
+internal fun <Destination> List<Destination>.refreshFluidDestinationSizes(
+    dirty: Boolean, clearDirty: () -> Unit, refresh: (Destination) -> Unit, updateModel: () -> Unit,
+) {
+    if (!dirty) return
+    clearDirty()
+    forEach(refresh)
+    updateModel()
+}
+
+internal fun <Destination> List<Destination>.requestFluidDestinationProgress(
+    capturedTop: Destination, isEqual: (Destination, Destination) -> Boolean, request: (Destination, Double) -> Unit,
+) {
+    forEach { destination -> request(destination, if (isEqual(destination, capturedTop)) 1.0 else 0.0) }
 }

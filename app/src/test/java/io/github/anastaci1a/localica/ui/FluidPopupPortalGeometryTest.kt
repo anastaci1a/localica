@@ -147,7 +147,9 @@ class FluidPopupPortalGeometryTest {
         assertEquals(listOf("old-first"), calls)
         assertEquals(listOf("old-second", "new"), destinations.map { it.payload })
         val progress = mutableListOf<Pair<Any, Double>>()
-        destinations.requestFluidDestinationProgress { destination, target -> progress += destination.progress to target }
+        destinations.requestFluidDestinationProgress(match, { a, b -> a === b }) { destination, target ->
+            progress += destination.progress to target
+        }
         assertEquals(listOf(duplicate.progress to 0.0, keptProgress to 1.0), progress)
     }
 
@@ -171,5 +173,65 @@ class FluidPopupPortalGeometryTest {
         }
         assertEquals(listOf("first", "second"), destinations)
         assertEquals(listOf("second"), hidden)
+    }
+
+    @Test fun ordinaryLayoutCapturesTheTopAndUsesItsEqualityForProgress() {
+        data class Destination(val id: Int, val label: String)
+        val first = Destination(1, "first")
+        val middle = Destination(2, "middle")
+        val top = Destination(1, "top")
+        val retained = listOf(first, middle, top)
+        assertNull(emptyList<Destination>().fluidLayoutTop(hasOverrideBounds = false))
+        assertNull(retained.fluidLayoutTop(hasOverrideBounds = true))
+        assertTrue(retained.fluidLayoutTop(hasOverrideBounds = false) === top)
+        val targets = mutableListOf<Pair<String, Double>>()
+        retained.requestFluidDestinationProgress(top, { a, b -> a.id == b.id }) { destination, target ->
+            targets += destination.label to target
+        }
+        assertEquals(listOf("first" to 1.0, "middle" to 0.0, "top" to 1.0), targets)
+    }
+
+    @Test fun layoutRefreshClearsDirtyBeforeUpdatingTheStoredDestinations() {
+        val retained = listOf("from", "to")
+        val calls = mutableListOf<String>()
+        retained.refreshFluidDestinationSizes(false, { error("Already clean") }, { error("Already clean") }, { error("Already clean") })
+        retained.refreshFluidDestinationSizes(true, { calls += "clear" }, { calls += it }, { calls += "model" })
+        assertEquals(listOf("clear", "from", "to", "model"), calls)
+    }
+
+    @Test fun layoutAxisReadsPresentedBoundsOnlyForZeroInsetsAndADifferentPreference() {
+        val zero = PopupPortalInsets(-0.0, 0.0, 0.0, 0.0)
+        val item = PopupPortalBounds(0.0, 0.0, 120.0, 44.0)
+        assertNull(fluidPopupLayoutAxis(insets, 2, 1, item) { error("Insets block axis selection") })
+        assertNull(fluidPopupLayoutAxis(zero, 2, 2, item) { error("The preferred axis is already current") })
+        assertEquals(2, fluidPopupLayoutAxis(zero, 2, 1, item) { PopupPortalBounds(0.0, 0.0, 80.0, 40.0) })
+        assertEquals(1, fluidPopupLayoutAxis(zero, 2, 1, item) { null })
+    }
+
+    @Test fun layoutSizeReadsTheModelInsetsAfterWritingTheTopInsets() {
+        val calls = mutableListOf<String>()
+        val model = insets.copy(leading = 4.0, bottom = 7.0)
+        requestFluidContentSize(
+            insets,
+            {
+                assertEquals(insets, it)
+                calls += "insets"
+            },
+            {
+                calls += "bounds"
+                backing
+            },
+            {
+                calls += "model"
+                model
+            },
+            { bounds, modelInsets ->
+                val crop = requireNotNull(modelInsets.signedCrop(bounds))
+                crop.width to crop.height
+            },
+            { calls += "width=$it" },
+            { calls += "height=$it" },
+        )
+        assertEquals(listOf("insets", "bounds", "model", "width=70.0", "height=40.0"), calls)
     }
 }
