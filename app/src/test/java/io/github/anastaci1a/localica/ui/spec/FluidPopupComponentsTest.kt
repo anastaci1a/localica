@@ -230,7 +230,7 @@ class FluidPopupComponentsTest {
         assertEquals(listOf("synchronous drain", "propagate hold", "builder completion"), events.takeLast(3))
     }
 
-    @Test fun growingKickUsesTheExistingPropertySpringAndSuppliedPresentationScale() {
+    @Test fun growingKickUsesTheSuppliedScaleAndCrossesZeroForTheUnsmoothedConstructorSpring() {
         assertEquals(0, FluidKickSpec.growingSlot)
         assertEquals(0.0.toRawBits(), FluidKickSpec.unkickTarget.toRawBits())
         assertEquals("MagicMorphAnimation.kickAmount", FluidPopupChannel.KickAmount.key)

@@ -157,7 +157,8 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
                 FluidTimelineAction.BlurIn -> FluidContentBlurIn
                 else -> null
             }
-            if (blur != null) {
+            // The constructor blur behaviors disable smoothing and projection. Live step modifiers are open.
+            if (blur != null && FluidPopupRuntimeInputs.liveContent == null) {
                 blurSpring = step.propertySpring(speed)
                 blurEntry = blurControls.immediateEntry(fluidBlurRadius, blur.gaussianRadius, blurEntry, blurEntry.target, blurSpring, null)
             }
