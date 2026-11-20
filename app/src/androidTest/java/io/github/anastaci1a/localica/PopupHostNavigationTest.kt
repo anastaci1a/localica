@@ -131,7 +131,9 @@ class PopupHostNavigationTest {
             compose.waitUntil(5000) {
                 compose.mainClock.advanceTimeByFrame()
                 compose.waitForIdle()
-                anchor.contact.expansion.value >= .7f
+                val value = anchor.contact.expansion.value
+                android.util.Log.i("PopupHostNavigation", "opening clock=${compose.mainClock.currentTime} value=$value ${frameState()}")
+                value >= .7f
             }
         } else compose.advanceMorphOpening(3200, anchor) { popupView }
         if (expanding) assertTrue("Back interrupts an unfinished expansion", anchor.contact.expansion.value < .99f)
@@ -186,7 +188,9 @@ class PopupHostNavigationTest {
             as io.github.anastaci1a.localica.ui.engine.ExpandCollapse? ?: return@runCatching "owner=none"
         val held = runCatching { (owner.javaClass.getDeclaredField("held\$delegate").apply { isAccessible = true }.get(owner) as State<*>).value }
             .getOrElse { "absent" }
-        "owner=${System.identityHashCode(owner)} held=$held"
+        "owner=${System.identityHashCode(owner)} held=$held" +
+            " opening=${owner.nativeOpening} awaiting=${owner.awaitingNativeGate} generation=${owner.nativeGeneration}" +
+            " retirement=${owner.retirementReady} expanded=${owner.expanded} contact=${owner.inContact}"
     }.getOrElse { "owner=unreadable(${it.javaClass.simpleName})" }
 
     private class FrameMarker(val x: Int) : android.graphics.drawable.Drawable() {

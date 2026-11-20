@@ -48,6 +48,9 @@ class PopupRetractContinuityTest {
                 val current = marker == null || screen.getPixel(origin[0] + marker.x.toInt(), origin[1] + marker.y.toInt()).let {
                     android.graphics.Color.green(it) > 200 && (android.graphics.Color.red(it) > 200) == (tick!! % 2 == 1) }
                 if (current) return screen.getPixel(origin[0] + target.x.toInt(), origin[1] + target.y.toInt())
+                android.util.Log.i("PopupRetract", "marker expected=$tick attempt=$it clock=${compose.mainClock.currentTime}" +
+                    " origin=${origin.contentToString()} target=$target marker=$marker screen=${screen.width}x${screen.height}" +
+                    " observed=${marker?.let { p -> screen.getPixel(origin[0] + p.x.toInt(), origin[1] + p.y.toInt()) }}")
             } finally { screen.recycle() }
             Thread.sleep(50)
         }

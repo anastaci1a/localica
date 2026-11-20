@@ -124,7 +124,7 @@ internal data class ShadowDrawState(val sequence: Long, val epoch: Long,
 internal data class ShadowExclusionState(val bodies: List<androidx.compose.ui.geometry.RoundRect>,
     val origin: androidx.compose.ui.geometry.Offset, val size: androidx.compose.ui.geometry.Size,
     val scaleX: Float, val scaleY: Float, val shift: Float, val weight: Float) {
-    fun renderer() = io.github.anastaci1a.localica.ui.engine.GlassShadowExclusion(bodies, origin, size, scaleX, scaleY, shift, weight)
+    fun renderer() = io.github.anastaci1a.localica.ui.engine.GlassShadowExclusion(bodies, origin, size, io.github.anastaci1a.localica.ui.GlassBodyTransform(androidx.compose.ui.geometry.Offset(scaleX, scaleY), androidx.compose.ui.geometry.Offset(shift, 0f)), weight)
 }
 internal data class ShadowNativeWindow(val window: Window, val view: android.view.View,
     val marker: IntOffset, val popup: (() -> PopupShadowComposition)? = null,
