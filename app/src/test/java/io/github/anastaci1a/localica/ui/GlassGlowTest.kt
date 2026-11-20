@@ -232,18 +232,18 @@ class GlassGlowTest {
                 motion.expansion.acknowledgeNativeGate(motion.expansion.nativeGeneration)
                 motion.hold()
                 advanceFrames()
-                assertEquals(27f, motion.fluidLensHeight, 0f)
+                assertEquals(27.0, motion.fluidLensHeight, 0.0)
                 assertEquals(-27.0, motion.fluidLensAmount, 0.0)
 
                 motion.release()
                 advanceFrames()
-                assertEquals(0f, motion.fluidLensHeight, 0f)
+                assertEquals(0.0, motion.fluidLensHeight, 0.0)
                 assertEquals(-0.001, motion.fluidLensAmount, 0.0)
 
                 motion.show(false)
                 motion.hold()
                 advanceFrames()
-                assertEquals(7.5f, motion.fluidLensHeight, 0f)
+                assertEquals(7.5, motion.fluidLensHeight, 0.0)
                 assertEquals(-7.5, motion.fluidLensAmount, 0.0)
 
                 motion.release()
@@ -252,13 +252,13 @@ class GlassGlowTest {
                 repeat(3) { harness.advance(1.0 / 120) }
                 val openingHeight = motion.fluidLensHeight
                 val openingAmount = motion.fluidLensAmount
-                assertTrue(openingHeight > 0f && openingHeight < 27f)
+                assertTrue(openingHeight > 0.0 && openingHeight < 27.0)
                 assertTrue(openingAmount < -0.001 && openingAmount > -27.0)
                 motion.show(false)
-                assertEquals(openingHeight, motion.fluidLensHeight, 0f)
+                assertEquals(openingHeight, motion.fluidLensHeight, 0.0)
                 assertEquals(openingAmount, motion.fluidLensAmount, 0.0)
                 advanceFrames()
-                assertEquals(0f, motion.fluidLensHeight, 0f)
+                assertEquals(0.0, motion.fluidLensHeight, 0.0)
                 assertEquals(-0.001, motion.fluidLensAmount, 0.0)
             } finally {
                 motion.dispose()
