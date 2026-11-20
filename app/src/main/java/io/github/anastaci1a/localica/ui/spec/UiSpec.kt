@@ -369,25 +369,48 @@ internal object FluidCornerSpec {
         return FloatArray(4) { radius }
     }
 
-    data class BoundsEncoding(val imageFunction: Int, val family: Float, val radii: FloatArray, val expansion: Double) {
-        fun splitsIntoRect(pad: Double, largerHalfExtent: Double) = expansion + pad < largerHalfExtent
+    data class FieldTransform(val scale: Float, val normalMatrix: FloatArray)
+
+    fun fieldTransform(affine: DoubleArray?, fusedMultiplyAdd: (Float, Float, Float) -> Float): FieldTransform {
+        if (affine == null) return FieldTransform(1f, floatArrayOf(1f, 0f, 0f, 1f))
+        val a = affine[0].toFloat()
+        val b = affine[1].toFloat()
+        val c = affine[4].toFloat()
+        val d = affine[5].toFloat()
+        val determinant = fusedMultiplyAdd(d, a, -(c * b))
+        val first = sqrt(fusedMultiplyAdd(d, d, b * b))
+        val second = sqrt(fusedMultiplyAdd(c, c, a * a))
+        val longest = when {
+            first.isNaN() -> second
+            second.isNaN() -> first
+            else -> maxOf(first, second)
+        }
+        val inverse = 1f / longest
+        val factor = if (determinant < 0f) -inverse else inverse
+        return FieldTransform(inverse * abs(determinant), floatArrayOf(d * factor, -(b * factor), -(c * factor), a * factor))
     }
 
-    fun boundsEncoding(raw: FloatArray, scale: Float, curveCode: Int, halfWidth: Float, halfHeight: Float): BoundsEncoding {
+    data class BoundsEncoding(
+        val imageFunction: Int, val family: Float, val normalMatrix: FloatArray, val radii: FloatArray, val expansion: Double,
+    ) {
+        fun splitsIntoRect(pad: Double, largerHalfExtent: Double) = !(expansion + pad >= largerHalfExtent)
+    }
+
+    fun boundsEncoding(raw: FloatArray, transform: FieldTransform, curveCode: Int, halfWidth: Float, halfHeight: Float): BoundsEncoding {
         val floor = Float.fromBits(0x3c23d70a)
         val clamped = FloatArray(4) { if (raw[it] < floor) floor else raw[it] }
         val uniform = clamped[0] == clamped[1] && clamped[1] == clamped[2] && clamped[2] == clamped[3]
-        val scaled = FloatArray(4) { clamped[it] * scale }
+        val scaled = FloatArray(4) { clamped[it] * transform.scale }
         val continuous = curveCode and 3 != 0
         val maxRadius = (if (uniform) scaled[0] else scaled.reduce { left, right -> if (left > right) left else right }).toDouble()
         val expansion = if (continuous) maxRadius * Double.fromBits(0x3ff875696e58a32fL) else maxRadius
-        if (!uniform) return BoundsEncoding(22, 5f, if (continuous) FloatArray(4) { -scaled[it] } else scaled, expansion)
+        if (!uniform) return BoundsEncoding(22, 5f, transform.normalMatrix, if (continuous) FloatArray(4) { -scaled[it] } else scaled, expansion)
         fun weight(half: Float): Float {
             if (!continuous) return 1f
             val coefficient = Double.fromBits(0x400721e8a7a4b61bL)
             return ((half + half).toDouble() * -coefficient / expansion + coefficient).coerceIn(0.0, 1.0).toFloat()
         }
-        return BoundsEncoding(21, 4f, floatArrayOf(weight(halfWidth), weight(halfHeight), scaled[0], 0f), expansion)
+        return BoundsEncoding(21, 4f, transform.normalMatrix, floatArrayOf(weight(halfWidth), weight(halfHeight), scaled[0], 0f), expansion)
     }
 
     // Group texture selection is independent of the per-element image kind.
