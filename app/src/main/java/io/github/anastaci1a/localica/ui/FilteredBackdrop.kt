@@ -38,7 +38,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     resolutionReader: (() -> Float)? = null, averageReader: (() -> MaterialAverageStyle)? = null, effect: (Size, Float, Float) -> RenderEffect?) {
-    if (flatGlass()) return
+
     val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     val drawObserver = LocalBackdropSamplingObserver.current
@@ -103,7 +103,6 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
                 observer(HomeBackdropSamplingFrame(footprint, homeCorners, flatHome, blend))
             }
         }
-        drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds) }
         val flatWeight = (if (flatSource) 1f - blend else 0f) + (if (flatHome) blend else 0f)
         val entirelyFlat = flatWeight >= 1f
         val viewport = size
@@ -131,6 +130,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
                 else crop(source)
             }
             scale(viewport.width / 8f, viewport.height / 8f, Offset.Zero) { drawLayer(layer) }
+            drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds, "material-average") }
             return@Canvas
         }
         val r = resolution.coerceIn(.25f, 1f)
@@ -176,6 +176,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
             else scene(source)
         }
         translate(-padding, -padding) { scale(1f / r, 1f / r, Offset.Zero) { drawLayer(layer) } }
+        drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds, if (layer.renderEffect != null) "lens" else "unfiltered") }
     }
 }
 
@@ -196,7 +197,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(b
         close()
     }
     chain.asReversed().forEach { scene ->
-        if (scene.hasGlassLayer && scene.recorded && !scene.layer.isReleased) {
+        if (scene.recorded && !scene.layer.isReleased) {
             if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(scene)
             val registration = if (scene === backing) backingToLocal else parentToLocal(scene)
             if (registration != null) {

@@ -138,10 +138,6 @@ def expected_for(root, api):
             ('rasterlessBackingRecordInvalidatesItsDependentRecording', 32, 'maxSdkVersion'),
             ('queuedFinalRecordingSurvivesASuspendedThumbnailCaptureAndThenSettles', 32, 'maxSdkVersion'),
         ],
-        'FlatNoneRendererPopupTest': [
-            ('rendererPopupCanLeaveFlatNoneForNormal', 33),
-            ('rendererPopupAccessibilityCanLeaveFlatNoneForNormal', 33),
-        ],
         'ScopedSearchOpticsTest': [
             ('searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
         ],
@@ -158,7 +154,7 @@ def expected_for(root, api):
         ],
         'GlassAppearanceTest': [
             ('frostedPanelsStillScatterTheParentScene', 33),
-            ('blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp', 33),
+            ('defaultFrostKeepsForegroundSharpAndPageInk', 33),
         ],
         'GlassBodyOpticsTest': [
             ('kernelSamplesTheSharedRefractionLookups', 33),
@@ -202,13 +198,6 @@ def expected_for(root, api):
             require(cls in sdk_contracts and path == 'app/src/androidTest/java/io/github/anastaci1a/localica/' + cls + '.kt',
                     'Unreviewed SDK-filtered source')
             reviewed = sdk_contracts[cls]
-            # This reviewed source uses the exact imported spelling; normalize only
-            # its annotation representation, without changing source or bounds.
-            if cls == 'FlatNoneRendererPopupTest':
-                imported = 'import androidx.test.filters.SdkSuppress\n'
-                require(text.count(imported) == 1, 'Changed flat None popup SDK import')
-                text = text.replace(imported, '').replace(
-                    '@SdkSuppress(', '@androidx.test.filters.SdkSuppress(')
             require(text.count('SdkSuppress') == len(reviewed), 'Additional SDK exclusions require review')
             for contract in reviewed:
                 method, bound = contract[:2]

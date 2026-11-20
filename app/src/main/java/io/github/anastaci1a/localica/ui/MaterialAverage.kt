@@ -26,7 +26,7 @@ internal fun FrostedBackdrop.canAverage(localCorners: List<Offset>): Boolean {
 internal data class MaterialAverageStyle(val whiteTint: Float, val tone: GlassTone, val opaque: Boolean = false, val broad: Boolean = false)
 
 /** True when this scene is, or lies inside, a finished panel material (a frosted panel or
- * popup body). That material already carries its panel's tint and tone, so None does not
+ * popup body). That material already carries its panel's tint and tone, so averaging does not
  * apply them a second time; a light-appearance face still applies its rows. Which pixels are sampled is decided
  * by the material's full bounds, never by this provenance. */
 internal fun FrostedBackdrop.withinFinishedMaterial(): Boolean {
@@ -39,13 +39,13 @@ internal fun FrostedBackdrop.withinFinishedMaterial(): Boolean {
     return false
 }
 
-/** The colour mapping None applies to a mean sampled from [backing]. */
+/** The colour mapping for a mean sampled from [backing]. */
 internal fun MaterialAverageStyle.forBacking(backing: FrostedBackdrop): MaterialAverageStyle =
     if (backing.withinFinishedMaterial()) copy(whiteTint = 0f, tone = tone.copy(trim = 0f, shift = 0f)) else this
 
 /** An 8×8 GPU crop becomes one uniform color before scaling to the control.
  * No readback, full-control ray tracing, or full-panel averaging texture.
- * With [variableTaps] (the None material) the shader instead averages the texels [0, taps) of a level
+ * With [variableTaps] the shader instead averages the texels [0, taps) of a level
  * of at most 8×8, so a reduction may stop there instead of at 1×1; the Normal 8×8 crop keeps its
  * original shader text unchanged. */
 @RequiresApi(33)

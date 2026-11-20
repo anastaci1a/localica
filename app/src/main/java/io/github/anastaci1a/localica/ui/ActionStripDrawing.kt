@@ -17,20 +17,26 @@ import androidx.compose.ui.unit.IntSize
  */
 internal class ActionStripDrawing(private val layer: GraphicsLayer) {
     fun record(enabled: () -> Boolean = { true }): Modifier = Modifier.drawWithContent {
-        if (enabled()) layer.record { this@drawWithContent.drawContent() }
+        if (enabled()) {
+            val pad = io.github.anastaci1a.localica.ui.spec.glassShadowInset(1f).roundToPx()
+            layer.record(size = IntSize(size.width.toInt() + pad * 2, size.height.toInt() + pad * 2)) {
+                translate(pad.toFloat(), pad.toFloat()) { this@drawWithContent.drawContent() }
+            }
+        }
         else drawContent()
         // Only the outer replay draws this content. In particular, do not also
         // draw it through the logical input clip and accumulate material/shadow.
     }
 
-    fun replay(inset: Dp, enabled: () -> Boolean = { true }): Modifier = Modifier.drawWithContent {
+    fun replay(inset: Dp, horizontal: Boolean = true, enabled: () -> Boolean = { true }): Modifier = Modifier.drawWithContent {
         // Traverse the real child FIRST. Its clip layer updates a dirty display
         // list synchronously here; unchanged cached content remains valid. Never
         // replay before this traversal or publish a separately scheduled image.
         drawContent()
         if (enabled() && layer.size != IntSize.Zero) {
+            val extent = io.github.anastaci1a.localica.ui.spec.glassShadowInset(1f).roundToPx().toFloat()
             val pad = inset.roundToPx().toFloat()
-            translate(-pad, -pad) { drawLayer(layer) }
+            translate(-extent - if (horizontal) pad else 0f, -extent - pad) { drawLayer(layer) }
         }
     }
 }

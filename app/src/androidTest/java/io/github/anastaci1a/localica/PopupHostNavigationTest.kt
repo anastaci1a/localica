@@ -111,7 +111,7 @@ class PopupHostNavigationTest {
         }
         if (settings) {
             compose.onNodeWithText("Interface").performClick()
-            compose.onNodeWithText("Glass").performClick()
+            compose.onNodeWithText("Motion").performClick()
         }
         compose.mainClock.autoAdvance = false
         compose.mainClock.advanceTimeBy(1600)

@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -24,7 +23,7 @@ import org.junit.Test
 class PlayerContrastTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun mostlyDarkArtworkKeepsLightInkAndSettingsTrimItsWhiteExtension() {
+    @Test fun mostlyDarkArtworkKeepsLightInkAndDefaultTrimOnItsWhiteExtension() {
         val art = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888).apply {
             eraseColor(android.graphics.Color.BLACK)
             for (y in 72 until height) for (x in 0 until width) setPixel(x, y, android.graphics.Color.WHITE)
@@ -37,22 +36,16 @@ class PlayerContrastTest {
             whiteWash.getPixel(whiteWash.width / 2, whiteWash.height - 1))
         val palette = sampled.copy(wash = whiteWash, softWash = whiteWash)
         assertFalse("White bottom must not flip page-wide ink", palette.isLight())
-        var appearance by mutableStateOf(GlassAppearance(contrast = 0f))
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides appearance) {
+
                 PlayerBackdrop(palette, Modifier.size(160.dp, 300.dp).testTag("extension"),
                     fullArtBlend = 1f, artHeight = 100f, artWidth = 100f,
-                    tone = GlassTone(appearance.contrast, appearance.contrastWeight, !palette.isLight()))
-            }
+                    tone = GlassTone(.25f, 2f, !palette.isLight()))
+
         } }
         fun bottom() = compose.onNodeWithTag("extension").captureToImage().toPixelMap().let { it[it.width / 2, it.height - 10].red }
-        compose.waitUntil(5000) { bottom() > .9f }
-        val original = bottom()
-        compose.runOnIdle { appearance = appearance.copy(contrast = .5f, contrastWeight = 2f) }
-        compose.waitUntil(5000) { bottom() < .6f }
-        assertEquals("White extension uses the same configured curve as glass", GlassTone(.5f, 2f, true).channel(original), bottom(), .025f)
-        compose.runOnIdle { appearance = appearance.copy(contrast = 0f) }
-        compose.waitUntil(5000) { bottom() > .9f }
+        compose.waitUntil(5000) { kotlin.math.abs(bottom() - GlassTone(.25f, 2f, true).channel(1f)) < .025f }
+        assertEquals("White extension uses the default curve", GlassTone(.25f, 2f, true).channel(1f), bottom(), .025f)
     }
 
     @Test fun collectionKeepsItsExistingBackdropAndInkTreatment() {
@@ -140,7 +133,7 @@ class PlayerContrastTest {
         compose.setContent { LocalicaTheme { GlassPanelTheme(dark) {
             val source = rememberFrostedBackdrop(Unit, dark = dark)
             CompositionLocalProvider(LocalFrostedBackdrop provides source) {
-                FrostedSurface(Modifier.size(180.dp)) {
+                GlassPanel(Modifier.size(180.dp)) {
                     outerInk = LocalContentColor.current
                     GlassPanelTheme(LocalFrostedBackdrop.current?.dark == true) {
                         nestedInk = LocalContentColor.current

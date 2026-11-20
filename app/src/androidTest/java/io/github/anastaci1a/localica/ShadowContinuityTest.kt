@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.test.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.assertTrue
@@ -222,15 +221,15 @@ class ShadowContinuityTest {
     @Test fun dragBubbleLandingDoesNotCutItsShadowAtEitherEndpoint() = availability("bubble")
 
     @Test fun buttonPressAndReleaseKeepTheCompleteMovingShadow() {
-        val strength = 2f
+        val strength = 1f
         val anchor = GlassAnchor()
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = strength, shadowSpread = 1f)) {
+
                 Box(Modifier.size(240.dp).background(Color.White).testTag("press-shadow-scene"),
                     contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    GlassActionButton(AppIcon.ActionEllipsis, "Press", Modifier.width(160.dp).glassAnchor(anchor).testTag("press-shadow")) {}
+                    GlassActionButton(AppIcon.ActionEllipsis, "Press", Modifier.size(160.dp, 96.dp).glassAnchor(anchor).testTag("press-shadow")) {}
                 }
-            }
+
         } }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
@@ -268,7 +267,10 @@ class ShadowContinuityTest {
                     Rect(body.center.x-8*d, body.bottom+36*d, body.center.x+8*d, body.bottom+38*d), .015f, "pressed button")
             }
         }
-        assertTrue("Press visibly moves the shadow", probe.luminances.max() - probe.luminances.min() > .01f)
+        val movement = probe.luminances.max() - probe.luminances.min()
+        val modelMovement = reference.luminances.max() - reference.luminances.min()
+        println("Default press shadow: region=$region body=$body actual=${probe.luminances} reference=${reference.luminances}")
+        assertTrue("Press visibly moves the shadow: actual=$movement reference=$modelMovement", movement > .01f)
         probe.assertContinuous(reference.maximumDelta + 2f/255f, "button press/release")
     }
 
@@ -276,7 +278,7 @@ class ShadowContinuityTest {
         var enabled by mutableStateOf(true)
         lateinit var expectedOpacity: State<Float>
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = 1f, shadowSpread = 1f)) {
+
                 Box(Modifier.size(240.dp).background(Color.White).testTag("shadow-scene"),
                     contentAlignment = androidx.compose.ui.Alignment.Center) {
                     val opacity = animateControlStateFloat(if (enabled) 1f else if (context == "settings") .45f else .38f,
@@ -293,7 +295,7 @@ class ShadowContinuityTest {
                         }
                     }
                 }
-            }
+
         } }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
@@ -331,11 +333,11 @@ class ShadowContinuityTest {
     @Test fun seekCancelRetainsItsFullShadowAtRest() {
         val state = SeekCancelTargetState()
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = 1f, shadowSpread = 1f)) {
+
                 Box(Modifier.size(240.dp).background(Color.White).testTag("shadow-scene")) {
                     SeekCancelTarget(state, false, 48.dp, true)
                 }
-            }
+
         } }
         // The target is shown only while its drag is active (#584); hold it at rest.
         compose.runOnIdle { state.update(true) }

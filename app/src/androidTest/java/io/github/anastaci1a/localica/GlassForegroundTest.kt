@@ -60,7 +60,7 @@ class GlassForegroundTest {
                 assertEquals("Theme agrees with ambient ink", target, current.second.luminance() > .5f)
                 assertEquals("Material agrees with ambient ink", target, current.third)
                 assertEquals("Synthetic origin's optical tone follows ambient ink", target,
-                    host.entries.single().anchor.ink.luminance() > .5f)
+                    host.entries.single().dark)
             }
         }
     }
@@ -102,7 +102,6 @@ class GlassForegroundTest {
                                 if (contextual) Box(Modifier.padding(32.dp).size(88.dp).contextMenuAnchor(anchor)
                                     .clickable { open = true }.testTag("artwork-trigger")) { Text("Artwork") }
                                 else {
-                                    anchor.captureInk()
                                     GlassActionButton(AppIcon.ActionInfo, "Open sheet",
                                         Modifier.padding(32.dp).glassAnchor(anchor).testTag("artwork-trigger")) { open = true }
                                 }
@@ -160,7 +159,6 @@ class GlassForegroundTest {
                         entry.anchor.hidden, entry.anchor.modalPresent, entry.anchor.contact.expansion.value) }}"
             }
             compose.onNodeWithTag("artwork-trigger").assertIsDisplayed()
-            compose.runOnIdle { assertEquals("Return retains the original trigger ink", ink, anchor.ink) }
         }
     }
 }

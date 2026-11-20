@@ -50,7 +50,7 @@ internal fun LocalicaUiRoot(state: LocalicaUiRootState = rememberLocalicaUiRoot(
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val refreshHz = rememberPeakRefreshHz()
     val referenceTravel = expansionReferenceTravel(playerBasis(density, window, navigationInset, StockUiSpec.clearance.getValue(Clearance.BottomChrome)))
-    val resolvedSpec = remember(settings.glass, settings.reducedMotion, settings.animationSpeedTenths, settings.popupMotion, systemReduced, referenceTravel, window, density) {
+    val resolvedSpec = remember(settings.reducedMotion, settings.animationSpeedTenths, settings.popupMotion, systemReduced, referenceTravel, window, density) {
         uiSpec(settings, ExpansionGeometryDomain(referenceTravel, maxOf(1f, kotlin.math.hypot(window.width.toFloat(), window.height.toFloat())), 1f / 24), density, systemReduced)
     }
     ProvideLocalicaEngineContext(refreshHz, referenceTravel, resolvedSpec, durationScale) {

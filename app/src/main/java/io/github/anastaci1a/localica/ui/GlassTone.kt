@@ -1,5 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassContrastWeightDefault
+import io.github.anastaci1a.localica.ui.spec.GlassContrastWeightMax
+import io.github.anastaci1a.localica.ui.spec.GlassContrastWeightMin
+
 import android.graphics.Bitmap
 import android.util.LruCache
 import androidx.compose.runtime.*
@@ -10,9 +14,9 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import io.github.anastaci1a.localica.navigation.GlassContrastWeightMax
-import io.github.anastaci1a.localica.navigation.GlassContrastWeightMin
 import kotlin.math.pow
+
+internal fun defaultGlassInk(lightMix: Float) = lerp(Color(0xFF202124), Color.White, lightMix)
 
 /** The trim actually applied at weight [p] (#633). Both laws have slope 1 − t·p·y^(p−1) ≥ 1 − t·p, so ordering
  * needs t·p ≤ 1; above that the trim becomes 1/p. With t ≤ .5 and p ≤ 2 the float product never exceeds 1, so
@@ -23,7 +27,7 @@ internal fun effectiveGlassTrim(t: Float, p: Float): Float = if (t * p > 1f) 1f 
  * [lightInk] is the polarity being approached and [arrival] how far the tone has travelled to it from the opposite
  * polarity (1 = arrived). Both polarities are exact endpoints; between them the mapping is their linear mix, so a
  * polarity change can ease with an animation instead of switching in one frame. */
-internal data class GlassTone(val trim: Float = 0f, val weight: Float = 2f, val lightInk: Boolean = false, val arrival: Float = 1f,
+internal data class GlassTone(val trim: Float = 0f, val weight: Float = GlassContrastWeightDefault, val lightInk: Boolean = false, val arrival: Float = 1f,
     /** Backdrop grading (#576): an OKLab lightness shift from [BackdropGrade]. Nonzero replaces the curve above. */
     val shift: Float = 0f) {
     /** True when this tone leaves pixels untouched. */
@@ -246,23 +250,3 @@ internal val GlassColorShader = """
         return mix(min(float3(${GlassFillRows.joinToString(", ") { "dot(color, float3(${it.take(3).joinToString()})) + ${it[3]}" }}), 1.06961), glassTone(color, whiteTint, tone), clamp(tone.z, 0.0, 1.0));
     }
 """
-
-/** The same mapping for broad frosted backings; foregrounds stay outside the pass. */
-@androidx.annotation.RequiresApi(33)
-internal class GlassToneRenderer {
-    private val shader = android.graphics.RuntimeShader("""
-        uniform shader scene;
-        uniform float3 tone;
-        $GlassColorShader
-        half4 main(float2 p) {
-            half4 c = scene.eval(p);
-            return half4(half3(glassTone(float3(c.rgb) / max(float(c.a), 0.0001), 0.0, tone) * float(c.a)), c.a);
-        }
-    """)
-    fun effect(tone: GlassTone, blur: Float): RenderEffect {
-        shader.setFloatUniform("tone", tone.trim, tone.weight, tone.lightMix)
-        val effect = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene")
-        return android.graphics.RenderEffect.createChainEffect(effect,
-            android.graphics.RenderEffect.createBlurEffect(blur.coerceAtLeast(.01f), blur.coerceAtLeast(.01f), android.graphics.Shader.TileMode.CLAMP)).asComposeRenderEffect()
-    }
-}

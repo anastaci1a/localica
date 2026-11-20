@@ -42,17 +42,16 @@ class LiftShadowTest {
     private lateinit var scene: SelectionScene
     private var selected by mutableStateOf(false)
 
-    private var glassState by mutableStateOf(GlassAppearance())
     private var inkState by mutableStateOf(Color.Black)
     private var started = false
 
     @Composable private fun Fixture() {
-        val glass = glassState; val ink = inkState
+        val ink = inkState
         LocalicaTheme {
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.size(360.dp, 320.dp).testTag("lift-scene")) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(.5f, .5f, .5f)) }
-                CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalGlassAppearance provides glass,
+                CompositionLocalProvider(LocalFrostedBackdrop provides source,
                     LocalContentColor provides ink) {
                     ConnectedSelectionHost(Modifier.fillMaxSize()) {
                         scene = checkNotNull(LocalSelectionScene.current)
@@ -71,9 +70,9 @@ class LiftShadowTest {
     /** Signed luminance change below the lifted bottom edge, per pixel row, from the selected frame against rest. */
     private class Profile(val signed: List<Float>, val extentDp: Float, val peak: Float)
 
-    private fun profile(glass: GlassAppearance, ink: Color): Profile {
+    private fun profile(ink: Color): Profile {
         if (!started) { started = true; compose.setContent { Fixture() } }
-        compose.runOnIdle { selected = false; glassState = glass; inkState = ink }
+        compose.runOnIdle { selected = false; inkState = ink }
         compose.waitForIdle()
         val rest = capture()
         val d = rest.width / 360f
@@ -90,7 +89,7 @@ class LiftShadowTest {
     }
 
     /** The reference: Glass shadow drawn directly with the lifted body, at the same pixel density. */
-    private fun glassReference(glass: GlassAppearance, d: Float): Profile {
+    private fun glassReference(d: Float): Profile {
         val width = (360 * d).toInt(); val height = (320 * d).toInt()
         val image = ImageBitmap(width, height)
         val lifted = scene.lastDrawnRegions.first()
@@ -100,7 +99,7 @@ class LiftShadowTest {
             // renderer does. Software source-over rounds away the fine contour increments.
             drawContext.canvas.saveLayer(Rect(Offset.Zero, size), Paint())
             glassShadows(listOf(RoundRect(lifted.bounds, CornerRadius(lifted.corner ?: 0f)) to 1f),
-                glass.shadowStrength, glass.shadowSpread, GlassShadowGeometry(), rasterizing = true)
+                1f, 1f, GlassShadowGeometry(), rasterizing = true)
             drawContext.canvas.restore()
         }
         val pixels = image.toPixelMap()
@@ -112,74 +111,23 @@ class LiftShadowTest {
     }
 
     @Test fun darkIconMenusGetADarkShadowAndLightIconMenusAWhiteGlow() {
-        val glass = GlassAppearance(shadowStrength = 1f, shadowSpread = .6f)
-        val dark = profile(glass, Color.Black)
+        val dark = profile(Color.Black)
         assertTrue("Dark shadow darkens: ${dark.peak}", dark.signed.minOrNull()!! < -.02f && dark.signed.maxOrNull()!! < .004f)
     }
 
     @Test fun lightIconMenusGetAWhiteGlow() {
-        val glass = GlassAppearance(shadowStrength = 1f, shadowSpread = .6f)
-        val light = profile(glass, Color.White)
+        val light = profile(Color.White)
         assertTrue("White glow lightens: ${light.peak}", light.signed.maxOrNull()!! > .02f && light.signed.minOrNull()!! > -.004f)
     }
 
     @Test fun spreadEqualsTheGlassShadowSpreadAndStrengthIsTheSharedMultiple() {
         val d = InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
-        for (spread in listOf(.1f, .6f, 1f)) {
-            val glass = GlassAppearance(shadowStrength = 1f, shadowSpread = spread)
-            val lift = profile(glass, Color.Black)
-            val reference = glassReference(glass, d)
+        for (spread in listOf(1f)) {
+            val lift = profile(Color.Black)
+            val reference = glassReference(d)
             assertEquals("Lift spread at Glass spread $spread", reference.extentDp, lift.extentDp, 4f)
             assertEquals("100% default equals Glass strength at $spread", reference.peak, lift.peak, .03f)
         }
     }
 
-    @Test fun strengthMultiplierScalesBothShadowAndGlow() {
-        val d = InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
-        val low = profile(GlassAppearance(shadowStrength = .6f, liftShadowStrength = .5f), Color.Black)
-        assertEquals("50% of Glass", .5f * glassReference(GlassAppearance(shadowStrength = .6f), d).peak, low.peak, .03f)
-    }
-
-    private fun liftLabels(): List<String> = listOf(true, false).flatMap { merged ->
-        compose.onAllNodes(hasText("Lift shadow strength ·", substring = true), merged).fetchSemanticsNodes().flatMap { n ->
-            if (n.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Text))
-                n.config[androidx.compose.ui.semantics.SemanticsProperties.Text].map { it.text } else emptyList() }
-    }
-
-    @Test fun liftShadowStrengthSettingSitsNextToTheShadowControlsSnapsToFivePercentAndResets() {
-        var value by mutableStateOf(GlassAppearance())
-        compose.setContent { EngineTheme(reduced = true) {
-            CompositionLocalProvider(LocalReducedMotion provides true) {
-                FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Glass appearance",
-                    interfaceContent = { page -> GlassSettingsControls(value, page) { value = it } })
-            }
-        } }
-        compose.onNodeWithContentDescription("Lift shadow strength").performScrollTo()
-        assertTrue("Default label: ${liftLabels()}", liftLabels().any { it.contains("100%") })
-        assertEquals(1f, value.liftShadowStrength, 0f)
-        compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(1.23f) }
-        compose.runOnIdle { assertEquals(1.25f, value.liftShadowStrength, .0001f) }
-        compose.waitForIdle()
-        assertTrue("Label shows 125%: ${liftLabels()}", liftLabels().any { it.contains("125%") })
-        compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(9f) }
-        compose.runOnIdle { assertEquals(1.5f, value.liftShadowStrength, .0001f) }
-        compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
-        compose.runOnIdle { assertEquals(.5f, value.liftShadowStrength, .0001f) }
-        compose.onNodeWithContentDescription("Back from settings").performClick()
-        compose.onNodeWithText("Glass advanced").performScrollTo().performClick()
-        compose.onNodeWithText("Reset glass appearance").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(1f, value.liftShadowStrength, 0f) }
-    }
-
-    @Test fun settingPersistsAcrossReads() {
-        val preferences = InterfacePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
-        val original = preferences.read()
-        try {
-            assertEquals(1f, InterfaceSettings().glass.liftShadowStrength, 0f)
-            for (value in listOf(.5f, .65f, 1.25f, 1.5f)) {
-                preferences.write(original.copy(glass = original.glass.copy(liftShadowStrength = value)))
-                assertEquals(value, preferences.read().glass.liftShadowStrength, .0001f)
-            }
-        } finally { preferences.write(original) }
-    }
 }

@@ -42,7 +42,7 @@ import org.junit.Test
 class QueueSongTransitionTest {
     @get:Rule val compose = createComposeRule<androidx.activity.ComponentActivity>()
     private val owner = PlayerBackgroundPolarityState()
-    private val settings = InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground, glass = GlassAppearance(contrast = .3f))
+    private val settings = InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground)
     private var visual by mutableStateOf<PlayerVisual?>(null)
     private var reduced by mutableStateOf(false)
     @Volatile private var queueInk = Float.NaN

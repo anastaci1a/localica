@@ -83,7 +83,6 @@ data class InterfaceSettings(
     val artworkLayout: ArtworkLayout = ArtworkLayout.FullBackground,
     val artworkTransition: ArtworkTransition = ArtworkTransition.BlurThrough,
     val artworkSwipe: Boolean = true,
-    val glass: GlassAppearance = GlassAppearance(),
     val grayTone: Float = .4f,
     val lyricDelayMs: Int = 0,
     val longScroll: LongScrollStyle = LongScrollStyle.FlyThrough,
@@ -99,54 +98,6 @@ const val FasterAnimationSpeedTenths = 15
 
 fun Float.normalizedGrayTone() = if (isFinite()) coerceIn(0f, 1f) else .4f
 
-enum class TabLensStyle(val label: String) { Adjustable("Adjustable glass"), Overlay("Clear overlay lens"), Classic("Classic gray pill") }
-
-enum class GlassRendererMode(val label: String) {
-    Normal("Normal"), FlatNone("None");
-
-    companion object {
-        fun fromStored(value: String?): GlassRendererMode = when (value) {
-            "FlatNone" -> FlatNone
-            else -> Normal
-        }
-    }
-}
-
-const val GlassBlurDefault = .2f
-data class GlassAppearance(
-    val blur: Float = GlassBlurDefault,
-    val whiteTint: Float = .06f,
-    val shadowStrength: Float = 1f,
-    val shadowSpread: Float = 1f,
-    val contrast: Float = .25f,
-    val tabStyle: TabLensStyle = TabLensStyle.Adjustable,
-    val tabBlur: Float = .3f,
-    val tabWhiteTint: Float = .16f,
-    val shapeDamping: Float = 8f,
-    val depth: Float = 1.35f,
-    val contrastWeight: Float = GlassContrastWeightDefault,
-    val classicOpacity: Float = .1f,
-    val controlExpansion: Float = 1.75f,
-    val overlayDarkening: Float = 0f,
-    val overlayForeground: Boolean = false,
-    val renderer: GlassRendererMode = GlassRendererMode.Normal,
-    /** Lift shadow strength under selected and floating items, as a multiple of [shadowStrength] (#553). */
-    val liftShadowStrength: Float = LiftShadowDefault,
-    val touchLight: Float = 1f,
-) {
-    fun normalized() = GlassAppearance(blur.unit(GlassBlurDefault), whiteTint.unit(.06f),
-        shadowStrength.unit(1f, 2f), shadowSpread.unit(1f, 2f), contrast.unit(.25f).coerceAtMost(.5f), tabStyle,
-        tabBlur.unit(.3f), tabWhiteTint.unit(.16f),
-        if (shapeDamping.isFinite()) shapeDamping.coerceIn(2f, 40f) else 8f,
-        if (depth.isFinite()) depth.coerceIn(.6f, 2f) else 1.35f,
-        if (contrastWeight.isFinite()) contrastWeight.coerceIn(GlassContrastWeightMin, GlassContrastWeightMax) else GlassContrastWeightDefault,
-        classicOpacity.unit(.1f),
-        if (controlExpansion.isFinite()) controlExpansion.coerceIn(1f, 2f) else 1.75f,
-        overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground, renderer,
-        normalizedLiftShadowStrength(liftShadowStrength), touchLight.unit(1f))
-    private fun Float.unit(fallback: Float, maximum: Float = 1f) = if (isFinite()) coerceIn(0f, maximum) else fallback
-}
-
 enum class ArtworkAction(val label: String) {
     Lyrics("Toggle lyrics"), Menu("Show artwork menu"), View("View artwork"), Change("Change artwork"), None("Do nothing")
 }
@@ -154,18 +105,3 @@ enum class ArtworkAction(val label: String) {
 enum class ArtworkLayout(val label: String) { FullBackground("Full-background artwork"), Floating("Floating artwork with matte background") }
 
 enum class ArtworkTransition(val label: String) { BlurThrough("Blur through"), Carousel("Carousel") }
-
-/** Adaptive-contrast brightness weighting (#633): 1 is even; the default 2 was the maximum before #633. Weights
- * above 1/trim limit the effective trim (see effectiveGlassTrim), so every weight keeps brightness ordered. */
-const val GlassContrastWeightMin = 1f
-const val GlassContrastWeightDefault = 2f
-const val GlassContrastWeightMax = 8f
-
-/** The lift shadow is a 50-150% multiple of Glass shadow strength in plain 5% steps; default 100%. */
-const val LiftShadowDefault = 1f
-const val LiftShadowMin = .5f
-const val LiftShadowMax = 1.5f
-const val LiftShadowSteps = 19
-
-fun normalizedLiftShadowStrength(value: Float): Float =
-    if (value.isFinite()) (Math.round(value.coerceIn(LiftShadowMin, LiftShadowMax) * 20f) / 20f) else LiftShadowDefault

@@ -30,8 +30,6 @@ import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.assertSame
@@ -154,19 +152,18 @@ internal fun verifyShadowUnion(rule: ComposeContentTestRule, actual: PresentedCa
 }
 
 /** Existing controls and their existing root fixture; no alternate shadow presenter or motion owner. */
-internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: GlassRendererMode,
+internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule,
     projectedReference: Boolean = false, suppressPressedShadow: Boolean = false) {
     var projectedSamples = 0
     var kind by mutableStateOf("button")
     var available by mutableStateOf(true)
-    var shadowSuppressed by mutableStateOf(false)
     lateinit var clock: UiClock
     lateinit var anchor: GlassAnchor
-    val runtime = GlassRendererRuntime(mode)
-    rule.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
+
+    rule.setContent {  LocalicaTheme {
         val currentClock = LocalUiClock.current
         SideEffect { clock = currentClock }
-        CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = if (shadowSuppressed) 0f else 1f, shadowSpread = 1f, renderer = mode)) {
+
             Box(Modifier.size(240.dp).background(Color.White).testTag("oracle-scene"), contentAlignment = Alignment.Center) {
                 key(kind) {
                     anchor = rememberGlassAnchor()
@@ -180,8 +177,8 @@ internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: Glass
                     }
                 }
             }
-        }
-    } } }
+
+    }  }
     rule.waitForIdle()
     val scene = rule.onNodeWithTag("oracle-scene")
     ShadowNativeCapture(rule, scene) { clock.stampNow.sequence }.use { capture ->
@@ -197,7 +194,7 @@ internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: Glass
                 val opacity = if (enabled) 1f else if (caller == "settings") .45f else .38f
                 val actual = capture.capture { scene -> ShadowDrawState(clock.stampNow.sequence, 0,
                     shadowScreenBodies(listOf(RoundRect(body, CornerRadius(radius)) to opacity), scene.topLeft)) }
-                assertShadowField(rule, actual, "$mode-$caller-$sample-$enabled", projectedReference)
+                assertShadowField(rule, actual, "Default-$caller-$sample-$enabled", projectedReference)
             }
             if (caller == "button") {
                 val node = rule.runOnIdle { checkNotNull(anchor.surfaceNode) }
@@ -207,7 +204,9 @@ internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: Glass
                     for (pressed in listOf(true, false)) {
                         subject.performTouchInput { if (pressed) down(center) else up() }
                         repeat(12) { frame ->
-                            if (suppressPressedShadow && pressed && frame == 4) rule.runOnIdle { shadowSuppressed = true }
+                            if (suppressPressedShadow && pressed && frame == 4) rule.runOnIdle { (node as io.github.anastaci1a.localica.ui.engine.SurfaceNode).request(
+                                io.github.anastaci1a.localica.ui.engine.SurfaceTarget(node.stratum, node.opacity.value(), io.github.anastaci1a.localica.ui.engine.ShadowRole.None),
+                                io.github.anastaci1a.localica.ui.engine.motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control)) }
                             rule.mainClock.advanceTimeByFrame(); rule.waitForIdle()
                             rule.runOnIdle {
                                 assertSame("Press keeps its actual caster", node, anchor.surfaceNode)
@@ -229,14 +228,14 @@ internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: Glass
                                     scaleX = common * kotlin.math.exp(axis), scaleY = common * kotlin.math.exp(-axis))
                             }
                             if (actual.nativeWindows.single().state.let { it.scaleX != 1f || it.scaleY != 1f }) projectedSamples++
-                            assertShadowField(rule, actual, "$mode-press-$pressed-$frame", projectedReference)
+                            assertShadowField(rule, actual, "Default-press-$pressed-$frame", projectedReference)
                         }
                     }
                 } finally { rule.mainClock.autoAdvance = true }
             }
         }
     }
-    if (projectedReference && mode == GlassRendererMode.Normal)
+    if (projectedReference)
         assertTrue("The actual native control must exercise non-unit press/rebound transforms", projectedSamples > 0)
 }
 

@@ -11,13 +11,29 @@ import org.json.JSONObject
 class InterfacePreferences(context: Context) {
     private val preferences = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
     fun read(): InterfaceSettings {
-        val savedRenderer = preferences.getString("glass-renderer", null)
-        if (savedRenderer in listOf("None", "SingleToneBlur", "Automatic", "Modern", "Legacy") || preferences.contains("glass-live-scroll")) {
-            preferences.edit().apply {
-                putString("glass-renderer", GlassRendererMode.fromStored(savedRenderer).name)
-                remove("glass-live-scroll")
-            }.apply()
-        }
+        preferences.edit().apply {
+            remove("glass-renderer")
+            remove("glass-live-scroll")
+            remove("glass-blur")
+            remove("glass-white-tint")
+            remove("glass-shadow-strength-multiplier")
+            remove("glass-shadow-strength")
+            remove("glass-shadow-spread-multiplier")
+            remove("glass-shadow-spread")
+            remove("glass-contrast-trim")
+            remove("glass-contrast")
+            remove("tab-lens-style")
+            remove("tab-lens-blur")
+            remove("tab-lens-tint")
+            remove("glass-shape-damping")
+            remove("glass-depth")
+            remove("glass-contrast-weight")
+            remove("tab-classic-opacity")
+            remove("glass-control-expansion")
+            remove("tab-overlay-darkening")
+            remove("tab-overlay-foreground")
+            remove("glass-lift-shadow-strength")
+        }.apply()
         val tabs = preferences.getString("tabs", null)?.split(',')?.mapNotNull { name -> enumNameOrNull<MainTab>(name)?.takeIf { it in MainTab.available } }
             ?.distinct()?.takeIf { it.isNotEmpty() } ?: InterfaceSettings().tabs
         return InterfaceSettings(tabs, preferences.getBoolean("history", true), preferences.getBoolean("confirm-exit", false),
@@ -33,25 +49,12 @@ class InterfacePreferences(context: Context) {
             artworkLayout = preferences.enumValue<ArtworkLayout>("artwork-layout") ?: ArtworkLayout.FullBackground,
             artworkTransition = preferences.enumValue<ArtworkTransition>("artwork-transition") ?: ArtworkTransition.BlurThrough,
             artworkSwipe = preferences.getBoolean("artwork-swipe", true),
-            glass = GlassAppearance(preferences.getFloat("glass-blur", .2f), preferences.getFloat("glass-white-tint", .06f),
-                preferences.getFloat("glass-shadow-strength-multiplier", preferences.getFloat("glass-shadow-strength", .12f) / .12f),
-                preferences.getFloat("glass-shadow-spread-multiplier", preferences.getFloat("glass-shadow-spread", .6f) / .6f),
-                preferences.getFloat("glass-contrast-trim", if (preferences.getFloat("glass-contrast", .4f) == 0f) 0f else .25f),
-                preferences.enumValue<TabLensStyle>("tab-lens-style") ?: TabLensStyle.Adjustable,
-                preferences.getFloat("tab-lens-blur", .3f), preferences.getFloat("tab-lens-tint", .16f),
-                preferences.getFloat("glass-shape-damping", 8f), preferences.getFloat("glass-depth", 1.35f),
-                preferences.getFloat("glass-contrast-weight", GlassContrastWeightDefault), preferences.getFloat("tab-classic-opacity", .1f),
-                preferences.getFloat("glass-control-expansion", 1.75f), preferences.getFloat("tab-overlay-darkening", 0f),
-                preferences.getBoolean("tab-overlay-foreground", false),
-                GlassRendererMode.fromStored(savedRenderer),
-                preferences.getFloat("glass-lift-shadow-strength", LiftShadowDefault)).normalized(),
             grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone(),
             lyricDelayMs = preferences.getInt("lyric-delay-ms", 0).coerceIn(-2000, 2000),
             longScroll = preferences.enumValue<LongScrollStyle>("long-scroll") ?: LongScrollStyle.FlyThrough)
     }
     fun write(value: InterfaceSettings) {
         require(value.tabs.isNotEmpty() && value.tabs.distinct() == value.tabs)
-        val glass = value.glass.normalized()
         preferences.edit().putString("tabs", value.tabs.joinToString(",") { it.name }).putBoolean("history", value.tabHistory)
             .putBoolean("confirm-exit", value.confirmExit).putBoolean("expand-on-play", value.expandOnPlay)
             .putBoolean("album-artist", value.albumArtistFirst).putBoolean("reduced-motion", value.reducedMotion)
@@ -64,18 +67,6 @@ class InterfacePreferences(context: Context) {
             .putFloat("gray-tone", value.grayTone.normalizedGrayTone())
             .putInt("lyric-delay-ms", value.lyricDelayMs.coerceIn(-2000, 2000))
             .putString("long-scroll", value.longScroll.name).putString("popup-motion", value.popupMotion.name)
-            .putFloat("glass-blur", glass.blur).putFloat("glass-white-tint", glass.whiteTint)
-            .putFloat("glass-shadow-strength-multiplier", glass.shadowStrength).putFloat("glass-shadow-spread-multiplier", glass.shadowSpread)
-            .remove("glass-shadow-strength").remove("glass-shadow-spread")
-            .putFloat("glass-contrast-trim", glass.contrast).remove("glass-contrast")
-            .putFloat("glass-contrast-weight", glass.contrastWeight).putFloat("tab-classic-opacity", glass.classicOpacity)
-            .putFloat("glass-control-expansion", glass.controlExpansion)
-            .putFloat("tab-overlay-darkening", glass.overlayDarkening).putBoolean("tab-overlay-foreground", glass.overlayForeground)
-            .putString("tab-lens-style", glass.tabStyle.name)
-            .putString("glass-renderer", glass.renderer.name).remove("glass-live-scroll")
-            .putFloat("tab-lens-blur", glass.tabBlur).putFloat("tab-lens-tint", glass.tabWhiteTint)
-            .putFloat("glass-lift-shadow-strength", glass.liftShadowStrength)
-            .putFloat("glass-shape-damping", glass.shapeDamping).putFloat("glass-depth", glass.depth)
             .putString("artwork-tap", value.artworkTap.name).putString("artwork-hold", value.artworkHold.name).apply()
     }
 }

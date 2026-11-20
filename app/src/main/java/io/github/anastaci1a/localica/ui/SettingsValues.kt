@@ -10,9 +10,6 @@ import io.github.anastaci1a.localica.queue.QueueSettings
 internal fun settingsSearchValues(settings: InterfaceSettings, queues: QueueSettings, filters: LibraryFilters): Map<String, String> {
     fun Boolean.label() = if (this) "On" else "Off"
     return buildMap {
-        put("Glass renderer", settings.glass.renderer.label)
-        put("Selector style", settings.glass.tabStyle.label)
-        put("Refract icons and labels", settings.glass.overlayForeground.label())
         put("Retrace tab history", settings.tabHistory.label())
         put("Confirm before exiting", settings.confirmExit.label())
         put("Main tabs", settings.tabs.joinToString { it.label })

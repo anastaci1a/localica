@@ -12,23 +12,7 @@ import java.nio.ByteOrder
 import kotlin.math.*
 
 /** Raw half-float geometry, never color-managed: signed-distance data is not RGB. */
-internal class LensDistanceMap(val bitmap: Bitmap, val origin: Offset, val scale: Float, val range: Float,
-    private val distances: FloatArray) {
-    fun sample(point: Offset): LensField {
-        // Match the linear bitmap sampler: samples live at texel centers, and
-        // normals interpolate with distance rather than jumping at each cell.
-        val p = (point - origin) * scale - Offset(.5f, .5f)
-        fun d(x: Int, y: Int) = distances[y.coerceIn(0, bitmap.height - 1) * bitmap.width + x.coerceIn(0, bitmap.width - 1)]
-        val x = floor(p.x).toInt(); val y = floor(p.y).toInt()
-        val fx = p.x - x; val fy = p.y - y
-        fun mix(a: Float, b: Float, t: Float) = a + (b - a) * t
-        val distance = mix(mix(d(x, y), d(x + 1, y), fx), mix(d(x, y + 1), d(x + 1, y + 1), fx), fy)
-        fun gx(x: Int, y: Int) = ((d(x + 1, y) - d(x - 1, y)) * .5f).coerceIn(-1f, 1f)
-        fun gy(x: Int, y: Int) = ((d(x, y + 1) - d(x, y - 1)) * .5f).coerceIn(-1f, 1f)
-        return LensField(max(distance - .5f, 0f) / scale, Offset(
-            mix(mix(gx(x, y), gx(x + 1, y), fx), mix(gx(x, y + 1), gx(x + 1, y + 1), fx), fy),
-            mix(mix(gy(x, y), gy(x + 1, y), fx), mix(gy(x, y + 1), gy(x + 1, y + 1), fx), fy)))
-    }
+internal class LensDistanceMap(val bitmap: Bitmap, val origin: Offset, val scale: Float, val range: Float) {
     companion object {
         fun create(path: Path): LensDistanceMap {
             val bounds = path.getBounds()
@@ -59,7 +43,7 @@ internal class LensDistanceMap(val bitmap: Bitmap, val origin: Offset, val scale
             buffer.rewind()
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGBA_F16)
             bitmap.copyPixelsFromBuffer(buffer)
-            return LensDistanceMap(bitmap, origin, scale, range, distances)
+            return LensDistanceMap(bitmap, origin, scale, range)
         }
     }
 }

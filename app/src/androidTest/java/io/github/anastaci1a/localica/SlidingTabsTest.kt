@@ -13,8 +13,6 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsProperties
 import io.github.anastaci1a.localica.navigation.MainTab
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.TabLensStyle
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -22,83 +20,22 @@ import org.junit.Test
 
 class SlidingTabsTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun optionalForegroundRefractionChangesOnlyTheSelectedInk() = inspectForeground(io.github.anastaci1a.localica.navigation.GlassRendererMode.Normal)
-    @Test fun noneKeepsSelectedInkWhenForegroundSamplingIsEnabled() = inspectForeground(io.github.anastaci1a.localica.navigation.GlassRendererMode.FlatNone)
-
-    private fun inspectForeground(mode: io.github.anastaci1a.localica.navigation.GlassRendererMode) {
-        val runtime = GlassRendererRuntime(mode)
-        val normal = effectiveGlassBackend(mode, android.os.Build.VERSION.SDK_INT) == GlassBackend.Normal
-        var foreground by mutableStateOf(false)
-        val samples = java.util.concurrent.atomic.AtomicInteger()
-        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = TabLensStyle.Overlay,
-                overlayForeground = foreground, whiteTint = 0f, blur = 0f, contrast = 0f, shadowStrength = 0f),
-                LocalBackdropSamplingObserver provides { samples.incrementAndGet() }) {
-                val source = rememberFrostedBackdrop(Unit, dark = false)
-                Box(Modifier.size(300.dp, 64.dp).testTag("foreground-tabs")) {
-                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(source).background(Color.White))
-                    SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, { 0f }, source = source) {}
-                }
-            }
-        } } }
-        val node = compose.onNodeWithTag("foreground-tabs")
-        val flat = mode == io.github.anastaci1a.localica.navigation.GlassRendererMode.FlatNone
-        if (!flat) compose.waitUntil(8000) { samples.get() > 0 }
-        val before = node.captureToImage().toPixelMap()
-        val previousSamples = samples.get()
-        compose.runOnIdle { foreground = true }
-        // A completed sample, not composition idleness, owns thumbnail readiness. None never samples.
-        if (flat) compose.runOnIdle { assertEquals("None never samples", 0, samples.get()) }
-        else compose.waitUntil(8000) { samples.get() > previousSamples }
-        var after = node.captureToImage().toPixelMap()
-        if (normal) compose.waitUntil(8000) {
-            after = node.captureToImage().toPixelMap()
-            var refracted = 0
-            for (y in 0 until before.height) for (x in 0 until before.width / 2)
-                if (kotlin.math.abs(before[x, y].green - after[x, y].green) > .1f) refracted++
-            refracted > 40
-        }
-        var changed = 0; var outside = 0
-        for (y in 0 until before.height) for (x in 0 until before.width) {
-            val error = kotlin.math.abs(before[x, y].green - after[x, y].green)
-            if (error > .1f) { if (x < before.width / 2) changed++ else outside++ }
-        }
-        if (normal) {
-            assertTrue("Opting in must visibly refract the selected foreground", changed > 40)
-        } else {
-            fun ink(image: androidx.compose.ui.graphics.PixelMap): Int {
-                var count = 0
-                for (y in 0 until image.height) for (x in 0 until image.width / 2) {
-                    val color = image[x, y]
-                    if (kotlin.math.abs(color.red - NavigationAccent.red) < .02f &&
-                        kotlin.math.abs(color.green - NavigationAccent.green) < .02f &&
-                        kotlin.math.abs(color.blue - NavigationAccent.blue) < .02f) count++
-                }
-                return count
-            }
-            assertTrue("None keeps selected foreground ink above the solid material", ink(before) > 40 && ink(after) >= ink(before) * .95f)
-        }
-        assertTrue("Other tab labels stay untouched: $outside", outside < 10)
-        compose.onAllNodesWithContentDescription("Home").assertCountEquals(1)
-        compose.onAllNodesWithContentDescription("Library").assertCountEquals(1)
-    }
-    @Test fun overlayLensDoesNotRefractOrDuplicateItsForegroundLabels() {
-        var style by mutableStateOf(TabLensStyle.Classic)
+    @Test fun defaultLensDoesNotMoveOrDuplicateItsForegroundLabels() {
+        var backing by mutableStateOf(Color.White)
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style, whiteTint = 0f,
-                blur = 0f, contrast = 0f, shadowStrength = 0f)) {
+
                 val source = rememberFrostedBackdrop(Unit)
                 Box(Modifier.size(300.dp, 64.dp).testTag("tabs")) {
-                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(source).background(Color.White))
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(source).background(backing))
                     CompositionLocalProvider(LocalFrostedBackdrop provides source) {
                         SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, { 0f }) {}
                     }
                 }
-            }
+
         } }
         val node = compose.onNodeWithTag("tabs")
         val before = node.captureToImage().toPixelMap()
-        compose.runOnIdle { style = TabLensStyle.Overlay }
+        compose.runOnIdle { backing = Color(0xFFF0F0F0) }
         val after = node.captureToImage().toPixelMap()
         fun accent(c: Color) = c.red - c.green > .2f && c.red - c.blue > .15f
         var ink = 0
@@ -210,8 +147,7 @@ class SlidingTabsTest {
         val selections = mutableListOf<MainTab>()
         val reselections = mutableListOf<MainTab>()
         compose.setContent { EngineTheme(reduced = true) {
-            CompositionLocalProvider(LocalReducedMotion provides true,
-                LocalGlassAppearance provides GlassAppearance(tabStyle = TabLensStyle.Classic)) {
+            CompositionLocalProvider(LocalReducedMotion provides true) {
                 Box(Modifier.size(300.dp, 64.dp).testTag("page-ownership-tabs")) {
                     SlidingTabs(tabs, active, { page }, pageDragging = pageDragging,
                         onReselect = { reselections += it }) { selections += it; active = it }

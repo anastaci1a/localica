@@ -73,11 +73,8 @@ class GlassPressureTest {
         compose.mainClock.autoAdvance = true
     }
     @Test fun verticalReleaseCouplesRenderedAxesAtDefaultDamping() = axisRelease(false, 8f)
-    @Test fun verticalReleaseCouplesRenderedAxesAtHigherDamping() = axisRelease(false, 20f)
-    @Test fun horizontalReleaseCouplesRenderedAxesAtDefaultDamping() = axisRelease(true, 8f)
-    @Test fun horizontalReleaseCouplesRenderedAxesAtHigherDamping() = axisRelease(true, 20f)
-
-    @Test fun retouchAndCancelKeepThePresentedCrossContourContinuous() {
+        @Test fun horizontalReleaseCouplesRenderedAxesAtDefaultDamping() = axisRelease(true, 8f)
+        @Test fun retouchAndCancelKeepThePresentedCrossContourContinuous() {
         checkRoundedContainment = true
         pressureChoices(listOf("First", "Second"))
         val rest = displayedTrackFrame()
@@ -199,8 +196,7 @@ class GlassPressureTest {
                 // track remain on blue, allowing a renderer-independent scan.
                 Canvas(Modifier.matchParentSize().recordFrostedBackdrop(backing)) { drawRect(Color.Red) }
                 Canvas(Modifier.matchParentSize()) { drawRect(Color.Blue) }
-                CompositionLocalProvider(LocalFrostedBackdrop provides backing,
-                    LocalGlassAppearance provides io.github.anastaci1a.localica.navigation.GlassAppearance(shapeDamping = damping)) {
+                CompositionLocalProvider(LocalFrostedBackdrop provides backing) {
                     Box(Modifier.padding(12.dp)) { GlassChoices(labels, 0, horizontal = horizontal) { } }
                 }
                 PresentationMarker { presentationStage }

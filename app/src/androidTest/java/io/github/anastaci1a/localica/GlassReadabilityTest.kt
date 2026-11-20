@@ -24,10 +24,8 @@ class GlassReadabilityTest {
     @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun entireGlassUsesTheBoundedCurveWithoutTintingItsForeground() {
         var lightInk by mutableStateOf(false)
-        var trim by mutableFloatStateOf(.25f)
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = 0f,
-                shadowStrength = 0f, contrast = trim)) {
+
                 Box(Modifier.fillMaxSize()) {
                     val source = rememberFrostedBackdrop(Unit, dark = lightInk)
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -38,15 +36,15 @@ class GlassReadabilityTest {
                         Canvas(Modifier.align(Alignment.TopCenter).padding(top = 12.dp).size(10.dp).testTag("ink")) { drawRect(Color.White) }
                     }
                 }
-            }
+
         } }
         fun ramp(): List<Float> {
             val pixels = compose.onNodeWithTag("tone").captureToImage().toPixelMap()
             return (0..4).map { pixels[(pixels.width * (it + .5f) / 5).toInt(), pixels.height / 2].red }
         }
-        for (light in listOf(false, true)) for (amount in listOf(.25f, .5f, 0f)) {
-            compose.runOnIdle { lightInk = light; trim = amount }
-            val expected = (0..4).map { if (light) GlassTone(amount, 2f, true).channel(it / 4f) else minOf(1f, (.5400391f - .2017822f - .0203094f) * (it / 4f) + .7001953f) }
+        for (light in listOf(false, true)) {
+            compose.runOnIdle { lightInk = light }
+            val expected = (0..4).map { if (light) GlassTone(.25f, 2f, true).channel(1f - (1f - it / 4f) * .94f / (1f - .06f * it / 4f)) else minOf(1f, (.5400391f - .2017822f - .0203094f) * (it / 4f) + .7001953f) }
             compose.waitUntil(10000) { ramp().zip(expected).all { (a, b) -> kotlin.math.abs(a - b) < .025f } }
             val ink = compose.onNodeWithTag("ink").captureToImage().toPixelMap()
             assertEquals("The foreground is outside the tone map", 1f, ink[ink.width / 2, ink.height / 2].red, .01f)
@@ -59,7 +57,7 @@ class GlassReadabilityTest {
         var content by mutableStateOf(Color.White)
         var split by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = 0f, shadowStrength = 0f)) {
+
                 Box(Modifier.fillMaxSize().background(page)) {
                     val source = rememberFrostedBackdrop(Unit, dark = lightInk)
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -70,7 +68,7 @@ class GlassReadabilityTest {
                             .background(androidx.compose.material3.LocalContentColor.current).testTag("ink"))
                     }
                 }
-            }
+
         } }
         // Light faces take the rows (red .7001953 + .3179475 grey, white clipped to 1); light-ink pages keep the graded face
         // (.25 compression, .06 white tint). The lens composites each translucent pixel over the displayed content and page;

@@ -32,13 +32,7 @@ internal class GlassSilhouetteFrame(val description: GlassSilhouetteGeometry) {
     val bounds = path.getBounds()
     val geometry = LensGeometry(bounds, description.corner ?: (bounds.height / 2f))
     val field by lazy { if (description.fieldWeight > 0f && description.splitInner == null) LensDistanceMap.create(path) else null }
-    fun opticalField(point: Offset): LensField {
-        val analytic = description.circles?.let { centers ->
-            pairedCircleLensField(point, centers, geometry.span, description.fieldWeight)
-        } ?: geometry.field(point)
-        val boundary = description.splitInner?.let { splitPillDistanceField(point, bounds, it) } ?: field?.sample(point)
-        return boundary?.let { blendLensFields(analytic, it, description.fieldWeight) } ?: analytic
-    }
+
 }
 
 @Composable internal fun rememberGlassSilhouette(bodies: (Size) -> List<RoundRect>): GlassSilhouette {

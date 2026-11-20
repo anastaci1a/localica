@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui.spec
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.Random
@@ -31,7 +30,6 @@ class UiSpecTest {
         assertEquals(.05f,stock.expansion.band,0f)
         // #846 (operator 3:17-3:20 AM): both drawers (player sheet and Queue) are the #608 measured model.
         assertEquals(ExpansionSpec(EasingSpec(.242192f,.999967f,.511935f,.997652f),426.086832f,.500401615f,1.41952128f,.73607278f,.5f,140f,.25f,.5f,.05f),stock.sheetExpansion)
-        assertEquals(56f,stock.clearance.getValue(Clearance.ShadowInset).value,.00001f)
     }
     @Test fun rejectsNaNZeroDurationAndEveryMalformedFieldWithoutThrowing() {
         val r=Random(600000)
@@ -46,7 +44,7 @@ class UiSpecTest {
                 4 -> UiSpecData(motion=mapOf(MotionProfile.Control to MotionProfileSpec(0,EasingSpec(0f,0f,.2f,1f))))
                 5 -> UiSpecData(spring=mapOf(SpringProfile.Page to SpringProfileSpec(value,380f)))
                 6 -> UiSpecData(expansion=StockUiSpec.expansion.copy(velocityKnee=value))
-                else -> UiSpecData(material=mapOf(MaterialRole.Glass to StockUiSpec.material.getValue(MaterialRole.Glass).copy(blur=value)))
+                else -> UiSpecData(sheetExpansion=StockUiSpec.sheetExpansion.copy(velocityKnee=value))
             }
             val a=uiSpec(settings,data)
             assertTrue("seed600000 case$index $a",a is SpecResult.Rejected)
@@ -63,7 +61,7 @@ class UiSpecTest {
         val input=mutableMapOf(Space.Base to 13.dp)
         val a=accepted(UiSpecData(space=input)); input[Space.Base]=14.dp
         assertEquals(13.dp,a.space[Space.Base])
-        for(map in listOf(a.space,StockUiSpec.space,StockUiSpec.radius,StockUiSpec.motion,StockUiSpec.spring,StockUiSpec.material)) {
+        for(map in listOf(a.space,StockUiSpec.space,StockUiSpec.radius,StockUiSpec.motion,StockUiSpec.spring)) {
             try { (map as MutableMap<*,*>).clear(); fail("Installed map must be immutable") } catch(expected: UnsupportedOperationException) { }
         }
         assertEquals(12.dp,accepted().space[Space.Base])
@@ -78,12 +76,9 @@ class UiSpecTest {
         for(d in listOf(Float.NaN,0f,-1f,Float.POSITIVE_INFINITY)) try { ResolvedUiSpec(accepted(),Density(d)); fail("Invalid density $d") } catch(expected: IllegalArgumentException) { }
         try { ResolvedUiSpec(accepted(UiSpecData(space=mapOf(Space.Panel to Float.MAX_VALUE.dp))),Density(4f)); fail("Resolved px overflow") } catch(expected: IllegalArgumentException) { }
     }
-    @Test fun reducedDominatesFasterAndMaterialOverridesResolveOneSpread() {
+    @Test fun reducedDominatesFaster() {
         assertEquals(MotionAccess.Reduced,accepted(UiSpecData(access=MotionAccess.Standard),settings.copy(reducedMotion=true,animationSpeedTenths=15)).access)
         assertEquals(MotionAccess.Standard,accepted(config=settings.copy(animationSpeedTenths=15)).access); assertEquals(1.5f,accepted(config=settings.copy(animationSpeedTenths=15)).speed,0f)
-        val m=StockUiSpec.material.getValue(MaterialRole.Glass).copy(shadowSpread=.1f)
-        assertEquals(12.8f,accepted(UiSpecData(material=mapOf(MaterialRole.Glass to m))).clearance.getValue(Clearance.ShadowInset).value,.00001f)
-        assertEquals(2f,accepted(config=settings.copy(glass=GlassAppearance(shapeDamping=2f)) ).material.getValue(MaterialRole.Glass).shapeDamping,0f)
     }
     @Test fun everyPositionSpringIsAdmittedAndSlowOverrideRejected() {
         for((key,spring) in accepted().spring) {
@@ -91,8 +86,8 @@ class UiSpecTest {
             assertTrue("$key $horizon",horizon.isFinite() && horizon<=2)
         }
         assertTrue(uiSpec(settings,UiSpecData(spring=mapOf(SpringProfile.Page to SpringProfileSpec(2f,1f)))) is SpecResult.Rejected)
-        // A2.2c deliberately preserves the user's decorative low damping; no two-second clamp.
-        assertTrue(uiSpec(settings.copy(glass=GlassAppearance(shapeDamping=2f))) is SpecResult.Accepted)
+        // Stock material admission is independent of position-spring admission.
+        assertTrue(uiSpec(settings) is SpecResult.Accepted)
         val page=StockUiSpec.spring.getValue(SpringProfile.Page)
         val lambda=.85*sqrt(380.0)
         val tau=minOf(springHorizon(page)/8,.064,1/lambda)

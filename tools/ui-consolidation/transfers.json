@@ -32,10 +32,17 @@
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.BoxWithConstraintsScope.PlayerSurface",
-      "codeSha256": "a4ed50deff897dfdb9723e7eefdce9d9d9c41eae34b429b48c9a59434ace9afc",
+      "codeSha256": "233fc670717e78b5583cb6bb68d258be8d59fd45977503636627ce4b7dc5823f",
       "removedBy": "U04.02a",
       "reason": "U04.02a removes (one-off U10.03 relabel 2026-11-07, glass snapshot-recording gate (U04.02a retained faces and compositor recording)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settin",
-      "relabel": "U10.03-relabel-2026-11-07"
+      "relabel": "U10.03-relabel-2026-11-07",
+      "reanchoredFrom": {
+        "codeSha256": "a4ed50deff897dfdb9723e7eefdce9d9d9c41eae34b429b48c9a59434ace9afc",
+        "errorLine1": "    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix)",
+        "errorLine2": "                                                                                                         ~~~~~~~",
+        "message": "Use Curve maps and owner-only mutation",
+        "ordinal": 0
+      }
     },
     {
       "rule": "RawMotionMap",

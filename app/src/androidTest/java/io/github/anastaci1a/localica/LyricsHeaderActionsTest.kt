@@ -144,8 +144,7 @@ class LyricsHeaderActionsTest {
         compose.setContent { EngineTheme {
             anchor = rememberGlassAnchor()
             preparation = rememberGlassOriginPreparation()
-            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density),
-                LocalGlassAppearance provides LocalGlassAppearance.current.copy(shadowStrength = 0f, touchLight = 0f)) {
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density)) {
                 RecordedLyricsBackdrop(backdrop, { backing = it }) {
                     Box(Modifier.padding(32.dp)) {
                         LyricsHeaderActions(true, 1f, anchor, preparation, {}, {}, {})
@@ -190,7 +189,16 @@ class LyricsHeaderActionsTest {
                         assertEquals("held handoff bottom separated=$separated", expected.bottom, actual.bottom, .01f)
                     }
                 }
-                val image = compose.onRoot().captureToImage().asAndroidBitmap()
+                // Coverage excludes the casters' fields, as in bareShot: the press pose and caster geometry stay unchanged.
+                val nodes = compose.runOnUiThread { requireNotNull(anchor.shadowPlane).casters.toList() }
+                val roles = nodes.map { it.role }
+                fun cast(role: (Int) -> io.github.anastaci1a.localica.ui.engine.ShadowRole) = compose.runOnUiThread { nodes.forEachIndexed { i, it ->
+                    it.request(io.github.anastaci1a.localica.ui.engine.SurfaceTarget(it.stratum, it.opacity.value(), role(i)),
+                        io.github.anastaci1a.localica.ui.engine.motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
+                } }
+                cast { io.github.anastaci1a.localica.ui.engine.ShadowRole.None }
+                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                val image = try { compose.onRoot().captureToImage().asAndroidBitmap() } finally { cast { roles[it] } }
                 for (expected in want) {
                     val column = (bounds.left + expected.center.x).roundToInt()
                     val occupied = ((bounds.top - height / 2).toInt()..(bounds.bottom + height / 2).toInt()).filter { row ->
@@ -273,15 +281,16 @@ class LyricsHeaderActionsTest {
 
     private fun heldBodyCastsNoShadowInside(label: String, separated: Boolean) {
         val backdrop = Color(0xFF3F6FB0)
-        var shadows by mutableStateOf(true)
         lateinit var backing: FrostedBackdrop
         lateinit var preparation: GlassOriginPreparation
+        lateinit var anchor: GlassAnchor
         compose.setContent { EngineTheme {
-            val anchor = rememberGlassAnchor()
+            anchor = rememberGlassAnchor()
             preparation = rememberGlassOriginPreparation()
-            RecordedLyricsBackdrop(backdrop, { backing = it }) {
-                CompositionLocalProvider(LocalGlassAppearance provides
-                    LocalGlassAppearance.current.copy(shadowStrength = if (shadows) 1f else 0f)) {
+            backing = rememberFrostedBackdrop(Unit)
+            Box(Modifier.fillMaxSize()) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backing)) { drawRect(backdrop) }
+                CompositionLocalProvider(LocalFrostedBackdrop provides backing) {
                     Box(Modifier.padding(48.dp)) { LyricsHeaderActions(separated, if (separated) 1f else 0f, anchor, preparation, {}, {}, {}) }
                 }
             }
@@ -299,9 +308,18 @@ class LyricsHeaderActionsTest {
             return IntArray(width * height + 2).also { image.getPixels(it, 0, width, left, top, width, height); it[it.size - 2] = width; it[it.size - 1] = height }
         }
         fun bareShot(): IntArray {
-            compose.runOnIdle { shadows = false }
+            val nodes = compose.runOnUiThread { requireNotNull(anchor.shadowPlane).casters.toList() }
+            val roles = nodes.map { it.role }
+            fun restore() = compose.runOnUiThread { nodes.zip(roles).forEach { (node, role) ->
+                node.request(io.github.anastaci1a.localica.ui.engine.SurfaceTarget(node.stratum, node.opacity.value(), role),
+                    io.github.anastaci1a.localica.ui.engine.motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
+            } }
+            compose.runOnUiThread { nodes.forEach { node ->
+                node.request(io.github.anastaci1a.localica.ui.engine.SurfaceTarget(node.stratum, node.opacity.value(), io.github.anastaci1a.localica.ui.engine.ShadowRole.None),
+                    io.github.anastaci1a.localica.ui.engine.motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
+            } }
             compose.mainClock.advanceTimeBy(100)
-            return shot().also { compose.runOnIdle { shadows = true }; compose.mainClock.advanceTimeBy(100) }
+            return try { shot() } finally { restore(); compose.mainClock.advanceTimeBy(100) }
         }
         compose.mainClock.autoAdvance = false
         try {

@@ -44,7 +44,7 @@ class PlayerBackgroundPolarityTest {
     private val ink: Color get() = inkComposition?.contentColor ?: Color.Unspecified
     private var queueInk = Color.Unspecified
     private var settings by mutableStateOf(InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground,
-        artworkTransition = ArtworkTransition.BlurThrough, glass = GlassAppearance(contrast = 0f)))
+        artworkTransition = ArtworkTransition.BlurThrough))
 
     private fun cover(white: Boolean, border: Boolean = false, width: Int = 150, height: Int = 300): PlayerVisual {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
@@ -187,12 +187,9 @@ class PlayerBackgroundPolarityTest {
         assertTrue("Control-only backing remains mid-gray, not secretly darkened", sampleBackgroundAtTransport() > .46f)
     }
 
-    @Test fun zeroTrimControlHasIdenticalBackingForBothToneDirections() = compareBacking(0f)
+    @Test fun defaultTrimStillMeasuresTheUngradedBackingWhenInkDiffersFromPalettePolarity() = compareBacking()
 
-    @Test fun nonzeroTrimStillMeasuresTheUngradedBackingWhenInkDiffersFromPalettePolarity() = compareBacking(.5f)
-
-    private fun compareBacking(trim: Float) {
-        settings = settings.copy(glass = settings.glass.copy(contrast = trim))
+    private fun compareBacking() {
         compareWash = true
         val border = cover(white = true, border = true)
         assertTrue("Fixture must have a light middle palette", border.palette.isLight())
@@ -361,8 +358,7 @@ class PlayerBackgroundPolarityTest {
         assertRenderedInk(true); assertTrue(sampleBackgroundAtTransport() < .1f)
     }
 
-    @Test fun maximumTrimDoesNotLockAColdWhiteBackgroundToWhiteInk() {
-        settings = settings.copy(glass = settings.glass.copy(contrast = .5f))
+    @Test fun defaultTrimDoesNotLockAColdWhiteBackgroundToWhiteInk() {
         tall = true
         mount(cover(true))
         compose.waitUntil(10000) { !owner.decision.lightInk && sampleBackgroundAtTransport() > .9f }

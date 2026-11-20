@@ -20,7 +20,6 @@ import io.github.anastaci1a.localica.ui.engine.glassShadows
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.Rule
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 
 /** Offscreen capture at density 1, using the live native backend where available. */
 internal fun shadowCapture(width: Int = 200, height: Int = 140, generation: Long = 1, draw: DrawScope.() -> Unit): PresentedCapture {
@@ -208,16 +207,16 @@ class ShadowFieldOracleSensitivityTest {
 
     @Test fun nativeDestinationCutoutMatchesTheBareControlAtBothFractionalOrigins() = verifyNativeDestinationCutoutReference(compose)
 
-    @Test fun realShadowCallersHaveCompleteNativeFieldsInNormal() = verifyNativeShadowCallers(compose, GlassRendererMode.Normal)
+    @Test fun realShadowCallersHaveCompleteNativeFieldsInNormal() = verifyNativeShadowCallers(compose)
     @Test fun projectedReferenceMatchesActualPressAndReboundInNormal() =
-        verifyNativeShadowCallers(compose, GlassRendererMode.Normal, projectedReference = true)
+        verifyNativeShadowCallers(compose, projectedReference = true)
 
     @Test fun missingPressedShadowIsRejectedByFullPoseOracle() {
         val failure = assertThrows(AssertionError::class.java) {
-            verifyNativeShadowCallers(compose, GlassRendererMode.Normal, suppressPressedShadow = true)
+            verifyNativeShadowCallers(compose, suppressPressedShadow = true)
         }
         assertTrue("Suppression must fail at its selected press frame: ${failure.message}",
-            failure.message.orEmpty().contains("Normal-press-true-4"))
+            failure.message.orEmpty().contains("Default-press-true-4"))
     }
 
 }

@@ -7,7 +7,6 @@ import androidx.compose.runtime.tooling.LocalInspectionTables
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.*
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import org.junit.Assert.*
@@ -73,8 +72,7 @@ class GlassBodyConfigurationTest {
             tables = inspected
             CompositionLocalProvider(LocalInspectionTables provides inspected) {
                 EngineTheme {
-                    CompositionLocalProvider(LocalReducedMotion provides reduced, LocalMotionSpeed provides 1f,
-                        LocalGlassAppearance provides GlassAppearance()) {
+                    CompositionLocalProvider(LocalReducedMotion provides reduced, LocalMotionSpeed provides 1f) {
                         Column {
                             GlassActionButton(true, AppIcon.ActionEdit, "Fresh", Modifier.size(width.dp, 64.dp), onClick = {})
                             GlassActionButton(true, AppIcon.ActionEdit, "Anchored", Modifier.glassAnchor(anchor).size(128.dp, 64.dp), onClick = {})

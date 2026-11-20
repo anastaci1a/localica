@@ -41,13 +41,13 @@ class SettingsSearchEntryAdoptionTest {
         compose.setContent { EngineTheme(reduced = reduced) {
             val device = LocalDensity.current
             val scroll = rememberScrollState()
-            focus = remember(replacement) { SettingsSearchFocus("Glass", scroll) }
+            focus = remember(replacement) { SettingsSearchFocus("Playback and queues", scroll) }
             CompositionLocalProvider(LocalSettingsSearchFocus provides focus, LocalReducedMotion provides reduced, LocalMotionSpeed provides speed,
                 LocalDensity provides Density(device.density, font),
                 LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                 MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color.Magenta)) {
                     Box(Modifier.width(300.dp)) {
-                        if (mounted) SettingsEntry("Glass renderer") {
+                        if (mounted) SettingsEntry("Previous button") {
                             Column(Modifier.fillMaxWidth().background(Color.White).padding(12.dp)) {
                                 Text("Opaque settings row", color = Color.Black)
                                 SettingsEntry("Glass appearance") { Text("Nested content", color = Color.Black) }
@@ -59,7 +59,7 @@ class SettingsSearchEntryAdoptionTest {
         } }
         compose.waitForIdle()
     }
-    private fun row() = compose.onNodeWithTag("setting:Glass renderer", useUnmergedTree = true)
+    private fun row() = compose.onNodeWithTag("setting:Previous button", useUnmergedTree = true)
     private fun alpha() = row().fetchSemanticsNode().config[SettingsHighlightAlpha]
     private fun sample(samples: JSONArray, start: Long) {
         val node = row().fetchSemanticsNode()
@@ -73,9 +73,9 @@ class SettingsSearchEntryAdoptionTest {
         show(reduced, speed, rtl, font)
         assertEquals(0f, alpha(), 0f)
         compose.onNodeWithTag("setting:Glass appearance", useUnmergedTree = true).assertDoesNotExist()
-        assertEquals(setOf("Glass renderer"), focus.anchors.keys.toSet())
+        assertEquals(setOf("Previous button"), focus.anchors.keys.toSet())
         compose.mainClock.autoAdvance = false
-        compose.runOnIdle { focus.highlighted = "Glass renderer" }
+        compose.runOnIdle { focus.highlighted = "Previous button" }
         val start = compose.mainClock.currentTime
         val samples = JSONArray()
         for (target in 16L..1440L step 16) {
@@ -95,7 +95,7 @@ class SettingsSearchEntryAdoptionTest {
         // Cancelling a new pulse must clear it immediately, without retaining the old delay/fade.
         compose.runOnIdle { focus.highlighted = null }
         compose.mainClock.advanceTimeByFrame()
-        compose.runOnIdle { focus.highlighted = "Glass renderer" }
+        compose.runOnIdle { focus.highlighted = "Previous button" }
         compose.mainClock.advanceTimeBy(80)
         assertTrue(alpha() > 0f)
         compose.runOnIdle { focus.highlighted = null }
@@ -107,7 +107,7 @@ class SettingsSearchEntryAdoptionTest {
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
         assertTrue("Replacing the registration retires the old owner", old.anchors.isEmpty())
-        assertTrue("The current callback registers the replacement owner", focus.anchors.containsKey("Glass renderer"))
+        assertTrue("The current callback registers the replacement owner", focus.anchors.containsKey("Previous button"))
         compose.runOnIdle { mounted = false }
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()

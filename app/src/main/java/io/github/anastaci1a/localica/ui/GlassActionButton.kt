@@ -65,7 +65,7 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
     val scope = rememberCoroutineScope()
     val reduced = LocalReducedMotion.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val shadowInset = glassLayoutInset()
+    val shadowInset = io.github.anastaci1a.localica.ui.spec.GlassLayoutInset
     val drawing = rememberActionStripDrawing()
     val trace = LocalGlassContactTrace.current
     val traceName = "action-strip-${System.identityHashCode(scroll)}"
@@ -83,7 +83,7 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
         // drawing outside that clip so shadows and Presence keep their own owners.
         Box(drawing.replay(shadowInset).clipToBounds()) {
         Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner)
-            .shadowViewportOutset(shadowInset, horizontal = true)
+            .stripContentOutset(horizontal = true)
             .then(drawing.record())
             .then(if (trace == null) Modifier else Modifier.onGloballyPositioned { coordinates ->
                 runCatching { trace(traceName, "viewport size=${coordinates.size} bounds=${coordinates.boundsInRoot()}",
@@ -126,9 +126,9 @@ internal fun glassActionNavigationConstraints(constraints: Constraints, stripHei
 /** Inert counterpart of the scrolling strip, including its conditional footer. */
 @Composable
 internal fun GlassActionRowMeasurement(content: @Composable RowScope.() -> Unit) {
-    val inset = glassLayoutInset()
+    val inset = io.github.anastaci1a.localica.ui.spec.GlassLayoutInset
     Layout(content = {
-        Row(Modifier.shadowViewportOutset(inset, horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Row(Modifier.stripContentOutset(horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically, content = content)
         // The live footer uses standard IconButtons: a 40dp container with the
         // same Material minimum-interactive constraint, without input or effects.

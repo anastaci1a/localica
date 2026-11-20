@@ -12,7 +12,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -30,7 +29,7 @@ class DragShadowContinuityTest {
             state = remember { object : KeyedDragState<String, Unit>(grid, scope, { it }) {
                 override fun capturePresentation() = Unit
             }.also { it.items = entries } }
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = 1f, shadowSpread = 1f)) {
+
                 Box(Modifier.size(300.dp, 440.dp).background(Color.White).testTag("drag-shadow-scene")
                     .onSizeChanged { state.viewportWidth = it.width; state.viewportHeight = it.height }) {
                     LazyVerticalGrid(columns = GridCells.Fixed(1), state = grid) {
@@ -41,7 +40,7 @@ class DragShadowContinuityTest {
                         Box(Modifier.fillMaxSize().background(Color.White))
                     }
                 }
-            }
+
         } }
         compose.runOnIdle {
             assertTrue(state.begin("first", entries.toSet(), state.bounds().getValue("first").center))

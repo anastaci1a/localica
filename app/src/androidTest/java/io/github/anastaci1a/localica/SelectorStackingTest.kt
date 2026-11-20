@@ -18,9 +18,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.MainTab
-import io.github.anastaci1a.localica.navigation.TabLensStyle
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -36,6 +34,7 @@ class SelectorStackingTest {
     private var backing: FrostedBackdrop? = null
     private var stage by mutableIntStateOf(0)
     private var showTabs by mutableStateOf(true)
+    private var witnessInTab by mutableStateOf(true)
 
     private fun fixture() {
         compose.setContent { LocalicaTheme {
@@ -46,9 +45,7 @@ class SelectorStackingTest {
             backing = source
             var selected by remember { mutableStateOf(MainTab.Songs) }
             val tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs)
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
-                tabStyle = TabLensStyle.Classic, classicOpacity = 1f,
-                blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(308.dp, 112.dp).testTag("stacking-scene")) {
                         Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source)) { drawRect(Color.Blue) }
@@ -59,6 +56,12 @@ class SelectorStackingTest {
                             .selectorTrackStacking(activity).testTag("stacked-tabs")) {
                             SlidingTabs(tabs, selected, { tabs.indexOf(selected).toFloat() }, source,
                                 activity = activity) { selected = it }
+                            if (witnessInTab) Canvas(Modifier.matchParentSize()) {
+                                drawRect(Color.Black, Offset(208.dp.toPx(), 28.dp.toPx()), androidx.compose.ui.geometry.Size(8.dp.toPx(), 8.dp.toPx()))
+                            }
+                        }
+                        if (!witnessInTab) Canvas(Modifier.matchParentSize()) {
+                            drawRect(Color.Black, Offset(208.dp.toPx(), 52.dp.toPx()), androidx.compose.ui.geometry.Size(8.dp.toPx(), 8.dp.toPx()))
                         }
                         PopupActionPill(rememberGlassAnchor(), source,
                             Modifier.offset(x = 204.dp, y = 24.dp).size(104.dp, 64.dp),
@@ -66,7 +69,7 @@ class SelectorStackingTest {
                         PresentationMarker { stage }
                     }
                 }
-            }
+
         } }
         if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing?.snapshot != null }
         compose.waitForIdle()
@@ -87,12 +90,14 @@ class SelectorStackingTest {
 
     private fun assertTabsAbove() {
         val color = overlapPixel()
-        assertTrue("Opaque Classic selector should cover the utility surface: $color", color.red < .15f && color.blue < .15f)
+        assertTrue("The opaque sibling witness should cover the utility surface: $color", color.red < .15f && color.blue < .15f)
     }
 
     @Test fun contactCancelAndSettlementRaiseTheWholeTabSiblingWithoutMovingItsHost() {
         fixture()
         assertUtilityAbove()
+        compose.runOnIdle { witnessInTab = false }; assertUtilityAbove()
+        compose.runOnIdle { witnessInTab = true }
         val host = compose.onNodeWithTag("tab-track-host")
         val restingHost = host.getUnclippedBoundsInRoot()
         compose.mainClock.autoAdvance = false
@@ -101,6 +106,13 @@ class SelectorStackingTest {
             host.performTouchInput { down(Offset(width * 5f / 6f, centerY)); held = true }
             compose.mainClock.advanceTimeBy(32)
             compose.runOnIdle { assertTrue("Pending contact raises the complete pill", activity.raised) }
+            assertTabsAbove()
+            compose.runOnIdle { witnessInTab = false }
+            compose.mainClock.advanceTimeByFrame()
+            val detached = overlapPixel()
+            assertFalse("An unraised witness must fail the raised-order predicate: $detached", detached.red < .15f && detached.blue < .15f)
+            compose.runOnIdle { witnessInTab = true }
+            compose.mainClock.advanceTimeByFrame()
             assertTabsAbove()
             host.performTouchInput { moveBy(Offset(140f, 0f), 100) }
             compose.mainClock.advanceTimeBy(500)

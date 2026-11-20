@@ -22,8 +22,6 @@ import io.github.anastaci1a.localica.library.LibraryRepository
 import io.github.anastaci1a.localica.library.LibraryStore
 import io.github.anastaci1a.localica.library.ScanResult
 import io.github.anastaci1a.localica.library.Track
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.navigation.InterfacePreferences
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.navigation.MainTab
@@ -221,7 +219,7 @@ class LastFmScrollStressTest {
             runBlocking { app.onlineMetadataConsent.setAllowed(photos) }
             runBlocking { store.replaceRoot(ScanResult(FolderSelection(ROOT, "Stress 779"), tracks, 0)) }
             interfacePreferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, tab),
-                expandOnPlay = false, glass = GlassAppearance(renderer = GlassRendererMode.Normal)))
+                expandOnPlay = false))
             browsePreferences.write(BrowseRoute(tab), BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5), false)
             counters.reset()
             val fixtureStart = GcStats.now()
