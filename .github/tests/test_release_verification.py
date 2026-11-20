@@ -73,6 +73,53 @@ class ReleaseVerificationTest(unittest.TestCase):
         self.assertIn('"localica-$GITHUB_REF_NAME-pre-release.apk.sha256"',text)
         self.assertNotIn('localica-$GITHUB_REF_NAME-debug',text)
 
+    def test_split_provisional_union_requires_every_failed_shard_and_exact_identity(self):
+        import hashlib
+        import io
+        import json
+        from unittest.mock import patch
+        import zipfile
+
+        self.run['conclusion'] = 'failure'
+        jobs = {job['name']: dict(job, id=index+1, started_at='2026-11-19T00:00:00Z',
+                                  completed_at='2026-11-19T00:01:00Z')
+                for index, job in enumerate(self.jobs)}
+        for name in ('device-tests-summary', 'device-tests (36, 0)'):
+            jobs[name]['conclusion'] = 'failure'
+        self.unions['36'].update(passed=8, failure=1)
+        progress = '\n'.join('2026-11-19T00:00:00Z '+line for entry in self.unions.values()
+                             for line in json.dumps(entry, indent=2).splitlines()).encode()
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, 'w') as archive:
+            archive.writestr('app/build/outputs/androidTest-results/TEST-fixture.xml',
+                             '<testsuite><testcase classname="Example" name="case">'
+                             '<failure message="held witness"/></testcase></testsuite>')
+        archive_bytes = payload.getvalue()
+        artifact = dict(name='device-reports-api-36-shard-0', expired=False, id=99,
+                        size_in_bytes=len(archive_bytes), created_at='2026-11-19T00:00:30Z',
+                        digest='sha256:'+hashlib.sha256(archive_bytes).hexdigest(),
+                        workflow_run={'id':42,'head_sha':self.sha})
+        with patch.object(module, 'gh', side_effect=[progress, archive_bytes]):
+            unions, failed = module.provisional_native('anastaci1a/localica', self.run, jobs, [artifact])
+        self.assertEqual(unions, self.unions)
+        self.assertEqual(failed, {('36','Example#case'):hashlib.sha256(b'held witness').hexdigest()})
+        with patch.object(module, 'gh', return_value=progress):
+            with self.assertRaisesRegex(ValueError, 'artifact'):
+                module.provisional_native('anastaci1a/localica', self.run, jobs, [])
+        with patch.object(module, 'gh', return_value=b'no union'):
+            with self.assertRaisesRegex(ValueError, 'complete unions'):
+                module.provisional_native('anastaci1a/localica', self.run, jobs, [artifact])
+
+    def test_split_tag_cannot_be_activated_for_another_ref_or_actor(self):
+        from unittest.mock import patch
+
+        with patch.dict(module.os.environ, {'GITHUB_ACTOR':'other','GITHUB_REF':'refs/tags/v0.34.16'}):
+            with self.assertRaisesRegex(ValueError, 'release maintainer'):
+                module.select_v03416('anastaci1a/localica', self.sha, self.tree)
+        with patch.dict(module.os.environ, {'GITHUB_ACTOR':'anastaci1a','GITHUB_REF':'refs/tags/v0.34.17'}):
+            with self.assertRaisesRegex(ValueError, 'v0.34.16 tag'):
+                module.select_v03416('anastaci1a/localica', self.sha, self.tree)
+
     def test_distribution_smoke_binds_expected_hash_to_the_build_output(self):
         import yaml
         jobs=yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']

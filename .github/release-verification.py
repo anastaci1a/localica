@@ -10,6 +10,8 @@ import re
 import subprocess
 import sys
 import zipfile
+from collections import Counter
+from xml.etree import ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parent/'test-evidence'))
 from full_partition import expected_for
@@ -27,7 +29,12 @@ def require(condition, reason):
 
 
 def gh(path, binary=False):
-    result = subprocess.check_output(['gh', 'api', path])
+    command = ['gh', 'api']
+    if binary and '/actions/jobs/' in path and path.endswith('/logs'):
+        help_text = subprocess.check_output(['gh', 'api', '--help'])
+        if b'--allow-escape-sequences' in help_text:
+            command.append('--allow-escape-sequences')
+    result = subprocess.check_output(command + [path])
     return result if binary else json.loads(result)
 
 
@@ -87,6 +94,169 @@ def artifact(artifacts, name, run, build):
     return item
 
 
+def release_output(run_id, apk_sha, provenance):
+    Path('verified-provenance.json').write_text(json.dumps(provenance, indent=2)+'\n')
+    with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+        output.write(f'run-id={run_id}\napk-sha256={apk_sha}\n')
+
+
+def delta_run(repository, run_id, workflow, sha):
+    require(type(run_id) is int and run_id > 0, 'Invalid split release run ID')
+    run = gh(f'repos/{repository}/actions/runs/{run_id}')
+    require(run['id'] == run_id and run['head_sha'] == sha and run['status'] == 'completed'
+            and run['event'] == 'workflow_dispatch' and run['path'] == '.github/workflows/'+workflow
+            and run['repository']['full_name'] == run['head_repository']['full_name'] == repository,
+            'Untrusted split release run')
+    jobs = pages(f'repos/{repository}/actions/runs/{run_id}/jobs?filter=latest', 'jobs')
+    require(len({job['name'] for job in jobs}) == len(jobs), 'Duplicate split release job')
+    require(all(job['run_id'] == run_id and job['head_sha'] == sha
+                and job['run_attempt'] == run['run_attempt'] for job in jobs), 'Stale split release job')
+    return run, {job['name']: job for job in jobs}
+
+
+def archived_artifact(repository, item):
+    require(item['size_in_bytes'] <= 256*1024*1024, 'Oversized split release archive')
+    data = gh(f'repos/{repository}/actions/artifacts/{item["id"]}/zip', binary=True)
+    require('sha256:'+hashlib.sha256(data).hexdigest() == item['digest'], 'Split archive digest mismatch')
+    return zipfile.ZipFile(io.BytesIO(data))
+
+
+def provisional_native(repository, run, jobs, artifacts):
+    require(run['conclusion'] in ('success', 'failure'), 'Provisional run did not finish device tests')
+    summary = jobs['device-tests-summary']
+    require(summary['conclusion'] == run['conclusion'], 'Provisional summary did not finish cleanly')
+    log = gh(f'repos/{repository}/actions/jobs/{summary["id"]}/logs', binary=True)
+    clean = '\n'.join(line.partition(' ')[2] for line in log.decode().splitlines())
+    entries = re.findall(r'^\{\n\s+"api": "(?:26|36)",\n.*?^\}', clean, re.M | re.S)
+    unions = {entry['api']: entry for entry in map(json.loads, entries)}
+    require(len(entries) == 2 and set(unions) == {'26', '36'}, 'Missing provisional complete unions')
+    failed = {}
+    for api, union in unions.items():
+        require(union['shards'] == DEVICE_SHARDS and union['xml_roots'] >= DEVICE_SHARDS
+                and union['expected'] == union['executed_once'] > 0 and union['error'] == 0
+                and union['passed'] + union['skipped'] + union['failure'] == union['expected'],
+                'Incomplete provisional native union')
+        for shard in range(DEVICE_SHARDS):
+            job = jobs[f'device-tests ({api}, {shard})']
+            require(job['conclusion'] in ('success', 'failure'), 'Provisional native shard did not finish')
+            if job['conclusion'] == 'success':
+                continue
+            name = f'device-reports-api-{api}-shard-{shard}'
+            item = artifact(artifacts, name, run, job)
+            require(job['started_at'] <= item['created_at'] <= job['completed_at'], 'Stale native shard archive')
+            count = 0
+            with archived_artifact(repository, item) as archive:
+                for member in archive.infolist():
+                    if '/androidTest-results/' not in member.filename or not member.filename.endswith('.xml'):
+                        continue
+                    require(member.file_size <= 32*1024*1024, 'Oversized provisional test XML')
+                    raw = archive.read(member)
+                    require(b'<!DOCTYPE' not in raw.upper() and b'<!ENTITY' not in raw.upper(),
+                            'Provisional XML entity declaration')
+                    for case in ET.fromstring(raw).iter('testcase'):
+                        failure = case.find('failure')
+                        if failure is None:
+                            continue
+                        identity = (api, case.attrib['classname']+'#'+case.attrib['name'])
+                        require(identity not in failed and failure.attrib.get('message'), 'Invalid provisional failure')
+                        failed[identity] = hashlib.sha256(failure.attrib['message'].encode()).hexdigest()
+                        count += 1
+            require(count > 0, 'Provisional shard failed outside an assertion')
+    require(Counter(api for api, _ in failed) == Counter({api: union['failure'] for api, union in unions.items()}),
+            'Provisional failures differ from the complete unions')
+    return unions, failed
+
+
+def select_v03416(repository, commit, tree):
+    require(repository == 'anastaci1a/localica' and os.environ.get('GITHUB_ACTOR') == 'anastaci1a',
+            'Only the release maintainer can use the v0.34.16 split gate')
+    ref = 'refs/tags/v0.34.16'
+    require(os.environ.get('GITHUB_REF') == ref, 'Split gate requires the v0.34.16 tag')
+    tag = gh(f'repos/{repository}/git/ref/tags/v0.34.16')['object']
+    require(tag['type'] == 'tag', 'Split gate requires an annotated tag')
+    annotation = gh(f'repos/{repository}/git/tags/{tag["sha"]}')
+    require(annotation['object']['type'] == 'commit' and annotation['object']['sha'] == commit
+            and annotation['tag'] == 'v0.34.16', 'Split annotation does not name the tagged commit')
+    require(len(annotation['message']) <= 128*1024, 'Oversized split annotation')
+    packet = json.loads(annotation['message'])
+    require(packet['version'] == 'v0.34.16' and packet['source_sha'] == commit and packet['tree'] == tree
+            and packet['provisional_run'] == 44665987162 and packet['schema'] == 1
+            and re.fullmatch('[0-9a-f]{64}', packet['apk_sha256'])
+            and re.fullmatch('[0-9a-f]{64}', packet['review_sha256']), 'Invalid reviewed split annotation')
+    provisional, jobs = delta_run(repository, packet['provisional_run'], 'android.yml',
+                                  '830f133db21e0211c1eca2e825b2ca90877e4dc0')
+    non_native = ['build', 'test-apks', 'static-checks', 'compatibility (26)', 'compatibility (36)',
+                  'distribution-smoke (26)', 'distribution-smoke (36)', 'Commit identities and attribution']
+    for name in non_native:
+        require(jobs[name]['conclusion'] == 'success', 'Provisional non-native job failed: '+name)
+    before_artifacts = pages(f'repos/{repository}/actions/runs/{provisional["id"]}/artifacts', 'artifacts')
+    unions, failed = provisional_native(repository, provisional, jobs, before_artifacts)
+    held = {}
+    for item in packet['held_failures']:
+        identity = (item['api'], item['method'])
+        require(identity not in held and re.fullmatch('[0-9a-f]{64}', item['held_signature_sha256']),
+                'Invalid held failure identity')
+        held[identity] = item['held_signature_sha256']
+    require(held == failed, 'A provisional failure differs from the reviewed held disclosure')
+
+    final, final_jobs = delta_run(repository, packet['final_build_run'], 'android.yml', commit)
+    require(final['conclusion'] == 'success' and final['head_branch'].startswith('proof/sol-release-tonight-final-')
+            and all(final_jobs[name]['conclusion'] == 'success' for name in non_native),
+            'Final signed distribution proof is incomplete')
+    final_artifacts = pages(f'repos/{repository}/actions/runs/{final["id"]}/artifacts', 'artifacts')
+    delivery = artifact(final_artifacts, 'localica-debug', final, final_jobs['build'])
+
+    required_classes = set(packet['affected_classes'])
+    require(required_classes and len(required_classes) == len(packet['affected_classes'])
+            and all(re.fullmatch(r'io\.github\.anastaci1a\.localica\.[\w.$]+', c) for c in required_classes),
+            'Invalid reviewed affected-class inventory')
+    covered = {'26': set(), '36': set()}
+    scoped_runs = packet['scoped_runs']
+    require(0 < len(scoped_runs) <= 24 and len(set(scoped_runs)) == len(scoped_runs), 'Invalid final scope run IDs')
+    for run_id in scoped_runs:
+        run, scoped_jobs = delta_run(repository, run_id, 'prototype.yml', commit)
+        decision_job = scoped_jobs['Prototype evidence and delivery decision']
+        require(run['conclusion'] == 'success' and decision_job['conclusion'] == 'success',
+                'Final scope workflow failed')
+        artifacts = pages(f'repos/{repository}/actions/runs/{run_id}/artifacts', 'artifacts')
+        item = artifact(artifacts, 'prototype-delivery-decision', run, decision_job)
+        require(decision_job['started_at'] <= item['created_at'] <= decision_job['completed_at'],
+                'Stale final scope archive')
+        with archived_artifact(repository, item) as archive:
+            require(archive.namelist().count('manifest.json') == 1
+                    and archive.getinfo('manifest.json').file_size <= 8*1024*1024, 'Invalid final scope manifest')
+            manifest = json.loads(archive.read('manifest.json'))
+        require(manifest['sha'] == commit and manifest['run_id'] == str(run_id)
+                and manifest['run_attempt'] == str(run['run_attempt']) and manifest['validation_errors'] == []
+                and not manifest['build_only'] and not manifest['requested_methods'], 'Invalid final whole-class proof')
+        for api, evidence in manifest['focused_evidence'].items():
+            require(manifest['checks']['focused_'+api] == 'passed' and evidence['sha'] == commit
+                    and str(evidence['api']) == api and all(outcome in ('passed', 'skipped')
+                    for outcome in evidence['methods'].values()), 'Final native scope did not pass')
+            covered[api].update(evidence['selectors'])
+    require(all(required_classes <= classes for classes in covered.values()), 'Final hosted affected-class gap')
+    for api in ('26', '36'):
+        local = packet['local'][api]
+        require(local['sha'] == commit and local['exit'] == 0 and re.fullmatch('[0-9a-f]{64}', local['receipt_sha256'])
+                and required_classes <= set(local['classes'])
+                and all(method in local['passed_methods'] for sdk, method in failed if sdk == api),
+                'Final local gate or held-failure verification incomplete')
+    provisional_phone = packet['provisional_a35']
+    require(provisional_phone['sha'] == provisional['head_sha'] and provisional_phone['restore_exit'] == 0
+            and re.fullmatch('[0-9a-f]{64}', provisional_phone['receipt_sha256']), 'Invalid provisional A35 receipt')
+    timed = provisional_phone['exit'] == 0 and provisional_phone['pairs'] == 5
+    stopped = (provisional_phone['exit'] == 1 and 0 <= provisional_phone['pairs'] < 5
+               and provisional_phone['decision'] == 'a35-restart-2226')
+    require(timed or stopped, 'Provisional A35 disposition is missing')
+    phone = packet['a35']
+    require(phone['sha'] == commit and phone['apk_sha256'] == packet['apk_sha256'] and phone['exit'] == 0
+            and phone['smoke_exit'] == 0 and phone['restore_exit'] == 0
+            and re.fullmatch('[0-9a-f]{64}', phone['receipt_sha256']), 'Final A35 proof is incomplete')
+    release_output(final['id'], packet['apk_sha256'], dict(release_commit=commit, release_tree=tree,
+        provisional_run=provisional, provisional_unions=unions, final_run=final, artifact=delivery,
+        reviewed_split_gate=packet))
+
+
 def select():
     repository = os.environ['GITHUB_REPOSITORY']
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
@@ -122,13 +292,14 @@ def select():
             validate(run, jobs, receipt, unions, repository, tree, expected)
             provenance = dict(release_commit=commit, release_tree=tree, producer_run=run,
                               producer_receipt=receipt, unions=unions, artifact=delivery)
-            Path('verified-provenance.json').write_text(json.dumps(provenance, indent=2)+'\n')
-            with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-                output.write(f'run-id={run["id"]}\napk-sha256={receipt["apk_sha256"]}\n')
+            release_output(run['id'], receipt['apk_sha256'], provenance)
             print(f'Verified run {run["id"]}, producer {run["head_sha"]}, exact tree {tree}')
             return
         except (ValueError, KeyError, StopIteration, zipfile.BadZipFile) as error:
             print(f'Rejected run {candidate["id"]}: {error}', file=sys.stderr)
+    if os.environ.get('GITHUB_REF_NAME') == 'v0.34.16':
+        select_v03416(repository, commit, tree)
+        return
     raise ValueError('No retained fully green exact-tree verification. Run the complete Android workflow with compatibility enabled.')
 
 

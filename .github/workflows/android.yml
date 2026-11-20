@@ -38,6 +38,11 @@ on:
         type: boolean
         required: false
         default: false
+      release_v03416_delta:
+        description: Build and verify the v0.34.16 distribution for the reviewed split release gate
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -59,6 +64,17 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+      - name: Limit the split release build to its approved release lane
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_v03416_delta }}
+        env:
+          COMPATIBILITY: ${{ inputs.compatibility }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = anastaci1a/localica
+          test "$GITHUB_ACTOR" = anastaci1a
+          [[ "$GITHUB_REF" == refs/heads/proof/sol-release-tonight-final-* ]]
+          test "$COMPATIBILITY" = true
+          test "$(head -n 1 .github/RELEASE_NOTES.md)" = '<!-- Release: v0.34.16 -->'
       - name: Exercise identity guard policy
         run: node .github/tests/test_commit_identity.mjs
       - name: Verify commit identities and attribution
@@ -262,7 +278,7 @@ jobs:
 
   device-tests:
     needs: [identity, test-apks]
-    if: ${{ needs.identity.result == 'success' && (!startsWith(github.ref, 'refs/tags/')) }}
+    if: ${{ needs.identity.result == 'success' && !startsWith(github.ref, 'refs/tags/') && !(github.event_name == 'workflow_dispatch' && inputs.release_v03416_delta) }}
     runs-on: ubuntu-24.04
     # Normal shards take 13–19 minutes, but the rc3 run (42958371856) needed 22–30 minutes on
     # completing shards and 8 of 16 hit 35 with no JUnit XML (AGP writes it only at task end).
@@ -411,7 +427,7 @@ jobs:
   device-tests-summary:
     # Proves the shards ran every inventory test exactly once. The tag release job checks this job
     # by name instead of the individual shard jobs.
-    if: ${{ needs.identity.result == 'success' && (always() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true') }}
+    if: ${{ always() && needs.identity.result == 'success' && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.release_v03416_delta) }}
     needs: [identity, device-tests, test-apks, build, static-checks, verification-reuse]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
