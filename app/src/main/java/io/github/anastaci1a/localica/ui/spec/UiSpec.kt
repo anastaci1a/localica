@@ -282,6 +282,56 @@ internal object FluidSharedBlurSpec {
     }
 }
 
+/** Decomposed rotation, scale, translation, shear and perspective, in that order. */
+internal class FluidZoomTransform(private val components: DoubleArray, val rotationDirection: Int) {
+    init {
+        require(components.size == 16)
+    }
+
+    operator fun get(index: Int) = components[index]
+}
+
+internal class FluidZoomValues(
+    private val sameValue: (FluidZoomTransform, FluidZoomTransform) -> Boolean,
+    private val displacementMode: Int = 0,
+) : SpringTransformValues<FluidZoomTransform> {
+    override val zeroVelocity = FluidZoomTransform(DoubleArray(16), 0)
+    override fun equal(left: FluidZoomTransform, right: FluidZoomTransform) = sameValue(left, right)
+
+    override fun displacement(from: FluidZoomTransform, to: FluidZoomTransform): FluidZoomTransform {
+        val direction = to.rotationDirection
+        val components = DoubleArray(16) { index ->
+            val difference = from[index] - to[index]
+            if (index < 3) {
+                wrappedAngle(difference, (direction and 1) != 0, ((4 ushr (direction and 7)) and 1) != 0)
+            } else if (displacementMode in 1..3) {
+                wrappedAngle(difference, displacementMode == 2, displacementMode == 3)
+            } else difference
+        }
+        return FluidZoomTransform(components, direction)
+    }
+
+    private fun wrappedAngle(difference: Double, negative: Boolean, positive: Boolean): Double {
+        val period = Double.fromBits(0x401921fb54442d18L)
+        val wrapped = atan2(sin(difference), cos(difference))
+        val directed = if (negative && wrapped > 0.0) wrapped + -period else wrapped
+        return if (positive && directed < 0.0) directed + period else directed
+    }
+
+    override fun scaledCopy(value: FluidZoomTransform, factor: Double) =
+        FluidZoomTransform(DoubleArray(16) { value[it] * factor }, value.rotationDirection)
+
+    override fun add(left: FluidZoomTransform, right: FluidZoomTransform): FluidZoomTransform {
+        val direction = when {
+            left.rotationDirection == 2 || right.rotationDirection == 2 -> 2
+            left.rotationDirection == 1 || right.rotationDirection == 1 -> 1
+            left.rotationDirection == 0 -> 0
+            else -> error("Invalid left rotation direction")
+        }
+        return FluidZoomTransform(DoubleArray(16) { left[it] + right[it] }, direction)
+    }
+}
+
 internal enum class FluidPopupChannel(val key: String, val value: Value) {
     DestinationOpacity("opacity", Value.PresentationScalar), ContentZoom("sublayerTransform", Value.Transform),
     GaussianRadius("filters.gaussianBlur.inputRadius", Value.ScaledScalar), LensHeight("effect.height", Value.CoarseScalar),
