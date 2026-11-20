@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -65,8 +64,7 @@ class GlassMenuViewportTouchTest {
         try {
             contentStarted = true
             compose.setContent { if (mounted) EngineTheme(reduced = true) {
-                CompositionLocalProvider(LocalReducedMotion provides true,
-                    LocalGlassAppearance provides GlassAppearance()) {
+                CompositionLocalProvider(LocalReducedMotion provides true) {
                     anchor = rememberGlassAnchor()
                     val source = rememberFrostedBackdrop(Unit, dark = false)
                     Box(Modifier.fillMaxSize()) {

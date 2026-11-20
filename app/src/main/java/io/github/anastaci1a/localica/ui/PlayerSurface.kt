@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 
 import androidx.compose.animation.core.tween
@@ -137,7 +138,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     SideEffect { inkTransition.present(inkStep.copy(value = lightMix)); polarity.presentLightMix(lightMix) }
     // Header controls already sample this scene before lyrics open. Older
     // adapters need its prepared pixels whenever that header is visible too.
-    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix)
+    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout), p > .7f, dark = lightInk, lightMix = lightMix)
     // Only the complete scene needs prepared pixels. The wash is a GPU backing
     // for the cover's sampling source, not a second full-window CPU snapshot.
     val artworkWash = rememberFrostedBackdrop(Unit, enabled = false, dark = lightInk, lightMix = lightMix, retainRaster = false)
@@ -378,7 +379,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             artworkBand, miniArtY, ordinarySeekY, normalTransport, contentInset, transportWidth, actionRows,
             fullTitleHeight, lineHeights[0], lineHeights[1], density, retainedEndpoint)
     }
-    PrewarmPlayerBackdrop(polarity, artwork, prewarmGeometry, settings.glass.contrast > 0f)
+    PrewarmPlayerBackdrop(polarity, artwork, prewarmGeometry)
     val baseColors = MaterialTheme.colorScheme
 
     GlassPopupHome(popupHome, container = { popupContent ->
@@ -459,12 +460,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough,
                 onBackgroundFrame = polarity::frame) { frame ->
                 val backgroundRole = LocalArtworkBackgroundRole.current
-                // Each role carries its own grade (#576): the crossfade blends two correctly graded backdrops. Brightness trim
-                // Off disables grading.
+                // Each role carries its own grade (#576): the crossfade blends two correctly graded backdrops.
                 val grade = polarity.grade(backgroundRole, frame)
-                val gradeReady = settings.glass.contrast <= 0f || grade != null
+                val gradeReady = grade != null
                 val lyricsShift = lyricsInk?.shifts?.get(backgroundRole)
-                val roleTone = GlassTone(shift = if (settings.glass.contrast <= 0f) 0f else if (lyricsShift != null)
+                val roleTone = GlassTone(shift = if (lyricsShift != null)
                     lyricsShift.first + (lyricsShift.second - lyricsShift.first) * lyricVisibility else grade?.shift ?: 0f)
                 val destination = artSwipe.destination
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
@@ -624,7 +624,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
 @Composable
 private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: FrostedBackdrop,
     enabled: Boolean): Modifier {
-    if (flatGlass()) return this
+
     val cover = rememberGlassLayer()
     val cutout = remember { Path() }
     return drawWithContent {

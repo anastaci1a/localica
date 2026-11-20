@@ -375,16 +375,6 @@
             column="33"/>
     </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                    settling = scope.launch { if (reduced) travel.snapTo(0f) else travel.animateTo(0f, glassMorphSpring(1f)); raw = 0f }"
-        errorLine2="                                     ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="191"
-            column="38"/>
-    </issue>
 
     <issue
         id="IndependentUiClock"
@@ -1093,12 +1083,12 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="    val shadowInset = glassLayoutInset().coerceAtLeast(12.dp)"
-        errorLine2="                                                       ~~~~~">
+        errorLine1="    val shadowInset = io.github.anastaci1a.localica.ui.spec.GlassLayoutInset.coerceAtLeast(12.dp)"
+        errorLine2="                                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowseSortDialog.kt"
             line="38"
-            column="56"/>
+            column="92"/>
     </issue>
 
     <issue
@@ -1937,38 +1927,8 @@
             column="91"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="    SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { 28.dp.toPx() } }"
-        errorLine2="                                                                                                                   ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="419"
-            column="116"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="        .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = .8f + (.38f - .8f) * lightMix),"
-        errorLine2="                ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="422"
-            column="17"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="            val blur = with(LocalDensity.current) { 22.dp.toPx() }"
-        errorLine2="                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="426"
-            column="53"/>
-    </issue>
 
     <issue
         id="LiteralUiSpacing"
@@ -1984,12 +1944,12 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="        Row(Modifier.shadowViewportOutset(inset, horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),"
-        errorLine2="                                                                                                                                 ~~~~">
+        errorLine1="        Row(Modifier.stripContentOutset(horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),"
+        errorLine2="                                                                                                                        ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassActionButton.kt"
-            line="130"
-            column="130"/>
+            line="131"
+            column="121"/>
     </issue>
 
     <issue
@@ -2043,7 +2003,7 @@
         errorLine2="                                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="144"
+            line="141"
             column="92"/>
     </issue>
 
@@ -2054,7 +2014,7 @@
         errorLine2="                                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="149"
+            line="146"
             column="92"/>
     </issue>
 
@@ -2147,82 +2107,12 @@
             column="78"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="        Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {"
-        errorLine2="                                           ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="84"
-            column="44"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="                val cell = 24.dp.toPx()"
-        errorLine2="                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="89"
-            column="28"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="        val limit = with(density) { ((maxWidth - 180.dp) / 2).toPx().coerceAtLeast(1f) }"
-        errorLine2="                                                 ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="180"
-            column="50"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="            .size(180.dp, 56.dp).glassAnchor(anchor, source, face = { Text(&quot;Drag preview&quot;) }).observeGlassContact { pressed = it }"
-        errorLine2="                  ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="185"
-            column="19"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="            .size(180.dp, 56.dp).glassAnchor(anchor, source, face = { Text(&quot;Drag preview&quot;) }).observeGlassContact { pressed = it }"
-        errorLine2="                          ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="185"
-            column="27"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {"
-        errorLine2="                                                   ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="201"
-            column="52"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {"
-        errorLine2="                                                                                                      ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="201"
-            column="103"/>
-    </issue>
 
 
     <issue
@@ -2280,16 +2170,6 @@
             column="21"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="    val Blur = 6.dp"
-        errorLine2="               ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/HoverLift.kt"
-            line="31"
-            column="16"/>
-    </issue>
 
     <issue
         id="LiteralUiSpacing"
@@ -2397,7 +2277,7 @@
         errorLine2="                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="68"
+            line="65"
             column="54"/>
     </issue>
 
@@ -2408,7 +2288,7 @@
         errorLine2="                                                                       ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="68"
+            line="65"
             column="72"/>
     </issue>
 
@@ -2419,7 +2299,7 @@
         errorLine2="                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="83"
+            line="80"
             column="25"/>
     </issue>
 
@@ -2430,7 +2310,7 @@
         errorLine2="                                     ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="83"
+            line="80"
             column="38"/>
     </issue>
 
@@ -3146,7 +3026,7 @@
         errorLine2="                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="48"
+            line="47"
             column="53"/>
     </issue>
 
@@ -3157,7 +3037,7 @@
         errorLine2="                                                                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="49"
+            line="48"
             column="72"/>
     </issue>
 
@@ -3168,7 +3048,7 @@
         errorLine2="                              ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="50"
+            line="49"
             column="31"/>
     </issue>
 
@@ -3179,7 +3059,7 @@
         errorLine2="                                                ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="62"
+            line="61"
             column="49"/>
     </issue>
 
@@ -3190,7 +3070,7 @@
         errorLine2="                                                                                 ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="66"
+            line="65"
             column="82"/>
     </issue>
 
@@ -3201,7 +3081,7 @@
         errorLine2="                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="86"
+            line="85"
             column="20"/>
     </issue>
 
@@ -3212,7 +3092,7 @@
         errorLine2="                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="97"
+            line="96"
             column="20"/>
     </issue>
 
@@ -4862,7 +4742,7 @@
         errorLine2="                                                                                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="73"
+            line="72"
             column="88"/>
     </issue>
 
@@ -4873,7 +4753,7 @@
         errorLine2="                                                                                                                 ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="118"
+            line="117"
             column="114"/>
     </issue>
 
@@ -4884,7 +4764,7 @@
         errorLine2="                                                              ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="124"
+            line="123"
             column="63"/>
     </issue>
 
@@ -4895,31 +4775,11 @@
         errorLine2="                                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="125"
+            line="124"
             column="60"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="        val shine = Stroke(2.6.dp.toPx())"
-        errorLine2="                           ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PopupGlassRim.kt"
-            line="61"
-            column="28"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="        val shade = Stroke(1.4.dp.toPx())"
-        errorLine2="                           ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PopupGlassRim.kt"
-            line="62"
-            column="28"/>
-    </issue>
 
     <issue
         id="LiteralUiSpacing"
@@ -5676,7 +5536,7 @@
         errorLine2="                                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SelectionLens.kt"
-            line="42"
+            line="38"
             column="60"/>
     </issue>
 
@@ -5687,7 +5547,7 @@
         errorLine2="                                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SelectionLens.kt"
-            line="48"
+            line="44"
             column="60"/>
     </issue>
 
@@ -5731,7 +5591,7 @@
         errorLine2="                                                                      ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SettingsComponents.kt"
-            line="77"
+            line="76"
             column="71"/>
     </issue>
 
@@ -5742,7 +5602,7 @@
         errorLine2="                                                                                                  ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SettingsComponents.kt"
-            line="95"
+            line="94"
             column="99"/>
     </issue>
 
@@ -5753,7 +5613,7 @@
         errorLine2="                                                                                                                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SettingsComponents.kt"
-            line="95"
+            line="94"
             column="116"/>
     </issue>
 
@@ -7022,16 +6882,6 @@
             column="9"/>
     </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="        Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {"
-        errorLine2="        ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="424"
-            column="9"/>
-    </issue>
 
     <issue
         id="NonPresetScreenLayout"
@@ -7069,11 +6919,11 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="        Row(Modifier.shadowViewportOutset(inset, horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),"
+        errorLine1="        Row(Modifier.stripContentOutset(horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),"
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassActionButton.kt"
-            line="130"
+            line="131"
             column="9"/>
     </issue>
 
@@ -7161,7 +7011,7 @@
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="144"
+            line="141"
             column="17"/>
     </issue>
 
@@ -7172,7 +7022,7 @@
         errorLine2="                                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="145"
+            line="142"
             column="33"/>
     </issue>
 
@@ -7183,7 +7033,7 @@
         errorLine2="                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassDialogs.kt"
-            line="149"
+            line="146"
             column="17"/>
     </issue>
 
@@ -7253,38 +7103,8 @@
             column="33"/>
     </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="        Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {"
-        errorLine2="        ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="84"
-            column="9"/>
-    </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="179"
-            column="5"/>
-    </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {"
-        errorLine2="            ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="201"
-            column="13"/>
-    </issue>
 
     <issue
         id="NonPresetScreenLayout"
@@ -7381,7 +7201,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="41"
+            line="40"
             column="9"/>
     </issue>
 
@@ -7392,7 +7212,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="68"
+            line="65"
             column="5"/>
     </issue>
 
@@ -7403,7 +7223,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="83"
+            line="80"
             column="5"/>
     </issue>
 
@@ -7568,7 +7388,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="48"
+            line="47"
             column="5"/>
     </issue>
 
@@ -7579,7 +7399,7 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="138"
+            line="137"
             column="9"/>
     </issue>
 
@@ -7590,7 +7410,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="139"
+            line="138"
             column="13"/>
     </issue>
 
@@ -8327,7 +8147,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="72"
+            line="71"
             column="13"/>
     </issue>
 
@@ -8338,7 +8158,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="99"
+            line="98"
             column="9"/>
     </issue>
 
@@ -8349,7 +8169,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="118"
+            line="117"
             column="9"/>
     </issue>
 
@@ -8360,7 +8180,7 @@
         errorLine2="                    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlaylistImportUi.kt"
-            line="127"
+            line="126"
             column="21"/>
     </issue>
 
@@ -8818,12 +8638,12 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="            inkOverride = if (preserveAppearance) androidx.compose.ui.graphics.Color.Black else null) { Box(Modifier.matchParentSize().testTag(&quot;elastic-lens-face&quot;)) }"
-        errorLine2="                                                                                                        ~~~">
+        errorLine1="            body = { body.value }, depthScale = depthScale, silhouette = silhouette) { Box(Modifier.matchParentSize().testTag(&quot;elastic-lens-face&quot;)) }"
+        errorLine2="                                                                                       ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SelectionLens.kt"
-            line="35"
-            column="105"/>
+            line="32"
+            column="88"/>
     </issue>
 
     <issue
@@ -8866,7 +8686,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SettingsComponents.kt"
-            line="95"
+            line="94"
             column="9"/>
     </issue>
 
@@ -8895,11 +8715,11 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="        Box(Modifier.selectorTrackPlacement(recording).recordFrostedBackdrop(composite), contentAlignment = AbsoluteAlignment.TopLeft) {"
+        errorLine1="        Box(Modifier.selectorTrackPlacement(recording), contentAlignment = AbsoluteAlignment.TopLeft) {"
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SlidingTabs.kt"
-            line="183"
+            line="178"
             column="9"/>
     </issue>
 
@@ -8958,16 +8778,6 @@
             column="29"/>
     </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="                    Box(Modifier.selectorTrackPlacement(selectorFrame.bounds).then(modifier).background(Color.Black.copy(alpha = appearance.classicOpacity),"
-        errorLine2="                    ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SlidingTabs.kt"
-            line="289"
-            column="21"/>
-    </issue>
 
     <issue
         id="NonPresetScreenLayout"
@@ -8980,38 +8790,8 @@
             column="13"/>
     </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="                Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundRecording)"
-        errorLine2="                ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SlidingTabs.kt"
-            line="309"
-            column="17"/>
-    </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="                    Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundContent)"
-        errorLine2="                    ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SlidingTabs.kt"
-            line="314"
-            column="21"/>
-    </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="                    Box(Modifier.fillMaxSize().graphicsLayer { alpha = average.value }) {"
-        errorLine2="                    ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SlidingTabs.kt"
-            line="324"
-            column="21"/>
-    </issue>
 
     <issue
         id="NonPresetScreenLayout"
@@ -9357,12 +9137,12 @@
     <issue
         id="RawMotionMap"
         message="Use Curve maps and owner-only mutation"
-        errorLine1="    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix)"
-        errorLine2="                                                                                                         ~~~~~~~">
+        errorLine1="    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout), p > .7f, dark = lightInk, lightMix = lightMix)"
+        errorLine2="                                                                                         ~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="140"
-            column="106"/>
+            line="141"
+            column="90"/>
     </issue>
 
     <issue
@@ -10355,49 +10135,9 @@
             column="40"/>
     </issue>
 
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="                }).graphicsLayer {"
-        errorLine2="                   ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="192"
-            column="20"/>
-    </issue>
 
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="                    scaleX = body.value.scaleX(); scaleY = body.value.scaleY()"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="193"
-            column="21"/>
-    </issue>
 
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="                    scaleX = body.value.scaleX(); scaleY = body.value.scaleY()"
-        errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="193"
-            column="51"/>
-    </issue>
 
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="                    translationX = (1f - scaleX) * size.width / 2f * (travel.value / limit).coerceIn(-1f, 1f)"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="194"
-            column="21"/>
-    </issue>
 
     <issue
         id="RawPresentationTransform"
@@ -10472,7 +10212,7 @@
         errorLine2="                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/InterfaceComponents.kt"
-            line="41"
+            line="40"
             column="22"/>
     </issue>
 
@@ -11213,27 +10953,7 @@
             column="80"/>
     </issue>
 
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="                    Box(Modifier.fillMaxSize().graphicsLayer { alpha = average.value }) {"
-        errorLine2="                                               ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SlidingTabs.kt"
-            line="324"
-            column="48"/>
-    </issue>
 
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="                    Box(Modifier.fillMaxSize().graphicsLayer { alpha = average.value }) {"
-        errorLine2="                                                               ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SlidingTabs.kt"
-            line="324"
-            column="64"/>
-    </issue>
 
     <issue
         id="RawShadowOrZOrder"
@@ -11257,27 +10977,7 @@
             column="16"/>
     </issue>
 
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
-        errorLine1="        if (blending) drawContext.canvas.saveLayer(path.getBounds(), Paint())"
-        errorLine2="                                         ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="288"
-            column="42"/>
-    </issue>
 
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
-        errorLine1="            drawContext.canvas.saveLayer(path.getBounds(), Paint().apply { alpha = progress * (1f - averageProgress) })"
-        errorLine2="                               ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="304"
-            column="32"/>
-    </issue>
 
     <issue
         id="RawShadowOrZOrder"
@@ -13028,16 +12728,6 @@
             column="82"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.spring&lt;Float>(1f, 90f * speed * speed, visibilityThreshold = .0001f)"
-        errorLine2="                                                                              ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassElastic.kt"
-            line="19"
-            column="79"/>
-    </issue>
 
     <issue
         id="RawUiMotion"
@@ -13160,115 +12850,15 @@
             column="79"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="internal fun glassAverageProgress(): State&lt;Float> = androidx.compose.animation.core.animateFloatAsState("
-        errorLine2="                                                                                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassRendererRuntime.kt"
-            line="42"
-            column="85"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    androidx.compose.animation.core.spring(1f, 450f), label = &quot;Glass render mode&quot;)"
-        errorLine2="                                    ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassRendererRuntime.kt"
-            line="44"
-            column="37"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val travel = remember { androidx.compose.animation.core.Animatable(0f) }"
-        errorLine2="                                                            ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="176"
-            column="61"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        val body = rememberGlassBody({ travel.value / limit },"
-        errorLine2="                                              ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="181"
-            column="47"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        LiquidGlassSurface(Modifier.offset { androidx.compose.ui.unit.IntOffset(travel.value.toInt(), 0) }"
-        errorLine2="                                                                                       ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="184"
-            column="88"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                onStart = { settling?.cancel(); raw = travel.value }, onDelta = { delta ->"
-        errorLine2="                                                             ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="187"
-            column="62"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    scope.launch { travel.snapTo(raw.coerceIn(-limit, limit)) }"
-        errorLine2="                                          ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="189"
-            column="43"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    settling = scope.launch { if (reduced) travel.snapTo(0f) else travel.animateTo(0f, glassMorphSpring(1f)); raw = 0f }"
-        errorLine2="                                                                  ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="191"
-            column="67"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    settling = scope.launch { if (reduced) travel.snapTo(0f) else travel.animateTo(0f, glassMorphSpring(1f)); raw = 0f }"
-        errorLine2="                                                                                         ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="191"
-            column="90"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    translationX = (1f - scaleX) * size.width / 2f * (travel.value / limit).coerceIn(-1f, 1f)"
-        errorLine2="                                                                             ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassSettings.kt"
-            line="194"
-            column="78"/>
-    </issue>
 
     <issue
         id="RawUiMotion"
@@ -15312,24 +14902,14 @@
     <issue
         id="ReplacePersistentShape"
         message="Retarget a stable PersistentShape"
-        errorLine1="    val silhouette = path ?: cache?.roundedPath(bounds, radius) ?: Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(radius))) }"
-        errorLine2="                                                                   ~~~~">
+        errorLine1="    val silhouette = path ?: Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(radius))) }"
+        errorLine2="                             ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="430"
-            column="68"/>
+            line="433"
+            column="30"/>
     </issue>
 
-    <issue
-        id="ReplacePersistentShape"
-        message="Retarget a stable PersistentShape"
-        errorLine1="            val arc = Path().apply {"
-        errorLine2="                      ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PopupGlassRim.kt"
-            line="39"
-            column="23"/>
-    </issue>
 
     <issue
         id="ReplacePersistentShape"
@@ -15342,16 +14922,6 @@
             column="36"/>
     </issue>
 
-    <issue
-        id="ReplacePersistentShape"
-        message="Retarget a stable PersistentShape"
-        errorLine1="                        androidx.compose.foundation.shape.GenericShape { size, _ -> addRoundRect(selectorContour.outlineAt(size)) }))"
-        errorLine2="                                                          ~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SlidingTabs.kt"
-            line="290"
-            column="59"/>
-    </issue>
 
     <issue
         id="UiLayerDependency"
@@ -15422,12 +14992,12 @@
     <issue
         id="UnownedSurfaceLifetime"
         message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="            translate(-pad, -pad) { drawLayer(layer) }"
-        errorLine2="                                    ~~~~~~~~~">
+        errorLine1="            translate(-extent - if (horizontal) pad else 0f, -extent - pad) { drawLayer(layer) }"
+        errorLine2="                                                                              ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ActionStripDrawing.kt"
-            line="33"
-            column="37"/>
+            line="39"
+            column="79"/>
     </issue>
 
     <issue
@@ -15620,46 +15190,16 @@
     <issue
         id="UnownedSurfaceLifetime"
         message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress * (1f - averageProgress) }) }"
+        errorLine1="                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress }) }"
         errorLine2="                                                 ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="298"
+            line="290"
             column="50"/>
     </issue>
 
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="            magnified { drawLayer(source.layer) }"
-        errorLine2="                        ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="305"
-            column="25"/>
-    </issue>
 
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                    translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }"
-        errorLine2="                                                                   ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="315"
-            column="68"/>
-    </issue>
 
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                scale(crop.width / 8f, crop.height / 8f, Offset.Zero) { drawLayer(output) }"
-        errorLine2="                                                                        ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="320"
-            column="73"/>
-    </issue>
 
     <issue
         id="UnownedSurfaceLifetime"
@@ -15712,7 +15252,7 @@
         errorLine2="                                                                          ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="130"
+            line="129"
             column="75"/>
     </issue>
 
@@ -15723,7 +15263,7 @@
         errorLine2="                                                                                              ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FilteredBackdrop.kt"
-            line="130"
+            line="129"
             column="95"/>
     </issue>
 
@@ -15910,7 +15450,7 @@
         errorLine2="            ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ListSearch.kt"
-            line="113"
+            line="112"
             column="13"/>
     </issue>
 

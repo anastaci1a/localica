@@ -49,7 +49,7 @@ internal fun SettingsSearchResults(query: String, values: Map<String, String>,
     val results by rememberAsyncValue(query, retainPrevious = true) { query to search(query) }
     if (results?.first == query && results?.second?.isEmpty() == true) {
         Text("No settings match \"$query\"")
-        Text("Try a different word, like blur, queue or tabs", style = MaterialTheme.typography.bodyMedium)
+        Text("Try a different word, like motion, queue or tabs", style = MaterialTheme.typography.bodyMedium)
     }
     results?.second.orEmpty().forEach { result ->
         SettingsLink(result.title, SettingsCatalog.breadcrumb(result.page) + (values[result.setting?.id]?.let { " · $it" } ?: "") +

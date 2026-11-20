@@ -1,6 +1,8 @@
 # Glass
 
-Glass uses two renderers: Normal (lens) or None (flat fills). Proposed: every glass element has a presence, from 0 to 1, and a shape. Glass appears by raising presence and disappears by lowering it, never by fading. Press also drives a shared touch glow; squish and morph change shape. Each renderer shows what it can.
+Glass uses one default material, with a lens on supported versions and an average-colour fallback on older versions.
+
+Proposed: every glass element has a presence, from 0 to 1, and a shape. Glass appears by raising presence and disappears by lowering it, never by fading. Press also drives a shared touch glow; squish and morph change shape. The shared material selects the platform capability directly.
 
 - Presence scales every material property. Shape is geometry: size, position, morph, squish and thickness.
 - Constant volume (Proposed): thickness is derived as resting volume divided by footprint area.
@@ -8,24 +10,20 @@ Glass uses two renderers: Normal (lens) or None (flat fills). Proposed: every gl
 - The lens needs Android 13 or newer. Older versions draw the average colour.
 - Status: renderers, fallbacks and touch light (#642/#1002) are Implemented. Touch-light spatial optics remain provisional; presence, constant volume and lensing in (#928) are Proposed.
 
-A third renderer, Single-Tone Blur, existed up to v0.34.2 as a testing mode. Its removal (#919) is Released in v0.34.3, and stored choices migrate to Normal. This page does not describe it.
-
-
 ## Renderers
 
 | Renderer | Material |
 | --- | --- |
 | Normal, Android 13+ | Padded AGSL refraction, illuminated rim and tone mapping over recorded scenes. |
 | Normal, older Android | Coverage-weighted scene average with tint/contrast and the same outline; no refraction or blur. |
-| None | Opaque white/dark-grey fills without glass recording, sampling, atlas or readback. |
 
-Shapes, shadows, input and motion are shared. Frosted panels use downsampled scattering on Android 12+; refracting glass requires Android 13+. Foregrounds and clear glass stay full-resolution.
+Shapes, shadows, input and motion are shared. Panels use downsampled scattering on Android 13+ and the average-colour fallback on older versions. Foregrounds stay sharp; clear glass stays full-resolution.
 
 ## Presence and shape
 
 ![Glass presence against shape: presence scales material strength, shape changes geometry](../assets/diagrams/glass-presence-shape.svg)
 
-The diagram separates material strength (presence, 0–1) from geometry (shape). Proposed in #928: appearance changes presence; presses, squish and morph change shape. Lens strength uses presence and thickness; None uses fill opacity. At zero presence all renderers match their background. Fallbacks ignore thickness.
+The diagram separates material strength (presence, 0–1) from geometry (shape). Proposed in #928: appearance changes presence; presses, squish and morph change shape. Lens strength uses presence and thickness. At zero presence the material matches its background. Fallbacks ignore thickness.
 
 Implemented appearance instead uses scale/opacity at full optical strength. It does not yet ramp lens inputs.
 
@@ -43,7 +41,7 @@ Spreading thins the material. Morphing changes resting volume between shapes; it
 
 ## The lens model
 
-One outline serves clipping, refraction, illumination and shadow. Foreground polarity is explicit, requiring no ink readback. Resting depth defaults to 1.35; menu controls/mini-player use 1.3×, tab shelf 0.72×. Trigger depth carries into its popup. Optics remain frozen outside milestone M6; exact changes require pixel equality.
+One outline serves clipping, refraction, illumination and shadow. Foreground polarity is explicit, requiring no ink readback. Resting depth is 1.35; menu controls/mini-player use 1.3×, tab shelf 0.72×. Trigger depth carries into its popup. Optics remain frozen outside milestone M6; exact changes require pixel equality.
 
 ## What glass samples
 
@@ -57,11 +55,11 @@ Progressive halving produces shared 32×32 thumbnails. The coverage-weighted reg
 
 ## Sliders and switches
 
-Resting white thumbs hold no lease. Normal contact captures only the procedural neighbourhood and refracts inside the shared geometry. None keeps geometry/motion with opaque fills. Explicitly eligible panel-contained controls use an 8×8 local GPU average on Android 13+.
+Resting white thumbs hold no lease. Normal contact captures only the procedural neighbourhood and refracts inside the shared geometry. Explicitly eligible panel-contained controls use an 8×8 local GPU average on Android 13+.
 
 ## Backings and selectors
 
-Backings stay viewport-bounded; released/unrecorded layers cannot read back. Queue frost is independent of floating glass. Navbar selectors sample bar material; optional overlays include labels/icons without double drawing. Graphics remain independent of storage/playback.
+Backings stay viewport-bounded; released/unrecorded layers cannot read back. Queue panels and navbar selectors share the default material while retaining their scene sources and foreground layout. Labels/icons draw once above it. Graphics remain independent of storage/playback.
 
 ## Tests
 

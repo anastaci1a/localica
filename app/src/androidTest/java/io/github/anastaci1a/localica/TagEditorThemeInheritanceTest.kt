@@ -47,7 +47,7 @@ class TagEditorThemeInheritanceTest {
         albumArtist = "Presentation album artist", album = "Presentation album", fileName = "presentation.mp3", relativePath = "presentation.mp3")
     private val row = SongRow(track.id, track)
     private val item = BrowserItem(MediaRef(MediaKind.Song, track.id), track.title, track.artist, listOf(row), row)
-    private data class Declaration(val ink: Color, val colors: ColorScheme, val appearance: GlassAppearance)
+    private data class Declaration(val ink: Color, val colors: ColorScheme)
     private var declarations = emptyList<Declaration>()
 
     @Before fun idleController() {
@@ -60,9 +60,6 @@ class TagEditorThemeInheritanceTest {
     @After fun closeFixture() {
         compose.runOnIdle { if (!controller.state.value.busy) { controller.close(); controller.hideJobs() } }
     }
-
-    private fun appearance(lightInk: Boolean) = GlassAppearance(contrast = if (lightInk) 0f else .43f,
-        contrastWeight = 1.4f, whiteTint = .03f, blur = .1f)
 
     @Composable private fun Scene(lightInk: Boolean, content: @Composable () -> Unit) {
         val source = rememberFrostedBackdrop(lightInk, dark = lightInk)
@@ -80,7 +77,7 @@ class TagEditorThemeInheritanceTest {
         val snapshots = mutableListOf<Declaration>()
         checkNotNull(LocalGlassDialogs.current).entries.filter { it.mounted }.forEach { entry ->
             CompositionLocalProvider(entry.locals) {
-                snapshots += Declaration(LocalContentColor.current, MaterialTheme.colorScheme.copy(), LocalGlassAppearance.current)
+                snapshots += Declaration(LocalContentColor.current, MaterialTheme.colorScheme.copy())
             }
         }
         SideEffect { declarations = snapshots }
@@ -94,7 +91,7 @@ class TagEditorThemeInheritanceTest {
         return color
     }
 
-    private fun assertPopup(title: String, lightInk: Boolean, expectedAppearance: GlassAppearance = appearance(lightInk)) {
+    private fun assertPopup(title: String, lightInk: Boolean) {
         val node = compose.onNodeWithText(title).assertIsDisplayed()
         assertEquals("Actual popup title keeps launch ink", lightInk, textColor(node, title).luminance() > .5f)
         compose.runOnIdle {
@@ -102,7 +99,6 @@ class TagEditorThemeInheritanceTest {
             assertEquals(lightInk, current.ink.luminance() > .5f)
             assertEquals(lightInk, current.colors.onSurface.luminance() > .5f)
             assertEquals(lightInk, current.colors.onSurfaceVariant.luminance() > .5f)
-            assertEquals("Explicit appearance, including contrast off, survives the host boundary", expectedAppearance, current.appearance)
         }
     }
 
@@ -141,11 +137,11 @@ class TagEditorThemeInheritanceTest {
             TagEditorHost(controller) {
                 val callback = checkNotNull(LocalTagEdit.current)
                 SideEffect { callbackIdentities += callback }
-                CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk)) { GlassPanelTheme(lightInk) {
+                 GlassPanelTheme(lightInk) {
                     val anchor = rememberGlassAnchor()
                     ActionIcon(AppIcon.ActionEdit, "Open launch menu", anchor = anchor) { open = true }
                     CollectionActions(open, anchor, item, PlaylistState(), null, null, emptyList(), {}, { open = false })
-                } }
+                }
             }
             ObserveDeclarations()
         } } } }
@@ -194,7 +190,7 @@ class TagEditorThemeInheritanceTest {
                     val artwork = remember { BrowseArtworkScope().apply {
                         seed(null, group); keepVisual(track.uri, PlayerVisual(palette = PlayerPalette(color, color, color)))
                     } }
-                    CompositionLocalProvider(LocalBrowseArtwork provides artwork, LocalGlassAppearance provides appearance(lightInk)) {
+                    CompositionLocalProvider(LocalBrowseArtwork provides artwork) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route, {}, { opened = it }, {},
                             { _, _, _ -> }, null, null, true, false, reducedMotion = true, queryDispatcher = Dispatchers.Unconfined,
                             onAppearance = { ink, _ -> pageInk = ink })
@@ -265,7 +261,7 @@ class TagEditorThemeInheritanceTest {
             TagEditorHost(controller) {
                 val launches = checkNotNull(LocalTagEditorLaunches.current)
                 SideEffect { launchOwner.set(launches) }
-                CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk),
+                CompositionLocalProvider(
                     LocalPlayerInkCompositionObserver provides { composedInk.set(it) }) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val color = if (lightInk) Color(0xFF181818) else Color(0xFFEAEAEA)
@@ -339,12 +335,12 @@ class TagEditorThemeInheritanceTest {
         var lightInk by mutableStateOf(true)
         compose.setContent { EngineTheme(reduced = true) { GlassPanelTheme(!lightInk) { Scene(lightInk) {
             TagEditorHost(controller) {
-                CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk)) { GlassPanelTheme(lightInk) {
+                 GlassPanelTheme(lightInk) {
                     CompositionLocalProvider(LocalContentColor provides Color.Unspecified) {
                         val edit = presentedTagEdit()
                         ActionTextButton(onClick = { edit?.invoke(listOf(track)) {} }) { Text("Launch unspecified ink") }
                     }
-                } }
+                }
             }
             ObserveDeclarations()
         } } } }
@@ -360,10 +356,10 @@ class TagEditorThemeInheritanceTest {
         var lightInk by mutableStateOf(true)
         compose.setContent { EngineTheme(reduced = true) { GlassPanelTheme(!lightInk) { Scene(lightInk) {
             TagEditorHost(controller) {
-                CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk)) { GlassPanelTheme(lightInk) {
+                 GlassPanelTheme(lightInk) {
                     val edit = presentedTagEdit()
                     ActionTextButton(onClick = { edit?.invoke(listOf(track)) {} }) { Text("Start presentation session") }
-                } }
+                }
             }
             ObserveDeclarations()
         } } } }
@@ -395,8 +391,8 @@ class TagEditorThemeInheritanceTest {
         val launches = TagEditorLaunches({ state }, edit, { selected ->
             edit(listOf(selected)) {}; if (!state.busy) state = state.copy(artworkOnly = true)
         })
-        val light = TagEditorPresentation(Color.White, darkColorScheme(), appearance(true))
-        val dark = TagEditorPresentation(Color(0xFF202124), lightColorScheme(), appearance(false))
+        val light = TagEditorPresentation(Color.White, darkColorScheme())
+        val dark = TagEditorPresentation(Color(0xFF202124), lightColorScheme())
         launches.openTags(light, listOf(track)) {}
         val first = state.sessionId
         state = state.copy(busy = true, background = true)

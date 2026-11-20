@@ -1,18 +1,14 @@
 package io.github.anastaci1a.localica.ui
 
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import kotlin.math.pow
 import org.junit.Assert.*
 import org.junit.Test
 
-/** #633: the Brightness weighting range 1–8 keeps ordered compression and leaves every pre-#633 setting unchanged. */
+/** The generic tone kernel keeps its numerical domain and exact ordered-compression law. */
 class GlassToneWeightRangeTest {
     private val trims = (0..25).map { it / 50f } + listOf(.001f, .125f, .249f, .499f)
     private val weights = ((0..70).map { 1f + it / 10f } + listOf(1.05f, 1.95f, 1.999f, 2.001f, 7.999f) +
-        (0..GlassContrastWeightSteps + 1).map {
-            contrastWeightFromSlider(sliderValue(it / (GlassContrastWeightSteps + 1f), 1f..8f, GlassContrastWeightCurve))
-        }).distinct()
+        listOf(1f, 1.005f, 1.017f, 1.035f, 1.058f, 1.086f, 1.119f, 1.156f, 1.197f, 1.243f, 1.293f, 1.347f, 1.405f, 1.466f, 1.532f, 1.601f, 1.674f, 1.75f, 1.83f, 1.913f, 2f, 2.09f, 2.184f, 2.281f, 2.381f, 2.485f, 2.592f, 2.702f, 2.815f, 2.931f, 3.051f, 3.173f, 3.299f, 3.428f, 3.56f, 3.695f, 3.832f, 3.973f, 4.117f, 4.264f, 4.413f, 4.566f, 4.722f, 4.88f, 5.041f, 5.205f, 5.372f, 5.542f, 5.715f, 5.89f, 6.068f, 6.249f, 6.433f, 6.619f, 6.808f, 7f, 7.195f, 7.392f, 7.592f, 7.795f, 8f)).distinct()
 
     @Test fun everyTrimWeightAndPolarityStaysOrderedFiniteAndBounded() {
         for (t in trims) for (p in weights) for (mix in listOf(0f, .25f, .5f, .75f, 1f)) {
@@ -64,26 +60,4 @@ class GlassToneWeightRangeTest {
         }
     }
 
-    @Test fun sliderGivesTheLowEndATrackThirdAndStoresTheDefaultExactly() {
-        val stored = (0..GlassContrastWeightSteps + 1).map {
-            contrastWeightFromSlider(sliderValue(it / (GlassContrastWeightSteps + 1f), 1f..8f, GlassContrastWeightCurve))
-        }
-        assertEquals(1f, stored.first(), 0f)
-        assertEquals(8f, stored.last(), 0f)
-        assertEquals(2f, stored[(GlassContrastWeightSteps + 1) / 3], 0f)
-        assertTrue("Steps strictly increase: $stored", stored.zipWithNext().all { (a, b) -> b > a })
-        assertEquals("1–2 keeps its 20 steps", 21, stored.count { it <= 2f })
-        assertEquals(1f / 3f, sliderPosition(2f, 1f..8f, GlassContrastWeightCurve), 1e-6f)
-    }
-
-    @Test fun normalizationKeepsTheNewRangeAndTheDefault() {
-        assertEquals(2f, GlassAppearance().contrastWeight, 0f)
-        assertEquals(2f, InterfaceSettings().glass.contrastWeight, 0f)
-        for (w in listOf(1f, 1.2f, 1.95f, 2f, 2.5f, 4.321f, 8f))
-            assertEquals(w, GlassAppearance(contrastWeight = w).normalized().contrastWeight, 0f)
-        assertEquals(8f, GlassAppearance(contrastWeight = 12f).normalized().contrastWeight, 0f)
-        assertEquals(1f, GlassAppearance(contrastWeight = .5f).normalized().contrastWeight, 0f)
-        assertEquals(2f, GlassAppearance(contrastWeight = Float.NaN).normalized().contrastWeight, 0f)
-        assertEquals(2f, GlassAppearance(contrastWeight = Float.POSITIVE_INFINITY).normalized().contrastWeight, 0f)
-    }
 }

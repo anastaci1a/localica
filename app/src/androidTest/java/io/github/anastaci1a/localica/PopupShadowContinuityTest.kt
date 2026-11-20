@@ -28,7 +28,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -42,7 +41,6 @@ import kotlin.math.roundToInt
 class PopupShadowContinuityTest {
     @get:Rule val compose = createComposeRule()
     private var open by mutableStateOf(false)
-    private var strength by mutableFloatStateOf(.8f)
     private lateinit var anchor: GlassAnchor
     private var popupView: View? = null
     private var popupWindow: Window? = null
@@ -67,7 +65,6 @@ class PopupShadowContinuityTest {
      * page and popup windows at identical geometry on every open and return, so their
      * shared gap must not switch between union and stacked coverage at either handoff. */
     @Test fun sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles() {
-        strength = 2f
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
@@ -76,7 +73,7 @@ class PopupShadowContinuityTest {
         compose.setContent { Fixture(false, sharedReference = true) }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
-        val log = StringBuilder("api=${Build.VERSION.SDK_INT} density=${compose.density.density} strength=$strength\n")
+        val log = StringBuilder("api=${Build.VERSION.SDK_INT} density=${compose.density.density} strength=1.0\n")
         val homeContinuity = ShadowFrameProbe()
         val frames = mutableListOf<Pair<Float, Float>>() // progress to geometry-matched error
         val rawContinuity = ShadowFrameProbe()
@@ -294,6 +291,7 @@ class PopupShadowContinuityTest {
         val modalPresent: Boolean, val shadowInModal: Boolean, val window: Boolean)
 
     private fun verify(nested: Boolean) {
+        calibrateDefaultField()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
@@ -380,7 +378,7 @@ class PopupShadowContinuityTest {
             assertNotSame(window, popupWindow)
             verifyField("replacement-window")
         } finally {
-            compose.runOnIdle { open = false; strength = .8f }
+            compose.runOnIdle { open = false }
             compose.mainClock.autoAdvance = true
         }
     }
@@ -394,8 +392,7 @@ class PopupShadowContinuityTest {
                 page.rootView.overlay.add(next)
                 onDispose { page.rootView.overlay.remove(next); pageMarker = null }
             }
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
-                shadowStrength = strength, shadowSpread = .6f, shapeDamping = 2f), LocalReducedMotion provides false) {
+            CompositionLocalProvider( LocalReducedMotion provides false) {
                 val source = rememberFrostedBackdrop(Unit, dark = false)
                 val modal = rememberFrostedBackdrop(Unit, dark = false)
                 val group = rememberShadowPlane()
@@ -479,7 +476,7 @@ class PopupShadowContinuityTest {
             referenceShift = with(density) { 192.dp.roundToPx().toFloat() }
         }
         Box(Modifier.fillMaxSize().onGloballyPositioned { referenceOrigin = it.backdropPosition(page) }
-            .shadowPlaneHost(plane, strength, .6f)) {
+            .shadowPlaneHost(plane, 1f, 1f)) {
             repeat(2) { index ->
                 val key = remember { Any() }
                 Box(Modifier.matchParentSize().glassCaster(plane, key,
@@ -536,6 +533,36 @@ class PopupShadowContinuityTest {
         } catch (failure: Throwable) { screenshot?.recycle(); throw failure }
     }
 
+    private fun calibrateDefaultField() {
+        fun field(x: Float, y: Float): Float {
+            val dx = (abs(x - 80f) - 52f).coerceAtLeast(0f)
+            val dy = abs(y - 36f)
+            return shadowPolynomialReference(kotlin.math.sqrt(dx*dx + dy*dy) - 28f)
+        }
+        val strip = (4..12).flatMap { x -> (-2..2).map { y -> Offset(160f + x, 28f + y) } }
+        val exterior = (-24..184 step 3).flatMap { x -> (-24..80 step 3).map { y -> Offset(x.toFloat(), y.toFloat()) } }
+            .filter { p ->
+                val dx = (abs(p.x - 80f) - 52f).coerceAtLeast(0f)
+                val dy = abs(p.y - 28f)
+                dx*dx + dy*dy > 30f*30f
+            }
+        fun accepted(points: List<Offset>, maximum: Float, exterior: Boolean, wrong: (Offset) -> Float): Boolean {
+            val errors = points.map { p -> wrong(p) - field(p.x, p.y) }
+            return errors.maxOf { abs(it) } < maximum &&
+                (if (exterior) errors.sumOf { abs(it).toDouble() }.toFloat() else abs(errors.sum())) / errors.size < .015f
+        }
+        for ((points, maximum, outside) in listOf(Triple(strip, .035f, false), Triple(exterior, .055f, true))) {
+            assertTrue("The fixed-default polynomial accepts its unchanged field", accepted(points, maximum, outside) { field(it.x, it.y) })
+            assertFalse("The original field caps reject a translated field", accepted(points, maximum, outside) { field(it.x - 24f, it.y) })
+            assertFalse("The original field caps reject clipped reach", accepted(points, maximum, outside) {
+                if (it.x > 164f || it.y > 60f || it.x < -4f || it.y < -4f) 0f else field(it.x, it.y)
+            })
+            assertFalse("The original field caps reject a trailing silhouette", accepted(points, maximum, outside) {
+                maxOf(field(it.x, it.y), field(it.x - 24f, it.y))
+            })
+        }
+    }
+
     private fun verifyField(name: String, popup: Boolean = true) {
         // This is the highest (tested) native window, including for a nested menu.
         val nodes = if (popup) compose.popupGeometryNodes(anchor, open, output, name, geometryWindowCount) else emptyList()
@@ -575,7 +602,7 @@ class PopupShadowContinuityTest {
                 val cx = shadowAxisCenter(localX, bounds.width, radius, 0f)
                 val cy = shadowAxisCenter(localY, bounds.height, radius, 8f*d)
                 val distance = kotlin.math.sqrt((localX-cx)*(localX-cx) + (localY-cy)*(localY-cy)) - radius
-                val expected = shadowPolynomialReference(distance / (d * .6f)) * .8f
+                val expected = shadowPolynomialReference(distance / d)
                 val referenceX = (right + 36f*d*sx).roundToInt()
                 assertTrue("The unshadowed reference must remain on screen", referenceX in 0 until on.width)
                 val background = AndroidColor.red(on.getPixel(referenceX, y)).toFloat()
@@ -613,7 +640,7 @@ class PopupShadowContinuityTest {
                     val dx = (abs(lx-screen.width/2)-(screen.width/2-radius)).coerceAtLeast(0f)
                     val dy = (abs(ly-screen.height/2-8f*d)-(screen.height/2-radius)).coerceAtLeast(0f)
                     val distance = kotlin.math.sqrt(dx*dx+dy*dy)-radius
-                    val expected = shadowPolynomialReference(distance / (d * .6f)) * .8f
+                    val expected = shadowPolynomialReference(distance / d)
                     val actual = 1f - AndroidColor.red(on.getPixel(x,y))/background.coerceAtLeast(1f)
                     if (expected < .015f && abs(actual) < .015f) continue
                     val error = abs(actual - expected)

@@ -190,6 +190,35 @@ test('equal groups of edited incidents pair in source order; unequal groups stay
     assert.equal(unequal.accepted, false); assert.equal(unequal.sameIncidents.length, 0);
     assert.equal(unequal.added.length, 1); assert.equal(unequal.removed.length, 2);
 });
+test('the two approved #1079 pairs keep exact identities and require falling totals and unchanged constructs', () => {
+    const scope = {path:'app/src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt',
+        fqn:'io.github.anastaci1a.localica.ui.DrawScope.magnified'};
+    const cases = [
+        ['RawShadowOrZOrder', '            drawContext.canvas.saveLayer(path.getBounds(), Paint().apply { alpha = progress * (1f - averageProgress) })', 31],
+        ['UnownedSurfaceLifetime', '                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress * (1f - averageProgress) }) }', 49]
+    ];
+    for (const [rule, code, marker] of cases) {
+        const at = text => row(text, marker, '~~~~~~~~~', {...scope, rule});
+        const old = at(code), now = at(code.replace(' * (1f - averageProgress)', ''));
+        const peer = at(code.replace('averageProgress', 'otherProgress'));
+        const result = compare([old, peer], [now], 0);
+        assert.equal(result.accepted, true, rule);
+        assert.equal(result.sameIncidents[0].approval, 'lead-2026-11-19-1079');
+        assert.deepEqual(result.sameIncidents.map(p => [p.from.identity, p.to.identity]), [[old.identity, now.identity]]);
+        assert.deepEqual(result.counts[rule], {before:2, after:1, removed:1, added:0});
+        for (const change of [{message:'other'}, {construct:'different'}, {span:'~~~~'}, {occurrences:2},
+            {codeSha256:'unapproved', identity:'unapproved'}, {path:'app/src/main/Other.kt', identity:'other-path'},
+            {fqn:'other.function', identity:'other-function'}, {rule:rules[0], identity:'other-rule'}]) {
+            const rejected = compare([old, peer], [{...now, ...change}], 0);
+            assert.equal(rejected.accepted, false, JSON.stringify(change));
+            assert.equal(rejected.sameIncidents.length, 0);
+        }
+        const extra = {...now, path:'app/src/main/Other.kt', identity:'extra'};
+        const rising = compare([old, peer], [now, extra], 0);
+        assert.equal(rising.accepted, false); assert.equal(rising.sameIncidents.length, 0);
+        assert.equal(compare([old, peer], [old, now], 0).sameIncidents.some(p => p.approval), false);
+    }
+});
 test('same-incident re-anchors reject every other difference, ambiguity and already matched rows', () => {
     const [old, now] = shapes[1], code = '            if (delta != 0f) scope.launch { lens.snapTo(position) }';
     const rejects = {

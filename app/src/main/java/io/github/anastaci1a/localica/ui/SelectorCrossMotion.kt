@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassShapeDamping
+
 import androidx.compose.runtime.*
 
 private class AppliedSelectorFrame(var frame: SelectorReturnFrame, var rest: SelectorReturnFrame,
@@ -16,7 +18,6 @@ internal fun rememberSelectorCrossFrame(raw: SelectorReturnFrame, rest: Selector
     var elapsed by remember { mutableFloatStateOf(0f) }
     var releasedFrame by remember { mutableStateOf(raw) }
     val speed by rememberUpdatedState(LocalMotionSpeed.current)
-    val damping by rememberUpdatedState(LocalGlassAppearance.current.shapeDamping)
     val settled by rememberUpdatedState(bodySettled)
     val reduced = LocalReducedMotion.current || !enabled
     val resized = applied.rest != rest
@@ -44,7 +45,7 @@ internal fun rememberSelectorCrossFrame(raw: SelectorReturnFrame, rest: Selector
             val now = withFrameNanos { it }
             val dt = ((now - previousTime) / 1e9f).coerceIn(.001f, .1f) * speed
             previousTime = now
-            if (!held) releasedFrame = release.advance(dt, damping)
+            if (!held) releasedFrame = release.advance(dt, GlassShapeDamping)
             elapsed += dt
         } while (if (held) selectorCriticalResidual(elapsed) >= .0003f else !release.settled || !settled)
         // Wait for the old optical body to settle before handing geometry back to it.

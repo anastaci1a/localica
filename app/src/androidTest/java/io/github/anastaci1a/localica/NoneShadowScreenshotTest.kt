@@ -26,12 +26,11 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 
-/** #624 evidence: Normal and None side by side for a floating pill, a popup, a selected row
- * and the Queue drawer edge, at the default Glass settings. Images go to the additional test
- * output; the selected-row lift is also compared outside its body. */
+/** Default material at both source polarities; selected-row shadows stay outside their body. */
 class NoneShadowScreenshotTest {
     @get:Rule val compose = localicaComposeRule()
 
+    private var dark by mutableStateOf(false)
     private val output: File by lazy {
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)!!
@@ -65,30 +64,33 @@ class NoneShadowScreenshotTest {
             drawColor(android.graphics.Color.MAGENTA)
             drawBitmap(normal, 0f, 0f, null); drawBitmap(none, (normal.width + gap).toFloat(), 0f, null)
             val paint = android.graphics.Paint().apply { color = android.graphics.Color.MAGENTA; textSize = 48f; isFakeBoldText = true }
-            drawText("Normal", 24f, 64f, paint); drawText("None", normal.width + gap + 24f, 64f, paint)
+            drawText("Dark ink", 24f, 64f, paint); drawText("Light ink", normal.width + gap + 24f, 64f, paint)
         }
         for ((suffix, image) in listOf("normal" to normal, "none" to none, "side-by-side" to combined))
             File(output, "$name-$suffix.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    /** [source] is re-read because FlatNone composes a fresh layer-less backdrop that never records. */
-    private fun capture(name: String, runtime: GlassRendererRuntime, source: () -> FrostedBackdrop): Pair<Bitmap, Bitmap> {
-        compose.runOnIdle { runtime.request(GlassRendererMode.Normal) }
+    /** Both captures share their existing recorded source and fixed material. */
+    private fun capture(name: String, source: () -> FrostedBackdrop): Pair<Bitmap, Bitmap> {
+        compose.runOnIdle { dark = false }
         // API 26-32 average materials draw nothing until the first scene readback lands; never compare that frame.
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source().snapshot != null }
+        compose.runOnIdle { assertFalse("The first source uses dark ink", source().dark); assertEquals(0f, source().lightMix, 0f) }
         val normal = screenshot()
-        compose.runOnIdle { runtime.request(GlassRendererMode.FlatNone) }
-        val none = screenshot().also { assertFalse("None never records the scene", source().recorded) }
+        compose.runOnIdle { dark = true }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue("The second source uses light ink", source().dark); assertEquals(1f, source().lightMix, 0f) }
+        val none = screenshot().also { assertTrue("The shared scene remains recorded", source().recorded) }
         sideBySide(name, normal, none)
         return normal to none
     }
 
     @Test fun floatingPillSelectedRowAndPopup() {
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+
         var popup by mutableStateOf(false)
         lateinit var source: FrostedBackdrop
-        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
-            source = rememberFrostedBackdrop(Unit, dark = false)
+        compose.setContent {  LocalicaTheme {
+            source = rememberFrostedBackdrop(Unit, dark = dark)
             Box(Modifier.fillMaxSize()) {
                 Page(source)
                 CompositionLocalProvider(LocalFrostedBackdrop provides source) {
@@ -105,12 +107,12 @@ class NoneShadowScreenshotTest {
                     LiquidGlassSurface(Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = 24.dp).size(56.dp),
                         pressFeedback = false) { Box(contentAlignment = Alignment.Center) { Text("⋯") } }
                     if (popup) GlassAlertDialog(onDismissRequest = {}, title = { Text("Popup shadow") },
-                        text = { Text("None replaces only the fill.") }, confirmButton = {})
+                        text = { Text("The shared material keeps its default finish.") }, confirmButton = {})
                 }
             }
-        } } }
-        val (normal, none) = capture("pill-row", runtime) { source }
-        // Selected-row lift: identical outside the lifted body in both renderers.
+        }  }
+        val (normal, none) = capture("pill-row") { source }
+        // Selected-row lift stays identical outside its body across source polarity.
         val row = compose.onNodeWithTag("selected-row").fetchSemanticsNode().boundsInRoot // root-relative: boundsInWindow already includes the root offset
         val inWindow = IntArray(2).also { (compose.onRoot().fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view.getLocationOnScreen(it) }
         // The lifted body is magnified beyond the row's layout bounds; exclude a generous margin.
@@ -125,10 +127,13 @@ class NoneShadowScreenshotTest {
                 val delta = maxOf(kotlin.math.abs((p shr 16 and 255) - (q shr 16 and 255)),
                     kotlin.math.abs((p shr 8 and 255) - (q shr 8 and 255)), kotlin.math.abs((p and 255) - (q and 255)))
                 // Two levels allow the retained-raster handoff rounding seen without any renderer change.
-                if (delta > 2) { differing++; largest = maxOf(largest, delta); box.union(x, y) }
+                if (delta > 2) {
+                    if (differing < 32) println("Default polarity outside shadow: x=$x y=$y first=${Integer.toHexString(p)} second=${Integer.toHexString(q)} body=$body")
+                    differing++; largest = maxOf(largest, delta); box.union(x, y)
+                }
             }
         compose.runOnIdle { popup = true }
-        capture("popup", runtime) { source }
+        capture("popup") { source }
         assertEquals("Selected-row lift shadow differs outside the lifted body $body (largest $largest/255 within $box)", 0, differing)
     }
 
@@ -138,9 +143,9 @@ class NoneShadowScreenshotTest {
         val state = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
         val library = LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false)
         lateinit var source: FrostedBackdrop
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
-        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
-            source = rememberFrostedBackdrop(Unit, dark = false)
+
+        compose.setContent {  LocalicaTheme {
+            source = rememberFrostedBackdrop(Unit, dark = dark)
             CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalSessionSelection provides remember { SessionSelection() }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     Page(source)
@@ -149,7 +154,7 @@ class NoneShadowScreenshotTest {
                     }
                 }
             }
-        } } }
-        capture("queue-edge", runtime) { source }
+        }  }
+        capture("queue-edge") { source }
     }
 }

@@ -12,8 +12,6 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import org.junit.Assert.*
@@ -39,12 +37,10 @@ class PressGeometryTest {
         Element("wide bar", 328f, 64f, trigger = true), Element("scoped search bar", 328f, 40f, trigger = true))
 
     @Test fun everyElementClassFollowsTheSizeLawStaysInTheWindowAndStretchesTowardTheDrag() {
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
         var index by mutableIntStateOf(0)
         val contacts = elements.map { if (it.trigger || it.action) null else GlassContact() }
         val anchors = elements.indices.map { i -> if (elements[i].trigger) GlassAnchor() else null }
-        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f, touchLight = 0f)) {
+        compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
                 Box(Modifier.size(360.dp, 200.dp).testTag("window").drawBehind { drawRect(Color.Black) }, contentAlignment = Alignment.Center) {
                     val e = elements[index]
                     key(index) {
@@ -53,8 +49,7 @@ class PressGeometryTest {
                             bodyOverride = if (e.action) FlexSpec.Small else null)
                     }
                 }
-            }
-        } } } }
+        } } }
         val window = compose.onNodeWithTag("window")
         val density = compose.density.density
         compose.mainClock.autoAdvance = false
@@ -65,8 +60,9 @@ class PressGeometryTest {
             return line.indexOfFirst { it > half } to line.indexOfLast { it > half }
         }
         val windowWidth = (360 * density).roundToInt()
-        for (mode in GlassRendererMode.entries) for ((i, e) in elements.withIndex()) {
-            compose.runOnIdle { runtime.request(mode); index = i }
+        val mode = "default"
+        for ((i, e) in elements.withIndex()) {
+            compose.runOnIdle { index = i }
             compose.mainClock.advanceTimeBy(1500)
             val body = compose.onNodeWithTag("body")
             val row = (body.fetchSemanticsNode().boundsInRoot.center.y - window.fetchSemanticsNode().boundsInRoot.top).roundToInt()

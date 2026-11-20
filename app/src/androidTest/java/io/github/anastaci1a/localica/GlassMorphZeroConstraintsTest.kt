@@ -30,7 +30,7 @@ class GlassMorphZeroConstraintsTest {
     private fun collapseAndRecover(placement: GlassPlacement) {
         var open by mutableStateOf(true)
         val home = Rect(40f, 40f, 160f, 96f)
-        val anchor = GlassAnchor().apply { bounds = home; ink = Color.Black }
+        val anchor = GlassAnchor().apply { bounds = home }
         val samples = mutableListOf<SearchMorphSample>()
         lateinit var popupView: View
         lateinit var currentOwner: Any

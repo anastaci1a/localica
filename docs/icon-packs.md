@@ -124,7 +124,6 @@ Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 element
 | `settings.interface` | Settings: Interface |
 | `settings.appearance` | Settings: Appearance |
 | `settings.icon_packs` | Settings: Icon packs |
-| `settings.glass` | Settings: Glass |
 | `settings.navigation` | Settings: Navigation |
 | `settings.player` | Settings: Player |
 | `settings.motion` | Settings: Motion |

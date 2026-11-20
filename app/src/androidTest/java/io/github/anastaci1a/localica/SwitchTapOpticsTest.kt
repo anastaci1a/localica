@@ -18,7 +18,6 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import io.github.anastaci1a.localica.ui.*
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Rule

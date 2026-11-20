@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -16,11 +17,13 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.ArtworkCache
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Rule
 import org.junit.Test
 
@@ -38,9 +41,8 @@ class QueueShadowContinuityTest {
         val queue = QueueEdits.create(tracks, 0, "Shadow queue")
         val state = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
         val library = LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false)
-        var strength by mutableFloatStateOf(1f)
         compose.setContent { EngineTheme(reduced = true) {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = strength, shadowSpread = 1f)) {
+
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.White).testTag("queue-shadow-scene")) {
                     val backing = rememberFrostedBackdrop(Unit, dark = false)
                     androidx.compose.foundation.Canvas(Modifier.matchParentSize().recordFrostedBackdrop(backing)) { drawRect(Color.White) }
@@ -54,7 +56,7 @@ class QueueShadowContinuityTest {
                     }
                     }
                 }
-            }
+
         } }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().size == 1 }
         compose.waitForIdle()
@@ -69,9 +71,39 @@ class QueueShadowContinuityTest {
         val d = compose.density.density
         val bodyBottom = target.bottom - 4*d
         val bodyTop = target.top + 4*d
-        val shadow = scene.captureToImage()
-        compose.runOnIdle { strength = 0f }
-        val baseline = scene.captureToImage()
+        val descriptor = compose.onNodeWithText("Search Shadow queue", useUnmergedTree = true).fetchSemanticsNode()
+        val anchor = compose.runOnUiThread {
+            generateSequence(descriptor.layoutInfo) { it.parentInfo }
+                .flatMap { it.getModifierInfo().asSequence() }
+                .mapNotNull { it.modifier.glassSurfaceAnchor() }.first()
+        }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { anchor.source?.snapshot != null }
+        compose.waitForIdle()
+        val node = requireNotNull(anchor.surfaceNode) as SurfaceNode
+        val role = node.role
+        fun field(value: ShadowRole) = compose.runOnUiThread {
+            node.request(SurfaceTarget(node.stratum, node.opacity.value(), value),
+                motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
+        }
+        compose.mainClock.autoAdvance = false
+        val (shadow, baseline, restored) = try {
+            val shadow = scene.captureToImage()
+            val baseline = try { field(ShadowRole.None); scene.captureToImage() } finally { field(role) }
+            Triple(shadow, baseline, scene.captureToImage().toPixelMap())
+        } finally { compose.mainClock.autoAdvance = true }
+        assertEquals("Removing only the search field preserves target geometry", target,
+            compose.onNodeWithTag("list-search-pill").fetchSemanticsNode().boundsInRoot.translate(-origin))
+        val original = shadow.toPixelMap()
+        val reach = target.inflate(56f * d)
+        val bare = baseline.toPixelMap()
+        var restoredChanges = 0
+        var outsideChanges = 0
+        for (y in 0 until original.height) for (x in 0 until original.width) {
+            if (original[x,y] != restored[x,y]) restoredChanges++
+            if (!reach.contains(androidx.compose.ui.geometry.Offset(x + .5f, y + .5f)) && original[x,y] != bare[x,y]) outsideChanges++
+        }
+        assertEquals("Restoring the field preserves every scene pixel", 0, restoredChanges)
+        assertEquals("Opaque scene content outside the field is unchanged", 0, outsideChanges)
         val output = nativeEvidenceDirectory("shadow-continuity",
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
         listOf("queue-shadow" to shadow, "queue-baseline" to baseline).forEach { (name, image) ->
@@ -101,6 +133,10 @@ class QueueShadowContinuityTest {
         assertTrue("Top shadow has no internal crop: $topRows", topRows.zipWithNext { p,q -> kotlin.math.abs(p-q) }.drop(3).max() < .04f)
         assertTrue("Side shadow has no internal crop: $sideRows", sideRows.zipWithNext { p,q -> kotlin.math.abs(p-q) }.max() < .06f)
         assertTrue("Search casts below its layout slot: $rows", rows.slice(6..10).max() > .015f)
+        assertFalse("A missing field must fail the original visibility predicate", List(rows.size) { 0f }.slice(6..10).max() > .015f)
+        val truncated = rows.mapIndexed { index, value -> if (index in 5..8) 0f else value }
+        assertFalse("A truncated four-dp band must fail the original continuity predicate",
+            truncated.zipWithNext { p,q -> kotlin.math.abs(p-q) }.drop(4).max() < .04f)
         val jump = rows.zipWithNext { p, q -> kotlin.math.abs(p-q) }.drop(4).max()
         assertTrue("Search shadow must taper instead of ending at a container edge: $rows", jump < .04f)
         ShadowFrameProbe.assertSpreadEdge(shadow,

@@ -48,7 +48,7 @@ class GlassBodyOpticsTest {
                 val bounds = Rect(.25f, .5f, 111f, 95f)
                 val path = Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(19.5f))) }
                 clipPath(path) {
-                    drawTouchLightFixture(glow, if (frozen) original.shape else shape, true, GlassRimCache(), bounds) { backing() }
+                    drawTouchLightFixture(glow, if (frozen) original.shape else shape, true, ContactGlowCache(), bounds) { backing() }
                     if (frozen) drawOriginalGlassRim(bounds, 19.5f, path, tone)
                     else drawGlassRim(bounds, 19.5f, path, tone, cache = GlassRimCache())
                 }

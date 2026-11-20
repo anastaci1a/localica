@@ -88,9 +88,7 @@ class SelectorPopupClearanceTest {
                         Canvas(Modifier.matchParentSize().recordFrostedBackdrop(backing)) { drawRect(Color.Red) }
                         Canvas(Modifier.matchParentSize()) { drawRect(Color.Blue) }
                         CompositionLocalProvider(LocalFrostedBackdrop provides backing,
-                            LocalInlineGlassDialog provides true,
-                            LocalGlassAppearance provides LocalGlassAppearance.current.copy(
-                                blur = 0f, whiteTint = 0f, contrast = 0f)) {
+                            LocalInlineGlassDialog provides true) {
                             if (!horizontal) {
                                 ChoiceDialog("Choose an option", labels, labels.first(), { it }, {}, {})
                             } else {
