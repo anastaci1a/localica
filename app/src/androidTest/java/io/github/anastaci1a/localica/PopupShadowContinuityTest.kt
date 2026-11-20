@@ -547,7 +547,10 @@ class PopupShadowContinuityTest {
                 dx*dx + dy*dy > 30f*30f
             }
         fun accepted(points: List<Offset>, maximum: Float, exterior: Boolean, wrong: (Offset) -> Float): Boolean {
-            val errors = points.map { p -> wrong(p) - field(p.x, p.y) }
+            val errors = points.mapNotNull { p ->
+                val expected = field(p.x, p.y); val actual = wrong(p)
+                if (exterior && expected < .015f && abs(actual) < .015f) null else actual - expected
+            }
             return errors.maxOf { abs(it) } < maximum &&
                 (if (exterior) errors.sumOf { abs(it).toDouble() }.toFloat() else abs(errors.sum())) / errors.size < .015f
         }
