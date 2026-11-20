@@ -158,13 +158,69 @@ def provisional_native(repository, run, jobs, artifacts):
                         if failure is None:
                             continue
                         identity = (api, case.attrib['classname']+'#'+case.attrib['name'])
-                        require(identity not in failed and failure.attrib.get('message'), 'Invalid provisional failure')
-                        failed[identity] = hashlib.sha256(failure.attrib['message'].encode()).hexdigest()
+                        message = failure.get('message') or (failure.text or '').partition('\n')[0]
+                        require(identity not in failed and message.strip(), 'Invalid provisional failure')
+                        failed[identity] = hashlib.sha256(message.encode()).hexdigest()
                         count += 1
             require(count > 0, 'Provisional shard failed outside an assertion')
     require(Counter(api for api, _ in failed) == Counter({api: union['failure'] for api, union in unions.items()}),
             'Provisional failures differ from the complete unions')
     return unions, failed
+
+
+def scoped_native_coverage(repository, commit, scoped_runs):
+    require(0 < len(scoped_runs) <= 24 and len(set(scoped_runs)) == len(scoped_runs), 'Invalid scope run IDs')
+    covered = {'26': set(), '36': set()}
+    for run_id in scoped_runs:
+        run, scoped_jobs = delta_run(repository, run_id, 'prototype.yml', commit)
+        decision_job = scoped_jobs['Prototype evidence and delivery decision']
+        require(run['conclusion'] == 'success' and decision_job['conclusion'] == 'success',
+                'Scope workflow failed')
+        artifacts = pages(f'repos/{repository}/actions/runs/{run_id}/artifacts', 'artifacts')
+        item = artifact(artifacts, 'prototype-delivery-decision', run, decision_job)
+        require(decision_job['started_at'] <= item['created_at'] <= decision_job['completed_at'],
+                'Stale scope archive')
+        with archived_artifact(repository, item) as archive:
+            require(archive.namelist().count('manifest.json') == 1
+                    and archive.getinfo('manifest.json').file_size <= 8*1024*1024, 'Invalid scope manifest')
+            manifest = json.loads(archive.read('manifest.json'))
+        require(manifest['sha'] == commit and manifest['run_id'] == str(run_id)
+                and manifest['run_attempt'] == str(run['run_attempt']) and manifest['validation_errors'] == []
+                and not manifest['build_only'] and not manifest['requested_methods'], 'Invalid whole-class proof')
+        for api, evidence in manifest['focused_evidence'].items():
+            require(manifest['checks']['focused_'+api] == 'passed' and evidence['sha'] == commit
+                    and str(evidence['api']) == api and all(outcome in ('passed', 'skipped')
+                    for outcome in evidence['methods'].values()), 'Native scope did not pass')
+            covered[api].update(evidence['selectors'])
+    return covered
+
+
+def verify_native_scope(repository, commit, packet, failed):
+    # The maintainer's reviewed dependency partition identifies the classes eligible for reuse.
+    final_classes = set(packet['affected_classes'])
+    carried_classes = set(packet['carried_classes'])
+    require(final_classes and final_classes.isdisjoint(carried_classes)
+            and len(final_classes)+len(carried_classes) == len(packet['affected_classes'])+len(packet['carried_classes'])
+            and all(re.fullmatch(r'io\.github\.anastaci1a\.localica\.[\w.$]+', c)
+                    for c in final_classes | carried_classes), 'Invalid reviewed dependency partition')
+    final_coverage = scoped_native_coverage(repository, commit, packet['scoped_runs'])
+    require(all(final_classes <= classes for classes in final_coverage.values()), 'Final hosted affected-class gap')
+    prior_runs = packet['carried_scoped_runs']
+    require(bool(carried_classes) == bool(prior_runs)
+            and set(prior_runs).isdisjoint(packet['scoped_runs']), 'Invalid carried class run IDs')
+    if carried_classes:
+        prior = 'fca7f179700c6853509d919b103cdc3e57cf4139'
+        comparison = gh(f'repos/{repository}/compare/{prior}...{commit}?per_page=1')
+        require(comparison['status'] == 'ahead' and comparison['merge_base_commit']['sha'] == prior,
+                'Carried source is not an ancestor of the release')
+        carried_coverage = scoped_native_coverage(repository, prior, prior_runs)
+        require(all(carried_classes <= classes for classes in carried_coverage.values()), 'Carried hosted class gap')
+    for api in ('26', '36'):
+        local = packet['local'][api]
+        require(local['sha'] == commit and local['exit'] == 0 and re.fullmatch('[0-9a-f]{64}', local['receipt_sha256'])
+                and final_classes <= set(local['classes'])
+                and all(method in local['passed_methods'] for sdk, method in failed if sdk == api),
+                'Final local gate or held-failure verification incomplete')
 
 
 def select_v03416(repository, commit, tree):
@@ -206,41 +262,7 @@ def select_v03416(repository, commit, tree):
     final_artifacts = pages(f'repos/{repository}/actions/runs/{final["id"]}/artifacts', 'artifacts')
     delivery = artifact(final_artifacts, 'localica-debug', final, final_jobs['build'])
 
-    required_classes = set(packet['affected_classes'])
-    require(required_classes and len(required_classes) == len(packet['affected_classes'])
-            and all(re.fullmatch(r'io\.github\.anastaci1a\.localica\.[\w.$]+', c) for c in required_classes),
-            'Invalid reviewed affected-class inventory')
-    covered = {'26': set(), '36': set()}
-    scoped_runs = packet['scoped_runs']
-    require(0 < len(scoped_runs) <= 24 and len(set(scoped_runs)) == len(scoped_runs), 'Invalid final scope run IDs')
-    for run_id in scoped_runs:
-        run, scoped_jobs = delta_run(repository, run_id, 'prototype.yml', commit)
-        decision_job = scoped_jobs['Prototype evidence and delivery decision']
-        require(run['conclusion'] == 'success' and decision_job['conclusion'] == 'success',
-                'Final scope workflow failed')
-        artifacts = pages(f'repos/{repository}/actions/runs/{run_id}/artifacts', 'artifacts')
-        item = artifact(artifacts, 'prototype-delivery-decision', run, decision_job)
-        require(decision_job['started_at'] <= item['created_at'] <= decision_job['completed_at'],
-                'Stale final scope archive')
-        with archived_artifact(repository, item) as archive:
-            require(archive.namelist().count('manifest.json') == 1
-                    and archive.getinfo('manifest.json').file_size <= 8*1024*1024, 'Invalid final scope manifest')
-            manifest = json.loads(archive.read('manifest.json'))
-        require(manifest['sha'] == commit and manifest['run_id'] == str(run_id)
-                and manifest['run_attempt'] == str(run['run_attempt']) and manifest['validation_errors'] == []
-                and not manifest['build_only'] and not manifest['requested_methods'], 'Invalid final whole-class proof')
-        for api, evidence in manifest['focused_evidence'].items():
-            require(manifest['checks']['focused_'+api] == 'passed' and evidence['sha'] == commit
-                    and str(evidence['api']) == api and all(outcome in ('passed', 'skipped')
-                    for outcome in evidence['methods'].values()), 'Final native scope did not pass')
-            covered[api].update(evidence['selectors'])
-    require(all(required_classes <= classes for classes in covered.values()), 'Final hosted affected-class gap')
-    for api in ('26', '36'):
-        local = packet['local'][api]
-        require(local['sha'] == commit and local['exit'] == 0 and re.fullmatch('[0-9a-f]{64}', local['receipt_sha256'])
-                and required_classes <= set(local['classes'])
-                and all(method in local['passed_methods'] for sdk, method in failed if sdk == api),
-                'Final local gate or held-failure verification incomplete')
+    verify_native_scope(repository, commit, packet, failed)
     provisional_phone = packet['provisional_a35']
     require(provisional_phone['sha'] == provisional['head_sha'] and provisional_phone['restore_exit'] == 0
             and re.fullmatch('[0-9a-f]{64}', provisional_phone['receipt_sha256']), 'Invalid provisional A35 receipt')

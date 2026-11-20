@@ -93,7 +93,8 @@ class ReleaseVerificationTest(unittest.TestCase):
         with zipfile.ZipFile(payload, 'w') as archive:
             archive.writestr('app/build/outputs/androidTest-results/TEST-fixture.xml',
                              '<testsuite><testcase classname="Example" name="case">'
-                             '<failure message="held witness"/></testcase></testsuite>')
+                             '<failure>java.lang.AssertionError: held witness expected:&lt;0&gt; but was:&lt;1&gt;\n'
+                             'at Example.case(Example.kt:42)</failure></testcase></testsuite>')
         archive_bytes = payload.getvalue()
         artifact = dict(name='device-reports-api-36-shard-0', expired=False, id=99,
                         size_in_bytes=len(archive_bytes), created_at='2026-11-19T00:00:30Z',
@@ -102,7 +103,8 @@ class ReleaseVerificationTest(unittest.TestCase):
         with patch.object(module, 'gh', side_effect=[progress, archive_bytes]):
             unions, failed = module.provisional_native('anastaci1a/localica', self.run, jobs, [artifact])
         self.assertEqual(unions, self.unions)
-        self.assertEqual(failed, {('36','Example#case'):hashlib.sha256(b'held witness').hexdigest()})
+        witness = b'java.lang.AssertionError: held witness expected:<0> but was:<1>'
+        self.assertEqual(failed, {('36','Example#case'):hashlib.sha256(witness).hexdigest()})
         with patch.object(module, 'gh', return_value=progress):
             with self.assertRaisesRegex(ValueError, 'artifact'):
                 module.provisional_native('anastaci1a/localica', self.run, jobs, [])
@@ -119,6 +121,45 @@ class ReleaseVerificationTest(unittest.TestCase):
         with patch.dict(module.os.environ, {'GITHUB_ACTOR':'anastaci1a','GITHUB_REF':'refs/tags/v0.34.17'}):
             with self.assertRaisesRegex(ValueError, 'v0.34.16 tag'):
                 module.select_v03416('anastaci1a/localica', self.sha, self.tree)
+
+    def test_carried_native_scope_requires_ancestor_coverage_and_final_local_replays(self):
+        from copy import deepcopy
+        from unittest.mock import patch
+
+        repository = 'anastaci1a/localica'
+        prior = 'fca7f179700c6853509d919b103cdc3e57cf4139'
+        changed = 'io.github.anastaci1a.localica.ChangedTest'
+        untouched = 'io.github.anastaci1a.localica.UntouchedTest'
+        held_method = untouched + '#priorFailure'
+        packet = dict(affected_classes=[changed], carried_classes=[untouched], scoped_runs=[10],
+                      carried_scoped_runs=[9], local={api: dict(sha=self.sha, exit=0, receipt_sha256='a'*64,
+                          classes=[changed], passed_methods=[held_method]) for api in ('26', '36')})
+        domains = ({'26': {changed}, '36': {changed}}, {'26': {untouched}, '36': {untouched}})
+        ancestor = dict(status='ahead', merge_base_commit={'sha':prior})
+        failed = {('26', held_method):'b'*64}
+        with patch.object(module, 'scoped_native_coverage', side_effect=domains) as coverage, \
+             patch.object(module, 'gh', return_value=ancestor):
+            module.verify_native_scope(repository, self.sha, packet, failed)
+        self.assertEqual([call.args for call in coverage.call_args_list],
+                         [(repository, self.sha, [10]), (repository, prior, [9])])
+
+        overlap = deepcopy(packet)
+        overlap['affected_classes'].append(untouched)
+        stale_replay = deepcopy(packet)
+        stale_replay['local']['26']['sha'] = prior
+        missing_replay = deepcopy(packet)
+        missing_replay['local']['26']['passed_methods'] = []
+        cases = (
+            ('ancestor', packet, domains, dict(status='diverged'), 'not an ancestor'),
+            ('coverage', packet, (domains[0], {'26': {untouched}, '36': set()}), ancestor, 'Carried hosted class gap'),
+            ('overlap', overlap, domains, ancestor, 'dependency partition'),
+            ('source', stale_replay, domains, ancestor, 'held-failure verification incomplete'),
+            ('replay', missing_replay, domains, ancestor, 'held-failure verification incomplete'),
+        )
+        for name, inputs, coverage, comparison, error in cases:
+            with self.subTest(name=name), patch.object(module, 'scoped_native_coverage', side_effect=coverage), \
+                 patch.object(module, 'gh', return_value=comparison), self.assertRaisesRegex(ValueError, error):
+                module.verify_native_scope(repository, self.sha, inputs, failed)
 
     def test_distribution_smoke_binds_expected_hash_to_the_build_output(self):
         import yaml
