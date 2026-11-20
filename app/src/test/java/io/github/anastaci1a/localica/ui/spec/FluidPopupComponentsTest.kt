@@ -129,6 +129,88 @@ class FluidPopupComponentsTest {
         assertTrue(queue.isEmpty())
     }
 
+    @Test fun sharedMorphCompletionWaitsForStartDrainAndTheFinalInteractionRelease() {
+        val completion = FluidMorphCompletion()
+        val events = mutableListOf<String>()
+        val queue = ArrayDeque(fluidThroughQueue(true, FluidMainEjectDefaults, FluidContentDefaults.copy(lensingEnabled = false)) {
+            error("Lensing disabled")
+        })
+        completion.acquireInteraction(previousAssertions = 0)
+        completion.acquireInteraction(previousAssertions = 1)
+        completion.start(
+            block = {
+                completeFluidTimeline(
+                    { events += "caller" }, { events += "prepare cleanup" }, { events += "remove views" },
+                    { events += "clear owner" }, { events += "state $it" },
+                    {
+                        queue.clear()
+                        events += "reset timeline"
+                    },
+                    {
+                        assertTrue(queue.isEmpty())
+                        events += "remove SDF"
+                    },
+                )
+            },
+            drain = {
+                completion.increment()
+                completion.complete()
+                assertTrue(events.isEmpty())
+                events += "start drain"
+            },
+            propagateHold = { events += "propagate hold" },
+        )
+        assertEquals(listOf("start drain", "propagate hold"), events)
+        assertTrue(queue.isNotEmpty())
+        completion.releaseInteraction(1, { error("Still held") }, { error("Still held") }, { error("Still held") })
+        completion.releaseInteraction(
+            remainingAssertions = 0, resetOrigin = { events += "reset origin" },
+            drain = {
+                assertTrue(queue.isNotEmpty())
+                events += "release drain"
+            },
+            requestTimer = { events += "request timer" },
+        )
+        assertEquals(listOf(
+            "start drain", "propagate hold", "reset origin", "release drain", "request timer",
+            "caller", "prepare cleanup", "remove views", "clear owner", "state 2", "reset timeline", "remove SDF",
+        ), events)
+        completion.complete()
+        assertEquals("remove SDF", events.last())
+    }
+
+    @Test fun sharedMorphCompletionClearsBeforeFiringAndSupportsTheDisabledRoute() {
+        val completion = FluidMorphCompletion()
+        val events = mutableListOf<String>()
+        completion.add(incrementing = false) {
+            events += "first"
+            completion.add(incrementing = false) { events += "later" }
+        }
+        completion.complete()
+        completion.completeImmediately()
+        assertTrue(events.isEmpty())
+        completion.add { events += "second" }
+        completion.increment()
+        completion.complete()
+        assertTrue(events.isEmpty())
+        completion.finishWithoutTimeline({ events += "direct" }, { events += "after group" }, { events += "completion" })
+        assertEquals(listOf("direct", "first", "second", "after group", "completion"), events)
+        completion.increment()
+        completion.complete()
+        assertEquals("later", events.last())
+        completion.start(
+            block = { events += "builder completion" },
+            drain = {
+                completion.increment()
+                completion.complete()
+                assertEquals("later", events.last())
+                events += "synchronous drain"
+            },
+            propagateHold = { events += "propagate hold" },
+        )
+        assertEquals(listOf("synchronous drain", "propagate hold", "builder completion"), events.takeLast(3))
+    }
+
     @Test fun growingKickUsesTheExistingPropertySpringAndSuppliedPresentationScale() {
         assertEquals(0, FluidKickSpec.growingSlot)
         assertEquals(0.0.toRawBits(), FluidKickSpec.unkickTarget.toRawBits())
