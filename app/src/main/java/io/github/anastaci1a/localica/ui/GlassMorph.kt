@@ -1188,7 +1188,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             val foregroundX = (width - foreground.width) / 2
                             val foregroundY = if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2
                             foreground.placeWithLayer(foregroundX, foregroundY) {
-                                motion.whenFluid {
+                                motion.whenFluid(ordinary = {
+                                    val fit = popupContentScale(width,height,foreground.width,foreground.height,page || placement == GlassPlacement.Search)
+                                    scaleX = fit; scaleY = fit
+                                }) {
                                     foregroundLens?.let { effect ->
                                         val blurRadius = motion.fluidBlurRadius
                                         val lensHeight = motion.fluidLensHeight
@@ -1201,10 +1204,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                             LensWarp(lensHeight, amount, 0f, IntSize(foreground.width, foreground.height.coerceAtLeast(1))),
                                         )
                                     }
-                                    Unit
-                                } ?: run {
-                                    val fit = popupContentScale(width,height,foreground.width,foreground.height,page || placement == GlassPlacement.Search)
-                                    scaleX = fit; scaleY = fit
                                 }
                             }
                             // A retained face may contain a Material Surface with a pointer node.

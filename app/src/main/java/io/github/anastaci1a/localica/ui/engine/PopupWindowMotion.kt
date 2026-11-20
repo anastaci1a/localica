@@ -95,7 +95,8 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         }
     }
     val fluid get() = expansion.popupLaw?.model?.style == PopupMotionStyle.Fluid
-    internal inline fun <T> whenFluid(place: () -> T): T? = if (fluid) place() else null
+    internal inline fun <T> whenFluid(ordinary: () -> T? = { null }, content: () -> T): T? =
+        if (fluid) content() else ordinary()
     internal inline fun <T> requestedEndpoint(open: () -> T, home: () -> T): T = if (shown) open() else home()
     init { expansion.nativeGate(gate) }
     fun attached(window: Any, host: ShadowPlane) {
