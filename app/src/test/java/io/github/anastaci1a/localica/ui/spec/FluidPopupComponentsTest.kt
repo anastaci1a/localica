@@ -353,6 +353,7 @@ class FluidPopupComponentsTest {
         assertEquals(5.0.toRawBits(), fresh.target.toRawBits())
         assertTrue(spring.advanceUnsmoothed(fresh, 0.0) === fresh)
         assertTrue(spring.advanceUnsmoothed(fresh, -0.03) === fresh)
+        assertTrue(spring.advanceUnsmoothed(fresh, Double.NaN) === fresh)
         val sampled = spring.advanceUnsmoothed(fresh, 0.03)
         assertEquals(FluidScalarSpringBody(5.0, 0.0), sampled.intermediate)
         val expected = SpringKernel.fromInstalled(1.0, 2.0).advanceBody(fresh.body, 5.0, 0.03)

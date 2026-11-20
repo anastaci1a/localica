@@ -155,7 +155,7 @@ internal data class FluidScalarSpringEntry(
     val body: FluidScalarSpringBody, val target: Double, val intermediate: FluidScalarSpringBody,
 ) {
     fun advanceUnsmoothed(stiffness: Double, damping: Double, dt: Double): FluidScalarSpringEntry {
-        if (dt <= 0.0) return this
+        if (!(dt > 0.0)) return this
         val nextIntermediate = FluidScalarSpringBody(target, 0.0)
         val nextBody = SpringKernel.fromInstalled(stiffness, damping).advanceBody(body, nextIntermediate.value, dt)
         return copy(body = nextBody, intermediate = nextIntermediate)
