@@ -33,37 +33,15 @@ internal data class PopupPortalBounds(val x: Double, val y: Double, val width: D
 
     fun centeredAt(centerX: Double, centerY: Double) =
         copy(x = centerX - width * 0.5, y = centerY - height * 0.5)
-
-    fun maskOffset() = -minX to -minY
-
-    /** Translation input in the scaled portal basis, before composing it with scale. */
-    fun cropOffset(croppedMidX: Double, croppedMidY: Double) = (midX - croppedMidX) to (midY - croppedMidY)
 }
 
 internal data class PopupPortalInsets(val top: Double, val leading: Double, val bottom: Double, val trailing: Double) {
     val horizontal get() = leading + trailing
     val vertical get() = top + bottom
-    val isZero get() = top == 0.0 && leading == 0.0 && bottom == 0.0 && trailing == 0.0
 
     fun signedCrop(bounds: PopupPortalBounds?): PopupPortalBounds? = bounds?.standardized()?.let {
         PopupPortalBounds(it.x + leading, it.y + top, it.width - horizontal, it.height - vertical)
     }
-}
-
-private const val PopupUnclippedContent = 4
-internal fun fluidPopupClipsBounds(itemOptions: Int) = (itemOptions and PopupUnclippedContent) == 0
-internal fun fluidPopupPreviewOptions(mode: Int, options: Int) =
-    if (mode == 4 || mode == 5) options or PopupUnclippedContent else options
-internal fun fluidPopupVisibleMask(pathBounds: PopupPortalBounds?, roundedRect: Boolean, equalsReferenceBounds: Boolean) =
-    pathBounds?.takeIf { !roundedRect || !equalsReferenceBounds }
-
-internal fun fluidPopupContentBounds(
-    visible: PopupPortalBounds?, backing: PopupPortalBounds?, size: PopupPortalBounds?,
-    insets: PopupPortalInsets, scale: Double,
-): PopupPortalBounds {
-    val width = visible?.width ?: backing?.let { it.width - insets.horizontal } ?: size?.width ?: 0.0
-    val height = visible?.height ?: backing?.let { it.height - insets.vertical } ?: size?.height ?: 0.0
-    return PopupPortalBounds(0.0, 0.0, width * scale, height * scale)
 }
 
 internal fun fluidPopupContentGrows(from: PopupPortalBounds, to: PopupPortalBounds) =
