@@ -65,6 +65,9 @@ class FluidPopupPortalGeometryTest {
         assertEquals(0.75, emptyWidth.scaleY, 0.0)
         val rightToLeft = fluidDestinationPlacement(80.0, 40.0, apertureInsets, item, destinationInsets, axis = 1, leftToRight = false)
         assertEquals(PopupPortalBounds(46.0, -8.0, 52.0, 26.0), rightToLeft.layer)
+        val zeroSpan = fluidDestinationPlacement(0.0, 40.0, apertureInsets, item, destinationInsets, axis = 1)
+        assertTrue(zeroSpan.layer.x.isNaN())
+        assertEquals(Double.POSITIVE_INFINITY, zeroSpan.layer.height, 0.0)
     }
 
     @Test fun growingOutlineTargetsRoundBeforeConversionAndKeepTheCompanionSeparate() {
