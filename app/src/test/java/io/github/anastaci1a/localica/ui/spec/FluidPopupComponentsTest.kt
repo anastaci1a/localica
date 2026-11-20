@@ -535,6 +535,49 @@ class FluidPopupComponentsTest {
         value.present(null)
     }
 
+    @Test fun lensPublicationPreservesPendingOnEqualityAndClearsBeforeTheCallback() {
+        val height = FluidScalarPublication()
+        val amount = FluidScalarPublication()
+        val equal = { a: Double, b: Double -> a == b }
+        height.consume { error("A fresh entry has no pending sample") }
+        height.queueTick(FluidScalarSpringBody(21.25, -0.0), 28.0, false) { _, _ ->
+            error("The first value has no previous value to compare")
+        }
+        height.queueTick(FluidScalarSpringBody(21.25, 9.0), 28.0, false, equal)
+        amount.queueTick(FluidScalarSpringBody(-0.005, 0.25), -0.01, false, equal)
+        FluidLensingSpec.publishSample(height) { value, velocity, cap, immediate, additive ->
+            assertEquals(21.25.toRawBits(), value.toRawBits())
+            assertEquals((-0.0).toRawBits(), velocity.toRawBits())
+            assertEquals(0, cap)
+            assertFalse(immediate)
+            assertFalse(additive)
+            height.consume { error("The pending sample was cleared before the callback") }
+            height.queueTick(FluidScalarSpringBody(22.0, 3.0), 28.0, false, equal)
+        }
+        val published = mutableListOf<FluidScalarSpringBody>()
+        height.consume { published += it }
+        amount.consume { published += it }
+        assertEquals(listOf(FluidScalarSpringBody(22.0, 3.0), FluidScalarSpringBody(-0.005, 0.25)), published)
+    }
+
+    @Test fun lensPublicationUsesTheProposedPreviousValueAndSnapsFiniteFinish() {
+        val publication = FluidScalarPublication()
+        val equal = { a: Double, b: Double -> a == b }
+        publication.queueTick(FluidScalarSpringBody(0.0, 2.0), 1.0, false, equal)
+        publication.queueTick(FluidScalarSpringBody(-0.0, 4.0), 1.0, false, equal)
+        publication.queueTick(FluidScalarSpringBody(0.999, 5.0), 1.0, true) { proposed, previous ->
+            assertEquals(1.0.toRawBits(), proposed.toRawBits())
+            assertEquals((-0.0).toRawBits(), previous.toRawBits())
+            false
+        }
+        val published = mutableListOf<FluidScalarSpringBody>()
+        publication.consume { published += it }
+        publication.consume { error("Existing publications are consumed only once") }
+        assertEquals(listOf(FluidScalarSpringBody(1.0, 0.0)), published)
+        publication.queueTick(FluidScalarSpringBody(1.0, 8.0), 2.0, false, equal)
+        publication.consume { error("A duplicate value does not enqueue velocity by itself") }
+    }
+
     @Test fun lensEntriesAppendIndependentlyAndReuseTheExistingDrain() {
         val pending = mutableListOf<FluidPopupChannel>()
         val events = mutableListOf<String>()
