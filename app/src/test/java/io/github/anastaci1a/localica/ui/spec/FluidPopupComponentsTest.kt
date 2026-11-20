@@ -714,6 +714,36 @@ class FluidPopupComponentsTest {
         assertEquals(Float.NEGATIVE_INFINITY, wrapped.bias.second)
     }
 
+    @Test fun narrowComputeRequestsPreclearOnlyForTheAdmittedDestinationAndPartialGrid() {
+        val size = 96 to 65
+        var requested = 0
+        fun plan(
+            flags: Int = 0, nonzero: Boolean = false, recorded: Pair<Int, Int> = size,
+            upper: Pair<Int, Int> = 32 to 64, encoder: Boolean = true,
+        ) = FluidGaussianSpec.narrowPreclear(flags, nonzero, size, recorded, upper) {
+            requested++
+            encoder
+        }
+        assertEquals(null, plan(flags = Int.MIN_VALUE))
+        assertEquals(null, plan(nonzero = true))
+        assertEquals(null, plan(upper = 96 to 96))
+        assertEquals(null, plan(upper = -32 to -32))
+        assertEquals(0, requested)
+        assertEquals(null, plan(encoder = false))
+        val preclear = requireNotNull(plan(flags = 0x20000000, nonzero = true, recorded = 96 to 64))
+        assertEquals(2, requested)
+        assertEquals(3L to 3L, preclear.threadgroups)
+        assertEquals(0x26, preclear.function)
+        assertEquals(0, preclear.destinationTextureSlot)
+        assertEquals(32, preclear.imageblockSide)
+        val width = FluidGaussianSpec.NarrowWidth.Taps7
+        val ordinary = FluidGaussianSpec.narrowCompute(width, true, 0x60000005)
+        val prepared = preclear.submittedFlags(0x60000005)
+        assertEquals(0xc0000005.toInt(), prepared)
+        assertEquals(0x12, ordinary.function)
+        assertEquals(0x18, FluidGaussianSpec.narrowCompute(width, true, prepared).function)
+    }
+
     @Test fun gaussianTileDecimationUsesLiveAdmissionAndTheNamedThreadDivisors() {
         val factors = FluidGaussianSpec.Decimation.entries
         val capabilities = FluidGaussianSpec.Capabilities(true, 0, true, true, 0)

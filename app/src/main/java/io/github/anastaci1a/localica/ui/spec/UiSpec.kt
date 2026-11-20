@@ -788,10 +788,31 @@ internal object FluidGaussianSpec {
         fun texel(inside: Boolean, edgePolicy: Int) = selectComputeTexel(inside, finalPass, edgePolicy)
     }
 
+    private fun preparedComputeSurface(flags: Int) = (flags and 0xa0000000.toInt()) == Int.MIN_VALUE
+
     fun narrowCompute(width: NarrowWidth, finalRequested: Boolean, destinationFlags: Int): NarrowComputePass {
-        val finalPass = finalRequested && (destinationFlags and 0xa0000000.toInt()) == 0x80000000.toInt()
+        val finalPass = finalRequested && preparedComputeSurface(destinationFlags)
         val base = if (finalPass) 0x18 else 0x12
         return NarrowComputePass(base + width.ordinal, 0x21 + width.ordinal, finalPass)
+    }
+
+    data class NarrowPreclear(val threadgroups: Pair<Long, Long>) {
+        val function get() = 0x26
+        val destinationTextureSlot get() = 0
+        val imageblockSide get() = 32
+        fun submittedFlags(current: Int) = (current and 0x5fffffff) or Int.MIN_VALUE
+    }
+
+    fun narrowPreclear(
+        flags: Int, originalArgumentNonzero: Boolean, size: Pair<Int, Int>, recordedSize: Pair<Int, Int>,
+        roundedUpper: Pair<Int, Int>, startEncoder: () -> Boolean,
+    ): NarrowPreclear? {
+        if (preparedComputeSurface(flags) || (originalArgumentNonzero && size == recordedSize)) return null
+        fun gridCeiling(pixels: Int) = (pixels.toLong() + 31L) ushr 5
+        val x = gridCeiling(size.first)
+        val y = gridCeiling(size.second)
+        if (gridCeiling(roundedUpper.first) >= x && gridCeiling(roundedUpper.second) >= y) return null
+        return if (startEncoder()) NarrowPreclear(x to y) else null
     }
 
     data class NarrowCoordinates(val scale: Pair<Float, Float>, val bias: Pair<Float, Float>)
