@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.IntSize
-import io.github.anastaci1a.localica.ui.engine.GlassBodyTransform
 import kotlin.math.ceil
 
 /** Passive observation of the actual modern Canvas sampling choice. */
@@ -40,7 +39,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     resolutionReader: (() -> Float)? = null, averageReader: (() -> MaterialAverageStyle)? = null,
-    body: ((Size) -> GlassBodyTransform)? = null, geometry: ((Size) -> LensGeometry)? = null,
+    liveLens: ((Size) -> LiveLensFrame)? = null,
     effect: (LensGeometry?, Float, Float) -> RenderEffect?) {
     if (flatGlass()) return
     val opticalWork = LocalGlassOpticalWork.current
@@ -185,13 +184,13 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     }
     // Invert the outer press before placing the recording in live layout pixels.
     Canvas(modifier.graphicsLayer()) {
-        val transform = body?.invoke(size) ?: GlassBodyTransform()
-        val live = geometry?.invoke(size)?.deformed(transform, center)
+        val frame = liveLens?.invoke(size)
+        val live = frame?.geometry
         val bounds = live?.bounds ?: Rect(Offset.Zero, size)
         if (bounds.isEmpty) return@Canvas
-        if (transform == GlassBodyTransform() && bounds == Rect(Offset.Zero, size)) sample(live)
-        else scale(1f / transform.scale.x, 1f / transform.scale.y) {
-            translate(-transform.drift.x, -transform.drift.y) {
+        if (frame == null || (frame.scale == Offset(1f, 1f) && frame.drift == Offset.Zero && bounds == Rect(Offset.Zero, size))) sample(live)
+        else scale(1f / frame.scale.x, 1f / frame.scale.y) {
+            translate(-frame.drift.x, -frame.drift.y) {
                 inset(bounds.left, bounds.top, size.width - bounds.right, size.height - bounds.bottom) { sample(live) }
             }
         }

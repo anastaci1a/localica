@@ -1,23 +1,11 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.*
-import io.github.anastaci1a.localica.ui.engine.GlassBodyTransform
-import io.github.anastaci1a.localica.ui.engine.deformed
 import kotlin.math.*
 
 internal data class LensGeometry(val bounds: Rect, val corner: Float, private val outlines: List<RoundRect>? = null) {
     val span get() = min(bounds.width, bounds.height) / 2f
     val bodies get() = outlines ?: listOf(RoundRect(bounds, CornerRadius(corner.coerceIn(0f, span))))
-
-    fun deformed(transform: GlassBodyTransform, pivot: Offset): LensGeometry =
-        if (transform.scale == Offset(1f, 1f) && transform.drift == Offset.Zero) this
-        else fromBodies(bodies.map { it.deformed(transform, pivot) })
-
-    fun recorded(resolution: Float, padding: Float): LensGeometry {
-        val origin = bounds.topLeft
-        val translation = Offset(padding - origin.x, padding - origin.y) * resolution
-        return deformed(GlassBodyTransform(Offset(resolution, resolution), translation), Offset.Zero)
-    }
 
     companion object {
         fun fromBodies(bodies: List<RoundRect>): LensGeometry {
@@ -27,6 +15,8 @@ internal data class LensGeometry(val bounds: Rect, val corner: Float, private va
         }
     }
 }
+
+internal data class LiveLensFrame(val geometry: LensGeometry, val scale: Offset, val drift: Offset)
 
 /** Fit the four adjacent radius sums before applying body strain. */
 internal fun RoundRect.fittedLensCorners(): RoundRect {
