@@ -323,6 +323,80 @@ internal fun ArrayDeque<FluidTimelineStep>.drainFluidTimeline(
     due.forEach { run(it, effectiveSpeed) }
 }
 
+/** One completion group for the admitted morph. The existing owner supplies its held requests. */
+internal class FluidMorphCompletion {
+    private var count = 0L
+    private var blocks = mutableListOf<() -> Unit>()
+
+    fun add(incrementing: Boolean = true, block: () -> Unit) {
+        blocks.add(block)
+        if (incrementing) increment()
+    }
+
+    fun increment() {
+        count = Math.addExact(count, 1L)
+        if (count == 0L) fire()
+    }
+
+    fun complete() {
+        val remaining = count - 1L
+        if (remaining < 0L) return
+        count = remaining
+        if (count == 0L) fire()
+    }
+
+    fun completeImmediately() {
+        val active = count != 0L
+        count = 0L
+        if (active) fire()
+    }
+
+    private fun fire() {
+        val pending = blocks
+        blocks = mutableListOf()
+        pending.forEach { it() }
+    }
+
+    fun start(block: () -> Unit, drain: () -> Unit, propagateHold: () -> Unit) {
+        add(block = block)
+        drain()
+        propagateHold()
+        complete()
+    }
+
+    fun acquireInteraction(previousAssertions: Int) {
+        if (previousAssertions == 0) increment()
+    }
+
+    fun releaseInteraction(remainingAssertions: Int, resetOrigin: () -> Unit, drain: () -> Unit, requestTimer: () -> Unit) {
+        if (remainingAssertions != 0) return
+        resetOrigin()
+        drain()
+        requestTimer()
+        complete()
+    }
+
+    fun finishWithoutTimeline(applyRequests: () -> Unit, afterGroup: (() -> Unit)?, completion: (() -> Unit)?) {
+        applyRequests()
+        completeImmediately()
+        afterGroup?.invoke()
+        completion?.invoke()
+    }
+}
+
+internal fun completeFluidTimeline(
+    callback: (() -> Unit)?, prepareCleanup: () -> Unit, removeViews: () -> Unit,
+    clearOwnerState: () -> Unit, setState: (Int) -> Unit, resetTimeline: () -> Unit, removeTrackedSdf: () -> Unit,
+) {
+    callback?.invoke()
+    prepareCleanup()
+    removeViews()
+    clearOwnerState()
+    setState(2)
+    resetTimeline()
+    removeTrackedSdf()
+}
+
 internal object FluidKickSpec {
     const val growingSlot = 0
     const val unkickTarget = 0.0
