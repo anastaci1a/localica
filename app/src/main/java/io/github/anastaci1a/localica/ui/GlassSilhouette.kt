@@ -61,13 +61,3 @@ internal fun splitPillBodies(size: Size, progress: Float): List<RoundRect> {
     return listOf(RoundRect(0f, 0f, half, size.height, outer, inner, inner, outer),
         RoundRect(half + gap, 0f, size.width, size.height, inner, outer, outer, inner))
 }
-
-/** A rest body under its surface's own draw transform about [pivot]; shadows read the same record. */
-internal fun RoundRect.deformed(transform: GlassBodyTransform, pivot: Offset): RoundRect {
-    val (sx, sy) = transform.scale
-    fun x(value: Float) = pivot.x + (value - pivot.x) * sx + transform.drift.x
-    fun y(value: Float) = pivot.y + (value - pivot.y) * sy + transform.drift.y
-    fun CornerRadius.scaled() = CornerRadius(this.x * sx, this.y * sy)
-    return RoundRect(x(left), y(top), x(right), y(bottom), topLeftCornerRadius.scaled(),
-        topRightCornerRadius.scaled(), bottomRightCornerRadius.scaled(), bottomLeftCornerRadius.scaled())
-}

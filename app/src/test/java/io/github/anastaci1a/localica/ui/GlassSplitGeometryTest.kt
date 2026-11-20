@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import io.github.anastaci1a.localica.ui.engine.deformed
 import org.junit.Assert.*
 import org.junit.Test
 

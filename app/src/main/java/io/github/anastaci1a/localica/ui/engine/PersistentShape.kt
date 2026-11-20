@@ -6,6 +6,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import io.github.anastaci1a.localica.ui.spec.*
 import kotlin.math.*
+internal data class GlassBodyTransform(val scale: Offset = Offset(1f, 1f), val drift: Offset = Offset.Zero) {
+    fun localPoint(point: Offset, size: Size) = Offset(
+        size.width * (.5f + (point.x - .5f) / scale.x) - drift.x / scale.x,
+        size.height * (.5f + (point.y - .5f) / scale.y) - drift.y / scale.y)
+}
+
+/** A rest body under its surface's own draw transform about [pivot]; shadows read the same record. */
+internal fun RoundRect.deformed(transform: GlassBodyTransform, pivot: Offset): RoundRect {
+    val (sx, sy) = transform.scale
+    val drift = transform.drift
+    fun x(value: Float) = pivot.x + (value - pivot.x) * sx + drift.x
+    fun y(value: Float) = pivot.y + (value - pivot.y) * sy + drift.y
+    fun CornerRadius.scaled() = CornerRadius(this.x * sx, this.y * sy)
+    return RoundRect(x(left), y(top), x(right), y(bottom), topLeftCornerRadius.scaled(),
+        topRightCornerRadius.scaled(), bottomRightCornerRadius.scaled(), bottomLeftCornerRadius.scaled())
+}
+
 /** [keys] (D14) name bodies for correspondence; null corresponds by order and geometry. */ @Immutable data class ShapeTarget(val bodies: List<RoundRect>,val join: JoinPolicy=JoinPolicy.ConcaveFillet,val strain: GlassStrain=GlassStrain.None,val keys: List<Any>?=null)
 enum class JoinPolicy { ConcaveFillet,Union }; @Immutable data class GlassStrain(val strain: Float,val depth: Float) { companion object { val None=GlassStrain(0f,0f) } }; @Stable interface ShapeView { val key: Any; fun outline(): ShapeFrame; fun outlineAt(stamp: FrameStamp): ShapeFrame }
 /** One published frame. [path] is the GlassSilhouette Union fold over nonzero-area bodies, or with [join] the #556 ConcaveFillet contour; built once on first read and never reset. */ @Immutable class ShapeFrame internal constructor(val bodies: List<RoundRect>,val bounds: Rect,val cornerRadius: Float,val strain: GlassStrain,internal val join: JoinData?=null) { val path: Path by lazy { if(join!=null) filletInputs(bodies,join).let { (o,local,s) -> Path().apply { addPath(concaveFilletPath(local,join.gap,s),o) } } else bodies.filter { it.width>0 && it.height>0 }.fold(Path()) { c,b -> Path.combine(PathOperation.Union,c,Path().apply { addRoundRect(b) }) } } }

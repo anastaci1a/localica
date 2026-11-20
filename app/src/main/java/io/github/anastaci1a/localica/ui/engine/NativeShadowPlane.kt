@@ -26,9 +26,10 @@ internal class NativeSurfaceField(private val plane: ShadowPlane,private val nod
     private var frame=ShapeFrame(emptyList(),Rect.Zero,0f,GlassStrain.None)
     internal fun frame()=frame
     fun draw(scope: androidx.compose.ui.graphics.drawscope.ContentDrawScope,opacity: Float,strength: Float,radius: Float,
-        sx: Float,sy: Float,shift: Float,receiver: GlassShadowReceiver?,exclusion: GlassShadowExclusion?,content: ()->Unit) = with(scope) {
+        transform: GlassBodyTransform,receiver: GlassShadowReceiver?,exclusion: GlassShadowExclusion?,content: ()->Unit) = with(scope) {
+        val (sx,sy)=transform.scale; val (dx,dy)=transform.drift
         val corner=radius.coerceIn(0f,size.minDimension/2f)
-        val presented=Rect(Offset(shift+size.width*(1f-sx)/2f,size.height*(1f-sy)/2f),Size(size.width*sx,size.height*sy))
+        val presented=Rect(Offset(dx+size.width*(1f-sx)/2f,dy+size.height*(1f-sy)/2f),Size(size.width*sx,size.height*sy))
         val body=RoundRect(presented,CornerRadius(corner*sx,corner*sy))
         frame=ShapeFrame(listOf(body),presented,corner,GlassStrain.None)
         val alpha=opacity.coerceIn(0f,1f)
@@ -43,7 +44,7 @@ internal class NativeSurfaceField(private val plane: ShadowPlane,private val nod
         }
         try {
             if(node.owns(plane)) {
-                if(scaled) translate(left=shift) { scale(sx,sy) {
+                if(scaled) translate(dx,dy) { scale(sx,sy) {
                     with(cache) { draw(listOf(RoundRect(Rect(Offset.Zero,size),CornerRadius(corner)) to 1f),strength,spread,receiver,exclusion) }
                 } } else with(cache) { draw(node.frameOn(plane).bodies.map { it to 1f },strength,spread,receiver,exclusion) }
             }
@@ -133,7 +134,7 @@ internal fun androidx.compose.ui.layout.Placeable.PlacementScope.placePopupFace(
     if(phase()<.55f) face.place(x,y)
 }
 
-internal fun nativeShadowExclusion(bodies: List<RoundRect>,origin: Offset,size: Size,scaleX: Float,scaleY: Float,shift: Float,weight: Float)=
-    if(bodies.isEmpty()) null else GlassShadowExclusion(bodies,origin,size,scaleX,scaleY,shift,weight)
+internal fun nativeShadowExclusion(bodies: List<RoundRect>,origin: Offset,size: Size,transform: GlassBodyTransform,weight: Float)=
+    if(bodies.isEmpty()) null else GlassShadowExclusion(bodies,origin,size,transform,weight)
 
 internal fun SurfaceView.fieldScalesWithBody()=(this as SurfaceNode).fieldInheritsBodyScale

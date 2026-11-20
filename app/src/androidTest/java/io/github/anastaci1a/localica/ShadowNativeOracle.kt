@@ -155,17 +155,18 @@ internal fun verifyShadowUnion(rule: ComposeContentTestRule, actual: PresentedCa
 
 /** Existing controls and their existing root fixture; no alternate shadow presenter or motion owner. */
 internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: GlassRendererMode,
-    projectedReference: Boolean = false) {
+    projectedReference: Boolean = false, suppressPressedShadow: Boolean = false) {
     var projectedSamples = 0
     var kind by mutableStateOf("button")
     var available by mutableStateOf(true)
+    var shadowSuppressed by mutableStateOf(false)
     lateinit var clock: UiClock
     lateinit var anchor: GlassAnchor
     val runtime = GlassRendererRuntime(mode)
     rule.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
         val currentClock = LocalUiClock.current
         SideEffect { clock = currentClock }
-        CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = 1f, shadowSpread = 1f, renderer = mode)) {
+        CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = if (shadowSuppressed) 0f else 1f, shadowSpread = 1f, renderer = mode)) {
             Box(Modifier.size(240.dp).background(Color.White).testTag("oracle-scene"), contentAlignment = Alignment.Center) {
                 key(kind) {
                     anchor = rememberGlassAnchor()
@@ -206,16 +207,26 @@ internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: Glass
                     for (pressed in listOf(true, false)) {
                         subject.performTouchInput { if (pressed) down(center) else up() }
                         repeat(12) { frame ->
+                            if (suppressPressedShadow && pressed && frame == 4) rule.runOnIdle { shadowSuppressed = true }
                             rule.mainClock.advanceTimeByFrame(); rule.waitForIdle()
                             rule.runOnIdle {
                                 assertSame("Press keeps its actual caster", node, anchor.surfaceNode)
                                 assertSame("Press keeps its persistent shape", shape, node.shape)
                             }
                             val actual = capture.capture { scene ->
-                                val strain = anchor.contact.body.value
+                                val raw = anchor.contact.body.value
+                                // This model reference checks native transform wiring. PressGeometryTest independently checks rendered spans.
+                                val longSide = body.size.maxDimension / rule.density.density
+                                val shortSide = body.size.minDimension / rule.density.density
+                                val points = if (longSide < 120f) 16f else
+                                    (16.0 - 12.0 * ((shortSide.toDouble() - 44.0) / 116.0).coerceIn(0.0, 1.0)).toFloat()
+                                val gain = points / longSide
+                                val common = raw.pressDepth?.let { 1f + (-gain / .24f) * it } ?: (1f + raw.lift * gain)
+                                val axis = if (anchor.contact.vertical) -raw.strain else raw.strain
+                                val shifted = body.translate(Offset(raw.drift.x * body.width, raw.drift.y * body.height))
                                 ShadowDrawState(clock.stampNow.sequence, checkNotNull(anchor.shadowPlane).host.routeEpoch,
-                                    shadowScreenBodies(listOf(RoundRect(body, CornerRadius(radius)) to 1f), scene.topLeft),
-                                    scaleX = strain.scaleX(anchor.contact.vertical), scaleY = strain.scaleY(anchor.contact.vertical))
+                                    shadowScreenBodies(listOf(RoundRect(shifted, CornerRadius(radius)) to 1f), scene.topLeft),
+                                    scaleX = common * kotlin.math.exp(axis), scaleY = common * kotlin.math.exp(-axis))
                             }
                             if (actual.nativeWindows.single().state.let { it.scaleX != 1f || it.scaleY != 1f }) projectedSamples++
                             assertShadowField(rule, actual, "$mode-press-$pressed-$frame", projectedReference)

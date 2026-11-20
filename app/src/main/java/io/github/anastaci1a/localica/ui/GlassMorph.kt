@@ -5,6 +5,7 @@ import io.github.anastaci1a.localica.ui.components.TriggerRole
 import io.github.anastaci1a.localica.ui.components.PopupSharedContent
 
 import io.github.anastaci1a.localica.ui.layout.PopupViewportSlot
+import io.github.anastaci1a.localica.ui.layout.lyricsHeaderWidth
 import io.github.anastaci1a.localica.ui.spec.PopupViewportInsets
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
 import io.github.anastaci1a.localica.ui.spec.PopupKind
@@ -79,7 +80,10 @@ import io.github.anastaci1a.localica.ui.engine.glassWellCaster
 
 /** The trigger stays in layout while its one visible surface moves into a modal window. */
 internal data class GlassOriginPresentation(val shape: GlassShape, val vertical: Boolean,
-    val horizontalShift: Float)
+    val horizontalShift: Float, private val inheritedWidth: Float) {
+    fun transform(size: Size, density: Float) =
+        shape.bodyTransform(Size(size.width + inheritedWidth, size.height), density, vertical)
+}
 
 /** How the screen currently shows an anchor's resting layout bounds: a uniform scale about [pivot]
  * in the same coordinate space, as when a selected item lifts (#554). */
@@ -326,13 +330,18 @@ internal fun GlassAnchor?.captureInk() {
 
 internal fun GlassAnchor.refreshSource() { source?.refresh() }
 
-internal fun TriggerRole.LyricsHeader<GlassSplitContact, GlassOriginPreparation>.presentation(height: Float): GlassOriginPresentation {
+internal fun TriggerRole.LyricsHeader<GlassSplitContact, GlassOriginPreparation>.presentation(
+    height: Float, density: androidx.compose.ui.unit.Density,
+): GlassOriginPresentation {
     val separation = originGap(preparation.progress)
     val left = if (side < 0f) contacts.left else contacts.right
     val right = if (side < 0f) contacts.right else contacts.left
-    val common = contacts.presentation(contacts.left, contacts.right, 0f).let { if (contacts.left.vertical) it.copy(strain = -it.strain) else it }
+    val joinedWidth = with(density) { lyricsHeaderWidth(CompactControlSize, 1f, .5f).roundToPx().toFloat() }
+    val inheritedWidth = (joinedWidth - height) * (1f - separation)
+    val common = contacts.presentation(contacts.left, contacts.right, 0f)
+        .bodyTransform(Size(joinedWidth, height), density.density, contacts.left.vertical)
     return GlassOriginPresentation(contacts.presentation(left, right, separation), left.vertical,
-        side * height / 2f * (common.scaleX() - 1f) * (1f - separation))
+        side * inheritedWidth / 2f * (common.scale.x - 1f), inheritedWidth)
 }
 
 /** A selection item supplies existing geometry data; the popup system owns its origin mapping. */
@@ -392,11 +401,12 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor?, source: FrostedBackdrop?
     role: TriggerRole<GlassSplitContact, GlassOriginPreparation> = TriggerRole.Surface,
     face: (@Composable () -> Unit)? = null): Modifier {
     if (anchor == null && role !is TriggerRole.LyricsHeader) return this
+    val density = LocalDensity.current
     val originPresentation: ((Float) -> GlassOriginPresentation)? =
-        if (role is TriggerRole.LyricsHeader) remember(role) { { height: Float -> role.presentation(height) } } else null
+        if (role is TriggerRole.LyricsHeader) remember(role, density) { { height: Float -> role.presentation(height, density) } } else null
     val marker = GlassDepthMarker(anchor, originPresentation, source, role)
     val presented = if (role is TriggerRole.LyricsHeader) drawWithContent {
-        translate(left = if (role.separated) role.presentation(size.height).horizontalShift else 0f) { this@drawWithContent.drawContent() }
+        translate(left = if (role.separated) role.presentation(size.height, density).horizontalShift else 0f) { this@drawWithContent.drawContent() }
     } else this
     if (anchor == null) return if (role !is TriggerRole.LyricsHeader) this else presented.then(marker)
     originPresentation?.let { presentation ->
@@ -456,10 +466,10 @@ internal fun Modifier.glassDepthScale(): Float = foldIn(1f) { depth, element ->
 }
 
 /** A named trigger carries its shared contact policy into the material host. */
-internal fun Modifier.glassSurfaceContactPresentation(): (() -> GlassShape)? =
+internal fun Modifier.glassSurfaceOriginPresentation(): ((Float) -> GlassOriginPresentation)? =
     foldIn<((Float) -> GlassOriginPresentation)?>(null) { origin, element ->
         if (element is GlassDepthMarker) element.origin ?: origin else origin
-    }?.let { origin -> { origin(0f).shape } }
+    }
 
 internal enum class GlassPlacement { Search, Menu, Center, Sheet, Page }
 internal val LocalGlassPanelReady = compositionLocalOf { true }
@@ -999,11 +1009,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         // optical jump when the same body returns to its trigger.
                         val pose = if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight()) else null
                         val shape = if (page || reduced && pose == null) GlassShape() else pose?.shape ?: body.value
-                        val vertical = pose?.vertical ?: anchor.contact.vertical
+                        val base = pose?.takeUnless { page }?.transform(size, density.density)
+                            ?: shape.bodyTransform(size, density.density, pose?.vertical ?: anchor.contact.vertical)
+                        val t = base.copy(drift = base.drift + Offset(pose?.horizontalShift ?: 0f, 0f))
                         val scaledField=windowNode.fieldScalesWithBody()
-                        val fieldSx=if(scaledField) shape.scaleX(vertical) else 1f
-                        val fieldSy=if(scaledField) shape.scaleY(vertical) else 1f
-                        val fieldShift=if(scaledField) pose?.horizontalShift ?: 0f else 0f
+                        val fieldTransform=if(scaledField) t else GlassBodyTransform()
                         // Draw in this native window outside the sampled panel/backdrop.
                         // Read placed coordinates in the same draw, not a previous-frame
                         // globally-positioned state handoff. The original trigger restores
@@ -1014,11 +1024,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             popupFlight.expanded && admittedDraw &&
                             coordinates?.isAttached == true) {
                             val home = (returningHome ?: anchor.presentedBounds).translate(-coordinates.backdropPosition(view))
-                            val caster = glassWellCaster(size, radius().toPx(), shape.scaleX(vertical),
-                                shape.scaleY(vertical), pose?.horizontalShift ?: 0f)
+                            val caster = glassWellCaster(size, radius().toPx(), t)
                             with(originWell) { draw(home, homeRadius().toPx(), caster, wellStrength) }
                             shadowReceiver[0] = receiverField.receiver(home,homeRadius().toPx(),size,
-                                fieldSx,fieldSy,fieldShift,
+                                fieldTransform,
                                 physicalSize = (returningHome ?: anchor.presentedBounds).size)
                         }
                         // The trigger's window keeps drawing its neighbors' shared shadow.
@@ -1027,27 +1036,23 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (!page && !detached && popupFlight.modalPresent && admittedDraw && coordinates?.isAttached == true) {
                             val surfaceOrigin = coordinates.backdropPosition(view)
                             val extent = glassShadowInset(shadowSpread).toPx()
-                            val sx = shape.scaleX(vertical)
-                            val sy = shape.scaleY(vertical)
-                            val drawn = Rect(surfaceOrigin + Offset((pose?.horizontalShift ?: 0f) + size.width * (1f - sx) / 2f,
-                                size.height * (1f - sy) / 2f), Size(size.width * sx, size.height * sy)).inflate(extent)
+                            val drawn = Rect(surfaceOrigin + Offset(t.drift.x + size.width * (1f - t.scale.x) / 2f,
+                                t.drift.y + size.height * (1f - t.scale.y) / 2f), Size(size.width * t.scale.x, size.height * t.scale.y)).inflate(extent)
                             val neighbors = glassShadowNeighbors(anchor, this).filter { Rect(it.left, it.top, it.right, it.bottom).inflate(extent).overlaps(drawn) }
                             shadowExclusion[0] = nativeShadowExclusion(neighbors, surfaceOrigin, size,
-                                fieldSx, fieldSy, fieldShift, weight = phase())
+                                fieldTransform, weight = phase())
                         }
                         // Composite field and material once, with the original padded footprint.
                         nativeField.draw(this,surfaceOpacity(),wellStrength *
                             (if(quietOptics) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
-                            radius().toPx(),shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
+                            radius().toPx(),t,
                             shadowReceiver[0],shadowExclusion[0]) {
                             // R5 (#847): B holds every popup optic until the restored source takes it at its draw entry.
                             if (visible || popupFlight.expanded || anchor.restoredBodyReceipt != anchor.restoredDrawRequest)
                                 popupFlight.refillBody(this@drawWithContent) {
-                                    translate(left = pose?.horizontalShift ?: 0f) {
-                                        scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
-                                            this@drawWithContent.drawContent()
-                                            wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
-                                        }
+                                    drawGlassBody(t) {
+                                        this@drawWithContent.drawContent()
+                                        wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
                                     }
                                 }
                             opticalBody.draw(this@drawWithContent)

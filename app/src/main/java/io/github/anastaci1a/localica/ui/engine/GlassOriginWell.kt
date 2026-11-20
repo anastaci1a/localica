@@ -66,9 +66,10 @@ internal fun glassWellShade(x: Float, y: Float, width: Float, height: Float, rad
     return (illumination * profile.lightStrength - profile.ambient * glassWellDepth(u)).coerceIn(-.25f, .08f)
 }
 
-/** Same center pivot, anisotropic body deformation and pre-scale translation as GlassMorph. */
-internal fun glassWellCaster(size: Size, radius: Float, sx: Float, sy: Float, shift: Float): RoundRect {
-    val center = Offset(size.width / 2f + shift, size.height / 2f)
+/** Same center pivot, anisotropic body deformation and post-scale translation as GlassMorph. */
+internal fun glassWellCaster(size: Size, radius: Float, transform: GlassBodyTransform): RoundRect {
+    val (sx, sy) = transform.scale
+    val center = Offset(size.width / 2f, size.height / 2f) + transform.drift
     val half = Offset(size.width * sx / 2f, size.height * sy / 2f)
     val corner = radius.coerceIn(0f, size.minDimension / 2f)
     return RoundRect(Rect(center - half, center + half), CornerRadius(corner * sx, corner * sy))
