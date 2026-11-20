@@ -774,8 +774,26 @@ internal object FluidGaussianSpec {
 internal object FluidLensingSpec {
     enum class Filter(val registeredName: String) { GaussianBlur("gaussianBlur"), DisplacementMap("displacementMap") }
     val filterOrder get() = Filter.entries
-    fun <Image : Any> colorChain(content: Image, emit: (Filter, Image) -> Image?): Image =
-        filterOrder.fold(content) { color, filter -> emit(filter, color) ?: color }
+    data class NamedMap<Surface : Any>(val surface: Surface, val scale: Float)
+
+    /** The renderer retains its own destination and reports whether the selected kind-7 draw emitted. */
+    fun <Surface : Any> retainNamedMap(
+        existing: NamedMap<Surface>?, field: Surface?, destination: () -> NamedMap<Surface>?,
+        render: (textureFunction: Int, field: Surface, destination: Surface) -> Boolean,
+    ): NamedMap<Surface>? {
+        if (existing != null) return existing
+        if (field == null) return null
+        val target = destination() ?: return null
+        return if (render(glassEffectFunction, field, target.surface)) target else null
+    }
+
+    fun <Image : Any> colorChain(
+        content: Image, namedMap: () -> NamedMap<Image>?,
+        emit: (Filter, Image, NamedMap<Image>?) -> Image?,
+    ): Image = filterOrder.fold(content) { color, filter ->
+        val map = if (filter == Filter.DisplacementMap) namedMap() else null
+        emit(filter, color, map) ?: color
+    }
 
     private val lensPropertyControls = FluidPropertySpringControls(delay = 0.0, startingVelocity = null, interactive = false, additive = false)
 
@@ -828,6 +846,7 @@ internal object FluidLensingSpec {
     val trackedProperties = listOf("bounds", "position", "cornerRadius", FluidPopupChannel.CornerRadii.key, "cornerCurve", "hidden", "meshTransform")
 
     const val displacementFunction = 44
+    const val glassEffectFunction = 66
     const val namedSourceTexture = 1
     const val displacementVertexType = 6
     const val freshHeight = 20.0
@@ -1052,7 +1071,7 @@ internal object FluidCornerSpec {
     }
 
     fun fieldFragment(inline: Boolean, compose: Boolean, combineSelector: Int) =
-        FieldFragment(if (inline) 66 else 1, if (!compose || combineSelector == 1) 63 else combineSelector)
+        FieldFragment(if (inline) FluidLensingSpec.glassEffectFunction else 1, if (!compose || combineSelector == 1) 63 else combineSelector)
 
     fun scansOverlap(parentAdmitted: Boolean, disableOption: Boolean) = parentAdmitted && !disableOption
     fun <Node : Any> inlineBounds(
