@@ -1079,6 +1079,52 @@ class FluidPopupComponentsTest {
         }
     }
 
+    @Test fun radiusSmoothingInstallsOverridesAndAdvancesParametersBeforeThePhysicalBody() {
+        val previous = FluidRadiusSpring(
+            entry = FluidScalarSpringEntry(FluidScalarSpringBody(0.2, 0.1), 4.0, FluidScalarSpringBody(0.25, 0.75)),
+            damping = FluidSmoothingParameter(FluidScalarSpringBody(0.7, 0.07), 0.7, 0.0, 0),
+            response = FluidSmoothingParameter(FluidScalarSpringBody(0.9, -0.1), 0.9, 0.0, 0),
+            targetSmoothing = 0.0, stiffness = 100.0, physicalDamping = 20.0, velocityScalingFactor = 0.2,
+        )
+        val description = FluidRadiusSmoothingDescription(
+            flags = Long.MIN_VALUE or 0x101L, damping = 0.8, response = 0.5,
+            dampingStart = 0.5, responseStart = 0.75,
+            dampingSmoothing = 0.4, responseSmoothing = 0.3, targetSmoothing = 0.2,
+        )
+        assertEquals(null, description.copy(flags = 0L).install(previous, reset = true))
+        val installed = requireNotNull(description.install(previous, reset = true))
+        assertEquals(FluidScalarSpringBody(0.5, 0.07), installed.damping.body)
+        assertEquals(FluidScalarSpringBody(0.75, -0.1), installed.response.body)
+        assertEquals(previous.entry, installed.entry)
+        assertTrue(installed.advance(0.0) === installed)
+        val next = installed.advance(0.031)
+        fun number(expected: Double, actual: Double) =
+            assertEquals(expected, actual, 1e-12 * maxOf(1.0, kotlin.math.abs(expected)))
+        number(0.5272149506014778, next.damping.body.value)
+        number(1.4321509662475718, next.damping.body.velocity)
+        number(0.7137869000465032, next.response.body.value)
+        number(-1.7943434680100525, next.response.body.velocity)
+        number(77.48588369027144, next.stiffness)
+        number(9.281731651642252, next.physicalDamping)
+        number(1.2136729050215496, next.entry.intermediate.value)
+        number(43.33214068841755, next.entry.intermediate.velocity)
+        number(0.23681938941712977, next.entry.body.value)
+        number(2.1617258804010206, next.entry.body.velocity)
+        assertEquals(installed.velocityScalingFactor.toRawBits(), next.velocityScalingFactor.toRawBits())
+
+        val unseeded = description.copy(flags = Long.MIN_VALUE, targetSmoothing = 0.0)
+        val retained = requireNotNull(unseeded.install(previous, reset = false))
+        assertEquals(previous.damping.body, retained.damping.body)
+        assertEquals(previous.response.body, retained.response.body)
+        val reset = requireNotNull(unseeded.install(previous, reset = true))
+        assertTrue(reset.damping.disabled && reset.response.disabled)
+        assertEquals(FluidScalarSpringBody(0.8, 0.0), reset.damping.body)
+        assertEquals(FluidScalarSpringBody(0.5, 0.0), reset.response.body)
+        assertEquals(reset.entry.advanceUnsmoothed(reset.stiffness, reset.physicalDamping, 0.031), reset.advance(0.031).entry)
+        val angular = FluidSmoothingParameter(FluidScalarSpringBody(7.0, 0.0), 0.0, 1.0, 2)
+        assertTrue(angular.advance(0.03, ScalarSpringUse.Parameter).value < 0.0)
+    }
+
     @Test fun sharedBlurOriginsAndPublishedRadiusPreserveTheTypedBody() {
         val identity = FluidSharedBlurSpec.zoomOrigin(null)
         assertEquals(listOf(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0), identity.toList())

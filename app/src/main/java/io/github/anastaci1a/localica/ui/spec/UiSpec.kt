@@ -73,14 +73,16 @@ internal fun fluidIntermediateY(sourceY: Double, targetY: Double, ratio: Double,
 internal fun fluidStoredDelay(storedDelay: Double, speed: Double, amplify: Boolean) =
     storedDelay * speed * (if (amplify) 10.0 else 1.0)
 private fun fluidThroughTailDelay(growing: Boolean) = if (growing) 0.12 else 0.1
+private fun fluidSpringOmega(response: Double) = 2 * PI / response
+
 internal class FluidPopupSpringSettings(
     val dampingRatio: Double, val response: Double, val retargetImpulse: Double = 0.0, val trackingResponse: Double = 0.15,
 ) {
     val mass get() = 1.0
-    val omega = 2 * PI / response
+    val omega = fluidSpringOmega(response)
     val stiffness = omega * omega
     val damping = 2 * dampingRatio * omega
-    private val installedDamping = (sqrt(stiffness) + sqrt(stiffness)) * dampingRatio
+    val installedDamping = (sqrt(stiffness) + sqrt(stiffness)) * dampingRatio
     val velocityScalingFactor get() = installedDamping / stiffness
     fun advanceUnsmoothed(entry: FluidScalarSpringEntry, dt: Double) = entry.advanceUnsmoothed(stiffness, installedDamping, dt)
 
@@ -149,6 +151,76 @@ internal data class FluidScalarSpringBody(val value: Double, val velocity: Doubl
         if (!value.isFinite() || !velocity.isFinite()) return true
         val combined = (target - value) + (velocity * velocityScalingFactor)
         return !combined.isFinite() || abs(combined) <= epsilonSquared
+    }
+}
+
+internal enum class ScalarSpringUse { Property, Parameter, Intermediate }
+
+internal data class FluidSmoothingParameter(
+    val body: FluidScalarSpringBody, val target: Double, val response: Double, val mode: Int,
+) {
+    val disabled get() = response == 0.0
+    private val spring = FluidPopupSpringSettings(1.0, response)
+
+    fun advance(dt: Double, use: ScalarSpringUse) =
+        if (disabled) body else SpringKernel.fromInstalled(spring.stiffness, spring.installedDamping)
+            .advanceBody(body, target, dt, use, mode)
+}
+
+internal data class FluidRadiusSmoothingDescription(
+    val flags: Long, val damping: Double, val response: Double,
+    val dampingStart: Double, val responseStart: Double,
+    val dampingSmoothing: Double, val responseSmoothing: Double, val targetSmoothing: Double,
+) {
+    fun install(previous: FluidRadiusSpring, reset: Boolean): FluidRadiusSpring? {
+        if (flags >= 0L) return null
+        fun parameter(old: FluidSmoothingParameter, bit: Long, start: Double, target: Double, smoothing: Double): FluidSmoothingParameter {
+            val specified = (flags and bit) != 0L
+            val smoothingResponse = if (reset && !specified) 0.0 else smoothing
+            val body = when {
+                smoothingResponse == 0.0 -> FluidScalarSpringBody(target, 0.0)
+                specified -> old.body.copy(value = start)
+                else -> old.body
+            }
+            return FluidSmoothingParameter(body, target, smoothingResponse, old.mode)
+        }
+        val installed = FluidPopupSpringSettings(damping, response)
+        return previous.copy(
+            damping = parameter(previous.damping, 1L, dampingStart, damping, dampingSmoothing),
+            response = parameter(previous.response, 256L, responseStart, response, responseSmoothing),
+            targetSmoothing = targetSmoothing,
+            stiffness = installed.stiffness,
+            physicalDamping = installed.installedDamping,
+            velocityScalingFactor = installed.velocityScalingFactor,
+        )
+    }
+}
+
+/** Supplied finite radius state after pending actions have been admitted. */
+internal data class FluidRadiusSpring(
+    val entry: FluidScalarSpringEntry, val damping: FluidSmoothingParameter, val response: FluidSmoothingParameter,
+    val targetSmoothing: Double, val stiffness: Double, val physicalDamping: Double, val velocityScalingFactor: Double,
+) {
+    fun advance(dt: Double): FluidRadiusSpring {
+        if (dt <= 0.0) return this
+        val nextDamping = damping.advance(dt, ScalarSpringUse.Parameter)
+        val nextResponse = response.advance(dt, ScalarSpringUse.Parameter)
+        val smoothed = !damping.disabled || !response.disabled
+        val (k, c) = if (smoothed) {
+            val omega = fluidSpringOmega(nextResponse.value)
+            val stiffness = omega * omega
+            val w = sqrt(stiffness)
+            stiffness to (nextDamping.value * (w + w))
+        } else stiffness to physicalDamping
+        val intermediate = if (targetSmoothing == 0.0) FluidScalarSpringBody(entry.target, 0.0) else {
+            FluidSmoothingParameter(entry.intermediate, entry.target, targetSmoothing, 0).advance(dt, ScalarSpringUse.Intermediate)
+        }
+        val body = SpringKernel.fromInstalled(k, c).advanceBody(entry.body, intermediate.value, dt)
+        return copy(
+            entry = entry.copy(body = body, intermediate = intermediate),
+            damping = damping.copy(body = nextDamping), response = response.copy(body = nextResponse),
+            stiffness = k, physicalDamping = c,
+        )
     }
 }
 
@@ -339,19 +411,10 @@ internal class FluidZoomValues(
         val components = DoubleArray(16) { index ->
             val difference = from[index] - to[index]
             if (index < 3) {
-                wrappedAngle(difference, (direction and 1) != 0, ((4 ushr (direction and 7)) and 1) != 0)
-            } else if (displacementMode in 1..3) {
-                wrappedAngle(difference, displacementMode == 2, displacementMode == 3)
-            } else difference
+                fluidWrappedAngle(difference, (direction and 1) != 0, ((4 ushr (direction and 7)) and 1) != 0)
+            } else fluidModeDisplacement(difference, displacementMode)
         }
         return FluidZoomTransform(components, direction)
-    }
-
-    private fun wrappedAngle(difference: Double, negative: Boolean, positive: Boolean): Double {
-        val period = Double.fromBits(0x401921fb54442d18L)
-        val wrapped = atan2(sin(difference), cos(difference))
-        val directed = if (negative && wrapped > 0.0) wrapped + -period else wrapped
-        return if (positive && directed < 0.0) directed + period else directed
     }
 
     override fun scaledCopy(value: FluidZoomTransform, factor: Double) =
@@ -366,6 +429,16 @@ internal class FluidZoomValues(
         }
         return FluidZoomTransform(DoubleArray(16) { left[it] + right[it] }, direction)
     }
+}
+
+private fun fluidModeDisplacement(difference: Double, mode: Int) =
+    if (mode in 1..3) fluidWrappedAngle(difference, mode == 2, mode == 3) else difference
+
+private fun fluidWrappedAngle(difference: Double, negative: Boolean, positive: Boolean): Double {
+    val period = Double.fromBits(0x401921fb54442d18L)
+    val wrapped = atan2(sin(difference), cos(difference))
+    val directed = if (negative && wrapped > 0.0) wrapped + -period else wrapped
+    return if (positive && directed < 0.0) directed + period else directed
 }
 
 internal enum class FluidPopupChannel(val key: String, val value: Value) {
@@ -1108,19 +1181,31 @@ internal class SpringKernel(private val omega: Double, private val zeta: Double,
     }
 
     /** The offset from the target ([d] false) or the velocity ([d] true) [t] seconds after offset [offset] and velocity [v]. */
-    fun response(offset: Double, v: Double, t: Double, d: Boolean): Double {
+    fun response(offset: Double, v: Double, t: Double, d: Boolean, use: ScalarSpringUse = ScalarSpringUse.Property): Double {
         if (installed) return installedBasis(t) { sine, cosine, envelope ->
+            val intermediate = use == ScalarSpringUse.Intermediate
+            val property = use == ScalarSpringUse.Property
+            val start = if (intermediate || (property && critical)) v + a * offset else a * offset + v
             if (critical) {
-                val b = v + a * offset
-                val displacement = offset + b * t
-                if (d) envelope * b - envelope * (displacement * a) else envelope * displacement
+                val displacement = offset + if (property) start * t else t * start
+                if (d) envelope * start - envelope * (displacement * a) else envelope * displacement
             } else {
-                val b = (1 / wd) * (a * offset + v)
-                val displacement = if (underdamped) offset * cosine + b * sine else cosine * offset + sine * b
+                val b = (1 / wd) * start
+                val displacement = when {
+                    property && underdamped -> offset * cosine + b * sine
+                    property || underdamped -> cosine * offset + sine * b
+                    intermediate -> offset * cosine + b * sine
+                    else -> offset * cosine + sine * b
+                }
                 if (d) {
                     val first = wd * (offset * sine)
-                    val second = wd * (cosine * b)
-                    envelope * (if (underdamped) second - first else first + second) - envelope * (displacement * a)
+                    val second = if (intermediate && !underdamped) wd * (b * cosine) else wd * (cosine * b)
+                    val derivative = when {
+                        underdamped -> second - first
+                        intermediate -> second + first
+                        else -> first + second
+                    }
+                    envelope * derivative - envelope * (displacement * a)
                 } else envelope * displacement
             }
         }
@@ -1147,10 +1232,15 @@ internal class SpringKernel(private val omega: Double, private val zeta: Double,
         return exp(-slow * t) * if (d) -slow * offset + b * (-slow * extra - difference * exp(-difference * t)) else offset + b * extra
     }
 
-    internal fun advanceBody(body: FluidScalarSpringBody, target: Double, dt: Double): FluidScalarSpringBody {
+    internal fun advanceBody(
+        body: FluidScalarSpringBody, target: Double, dt: Double,
+        use: ScalarSpringUse = ScalarSpringUse.Property, displacementMode: Int = 0,
+    ): FluidScalarSpringBody {
         if (dt <= 0.0 || (body.value == target && body.velocity == 0.0)) return body
-        val offset = body.value - target
-        return FluidScalarSpringBody(target + response(offset, body.velocity, dt, false), response(offset, body.velocity, dt, true))
+        val offset = fluidModeDisplacement(body.value - target, displacementMode)
+        val displacement = response(offset, body.velocity, dt, false, use)
+        val velocity = response(offset, body.velocity, dt, true, use)
+        return FluidScalarSpringBody(target + displacement, velocity)
     }
 
     /** Installed transform channels preserve their value type's ordered copy, scale and sum operations. */
