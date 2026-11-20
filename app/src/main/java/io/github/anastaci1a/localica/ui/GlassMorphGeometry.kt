@@ -67,6 +67,47 @@ internal fun popupThroughSlots(from: PopupPortalBounds, to: PopupPortalBounds, f
     return if (fluidPopupContentGrows(from, to) == fromPhase) PopupThroughItem.Pivot to endpoint else endpoint to PopupThroughItem.Pivot
 }
 
+internal data class FluidOutlineOverride(
+    val bounds: PopupPortalBounds?, val cornerRadius: Double, val identityTransform: Boolean = false,
+)
+
+internal data class FluidOutlineStep(val endpoint: FluidOutlineOverride?, val companion: FluidOutlineOverride?)
+
+internal data class FluidGrowingOutlineTargets(
+    val collapsedSource: FluidOutlineStep, val overrounded: FluidOutlineStep, val fullyExpanded: FluidOutlineStep,
+)
+
+/** The two source rectangles are in the smaller root. The two conversions resolve each target's container. */
+internal fun fluidGrowingOutlineTargets(
+    larger: PopupPortalBounds, pivot: PopupPortalBounds, diameter: Double,
+    toSmallerContainer: (PopupPortalBounds) -> PopupPortalBounds, toPivotContainer: (PopupPortalBounds) -> PopupPortalBounds,
+    companionInset: (PopupPortalBounds, Double) -> PopupPortalBounds,
+): FluidGrowingOutlineTargets {
+    fun roundedOrigin(value: Double): Double {
+        val magnitude = kotlin.math.abs(value)
+        val integral = kotlin.math.floor(magnitude)
+        return Math.copySign(if (magnitude - integral >= 0.5) integral + 1.0 else integral, value)
+    }
+    fun squareAt(x: Double, y: Double): PopupPortalBounds {
+        val square = PopupPortalBounds(0.0, 0.0, diameter, diameter).centeredAt(x, y)
+        return square.copy(x = roundedOrigin(square.x), y = roundedOrigin(square.y))
+    }
+    fun circle(bounds: PopupPortalBounds, identity: Boolean = false): FluidOutlineOverride {
+        val short = if (bounds.height < bounds.width) bounds.height else bounds.width
+        return FluidOutlineOverride(bounds, short * 0.5, identity)
+    }
+    val collapsed = toSmallerContainer(squareAt(pivot.midX, pivot.midY))
+    val region = companionInset(larger, (0.25 * diameter) * 0.5).standardized()
+    val companionX = (pivot.midX * 0.75 + larger.midX * 0.25).coerceIn(region.x, region.x + region.width)
+    val companionY = (pivot.midY * 0.75 + larger.midY * 0.25).coerceIn(region.y, region.y + region.height)
+    val companion = circle(toPivotContainer(squareAt(companionX, companionY)))
+    return FluidGrowingOutlineTargets(
+        FluidOutlineStep(circle(collapsed, identity = true), null),
+        FluidOutlineStep(FluidOutlineOverride(null, kotlin.math.abs(larger.width)), companion),
+        FluidOutlineStep(null, companion),
+    )
+}
+
 /** Both prepared rectangles use the smaller endpoint's root coordinates. */
 internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, anchorY: Double, genieScale: Double?): Double {
     val larger = standardized()
