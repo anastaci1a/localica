@@ -672,18 +672,28 @@ internal object FluidLensingSpec {
 internal object FluidCornerSpec {
     const val continuous = 1
     fun freshCurve(sdkVersionSet: Int) = if (sdkVersionSet >= 0x07e80000) continuous else 0
-    fun matchedRadius(source: Double) = source.toFloat().let { if (it < 0f) 0f else it }
-    fun matchedRadii(source: DoubleArray) = DoubleArray(source.size) { if (source[it] < 0.0) 0.0 else source[it] }
 
-    fun rawRadii(precomputed: FloatArray?, suppressFallback: Boolean, vector: DoubleArray?, scalar: Float, shortSide: Double): FloatArray? {
+    private fun scalarRadius(stored: Float?, width: Double, height: Double) = when {
+        stored == null -> 0f
+        stored.toRawBits() == 0x7fe00000 -> (0.5 * (if (width < height) width else height)).toFloat()
+        stored.isNaN() -> 0f
+        else -> stored
+    }
+
+    fun matchedRadius(stored: Float?, width: Double, height: Double) =
+        scalarRadius(stored, width, height).let { if (it < 0f) 0f else it }
+
+    // A null numeric payload skips the write and keeps the destination's existing vector.
+    fun matchedRadii(source: DoubleArray?, capacity: Int): DoubleArray? =
+        source?.takeIf { capacity >= 8 && it.size == 8 }?.let { DoubleArray(8) { i -> if (it[i] < 0.0) 0.0 else it[i] } }
+
+    fun rawRadii(
+        precomputed: FloatArray?, suppressFallback: Boolean, vector: DoubleArray?, scalar: Float?, width: Double, height: Double,
+    ): FloatArray? {
         if (precomputed != null) return precomputed
         if (suppressFallback) return null
         if (vector != null) return FloatArray(4) { vector[it * 2].toFloat() }
-        val radius = when {
-            scalar.toRawBits() == 0x7fe00000 -> (shortSide * 0.5).toFloat()
-            scalar.isNaN() -> 0f
-            else -> scalar
-        }
+        val radius = scalarRadius(scalar, width, height)
         return FloatArray(4) { radius }
     }
 
@@ -772,8 +782,27 @@ internal object FluidCornerSpec {
     const val rectImageFunction = 20
     const val inlineEffectTexture = 66
     fun scansOverlap(parentAdmitted: Boolean, disableOption: Boolean) = parentAdmitted && !disableOption
-    fun inlinesBounds(parentAllowsInline: Boolean, eligibleBoundsUnionChildren: Int) =
-        parentAllowsInline && eligibleBoundsUnionChildren == 1
+    fun <Node : Any> inlineBounds(
+        nodes: Iterable<Node>, debugDisablesInline: Boolean, capabilityDisablesInline: Boolean,
+        parentRequiresCheck: Boolean, hasInputSurface: Boolean, checkParent: () -> Boolean,
+        flags: (Node) -> Long, isBoundsUnion: (Node) -> Boolean, children: (Node) -> Iterable<Node>,
+    ): Node? {
+        if (debugDisablesInline || capabilityDisablesInline || (parentRequiresCheck && !checkParent())) return null
+        var candidate: Node? = null
+        fun scan(siblings: Iterable<Node>): Boolean {
+            for (node in siblings) {
+                val word = flags(node)
+                if ((word and 0x30000000000L) == 0x10000000000L) continue
+                if ((word and 0x8000000000L) != 0L) {
+                    if (candidate != null || !isBoundsUnion(node)) return false
+                    candidate = node
+                }
+                if (!scan(children(node))) return false
+            }
+            return true
+        }
+        return if (scan(nodes) && !hasInputSurface) candidate else null
+    }
 }
 
 internal fun <Item, Assertion : Any> fluidHoldEndpoints(from: Item, to: Item, hide: (Item) -> Assertion?) =
