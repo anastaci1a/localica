@@ -1,7 +1,14 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
+import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction
+import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
+import io.github.anastaci1a.localica.ui.spec.PopupOutline
+import io.github.anastaci1a.localica.ui.spec.PopupOutlinePreview
 import io.github.anastaci1a.localica.ui.spec.Space
 import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 import io.github.anastaci1a.localica.ui.spec.fluidThroughGrows
@@ -26,37 +33,15 @@ internal data class PopupPortalBounds(val x: Double, val y: Double, val width: D
 
     fun centeredAt(centerX: Double, centerY: Double) =
         copy(x = centerX - width * 0.5, y = centerY - height * 0.5)
-
-    fun maskOffset() = -minX to -minY
-
-    /** Translation input in the scaled portal basis, before composing it with scale. */
-    fun cropOffset(croppedMidX: Double, croppedMidY: Double) = (midX - croppedMidX) to (midY - croppedMidY)
 }
 
 internal data class PopupPortalInsets(val top: Double, val leading: Double, val bottom: Double, val trailing: Double) {
     val horizontal get() = leading + trailing
     val vertical get() = top + bottom
-    val isZero get() = top == 0.0 && leading == 0.0 && bottom == 0.0 && trailing == 0.0
 
     fun signedCrop(bounds: PopupPortalBounds?): PopupPortalBounds? = bounds?.standardized()?.let {
         PopupPortalBounds(it.x + leading, it.y + top, it.width - horizontal, it.height - vertical)
     }
-}
-
-private const val PopupUnclippedContent = 4
-internal fun fluidPopupClipsBounds(itemOptions: Int) = (itemOptions and PopupUnclippedContent) == 0
-internal fun fluidPopupPreviewOptions(mode: Int, options: Int) =
-    if (mode == 4 || mode == 5) options or PopupUnclippedContent else options
-internal fun fluidPopupVisibleMask(pathBounds: PopupPortalBounds?, roundedRect: Boolean, equalsReferenceBounds: Boolean) =
-    pathBounds?.takeIf { !roundedRect || !equalsReferenceBounds }
-
-internal fun fluidPopupContentBounds(
-    visible: PopupPortalBounds?, backing: PopupPortalBounds?, size: PopupPortalBounds?,
-    insets: PopupPortalInsets, scale: Double,
-): PopupPortalBounds {
-    val width = visible?.width ?: backing?.let { it.width - insets.horizontal } ?: size?.width ?: 0.0
-    val height = visible?.height ?: backing?.let { it.height - insets.vertical } ?: size?.height ?: 0.0
-    return PopupPortalBounds(0.0, 0.0, width * scale, height * scale)
 }
 
 internal fun fluidPopupContentGrows(from: PopupPortalBounds, to: PopupPortalBounds) =
@@ -64,9 +49,12 @@ internal fun fluidPopupContentGrows(from: PopupPortalBounds, to: PopupPortalBoun
 
 internal enum class PopupThroughItem { From, Pivot, To }
 
-internal fun popupThroughSlots(from: PopupPortalBounds, to: PopupPortalBounds, fromPhase: Boolean): Pair<PopupThroughItem, PopupThroughItem> {
+internal fun popupThroughSlots(from: PopupPortalBounds, to: PopupPortalBounds, fromPhase: Boolean) =
+    popupThroughSlots(fluidPopupContentGrows(from, to), fromPhase)
+
+private fun popupThroughSlots(growing: Boolean, fromPhase: Boolean): Pair<PopupThroughItem, PopupThroughItem> {
     val endpoint = if (fromPhase) PopupThroughItem.From else PopupThroughItem.To
-    return if (fluidPopupContentGrows(from, to) == fromPhase) PopupThroughItem.Pivot to endpoint else endpoint to PopupThroughItem.Pivot
+    return if (growing == fromPhase) PopupThroughItem.Pivot to endpoint else endpoint to PopupThroughItem.Pivot
 }
 
 internal data class FluidOutlineOverride(
@@ -78,6 +66,26 @@ internal data class FluidOutlineStep(val endpoint: FluidOutlineOverride?, val co
 internal data class FluidGrowingOutlineTargets(
     val collapsedSource: FluidOutlineStep, val overrounded: FluidOutlineStep, val fullyExpanded: FluidOutlineStep,
 )
+
+internal fun fluidOutlineRequests(
+    action: FluidTimelineAction, growing: Boolean, growth: FluidGrowingOutlineTargets?,
+): List<Pair<PopupThroughItem, FluidOutlineOverride?>>? {
+    val source = when (action) {
+        FluidTimelineAction.Source, FluidTimelineAction.CollapsedSource -> true
+        FluidTimelineAction.ExpandedOverrounded, FluidTimelineAction.FullyExpanded -> false
+        else -> return null
+    }
+    // The return queue reuses the prepared FullyExpanded step; its Source carries no override.
+    val outline = when (action) {
+        FluidTimelineAction.CollapsedSource -> growth?.collapsedSource
+        FluidTimelineAction.ExpandedOverrounded -> growth?.overrounded
+        FluidTimelineAction.FullyExpanded -> growth?.fullyExpanded
+        else -> null
+    }
+    val (first, second) = popupThroughSlots(growing, fromPhase = source == growing)
+    fun request(role: PopupThroughItem) = role to if (role == PopupThroughItem.Pivot) outline?.companion else outline?.endpoint
+    return listOf(request(first), request(second))
+}
 
 /** The two source rectangles are in the smaller root. The two conversions resolve each target's container. */
 internal fun fluidGrowingOutlineTargets(
@@ -111,7 +119,7 @@ internal fun fluidGrowingOutlineTargets(
 }
 
 /** Both prepared rectangles use the smaller endpoint's root coordinates. */
-internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, anchorY: Double, genieScale: Double?): Double {
+internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, anchorY: Double, genieScale: Double?, amount: Double = -80.0): Double {
     val larger = standardized()
     val center = genieScale ?: if (anchorY != 0.5) anchorY else {
         val fraction = (pivot.midY - larger.y) / larger.height
@@ -119,143 +127,49 @@ internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, ancho
     }
     val fraction = (larger.height + (-60.0)) / 140.0
     val scale = if (fraction.isNaN()) 1.0 else fraction.coerceIn(0.5, 1.0)
-    return (center - (1.0 - center)) * (-80.0 * scale)
+    return (center - (1.0 - center)) * (amount * scale)
 }
 
-internal data class PopupPortalPlacement(val bounds: PopupPortalBounds, val x: Double, val y: Double)
+internal data class FluidPopupPreview(
+    override val opening: Boolean, val pivot: Rect, val root: Offset, val homeRadius: Float, val popupRadius: Float,
+    val anchorY: Double, val kickScale: Double,
+) : PopupOutlinePreview<Rect> {
+    override fun prepare(home: Rect, envelope: Rect, density: Float): PopupOutline<Rect> = PreparedFluidOutline(home, envelope, density, this)
+}
 
-internal fun fluidPopupPortalPlacement(
-    content: PopupPortalBounds, backing: PopupPortalBounds?, mask: PopupPortalBounds?,
-): PopupPortalPlacement = if (backing != null && mask != null) {
-    val path = mask.standardized()
-    PopupPortalPlacement(backing, backing.midX - path.x, backing.midY - path.y)
-} else PopupPortalPlacement(content, content.midX, content.midY)
-
-internal fun fluidPopupPreviewInsets(top: Double, left: Double, bottom: Double, right: Double, reversed: Boolean) =
-    if (reversed) PopupPortalInsets(top, right, bottom, left) else PopupPortalInsets(top, left, bottom, right)
-
-internal fun fluidPopupPreviewScaleChanges(old: Double, requested: Double) =
-    !(kotlin.math.abs(requested - old) <= Double.fromBits(0x3cb0000000000000L))
-
-internal fun fluidPopupAperture(width: Double, height: Double, insets: PopupPortalInsets) =
-    PopupPortalBounds(0.0, 0.0, width + insets.horizontal, height + insets.vertical)
-
-internal fun PopupPortalBounds.destinationPosition(apertureInsets: PopupPortalInsets, destinationInsets: PopupPortalInsets) =
-    midX to (apertureInsets.top - destinationInsets.top)
-
-/** Placement from the local presentation aperture and the scale already requested for this destination. */
-internal fun PopupPortalBounds.presentedDestination(
-    itemWidth: Double, itemHeight: Double, scale: Pair<Double, Double>, axis: Int,
-    apertureInsets: PopupPortalInsets, itemInsets: PopupPortalInsets, reversed: Boolean,
-): PopupPortalPlacement {
-    val (sx, sy) = scale
-    val apertureWidth = kotlin.math.abs(width)
-    val apertureHeight = kotlin.math.abs(height)
-    if (axis == 1) {
-        fun left(insets: PopupPortalInsets) = if (reversed) insets.trailing else insets.leading
-        val scaledWidth = itemWidth * sx
-        val left = left(apertureInsets) - left(itemInsets) * sx
-        val mid = midX
-        val fraction = 1.0 - (mid - left) / scaledWidth
-        return PopupPortalPlacement(
-            PopupPortalBounds(0.0, 0.0, itemWidth, apertureHeight / sx),
-            mid + scaledWidth * (fraction - 0.5), apertureInsets.top - itemInsets.top * sx,
-        )
+private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, private val preview: FluidPopupPreview) : PopupOutline<Rect> {
+    private val opening = preview.opening
+    private val scale = density.toDouble()
+    private fun points(r: Rect) = PopupPortalBounds((r.left - preview.root.x) / scale,
+        (r.top - preview.root.y) / scale, r.width / scale, r.height / scale)
+    private val home = points(start)
+    private val popup = points(end)
+    private val pivot = points(preview.pivot)
+    override val kickScale get()=preview.kickScale
+    override val growing = if (opening) fluidPopupContentGrows(home, popup) else fluidPopupContentGrows(popup, home)
+    override val apertureSlot get()=if (growing) 0 else 1
+    private val smaller = if (growing == opening) home else popup
+    private val larger = if (growing == opening) popup else home
+    private val targets = fluidGrowingOutlineTargets(larger, pivot, minOf(smaller.width, smaller.height), { it }, { it }) { r, inset ->
+        requireNotNull(PopupPortalInsets(inset, inset, inset, inset).signedCrop(r))
     }
-    val destinationWidth = if (axis == 2) apertureWidth / sy else itemWidth
-    return PopupPortalPlacement(PopupPortalBounds(0.0, 0.0, destinationWidth, itemHeight), apertureWidth * 0.5, 0.0)
-}
 
-internal fun fluidPopupDestinationScale(
-    width: Double, height: Double, croppedWidth: Double, croppedHeight: Double, axis: Int,
-): Pair<Double, Double> {
-    val rx = if (croppedWidth == 0.0) 1.0 else width / croppedWidth
-    val ry = if (croppedHeight == 0.0) 1.0 else height / croppedHeight
-    return when (axis) {
-        1 -> rx to rx
-        2 -> ry to ry
-        else -> rx to ry
+    override fun outline(action: FluidTimelineAction): List<Pair<Rect, Float>>? = fluidOutlineRequests(action, growing, targets)?.map { (role, override) ->
+        val isHome = if (role == PopupThroughItem.Pivot) true else (role == PopupThroughItem.From) == opening
+        val bounds = override?.bounds ?: if (role == PopupThroughItem.Pivot) pivot else if (isHome) home else popup
+        val rect = Rect((bounds.x * scale + preview.root.x).toFloat(), (bounds.y * scale + preview.root.y).toFloat(),
+            ((bounds.x + bounds.width) * scale + preview.root.x).toFloat(), ((bounds.y + bounds.height) * scale + preview.root.y).toFloat())
+        rect to (override?.let { (it.cornerRadius * scale).toFloat() } ?: if (isHome) preview.homeRadius else preview.popupRadius)
     }
-}
 
-internal fun fluidPopupAutoAxis(oldWidth: Double, oldHeight: Double, targetWidth: Double, targetHeight: Double) =
-    if (kotlin.math.abs(targetHeight - oldHeight) / oldHeight < kotlin.math.abs(targetWidth - oldWidth) / oldWidth) 2 else 1
-
-private fun fluidPopupAutoAxis(old: PopupPortalBounds, target: PopupPortalBounds): Int {
-    val from = old.standardized()
-    val to = target.standardized()
-    return fluidPopupAutoAxis(from.width, from.height, to.width, to.height)
-}
-
-internal fun fluidPopupIncomingAxis(
-    existingCount: Int, current: Int, incomingInsets: PopupPortalInsets,
-    incomingSize: () -> PopupPortalBounds, presentedBounds: () -> PopupPortalBounds?,
-    existingTailSize: () -> PopupPortalBounds,
-): Int? {
-    if (existingCount == 0 || current != 0) return null
-    if (!incomingInsets.isZero) return 1
-    return fluidPopupAutoAxis(presentedBounds() ?: existingTailSize(), incomingSize())
-}
-
-internal data class FluidRasterRequest(val rasterize: Boolean, val scale: Double?, val minificationFilter: String)
-
-internal fun fluidPopupRasterRequest(wantsMinificationFilter: Boolean, retainedDisplayScale: Double) =
-    if (wantsMinificationFilter) FluidRasterRequest(true, retainedDisplayScale, "box")
-    else FluidRasterRequest(false, null, "linear")
-
-internal fun fluidPopupLayoutAxis(
-    topInsets: PopupPortalInsets, preferred: Int, current: Int, itemSize: PopupPortalBounds,
-    presentedBounds: () -> PopupPortalBounds?,
-): Int? {
-    if (preferred == current || !topInsets.isZero) return null
-    return fluidPopupAutoAxis(presentedBounds() ?: itemSize, itemSize)
-}
-
-internal fun requestFluidContentSize(
-    topInsets: PopupPortalInsets, writeInsets: (PopupPortalInsets) -> Unit,
-    readBounds: () -> PopupPortalBounds?, readModelInsets: () -> PopupPortalInsets,
-    insetSize: (PopupPortalBounds?, PopupPortalInsets) -> Pair<Double, Double>,
-    writeWidth: (Double) -> Unit, writeHeight: (Double) -> Unit,
-) {
-    writeInsets(topInsets)
-    val (width, height) = insetSize(readBounds(), readModelInsets())
-    writeWidth(width)
-    writeHeight(height)
-}
-
-/** Runs inside the presentation owner's destination update. The prepared miss is allocated only when needed. */
-internal fun <Destination, Item> updateFluidPopupDestination(
-    destinations: MutableList<Destination>, item: Item, matchesItemId: (Destination, Item) -> Boolean,
-    prepare: () -> Destination, reparent: (Destination) -> Unit, replaceItem: (Destination, Item) -> Unit, hideNew: (Destination) -> Unit,
-): Destination {
-    val index = destinations.indexOfFirst { matchesItemId(it, item) }
-    if (index >= 0) {
-        val destination = destinations.removeAt(index)
-        destinations.add(destination)
-        reparent(destination)
-        replaceItem(destination, item)
-        return destination
+    override fun kick(action: FluidTimelineAction): Pair<Int, Float>? {
+        val (slot, amount) = when (action) {
+            Kick, KickEjectee -> FluidKickSpec.growingSlot to larger.growingKickTarget(pivot, preview.anchorY, null)
+            KickSource -> 1 to larger.growingKickTarget(pivot, preview.anchorY, null, amount = 40.0)
+            Unkick, UnkickEjectee -> FluidKickSpec.growingSlot to FluidKickSpec.unkickTarget
+            UnkickSource -> 1 to FluidKickSpec.unkickTarget
+            else -> return null
+        }
+        return slot to (amount * scale).toFloat()
     }
-    val destination = prepare()
-    destinations.add(destination)
-    if (destinations.size >= 2) hideNew(destination)
-    return destination
-}
-
-internal fun <Destination : Any> List<Destination>.fluidLayoutTop(hasOverrideBounds: Boolean): Destination? =
-    if (hasOverrideBounds) null else lastOrNull()
-
-internal fun <Destination> List<Destination>.refreshFluidDestinationSizes(
-    dirty: Boolean, clearDirty: () -> Unit, refresh: (Destination) -> Unit, updateModel: () -> Unit,
-) {
-    if (!dirty) return
-    clearDirty()
-    forEach(refresh)
-    updateModel()
-}
-
-internal fun <Destination> List<Destination>.requestFluidDestinationProgress(
-    capturedTop: Destination, isEqual: (Destination, Destination) -> Boolean, request: (Destination, Double) -> Unit,
-) {
-    forEach { destination -> request(destination, if (isEqual(destination, capturedTop)) 1.0 else 0.0) }
 }

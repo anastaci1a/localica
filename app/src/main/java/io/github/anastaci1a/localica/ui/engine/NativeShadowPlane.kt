@@ -26,26 +26,31 @@ internal class NativeSurfaceField(private val plane: ShadowPlane,private val nod
     private var frame=ShapeFrame(emptyList(),Rect.Zero,0f,GlassStrain.None)
     internal fun frame()=frame
     fun draw(scope: androidx.compose.ui.graphics.drawscope.ContentDrawScope,opacity: Float,strength: Float,radius: Float,
-        transform: GlassBodyTransform,receiver: GlassShadowReceiver?,exclusion: GlassShadowExclusion?,content: ()->Unit) = with(scope) {
+        transform: GlassBodyTransform,receiver: GlassShadowReceiver?,exclusion: GlassShadowExclusion?,
+        outline: List<RoundRect>?,localOrigin: ()->Offset?,content: ()->Unit) = with(scope) {
         val (sx,sy)=transform.scale; val (dx,dy)=transform.drift
         val corner=radius.coerceIn(0f,size.minDimension/2f)
         val presented=Rect(Offset(dx+size.width*(1f-sx)/2f,dy+size.height*(1f-sy)/2f),Size(size.width*sx,size.height*sy))
-        val body=RoundRect(presented,CornerRadius(corner*sx,corner*sy))
-        frame=ShapeFrame(listOf(body),presented,corner,GlassStrain.None)
+        // One unscaled local construction: the window body, or the prepared slots relative to this node; both branches draw it.
+        val origin=outline?.let { localOrigin() }
+        val local=if(outline==null || origin==null) listOf(RoundRect(Rect(Offset.Zero,size),CornerRadius(corner))) else outline.map { it.translate(-origin) }
+        val bodies=local.map { RoundRect(Rect(Offset(presented.left+it.left*sx,presented.top+it.top*sy),Size(it.width*sx,it.height*sy)),CornerRadius(it.topLeftCornerRadius.x*sx,it.topLeftCornerRadius.y*sy)) }
+        val footprint=if(bodies.size==1) presented else Rect(bodies.minOf { it.left },bodies.minOf { it.top },bodies.maxOf { it.right },bodies.maxOf { it.bottom })
+        frame=ShapeFrame(bodies,footprint,corner,GlassStrain.None)
         val alpha=opacity.coerceIn(0f,1f)
         if(alpha<=0f) return@with
         val scaled=node.fieldInheritsBodyScale
         val pad=glassShadowInset(spread).toPx()+2f
         val layer=alpha<1f
         if(layer) {
-            val footprint=Rect(presented.left-pad*(if(scaled) sx else 1f),presented.top-pad*(if(scaled) sy else 1f),
-                presented.right+pad*(if(scaled) sx else 1f),presented.bottom+pad*(if(scaled) sy else 1f))
-            drawContext.canvas.saveLayer(footprint,Paint().apply { this.alpha=alpha })
+            val padded=Rect(footprint.left-pad*(if(scaled) sx else 1f),footprint.top-pad*(if(scaled) sy else 1f),
+                footprint.right+pad*(if(scaled) sx else 1f),footprint.bottom+pad*(if(scaled) sy else 1f))
+            drawContext.canvas.saveLayer(padded,Paint().apply { this.alpha=alpha })
         }
         try {
             if(node.owns(plane)) {
                 if(scaled) translate(dx,dy) { scale(sx,sy) {
-                    with(cache) { draw(listOf(RoundRect(Rect(Offset.Zero,size),CornerRadius(corner)) to 1f),strength,spread,receiver,exclusion) }
+                    with(cache) { draw(local.map { it to 1f },strength,spread,receiver,exclusion) }
                 } } else with(cache) { draw(node.frameOn(plane).bodies.map { it to 1f },strength,spread,receiver,exclusion) }
             }
             content()
