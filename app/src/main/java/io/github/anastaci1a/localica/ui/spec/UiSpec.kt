@@ -445,9 +445,10 @@ internal enum class FluidPopupChannel(val key: String, val value: Value) {
     DestinationOpacity("opacity", Value.PresentationScalar), ContentZoom("sublayerTransform", Value.Transform),
     GaussianRadius("filters.gaussianBlur.inputRadius", Value.ScaledScalar), LensHeight("effect.height", Value.CoarseScalar),
     LensAmount("filters.displacementMap.inputAmount", Value.CoarseScalar),
+    CornerRadii("cornerRadii", Value.CornerRadii),
     KickAmount("MagicMorphAnimation.kickAmount", Value.StandardScalar), KickScale("MagicMorphAnimation.kickScale", Value.StandardScalar);
 
-    enum class Value { PresentationScalar, Transform, ScaledScalar, CoarseScalar, StandardScalar }
+    enum class Value { PresentationScalar, Transform, ScaledScalar, CoarseScalar, CornerRadii, StandardScalar }
 }
 
 internal fun fluidLensSuppressesAction(old: Double, new: Double, latest: Double?, bypass: Boolean) =
@@ -794,7 +795,7 @@ internal object FluidLensingSpec {
 
     const val trackStoredDelay = 0.0
     const val trackedHitTestsAsFill = true
-    val trackedProperties = listOf("bounds", "position", "cornerRadius", "cornerRadii", "cornerCurve", "hidden", "meshTransform")
+    val trackedProperties = listOf("bounds", "position", "cornerRadius", FluidPopupChannel.CornerRadii.key, "cornerCurve", "hidden", "meshTransform")
 
     const val displacementFunction = 44
     const val namedSourceTexture = 1
@@ -874,6 +875,39 @@ internal object FluidLensingSpec {
 internal object FluidCornerSpec {
     const val continuous = 1
     fun freshCurve(sdkVersionSet: Int) = if (sdkVersionSet >= 0x07e80000) continuous else 0
+
+    fun <Receiver : Any> writeModelRadii(
+        readModel: () -> DoubleArray, clipping: Receiver, self: Receiver,
+        platformReceivers: Pair<() -> Receiver, () -> Receiver>?, write: (Receiver, DoubleArray) -> Unit,
+    ) {
+        write(clipping, readModel())
+        val first = readModel()
+        write(platformReceivers?.first?.invoke() ?: self, first)
+        val second = readModel()
+        write(platformReceivers?.second?.invoke() ?: self, second)
+    }
+
+    fun publishRadii(
+        width: Double, height: Double, readPresentation: () -> DoubleArray,
+        platform: ((FluidPopupChannel, DoubleArray) -> Unit)?,
+        coordinator: ((FluidPopupChannel, DoubleArray, DoubleArray?, Int, Boolean) -> Unit)?,
+        clipping: (FluidPopupChannel, DoubleArray, DoubleArray?, Int, Boolean) -> Unit,
+    ) {
+        val radii = readPresentation()
+        val halfWidth = width * 0.5
+        val halfHeight = height * 0.5
+        val upper = if (halfHeight < halfWidth) halfHeight else halfWidth
+        require(upper >= 0.0)
+        val presented = DoubleArray(8) { index ->
+            val value = radii[index]
+            val bounded = if (value <= upper) value else upper
+            if (bounded < 0.0) 0.0 else bounded
+        }
+        val channel = FluidPopupChannel.CornerRadii
+        platform?.invoke(channel, presented)
+        coordinator?.invoke(channel, presented, null, 0, false)
+        clipping(channel, presented, null, 0, false)
+    }
 
     private fun scalarRadius(stored: Float?, width: Double, height: Double) = when {
         stored == null -> 0f

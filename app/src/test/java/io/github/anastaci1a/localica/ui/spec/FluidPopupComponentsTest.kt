@@ -759,6 +759,70 @@ class FluidPopupComponentsTest {
         assertEquals(null, FluidCornerSpec.rawRadii(null, true, vector, 3f, 10.0, 18.0))
     }
 
+    @Test fun cornerPresentationClampsEightLanesBeforeTheThreeOrderedRequests() {
+        val radii = doubleArrayOf(-3.0, -0.0, Double.NaN, 14.0, 1.0, 12.0, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)
+        val expected = listOf(0.0, -0.0, 12.0, 12.0, 1.0, 12.0, 0.0, 12.0).map(Double::toRawBits)
+        val events = mutableListOf<String>()
+        var boxed: DoubleArray? = null
+        FluidCornerSpec.publishRadii(
+            width = 40.0, height = 24.0,
+            readPresentation = {
+                events += "read"
+                radii
+            },
+            platform = { key, value ->
+                assertEquals(FluidPopupChannel.CornerRadii, key)
+                assertEquals("cornerRadii", key.key)
+                assertEquals(expected, value.map(Double::toRawBits))
+                boxed = value
+                events += "platform"
+            },
+            coordinator = { _, value, velocity, cap, immediate ->
+                assertTrue(value === boxed)
+                assertEquals(null, velocity)
+                assertEquals(0, cap)
+                assertFalse(immediate)
+                events += "coordinator"
+            },
+            clipping = { _, value, velocity, cap, immediate ->
+                assertTrue(value === boxed)
+                assertEquals(null, velocity)
+                assertEquals(0, cap)
+                assertFalse(immediate)
+                events += "clipping"
+            },
+        )
+        assertEquals(listOf("read", "platform", "coordinator", "clipping"), events)
+        assertTrue(radii[2].isNaN())
+        FluidCornerSpec.publishRadii(24.0, Double.NaN, { radii }, null, null) { _, value, _, _, _ ->
+            assertEquals(expected, value.map(Double::toRawBits))
+        }
+        for (invalid in listOf(-1.0, Double.NaN)) {
+            val rejected = runCatching {
+                FluidCornerSpec.publishRadii(invalid, 24.0, { radii }, null, null) { _, _, _, _, _ ->
+                    error("Invalid upper bound reached the receiver")
+                }
+            }.exceptionOrNull()
+            assertTrue(rejected is IllegalArgumentException)
+        }
+    }
+
+    @Test fun cornerModelRecipientsReadTheUnclampedChannelIndependently() {
+        val writes = mutableListOf<Pair<String, Double>>()
+        var reads = 0
+        val read = {
+            val value = -(++reads).toDouble()
+            DoubleArray(8) { value }
+        }
+        val received = { name: String, value: DoubleArray -> writes += name to value[0] }
+        FluidCornerSpec.writeModelRadii(read, "clip", "self", null, received)
+        assertEquals(listOf("clip" to -1.0, "self" to -2.0, "self" to -3.0), writes)
+        writes.clear()
+        reads = 0
+        FluidCornerSpec.writeModelRadii(read, "clip", "self", ({ "first" }) to ({ "second" }), received)
+        assertEquals(listOf("clip" to -1.0, "first" to -2.0, "second" to -3.0), writes)
+    }
+
     @Test fun trackedCornerBoundsChooseUniformAndSignedUnevenPayloads() {
         val transform = FluidCornerSpec.fieldTransform(doubleArrayOf(2.0, 0.0, 0.0, 0.0, 0.0, 2.0), Math::fma)
         val uniform = FluidCornerSpec.boundsEncoding(floatArrayOf(-1f, 0f, 0.009f, 0.01f), transform, 0, 6.0, 8.0, 0f, inline = true)
