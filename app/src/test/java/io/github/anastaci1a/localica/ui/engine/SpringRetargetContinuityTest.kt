@@ -47,7 +47,7 @@ class SpringRetargetContinuityTest {
             val motion = PopupWindowMotion(h.clock, spec.expansion, "t6-${c.name}-$hz-$seed", c.prepared, c.quiet, c.kind)
             var shown = false; var env = envelope
             motion.show(true); shown = true; motion.place(home, env, 1f)
-            val e = motion.expansion; val rect = motion.bounds as MotionRect
+            val e = motion.expansion; val rect = requireNotNull(motion.rectangle)
             val cross = e.crossPhase(); val channels = listOfNotNull(e.main, cross) + rect.channels.toList()
             val consumers = curves(motion)
             // Each entry is (value, tolerance): the phase and cross phase to 1e-6, an edge to 1e-6 of its range, a Curve consumer's value and slope times velocity to 1e-5.

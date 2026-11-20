@@ -42,7 +42,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     val preparationCurve = Curve.window(0f, .25f).scaled(.68359375f) +
         Curve.window(.25f, .75f).scaled(.31640625f)
     private val ranges = requireNotNull(clock.spec.geometry).maxViewportDiagonalPx.let { EdgeRanges(it, it, it, it) }
-    private var rectangle by mutableStateOf<MotionRect?>(null)
+    internal var rectangle by mutableStateOf<MotionRect?>(null); private set
     val bounds: MotionRectView? get() = rectangle?.let { expansion.aperture }
     /** The intent: what [show] last asked for. Foreground semantics follow it, so Hide releases them at its event. */
     var shown by mutableStateOf(false); private set
