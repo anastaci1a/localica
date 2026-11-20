@@ -393,6 +393,21 @@ class FluidPopupComponentsTest {
         assertEquals(stored, retarget(3.0, nonpositiveDamping).body)
     }
 
+    @Test fun nontrackingSpringUsesPriorInteractivityForTargetSmoothingAndProjection() {
+        val spring = FluidPopupSpringSettings(0.8, 0.5, trackingResponse = 0.4)
+        fun modifiers(enabled: Boolean, priorInteractive: Boolean) =
+            spring.nontrackingModifiers(enabled, priorInteractive, 0.3, 0.6, 0.5, 0.998)
+
+        val inactive = FluidSpringModifiers(0.0, 0.0, 0.0, 0.0)
+        assertEquals(inactive, modifiers(false, false))
+        assertEquals(inactive, modifiers(false, true))
+        assertEquals(FluidSpringModifiers(0.3, 0.6, 0.0, 0.0), modifiers(true, false))
+        assertEquals(FluidSpringModifiers(0.3, 0.6, 0.2, 0.998), modifiers(true, true))
+        val zeroRatio = spring.nontrackingModifiers(true, true, 0.3, 0.6, -0.0, 0.998)
+        assertEquals((-0.0).toRawBits(), zeroRatio.targetSmoothing.toRawBits())
+        assertEquals(0.998.toRawBits(), zeroRatio.projectionDeceleration.toRawBits())
+    }
+
     @Test fun pendingPropertyVelocityTakesPrecedenceOverStartingVelocityAndImpulse() {
         val controls = FluidPropertySpringControls(0.0, 0.5, interactive = false, additive = false)
         val spring = FluidPopupSpringSettings(1.0, 2 * Math.PI, retargetImpulse = 0.5)
