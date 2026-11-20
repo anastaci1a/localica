@@ -63,7 +63,7 @@ internal const val StockPopupMotionRevision = "855-ios262-60fps-interim-r926"
 internal val StockPopupMotion = PopupMotionModel(StockPopupMotionRevision, SpringLaw(28f,.78f), SpringLaw(20f,1f), SpringLaw(120f,1f), SpringLaw(20f,1f), 1.4f, .25f, .05f,
     mapOf(PopupKind.Menu to PopupMotionVariant.Base, PopupKind.RowMenu to PopupMotionVariant.Base, PopupKind.BottomMenu to PopupMotionVariant.CrossAxisSnap, PopupKind.Dialog to PopupMotionVariant.Base,
         PopupKind.SelectionPill to PopupMotionVariant.Base, PopupKind.Legacy to PopupMotionVariant.Legacy))
-internal fun fluidPopupMotion() = StockPopupMotion.copy(style = PopupMotionStyle.Fluid, centre = FluidPopupRuntimeInputs.outlineCentre)
+internal fun fluidPopupMotion() = StockPopupMotion.copy(style = PopupMotionStyle.Fluid)
 internal fun fluidPreviewMorphs(compact: Boolean, overlapsPreview: () -> Boolean) =
     compact && overlapsPreview()
 internal fun fluidIntermediateY(sourceY: Double, targetY: Double, ratio: Double, cap: Double) =
@@ -111,6 +111,7 @@ internal data class FluidSpringModifiers(
 /** The constructed root settings: the through main springs and, in [FluidContent], scales, blur springs and speed. */
 internal val FluidMainEject = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
 internal val FluidMainAbsorb = FluidPopupSpringSettings(dampingRatio = 0.8, response = 0.7)
+private val FluidSourceOutlineSpring = FluidPopupSpringSettings(0.8, 0.3, retargetImpulse = 0.016, trackingResponse = 0.3)
 
 @Immutable data class PopupSecondPhase(val spring: SpringLaw, val band: Float, val edgeShares: (DoubleArray) -> DoubleArray)
 
@@ -120,14 +121,12 @@ internal interface PopupOutlinePreview<Bounds> {
 internal interface PopupOutline<Bounds> {
     val growing: Boolean
     val apertureSlot: Int
-    val kickScale: Double
-    fun outline(action: FluidTimelineAction): List<Pair<Bounds,Float>>?
+    val hostScaleY: Double
+    fun outline(action: FluidTimelineAction): List<PopupOutlinePose<Bounds>>?
     fun kick(action: FluidTimelineAction): Pair<Int,Float>?
 }
 
-internal object FluidPopupRuntimeInputs {
-    val outlineCentre: PopupSecondPhase? = null
-}
+internal data class PopupOutlinePose<Bounds>(val bounds: Bounds, val radius: Float, val scale: Float)
 
 internal data class FluidContentSettings(
     val minScale: Double, val maxScale: Double,
@@ -304,7 +303,7 @@ internal data class FluidGeometrySpringBinding(val sharedSpring: FluidPopupSprin
 internal fun FluidTimelineStep.geometrySpringBinding(effectiveSpeed: Double) =
     FluidGeometrySpringBinding(propertySpring(effectiveSpeed))
 
-internal fun fluidPositionSpring(resolved: FluidPopupSpringSettings?) = resolved ?: FluidPopupSpringSettings(1.0, 0.4)
+internal fun fluidPositionSpring(resolved: FluidPopupSpringSettings?) = resolved ?: FluidSourceOutlineSpring
 
 internal fun fluidThroughQueue(
     growing: Boolean, mainEject: FluidPopupSpringSettings, content: FluidContentSettings,
@@ -322,13 +321,13 @@ internal fun fluidThroughQueue(
         step(FluidTimelineAction.Kick, spring = FluidKickSpec.ejecteeSpring)
         step(FluidTimelineAction.Unkick, 0.1, mainEject)
     } else {
-        step(FluidTimelineAction.FullyExpanded)
+        step(FluidTimelineAction.FullyExpanded, spring = FluidMainAbsorb)
         step(FluidTimelineAction.AddSdfElements)
-        step(FluidTimelineAction.Source)
-        step(FluidTimelineAction.KickEjectee)
-        step(FluidTimelineAction.UnkickEjectee, 0.1)
-        step(FluidTimelineAction.KickSource)
-        step(FluidTimelineAction.UnkickSource, Double.fromBits(0x3fc3333333333334L))
+        step(FluidTimelineAction.Source, spring = FluidMainAbsorb)
+        step(FluidTimelineAction.KickEjectee, spring = FluidKickSpec.ejecteeSpring)
+        step(FluidTimelineAction.UnkickEjectee, 0.1, FluidMainAbsorb)
+        step(FluidTimelineAction.KickSource, spring = FluidMainAbsorb)
+        step(FluidTimelineAction.UnkickSource, Double.fromBits(0x3fc3333333333334L), FluidMainAbsorb)
     }
     step(FluidTimelineAction.SmoothOn, spring = FluidPopupSpringSettings(1.0, 0.1))
     step(FluidTimelineAction.SmoothOff, if (growing) 0.3 else 0.1, FluidPopupSpringSettings(1.0, 0.6))
@@ -1160,6 +1159,10 @@ internal object FluidLensingSpec {
 internal object FluidCornerSpec {
     const val continuous = 1
     fun freshCurve(sdkVersionSet: Int) = if (sdkVersionSet >= 0x07e80000) continuous else 0
+    fun clampRadius(value: Double, upper: Double): Double {
+        val bounded = if (value <= upper) value else upper
+        return if (bounded < 0.0) 0.0 else bounded
+    }
 
     fun <Receiver : Any> writeModelRadii(
         readModel: () -> DoubleArray, clipping: Receiver, self: Receiver,
@@ -1183,11 +1186,7 @@ internal object FluidCornerSpec {
         val halfHeight = height * 0.5
         val upper = if (halfHeight < halfWidth) halfHeight else halfWidth
         require(upper >= 0.0)
-        val presented = DoubleArray(8) { index ->
-            val value = radii[index]
-            val bounded = if (value <= upper) value else upper
-            if (bounded < 0.0) 0.0 else bounded
-        }
+        val presented = DoubleArray(8) { index -> clampRadius(radii[index], upper) }
         val channel = FluidPopupChannel.CornerRadii
         platform?.invoke(channel, presented)
         coordinator?.invoke(channel, presented, null, 0, false)

@@ -8,6 +8,7 @@ import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
 import io.github.anastaci1a.localica.ui.spec.PopupOutline
+import io.github.anastaci1a.localica.ui.spec.PopupOutlinePose
 import io.github.anastaci1a.localica.ui.spec.PopupOutlinePreview
 import io.github.anastaci1a.localica.ui.spec.Space
 import io.github.anastaci1a.localica.ui.spec.StockUiSpec
@@ -58,64 +59,68 @@ private fun popupThroughSlots(growing: Boolean, fromPhase: Boolean): Pair<PopupT
 }
 
 internal data class FluidOutlineOverride(
-    val bounds: PopupPortalBounds?, val cornerRadius: Double, val identityTransform: Boolean = false,
+    val bounds: PopupPortalBounds?, val cornerRadius: Double, val scale: Double = 1.0,
 )
 
-internal data class FluidOutlineStep(val endpoint: FluidOutlineOverride?, val companion: FluidOutlineOverride?)
-
-internal data class FluidGrowingOutlineTargets(
-    val collapsedSource: FluidOutlineStep, val overrounded: FluidOutlineStep, val fullyExpanded: FluidOutlineStep,
+internal data class FluidOutlineTargets(
+    val sourcePivot: FluidOutlineOverride?, val collapsedSource: FluidOutlineOverride,
+    val companion: FluidOutlineOverride, val overrounded: FluidOutlineOverride,
 )
 
 internal fun fluidOutlineRequests(
-    action: FluidTimelineAction, growing: Boolean, growth: FluidGrowingOutlineTargets?,
+    action: FluidTimelineAction, growing: Boolean, targets: FluidOutlineTargets,
 ): List<Pair<PopupThroughItem, FluidOutlineOverride?>>? {
     val source = when (action) {
-        FluidTimelineAction.Source, FluidTimelineAction.CollapsedSource -> true
-        FluidTimelineAction.ExpandedOverrounded, FluidTimelineAction.FullyExpanded -> false
+        Source, CollapsedSource -> true
+        ExpandedOverrounded, FullyExpanded -> false
         else -> return null
     }
-    // The return queue reuses the prepared FullyExpanded step; its Source carries no override.
-    val outline = when (action) {
-        FluidTimelineAction.CollapsedSource -> growth?.collapsedSource
-        FluidTimelineAction.ExpandedOverrounded -> growth?.overrounded
-        FluidTimelineAction.FullyExpanded -> growth?.fullyExpanded
+    val (first, second) = popupThroughSlots(growing, fromPhase = source == growing)
+    fun request(role: PopupThroughItem) = role to when {
+        role == PopupThroughItem.Pivot -> if (source) targets.sourcePivot else targets.companion
+        action == CollapsedSource -> targets.collapsedSource
+        action == ExpandedOverrounded -> targets.overrounded
         else -> null
     }
-    val (first, second) = popupThroughSlots(growing, fromPhase = source == growing)
-    fun request(role: PopupThroughItem) = role to if (role == PopupThroughItem.Pivot) outline?.companion else outline?.endpoint
     return listOf(request(first), request(second))
 }
 
 /** The two source rectangles are in the smaller root. The two conversions resolve each target's container. */
-internal fun fluidGrowingOutlineTargets(
-    larger: PopupPortalBounds, pivot: PopupPortalBounds, diameter: Double,
+internal fun fluidOutlineTargets(
+    smaller: PopupPortalBounds, larger: PopupPortalBounds, pivot: PopupPortalBounds,
     toSmallerContainer: (PopupPortalBounds) -> PopupPortalBounds, toPivotContainer: (PopupPortalBounds) -> PopupPortalBounds,
-    companionInset: (PopupPortalBounds, Double) -> PopupPortalBounds,
-): FluidGrowingOutlineTargets {
+): FluidOutlineTargets {
+    val diameter = minOf(smaller.width, smaller.height)
     fun roundedOrigin(value: Double): Double {
         val magnitude = kotlin.math.abs(value)
         val integral = kotlin.math.floor(magnitude)
         return Math.copySign(if (magnitude - integral >= 0.5) integral + 1.0 else integral, value)
     }
-    fun squareAt(x: Double, y: Double): PopupPortalBounds {
-        val square = PopupPortalBounds(0.0, 0.0, diameter, diameter).centeredAt(x, y)
+    fun squareAt(x: Double, y: Double, side: Double): PopupPortalBounds {
+        val square = PopupPortalBounds(0.0, 0.0, side, side).centeredAt(x, y)
         return square.copy(x = roundedOrigin(square.x), y = roundedOrigin(square.y))
     }
-    fun circle(bounds: PopupPortalBounds, identity: Boolean = false): FluidOutlineOverride {
-        val short = if (bounds.height < bounds.width) bounds.height else bounds.width
-        return FluidOutlineOverride(bounds, short * 0.5, identity)
+    fun circle(bounds: PopupPortalBounds, scale: Double = 1.0) =
+        FluidOutlineOverride(bounds, minOf(bounds.width, bounds.height) * 0.5, scale)
+    fun inset(bounds: PopupPortalBounds, x: Double, y: Double) =
+        requireNotNull(PopupPortalInsets(y, x, y, x).signedCrop(bounds))
+    fun PopupPortalBounds.squareClampedAt(x: Double, y: Double, side: Double) =
+        squareAt(x.coerceIn(this.x, this.x + width), y.coerceIn(this.y, this.y + height), side)
+
+    val collapsed = circle(toSmallerContainer(squareAt(pivot.midX, pivot.midY, diameter)))
+    val region = inset(larger, diameter / 8, diameter / 8).standardized()
+    val companion = circle(toPivotContainer(region.squareClampedAt(
+        pivot.midX * 0.75 + larger.midX * 0.25, pivot.midY * 0.75 + larger.midY * 0.25, diameter,
+    )), 0.25)
+    val sourceRegion = inset(smaller, pivot.width * 0.5, pivot.height * 0.5)
+    val largerSide = maxOf(larger.width, larger.height)
+    val sourcePivot = if (sourceRegion.width >= 0 && sourceRegion.height >= 0 && largerSide > 0) {
+        val bounds = sourceRegion.squareClampedAt(pivot.midX, pivot.midY, larger.width)
+        circle(toPivotContainer(bounds), pivot.height * 0.5 / largerSide)
+    } else {
+        null
     }
-    val collapsed = toSmallerContainer(squareAt(pivot.midX, pivot.midY))
-    val region = companionInset(larger, (0.25 * diameter) * 0.5).standardized()
-    val companionX = (pivot.midX * 0.75 + larger.midX * 0.25).coerceIn(region.x, region.x + region.width)
-    val companionY = (pivot.midY * 0.75 + larger.midY * 0.25).coerceIn(region.y, region.y + region.height)
-    val companion = circle(toPivotContainer(squareAt(companionX, companionY)))
-    return FluidGrowingOutlineTargets(
-        FluidOutlineStep(circle(collapsed, identity = true), null),
-        FluidOutlineStep(FluidOutlineOverride(null, kotlin.math.abs(larger.width)), companion),
-        FluidOutlineStep(null, companion),
-    )
+    return FluidOutlineTargets(sourcePivot, collapsed, companion, FluidOutlineOverride(null, larger.width))
 }
 
 /** Both prepared rectangles use the smaller endpoint's root coordinates. */
@@ -132,7 +137,7 @@ internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, ancho
 
 internal data class FluidPopupPreview(
     val pivot: Rect, val root: Offset, val homeRadius: Float, val popupRadius: Float,
-    val anchorY: Double, val kickScale: Double,
+    val anchorY: Double, val hostScaleY: Double,
 ) : PopupOutlinePreview<Rect> {
     override fun prepare(home: Rect, envelope: Rect, density: Float, opening: Boolean): PopupOutline<Rect> =
         PreparedFluidOutline(home, envelope, density, opening, this)
@@ -145,21 +150,20 @@ private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, priva
     private val home = points(start)
     private val popup = points(end)
     private val pivot = points(preview.pivot)
-    override val kickScale get()=preview.kickScale
+    override val hostScaleY get() = preview.hostScaleY
     override val growing = if (opening) fluidPopupContentGrows(home, popup) else fluidPopupContentGrows(popup, home)
     override val apertureSlot get()=if (growing) 0 else 1
     private val smaller = if (growing == opening) home else popup
     private val larger = if (growing == opening) popup else home
-    private val targets = fluidGrowingOutlineTargets(larger, pivot, minOf(smaller.width, smaller.height), { it }, { it }) { r, inset ->
-        requireNotNull(PopupPortalInsets(inset, inset, inset, inset).signedCrop(r))
-    }
+    private val targets = fluidOutlineTargets(smaller, larger, pivot, { it }, { it })
 
-    override fun outline(action: FluidTimelineAction): List<Pair<Rect, Float>>? = fluidOutlineRequests(action, growing, targets)?.map { (role, override) ->
+    override fun outline(action: FluidTimelineAction): List<PopupOutlinePose<Rect>>? = fluidOutlineRequests(action, growing, targets)?.map { (role, override) ->
         val isHome = if (role == PopupThroughItem.Pivot) true else (role == PopupThroughItem.From) == opening
         val bounds = override?.bounds ?: if (role == PopupThroughItem.Pivot) pivot else if (isHome) home else popup
         val rect = Rect((bounds.x * scale + preview.root.x).toFloat(), (bounds.y * scale + preview.root.y).toFloat(),
             ((bounds.x + bounds.width) * scale + preview.root.x).toFloat(), ((bounds.y + bounds.height) * scale + preview.root.y).toFloat())
-        rect to (override?.let { (it.cornerRadius * scale).toFloat() } ?: if (isHome) preview.homeRadius else preview.popupRadius)
+        val radius = override?.let { (it.cornerRadius * scale).toFloat() } ?: if (isHome) preview.homeRadius else preview.popupRadius
+        PopupOutlinePose(rect, radius, (override?.scale ?: 1.0).toFloat())
     }
 
     override fun kick(action: FluidTimelineAction): Pair<Int, Float>? {

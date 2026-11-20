@@ -640,8 +640,29 @@ class FluidPopupComponentsTest {
         assertEquals(null, unresolved.sharedSpring)
         assertTrue(unresolved.tracksPresentationLayer)
         val fallback = fluidPositionSpring(null)
-        assertEquals(1.0, fallback.dampingRatio, 0.0)
-        assertEquals(0.4, fallback.response, 0.0)
+        assertEquals(0.8, fallback.dampingRatio, 0.0)
+        assertEquals(0.3, fallback.response, 0.0)
+        assertEquals(0.3, fallback.trackingResponse, 0.0)
+        assertEquals(0.016, fallback.retargetImpulse, 0.0)
+        assertFalse(route.any { it.action == KickSource || it.action == UnkickSource })
+    }
+
+    @Test fun closingGeometryAndKicksHaveTheRecoveredSpringsAndDelays() {
+        val steps = fluidThroughQueue(false, FluidMainEject, FluidContent.copy(lensingEnabled = false)) { emptyList() }.associateBy { it.action }
+        for (action in listOf(FullyExpanded, Source, KickSource, UnkickEjectee, UnkickSource)) {
+            val step = steps.getValue(action)
+            val spring = requireNotNull(step.propertySpring(0.7))
+            assertEquals(0.8, spring.dampingRatio, 0.0)
+            assertEquals(0x3fdf5c28f5c28f5bL, spring.response.toRawBits())
+            assertEquals(0x3fbae147ae147ae1L, spring.trackingResponse.toRawBits())
+        }
+        val ejectee = requireNotNull(steps.getValue(KickEjectee).propertySpring(0.7))
+        assertEquals(1.0, ejectee.dampingRatio, 0.0)
+        assertEquals((0.2 * 0.7).toRawBits(), ejectee.response.toRawBits())
+        assertEquals(0.0, steps.getValue(FullyExpanded).timing.storedDelay, 0.0)
+        assertEquals(0.0, steps.getValue(Source).timing.storedDelay, 0.0)
+        assertEquals(0.1, steps.getValue(UnkickEjectee).timing.storedDelay, 0.0)
+        assertEquals(0x3fc3333333333334L, steps.getValue(UnkickSource).timing.storedDelay.toRawBits())
     }
 
     @Test fun lensingSetupKeepsFilterOrderAndTrackedProperties() {

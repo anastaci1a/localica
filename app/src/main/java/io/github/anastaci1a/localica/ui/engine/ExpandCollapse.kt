@@ -74,68 +74,122 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     internal val ownerClock get()=clock
     private val physical get()=bound?.channels?.toList().orEmpty()+outline?.owned.orEmpty()
     private val physicalRest: Boolean get() { val edges=bound?.channels; val owned=outline?.owned; motion.epoch.intValue; cross?.epoch?.intValue; edges?.forEach { it.epoch.intValue }; owned?.forEach { it.epoch.intValue }; return motion.settled && cross?.settled!=false && edges?.all { it.settled }!=false && owned?.all { it.settled }!=false }
-    /** #1083: the Fluid window's second through slot is a second rectangle beside [bound]; each slot has one radius and one kick. */
-    private inner class Outline(poses: List<Pair<Rect,Float>>,aperture: Int,scale: Double) {
-        val companion=MotionRect(clock,poses[1].first,requireNotNull(bound).ranges).also { it.claim(this@ExpandCollapse) }
-        val radii=poses.map { MotionFloat(clock,it.second,companion.ranges.top) }
+    private inner class Outline(poses: List<PopupOutlinePose<Rect>>,aperture: Int,hostScaleY: Double) {
+        val companion=MotionRect(clock,poses[1].bounds,requireNotNull(bound).ranges).also { it.claim(this@ExpandCollapse) }
+        val radii=poses.map { MotionFloat(clock,0f,companion.ranges.top) }
+        val content=List(2) { List(2) { MotionFloat(clock,0f,companion.ranges.top) } }
+        val scales=poses.map { MotionFloat(clock,it.scale,1f) }
         val kicks=List(2) { MotionFloat(clock,FluidKickSpec.unkickTarget.toFloat(),companion.ranges.top) }
-        val owned=companion.channels.toList()+radii+kicks
-        var aperture by mutableIntStateOf(aperture); var scale by mutableDoubleStateOf(scale)
+        val owned=companion.channels.toList()+radii+content.flatten()+scales+kicks
+        var aperture by mutableIntStateOf(aperture); var hostScaleY by mutableDoubleStateOf(hostScaleY)
         // The last edge and kick requests: committed unless held, and replayed by [resumeOutline] at release.
         var edges: Pair<List<Pair<MotionFloat,Float>>,FluidPopupSpringSettings>?=null; val kickRequests=arrayOfNulls<Pair<Float,FluidPopupSpringSettings>>(2)
-        fun translation(amount: Float)=FluidKickSpec.translationY(amount.toDouble(),scale).toFloat()
+        fun rect(slot: Int)=if(slot==0) requireNotNull(bound) else companion
+        fun contentTargets(poses: List<PopupOutlinePose<Rect>>) = poses.flatMapIndexed { slot, pose ->
+            listOf(radii[slot] to pose.radius, content[slot][0] to pose.bounds.width, content[slot][1] to pose.bounds.height)
+        }
     }
     private var outline by mutableStateOf<Outline?>(null)
     internal val hasOutline get()=outline!=null
-    /** The bound rectangle as presented: its vertical edges carry the aperture slot's kick while an outline is installed. */
-    internal val aperture: MotionRectView=object: MotionRectView {
-        private fun edge(i: Int)=requireNotNull(bound).channels[i]
-        private fun kicked(i: Int)=object: MotionValue {
-            private fun kick(base: Float,read: (MotionFloat)->Float)=outline?.let { base+it.translation(read(it.kicks[0])) }?:base
-            override val target get()=kick(edge(i).target) { it.target }
-            override val settled get()=edge(i).settled && outline?.kicks?.first()?.settled!=false
-            override fun value()=kick(edge(i).value()) { it.value() }
-            override fun velocity()=kick(edge(i).velocity()) { it.velocity() }
-            override fun sample()=if(outline==null) edge(i).sample() else Kinematic(value(),velocity())
-            override fun valueAt(stamp: FrameStamp)=kick(edge(i).valueAt(stamp)) { it.valueAt(stamp) }
-            override fun velocityAt(stamp: FrameStamp)=kick(edge(i).velocityAt(stamp)) { it.velocityAt(stamp) }
-            override fun sampleAt(stamp: FrameStamp)=if(outline==null) edge(i).sampleAt(stamp) else Kinematic(valueAt(stamp),velocityAt(stamp))
+    internal val aperture: MotionRectView=outlineView(0)
+    private val companionView=outlineView(1)
+    private fun outlineView(slot: Int)=object: MotionRectView {
+        private fun edge(i: Int)= (outline?.rect(slot) ?: requireNotNull(bound)).channels[i]
+        private fun projected(i: Int)=object: MotionValue {
+            private val vertical=i%2==1
+            private fun value(read: (MotionFloat)->Float): Float {
+                val base=read(edge(i))
+                val o=outline?:return base
+                val scale=read(o.scales[slot])
+                val kick=if(vertical) FluidKickSpec.translationY(read(o.kicks[slot]).toDouble(),o.hostScaleY*scale).toFloat() else 0f
+                return base+(abs(scale)-1f)*(base-read(edge(i xor 2)))*0.5f+kick
+            }
+            private fun velocity(read: (MotionFloat)->Kinematic): Float {
+                val base=read(edge(i))
+                val o=outline?:return base.velocity
+                val other=read(edge(i xor 2))
+                val scale=read(o.scales[slot])
+                val scaleVelocity=if(scale.value<0f) -scale.velocity else scale.velocity
+                val kick=if(vertical) read(o.kicks[slot]).let {
+                    (o.hostScaleY*(scale.value*it.velocity+scale.velocity*it.value)).toFloat()
+                } else 0f
+                return base.velocity+(abs(scale.value)-1f)*(base.velocity-other.velocity)*0.5f+
+                    scaleVelocity*(base.value-other.value)*0.5f+kick
+            }
+            override val target get()=value { it.target }
+            override val settled get()=edge(i).settled && (outline?.let { o ->
+                edge(i xor 2).settled && o.scales[slot].settled && (!vertical || o.kicks[slot].settled)
+            } ?: true)
+            override fun value()=value { it.value() }
+            override fun velocity()=velocity { it.sample() }
+            override fun sample()=Kinematic(value(),velocity())
+            override fun valueAt(stamp: FrameStamp)=value { it.valueAt(stamp) }
+            override fun velocityAt(stamp: FrameStamp)=velocity { it.sampleAt(stamp) }
+            override fun sampleAt(stamp: FrameStamp)=Kinematic(valueAt(stamp),velocityAt(stamp))
         }
-        override val left get()=edge(0); override val top: MotionValue=kicked(1); override val right get()=edge(2); override val bottom: MotionValue=kicked(3)
+        override val left: MotionValue=projected(0); override val top: MotionValue=projected(1)
+        override val right: MotionValue=projected(2); override val bottom: MotionValue=projected(3)
         override fun value()=Rect(left.value(),top.value(),right.value(),bottom.value())
         override fun valueAt(stamp: FrameStamp)=Rect(left.valueAt(stamp),top.valueAt(stamp),right.valueAt(stamp),bottom.valueAt(stamp))
     }
     /** Poses arrive in request order; the receiving endpoint's slot stays on the bound aperture. */
-    internal fun replaceOutline(poses: List<Pair<Rect,Float>>,aperture: Int,scale: Double,spring: FluidPopupSpringSettings) {
+    internal fun replaceOutline(poses: List<PopupOutlinePose<Rect>>,aperture: Int,hostScaleY: Double,spring: FluidPopupSpringSettings) {
         val ordered=if(aperture==0) poses else poses.asReversed()
-        val current=outline?:Outline(ordered,aperture,scale).also { o -> outline=o; o.owned.forEach { it.onRest={ notifyLifecycle() } } }
-        current.aperture=aperture; current.scale=scale; drawn=null
-        val edges=listOf(requireNotNull(bound),current.companion).zip(ordered).flatMap { (rect,pose) -> rect.channels.zip(floatArrayOf(pose.first.left,pose.first.top,pose.first.right,pose.first.bottom).toList()) }
-        current.edges=(edges+current.radii.zip(ordered.map { it.second })) to spring
-        if(!held) resumeEdges(current)
+        val existing=outline
+        val current=existing?:Outline(ordered,aperture,hostScaleY).also { o ->
+            outline=o
+            o.owned.forEach { it.onRest={ notifyLifecycle() } }
+        }
+        current.aperture=aperture; current.hostScaleY=hostScaleY; drawn=null
+        val view=ordered.flatMapIndexed { slot, pose ->
+            val r=pose.bounds
+            current.rect(slot).channels.zip(listOf(r.left,r.top,r.right,r.bottom))+(current.scales[slot] to pose.scale)
+        }
+        if(existing==null) {
+            retargetOutline(view,spring,snap=true)
+        } else if(!held || current.edges!=null) {
+            val targets=view+current.contentTargets(ordered)
+            val previous=current.edges
+            current.edges=targets to spring
+            if(!held) {
+                val unchanged=previous?.takeIf { (_,law) -> law.omega==spring.omega && law.dampingRatio==spring.dampingRatio }
+                retargetOutline(if(unchanged==null) targets else targets-unchanged.first.toSet(),spring)
+            }
+        }
+    }
+    internal fun layoutHeldOutlineSource(poses: List<PopupOutlinePose<Rect>>) {
+        val current=outline?.takeIf { held && it.edges==null }?:return
+        val ordered=if(current.aperture==0) poses else poses.asReversed()
+        retargetOutline(current.contentTargets(ordered),fluidPositionSpring(null),snap=true)
     }
     internal fun kickOutline(slot: Int,target: Float,spring: FluidPopupSpringSettings) { outline?.let { val i=slot xor it.aperture; it.kickRequests[i]=target to spring; if(!held) resumeKick(it,i) } }
     private fun resumeEdges(o: Outline) { o.edges?.let { (targets,spring) -> retargetOutline(targets,spring) } }
     private fun resumeKick(o: Outline,i: Int) { o.kickRequests[i]?.let { (target,spring) -> retargetOutline(listOf(o.kicks[i] to target),spring) } }
     private fun resumeOutline() { val o=outline?:return; resumeEdges(o); for(i in 0..1) resumeKick(o,i) }
-    private fun retargetOutline(targets: List<Pair<MotionFloat,Float>>,spring: FluidPopupSpringSettings) {
+    private fun retargetOutline(targets: List<Pair<MotionFloat,Float>>,spring: FluidPopupSpringSettings,snap: Boolean=false) {
+        if(targets.isEmpty()) return
         drawn=null
-        val stamp=clock.stampNow; val ctx=context(); val display=ctx.displayIntervalSeconds.toDouble(); val reduced=ctx.access==MotionAccess.Reduced
+        val stamp=clock.stampNow; val ctx=context(); val display=ctx.displayIntervalSeconds.toDouble()
+        val immediate=snap || ctx.access==MotionAccess.Reduced
         val moving=targets.filter { (m,q) -> m.rawValue(stamp)!=q.toDouble() || m.rawVelocity(stamp)!=0.0 }
-        val plan=if(reduced || moving.isEmpty()) null else SpringPlan.of(stamp,1.0,display,moving.map { (m,q) -> doubleArrayOf(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble()) })
-        commitAtomic(targets.map { (m,q) -> m to m.prepareSegment(plan?.let { Damped(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble(),display,it.finish,it.tauOut,it) }?:Rest(q.toDouble()),q,stamp,plan,if(reduced) "Reduced" else "Continuous") })
+        val plan=if(immediate || moving.isEmpty()) null else SpringPlan.of(stamp,1.0,display,moving.map { (m,q) -> doubleArrayOf(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble()) })
+        commitAtomic(targets.map { (m,q) -> m to m.prepareSegment(plan?.let { Damped(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble(),display,it.finish,it.tauOut,it) }?:Rest(q.toDouble()),q,stamp,plan,if(immediate) "Reduced" else "Continuous") })
     }
     // The bodies sampled at one frame stamp: the field and every radius reader of that frame share one construction.
     private var drawn: Pair<FrameStamp,List<RoundRect>>?=null
     /** Both sampled slots in field order, each with its published circular radius. */
     internal fun outlineBodies(): List<RoundRect>? = outline?.let { o -> drawn?.takeIf { it.first==clock.stamp }?.second ?: run {
-        val bodies=listOf(aperture.value(),o.companion.value().translate(Offset(0f,o.translation(o.kicks[1].value())))).zip(o.radii).map { (r,radius) -> RoundRect(r,CornerRadius(presentedRadius(r,radius))) }
+        val bodies=listOf(aperture.value(),companionView.value()).mapIndexed { slot,r -> RoundRect(r,CornerRadius(o.presentedRadius(slot,r))) }
         if(o.aperture==0) bodies else bodies.asReversed()
     }.also { drawn=clock.stamp to it } }
     internal fun outlineRadius()=outline?.let { o -> requireNotNull(outlineBodies())[o.aperture].topLeftCornerRadius.x }
-    private fun presentedRadius(rect: Rect,radius: MotionFloat): Float { var presented=0.0; val sample=radius.value().toDouble()
-        FluidCornerSpec.publishRadii(maxOf(rect.width,0f).toDouble(),maxOf(rect.height,0f).toDouble(),{ DoubleArray(8) { sample } },null,null) { _,value,_,_,_ -> presented=value[0] }
-        return presented.toFloat() }
+    private fun Outline.presentedRadius(slot: Int,rect: Rect): Float {
+        val (width,height)=content[slot]
+        val scale=abs(scales[slot].value())
+        val contentLimit=minOf(width.value(),height.value())*scale
+        val side=minOf(rect.width,rect.height,contentLimit).coerceAtLeast(0f)
+        return FluidCornerSpec.clampRadius(radii[slot].value().toDouble()*scale,side*0.5).toFloat()
+    }
     internal fun clearOutline() { outline?.owned?.forEach { it.onRest=null; it.dispose() }; outline=null; drawn=null }
     internal val awaitingNativeGate get()=!held && pendingNative!=null && physicalRest
     internal val retirementReady get()=!held && pendingNative==null && physicalRest

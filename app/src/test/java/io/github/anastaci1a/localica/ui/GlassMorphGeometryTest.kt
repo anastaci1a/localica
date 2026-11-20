@@ -9,10 +9,12 @@ import io.github.anastaci1a.localica.ui.spec.MotionAccess
 import io.github.anastaci1a.localica.ui.engine.PopupWindowMotion
 import io.github.anastaci1a.localica.ui.spec.ExpansionGeometryDomain
 import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
+import io.github.anastaci1a.localica.ui.spec.FluidMainEject
 import io.github.anastaci1a.localica.ui.spec.FluidPopupSpringSettings
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
+import io.github.anastaci1a.localica.ui.spec.PopupOutlinePose
 import io.github.anastaci1a.localica.ui.spec.SpecResult
 import io.github.anastaci1a.localica.ui.spec.uiSpec
 import java.security.MessageDigest
@@ -53,8 +55,8 @@ class GlassMorphGeometryTest {
             val opened = requireNotNull(popup.outlineBodies())
             assertEquals(envelope, opened[0].boundingRect)
             assertEquals(24f, opened[0].topLeftCornerRadius.x, 0f)
-            assertEquals(Rect(32f, 15f, 52f, 35f), opened[1].boundingRect)
-            assertEquals(10f, opened[1].topLeftCornerRadius.x, 0f)
+            assertEquals(Rect(39.5f, 22.5f, 44.5f, 27.5f), opened[1].boundingRect)
+            assertEquals(2.5f, opened[1].topLeftCornerRadius.x, 0f)
             val edges = listOf(aperture.left, aperture.top, aperture.right, aperture.bottom)
             val before = edges.map { it.sampleAt(h.clock.stampNow) }
             popup.show(false)
@@ -203,23 +205,65 @@ class GlassMorphGeometryTest {
     }
 
     @Test fun preparedThroughRequestsKeepEndpointAndPivotOverridesWithTheirRoles() {
-        val from = PopupPortalBounds(16.0, 10.0, 40.0, 20.0)
-        val to = PopupPortalBounds(0.0, 0.0, 120.0, 80.0)
-        val growth = fluidGrowingOutlineTargets(to, from, 20.0, { it }, { it }) { bounds, inset ->
-            requireNotNull(PopupPortalInsets(inset, inset, inset, inset).signedCrop(bounds))
-        }
-        val collapsed = FluidOutlineOverride(PopupPortalBounds(26.0, 10.0, 20.0, 20.0), 10.0, true)
-        val companion = FluidOutlineOverride(PopupPortalBounds(32.0, 15.0, 20.0, 20.0), 10.0)
-        val (start, pivot, end) = PopupThroughItem.entries
-        assertEquals(listOf(pivot to null, start to null), fluidOutlineRequests(Source, true, growth))
-        assertEquals(listOf(pivot to null, start to collapsed), fluidOutlineRequests(CollapsedSource, true, growth))
-        assertEquals(listOf(end to FluidOutlineOverride(null, 120.0), pivot to companion),
-            fluidOutlineRequests(ExpandedOverrounded, true, growth))
-        assertEquals(listOf(end to null, pivot to companion), fluidOutlineRequests(FullyExpanded, true, growth))
-        assertEquals(listOf(start to null, pivot to companion),
-            fluidOutlineRequests(FullyExpanded, false, growth))
-        // Return Source keeps Pivot A then To with no override even when the prepared targets are supplied.
-        assertEquals(listOf(pivot to null, end to null), fluidOutlineRequests(Source, false, growth))
+        val home = Rect(35f, 40f, 123f, 84f)
+        val menu = Rect(35f, 40f, 285f, 400f)
+        val input = FluidPopupPreview(home, Offset.Zero, 22f, 24f, 0.5, 1.0)
+        val opening = input.prepare(home, menu, 1f, opening = true)
+        val closing = input.prepare(home, menu, 1f, opening = false)
+        val source = PopupOutlinePose(home, 22f, 1f)
+        val pivot = PopupOutlinePose(Rect(-46f, -63f, 204f, 187f), 125f, 22f / 360f)
+        val collapsed = PopupOutlinePose(Rect(57f, 40f, 101f, 84f), 22f, 1f)
+        val companion = PopupOutlinePose(Rect(77f, 80f, 121f, 124f), 22f, 0.25f)
+        val expanded = PopupOutlinePose(menu, 24f, 1f)
+        assertEquals(listOf(pivot, source), opening.outline(Source))
+        assertEquals(listOf(pivot, collapsed), opening.outline(CollapsedSource))
+        assertEquals(listOf(expanded.copy(radius = 250f), companion), opening.outline(ExpandedOverrounded))
+        assertEquals(listOf(expanded, companion), opening.outline(FullyExpanded))
+        assertEquals(listOf(expanded, companion), closing.outline(FullyExpanded))
+        assertEquals(listOf(pivot, source), closing.outline(Source))
+        assertEquals(0 to 70.22222f, opening.kick(Kick))
+        assertEquals(0 to 70.22222f, closing.kick(KickEjectee))
+        assertEquals(1 to -35.11111f, closing.kick(KickSource))
+        assertEquals(0 to 0f, opening.kick(Unkick))
+        assertEquals(0 to 0f, closing.kick(UnkickEjectee))
+        assertEquals(1 to 0f, closing.kick(UnkickSource))
+    }
+
+    @Test fun freshViewSnapsAndItsContentCornerStartsFromZero() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
+        val home = Rect(35f, 40f, 123f, 84f)
+        val menu = Rect(35f, 40f, 285f, 400f)
+        popup.show(true)
+        popup.place(home, menu, 1f, preview = input.copy(pivot = home, homeRadius = 22f, hostScaleY = 1.0))
+        repeat(240) { h.advance(1.0 / 120) }
+        assertTrue(popup.expansion.awaitingNativeGate)
+        popup.acknowledgeNativeGate(popup.expansion.nativeGeneration)
+        val initial = requireNotNull(popup.outlineBodies())
+        assertEquals(79f, initial[0].boundingRect.center.x, 0f)
+        assertEquals(62f, initial[0].boundingRect.center.y, 0f)
+        assertEquals(15.277778f, initial[0].width, 0.00002f)
+        assertEquals(home, initial[1].boundingRect)
+        assertTrue(initial.all { it.topLeftCornerRadius.x == 0f })
+        h.advance(1.0 / 120)
+        val first = requireNotNull(popup.outlineBodies())[0]
+        assertEquals(1.2973572f, first.topLeftCornerRadius.x / (first.width / 250f), 0.0002f)
+    }
+
+    @Test fun kickDisplacementUsesTheInstantaneousSlotScale() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, _ ->
+        val bounds = Rect(0f, 0f, 250f, 360f)
+        val pose = PopupOutlinePose(bounds, 24f, 0.25f)
+        val spring = FluidMainEject.scaledResponses(0.7)
+        val expansion = popup.expansion
+        expansion.replaceOutline(listOf(pose, pose), 0, 2.0, spring)
+        expansion.replaceOutline(listOf(pose.copy(scale = 1f), pose), 0, 2.0, spring)
+        expansion.kickOutline(0, 40f, FluidKickSpec.ejecteeSpring)
+        h.advance(1.0 / 120)
+        val slots = requireNotNull(popup.outlineBodies())
+        val scale = 0.25 + 0.75 * 0.010378857970991029
+        val kt = 2.0 * Math.PI / 0.2 / 120
+        val kick = 40.0 * (1.0 - (1.0 + kt) * kotlin.math.exp(-kt))
+        assertEquals((250.0 * scale).toFloat(), slots[0].width, 0.00002f)
+        assertEquals((180.0 + scale * kick * 2.0).toFloat(), slots[0].boundingRect.center.y, 0.00002f)
+        assertEquals(180f, slots[1].boundingRect.center.y, 0f)
     }
 
     @Test fun edgeSpringPreparedPopupKeepsItsFrameCorpus() {

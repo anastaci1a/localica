@@ -42,29 +42,25 @@ class FluidPopupPortalGeometryTest {
 
     @Test fun growingOutlineTargetsRoundBeforeConversionAndKeepTheCompanionSeparate() {
         val larger = PopupPortalBounds(0.0, 0.0, 20.0, 20.0)
-        val pivot = PopupPortalBounds(-4.5, 11.5, 4.0, 4.0)
-        val targets = fluidGrowingOutlineTargets(
-            larger, pivot, 4.0,
+        val pivot = PopupPortalBounds(-8.5, 11.5, 4.0, 4.0)
+        val inPivotContainer = mutableListOf<PopupPortalBounds>()
+        val targets = fluidOutlineTargets(
+            pivot, larger, pivot,
             toSmallerContainer = { square ->
-                assertEquals(PopupPortalBounds(-5.0, 12.0, 4.0, 4.0), square)
+                assertEquals(PopupPortalBounds(-9.0, 12.0, 4.0, 4.0), square)
                 square.copy(x = square.x + 30.0, y = square.y + 20.0, width = 8.0)
             },
             toPivotContainer = { square ->
-                assertEquals(PopupPortalBounds(1.0, 11.0, 4.0, 4.0), square)
+                inPivotContainer.add(square)
                 square.copy(x = square.x - 10.0, width = 6.0, height = 2.0)
             },
-            companionInset = { bounds, inset ->
-                assertTrue(bounds === larger)
-                assertEquals(0.5, inset, 0.0)
-                PopupPortalBounds(3.0, 2.0, 15.0, 15.0)
-            },
         )
-        val collapsed = FluidOutlineOverride(PopupPortalBounds(25.0, 32.0, 8.0, 4.0), 2.0, identityTransform = true)
-        val companion = FluidOutlineOverride(PopupPortalBounds(-9.0, 11.0, 6.0, 2.0), 1.0)
-        assertEquals(FluidOutlineStep(collapsed, null), targets.collapsedSource)
-        assertEquals(FluidOutlineStep(FluidOutlineOverride(null, 20.0), companion), targets.overrounded)
-        assertEquals(FluidOutlineStep(null, companion), targets.fullyExpanded)
-        assertTrue(targets.overrounded.companion === targets.fullyExpanded.companion)
+        assertEquals(listOf(PopupPortalBounds(-2.0, 11.0, 4.0, 4.0),
+            PopupPortalBounds(-17.0, 4.0, 20.0, 20.0)), inPivotContainer)
+        assertEquals(FluidOutlineOverride(PopupPortalBounds(21.0, 32.0, 8.0, 4.0), 2.0), targets.collapsedSource)
+        assertEquals(FluidOutlineOverride(PopupPortalBounds(-12.0, 11.0, 6.0, 2.0), 1.0, 0.25), targets.companion)
+        assertEquals(FluidOutlineOverride(PopupPortalBounds(-27.0, 4.0, 6.0, 2.0), 1.0, 0.1), targets.sourcePivot)
+        assertEquals(FluidOutlineOverride(null, 20.0), targets.overrounded)
     }
 
     @Test fun growingKickUsesTheLargerAnchorOrThePivotInTheSameRoot() {
