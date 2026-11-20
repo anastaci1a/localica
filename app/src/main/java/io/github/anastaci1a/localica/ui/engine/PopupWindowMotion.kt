@@ -14,6 +14,14 @@ internal interface PopupTakeoverOwner {
     val expanded: Boolean get() = takeover == PopupTakeover.InWindow
 }
 
+/** #1083: the host's prepared outline producer for one intent, built from the measured endpoints. */
+internal interface PopupOutlinePreview { val opening: Boolean; fun prepare(home: Rect, envelope: Rect, density: Float): PopupOutline }
+internal interface PopupOutline {
+    val growing: Boolean; val apertureSlot: Int; val kickScale: Double
+    fun outline(action: FluidTimelineAction): List<Pair<Rect,Float>>?
+    fun kick(action: FluidTimelineAction): Pair<Int,Float>?
+}
+
 /** #854: the surface kind of the enclosing popup; retained faces inside it (rememberFaceExpansion) inherit its motion. */
 internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
 
@@ -53,12 +61,11 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private var nativeWindow: java.lang.ref.WeakReference<Any>? = null
     private var firstNativeMeasurement = false
     private var nativeHost: java.lang.ref.WeakReference<ShadowPlane>? = null
-    private data class FluidPlacement(val basis: ExpansionBasis, val preview: PopupOutlinePreview<Rect>?, val intent: Boolean? = null,
-        val outline: PopupOutline<Rect>? = null, val request: Pair<FluidTimelineStep,Double>? = null)
+    private data class FluidPlacement(val basis: ExpansionBasis, val preview: PopupOutlinePreview?, val intent: Boolean? = null,
+        val outline: PopupOutline? = null, val request: Pair<FluidTimelineStep,Double>? = null)
     private var placement: FluidPlacement? = null
     internal fun outlineBodies()=expansion.outlineBodies()
-    internal fun outlineRadius()=expansion.outlineRadius()
-    internal fun apertureRadius(density: Density, fallback: ()->Dp)=outlineRadius()?.let { with(density) { it.toDp() } }?:fallback()
+    internal fun apertureRadius(density: Density, fallback: ()->Dp)=expansion.outlineRadius()?.let { with(density) { it.toDp() } }?:fallback()
     var fluidBlurRadius by mutableDoubleStateOf(0.0); private set
     private val fluidBlur = FluidPropertyMotion(clock, Double::equals, { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidBlurRadius = radius } })
     private val fluidBlurControls = FluidPropertySpringControls(0.0, null, false, false)
@@ -100,10 +107,9 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     fun release() {
         holding = false
         expansion.release()
-        placement?.takeIf { it.intent==shown }?.request?.let { (step,speed) -> deliverOutline(step,speed) }
         fluidTimeline.release()
     }
-    fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false, preview: PopupOutlinePreview<Rect>? = null) {
+    fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false, preview: PopupOutlinePreview? = null) {
         if (shown || openingEnvelope == null) openingEnvelope = envelope
         val capturedEnvelope = requireNotNull(openingEnvelope)
         // A detached window can present beyond its root viewport; its duration never exceeds the admitted travel.
@@ -134,13 +140,12 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         val current=placement?:return
         val outline=current.outline?.takeIf { current.intent==shown }?:return
         val root=fluidThroughMainSpring(outline.growing,FluidMainEject,FluidMainAbsorb)
-        val spring=step.geometrySpringBinding(speed).sharedSpring ?: (if(step.action==FluidTimelineAction.KickEjectee)
-            FluidPopupSpringSettings(1.0,0.2) else root).scaledResponses(speed)
+        val spring=step.geometrySpringBinding(speed).sharedSpring ?: (if(step.action==FluidTimelineAction.KickEjectee) FluidKickSpec.ejecteeSpring else root).scaledResponses(speed)
         outline.outline(step.action)?.let { poses ->
             placement=current.copy(request=step to speed)
-            if(!holding) expansion.replaceOutline(poses,outline.apertureSlot,outline.kickScale,spring)
+            expansion.replaceOutline(poses,outline.apertureSlot,outline.kickScale,spring)
         }
-        if(!holding) outline.kick(step.action)?.let { (slot,target) -> expansion.kickOutline(slot,target,spring) }
+        outline.kick(step.action)?.let { (slot,target) -> expansion.kickOutline(slot,target,spring) }
     }
     private fun startFluid() {
         val current=placement?:return
@@ -158,7 +163,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         fluidTimeline.replace(fluidThroughQueue(growing, FluidMainEject, FluidContent) {
             FluidLensingSpec.requests(FluidContent.lensingEnabled, growing, short(smaller), short(larger), FluidMainEject, FluidMainAbsorb)
         })
-        if(outline!=null && !holding) for(slot in 0..1) expansion.kickOutline(slot,FluidKickSpec.unkickTarget.toFloat(),FluidMainAbsorb.scaledResponses(FluidContent.speed))
+        if(outline!=null) for(slot in 0..1) expansion.kickOutline(slot,FluidKickSpec.unkickTarget.toFloat(),FluidMainAbsorb.scaledResponses(FluidContent.speed))
         fluidTimeline.start(FluidContent.speed, FluidContent.amplifyDelays, holding)
     }
     fun updateSpeed(speed: Float) = expansion.updateSpeed(speed)

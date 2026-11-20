@@ -73,7 +73,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     internal val lifecycle=linkedSetOf<(Boolean)->Unit>(); internal fun owns(rect: MotionRectView)=bound!=null && (bound===rect || aperture===rect)
     internal val ownerClock get()=clock
     private val physical get()=bound?.channels?.toList().orEmpty()+outline?.owned.orEmpty()
-    private val physicalRest: Boolean get() { val edges=physical; motion.epoch.intValue; cross?.epoch?.intValue; edges.forEach { it.epoch.intValue }; return motion.settled && cross?.settled!=false && edges.all { it.settled } }
+    private val physicalRest: Boolean get() { val edges=bound?.channels; val owned=outline?.owned; motion.epoch.intValue; cross?.epoch?.intValue; edges?.forEach { it.epoch.intValue }; owned?.forEach { it.epoch.intValue }; return motion.settled && cross?.settled!=false && edges?.all { it.settled }!=false && owned?.all { it.settled }!=false }
     /** #1083: the Fluid window's second through slot is a second rectangle beside [bound]; each slot has one radius and one kick. */
     private inner class Outline(poses: List<Pair<Rect,Float>>,aperture: Int,scale: Double) {
         val companion=MotionRect(clock,poses[1].first,requireNotNull(bound).ranges).also { it.claim(this@ExpandCollapse) }
@@ -81,7 +81,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         val kicks=List(2) { MotionFloat(clock,FluidKickSpec.unkickTarget.toFloat(),companion.ranges.top) }
         val owned=companion.channels.toList()+radii+kicks
         var aperture by mutableIntStateOf(aperture); var scale by mutableDoubleStateOf(scale)
-        var spring: FluidPopupSpringSettings?=null; val kickLaws=arrayOfNulls<FluidPopupSpringSettings>(2)
+        // The last edge and kick requests: committed unless held, and replayed by [resumeOutline] at release.
+        var edges: Pair<List<Pair<MotionFloat,Float>>,FluidPopupSpringSettings>?=null; val kickRequests=arrayOfNulls<Pair<Float,FluidPopupSpringSettings>>(2)
         fun translation(amount: Float)=FluidKickSpec.translationY(amount.toDouble(),scale).toFloat()
     }
     private var outline by mutableStateOf<Outline?>(null)
@@ -108,15 +109,15 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     internal fun replaceOutline(poses: List<Pair<Rect,Float>>,aperture: Int,scale: Double,spring: FluidPopupSpringSettings) {
         val ordered=if(aperture==0) poses else poses.asReversed()
         val current=outline?:Outline(ordered,aperture,scale).also { o -> outline=o; o.owned.forEach { it.onRest={ notifyLifecycle() } } }
-        current.aperture=aperture; current.scale=scale; current.spring=spring
+        current.aperture=aperture; current.scale=scale
         val edges=listOf(requireNotNull(bound),current.companion).zip(ordered).flatMap { (rect,pose) -> rect.channels.zip(floatArrayOf(pose.first.left,pose.first.top,pose.first.right,pose.first.bottom).toList()) }
-        retargetOutline(edges+current.radii.zip(ordered.map { it.second }),spring)
+        current.edges=(edges+current.radii.zip(ordered.map { it.second })) to spring
+        if(!held) resumeEdges(current)
     }
-    internal fun kickOutline(slot: Int,target: Float,spring: FluidPopupSpringSettings) { outline?.let { val i=slot xor it.aperture; it.kickLaws[i]=spring; retargetOutline(listOf(it.kicks[i] to target),spring) } }
-    private fun resumeOutline() { val o=outline?:return
-        o.spring?.let { spring -> retargetOutline((bound!!.channels.toList()+o.companion.channels+o.radii).map { it to it.target },spring) }
-        o.kickLaws.forEachIndexed { i,spring -> if(spring!=null) retargetOutline(listOf(o.kicks[i] to o.kicks[i].target),spring) }
-    }
+    internal fun kickOutline(slot: Int,target: Float,spring: FluidPopupSpringSettings) { outline?.let { val i=slot xor it.aperture; it.kickRequests[i]=target to spring; if(!held) resumeKick(it,i) } }
+    private fun resumeEdges(o: Outline) { o.edges?.let { (targets,spring) -> retargetOutline(targets,spring) } }
+    private fun resumeKick(o: Outline,i: Int) { o.kickRequests[i]?.let { (target,spring) -> retargetOutline(listOf(o.kicks[i] to target),spring) } }
+    private fun resumeOutline() { val o=outline?:return; resumeEdges(o); for(i in 0..1) resumeKick(o,i) }
     private fun retargetOutline(targets: List<Pair<MotionFloat,Float>>,spring: FluidPopupSpringSettings) {
         val stamp=clock.stampNow; val ctx=context(); val display=ctx.displayIntervalSeconds.toDouble(); val reduced=ctx.access==MotionAccess.Reduced
         val moving=targets.filter { (m,q) -> m.rawValue(stamp)!=q.toDouble() || m.rawVelocity(stamp)!=0.0 }
@@ -128,7 +129,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         val bodies=listOf(aperture.value(),o.companion.value().translate(Offset(0f,o.translation(o.kicks[1].value())))).zip(o.radii).map { (r,radius) -> RoundRect(r,CornerRadius(presentedRadius(r,radius))) }
         if(o.aperture==0) bodies else bodies.asReversed()
     }
-    internal fun outlineRadius()=outline?.let { presentedRadius(aperture.value(),it.radii[0]) }
+    internal fun outlineRadius()=outline?.let { o -> requireNotNull(outlineBodies())[o.aperture].topLeftCornerRadius.x }
     private fun presentedRadius(rect: Rect,radius: MotionFloat): Float { var presented=0.0; val sample=radius.value().toDouble()
         FluidCornerSpec.publishRadii(maxOf(rect.width,0f).toDouble(),maxOf(rect.height,0f).toDouble(),{ DoubleArray(8) { sample } },null,null) { _,value,_,_,_ -> presented=value[0] }
         return presented.toFloat() }

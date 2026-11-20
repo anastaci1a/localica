@@ -7,8 +7,8 @@ import androidx.compose.ui.unit.Dp
 import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
-import io.github.anastaci1a.localica.ui.spec.PopupOutline
-import io.github.anastaci1a.localica.ui.spec.PopupOutlinePreview
+import io.github.anastaci1a.localica.ui.engine.PopupOutline
+import io.github.anastaci1a.localica.ui.engine.PopupOutlinePreview
 import io.github.anastaci1a.localica.ui.spec.Space
 import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 import io.github.anastaci1a.localica.ui.spec.fluidThroughGrows
@@ -119,7 +119,7 @@ internal fun fluidGrowingOutlineTargets(
 }
 
 /** Both prepared rectangles use the smaller endpoint's root coordinates. */
-internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, anchorY: Double, genieScale: Double?, amount: Double = -80.0): Double {
+internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, anchorY: Double, genieScale: Double?, amount: Double = FluidKickSpec.growingAmount): Double {
     val larger = standardized()
     val center = genieScale ?: if (anchorY != 0.5) anchorY else {
         val fraction = (pivot.midY - larger.y) / larger.height
@@ -133,11 +133,11 @@ internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, ancho
 internal data class FluidPopupPreview(
     override val opening: Boolean, val pivot: Rect, val root: Offset, val homeRadius: Float, val popupRadius: Float,
     val anchorY: Double, val kickScale: Double,
-) : PopupOutlinePreview<Rect> {
-    override fun prepare(home: Rect, envelope: Rect, density: Float): PopupOutline<Rect> = PreparedFluidOutline(home, envelope, density, this)
+) : PopupOutlinePreview {
+    override fun prepare(home: Rect, envelope: Rect, density: Float): PopupOutline = PreparedFluidOutline(home, envelope, density, this)
 }
 
-private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, private val preview: FluidPopupPreview) : PopupOutline<Rect> {
+private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, private val preview: FluidPopupPreview) : PopupOutline {
     private val opening = preview.opening
     private val scale = density.toDouble()
     private fun points(r: Rect) = PopupPortalBounds((r.left - preview.root.x) / scale,
@@ -165,7 +165,7 @@ private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, priva
     override fun kick(action: FluidTimelineAction): Pair<Int, Float>? {
         val (slot, amount) = when (action) {
             Kick, KickEjectee -> FluidKickSpec.growingSlot to larger.growingKickTarget(pivot, preview.anchorY, null)
-            KickSource -> 1 to larger.growingKickTarget(pivot, preview.anchorY, null, amount = 40.0)
+            KickSource -> 1 to larger.growingKickTarget(pivot, preview.anchorY, null, FluidKickSpec.sourceAmount)
             Unkick, UnkickEjectee -> FluidKickSpec.growingSlot to FluidKickSpec.unkickTarget
             UnkickSource -> 1 to FluidKickSpec.unkickTarget
             else -> return null

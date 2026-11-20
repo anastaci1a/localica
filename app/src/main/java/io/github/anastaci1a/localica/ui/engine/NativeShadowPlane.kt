@@ -32,8 +32,7 @@ internal class NativeSurfaceField(private val plane: ShadowPlane,private val nod
         val corner=radius.coerceIn(0f,size.minDimension/2f)
         val presented=Rect(Offset(dx+size.width*(1f-sx)/2f,dy+size.height*(1f-sy)/2f),Size(size.width*sx,size.height*sy))
         // One unscaled local construction: the window body, or the prepared slots relative to this node; both branches draw it.
-        val origin=outline?.let { localOrigin() }
-        val local=if(outline==null || origin==null) listOf(RoundRect(Rect(Offset.Zero,size),CornerRadius(corner))) else outline.map { it.translate(-origin) }
+        val local=outline?.let { val origin=requireNotNull(localOrigin()); it.map { body -> body.translate(-origin) } }?:listOf(RoundRect(Rect(Offset.Zero,size),CornerRadius(corner)))
         val bodies=local.map { RoundRect(Rect(Offset(presented.left+it.left*sx,presented.top+it.top*sy),Size(it.width*sx,it.height*sy)),CornerRadius(it.topLeftCornerRadius.x*sx,it.topLeftCornerRadius.y*sy)) }
         val footprint=if(bodies.size==1) presented else Rect(bodies.minOf { it.left },bodies.minOf { it.top },bodies.maxOf { it.right },bodies.maxOf { it.bottom })
         frame=ShapeFrame(bodies,footprint,corner,GlassStrain.None)

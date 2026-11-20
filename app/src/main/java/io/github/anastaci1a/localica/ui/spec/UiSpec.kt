@@ -116,18 +116,6 @@ internal val FluidMainAbsorb = FluidPopupSpringSettings(dampingRatio = 0.8, resp
 
 @Immutable data class PopupSecondPhase(val spring: SpringLaw, val band: Float, val edgeShares: (DoubleArray) -> DoubleArray)
 
-internal interface PopupOutlinePreview<Bounds> {
-    val opening: Boolean
-    fun prepare(home: Bounds, envelope: Bounds, density: Float): PopupOutline<Bounds>
-}
-internal interface PopupOutline<Bounds> {
-    val growing: Boolean
-    val apertureSlot: Int
-    val kickScale: Double
-    fun outline(action: FluidTimelineAction): List<Pair<Bounds,Float>>?
-    fun kick(action: FluidTimelineAction): Pair<Int,Float>?
-}
-
 internal object FluidPopupRuntimeInputs {
     val outlineCentre: PopupSecondPhase? = null
 }
@@ -322,7 +310,7 @@ internal fun fluidThroughQueue(
         step(FluidTimelineAction.CollapsedSource, spring = FluidPopupSpringSettings(1.0, 0.3))
         step(FluidTimelineAction.ExpandedOverrounded, spring = mainEject)
         step(FluidTimelineAction.FullyExpanded, 0.1, mainEject)
-        step(FluidTimelineAction.Kick, spring = FluidPopupSpringSettings(1.0, 0.2))
+        step(FluidTimelineAction.Kick, spring = FluidKickSpec.ejecteeSpring)
         step(FluidTimelineAction.Unkick, 0.1, mainEject)
     } else {
         step(FluidTimelineAction.FullyExpanded)
@@ -445,6 +433,10 @@ internal fun completeFluidTimeline(
 
 internal object FluidKickSpec {
     const val growingSlot = 0
+    // Kick amounts and the ejectee spring from binary-centre-kick.json: slot 0 kicks -80, the return source slot 1 +40.
+    const val growingAmount = -80.0
+    const val sourceAmount = 40.0
+    val ejecteeSpring = FluidPopupSpringSettings(1.0, 0.2)
     const val unkickTarget = 0.0
     fun translationY(amount: Double, scale: Double) = scale * amount
 }

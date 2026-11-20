@@ -8,6 +8,7 @@ import io.github.anastaci1a.localica.ui.engine.EngineHarness
 import io.github.anastaci1a.localica.ui.spec.MotionAccess
 import io.github.anastaci1a.localica.ui.engine.PopupWindowMotion
 import io.github.anastaci1a.localica.ui.spec.ExpansionGeometryDomain
+import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
 import io.github.anastaci1a.localica.ui.spec.FluidPopupSpringSettings
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
 import io.github.anastaci1a.localica.ui.spec.PopupKind
@@ -46,7 +47,7 @@ class GlassMorphGeometryTest {
             assertEquals(2, moving.size)
             assertEquals(aperture.valueAt(h.clock.stampNow), moving.first().boundingRect)
             assertEquals(aperture.valueAt(h.clock.stampNow).bottom, aperture.bottom.valueAt(h.clock.stampNow), 0f)
-            assertEquals(moving.first().topLeftCornerRadius.x, requireNotNull(popup.outlineRadius()), 0f)
+            assertEquals(moving.first().topLeftCornerRadius.x, requireNotNull(popup.expansion.outlineRadius()), 0f)
             moving.forEach { assertTrue(it.topLeftCornerRadius.x <= minOf(it.width, it.height) / 2f) }
             frames(240)
             val opened = requireNotNull(popup.outlineBodies())
@@ -63,7 +64,7 @@ class GlassMorphGeometryTest {
             assertTrue(popup.expansion.awaitingNativeGate)
             assertSame(aperture, popup.bounds)
             assertEquals(home, aperture.valueAt(h.clock.stampNow))
-            assertEquals(6f, requireNotNull(popup.outlineRadius()), 0f)
+            assertEquals(6f, requireNotNull(popup.expansion.outlineRadius()), 0f)
             popup.acknowledgeNativeGate(popup.expansion.nativeGeneration)
             frames(240)
             assertTrue(popup.expansion.retirementReady)
@@ -97,7 +98,7 @@ class GlassMorphGeometryTest {
                 assertEquals(endpoint, aperture.valueAt(h.clock.stampNow))
                 assertEquals(endpoint, receiving.boundingRect)
                 assertEquals(radius, receiving.topLeftCornerRadius.x, 0f)
-                assertEquals(radius, requireNotNull(popup.outlineRadius()), 0f)
+                assertEquals(radius, requireNotNull(popup.expansion.outlineRadius()), 0f)
                 assertTrue(popup.expansion.retirementReady)
             }
             popup.dispose()
@@ -126,7 +127,7 @@ class GlassMorphGeometryTest {
         popup.show(true)
         h.frames(popup, 480)
         // Radius 120 on the 120x80 slot publishes 40 per lane, on the aperture and in the field.
-        assertEquals(40f, requireNotNull(popup.outlineRadius()), 0f)
+        assertEquals(40f, requireNotNull(popup.expansion.outlineRadius()), 0f)
         assertEquals(40f, requireNotNull(popup.outlineBodies())[0].topLeftCornerRadius.x, 0f)
         popup.expansion.kickOutline(0, -40f, FluidPopupSpringSettings(1.0, 0.2))
         h.frames(popup, 3)
@@ -158,6 +159,24 @@ class GlassMorphGeometryTest {
             assertTrue(requireNotNull(previous).any { it.boundingRect == endpoint })
             assertTrue(popup.expansion.retirementReady)
         }
+    }
+
+    @Test fun aReversalRequestedWhileHeldLandsItsUnkickAtRelease() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
+        popup.show(true)
+        h.frames(popup, 480)
+        val aperture = requireNotNull(popup.bounds)
+        val edges = requireNotNull(popup.rectangle)
+        popup.expansion.kickOutline(0, -40f, FluidKickSpec.ejecteeSpring)
+        h.frames(popup, 3)
+        assertNotEquals(edges.top.target, aperture.top.target, 0f)
+        popup.hold()
+        popup.show(false)
+        popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input.copy(opening = false))
+        popup.release()
+        // The reversal's unkick was requested while held; release replays it instead of the old kick.
+        assertEquals(edges.top.target, aperture.top.target, 0f)
+        h.frames(popup, 480)
+        assertTrue(popup.expansion.retirementReady)
     }
 
     @Test fun preparedThroughRequestsKeepEndpointAndPivotOverridesWithTheirRoles() {
