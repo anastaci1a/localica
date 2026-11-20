@@ -285,6 +285,38 @@ internal fun <Coordinator> List<Pair<() -> Coordinator, (Coordinator) -> Unit>>.
     }
 }
 
+internal data class FluidModifierFormat(val valueCount: Int, val additive: Boolean)
+
+/** The admitted presentation owner supplies one store per receiving layer. */
+internal fun <Modifier : Any> MutableMap<String, Modifier>.writeFluidPresentationModifier(
+    channel: FluidPopupChannel, ordinaryReuse: Boolean, requested: FluidModifierFormat,
+    format: (Modifier) -> FluidModifierFormat, update: (Modifier) -> Unit,
+    cancelCreate: (String) -> Unit, enqueueCreate: (String) -> Unit,
+) {
+    val key = channel.key
+    val modifier = this[key]
+    if (modifier != null && ordinaryReuse && format(modifier) == requested) {
+        update(modifier)
+        return
+    }
+    clearFluidModifier(key, cancelCreate)
+    enqueueCreate(key)
+}
+
+internal fun <Modifier : Any> MutableMap<String, Modifier>.completeFluidPresentationModifier(
+    channel: FluidPopupChannel, cancelCreate: (String) -> Unit, removesImmediately: () -> Boolean,
+    removeNow: (Modifier) -> Unit, enqueueRemoval: (Modifier) -> Unit,
+) {
+    val modifier = clearFluidModifier(channel.key, cancelCreate) ?: return
+    if (removesImmediately()) removeNow(modifier) else enqueueRemoval(modifier)
+}
+
+private fun <Modifier : Any> MutableMap<String, Modifier>.clearFluidModifier(key: String, cancelCreate: (String) -> Unit): Modifier? {
+    val modifier = remove(key)
+    cancelCreate(key)
+    return modifier
+}
+
 /** The original layer's resolved view/window supplies the live scale. Null means the view or window is absent. */
 internal fun fluidLayerPointScale(resolvedContext: Boolean, windowScale: () -> Double?): Double =
     if (resolvedContext) windowScale() ?: 1.0 else 1.0
