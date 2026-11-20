@@ -104,7 +104,26 @@ internal data class FluidPopupStep(val storedDelay: Double, val spring: FluidPop
 }
 internal data class FluidPropertySpringControls(
     val delay: Double, val startingVelocity: Double?, val interactive: Boolean, val additive: Boolean,
-)
+) {
+    /** The scalar body handed from the property owner to the ordinary zero-delay spring. */
+    fun immediateBody(
+        requestedStart: Double, target: Double, retained: FluidScalarSpringBody?, previousTarget: Double?,
+        spring: FluidPopupSpringSettings?, impulse: Double, pendingVelocity: Double?,
+    ): FluidScalarSpringBody {
+        val value = retained?.value ?: requestedStart
+        val velocity = when {
+            pendingVelocity != null -> pendingVelocity
+            startingVelocity != null -> (target - requestedStart) * startingVelocity
+            retained == null -> 0.0
+            impulse > 0.0 && previousTarget != null && spring != null && spring.dampingRatio > 0.0 && spring.response > 0.0 ->
+                retained.velocity + (target - previousTarget) * (impulse * spring.stiffness)
+            else -> retained.velocity
+        }
+        return FluidScalarSpringBody(value, velocity)
+    }
+}
+
+internal data class FluidScalarSpringBody(val value: Double, val velocity: Double)
 
 internal enum class FluidGeometryAction { CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick }
 internal data class FluidGeometryStep(val action: FluidGeometryAction, val timing: FluidPopupStep)
