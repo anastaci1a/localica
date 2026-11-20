@@ -188,7 +188,6 @@ internal class LensRenderer {
         }
     """.trimIndent())
     private var last = floatArrayOf()
-    private var lastWarp: FloatArray? = null
     private var fieldBitmap: Bitmap? = null
     private var cached: RenderEffect? = null
     private var blurAmount = Float.NaN
@@ -210,10 +209,9 @@ internal class LensRenderer {
             map?.scale ?: 1f, map?.range ?: 1f, flattening, tone.trim, tone.weight, tone.lightMix,
             fieldWeight.coerceIn(0f, 1f), if (circles == null) 0f else 1f,
             circles?.first?.x ?: 0f, circles?.first?.y ?: 0f,
-            circles?.second?.x ?: 0f, circles?.second?.y ?: 0f, splitInner ?: -1f)
-        if (state.contentEquals(last) && words.contentEquals(lastWarp) && fieldBitmap === map?.bitmap) return requireNotNull(cached)
+            circles?.second?.x ?: 0f, circles?.second?.y ?: 0f, splitInner ?: -1f) + (words ?: FloatArray(0))
+        if (state.contentEquals(last) && fieldBitmap === map?.bitmap) return requireNotNull(cached)
         last = state
-        lastWarp = words
         shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
         shader.setFloatUniform("corner", geometry.radius)
         shader.setFloatUniform("weights", geometry.weights.x, geometry.weights.y)

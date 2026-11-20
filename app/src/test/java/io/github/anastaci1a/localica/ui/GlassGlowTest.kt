@@ -8,6 +8,7 @@ import io.github.anastaci1a.localica.ui.engine.PopupWindowMotion
 import io.github.anastaci1a.localica.ui.spec.ExpansionGeometryDomain
 import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
+import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import io.github.anastaci1a.localica.ui.spec.SpecResult
@@ -21,6 +22,13 @@ import java.io.File
 import java.security.MessageDigest
 
 class GlassGlowTest {
+    @Test fun fluidLensHeightAndFinishThresholdUseTheRecordedScale() {
+        assertEquals(0.0.toRawBits(), FluidLensingSpec.height(100.0, 0.0).toRawBits())
+        assertEquals(37.5.toRawBits(), FluidLensingSpec.height(125.0, 1.0).toRawBits())
+        assertEquals(75.0.toRawBits(), FluidLensingSpec.height(500.0, 1.0).toRawBits())
+        assertEquals(0x3f647ae147ae147cL, FluidLensingSpec.epsilonSquared.toRawBits())
+    }
+
     private fun step(body: GlassMomentum, fps: Int, point: Offset?, held: Float, strength: Float = 1f) {
         body.targetGlow(point, held, strength)
         body.advance(0f, (1f / fps).toDouble(), contact = held)
@@ -303,9 +311,7 @@ class GlassGlowTest {
         replaceExact("            if (warpMode > 0.5) return warped(p, f);\n")
         replaceExact(", warp: LensWarp? = null")
         replaceExact("        val words = warp?.uniforms(unit)\n")
-        replaceExact("    private var lastWarp: FloatArray? = null\n")
-        replaceExact(" && words.contentEquals(lastWarp)")
-        replaceExact("        lastWarp = words\n")
+        replaceExact(" + (words ?: FloatArray(0))")
         replaceExact("""
             |        val w = words ?: FloatArray(12)
             |        shader.setFloatUniform("mapShape", w[0], w[1], w[2], w[3])

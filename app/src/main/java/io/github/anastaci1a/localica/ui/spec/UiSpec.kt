@@ -559,7 +559,7 @@ internal enum class FluidPopupChannel(val key: String, val value: Value) {
 }
 
 internal fun fluidLensSuppressesAction(old: Double, new: Double, latest: Double?, bypass: Boolean) =
-    !bypass && abs(new - old) <= 0.05 && (latest == null || abs(new - latest) <= 0.05)
+    !bypass && abs(new - old) <= FluidLensingSpec.epsilon && (latest == null || abs(new - latest) <= FluidLensingSpec.epsilon)
 
 /** Appends to the shared property owner's request queue and chooses its existing commit hook. */
 internal fun <Request> MutableList<Request>.submitFluidPropertyPublication(
@@ -987,9 +987,11 @@ internal object FluidLensingSpec {
 
     private val lensPropertyControls = FluidPropertySpringControls(delay = 0.0, startingVelocity = null, interactive = false, additive = false)
 
-    fun publishSample(publication: FluidScalarPublication, write: (Double, Double, Int, Boolean, Boolean) -> Unit) {
-        publication.consume { sample -> write(sample.value, sample.velocity, 0, false, lensPropertyControls.additive) }
-    }
+    fun publishSample(publication: FluidScalarPublication, write: (Double, Double, Int, Boolean, Boolean) -> Unit) =
+        publication.consume { publishSample(it, write) }
+
+    inline fun publishSample(sample: FluidScalarSpringBody, write: (Double, Double, Int, Boolean, Boolean) -> Unit) =
+        write(sample.value, sample.velocity, 0, false, lensPropertyControls.additive)
 
     // The render owner supplies the active modifier value and the original filter order.
     fun applyPresentation(
@@ -1065,9 +1067,13 @@ internal object FluidLensingSpec {
     const val displacementVertexType = 6
     const val freshHeight = 20.0
     const val freshAmount = -0.001
-    fun isForegroundAtRest(blurRadius: Double, height: Float, amount: Double) =
-        FluidGaussianSpec.isIdentity(blurRadius) && amount == freshAmount &&
-            (height == 0f || height == freshHeight.toFloat())
+    const val epsilon = 0.05
+    const val epsilonSquared = epsilon * epsilon
+
+    fun height(dimension: Double, gain: Double) = 75.0 * (gain * minOf(dimension / 250.0, 1.0))
+
+    fun isForegroundAtRest(blurRadius: Double, height: Double, amount: Double) =
+        FluidGaussianSpec.isIdentity(blurRadius) && amount == freshAmount && (height == 0.0 || height == freshHeight)
 
     val freshOffset get() = offset(null)
     fun skipsDisplacementSample(maskBlue: Float) = maskBlue < Float.fromBits(0x3b808081)

@@ -979,7 +979,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     // Measure and placement share one edge-rounded rectangle. Keep the
                     // shadow's layer-free placement on legacy Android.
                     val panelBounds = remember { arrayOfNulls<MotionPixelRect>(1) }
-                    val foregroundLens = remember(motion) { lazy { if (android.os.Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
+                    val foregroundLens = remember(motion) {
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            val renderer = lazy { LensRenderer() }
+                            val effect = { aperture: LensGeometry, blur: Float, unit: Float, warp: LensWarp ->
+                                renderer.value.effect(aperture, blur, anchor.depthScale, unit, warp = warp)
+                            }
+                            effect
+                        } else null
+                    }
                     Layout(modifier = measureModifier.glassShadowOffset {
                         val pixels = panelBounds[0]
                         androidx.compose.ui.unit.IntOffset(pixels?.left ?: 0, pixels?.top ?: 0)
@@ -1175,16 +1183,16 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             val foregroundY = if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2
                             foreground.placeWithLayer(foregroundX, foregroundY) {
                                 if (motion.fluid) {
-                                    if (android.os.Build.VERSION.SDK_INT >= 33 && foreground.height > 0) {
-                                        val blur = motion.fluidBlurRadius
+                                    foregroundLens?.let { effect ->
+                                        val blurRadius = motion.fluidBlurRadius
                                         val lensHeight = motion.fluidLensHeight
                                         val amount = motion.fluidLensAmount
-                                        val atRest = FluidLensingSpec.isForegroundAtRest(blur, lensHeight, amount)
-                                        renderEffect = if (atRest) null else foregroundLens.value?.effect(
+                                        renderEffect = if (FluidLensingSpec.isForegroundAtRest(blurRadius, lensHeight, amount)) null
+                                        else effect(
                                             LensGeometry(Rect(-foregroundX.toFloat(), -foregroundY.toFloat(),
                                                 (width - foregroundX).toFloat(), (height - foregroundY).toFloat()), with(density) { radius().toPx() }),
-                                            (blur * density.density).toFloat(), anchor.depthScale, density.density,
-                                            warp = LensWarp(lensHeight.toDouble(), amount, 0f, IntSize(foreground.width, foreground.height)),
+                                            (blurRadius * density.density).toFloat(), density.density,
+                                            LensWarp(lensHeight, amount, 0f, IntSize(foreground.width, foreground.height.coerceAtLeast(1))),
                                         )
                                     }
                                 } else {
