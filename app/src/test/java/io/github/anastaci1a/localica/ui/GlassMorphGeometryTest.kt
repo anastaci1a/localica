@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.boundingRect
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.engine.EngineHarness
+import io.github.anastaci1a.localica.ui.engine.EngineContext
 import io.github.anastaci1a.localica.ui.engine.FluidPropertyMotion
 import io.github.anastaci1a.localica.ui.spec.MotionAccess
 import io.github.anastaci1a.localica.ui.engine.PopupWindowMotion
@@ -331,6 +332,25 @@ class GlassMorphGeometryTest {
             large.animate(running.value, 0.0, controls, spring, FluidKickSpec.epsilonSquared)
             assertEquals(running, large.sample())
         }
+    }
+
+    @Test fun changingDragKeepsElapsedOutlineSpringTime() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, _ ->
+        val expansion = popup.expansion
+        val spring = FluidPopupSpringSettings(1.0, 0.4)
+        val start = Rect(0f, 0f, 250f, 360f)
+        val pose = PopupOutlinePose(start, 24f, 1f)
+        expansion.replaceOutline(listOf(pose, pose), 0, 1.0, spring)
+        expansion.replaceOutline(listOf(pose.copy(bounds = start.translate(Offset(100f, 0f))), pose), 0, 1.0, spring)
+        h.advance(0.016)
+        val before = requireNotNull(popup.outlineBodies()).first().boundingRect.center.x
+        h.clock.configure(EngineContext(1f / 120, 1000f, MotionAccess.Standard, durationScale = 2f), h.clock.spec)
+        assertEquals(before, requireNotNull(popup.outlineBodies()).first().boundingRect.center.x, 0f)
+        h.advance(0.016)
+        val elapsed = 0.016 + 0.016 / 2
+        val t = 2 * Math.PI / 0.4 * elapsed
+        val expected = 125.0 + 100.0 * (1.0 - (1.0 + t) * kotlin.math.exp(-t))
+        val after = requireNotNull(popup.outlineBodies()).first().boundingRect.center.x
+        assertEquals(expected.toFloat(), after, 0.00002f)
     }
 
     @Test fun unscaledSourceAppliesOnlyTheRecoveredSpringImpulse() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, _ ->

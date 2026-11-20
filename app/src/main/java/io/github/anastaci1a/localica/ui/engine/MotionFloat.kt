@@ -29,7 +29,11 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
         val seconds=(stamp.nanos-start.nanos)/1e9
         if(trajectory.kind !in 1..2) return seconds
         val scale=clock.context?.durationScale?:1f
-        return when(scale) { 1f -> seconds; 0f -> trajectory.duration; else -> seconds/scale }
+        if(scale==0f) return trajectory.duration
+        val startedAt=start.springCorrectionSeconds
+        val sampledAt=stamp.springCorrectionSeconds
+        if(trajectory.kind==2 && startedAt!=null && sampledAt!=null) return seconds+(sampledAt-startedAt)
+        return seconds/scale
     }
     private fun raw(stamp: FrameStamp,derivative: Boolean): Double { var selected=segment; var start=started; var old=past; while(stamp.nanos<start.nanos && old!=null) { selected=old.trajectory; start=old.started; old=old.previous }; val t=elapsed(selected,start,stamp); return if(derivative) selected.velocity(t) else selected.value(t) }
     internal fun rawValue(stamp: FrameStamp)=raw(stamp,false)
