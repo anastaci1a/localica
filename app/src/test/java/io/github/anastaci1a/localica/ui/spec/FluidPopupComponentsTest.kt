@@ -179,6 +179,25 @@ class FluidPopupComponentsTest {
         assertEquals("remove SDF", events.last())
     }
 
+    @Test fun hostRequestCompletionReleasesTheGroupOnlyWithStateAndCallback() {
+        val completion = FluidMorphCompletion()
+        val events = mutableListOf<String>()
+        completion.start(
+            block = { events += "group completion" },
+            drain = { completion.increment() },
+            propagateHold = {},
+        )
+        val release = {
+            events += "request release"
+            completion.complete()
+        }
+        releaseFluidMorphRequest(stateInstalled = false, release)
+        releaseFluidMorphRequest(stateInstalled = true, release = null)
+        assertTrue(events.isEmpty())
+        releaseFluidMorphRequest(stateInstalled = true, release)
+        assertEquals(listOf("request release", "group completion"), events)
+    }
+
     @Test fun sharedMorphCompletionClearsBeforeFiringAndSupportsTheDisabledRoute() {
         val completion = FluidMorphCompletion()
         val events = mutableListOf<String>()
