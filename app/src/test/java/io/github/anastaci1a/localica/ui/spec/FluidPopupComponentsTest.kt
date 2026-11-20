@@ -454,6 +454,58 @@ class FluidPopupComponentsTest {
         assertEquals(FluidGaussianSpec.NarrowTexel.GaussianColor, ordinary.last().texel(inside = true, edgePolicy = 0))
     }
 
+    @Test fun gaussianTileDecimationUsesLiveAdmissionAndTheNamedThreadDivisors() {
+        val factors = FluidGaussianSpec.Decimation.entries
+        for (size in factors) {
+            fun admits(shape: Boolean = false, flags: Int = 0, mode: Int = 0,
+                allowed: Boolean = true, current: Boolean = true, level: Int = 0xf0 or size.factor,
+            ) = FluidGaussianSpec.admitsTileDecimation(size, shape, flags, mode, allowed, current, level)
+            assertTrue(admits())
+            assertTrue(admits(flags = 1, mode = 2))
+            assertFalse(admits(shape = true))
+            assertFalse(admits(flags = 2))
+            assertFalse(admits(flags = 1, mode = 1))
+            assertFalse(admits(allowed = false))
+            assertFalse(admits(current = false))
+            assertFalse(admits(level = 0xf0 or (size.factor - 1)))
+        }
+        fun tile(size: FluidGaussianSpec.Decimation, encoder: Boolean = true,
+            destinationFlags: Int = 0x40, sourceFlags: Int = 8, tileSize: Pair<UInt, UInt> = 15u to 11u,
+        ) = FluidGaussianSpec.tileDecimation(
+            size, encoder, destinationFlags, sourceFlags, tileSize, -7 to 17, 1 to 3, 1f, 4f, 2f,
+        )
+        val passes = factors.map { tile(it)!! }
+        assertEquals(listOf("tile_downsample_2", "tile_downsample_4", "tile_downsample_8"), passes.map { it.function })
+        assertEquals(listOf(7u to 5u, 7u to 5u, 3u to 2u), passes.map { it.threads })
+        assertEquals(listOf(0x0005fffc, 0x0001fffe, 0xffffffff.toInt()), passes.map { it.offsetLanes })
+        assertEquals(0.25f to 0.5f, passes.last().gainInputs)
+        assertEquals(null, tile(factors.first(), encoder = false))
+        assertEquals(null, tile(factors.first(), destinationFlags = 8))
+        assertEquals(null, tile(factors.first(), sourceFlags = 0x40))
+        assertEquals(null, tile(factors.last(), tileSize = 3u to 8u))
+    }
+
+    @Test fun gaussianBoxFallbackKeepsAxisScalesAndTheComputeAndDrawInputsSeparate() {
+        val factors = FluidGaussianSpec.Decimation.entries
+        fun box(size: FluidGaussianSpec.Decimation, compute: Boolean, supported: Boolean = true) =
+            FluidGaussianSpec.boxDecimation(size, compute, supported, 2f to 1f, 0.25f to 0.5f)
+
+        val compute = factors.map { box(it, true, supported = false)!! }
+        assertEquals(listOf(0x25, 0x0d, 0x0f), compute.map { it.computeFunction })
+        assertEquals(listOf(1, 0x1b, 0x1d), compute.map { it.textureFunction })
+        assertEquals(listOf(2f to 1f, 4f to 4f, 8f to 8f), compute.map { it.scale })
+        assertTrue(compute.first().offsets.isEmpty())
+        assertEquals(listOf(-1f to 1f, 1f to 1f, -1f to -1f, 1f to -1f), compute[1].offsets)
+        assertEquals(List(4) { 0.25f }, compute[1].weights)
+        assertEquals(listOf(1f to 1f, 1f to 3f, 3f to 1f, 3f to 3f), compute.last().offsets)
+        assertEquals(null, compute.last().weights)
+        assertEquals(null, box(factors[1], false, supported = false))
+        val draw = factors.map { box(it, false)!! }
+        assertTrue(draw.all { it.computeFunction == null })
+        assertEquals(compute[1].offsets, draw[1].offsets)
+        assertEquals(listOf(0.25f to 0.5f, 0.25f to 1.5f, 0.75f to 0.5f, 0.75f to 1.5f), draw.last().offsets)
+    }
+
     @Test fun gaussianIdentityAndPaddingUseTheSameOrderedRadius() {
         assertTrue(FluidGaussianSpec.isIdentity(FluidContentBlurIn.gaussianRadius))
         assertTrue(FluidGaussianSpec.isIdentity(Double.NaN))

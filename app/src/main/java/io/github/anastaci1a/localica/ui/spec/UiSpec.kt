@@ -420,6 +420,63 @@ internal fun fluidDestinationBlend(
 }
 
 internal object FluidGaussianSpec {
+    enum class Decimation(val factor: Int, val textureFunction: Int, val computeFunction: Int, val threadDivisor: UInt) {
+        By2(2, 1, 0x25, 2u), By4(4, 0x1b, 0x0d, 2u), By8(8, 0x1d, 0x0f, 4u);
+    }
+
+    fun admitsTileDecimation(
+        size: Decimation, hasShape: Boolean, blurFlags: Int, mode: Int,
+        contextAllowsTile: Boolean, isCurrentSurface: Boolean, sourceLevel: Int,
+    ) = !hasShape && (blurFlags and 2) == 0 && ((blurFlags and 1) == 0 || mode != 1) &&
+        contextAllowsTile && isCurrentSurface && (sourceLevel and 15) >= size.factor
+
+    data class TileDecimationPass(
+        val function: String, val threads: Pair<UInt, UInt>, val offsetLanes: Int, val gainInputs: Pair<Float, Float>,
+    )
+
+    fun tileDecimation(
+        size: Decimation, encoderLive: Boolean, destinationFlags: Int, sourceFlags: Int,
+        tileSize: Pair<UInt, UInt>, sourceOrigin: Pair<Int, Int>, destinationOrigin: Pair<Int, Int>,
+        destinationScale: Float, sourceScale: Float, contextScale: Float,
+    ): TileDecimationPass? {
+        if (!encoderLive || (destinationFlags and 0x40) == 0 || (sourceFlags and 8) == 0) return null
+        val width = tileSize.first / size.threadDivisor
+        val height = tileSize.second / size.threadDivisor
+        if (width * height == 0u) return null
+        val x = sourceOrigin.first / size.factor - destinationOrigin.first
+        val y = sourceOrigin.second / size.factor - destinationOrigin.second
+        val offsets = (x and 0xffff) or (y shl 16)
+        return TileDecimationPass(
+            "tile_downsample_${size.factor}", width to height, offsets,
+            (destinationScale / sourceScale) to (1f / contextScale),
+        )
+    }
+
+    data class BoxDecimationPass(
+        val textureFunction: Int, val computeFunction: Int?, val scale: Pair<Float, Float>,
+        val offsets: List<Pair<Float, Float>>, val weights: List<Float>?,
+    )
+
+    fun boxDecimation(
+        size: Decimation, compute: Boolean, directBox4Supported: Boolean,
+        axisFactors: Pair<Float, Float>, imageScale: Pair<Float, Float>,
+    ): BoxDecimationPass? {
+        val computeFunction = if (compute) size.computeFunction else null
+        return when (size) {
+            Decimation.By2 -> BoxDecimationPass(size.textureFunction, computeFunction, axisFactors, emptyList(), null)
+            Decimation.By4 -> {
+                if (!compute && !directBox4Supported) return null
+                val offsets = listOf(-1f to 1f, 1f to 1f, -1f to -1f, 1f to -1f)
+                BoxDecimationPass(size.textureFunction, computeFunction, 4f to 4f, offsets, List(4) { 0.25f })
+            }
+            Decimation.By8 -> {
+                val (x, y) = if (compute) 1f to 1f else imageScale
+                val offsets = listOf(x to y, x to (3f * y), (3f * x) to y, (3f * x) to (3f * y))
+                BoxDecimationPass(size.textureFunction, computeFunction, 8f to 8f, offsets, null)
+            }
+        }
+    }
+
     enum class NarrowWidth { Taps7, Taps11, Taps15, Taps19, Taps23, Taps27 }
     enum class NarrowTexel { GaussianColor, Zero, ClampedSource, ExistingDestination }
 
