@@ -17,6 +17,7 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.Curve
+import io.github.anastaci1a.localica.ui.engine.deformed
 import org.junit.Assert.*
 import kotlin.math.roundToInt
 import org.junit.Rule
