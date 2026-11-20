@@ -833,7 +833,10 @@ class SearchImeMotionTest {
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
             advanceUntil { anchor.modalPresent }
             compose.runOnUiThread { visible = false }
-            closed()
+            // Let the cancelled flight finish on the test clock before stepping the reopen.
+            compose.mainClock.autoAdvance = true
+            compose.runOnIdle { assertFalse("Cancelled opening retires the modal", anchor.modalPresent) }
+            compose.mainClock.autoAdvance = false
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
             opened()
             assertTrue("Absent keyboard still opens", compose.runOnUiThread { visible })
