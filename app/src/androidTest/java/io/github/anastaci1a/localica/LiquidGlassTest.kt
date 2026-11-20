@@ -115,8 +115,16 @@ class LiquidGlassTest {
             assertTrue("The aperture's left edge is inset in foreground coordinates", bounds.left > origin.x)
 
             val pixels = capturePopupPixels(compose, aperture) { popupView }
-            val left = pixels[pixels.width / 4, 2]
-            val corner = pixels[1, 2]
+            val swatchX = pixels.width / 4
+            val swatchTop = (0 until pixels.height / 2).firstOrNull { y ->
+                val color = pixels[swatchX, y]
+                color.red - color.green > .1f
+            }
+            assertNotNull("The native frame contains the red source swatch", swatchTop)
+            // The shared body can translate its presented pixels after the layout crop is measured.
+            val cornerRow = requireNotNull(swatchTop) + 2
+            val left = pixels[swatchX, cornerRow]
+            val corner = pixels[1, cornerRow]
             assertTrue("The active field clips the foreground at the placed left corner: $corner vs $left",
                 left.red - left.green > corner.red - corner.green + .1f)
             val row = pixels.height / 2
