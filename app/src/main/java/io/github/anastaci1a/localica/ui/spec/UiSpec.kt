@@ -1065,6 +1065,10 @@ internal object FluidLensingSpec {
     const val displacementVertexType = 6
     const val freshHeight = 20.0
     const val freshAmount = -0.001
+    fun isForegroundAtRest(blurRadius: Double, height: Float, amount: Double) =
+        FluidGaussianSpec.isIdentity(blurRadius) && amount == freshAmount &&
+            (height == 0f || height == freshHeight.toFloat())
+
     val freshOffset get() = offset(null)
     fun skipsDisplacementSample(maskBlue: Float) = maskBlue < Float.fromBits(0x3b808081)
 

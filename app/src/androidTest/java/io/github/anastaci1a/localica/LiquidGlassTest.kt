@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +21,7 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -61,6 +63,54 @@ class LiquidGlassTest {
             val seam = blurred[x, 24]
             assertTrue("The Gaussian mixes the two colors at x=$x: $seam", seam.red > 0f && seam.blue > 0f)
         }
+    }
+
+    @Test fun fluidLensActivationKeepsTheParentAperture() {
+        org.junit.Assume.assumeTrue("The foreground lens requires runtime shaders", Build.VERSION.SDK_INT >= 33)
+        if (Build.VERSION.SDK_INT < 33) return
+        var lensHeight by mutableFloatStateOf(FluidLensingSpec.freshHeight.toFloat())
+        var lensAmount by mutableDoubleStateOf(FluidLensingSpec.freshAmount)
+        val extent = IntSize(64, 64)
+        val corner = 8f
+        val aperture = LensGeometry(Rect(0f, 0f, extent.width.toFloat(), extent.height.toFloat()), corner)
+        compose.setContent {
+            val renderer = remember { LensRenderer() }
+            val density = LocalDensity.current
+            val outline = RoundedCornerShape(with(density) { corner.toDp() })
+            Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+                Box(with(density) { Modifier.requiredSize(extent.width.toDp(), extent.height.toDp()) }
+                    .testTag("fluid-activation-aperture").graphicsLayer { shape = outline; clip = true }) {
+                    Canvas(Modifier.fillMaxSize().graphicsLayer {
+                        val height = lensHeight
+                        val amount = lensAmount
+                        renderEffect = if (FluidLensingSpec.isForegroundAtRest(0.0, height, amount)) null
+                        else renderer.effect(aperture, 0f, 1f, 1f, warp = LensWarp(height.toDouble(), amount, 0f, extent))
+                    }) { drawRect(Color.White) }
+                }
+            }
+        }
+        val foreground = compose.onNodeWithTag("fluid-activation-aperture")
+        val edge = 0 until corner.toInt()
+        fun cornerPixels(): List<Color> {
+            val frame = foreground.captureNativeFrame().toPixelMap()
+            return edge.flatMap { y -> edge.map { x -> frame[x, y] } }
+        }
+        val fresh = cornerPixels()
+        assertTrue("The rounded parent has a partially covered edge", fresh.any { it.red > 0f && it.red < 1f })
+        compose.runOnIdle {
+            lensHeight = corner
+            lensAmount = -corner.toDouble()
+        }
+        val active = cornerPixels().zip(fresh)
+        assertTrue("The active mask stays within the parent coverage", active.all { (masked, clipped) -> masked.red <= clipped.red })
+        assertTrue("The active mask contributes coverage at the seam", active.any { (masked, clipped) ->
+            clipped.red > 0f && clipped.red < 1f && masked.red < clipped.red
+        })
+        compose.runOnIdle {
+            lensHeight = 0f
+            lensAmount = FluidLensingSpec.freshAmount
+        }
+        assertEquals("Settled LensOff restores the parent's original antialiasing", fresh, cornerPixels())
     }
 
     @Test fun resizingAnInactiveBackdropDoesNotRecomposeItsScreen() {
