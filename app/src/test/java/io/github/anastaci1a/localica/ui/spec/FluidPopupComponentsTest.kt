@@ -1614,6 +1614,25 @@ class FluidPopupComponentsTest {
         })
     }
 
+    @Test fun glassEffectPacksTheTwoHalfRowsInFieldOrder() {
+        val lens = FluidLensingSpec
+        val rows = lens.glassEffectEncoding
+        assertEquals(listOf(0xb0, 0x100), rows.map { it.contextOffset })
+        assertEquals(listOf(0x8c, 0x8c), rows.map { it.descriptor })
+        assertTrue(rows.all { it.elementCount == 4 && it.elementBytes == 2 && it.alignment == 8 })
+        val lanes = mutableListOf<Int>()
+        val half = listOf(0x4d00, 0x3800, 0xc000, 0x4400, 0x3c00, 0x8000, 0, 0)
+        val packed = lens.glassEffectHalfUniforms(20f, 0.5f, -2f, 4f, -0f, {
+            assertEquals((-0f).toRawBits(), it.toRawBits())
+            -0f to 1f
+        }) {
+            lanes += it.toRawBits()
+            half[lanes.lastIndex].toShort()
+        }
+        assertEquals(listOf(20f, 0.5f, -2f, 4f, 1f, -0f, 0f, 0f).map(Float::toRawBits), lanes)
+        assertEquals(half, packed.map { it.toInt() and 0xffff })
+    }
+
     @Test fun namedDisplacementReceivesTheSameSurfaceRenderedByTheGlassEffect() {
         val color = Any()
         val blurredColor = Any()
@@ -1625,8 +1644,9 @@ class FluidPopupComponentsTest {
             FluidLensingSpec.retainNamedMap(null, field, {
                 events += "destination"
                 map
-            }) { function, input, destination ->
+            }) { function, fieldSlot, input, destination ->
                 assertEquals(66, function)
+                assertEquals(0, fieldSlot)
                 assertTrue(input === field)
                 assertTrue(destination === map.surface)
                 events += "map draw"
@@ -1648,12 +1668,12 @@ class FluidPopupComponentsTest {
         }
         assertTrue(rendered === displacedColor)
         assertEquals(listOf("blur", "destination", "map draw", "displacement"), events)
-        assertTrue(FluidLensingSpec.retainNamedMap(map, null, { error("Bound slot must be kept") }) { _, _, _ ->
+        assertTrue(FluidLensingSpec.retainNamedMap(map, null, { error("Bound slot must be kept") }) { _, _, _, _ ->
             error("Bound slot must not render again")
         } === map)
-        assertEquals(null, FluidLensingSpec.retainNamedMap(null, field, { null }) { _, _, _ ->
+        assertEquals(null, FluidLensingSpec.retainNamedMap(null, field, { null }) { _, _, _, _ ->
             error("No acquired destination")
         })
-        assertEquals(null, FluidLensingSpec.retainNamedMap(null, field, { map }) { _, _, _ -> false })
+        assertEquals(null, FluidLensingSpec.retainNamedMap(null, field, { map }) { _, _, _, _ -> false })
     }
 }

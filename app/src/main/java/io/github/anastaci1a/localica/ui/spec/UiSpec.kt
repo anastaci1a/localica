@@ -706,6 +706,13 @@ internal fun fluidDestinationBlend(
     return FluidDestinationBlend(opacity, 0.0)
 }
 
+internal data class FluidUniformEncoding(val contextOffset: Int, val descriptor: Int) {
+    val channels get() = descriptor and 7
+    val elementCount get() = channels * ((descriptor ushr 3) and 15)
+    val elementBytes get() = if ((descriptor and 0x80) != 0) 2 else 4
+    val alignment get() = channels * elementBytes
+}
+
 internal object FluidGaussianSpec {
     data class Capabilities(
         val familySupportsCompute: Boolean, val computeDisableByte: Int,
@@ -915,14 +922,7 @@ internal object FluidGaussianSpec {
         return NarrowCoordinates(horizontal.first to vertical.first, horizontal.second to vertical.second)
     }
 
-    data class SinglePassEncoding(val contextOffset: Int, val descriptor: Int) {
-        val channels get() = descriptor and 7
-        val elementCount get() = channels * ((descriptor ushr 3) and 15)
-        val elementBytes get() = if ((descriptor and 0x80) != 0) 2 else 4
-        val alignment get() = channels * elementBytes
-    }
-
-    val singlePassEncoding = listOf(SinglePassEncoding(0xb0, 0x42), SinglePassEncoding(0x100, 0x94), SinglePassEncoding(0x150, 0x89))
+    val singlePassEncoding = listOf(FluidUniformEncoding(0xb0, 0x42), FluidUniformEncoding(0x100, 0x94), FluidUniformEncoding(0x150, 0x89))
 
     data class SinglePassUniforms(val offsets: List<Pair<Float, Float>>, val normalization: Float) {
         val textureFunction get() = 0x2d
@@ -980,12 +980,12 @@ internal object FluidLensingSpec {
     /** The renderer retains its own destination and reports whether the selected kind-7 draw emitted. */
     fun <Surface : Any> retainNamedMap(
         existing: NamedMap<Surface>?, field: Surface?, destination: () -> NamedMap<Surface>?,
-        render: (textureFunction: Int, field: Surface, destination: Surface) -> Boolean,
+        render: (textureFunction: Int, fieldSlot: Int, field: Surface, destination: Surface) -> Boolean,
     ): NamedMap<Surface>? {
         if (existing != null) return existing
         if (field == null) return null
         val target = destination() ?: return null
-        return if (render(glassEffectFunction, field, target.surface)) target else null
+        return if (render(glassEffectFunction, 0, field, target.surface)) target else null
     }
 
     fun <Image : Any> colorChain(
@@ -1057,6 +1057,16 @@ internal object FluidLensingSpec {
 
     const val displacementFunction = 44
     const val glassEffectFunction = 66
+    val glassEffectEncoding = listOf(FluidUniformEncoding(0xb0, 0x8c), FluidUniformEncoding(0x100, 0x8c))
+
+    fun glassEffectHalfUniforms(
+        height: Float, curvature: Float, effectOffset: Float, maskOffset: Float, angle: Float,
+        sinCos: (Float) -> Pair<Float, Float>, narrowHalf: (Float) -> Short,
+    ): ShortArray {
+        val (sine, cosine) = sinCos(angle)
+        val lanes = floatArrayOf(height, curvature, effectOffset, maskOffset, cosine, sine, 0f, 0f)
+        return ShortArray(lanes.size) { narrowHalf(lanes[it]) }
+    }
     const val namedSourceTexture = 1
     const val displacementVertexType = 6
     const val freshHeight = 20.0
