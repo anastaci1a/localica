@@ -607,6 +607,31 @@ class FluidPopupComponentsTest {
         assertEquals(FluidGaussianSpec.ComputeTexel.FilteredColor, ordinary.last().texel(inside = true, edgePolicy = 0))
     }
 
+    @Test fun narrowComputePacksBothCornersWithSeparateScaleAndBiasRounding() {
+        val uniforms = FluidGaussianSpec.narrowCoordinates(
+            pixelOrigin = -5 to 37, pixelExtent = 17 to 23, destinationSize = 23 to 71,
+            contextScale = 0.037f to -0.041f, contextBias = 0.31f to -0.21f,
+            sampleOrigin = 0.12 to -0.37, sampleExtent = 0.05 to 0.22,
+            fusedMultiplyAdd = Math::fma,
+        )
+        assertEquals(0x3be28071, uniforms.scale.first.toRawBits())
+        assertEquals(0x3bd75809, uniforms.scale.second.toRawBits())
+        assertEquals(0x3cfa72cc, uniforms.bias.first.toRawBits())
+        assertEquals(0xbf80cb48.toInt(), uniforms.bias.second.toRawBits())
+        val rearranged = 0.12f - uniforms.scale.first * 12.9375f
+        assertEquals(0x3cfa72d0, rearranged.toRawBits())
+
+        val wrapped = FluidGaussianSpec.narrowCoordinates(
+            pixelOrigin = Int.MAX_VALUE to 0, pixelExtent = 1 to 0, destinationSize = 2 to 2,
+            contextScale = 1f to 1f, contextBias = 0f to 0f,
+            sampleOrigin = 0.0 to 0.0, sampleExtent = 1.0 to 1.0, fusedMultiplyAdd = Math::fma,
+        )
+        assertEquals((-Math.scalb(1f, -32)).toRawBits(), wrapped.scale.first.toRawBits())
+        assertEquals(0.5f.toRawBits(), wrapped.bias.first.toRawBits())
+        assertEquals(Float.POSITIVE_INFINITY, wrapped.scale.second)
+        assertEquals(Float.NEGATIVE_INFINITY, wrapped.bias.second)
+    }
+
     @Test fun gaussianTileDecimationUsesLiveAdmissionAndTheNamedThreadDivisors() {
         val factors = FluidGaussianSpec.Decimation.entries
         val capabilities = FluidGaussianSpec.Capabilities(true, 0, true, true, 0)

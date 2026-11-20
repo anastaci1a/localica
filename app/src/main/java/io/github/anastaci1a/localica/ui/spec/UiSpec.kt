@@ -720,6 +720,36 @@ internal object FluidGaussianSpec {
         return NarrowComputePass(base + width.ordinal, 0x21 + width.ordinal, finalPass)
     }
 
+    data class NarrowCoordinates(val scale: Pair<Float, Float>, val bias: Pair<Float, Float>)
+
+    fun narrowCoordinates(
+        pixelOrigin: Pair<Int, Int>, pixelExtent: Pair<Int, Int>, destinationSize: Pair<Int, Int>,
+        contextScale: Pair<Float, Float>, contextBias: Pair<Float, Float>,
+        sampleOrigin: Pair<Double, Double>, sampleExtent: Pair<Double, Double>,
+        fusedMultiplyAdd: (Float, Float, Float) -> Float,
+    ): NarrowCoordinates {
+        val xBias = contextBias.first + 1f
+        fun destinationX(x: Int): Float {
+            val normalized = fusedMultiplyAdd(contextScale.first, x.toFloat(), xBias)
+            return ((destinationSize.first.toDouble() * 0.5) * normalized.toDouble()).toFloat()
+        }
+        fun destinationY(y: Int): Float {
+            val normalized = 1f - fusedMultiplyAdd(contextScale.second, y.toFloat(), contextBias.second)
+            return ((destinationSize.second.toDouble() * 0.5) * normalized.toDouble()).toFloat()
+        }
+        fun axis(first: Float, last: Float, origin: Double, extent: Double): Pair<Float, Float> {
+            val start = origin.toFloat()
+            val sampleSpan = (origin + extent).toFloat() - start
+            val destinationSpan = last - first
+            return (sampleSpan / destinationSpan) to (start - (sampleSpan * first) / destinationSpan)
+        }
+        val (x, y) = pixelOrigin
+        val (dx, dy) = pixelExtent
+        val horizontal = axis(destinationX(x), destinationX(x + dx), sampleOrigin.first, sampleExtent.first)
+        val vertical = axis(destinationY(y), destinationY(y + dy), sampleOrigin.second, sampleExtent.second)
+        return NarrowCoordinates(horizontal.first to vertical.first, horizontal.second to vertical.second)
+    }
+
     fun decodeBounds(encoded: DoubleArray?): DoubleArray? =
         encoded?.takeIf { it.size >= 4 }?.let { doubleArrayOf(it[0], it[1], it[2] - it[0], it[3] - it[1]) }
 
