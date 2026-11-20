@@ -76,12 +76,25 @@ class FluidPopupPortalGeometryTest {
         assertEquals((-0.0).toRawBits(), larger.growingKickTarget(pivot.copy(y = 190.0), 0.5, null).toRawBits())
     }
 
-    @Test fun sourceInsetNarrowerThanThePivotKeepsTheUnderlyingHostPose() {
+    @Test fun invertedSourceInsetStillSetsThePivotSizeRadiusAndScale() {
         val smaller = PopupPortalBounds(0.0, 0.0, 40.0, 20.0)
         val pivot = PopupPortalBounds(0.0, 0.0, 88.0, 44.0)
         val larger = PopupPortalBounds(0.0, 0.0, 250.0, 360.0)
         val targets = fluidOutlineTargets(smaller, larger, pivot, { it }, { it })
-        assertNull(targets.sourcePivot)
+        val source = requireNotNull(targets.sourcePivot)
+        val bounds = requireNotNull(source.bounds)
+        assertEquals(250.0, bounds.width, 0.0)
+        assertEquals(250.0, bounds.height, 0.0)
+        assertEquals(125.0, source.cornerRadius, 0.0)
+        assertEquals(22.0 / 360.0, source.scale, 0.0)
         assertEquals(PopupPortalBounds(34.0, 12.0, 20.0, 20.0), targets.collapsedSource.bounds)
+    }
+
+    @Test fun emptySourceInsetClampsThePivotToItsOnlyPoint() {
+        val smaller = PopupPortalBounds(10.0, 20.0, 40.0, 20.0)
+        val pivot = PopupPortalBounds(Double.NaN, 60.0, 40.0, 20.0)
+        val larger = PopupPortalBounds(0.0, 0.0, 250.0, 360.0)
+        val source = requireNotNull(fluidOutlineTargets(smaller, larger, pivot, { it }, { it }).sourcePivot)
+        assertEquals(PopupPortalBounds(-95.0, -95.0, 250.0, 250.0), source.bounds)
     }
 }

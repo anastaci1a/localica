@@ -104,8 +104,12 @@ internal fun fluidOutlineTargets(
         FluidOutlineOverride(bounds, minOf(bounds.width, bounds.height) * 0.5, scale)
     fun inset(bounds: PopupPortalBounds, x: Double, y: Double) =
         requireNotNull(PopupPortalInsets(y, x, y, x).signedCrop(bounds))
+    fun clamp(value: Double, lower: Double, upper: Double): Double {
+        require(lower <= upper)
+        return if (value <= upper) maxOf(value, lower) else upper
+    }
     fun PopupPortalBounds.squareClampedAt(x: Double, y: Double, side: Double) =
-        squareAt(x.coerceIn(this.x, this.x + width), y.coerceIn(this.y, this.y + height), side)
+        squareAt(clamp(x, this.x, this.x + width), clamp(y, this.y, this.y + height), side)
 
     val collapsed = circle(toSmallerContainer(squareAt(pivot.midX, pivot.midY, diameter)))
     val region = inset(larger, diameter / 8, diameter / 8).standardized()
@@ -113,10 +117,15 @@ internal fun fluidOutlineTargets(
         pivot.midX * 0.75 + larger.midX * 0.25, pivot.midY * 0.75 + larger.midY * 0.25, diameter,
     )), 0.25)
     val sourceRegion = inset(smaller, pivot.width * 0.5, pivot.height * 0.5)
-    val largerSide = maxOf(larger.width, larger.height)
-    val sourcePivot = if (sourceRegion.width >= 0 && sourceRegion.height >= 0 && largerSide > 0) {
-        val bounds = sourceRegion.squareClampedAt(pivot.midX, pivot.midY, larger.width)
-        circle(toPivotContainer(bounds), pivot.height * 0.5 / largerSide)
+    val largerSide = if (larger.width <= larger.height) larger.height else larger.width
+    val sourcePivot = if (largerSide > 0) {
+        val bounds = if (sourceRegion.width < 0 || sourceRegion.height < 0) {
+            // The infinite position override has no resolved host conversion. Retain the host centre.
+            PopupPortalBounds(0.0, 0.0, larger.width, larger.width).centeredAt(pivot.midX, pivot.midY)
+        } else {
+            toPivotContainer(sourceRegion.squareClampedAt(pivot.midX, pivot.midY, larger.width))
+        }
+        circle(bounds, pivot.height * 0.5 / largerSide)
     } else {
         null
     }
