@@ -82,12 +82,7 @@ internal class FluidPopupSpringSettings(
     val damping = 2 * dampingRatio * omega
     private val installedDamping = (sqrt(stiffness) + sqrt(stiffness)) * dampingRatio
     val velocityScalingFactor get() = installedDamping / stiffness
-    fun advanceUnsmoothed(entry: FluidScalarSpringEntry, dt: Double): FluidScalarSpringEntry {
-        if (dt <= 0.0) return entry
-        val intermediate = FluidScalarSpringBody(entry.target, 0.0)
-        val body = SpringKernel.fromInstalled(stiffness, installedDamping).advanceBody(entry.body, intermediate.value, dt)
-        return entry.copy(body = body, intermediate = intermediate)
-    }
+    fun advanceUnsmoothed(entry: FluidScalarSpringEntry, dt: Double) = entry.advanceUnsmoothed(stiffness, installedDamping, dt)
 
     fun scaledResponses(multiplier: Double) =
         FluidPopupSpringSettings(dampingRatio, multiplier * response, retargetImpulse, multiplier * trackingResponse)
@@ -139,7 +134,14 @@ internal data class FluidPropertySpringControls(
 
 internal data class FluidScalarSpringEntry(
     val body: FluidScalarSpringBody, val target: Double, val intermediate: FluidScalarSpringBody,
-)
+) {
+    fun advanceUnsmoothed(stiffness: Double, damping: Double, dt: Double): FluidScalarSpringEntry {
+        if (dt <= 0.0) return this
+        val nextIntermediate = FluidScalarSpringBody(target, 0.0)
+        val nextBody = SpringKernel.fromInstalled(stiffness, damping).advanceBody(body, nextIntermediate.value, dt)
+        return copy(body = nextBody, intermediate = nextIntermediate)
+    }
+}
 
 internal data class FluidScalarSpringBody(val value: Double, val velocity: Double) {
     fun finished(target: Double, velocityScalingFactor: Double, epsilonSquared: Double, hasPending: Boolean): Boolean {
@@ -271,9 +273,6 @@ internal object FluidSharedBlurSpec {
 
     fun zoomOrigin(model: DoubleArray?) = model ?: DoubleArray(16) { if (it % 5 == 0) 1.0 else 0.0 }
     fun radiusOrigin(model: Double?) = model ?: 0.0
-
-    fun advanceRadius(body: FluidScalarSpringBody, intermediate: Double, stiffness: Double, damping: Double, dt: Double) =
-        SpringKernel.fromInstalled(stiffness, damping).advanceBody(body, intermediate, dt)
 
     fun publishRadius(publication: FluidScalarPublication, write: (Double, Double, Boolean) -> Unit) {
         publication.consume { sample ->
