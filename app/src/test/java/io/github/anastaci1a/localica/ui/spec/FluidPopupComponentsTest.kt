@@ -563,15 +563,25 @@ class FluidPopupComponentsTest {
     @Test fun trackedCornerDefaultAndMatchesPreserveTheEncodedCurve() {
         assertEquals(0, FluidCornerSpec.freshCurve(0x07e7ffff))
         assertEquals(1, FluidCornerSpec.freshCurve(0x07e80000))
-        assertEquals(0f.toRawBits(), FluidCornerSpec.matchedRadius(-5.0).toRawBits())
-        assertEquals((-0f).toRawBits(), FluidCornerSpec.matchedRadius(-0.0).toRawBits())
-        val vector = FluidCornerSpec.matchedRadii(doubleArrayOf(3.0, 9.0, -5.0, 10.0, 7.0, 11.0, 8.0, 12.0))
-        val lanes = FluidCornerSpec.rawRadii(null, false, vector, Float.NaN, 10.0)
+        val automaticRadius = Float.fromBits(0x7fe00000)
+        assertEquals(0f.toRawBits(), FluidCornerSpec.matchedRadius(-5f, 10.0, 18.0).toRawBits())
+        assertEquals((-0f).toRawBits(), FluidCornerSpec.matchedRadius(-0f, 10.0, 18.0).toRawBits())
+        assertEquals(0f.toRawBits(), FluidCornerSpec.matchedRadius(null, 10.0, 18.0).toRawBits())
+        assertEquals(0f.toRawBits(), FluidCornerSpec.matchedRadius(Float.NaN, 10.0, 18.0).toRawBits())
+        assertEquals(5f.toRawBits(), FluidCornerSpec.matchedRadius(automaticRadius, 18.0, 10.0).toRawBits())
+        assertEquals(5f.toRawBits(), FluidCornerSpec.matchedRadius(automaticRadius, Double.NaN, 10.0).toRawBits())
+        assertTrue(FluidCornerSpec.matchedRadius(automaticRadius, 10.0, Double.NaN).isNaN())
+        val source = doubleArrayOf(3.0, 9.0, -5.0, 10.0, 7.0, 11.0, 8.0, 12.0)
+        val vector = FluidCornerSpec.matchedRadii(source, capacity = 8)
+        assertEquals(null, FluidCornerSpec.matchedRadii(source, capacity = 7))
+        assertEquals(null, FluidCornerSpec.matchedRadii(source.copyOf(9), capacity = 9))
+        assertEquals(null, FluidCornerSpec.matchedRadii(null, capacity = 8))
+        val lanes = FluidCornerSpec.rawRadii(null, false, vector, Float.NaN, 10.0, 18.0)
         assertEquals(listOf(3f, 0f, 7f, 8f), lanes?.toList())
-        val automatic = FluidCornerSpec.rawRadii(null, false, null, Float.fromBits(0x7fe00000), 10.0)
+        val automatic = FluidCornerSpec.rawRadii(null, false, null, automaticRadius, 10.0, 18.0)
         assertEquals(List(4) { 5f }, automatic?.toList())
-        assertEquals(List(4) { 0f }, FluidCornerSpec.rawRadii(null, false, null, Float.NaN, 10.0)?.toList())
-        assertEquals(null, FluidCornerSpec.rawRadii(null, true, vector, 3f, 10.0))
+        assertEquals(List(4) { 0f }, FluidCornerSpec.rawRadii(null, false, null, Float.NaN, 10.0, 18.0)?.toList())
+        assertEquals(null, FluidCornerSpec.rawRadii(null, true, vector, 3f, 10.0, 18.0))
     }
 
     @Test fun trackedCornerBoundsChooseUniformAndSignedUnevenPayloads() {
@@ -582,6 +592,9 @@ class FluidPopupComponentsTest {
         assertEquals(listOf(1f, 1f, 0.02f, 0f), uniform.radii.toList())
         val rounded = FluidCornerSpec.boundsEncoding(FloatArray(4) { 5f }, transform, 1, 0.0, 10.0, 0f, inline = true)
         assertEquals(listOf(1f, 0f, 10f, 0f), rounded.radii.toList())
+        val unordered = FluidCornerSpec.boundsEncoding(FloatArray(4) { 5f }, transform, 1, Double.NaN, 10.0, 0f, inline = true)
+        assertTrue(unordered.radii[0].isNaN())
+        assertEquals(0f.toRawBits(), unordered.radii[1].toRawBits())
         val uneven = FluidCornerSpec.boundsEncoding(floatArrayOf(1f, 2f, 3f, 4f), transform, 1, 60.0, 80.0, 0f, inline = true)
         assertEquals(22, uneven.imageFunction)
         assertEquals(5f, uneven.family, 0f)
@@ -633,13 +646,36 @@ class FluidPopupComponentsTest {
     @Test fun trackedCornerDispatchKeepsImageAndCompositionSelectionsSeparate() {
         assertTrue(FluidCornerSpec.scansOverlap(parentAdmitted = true, disableOption = false))
         assertFalse(FluidCornerSpec.scansOverlap(parentAdmitted = true, disableOption = true))
-        assertTrue(FluidCornerSpec.inlinesBounds(parentAllowsInline = true, eligibleBoundsUnionChildren = 1))
-        assertFalse(FluidCornerSpec.inlinesBounds(parentAllowsInline = true, eligibleBoundsUnionChildren = 2))
         assertEquals(20, FluidCornerSpec.rectImageFunction)
         assertEquals(66, FluidCornerSpec.inlineEffectTexture)
         assertEquals(58, FluidCornerSpec.groupTexture(subtract = false, roiDirect = false, roiOverlap = true))
         assertEquals(1, FluidCornerSpec.groupTexture(subtract = false, roiDirect = true, roiOverlap = true))
         assertEquals(59, FluidCornerSpec.groupTexture(subtract = true, roiDirect = true, roiOverlap = true))
+    }
+
+    @Test fun trackedInlineScanSkipsExcludedSubtreesAndRequiresOneBoundsUnion() {
+        data class Node(val flags: Long, val boundsUnion: Boolean = true, val children: List<Node> = emptyList())
+        val candidate = Node(1L shl 39)
+        val ineligible = candidate.copy(boundsUnion = false)
+        val skipped = Node((1L shl 40) or (1L shl 39), children = listOf(ineligible))
+        val branch = Node(0, children = listOf(candidate))
+        fun inline(nodes: List<Node>, debug: Boolean = false, capability: Boolean = false, requiresCheck: Boolean = false,
+            surface: Boolean = false, checkParent: () -> Boolean = { error("No parent check required") },
+        ) = FluidCornerSpec.inlineBounds(
+            nodes, debug, capability, requiresCheck, surface, checkParent, Node::flags, Node::boundsUnion, Node::children,
+        )
+
+        val roots = listOf(skipped, branch)
+        assertTrue(inline(roots) === candidate)
+        assertTrue(inline(roots, requiresCheck = true) { true } === candidate)
+        assertEquals(null, inline(roots, requiresCheck = true) { false })
+        assertEquals(null, inline(roots, debug = true))
+        assertEquals(null, inline(roots, capability = true))
+        assertEquals(null, inline(roots, surface = true))
+        assertEquals(null, inline(listOf(skipped)))
+        assertEquals(null, inline(listOf(branch, candidate)))
+        assertEquals(null, inline(listOf(ineligible)))
+        assertEquals(null, inline(listOf(skipped.copy(flags = skipped.flags or (1L shl 41)))))
     }
 
     @Test fun destinationPresentationKeepsFullKeysAndUnroundedValues() {
