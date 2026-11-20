@@ -306,9 +306,11 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     fun toneOf(record: GlassSurfacePresentation) = GlassTone.mixed(appearance.contrast, appearance.contrastWeight, record.lightMix)
     val tone = toneOf(own.value)
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact, bodyOverride)
-    val contactShape = contactPresentation ?: modifier.glassSurfaceContactPresentation() ?: { contact.body.value }
+    val origin = modifier.glassSurfaceOriginPresentation().takeIf { contactPresentation == null }
+    val contactShape = contactPresentation ?: { origin?.invoke(0f)?.shape ?: contact.body.value }
     val appliedTransform: (Size) -> GlassBodyTransform = { extent -> if (pressFeedback || anchor != null)
-        contactShape().bodyTransform(extent, density.density, contact.vertical) else GlassBodyTransform() }
+        origin?.invoke(extent.height)?.transform(extent, density.density)
+            ?: contactShape().bodyTransform(extent, density.density, contact.vertical) else GlassBodyTransform() }
     val surfaceClip = remember(silhouette, cornerRadius) {
         silhouette?.let { outline -> androidx.compose.foundation.shape.GenericShape { extent, _ ->
             addPath(outline.frame(extent).path)

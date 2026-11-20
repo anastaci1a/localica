@@ -11,13 +11,16 @@ import io.github.anastaci1a.localica.ui.components.LyricsHeaderSurface
 import io.github.anastaci1a.localica.ui.engine.originExpansion
 import io.github.anastaci1a.localica.ui.engine.originGap
 
+internal fun lyricsHeaderWidth(controlSize: Dp, reveal: Float, progress: Float): Dp =
+    controlSize * (1f + originExpansion(reveal, progress) + originGap(progress) / 6f)
+
 /** Owns the real header measurement; preparation acknowledges this same layout and draw. */
 @Composable
 internal fun LyricsHeaderLayout(controlSize: Dp, reveal: Float, progress: () -> Float,
     modifier: Modifier, decoration: Modifier, content: @Composable BoxScope.() -> Unit) {
     Box(Modifier.height(controlSize).then(modifier)
         .layout { measurable, constraints ->
-            val width = (controlSize * (1f + originExpansion(reveal, progress()) + originGap(progress()) / 6f)).roundToPx()
+            val width = lyricsHeaderWidth(controlSize, reveal, progress()).roundToPx()
             val child = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
             layout(child.width, child.height) { child.place(0, 0) }
         }.then(decoration), content = content)

@@ -3,9 +3,11 @@ package io.github.anastaci1a.localica
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -123,13 +125,81 @@ class LyricsHeaderActionsTest {
 
     /** #1076: the header's shadow plane draws over its glass, so each cast body must be the body its surface
      * draws while held. Every pixel the held glass covers matches a shadowless render of the same frame. */
-    @Test fun heldExpandedHeaderCastsNoShadowInsideItsBody() = heldBodyCastsNoShadowInside("Show lyrics", separated = false, expands = true)
+    @Test fun heldExpandedHeaderCastsNoShadowInsideItsBody() = heldBodyCastsNoShadowInside("Show lyrics", separated = false)
 
     /** The separated right body lifts and drifts toward an off-centre contact. */
-    @Test fun heldSeparatedRightBodyCastsNoShadowInsideItsBody() = heldBodyCastsNoShadowInside("Hide lyrics", separated = true, expands = true)
+    @Test fun heldSeparatedRightBodyCastsNoShadowInsideItsBody() = heldBodyCastsNoShadowInside("Hide lyrics", separated = true)
 
-    /** The anchored left body keeps unit lift and no drift; its cast body still follows its press deformation. */
-    @Test fun heldAnchoredLeftBodyCastsNoShadowInsideItsBody() = heldBodyCastsNoShadowInside("Lyrics sources", separated = true, expands = false)
+    /** The anchored left body grows under the same press law as the other bodies. */
+    @Test fun heldAnchoredLeftBodyCastsNoShadowInsideItsBody() = heldBodyCastsNoShadowInside("Lyrics sources", separated = true)
+
+    @Test fun heldHeaderSplitKeepsJoinedPressPoseAtHandoff() {
+        val density = 2.625f
+        val backdrop = Color(0xFF3F6FB0)
+        val phase = Animatable(.4999f)
+        lateinit var anchor: GlassAnchor
+        lateinit var preparation: GlassOriginPreparation
+        compose.setContent { EngineTheme {
+            anchor = rememberGlassAnchor()
+            preparation = rememberGlassOriginPreparation()
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density),
+                LocalGlassAppearance provides LocalGlassAppearance.current.copy(shadowStrength = 0f, touchLight = 0f)) {
+                Box(Modifier.fillMaxSize().background(backdrop).padding(32.dp)) {
+                    LyricsHeaderActions(true, 1f, anchor, preparation, {}, {}, {})
+                }
+            }
+        } }
+        compose.runOnIdle { preparation.bind(AnimatablePhase(phase), Curve.linear(0f, 1f)) }
+        compose.waitForIdle()
+        val header = compose.onNodeWithTag("player-lyrics-pill")
+        val node = compose.onNodeWithContentDescription("Lyrics sources")
+        compose.mainClock.autoAdvance = false
+        try {
+            node.performTouchInput { down(center) }
+            compose.mainClock.advanceTimeBy(2000)
+            for (separated in listOf(false, true)) {
+                if (separated) {
+                    compose.runOnUiThread { kotlinx.coroutines.runBlocking { phase.snapTo(.5f) } }
+                    compose.mainClock.advanceTimeBy(32)
+                }
+                compose.waitForIdle()
+                val bounds = header.fetchSemanticsNode().boundsInRoot
+                val width = bounds.width
+                val height = bounds.height
+                val half = if (separated) height else width / 2f
+                val scale = 1.0 + 16.0 * density / width
+                fun x(value: Float) = (width / 2 + (value - width / 2) * scale).toFloat()
+                val top = (height * (1 - scale) / 2).toFloat()
+                val bottom = height - top
+                val want = listOf(Rect(x(0f), top, x(half), bottom), Rect(x(width - half), top, x(width), bottom))
+                compose.runOnIdle {
+                    assertEquals(separated, preparation.separated)
+                    val cast = requireNotNull(anchor.shadowPlane).casters.mapNotNull {
+                        (it.shape as io.github.anastaci1a.localica.ui.engine.LayoutShape).laidOut()?.boundingRect
+                    }.sortedBy { it.left }
+                    assertEquals(2, cast.size)
+                    for ((expected, actual) in want.zip(cast)) {
+                        assertEquals("held handoff left separated=$separated", expected.left, actual.left, .01f)
+                        assertEquals("held handoff top separated=$separated", expected.top, actual.top, .01f)
+                        assertEquals("held handoff right separated=$separated", expected.right, actual.right, .01f)
+                        assertEquals("held handoff bottom separated=$separated", expected.bottom, actual.bottom, .01f)
+                    }
+                }
+                val image = compose.onRoot().captureToImage().asAndroidBitmap()
+                for (expected in want) {
+                    val column = (bounds.left + expected.center.x).roundToInt()
+                    val occupied = ((bounds.top - height / 2).toInt()..(bounds.bottom + height / 2).toInt()).filter { row ->
+                        val pixel = image.getPixel(column, row)
+                        kotlin.math.abs(android.graphics.Color.red(pixel) - android.graphics.Color.red(backdrop.toArgb())) > 10
+                    }
+                    assertTrue("held handoff covers the body centre separated=$separated", occupied.isNotEmpty())
+                    assertEquals("rendered top separated=$separated", bounds.top + top, occupied.first().toFloat(), 1.5f)
+                    assertEquals("rendered bottom separated=$separated", bounds.top + bottom, occupied.last() + 1f, 1.5f)
+                }
+            }
+            node.performTouchInput { cancel() }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
 
     /** #1076: separated casters are the measured surfaces (CompactControlSize squares at either end of the
      * header), exactly, at fractional densities whose header width rounds independently, and mid-separation. */
@@ -173,7 +243,7 @@ class LyricsHeaderActionsTest {
             compose.runOnIdle {
                 val pose = requireNotNull(anchor.originPresentation)(measured)
                 assertTrue("Held mid-separation shifts the pivot (${pose.horizontalShift})", kotlin.math.abs(pose.horizontalShift) > .01f)
-                val drawn = pose.shape.bodyTransform(Size(measured, measured), density, pose.vertical)
+                val drawn = pose.transform(Size(measured, measured), density)
                 val square = androidx.compose.ui.geometry.RoundRect(0f, 0f, measured, measured, androidx.compose.ui.geometry.CornerRadius(measured / 2f))
                 val want = square.deformed(drawn.copy(drift = drawn.drift + Offset(pose.horizontalShift, 0f)), Offset(measured / 2f, measured / 2f))
                 val got = requireNotNull(anchor.shadowPlane).casters.mapNotNull { (it.shape as io.github.anastaci1a.localica.ui.engine.LayoutShape).laidOut() }.minBy { it.left }
@@ -184,7 +254,7 @@ class LyricsHeaderActionsTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
-    private fun heldBodyCastsNoShadowInside(label: String, separated: Boolean, expands: Boolean) {
+    private fun heldBodyCastsNoShadowInside(label: String, separated: Boolean) {
         val backdrop = Color(0xFF3F6FB0)
         var shadows by mutableStateOf(true)
         lateinit var backing: FrostedBackdrop
@@ -234,9 +304,7 @@ class LyricsHeaderActionsTest {
             fun coverage(image: IntArray) = BooleanArray(pixels) { difference(image[it], backdrop.toArgb()) > 10 }
             val covered = coverage(bare); val restCovered = coverage(resting)
             val grown = (0 until pixels).count { covered[it] && !restCovered[it] }
-            val shrunk = (0 until pixels).count { restCovered[it] && !covered[it] }
-            if (expands) assertTrue("The held glass grows past its resting body (grown $grown)", grown > 40)
-            else assertTrue("The held glass deforms (grown $grown, shrunk $shrunk)", grown + shrunk > 40)
+            assertTrue("The held glass grows past its resting body (grown $grown)", grown > 40)
             // Erode the glass coverage so antialiased silhouette pixels never decide the result.
             fun inside(x: Int, y: Int) = (-3..3).all { dy -> (-3..3).all { dx ->
                 val px = x + dx; val py = y + dy; px in 0 until width && py in 0 until height && covered[py * width + px] } }

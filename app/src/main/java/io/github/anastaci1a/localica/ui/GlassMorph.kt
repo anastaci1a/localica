@@ -5,6 +5,7 @@ import io.github.anastaci1a.localica.ui.components.TriggerRole
 import io.github.anastaci1a.localica.ui.components.PopupSharedContent
 
 import io.github.anastaci1a.localica.ui.layout.PopupViewportSlot
+import io.github.anastaci1a.localica.ui.layout.lyricsHeaderWidth
 import io.github.anastaci1a.localica.ui.spec.PopupViewportInsets
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
 import io.github.anastaci1a.localica.ui.spec.PopupKind
@@ -78,7 +79,10 @@ import io.github.anastaci1a.localica.ui.engine.glassWellCaster
 
 /** The trigger stays in layout while its one visible surface moves into a modal window. */
 internal data class GlassOriginPresentation(val shape: GlassShape, val vertical: Boolean,
-    val horizontalShift: Float)
+    val horizontalShift: Float, private val inheritedWidth: Float) {
+    fun transform(size: Size, density: Float) =
+        shape.bodyTransform(Size(size.width + inheritedWidth, size.height), density, vertical)
+}
 
 /** How the screen currently shows an anchor's resting layout bounds: a uniform scale about [pivot]
  * in the same coordinate space, as when a selected item lifts (#554). */
@@ -325,13 +329,18 @@ internal fun GlassAnchor?.captureInk() {
 
 internal fun GlassAnchor.refreshSource() { source?.refresh() }
 
-internal fun TriggerRole.LyricsHeader<GlassSplitContact, GlassOriginPreparation>.presentation(height: Float): GlassOriginPresentation {
+internal fun TriggerRole.LyricsHeader<GlassSplitContact, GlassOriginPreparation>.presentation(
+    height: Float, density: androidx.compose.ui.unit.Density,
+): GlassOriginPresentation {
     val separation = originGap(preparation.progress)
     val left = if (side < 0f) contacts.left else contacts.right
     val right = if (side < 0f) contacts.right else contacts.left
-    val common = contacts.presentation(contacts.left, contacts.right, 0f).let { if (contacts.left.vertical) it.copy(strain = -it.strain) else it }
+    val joinedWidth = with(density) { lyricsHeaderWidth(CompactControlSize, 1f, .5f).roundToPx().toFloat() }
+    val inheritedWidth = (joinedWidth - height) * (1f - separation)
+    val common = contacts.presentation(contacts.left, contacts.right, 0f)
+        .bodyTransform(Size(joinedWidth, height), density.density, contacts.left.vertical)
     return GlassOriginPresentation(contacts.presentation(left, right, separation), left.vertical,
-        side * height / 2f * (common.scaleX() - 1f) * (1f - separation))
+        side * inheritedWidth / 2f * (common.scale.x - 1f), inheritedWidth)
 }
 
 /** A selection item supplies existing geometry data; the popup system owns its origin mapping. */
@@ -391,11 +400,12 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor?, source: FrostedBackdrop?
     role: TriggerRole<GlassSplitContact, GlassOriginPreparation> = TriggerRole.Surface,
     face: (@Composable () -> Unit)? = null): Modifier {
     if (anchor == null && role !is TriggerRole.LyricsHeader) return this
+    val density = LocalDensity.current
     val originPresentation: ((Float) -> GlassOriginPresentation)? =
-        if (role is TriggerRole.LyricsHeader) remember(role) { { height: Float -> role.presentation(height) } } else null
+        if (role is TriggerRole.LyricsHeader) remember(role, density) { { height: Float -> role.presentation(height, density) } } else null
     val marker = GlassDepthMarker(anchor, originPresentation, source, role)
     val presented = if (role is TriggerRole.LyricsHeader) drawWithContent {
-        translate(left = if (role.separated) role.presentation(size.height).horizontalShift else 0f) { this@drawWithContent.drawContent() }
+        translate(left = if (role.separated) role.presentation(size.height, density).horizontalShift else 0f) { this@drawWithContent.drawContent() }
     } else this
     if (anchor == null) return if (role !is TriggerRole.LyricsHeader) this else presented.then(marker)
     originPresentation?.let { presentation ->
@@ -455,10 +465,10 @@ internal fun Modifier.glassDepthScale(): Float = foldIn(1f) { depth, element ->
 }
 
 /** A named trigger carries its shared contact policy into the material host. */
-internal fun Modifier.glassSurfaceContactPresentation(): (() -> GlassShape)? =
+internal fun Modifier.glassSurfaceOriginPresentation(): ((Float) -> GlassOriginPresentation)? =
     foldIn<((Float) -> GlassOriginPresentation)?>(null) { origin, element ->
         if (element is GlassDepthMarker) element.origin ?: origin else origin
-    }?.let { origin -> { origin(0f).shape } }
+    }
 
 internal enum class GlassPlacement { Search, Menu, Center, Sheet, Page }
 internal val LocalGlassPanelReady = compositionLocalOf { true }
@@ -997,7 +1007,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         // optical jump when the same body returns to its trigger.
                         val pose = if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight()) else null
                         val shape = if (page || reduced && pose == null) GlassShape() else pose?.shape ?: body.value
-                        val base = shape.bodyTransform(size, density.density, pose?.vertical ?: anchor.contact.vertical)
+                        val base = pose?.takeUnless { page }?.transform(size, density.density)
+                            ?: shape.bodyTransform(size, density.density, pose?.vertical ?: anchor.contact.vertical)
                         val t = base.copy(drift = base.drift + Offset(pose?.horizontalShift ?: 0f, 0f))
                         val scaledField=windowNode.fieldScalesWithBody()
                         val fieldTransform=if(scaledField) t else GlassBodyTransform()
