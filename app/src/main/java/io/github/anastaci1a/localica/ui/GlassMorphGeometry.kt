@@ -88,6 +88,29 @@ internal fun fluidPopupAperture(width: Double, height: Double, insets: PopupPort
 internal fun PopupPortalBounds.destinationPosition(apertureInsets: PopupPortalInsets, destinationInsets: PopupPortalInsets) =
     midX to (apertureInsets.top - destinationInsets.top)
 
+/** Placement from the local presentation aperture and the scale already requested for this destination. */
+internal fun PopupPortalBounds.presentedDestination(
+    itemWidth: Double, itemHeight: Double, scale: Pair<Double, Double>, axis: Int,
+    apertureInsets: PopupPortalInsets, itemInsets: PopupPortalInsets, reversed: Boolean,
+): PopupPortalPlacement {
+    val (sx, sy) = scale
+    val apertureWidth = kotlin.math.abs(width)
+    val apertureHeight = kotlin.math.abs(height)
+    if (axis == 1) {
+        fun left(insets: PopupPortalInsets) = if (reversed) insets.trailing else insets.leading
+        val scaledWidth = itemWidth * sx
+        val left = left(apertureInsets) - left(itemInsets) * sx
+        val mid = midX
+        val fraction = 1.0 - (mid - left) / scaledWidth
+        return PopupPortalPlacement(
+            PopupPortalBounds(0.0, 0.0, itemWidth, apertureHeight / sx),
+            mid + scaledWidth * (fraction - 0.5), apertureInsets.top - itemInsets.top * sx,
+        )
+    }
+    val destinationWidth = if (axis == 2) apertureWidth / sy else itemWidth
+    return PopupPortalPlacement(PopupPortalBounds(0.0, 0.0, destinationWidth, itemHeight), apertureWidth * 0.5, 0.0)
+}
+
 internal fun fluidPopupDestinationScale(
     width: Double, height: Double, croppedWidth: Double, croppedHeight: Double, axis: Int,
 ): Pair<Double, Double> {
@@ -102,3 +125,26 @@ internal fun fluidPopupDestinationScale(
 
 internal fun fluidPopupAutoAxis(oldWidth: Double, oldHeight: Double, targetWidth: Double, targetHeight: Double) =
     if (kotlin.math.abs(targetHeight - oldHeight) / oldHeight < kotlin.math.abs(targetWidth - oldWidth) / oldWidth) 2 else 1
+
+/** Runs inside the presentation owner's destination update. The prepared miss is allocated only when needed. */
+internal fun <Destination, Item> updateFluidPopupDestination(
+    destinations: MutableList<Destination>, item: Item, matchesItemId: (Destination, Item) -> Boolean,
+    prepare: () -> Destination, reparent: (Destination) -> Unit, replaceItem: (Destination, Item) -> Unit, hideNew: (Destination) -> Unit,
+): Destination {
+    val index = destinations.indexOfFirst { matchesItemId(it, item) }
+    if (index >= 0) {
+        val destination = destinations.removeAt(index)
+        destinations.add(destination)
+        reparent(destination)
+        replaceItem(destination, item)
+        return destination
+    }
+    val destination = prepare()
+    destinations.add(destination)
+    if (destinations.size >= 2) hideNew(destination)
+    return destination
+}
+
+internal fun <Destination> List<Destination>.requestFluidDestinationProgress(request: (Destination, Double) -> Unit) {
+    forEachIndexed { index, destination -> request(destination, if (index == lastIndex) 1.0 else 0.0) }
+}
