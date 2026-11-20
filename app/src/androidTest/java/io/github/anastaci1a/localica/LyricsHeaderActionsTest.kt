@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -139,19 +138,23 @@ class LyricsHeaderActionsTest {
         val backdrop = Color(0xFF3F6FB0)
         val phase = Animatable(.4999f)
         lateinit var anchor: GlassAnchor
+        lateinit var backing: FrostedBackdrop
         lateinit var preparation: GlassOriginPreparation
         compose.setContent { EngineTheme {
             anchor = rememberGlassAnchor()
             preparation = rememberGlassOriginPreparation()
             CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density),
                 LocalGlassAppearance provides LocalGlassAppearance.current.copy(shadowStrength = 0f, touchLight = 0f)) {
-                Box(Modifier.fillMaxSize().background(backdrop).padding(32.dp)) {
-                    LyricsHeaderActions(true, 1f, anchor, preparation, {}, {}, {})
+                RecordedLyricsBackdrop(backdrop, { backing = it }) {
+                    Box(Modifier.padding(32.dp)) {
+                        LyricsHeaderActions(true, 1f, anchor, preparation, {}, {}, {})
+                    }
                 }
             }
         } }
         compose.runOnIdle { preparation.bind(AnimatablePhase(phase), Curve.linear(0f, 1f)) }
         compose.waitForIdle()
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing.snapshot != null }
         val header = compose.onNodeWithTag("player-lyrics-pill")
         val node = compose.onNodeWithContentDescription("Lyrics sources")
         compose.mainClock.autoAdvance = false
@@ -190,8 +193,7 @@ class LyricsHeaderActionsTest {
                 for (expected in want) {
                     val column = (bounds.left + expected.center.x).roundToInt()
                     val occupied = ((bounds.top - height / 2).toInt()..(bounds.bottom + height / 2).toInt()).filter { row ->
-                        val pixel = image.getPixel(column, row)
-                        kotlin.math.abs(android.graphics.Color.red(pixel) - android.graphics.Color.red(backdrop.toArgb())) > 10
+                        difference(image.getPixel(column, row), backdrop.toArgb()) > 10
                     }
                     assertTrue("held handoff covers the body centre separated=$separated", occupied.isNotEmpty())
                     assertEquals("rendered top separated=$separated", bounds.top + top, occupied.first().toFloat(), 1.5f)
@@ -255,6 +257,19 @@ class LyricsHeaderActionsTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
+    @Composable
+    private fun RecordedLyricsBackdrop(color: Color, record: (FrostedBackdrop) -> Unit, content: @Composable () -> Unit) {
+        val backing = rememberFrostedBackdrop(Unit)
+        record(backing)
+        Box(Modifier.fillMaxSize()) {
+            Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backing)) { drawRect(color) }
+            CompositionLocalProvider(LocalFrostedBackdrop provides backing, content = content)
+        }
+    }
+
+    private fun difference(a: Int, b: Int) = maxOf(kotlin.math.abs(android.graphics.Color.red(a) - android.graphics.Color.red(b)),
+        kotlin.math.abs(android.graphics.Color.green(a) - android.graphics.Color.green(b)), kotlin.math.abs(android.graphics.Color.blue(a) - android.graphics.Color.blue(b)))
+
     private fun heldBodyCastsNoShadowInside(label: String, separated: Boolean) {
         val backdrop = Color(0xFF3F6FB0)
         var shadows by mutableStateOf(true)
@@ -263,10 +278,8 @@ class LyricsHeaderActionsTest {
         compose.setContent { EngineTheme {
             val anchor = rememberGlassAnchor()
             preparation = rememberGlassOriginPreparation()
-            backing = rememberFrostedBackdrop(Unit)
-            Box(Modifier.fillMaxSize()) {
-                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backing)) { drawRect(backdrop) }
-                CompositionLocalProvider(LocalFrostedBackdrop provides backing, LocalGlassAppearance provides
+            RecordedLyricsBackdrop(backdrop, { backing = it }) {
+                CompositionLocalProvider(LocalGlassAppearance provides
                     LocalGlassAppearance.current.copy(shadowStrength = if (shadows) 1f else 0f)) {
                     Box(Modifier.padding(48.dp)) { LyricsHeaderActions(separated, if (separated) 1f else 0f, anchor, preparation, {}, {}, {}) }
                 }
@@ -284,8 +297,6 @@ class LyricsHeaderActionsTest {
             val width = minOf(rest.width.toInt() + 2 * margin, image.width - left); val height = minOf(rest.height.toInt() + 2 * margin, image.height - top)
             return IntArray(width * height + 2).also { image.getPixels(it, 0, width, left, top, width, height); it[it.size - 2] = width; it[it.size - 1] = height }
         }
-        fun difference(a: Int, b: Int) = maxOf(kotlin.math.abs(android.graphics.Color.red(a) - android.graphics.Color.red(b)),
-            kotlin.math.abs(android.graphics.Color.green(a) - android.graphics.Color.green(b)), kotlin.math.abs(android.graphics.Color.blue(a) - android.graphics.Color.blue(b)))
         fun bareShot(): IntArray {
             compose.runOnIdle { shadows = false }
             compose.mainClock.advanceTimeBy(100)
