@@ -1,6 +1,17 @@
 package io.github.anastaci1a.localica
 
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.BlendMode
+import android.graphics.ColorSpace
+import android.graphics.HardwareBufferRenderer
+import android.graphics.Paint
+import android.graphics.RenderNode
+import android.graphics.RuntimeShader
+import android.graphics.Shader
+import android.hardware.HardwareBuffer
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -30,9 +41,71 @@ import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 class LiquidGlassTest {
     @get:Rule val compose = createComposeRule()
+
+    @SdkSuppress(minSdkVersion = 36)
+    @RequiresApi(34)
+    @Test fun fluidFieldTargetPreservesSignedHalfSamplesAndCoverage() {
+        val width = 2
+        val height = 1
+        val usage = HardwareBuffer.USAGE_GPU_COLOR_OUTPUT or HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE
+        val colorSpace = ColorSpace.get(ColorSpace.Named.LINEAR_EXTENDED_SRGB)
+        val packets = """
+            half4 packet(float2 point) {
+                return point.x < 1.0 ? half4(-2.0, 0.5, -0.25, 0.75) : half4(1.5, -0.5, 0.25, 0.25);
+            }
+        """.trimIndent()
+        HardwareBuffer.create(width, height, HardwareBuffer.RGBA_FP16, 1, usage).use { field ->
+            assertEquals(HardwareBuffer.RGBA_FP16, field.format)
+            val node = RenderNode("Fluid field packet")
+            try {
+                node.setPosition(0, 0, width, height)
+                node.beginRecording(width, height).drawPaint(Paint().apply {
+                    shader = RuntimeShader("$packets\nhalf4 main(float2 point) { return packet(point); }")
+                    blendMode = BlendMode.SRC
+                })
+                node.endRecording()
+                HardwareBufferRenderer(field).use { renderer ->
+                    renderer.setContentRoot(node)
+                    val committed = CompletableFuture<HardwareBufferRenderer.RenderResult>()
+                    renderer.obtainRenderRequest().setColorSpace(colorSpace)
+                        .draw({ it.run() }) { committed.complete(it) }
+                    val result = committed.get(5, TimeUnit.SECONDS)
+                    result.fence.use { fence ->
+                        assertEquals(HardwareBufferRenderer.RenderResult.SUCCESS, result.status)
+                        assertTrue("Field target draw committed", fence.await(Duration.ofSeconds(5)))
+                    }
+                    val bitmap = requireNotNull(Bitmap.wrapHardwareBuffer(field, colorSpace))
+                    try {
+                        val sample = RuntimeShader("""
+                            uniform shader field;
+                            $packets
+                            half4 main(float2 point) {
+                                return all(equal(field.eval(point), packet(point)))
+                                    ? half4(0, 1, 0, 1) : half4(1, 0, 0, 1);
+                            }
+                        """.trimIndent())
+                        sample.setInputBuffer("field", BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP))
+                        val pixels = renderNativeReferenceImage(width, height, "Fluid field sampling") { canvas ->
+                            canvas.drawPaint(Paint().apply { shader = sample })
+                        }.toPixelMap()
+                        for (x in 0 until width) {
+                            assertEquals("FP16 signed distance, normal and fractional coverage at x=$x", Color.Green, pixels[x, 0])
+                        }
+                    } finally {
+                        bitmap.recycle()
+                    }
+                }
+            } finally {
+                node.discardDisplayList()
+            }
+        }
+    }
 
     @SdkSuppress(minSdkVersion = 33)
     @Test fun fluidMaskKeepsGaussianInsideTheForeground() {
