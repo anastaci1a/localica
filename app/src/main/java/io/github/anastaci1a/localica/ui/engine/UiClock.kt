@@ -51,7 +51,7 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
         } } finally { active.clear() }
     }
 }
-/** #1083: a through popup's ordered actions on the shared clock, whose frames replace the reference's 16 ms drain timer. A hold takes the
+/** #1083: a through popup's ordered actions on the shared clock, whose frames replace a 16 ms drain timer. A hold takes the
  * first action and waits for its lifecycle owner; with animations off (Reduced) the effective speed 0 admits the whole queue. */
 internal class FluidTimelineMotion(private val clock: UiClock,private val run: (FluidTimelineStep,Double)->Unit): ActiveMotion {
     override val id=clock.allocateId(); override val presented get()=true; override val settled get()=actions.isEmpty()
@@ -61,17 +61,17 @@ internal class FluidTimelineMotion(private val clock: UiClock,private val run: (
     fun replace(steps: List<FluidTimelineStep>) { clock.checkMutation(); clock.unregister(this); timing=false; holding=false; actions.replaceFluidTimeline(steps) }
     fun start(suppliedSpeed: Double,amplifyDelays: Boolean,hold: Boolean) {
         clock.checkMutation(); if(timing || holding) return
-        speed=if(clock.context?.access==MotionAccess.Reduced) 0.0 else suppliedSpeed; amplify=amplifyDelays; holding=hold; begin()
+        speed=suppliedSpeed; amplify=amplifyDelays; holding=hold; begin()
     }
     /** An interaction assertion stops the timer; its final release resets the origin, drains the due prefix and restarts it. */
     fun hold() { clock.checkMutation(); clock.unregister(this); timing=false; holding=true }
     fun release() { clock.checkMutation(); if(holding) { holding=false; begin() } }
     private fun begin() { started=clock.stampNow; drain(started); if(!holding && actions.isNotEmpty()) { timing=true; clock.register(this) } }
-    private fun drain(stamp: FrameStamp)=actions.drainFluidTimeline((stamp.nanos-started.nanos)/1e9,speed,amplify,{ clock.fluidDrag },holding,run)
+    private fun drain(stamp: FrameStamp)=actions.drainFluidTimeline((stamp.nanos-started.nanos)/1e9,if(clock.context?.access==MotionAccess.Reduced) 0.0 else speed,amplify,{ clock.fluidDrag },holding,run)
     override fun frame(stamp: FrameStamp)=drain(stamp)
     override fun endsAt(stamp: FrameStamp)=actions.isEmpty()
     override fun finish(stamp: FrameStamp) { timing=false }
-    override fun reduce(stamp: FrameStamp) { clock.unregister(this); timing=false; speed=0.0; drain(stamp) }
+    override fun reduce(stamp: FrameStamp) { clock.unregister(this); timing=false; drain(stamp) }
 }
 /** #1083: one running property entry on the shared clock. Each frame advances the installed spring by the frame delta over the drag, finishes
  * on the projected error and publishes through [write]; [completion] belongs to the lifecycle owner. */

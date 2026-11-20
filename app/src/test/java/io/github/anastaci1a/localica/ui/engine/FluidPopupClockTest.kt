@@ -57,6 +57,10 @@ class FluidPopupClockTest {
         assertEquals(prefix, ran.size)
         rig.frame(2_069_000_000L); assertEquals("thresholds count from the release", prefix, ran.size)
         rig.frame(2_071_000_000L); assertTrue(ran.size > prefix)
+        val off = mutableListOf<Pair<FluidTimelineAction, Double>>(); val held = timeline(rig, off)
+        held.start(0.7, false, true); rig.configure(MotionAccess.Reduced); held.release()
+        assertEquals("a hold released after animations turn off admits everything at speed 0", queue.map { it.action }, off.map { it.first })
+        assertTrue(off.drop(1).all { it.second == 0.0 })
         rig.close()
     }
 

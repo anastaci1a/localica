@@ -143,4 +143,28 @@ class PopupWindowMotionTest {
         motion.dispose()
     }
 
+    @Test fun fluidRequestsDriveTheBlurThroughTheSharedOwnersAndDisposeReleasesThem() {
+        val fluid = (uiSpec(InterfaceSettings(popupMotion = PopupMotionStyle.Fluid), null, ExpansionGeometryDomain(1000f, 4000f, 1f / 30)) as SpecResult.Accepted).spec
+        fun popup(h: EngineHarness) = PopupWindowMotion(h.clock, fluid.expansion, "fluid", false, false, PopupKind.Menu)
+            .also { assertTrue(it.fluid); it.show(true); it.place(home, envelope, 2f) }
+        fun frames(h: EngineHarness, motion: PopupWindowMotion, seconds: Double) = List((seconds * 120).toInt()) { h.advance(1.0 / 120); motion.fluidBlurRadius }
+        EngineHarness(spec = fluid).use { h ->
+            val motion = popup(h)
+            val radii = frames(h, motion, 2.0)
+            assertTrue("BlurOut raises the radius toward 4", radii.max() > 0.0 && radii.max() < 4.0)
+            assertEquals("BlurIn lands at 0", 0.0, radii.last(), 0.0)
+            motion.show(false); h.advance(1.0 / 120); motion.hold()
+            assertEquals("a held timeline keeps BlurIn waiting while the blur settles at 4", 4.0, frames(h, motion, 1.0).last(), 1e-3)
+            motion.release()
+            assertEquals(0.0, frames(h, motion, 2.0).last(), 0.0)
+            motion.show(true); h.advance(1.0 / 120)
+            motion.dispose()
+            assertEquals("dispose releases the timeline and the blur owner", 0, h.clock.activeCount)
+        }
+        EngineHarness(MotionAccess.Reduced, fluid).use { h ->
+            val motion = popup(h)
+            assertEquals("animations off run the whole queue and land the blur at 0", 0.0, motion.fluidBlurRadius, 0.0)
+            motion.dispose()
+        }
+    }
 }
