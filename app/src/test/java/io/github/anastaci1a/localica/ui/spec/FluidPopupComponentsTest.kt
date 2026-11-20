@@ -332,6 +332,55 @@ class FluidPopupComponentsTest {
         }
     }
 
+    @Test fun installedTransformPreservesTypedOperationOrderInAllThreeBranches() {
+        data class Value(val amount: Double)
+        val calls = StringBuilder()
+        val factors = mutableListOf<Double>()
+        val sums = mutableListOf<Pair<Value, Value>>()
+        val values = object : SpringTransformValues<Value> {
+            override val zeroVelocity = Value(0.0)
+            override fun equal(left: Value, right: Value) = left == right
+            override fun displacement(from: Value, to: Value): Value {
+                calls.append('D')
+                return Value(from.amount - to.amount)
+            }
+            override fun scaledCopy(value: Value, factor: Double): Value {
+                calls.append('S')
+                factors += factor
+                return Value(value.amount * factor)
+            }
+            override fun add(left: Value, right: Value): Value {
+                calls.append('A')
+                sums += left to right
+                return Value(left.amount + right.amount)
+            }
+        }
+        val body = Value(2.0) to Value(1.3)
+        val target = Value(12.0)
+        val cases = listOf(100.0 to 7.0, 144.0 to 24.0, 81.0 to 24.0)
+        for ((stiffness, damping) in cases) {
+            val kernel = SpringKernel.fromInstalled(stiffness, damping)
+            val (value, velocity) = kernel.advanceTransform(body, target, 0.019, values)
+            val scalar = kernel.advanceBody(FluidScalarSpringBody(2.0, 1.3), 12.0, 0.019)
+            assertEquals(scalar.value, value.amount, 1e-12 * maxOf(1.0, kotlin.math.abs(scalar.value)))
+            assertEquals(scalar.velocity, velocity.amount, 1e-12 * maxOf(1.0, kotlin.math.abs(scalar.velocity)))
+            if (stiffness == 144.0) {
+                assertEquals("DSASASSASSASASSAA", calls.toString())
+            } else {
+                assertEquals("DSSASSASSSSASSSASSSASSASSAA", calls.toString())
+                assertEquals(stiffness == 100.0, factors[5] < 0.0)
+            }
+            assertTrue(sums.last().second === target)
+            calls.clear()
+            factors.clear()
+            sums.clear()
+            assertTrue(kernel.advanceTransform(body, target, 0.0, values) === body)
+            val rest = target to values.zeroVelocity
+            assertTrue(kernel.advanceTransform(rest, target, 0.019, values) === rest)
+            assertTrue(calls.isEmpty())
+        }
+    }
+
     @Test fun installedPropertyScalesFinishVelocityWithItsPhysicalDamping() {
         val spring = FluidPopupSpringSettings(0.68, 0.37)
         assertEquals(0.08008676736384175.toRawBits(), spring.velocityScalingFactor.toRawBits())
