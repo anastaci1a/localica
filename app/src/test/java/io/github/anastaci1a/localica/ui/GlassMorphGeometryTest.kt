@@ -363,7 +363,8 @@ class GlassMorphGeometryTest {
         val transformImpulse = 0.016 * (2 * Math.PI / 0.3) * (2 * Math.PI / 0.3)
         assertEquals((12 * geometryImpulse).toFloat(), (left + right) * 0.5f, 0.0001f)
         assertEquals((250 * transformImpulse).toFloat(), right - left, 0.001f)
-        assertEquals(pose.bounds, aperture.valueAt(stamp))
+        assertEquals(pose.bounds, requireNotNull(popup.rectangle).valueAt(stamp))
+        assertEquals(next.bounds, aperture.valueAt(stamp))
     }
 
     @Test fun kickPropertiesFinishIndependentlyOnTheirProjectedError() {
@@ -423,7 +424,9 @@ class GlassMorphGeometryTest {
         assertEquals((12 * impulsePerPoint).toFloat(), centreVelocity(), 0.002f)
         request(17f)
         assertEquals((17 * impulsePerPoint).toFloat(), centreVelocity(), 0.002f)
-        assertEquals(125f, aperture.valueAt(h.clock.stampNow).center.x, 0f)
+        val stamp = h.clock.stampNow
+        assertEquals(125f, requireNotNull(popup.rectangle).valueAt(stamp).center.x, 0f)
+        assertEquals(142f, aperture.valueAt(stamp).center.x, 0f)
     }
 
     @Test fun edgeSpringPreparedPopupKeepsItsFrameCorpus() {
