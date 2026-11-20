@@ -151,8 +151,11 @@ class GlassMorphGeometryTest {
                 bodies?.forEachIndexed { i, body -> if (previous?.get(i) != body) changed[i] = frame }
                 previous = bodies
             }
-            assertTrue(changed[0] >= 0)
+            // Reduced requests commit Rest to both slots atomically, so neither slot settles on a later frame than the other.
             assertEquals(changed[0], changed[1])
+            val endpoint = if (opening) Rect(0f, 0f, 120f, 80f) else input.pivot
+            assertEquals(endpoint, requireNotNull(popup.bounds).value())
+            assertTrue(requireNotNull(previous).any { it.boundingRect == endpoint })
             assertTrue(popup.expansion.retirementReady)
         }
     }
