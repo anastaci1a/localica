@@ -96,6 +96,17 @@ class GlassRefractionTest {
         }
         val smallCorner = LensGeometry(Rect(0f, 0f, 200f, 120f), 10f)
         assertTrue(smallCorner.field(Offset(10f, 10f)).distance < GlassRefraction.InnerHeight)
+        val epsilon = 1f / 1024f
+        for (depth in 10..12) {
+            val d = depth.toFloat()
+            val left = smallCorner.field(Offset(d, d + epsilon))
+            val top = smallCorner.field(Offset(d + epsilon, d))
+            assertEquals(Offset(1f, 0f), left.inward)
+            assertEquals(Offset(0f, 1f), top.inward)
+            val jump = (GlassRefractionReference.at(left, 1f).inner - GlassRefractionReference.at(top, 1f).inner).getDistance()
+            val exactJump = sqrt(2.0) * abs(profile(-38.4, 12.0, depth.toDouble()))
+            assertEquals("10 dp corner at depth $depth", exactJump, jump.toDouble(), 1e-4)
+        }
         val square = LensGeometry(Rect(0f, 0f, 200f, 120f), 0f)
         val left = square.field(Offset(5f, 5.5f)).inward
         val top = square.field(Offset(5.5f, 5f)).inward

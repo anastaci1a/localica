@@ -371,7 +371,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                     val rest = silhouette?.frame(extent)?.geometry ?: LensGeometry(Rect(Offset.Zero, extent), radius)
                     val transform = appliedTransform(extent)
                     val pivot = Offset(extent.width / 2f, extent.height / 2f)
-                    LiveLensFrame(rest.deformed(transform, pivot), transform.scale, transform.drift)
+                    LiveLensFrame(rest.deformed(transform, pivot), transform)
                 }) { geometry, resolution, flatWeight ->
                 val frame = material()
                 val blur = blur(frame)

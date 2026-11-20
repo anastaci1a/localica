@@ -126,9 +126,19 @@ class GlassSplitGeometryTest {
         }
     }
 
-    @Test fun theConnectedOpticalNeckHasNoNormalSeamAndMatchesItsHeightGradient() {
+    @Test fun theConnectedOpticalNeckKeepsItsDepthAndFoldsAtTheMidline() {
         val geometry = lens(Size(120f, 60f), .3f)
         fun field(point: Offset) = geometry.field(point)
+        val medial = field(Offset(60f, 30f))
+        assertEquals(12f, medial.distance, .00001f)
+        assertEquals(0f, medial.inward.x, .00001f)
+        assertEquals(1f, kotlin.math.abs(medial.inward.y), .00001f)
+        for (side in listOf(-1f, 1f)) {
+            val flank = field(Offset(60f, 30f + side * .25f))
+            assertEquals(11.75f, flank.distance, .00001f)
+            assertEquals(0f, flank.inward.x, .00001f)
+            assertEquals(-side, flank.inward.y, .00001f)
+        }
         assertEquals(0f, field(Offset(60f, 24f)).inward.x, .00001f)
         for (point in listOf(Offset(52f, 24f), Offset(60f, 24f), Offset(68f, 36f))) {
             val dx = (field(point + Offset(.01f, 0f)).distance - field(point - Offset(.01f, 0f)).distance) / .02f

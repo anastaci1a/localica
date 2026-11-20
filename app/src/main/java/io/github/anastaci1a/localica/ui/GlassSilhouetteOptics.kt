@@ -34,9 +34,11 @@ private val rimSplit = Curve.window(0f, .5f)
 internal fun splitPillOptics(bodies: List<RoundRect>, progress: Float): GlassSilhouetteGeometry =
     GlassSilhouetteGeometry(bodies, rimSplit.at(progress.coerceIn(0f, 1f)))
 
+internal data class LiveLensFrame(val geometry: LensGeometry, val transform: GlassBodyTransform)
+
 internal fun LensGeometry.deformed(transform: GlassBodyTransform, pivot: Offset): LensGeometry =
     if (transform.scale == Offset(1f, 1f) && transform.drift == Offset.Zero) this
-    else LensGeometry.fromBodies(bodies.map { it.deformed(transform, pivot) })
+    else LensGeometry(bodies.map { it.deformed(transform, pivot) })
 
 internal fun LensGeometry.recorded(resolution: Float, padding: Float): LensGeometry {
     val origin = bounds.topLeft

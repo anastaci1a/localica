@@ -3,20 +3,19 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.geometry.*
 import kotlin.math.*
 
-internal data class LensGeometry(val bounds: Rect, val corner: Float, private val outlines: List<RoundRect>? = null) {
-    val span get() = min(bounds.width, bounds.height) / 2f
-    val bodies get() = outlines ?: listOf(RoundRect(bounds, CornerRadius(corner.coerceIn(0f, span))))
-
-    companion object {
-        fun fromBodies(bodies: List<RoundRect>): LensGeometry {
-            val bounds = if (bodies.isEmpty()) Rect.Zero else Rect(bodies.minOf { it.left }, bodies.minOf { it.top },
-                bodies.maxOf { it.right }, bodies.maxOf { it.bottom })
-            return LensGeometry(bounds, 0f, bodies)
-        }
+internal data class LensGeometry(val bodies: List<RoundRect>) {
+    val bounds = when (bodies.size) {
+        0 -> Rect.Zero
+        1 -> bodies.single().boundingRect
+        else -> Rect(bodies.minOf { it.left }, bodies.minOf { it.top },
+            bodies.maxOf { it.right }, bodies.maxOf { it.bottom })
     }
+    val span get() = min(bounds.width, bounds.height) / 2f
+    val corner get() = bodies.single().topLeftCornerRadius.x
 }
 
-internal data class LiveLensFrame(val geometry: LensGeometry, val scale: Offset, val drift: Offset)
+internal fun LensGeometry(bounds: Rect, corner: Float) =
+    LensGeometry(listOf(RoundRect(bounds, CornerRadius(corner.coerceIn(0f, bounds.size.minDimension / 2f)))))
 
 /** Fit the four adjacent radius sums before applying body strain. */
 internal fun RoundRect.fittedLensCorners(): RoundRect {

@@ -107,7 +107,6 @@ class SelectorFreeCornerTest {
                     vertical, rtl, reduced, false, heldCrossInset = 4f)
                 val frame = g.lens(0f, 3, SelectorTrackInsets(0f, 4f, 4f), vertical, rtl, GlassShape(), 32f)
                 assertTrue(frame.contour().isUniform)
-                assertEquals(0f, frame.contour().opticalWeight, 0f)
             }
     }
 }

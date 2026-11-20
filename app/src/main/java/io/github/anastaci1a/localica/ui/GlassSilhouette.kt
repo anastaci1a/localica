@@ -26,7 +26,7 @@ internal class GlassSilhouetteFrame(val description: GlassSilhouetteGeometry) {
         Path.combine(PathOperation.Union, combined, Path().apply { addRoundRect(body) })
     } }
     val bounds get() = geometry.bounds
-    val geometry = LensGeometry.fromBodies(bodies)
+    val geometry = LensGeometry(bodies)
 }
 
 @Composable internal fun rememberGlassSilhouette(bodies: (Size) -> List<RoundRect>): GlassSilhouette {

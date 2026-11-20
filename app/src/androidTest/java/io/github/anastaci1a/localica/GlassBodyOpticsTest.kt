@@ -166,7 +166,7 @@ class GlassBodyOpticsTest {
             val bl = rgb(color(l, t + 1)); val br = rgb(color(l + 1, t + 1))
             return tl.indices.map { i -> (1 - b) * ((1 - a) * tl[i] + a * tr[i]) + b * ((1 - a) * bl[i] + a * br[i]) }
         }
-        fun lens(bodies: List<RoundRect>) = LensGeometry.fromBodies(bodies)
+        fun lens(bodies: List<RoundRect>) = LensGeometry(bodies)
         val cases = listOf(
             "circle" to listOf(RoundRect(Rect(-32f, -32f, 32f, 32f), CornerRadius(32f))),
             "pill" to listOf(RoundRect(Rect(-80f, -24f, 80f, 24f), CornerRadius(24f))),

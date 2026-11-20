@@ -72,7 +72,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
         val origin = shape.bounds.topLeft - Offset(pad, pad)
         val extent = IntSize(ceil(shape.bounds.width + pad * 2).toInt().coerceAtLeast(1),
             ceil(shape.bounds.height + pad * 2).toInt().coerceAtLeast(1))
-        val shifted = shape.copy(bounds = shape.bounds.translate(-origin))
+        val shifted = shape.recorded(1f, pad)
         val thickness = body().thickness
         val flattening = ((1f - thickness) / .18f).coerceIn(0f, 1f)
         val controlSize = size

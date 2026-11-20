@@ -186,11 +186,12 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     Canvas(modifier.graphicsLayer()) {
         val frame = liveLens?.invoke(size)
         val live = frame?.geometry
+        val transform = frame?.transform
         val bounds = live?.bounds ?: Rect(Offset.Zero, size)
         if (bounds.isEmpty) return@Canvas
-        if (frame == null || (frame.scale == Offset(1f, 1f) && frame.drift == Offset.Zero && bounds == Rect(Offset.Zero, size))) sample(live)
-        else scale(1f / frame.scale.x, 1f / frame.scale.y) {
-            translate(-frame.drift.x, -frame.drift.y) {
+        if (transform == null || (transform.scale == Offset(1f, 1f) && transform.drift == Offset.Zero && bounds == Rect(Offset.Zero, size))) sample(live)
+        else scale(1f / transform.scale.x, 1f / transform.scale.y) {
+            translate(-transform.drift.x, -transform.drift.y) {
                 inset(bounds.left, bounds.top, size.width - bounds.right, size.height - bounds.bottom) { sample(live) }
             }
         }
