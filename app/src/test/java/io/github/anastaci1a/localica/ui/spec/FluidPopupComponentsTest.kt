@@ -45,7 +45,7 @@ class FluidPopupComponentsTest {
         val eject = FluidPopupSpringSettings(0.72, 0.42)
         val absorb = FluidPopupSpringSettings(0.84, 0.65)
         val lens = FluidLensingSpec.requests(true, true, 25.0, 90.0, eject, absorb)
-        val queue = fluidThroughQueue(true, eject, FluidContent) { lens }
+        val queue = fluidThroughQueue(true, eject, FluidContent, 367.5) { lens }
         assertEquals(
             listOf(
                 Source, AddSdfElements, CollapsedSource, ExpandedOverrounded, Kick, SmoothOn, LensOn, ChangeLensDimension,
@@ -66,6 +66,8 @@ class FluidPopupComponentsTest {
         assertEquals(0.06999999999999999.toRawBits(), growingGeometry[2].dueThreshold(0.7, false, 1.0).toRawBits())
         assertEquals(0.0.toRawBits(), growingGeometry[3].dueThreshold(0.7, false, 1.0).toRawBits())
         assertTrue(queue[7].lens === lens[1])
+        assertEquals(FluidContentBlurRequest(1.4249999999999998, 4.0), queue[8].content)
+        assertEquals(FluidContentBlurRequest(1.0, 0.0), queue.first { it.action == BlurIn }.content)
         assertEquals(0.1, requireNotNull(queue[5].timing.spring).response, 0.0)
         assertEquals(0.6, requireNotNull(queue.last().timing.spring).response, 0.0)
         assertEquals(1.0, requireNotNull(queue.last().timing.spring).dampingRatio, 0.0)
@@ -75,7 +77,7 @@ class FluidPopupComponentsTest {
         val eject = FluidMainEject
         val absorb = FluidPopupSpringSettings(0.8, 0.7)
         val lens = FluidLensingSpec.requests(true, false, 25.0, 90.0, eject, absorb)
-        val queue = fluidThroughQueue(false, eject, FluidContent) { lens }
+        val queue = fluidThroughQueue(false, eject, FluidContent, 367.5) { lens }
         assertEquals(
             listOf(
                 FullyExpanded, AddSdfElements, Source, KickEjectee, KickSource, SmoothOn, LensOn, ChangeLensDimension, BlurOut,
@@ -87,16 +89,17 @@ class FluidPopupComponentsTest {
         assertEquals(0x3fc3333333333334L, queue.last().timing.storedDelay.toRawBits())
         assertTrue(queue[7].timing.spring === absorb)
         val disabled = FluidContent.copy(lensingEnabled = false)
-        val nonGrowingNoLens = fluidThroughQueue(false, eject, disabled) { error("Lensing must stay disabled") }
+        val nonGrowingNoLens = fluidThroughQueue(false, eject, disabled, 367.5) { error("Lensing must stay disabled") }
         assertEquals(listOf(FullyExpanded, AddSdfElements, Source, KickEjectee, KickSource, SmoothOn, UnkickEjectee, SmoothOff, UnkickSource), nonGrowingNoLens.map { it.action })
-        val growingNoLens = fluidThroughQueue(true, eject, disabled) { error("Lensing must stay disabled") }
+        val growingNoLens = fluidThroughQueue(true, eject, disabled, 367.5) { error("Lensing must stay disabled") }
         assertEquals(listOf(Source, AddSdfElements, CollapsedSource, ExpandedOverrounded, Kick, SmoothOn, FullyExpanded, Unkick, SmoothOff), growingNoLens.map { it.action })
+        assertTrue((nonGrowingNoLens + growingNoLens).none { it.content != null })
     }
 
     @Test fun queueResetAndStartAdmissionReuseTheOrderedThreshold() {
         val eject = FluidMainEject
         val lens = FluidLensingSpec.requests(true, true, 25.0, 90.0, eject, eject)
-        val route = fluidThroughQueue(true, eject, FluidContent) { lens }
+        val route = fluidThroughQueue(true, eject, FluidContent, 367.5) { lens }
         val queue = ArrayDeque<FluidTimelineStep>()
         val ran = mutableListOf<FluidTimelineAction>()
         var nextAction = AddSdfElements
@@ -132,7 +135,7 @@ class FluidPopupComponentsTest {
     @Test fun sharedMorphCompletionWaitsForStartDrainAndTheFinalInteractionRelease() {
         val completion = FluidMorphCompletion()
         val events = mutableListOf<String>()
-        val queue = ArrayDeque(fluidThroughQueue(true, FluidMainEject, FluidContent.copy(lensingEnabled = false)) {
+        val queue = ArrayDeque(fluidThroughQueue(true, FluidMainEject, FluidContent.copy(lensingEnabled = false), 367.5) {
             error("Lensing disabled")
         })
         completion.acquireInteraction(previousAssertions = 0)
@@ -427,7 +430,7 @@ class FluidPopupComponentsTest {
     @Test fun freshCentreSpringsStartAtZeroAndPreserveRunningVelocityOnHandover() {
         val controls = FluidPropertySpringControls(0.0, null, interactive = false, additive = false)
         val content = FluidContent.copy(lensingEnabled = false)
-        val queue = fluidThroughQueue(true, FluidMainEject, content) { error("Lensing disabled") }
+        val queue = fluidThroughQueue(true, FluidMainEject, content, 367.5) { error("Lensing disabled") }
         val carried = FluidScalarSpringBody(31.5, -7.25)
         val retained = FluidScalarSpringEntry(carried, 20.0, FluidScalarSpringBody(20.0, 0.0))
         for (action in listOf(CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick, Unkick)) {
@@ -625,7 +628,7 @@ class FluidPopupComponentsTest {
 
     @Test fun geometryStepUsesTheSharedScaledSpringOrTheUnscaledSourceSettings() {
         val content = FluidContent.copy(lensingEnabled = false)
-        val route = fluidThroughQueue(true, FluidMainEject, content) { error("Lensing disabled") }
+        val route = fluidThroughQueue(true, FluidMainEject, content, 367.5) { error("Lensing disabled") }
         val expected = listOf(CollapsedSource to 0.21, ExpandedOverrounded to 0.35, FullyExpanded to 0.35)
         for ((action, response) in expected) {
             val binding = route.first { it.action == action }.geometrySpringBinding(0.7)

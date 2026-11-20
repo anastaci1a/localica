@@ -40,6 +40,33 @@ class FluidPopupPortalGeometryTest {
         assertEquals(PopupThroughItem.Pivot to PopupThroughItem.To, popupThroughSlots(smaller, tied, fromPhase = false))
     }
 
+    @Test fun destinationPlacementUsesTheApertureAndDestinationInsetsPerAxis() {
+        val apertureInsets = PopupPortalInsets(4.0, 6.0, 8.0, 12.0)
+        val item = PopupPortalBounds(0.0, 0.0, 52.0, 50.0)
+        val destinationInsets = PopupPortalInsets(6.0, 3.0, 4.0, 9.0)
+
+        val horizontal = fluidDestinationPlacement(80.0, 40.0, apertureInsets, item, destinationInsets, axis = 1)
+        assertEquals(2.0, horizontal.scaleX, 0.0)
+        assertEquals(2.0, horizontal.scaleY, 0.0)
+        assertEquals(PopupPortalBounds(52.0, -8.0, 52.0, 26.0), horizontal.layer)
+
+        val vertical = fluidDestinationPlacement(80.0, 40.0, apertureInsets, item, destinationInsets, axis = 2)
+        assertEquals(1.0, vertical.scaleX, 0.0)
+        assertEquals(1.0, vertical.scaleY, 0.0)
+        assertEquals(PopupPortalBounds(49.0, 0.0, 98.0, 50.0), vertical.layer)
+
+        val independent = fluidDestinationPlacement(80.0, 40.0, apertureInsets, item, destinationInsets, axis = 0)
+        assertEquals(2.0, independent.scaleX, 0.0)
+        assertEquals(1.0, independent.scaleY, 0.0)
+        assertEquals(PopupPortalBounds(49.0, 0.0, 52.0, 50.0), independent.layer)
+
+        val emptyWidth = fluidDestinationPlacement(80.0, 30.0, apertureInsets, item.copy(width = 12.0), destinationInsets, axis = 0)
+        assertEquals(1.0, emptyWidth.scaleX, 0.0)
+        assertEquals(0.75, emptyWidth.scaleY, 0.0)
+        val rightToLeft = fluidDestinationPlacement(80.0, 40.0, apertureInsets, item, destinationInsets, axis = 1, leftToRight = false)
+        assertEquals(PopupPortalBounds(46.0, -8.0, 52.0, 26.0), rightToLeft.layer)
+    }
+
     @Test fun growingOutlineTargetsRoundBeforeConversionAndKeepTheCompanionSeparate() {
         val larger = PopupPortalBounds(0.0, 0.0, 20.0, 20.0)
         val pivot = PopupPortalBounds(-8.5, 11.5, 4.0, 4.0)

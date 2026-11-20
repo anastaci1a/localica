@@ -314,6 +314,7 @@ internal enum class FluidTimelineAction {
 
 internal data class FluidTimelineStep(
     val action: FluidTimelineAction, val timing: FluidPopupStep<FluidPopupSpringSettings?>, val lens: FluidLensingSpec.Request? = null,
+    val content: FluidContentBlurRequest? = null,
 ) {
     fun propertySpring(effectiveSpeed: Double) = timing.spring?.scaledResponses(effectiveSpeed)
 }
@@ -331,7 +332,7 @@ internal fun fluidOutlineGeometrySpring(spring: FluidPopupSpringSettings, access
     if (access == MotionAccess.Reduced && spring === FluidSourceOutlineSpring) FluidReducedSourceGeometrySpring else spring
 
 internal fun fluidThroughQueue(
-    growing: Boolean, mainEject: FluidPopupSpringSettings, content: FluidContentSettings,
+    growing: Boolean, mainEject: FluidPopupSpringSettings, content: FluidContentSettings, largerHeight: Double,
     lensRequests: () -> List<FluidLensingSpec.Request>,
 ): List<FluidTimelineStep> = buildList {
     fun step(action: FluidTimelineAction, delay: Double = 0.0, spring: FluidPopupSpringSettings? = null) {
@@ -361,8 +362,9 @@ internal fun fluidThroughQueue(
         add(FluidTimelineStep(FluidTimelineAction.LensOn, on.timing, on))
         add(FluidTimelineStep(FluidTimelineAction.ChangeLensDimension, change.timing, change))
         add(FluidTimelineStep(FluidTimelineAction.LensOff, off.timing, off))
-        add(FluidTimelineStep(FluidTimelineAction.BlurOut, blur.blurOut))
-        add(FluidTimelineStep(FluidTimelineAction.BlurIn, blur.blurIn))
+        add(FluidTimelineStep(FluidTimelineAction.BlurOut, blur.blurOut,
+            content = fluidContentBlurOut(largerHeight, { content.maxScale }, { content.minScale })))
+        add(FluidTimelineStep(FluidTimelineAction.BlurIn, blur.blurIn, content = FluidContentBlurIn))
     }
 }.sortedBy { it.timing.storedDelay }
 

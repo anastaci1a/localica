@@ -75,17 +75,13 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private val fluidBlurControls = FluidPropertySpringControls(0.0, null, false, false)
     private val fluidTimeline = FluidTimelineMotion(clock, ::snapsReducedFluid) { step, speed ->
         deliverOutline(step,speed)
-        val radius = when (step.action) {
-            FluidTimelineAction.BlurOut -> FluidSharedBlurSpec.blurOutRadius
-            FluidTimelineAction.BlurIn -> FluidContentBlurIn.gaussianRadius
-            else -> null
+        val spring = step.propertySpring(speed) ?: return@FluidTimelineMotion
+        step.content?.let { content ->
+            val scale = fluidLayerPointScale(nativeWindow?.get() != null) { placement?.basis?.density?.toDouble() }
+            fluidBlur.animate(fluidBlurRadius, content.gaussianRadius, fluidBlurControls, spring, fluidRadiusEpsilonSquared(scale))
         }
-        val spring = step.propertySpring(speed)
-        // The attached window's density is the point scale; before attachment it is 1.
-        val scale = fluidLayerPointScale(nativeWindow?.get() != null) { placement?.basis?.density?.toDouble() }
-        if (radius != null && spring != null) fluidBlur.animate(fluidBlurRadius, radius, fluidBlurControls, spring, fluidRadiusEpsilonSquared(scale))
         val lens = step.lens
-        if (lens != null && spring != null) {
+        if (lens != null) {
             val height = if (step.action == FluidTimelineAction.LensOff) 0.0
                 else lens.dimension?.let { FluidLensingSpec.height(it, lens.gain) }
             if (height != null) {
@@ -176,7 +172,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         // Lens heights are in points: the prepared endpoints' short dimensions at the window density.
         fun short(r: Rect) = FluidLensingSpec.shortDimension(1.0 / basis.density, r.width.toDouble(), r.height.toDouble())
         val (smaller, larger) = if (growing) from to to else to to from
-        fluidTimeline.replace(fluidThroughQueue(growing, FluidMainEject, FluidContent) {
+        fluidTimeline.replace(fluidThroughQueue(growing, FluidMainEject, FluidContent, larger.height / basis.density.toDouble()) {
             FluidLensingSpec.requests(FluidContent.lensingEnabled, growing, short(smaller), short(larger), FluidMainEject, FluidMainAbsorb)
         })
         fluidTimeline.start(FluidContent.speed, FluidContent.amplifyDelays, holding)

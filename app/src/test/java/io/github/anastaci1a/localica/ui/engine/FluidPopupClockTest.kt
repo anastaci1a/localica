@@ -18,7 +18,7 @@ class FluidPopupClockTest {
         fun frame(nanos: Long) { now = nanos; channel.trySend(nanos) }
         fun close() = scope.cancel()
     }
-    private val queue = fluidThroughQueue(true, FluidMainEject, FluidContent.copy(lensingEnabled = false)) { emptyList() }
+    private val queue = fluidThroughQueue(true, FluidMainEject, FluidContent.copy(lensingEnabled = false), 367.5) { emptyList() }
     private fun timeline(rig: Rig, ran: MutableList<Pair<FluidTimelineAction, Double>>) =
         FluidTimelineMotion(rig.clock) { step, speed -> ran += step.action to speed }.also { it.replace(queue) }
 
