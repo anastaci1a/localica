@@ -83,7 +83,7 @@ internal class FluidPopupSpringSettings(
     private val installedDamping = (sqrt(stiffness) + sqrt(stiffness)) * dampingRatio
     val velocityScalingFactor get() = installedDamping / stiffness
     fun advance(body: FluidScalarSpringBody, target: Double, dt: Double) =
-        SpringKernel(sqrt(stiffness), dampingRatio, installedDamping).advanceBody(body, target, dt)
+        SpringKernel.fromInstalled(stiffness, installedDamping).advanceBody(body, target, dt)
 
     fun scaledResponses(multiplier: Double) =
         FluidPopupSpringSettings(dampingRatio, multiplier * response, retargetImpulse, multiplier * trackingResponse)
@@ -261,6 +261,9 @@ internal object FluidSharedBlurSpec {
 
     fun zoomOrigin(model: DoubleArray?) = model ?: DoubleArray(16) { if (it % 5 == 0) 1.0 else 0.0 }
     fun radiusOrigin(model: Double?) = model ?: 0.0
+
+    fun advanceRadius(body: FluidScalarSpringBody, intermediate: Double, stiffness: Double, damping: Double, dt: Double) =
+        SpringKernel.fromInstalled(stiffness, damping).advanceBody(body, intermediate, dt)
 
     fun publishRadius(publication: FluidScalarPublication, write: (Double, Double, Boolean) -> Unit) {
         publication.consume { sample ->
@@ -785,6 +788,13 @@ internal fun popupMotionAdmission(m: PopupMotionModel): List<String> {
 /** #854 (rule 12): the one closed-form damped spring. The engine's Damped flies it and the admission below composes it (the spec
  * layer cannot depend on the engine). Overdamped laws use expm1, so near-critical laws keep their precision. */
 internal class SpringKernel(private val omega: Double, private val zeta: Double, installedDamping: Double? = null) {
+    companion object {
+        fun fromInstalled(stiffness: Double, damping: Double): SpringKernel {
+            val omega = sqrt(stiffness)
+            return SpringKernel(omega, damping / (omega + omega), damping)
+        }
+    }
+
     private val installed = installedDamping != null
     private val a = installedDamping?.times(0.5) ?: zeta * omega
     private val underdamped = if (installed) a < omega else zeta < 1.0
