@@ -63,8 +63,9 @@ internal fun splitPillBodies(size: Size, progress: Float): List<RoundRect> {
 }
 
 /** A rest body under its surface's own draw transform about [pivot]; shadows read the same record. */
-internal fun RoundRect.deformed(scale: Offset, drift: Offset, pivot: Offset): RoundRect {
-    val (sx, sy) = scale
+internal fun RoundRect.deformed(transform: GlassBodyTransform, pivot: Offset): RoundRect {
+    val (sx, sy) = transform.scale
+    val drift = transform.drift
     fun x(value: Float) = pivot.x + (value - pivot.x) * sx + drift.x
     fun y(value: Float) = pivot.y + (value - pivot.y) * sy + drift.y
     fun CornerRadius.scaled() = CornerRadius(this.x * sx, this.y * sy)

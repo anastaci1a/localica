@@ -16,8 +16,6 @@ import io.github.anastaci1a.localica.ui.components.rememberLyricsHeaderSurface
 import io.github.anastaci1a.localica.ui.layout.LyricsHeaderLayout
 import io.github.anastaci1a.localica.ui.layout.LyricsHeaderJoinedLayout
 
-internal fun androidx.compose.ui.geometry.RoundRect.deformed(transform: GlassBodyTransform, pivot: Offset) = deformed(transform.scale, transform.drift, pivot)
-
 /** One joined surface narrows its neck before handing two tangent bodies their
  * independent clocks. Rejoining follows the same geometry in reverse. */
 @Composable

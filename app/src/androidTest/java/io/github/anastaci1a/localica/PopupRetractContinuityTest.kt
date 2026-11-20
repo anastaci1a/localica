@@ -10,6 +10,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -23,6 +25,9 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.components.TriggerRole
+import io.github.anastaci1a.localica.ui.engine.LocalShadowPlane
+import io.github.anastaci1a.localica.ui.engine.ShadowPlane
+import io.github.anastaci1a.localica.ui.engine.SurfaceNode
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -48,9 +53,6 @@ class PopupRetractContinuityTest {
                 val current = marker == null || screen.getPixel(origin[0] + marker.x.toInt(), origin[1] + marker.y.toInt()).let {
                     android.graphics.Color.green(it) > 200 && (android.graphics.Color.red(it) > 200) == (tick!! % 2 == 1) }
                 if (current) return screen.getPixel(origin[0] + target.x.toInt(), origin[1] + target.y.toInt())
-                android.util.Log.i("PopupRetract", "marker expected=$tick attempt=$it clock=${compose.mainClock.currentTime}" +
-                    " origin=${origin.contentToString()} target=$target marker=$marker screen=${screen.width}x${screen.height}" +
-                    " observed=${marker?.let { p -> screen.getPixel(origin[0] + p.x.toInt(), origin[1] + p.y.toInt()) }}")
             } finally { screen.recycle() }
             Thread.sleep(50)
         }
@@ -138,7 +140,6 @@ class PopupRetractContinuityTest {
             }
             assertEquals(listOf("withdraw:1") + List(3) { listOf("unlink:0", "withdraw:1") }.flatten(), events.toList())
         }
-        android.util.Log.i("PopupRetract", outcomes.joinToString("; "))
         // The omitted withdrawal must expose the retained optic, or this oracle proves nothing.
         assertTrue("The no-withdrawal control must discriminate: $outcomes", outcomes.filter { "NoWithdraw" in it }.all { "restored=true" in it })
     }
@@ -186,7 +187,7 @@ class PopupRetractContinuityTest {
     private class Scene(val anchor: GlassAnchor, val events: MutableList<Any>)
 
     private fun pill(geometryOnly: Boolean = false, throwOnce: Boolean = false, drawTrigger: () -> Boolean = { true },
-        lightMix: () -> Float = { .23f }): Pair<Scene, MutableState<Boolean>> {
+        lightMix: () -> Float = { .23f }, preparedPlane: ((ShadowPlane?) -> Unit)? = null): Pair<Scene, MutableState<Boolean>> {
         val open = mutableStateOf(false)
         lateinit var anchor: GlassAnchor
         val events = Collections.synchronizedList(mutableListOf<Any>())
@@ -198,6 +199,8 @@ class PopupRetractContinuityTest {
         }) {
             Box(Modifier.fillMaxSize()) {
                 anchor = rememberGlassAnchor()
+                val preparation = if (preparedPlane != null) rememberGlassOriginPreparation() else null
+                val prepared = if (preparation == null) Modifier else Modifier.preparedOrigin(preparation) { preparation.progress }
                 val mix = lightMix()
                 val source = rememberFrostedBackdrop(Unit, dark = mix >= .5f, lightMix = mix)
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -208,7 +211,7 @@ class PopupRetractContinuityTest {
                     Box(Modifier.align(Alignment.BottomEnd).padding(24.dp).drawWithContent {
                         if (drawTrigger()) try { drawContent() } catch (_: UnsupportedOperationException) { }
                     }) {
-                        val face = Modifier.size(104.dp, 56.dp).glassAnchor(anchor, source).clickable { open.value = true }.testTag("trigger")
+                        val face = Modifier.size(104.dp, 56.dp).then(prepared).glassAnchor(anchor, source).clickable { open.value = true }.testTag("trigger")
                         val throwing = Modifier.fillMaxSize().drawBehind {
                             if (pending && !anchor.hidden && !open.value && anchor.restoredDrawRequest > 0) { pending = false; throw UnsupportedOperationException("draw aborted") }
                         }
@@ -216,7 +219,13 @@ class PopupRetractContinuityTest {
                         else LiquidGlassSurface(face, source, cornerRadius = 28.dp, frostProgress = .2f, refraction = 1.3f,
                             tint = Color(0x2200FF88)) { Box(throwing) }
                     }
-                    GlassMenu(open.value, anchor, { open.value = false }) { Text("Create playlist"); Text("Import playlist") }
+                    GlassMenu(open.value, anchor, { open.value = false }, originPreparation = preparation) {
+                        if (preparedPlane != null) {
+                            val plane = LocalShadowPlane.current
+                            SideEffect { preparedPlane(plane) }
+                        }
+                        Text("Create playlist"); Text("Import playlist")
+                    }
                 }
             }
         } } }
@@ -246,6 +255,35 @@ class PopupRetractContinuityTest {
 
     private fun Scene.body() = events.filterIsInstance<GlassBodyReceipt>().map { "${it.event}:${it.request}" }
     private fun Scene.trace() = events.filter { it is GlassBodyReceipt || it is GlassTransitionReceipt || it is String }
+
+    @Test fun liveFlightProjectsDriftAtTheCurrentPopupExtent() {
+        var plane: ShadowPlane? = null
+        val (scene, open) = pill(preparedPlane = { plane = it })
+        val drift = Offset(.04f, -.025f)
+        val pose = GlassOriginPresentation(GlassShape(drift = drift), false, 0f, 0f)
+        val triggerWidth = compose.onNodeWithTag("trigger").fetchSemanticsNode().boundsInRoot.width
+        val node = compose.runOnIdle {
+            scene.anchor.originPresentation = { pose }
+            checkNotNull(scene.anchor.surfaceNode) as SurfaceNode
+        }
+        val samples = mutableListOf<Rect>()
+        compose.runOnIdle { open.value = true }
+        frames("two drawn native flight extents") {
+            compose.runOnIdle {
+                val phase = scene.anchor.contact.expansion.value
+                val bounds = plane?.let { node.frameOn(it).bounds }
+                if (phase > 0f && phase < 1f && scene.anchor.modalPresent && bounds != null &&
+                    bounds.width > triggerWidth + 1f && samples.none { kotlin.math.abs(it.width - bounds.width) < 1f }) {
+                    samples += bounds
+                }
+                samples.size >= 2
+            }
+        }
+        for (bounds in samples) {
+            assertEquals("Horizontal drift at the drawn flight width", drift.x * bounds.width, bounds.left, .01f)
+            assertEquals("Vertical drift at the drawn flight height", drift.y * bounds.height, bounds.top, .01f)
+        }
+    }
 
     /** R4 §1/R5: the ordinary source takes the body at its draw entry, before its posted acknowledgment, exactly once per request. */
     @Test fun pillReturnStopsFilteringOnSourceDrawBeforePost() {

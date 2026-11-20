@@ -215,7 +215,7 @@ internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: Glass
                             }
                             val actual = capture.capture { scene ->
                                 val raw = anchor.contact.body.value
-                                // Independent body oracle: optical cap depth is not the shared drawn pose.
+                                // This model reference checks native transform wiring. PressGeometryTest independently checks rendered spans.
                                 val longSide = body.size.maxDimension / rule.density.density
                                 val shortSide = body.size.minDimension / rule.density.density
                                 val points = if (longSide < 120f) 16f else
