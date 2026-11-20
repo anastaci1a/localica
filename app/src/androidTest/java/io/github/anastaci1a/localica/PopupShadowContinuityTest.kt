@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.ShadowMassContour
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -40,10 +41,74 @@ import kotlin.math.roundToInt
  * Compare against one field at the current outline, not just registration counts. */
 class PopupShadowContinuityTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun restingNativePopupAndReturnedTriggerKeepTheDownwardMass() {
+        output = nativeEvidenceDirectory("shadow-mass-popup", InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
+        check(output.isDirectory || output.mkdirs())
+        compose.setContent { Fixture(nested = false) }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        val failures = mutableListOf<String>()
+        fun settle() { repeat(24) { compose.mainClock.advanceTimeBy(64); compose.waitForIdle() } }
+        fun measure(name: String, popup: Boolean) {
+            val nodes = if (popup) compose.popupGeometryNodes(anchor, open, output, name, 0) else emptyList()
+            val bounds = if (popup) nodes.minBy { it.boundsInRoot.width * it.boundsInRoot.height }.boundsInRoot else anchor.bounds
+            val origin = IntArray(2)
+            if (popup) compose.runOnIdle { requireNotNull(popupView).getLocationOnScreen(origin) }
+            val screen = bounds.translate(Offset(origin[0].toFloat(), origin[1].toFloat()))
+            val d = if (popup) requireNotNull(popupDensity) else compose.density.density
+            val rows = (16 * d).toInt()
+            val left = kotlin.math.ceil(screen.left).toInt()
+            val right = kotlin.math.floor(screen.right).toInt()
+            val top = kotlin.math.floor(screen.top).toInt() - rows
+            val bottom = kotlin.math.ceil(screen.bottom).toInt() + rows
+            val image = screenshot()
+            try {
+                assertTrue("The complete mass bands must fit the native display", left >= 0 && top >= 0 && right <= image.width && bottom <= image.height)
+                val referenceY = (screen.top - 64 * d).toInt()
+                assertTrue("Unshadowed backing must be inside app content", referenceY > 24 * d)
+                val background = AndroidColor.red(image.getPixel(screen.center.x.toInt(), referenceY)) / 255.0
+                assertTrue("Backing must carry contrast", background > .1)
+                val local = screen.translate(Offset(-left.toFloat(), -top.toFloat()))
+                val radius = if (popup) 28 * d else screen.height / 2
+                val contours = mutableListOf(ShadowMassContour(
+                    local.left, local.top, local.right, local.bottom, radius))
+                if (!popup && neighboringBody != Rect.Zero) {
+                    val neighbor = neighboringBody.translate(Offset(-left.toFloat(), -top.toFloat()))
+                    contours += ShadowMassContour(
+                        neighbor.left, neighbor.top, neighbor.right, neighbor.bottom, neighbor.height / 2)
+                }
+                val mass = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMass(
+                    right - left, bottom - top, local.top, local.bottom, rows) { x, y ->
+                    maxOf(0.0, 1 - AndroidColor.red(image.getPixel(left + x, top + y)) / (255 * background))
+                }
+                val reference = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMassReference(
+                    right - left, bottom - top, local.left, local.top, local.right, local.bottom, radius, d,
+                    code = 1 / (255 * background), bandDp = 16f, contours = contours)
+                File(output, "$name.txt").writeText("density=$d body=$screen background=$background " +
+                    "window=${System.identityHashCode(popupWindow ?: pageView)} generation=$stage " +
+                    "modal=${anchor.modalPresent} mass=$mass reference=$reference contours=$contours\n")
+                if (!reference.accepts(mass)) failures += "$name: native visible mass=$mass reference=$reference"
+            } finally { image.recycle() }
+        }
+        try {
+            settle(); measure("closed", false)
+            compose.runOnIdle { open = true }; settle()
+            assertNotNull(popupWindow)
+            measure("popup", true)
+            compose.runOnIdle { open = false }; settle()
+            assertNull(popupWindow)
+            assertFalse(anchor.modalPresent)
+            measure("returned", false)
+            assertTrue(failures.joinToString("\n"), failures.isEmpty())
+        } finally { compose.mainClock.autoAdvance = true }
+    }
     private var open by mutableStateOf(false)
     private lateinit var anchor: GlassAnchor
     private var popupView: View? = null
     private var popupWindow: Window? = null
+    private var popupDensity: Float? = null
+    private var popupPlane: ShadowPlane? = null
     private var marker: FrameMarker? = null
     private lateinit var pageView: View
     private var pageMarker: FrameMarker? = null
@@ -392,13 +457,13 @@ class PopupShadowContinuityTest {
                 page.rootView.overlay.add(next)
                 onDispose { page.rootView.overlay.remove(next); pageMarker = null }
             }
-            CompositionLocalProvider( LocalReducedMotion provides false) {
+            CompositionLocalProvider(LocalReducedMotion provides false) {
                 val source = rememberFrostedBackdrop(Unit, dark = false)
                 val modal = rememberFrostedBackdrop(Unit, dark = false)
                 val group = rememberShadowPlane()
                 CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalModalBackdrop provides modal,
                     LocalPageShadows provides group) {
-                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal).pageShadowHost(group)) {
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal).shadowPlaneHost(group, 1f, 1f)) {
                         Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(androidx.compose.ui.graphics.Color.White) }
                         if (nested) {
                             GlassMorphPopup(true, rememberGlassAnchor(), {}, GlassPlacement.Center, fitContent = false) {
@@ -455,7 +520,7 @@ class PopupShadowContinuityTest {
         // The spread and 8dp vertical shadow shift are specified by the renderer.
         // Check the FULL padded outlines at every sampled strain/depth, not just
         // the gap or the undeformed 64dp body. A separate plane prevents merging.
-        val pad = (8f + .6f * 48f) * compose.density.density + 2f
+        val pad = (8f + 48f) * compose.density.density + 2f
         val shift = Offset(0f, -referenceShift)
         val bodies = homeBodies().map { it.boundingRect.inflate(pad) }
         val controls = bodies.map { it.translate(shift) }
@@ -490,14 +555,18 @@ class PopupShadowContinuityTest {
     @Composable private fun Menu() {
         GlassMenu(open, anchor, { open = false }) {
             val view = LocalView.current
+            val density = androidx.compose.ui.platform.LocalDensity.current.density
+            val plane = LocalShadowPlane.current
             val window = (view.parent as DialogWindowProvider).window
             DisposableEffect(window) {
                 val next = FrameMarker()
-                popupView = view; popupWindow = window; marker = next
+                popupView = view; popupWindow = window; popupDensity = density; popupPlane = plane; marker = next
                 window.decorView.overlay.add(next)
                 onDispose {
                     window.decorView.overlay.remove(next)
-                    if (popupWindow === window) { popupView = null; popupWindow = null; marker = null }
+                    if (popupWindow === window) {
+                        popupView = null; popupWindow = null; popupDensity = null; popupPlane = null; marker = null
+                    }
                 }
             }
             ActionMenuItem("Scan music", icon = AppIcon.TabFolders, onClick = {})
@@ -533,33 +602,57 @@ class PopupShadowContinuityTest {
         } catch (failure: Throwable) { screenshot?.recycle(); throw failure }
     }
 
-    private fun calibrateDefaultField() {
-        fun field(x: Float, y: Float): Float {
-            val dx = (abs(x - 80f) - 52f).coerceAtLeast(0f)
-            val dy = abs(y - 36f)
-            return shadowPolynomialReference(kotlin.math.sqrt(dx*dx + dy*dy) - 28f)
+    private class SweptShadowErrors(private val bounds: Rect) {
+        private val sums = FloatArray(4)
+        private val counts = IntArray(4)
+        var maximum = 0f
+            private set
+        val count get() = counts.sum()
+        val mean get() = sums.sum() / count
+        val sideMeans get() = counts.indices.filter { counts[it] != 0 }.map { sums[it] / counts[it] }
+        val accepted get() = maximum < .055f && mean < .015f && sideMeans.all { it < .015f }
+
+        fun add(point: Offset, expected: Float, actual: Float) {
+            if (expected < .015f && abs(actual) < .015f) return
+            val delta = point - bounds.center
+            // A localized trail can disappear in the average around the whole contour.
+            val side = if (abs(delta.x) / bounds.width > abs(delta.y) / bounds.height) {
+                if (delta.x < 0f) 0 else 1
+            } else if (delta.y < 0f) 2 else 3
+            val error = abs(actual - expected)
+            maximum = maxOf(maximum, error)
+            sums[side] += error
+            counts[side]++
         }
+    }
+
+    private fun calibrateDefaultField() {
         val strip = (4..12).flatMap { x -> (-2..2).map { y -> Offset(160f + x, 28f + y) } }
         val exterior = (-24..184 step 3).flatMap { x -> (-24..80 step 3).map { y -> Offset(x.toFloat(), y.toFloat()) } }
-            .filter { p ->
-                val dx = (abs(p.x - 80f) - 52f).coerceAtLeast(0f)
-                val dy = abs(p.y - 28f)
-                dx*dx + dy*dy > 30f*30f
+        for ((sx, sy) in listOf(1f to 1f, 1.07f to .93f, .96f to 1.04f)) {
+            val bounds = Rect(80f - 80f * sx, 28f - 28f * sy, 80f + 80f * sx, 28f + 28f * sy)
+            val contour = ShadowMassContour(bounds.left, bounds.top, bounds.right, bounds.bottom, 28f * sx, 28f * sy)
+            fun distance(point: Offset, shift: Float) = contour.distance(point.x.toDouble(), point.y.toDouble(), shift)
+            fun field(point: Offset) = shadowPolynomialReference(distance(point, 8f).toFloat())
+            fun translated(point: Offset) = field(point - Offset(24f, 0f))
+            val controls = mapOf<String, (Offset) -> Float>(
+                "unchanged" to ::field,
+                "translated" to ::translated,
+                "clipped" to { if (it.x > 164f || it.y > 60f || it.x < -4f || it.y < -4f) 0f else field(it) },
+                "trailing" to { maxOf(field(it), translated(it)) },
+            )
+            for ((name, control) in controls) {
+                val stripErrors = strip.map { control(it) - field(it) }
+                val swept = SweptShadowErrors(bounds)
+                for (point in exterior) if (distance(point, 0f) > 2.0) {
+                    swept.add(point, field(point), control(point))
+                }
+                val unchanged = name == "unchanged"
+                assertEquals("$name strip at $sx,$sy", unchanged,
+                    stripErrors.maxOf { abs(it) } < .035f && abs(stripErrors.sum()) / stripErrors.size < .015f)
+                assertEquals("$name exterior at $sx,$sy: mean=${swept.mean} sides=${swept.sideMeans} max=${swept.maximum}",
+                    unchanged, swept.accepted)
             }
-        fun accepted(points: List<Offset>, maximum: Float, exterior: Boolean, wrong: (Offset) -> Float): Boolean {
-            val errors = points.map { p -> wrong(p) - field(p.x, p.y) }
-            return errors.maxOf { abs(it) } < maximum &&
-                (if (exterior) errors.sumOf { abs(it).toDouble() }.toFloat() else abs(errors.sum())) / errors.size < .015f
-        }
-        for ((points, maximum, outside) in listOf(Triple(strip, .035f, false), Triple(exterior, .055f, true))) {
-            assertTrue("The fixed-default polynomial accepts its unchanged field", accepted(points, maximum, outside) { field(it.x, it.y) })
-            assertFalse("The original field caps reject a translated field", accepted(points, maximum, outside) { field(it.x - 24f, it.y) })
-            assertFalse("The original field caps reject clipped reach", accepted(points, maximum, outside) {
-                if (it.x > 164f || it.y > 60f || it.x < -4f || it.y < -4f) 0f else field(it.x, it.y)
-            })
-            assertFalse("The original field caps reject a trailing silhouette", accepted(points, maximum, outside) {
-                maxOf(field(it.x, it.y), field(it.x - 24f, it.y))
-            })
         }
     }
 
@@ -571,11 +664,25 @@ class PopupShadowContinuityTest {
         val origin = IntArray(2)
         if (popup) compose.runOnIdle { requireNotNull(popupView).getLocationOnScreen(origin) }
         val screen = bounds.translate(Offset(origin[0].toFloat(), origin[1].toFloat()))
-        val shape = anchor.contact.body.value
-        val sx = shape.scaleX(anchor.contact.vertical)
-        val sy = shape.scaleY(anchor.contact.vertical)
         val d = compose.density.density
-        val right = screen.center.x + screen.width * sx / 2f
+        val (caster, inheritsScale) = compose.runOnUiThread {
+            val native = popupPlane.takeIf { popup }
+            val node = requireNotNull(anchor.surfaceNode as? SurfaceNode ?: native?.node(anchor))
+            val plane = native?.takeIf(node::owns) ?: requireNotNull(node.sourcePlane)
+            val contour = node.frameOn(plane).bodies.single()
+            val position = requireNotNull(plane.layout).localToScreen(Offset.Zero)
+            contour.translate(position) to (plane === native && node.fieldInheritsBodyScale)
+        }
+        val drawn = caster.boundingRect
+        val sx = if (inheritsScale) drawn.width / screen.width else 1f
+        val sy = if (inheritsScale) drawn.height / screen.height else 1f
+        val corner = caster.topLeftCornerRadius
+        val radiusX = corner.x / sx
+        val radiusY = if (inheritsScale) radiusX else corner.y
+        val contour = ShadowMassContour(drawn.left, drawn.top, drawn.right, drawn.bottom, radiusX, radiusY)
+        fun distance(point: Offset, shifted: Boolean) =
+            contour.distance(point.x.toDouble(), point.y.toDouble(), if (shifted) 8f * d else 0f, sx, sy)
+        val right = drawn.right
         // This strip and its unshadowed reference are over the same flat scene:
         // white beside the utility, or the flat content inside the enclosing panel.
         // The clock stays frozen, including the last frame before window disposal.
@@ -584,25 +691,19 @@ class PopupShadowContinuityTest {
         val on = screenshot()
         exports.verify(on, name, { if (sweptBounds == Rect.Zero) screen else sweptBounds }) {
             ShadowFrameProbe.assertSpreadEdge(on.asImageBitmap(),
-                Rect(right + 20f*d*sx, screen.center.y - 2*d, right + 22f*d*sx, screen.center.y + 2*d),
-                Rect(right + 22f*d*sx, screen.center.y - 2*d, right + 24f*d*sx, screen.center.y + 2*d),
+                Rect(right + 20f*d*sx, drawn.center.y - 2*d, right + 22f*d*sx, drawn.center.y + 2*d),
+                Rect(right + 22f*d*sx, drawn.center.y - 2*d, right + 24f*d*sx, drawn.center.y + 2*d),
                 .015f, "popup $name")
             var maximumError = 0f
             var expectedTotal = 0f
             var actualTotal = 0f
             var count = 0
             val p = anchor.contact.expansion.value.coerceIn(0f, 1f)
-            val radius = (anchor.bounds.height / 2 * (1f - p) + 28f * d * p).coerceAtMost(minOf(bounds.width, bounds.height) / 2)
             for (offset in 4..12) for (dy in -2..2) {
                 val x = (right + offset * d * sx).roundToInt()
-                val y = (screen.center.y + dy * d * sy).roundToInt()
+                val y = (drawn.center.y + dy * d * sy).roundToInt()
                 assertTrue("Entire padded sample must be on screen", x in 0 until on.width && y in 0 until on.height)
-                val localX = (x + .5f - screen.center.x) / sx + screen.width / 2
-                val localY = (y + .5f - screen.center.y) / sy + screen.height / 2
-                val cx = shadowAxisCenter(localX, bounds.width, radius, 0f)
-                val cy = shadowAxisCenter(localY, bounds.height, radius, 8f*d)
-                val distance = kotlin.math.sqrt((localX-cx)*(localX-cx) + (localY-cy)*(localY-cy)) - radius
-                val expected = shadowPolynomialReference(distance / d)
+                val expected = shadowPolynomialReference(distance(Offset(x + .5f, y + .5f), shifted = true).toFloat() / d)
                 val referenceX = (right + 36f*d*sx).roundToInt()
                 assertTrue("The unshadowed reference must remain on screen", referenceX in 0 until on.width)
                 val background = AndroidColor.red(on.getPixel(referenceX, y)).toFloat()
@@ -612,53 +713,38 @@ class PopupShadowContinuityTest {
             }
             // Also check the entire swept exterior. A right-aligned menu can leave
             // its right edge nearly stationary while old top/left silhouettes trail.
-            val drawn = Rect(screen.center.x - screen.width*sx/2, screen.center.y - screen.height*sy/2,
-                right, screen.center.y + screen.height*sy/2)
             val padded = drawn.inflate(24f*d*maxOf(sx, sy))
             sweptBounds = if (sweptBounds == Rect.Zero) padded else Rect(
                 minOf(sweptBounds.left, padded.left), minOf(sweptBounds.top, padded.top),
                 maxOf(sweptBounds.right, padded.right), maxOf(sweptBounds.bottom, padded.bottom))
             val parentInterior = nodes.maxByOrNull { it.boundsInRoot.width * it.boundsInRoot.height }
                 ?.takeIf { nodes.size > 1 }?.boundsInRoot?.translate(Offset(origin[0].toFloat(), origin[1].toFloat()))?.deflate(32*d)
-            val background = AndroidColor.red(on.getPixel((right + 36f*d*sx).roundToInt(), screen.center.y.roundToInt())).toFloat()
-            var exteriorError = 0f
-            var exteriorMaximum = 0f
-            var exteriorCount = 0
+            val background = AndroidColor.red(on.getPixel((right + 36f*d*sx).roundToInt(), drawn.center.y.roundToInt())).toFloat()
+            val exterior = SweptShadowErrors(drawn)
             for (y in sweptBounds.top.toInt().coerceAtLeast(0) until sweptBounds.bottom.toInt().coerceAtMost(on.height) step 3)
                 for (x in sweptBounds.left.toInt().coerceAtLeast(0) until sweptBounds.right.toInt().coerceAtMost(on.width) step 3) {
                     val point = Offset(x + .5f, y + .5f)
                     if (parentInterior != null && !parentInterior.contains(point)) continue
                     if (neighboringBody != Rect.Zero && neighboringBody.inflate(26*d).contains(point)) continue
-                    val lx = (point.x - screen.center.x)/sx + screen.width/2
-                    val ly = (point.y - screen.center.y)/sy + screen.height/2
-                    fun inside(expansion: Float, shift: Float): Boolean {
-                        val dx = (abs(lx - screen.width/2) - (screen.width/2 - radius)).coerceAtLeast(0f)
-                        val dy = (abs(ly - screen.height/2 - shift) - (screen.height/2 - radius)).coerceAtLeast(0f)
-                        return dx*dx + dy*dy <= (radius + expansion)*(radius + expansion)
-                    }
-                    if (inside(2f/minOf(sx, sy), 0f)) continue // Exclude antialiased material edge.
-                    val dx = (abs(lx-screen.width/2)-(screen.width/2-radius)).coerceAtLeast(0f)
-                    val dy = (abs(ly-screen.height/2-8f*d)-(screen.height/2-radius)).coerceAtLeast(0f)
-                    val distance = kotlin.math.sqrt(dx*dx+dy*dy)-radius
-                    val expected = shadowPolynomialReference(distance / d)
+                    if (distance(point, shifted = false) <= 2f / minOf(sx, sy)) continue // Antialiased material edge.
+                    val expected = shadowPolynomialReference(distance(point, shifted = true).toFloat() / d)
                     val actual = 1f - AndroidColor.red(on.getPixel(x,y))/background.coerceAtLeast(1f)
-                    if (expected < .015f && abs(actual) < .015f) continue
-                    val error = abs(actual - expected)
-                    exteriorError += error; exteriorMaximum = maxOf(exteriorMaximum, error); exteriorCount++
+                    exterior.add(point, expected, actual)
                 }
-            assertTrue("The swept exterior must include a measurable shadow", exteriorCount > 20)
-            File(output, "profiles.txt").appendText("$name sweptCount=$exteriorCount sweptMean=${exteriorError/exteriorCount} sweptMax=$exteriorMaximum\n")
+            assertTrue("The swept exterior must include a measurable shadow", exterior.count > 20)
+            File(output, "profiles.txt").appendText(
+                "$name sweptCount=${exterior.count} sweptMean=${exterior.mean} sweptMax=${exterior.maximum} sides=${exterior.sideMeans}\n")
             // Save the entire synthetic popup region so off-axis trails are reviewable.
             val fullLeft = sweptBounds.left.roundToInt().coerceIn(0, on.width-1)
             val fullTop = sweptBounds.top.roundToInt().coerceIn(0, on.height-1)
             val fullWidth = (sweptBounds.right.roundToInt()-fullLeft).coerceIn(1, on.width-fullLeft)
             val fullHeight = (sweptBounds.bottom.roundToInt()-fullTop).coerceIn(1, on.height-fullTop)
             exports.success(on, "$name-field", fullLeft, fullTop, fullWidth, fullHeight)
-            assertTrue("$name must not leave an old shadow or material silhouette anywhere outside the current outline: max=$exteriorMaximum mean=${exteriorError/exteriorCount}",
-                exteriorMaximum < .055f && exteriorError/exteriorCount < .015f)
+            assertTrue("$name must retain one exterior field: max=${exterior.maximum} mean=${exterior.mean} sides=${exterior.sideMeans}",
+                exterior.accepted)
             // Keep a complete perpendicular shadow profile as well.
             val left = (right + 2*d*sx).roundToInt().coerceIn(0, on.width - 1)
-            val top = (screen.center.y - 8*d*sy).roundToInt().coerceIn(0, on.height - 1)
+            val top = (drawn.center.y - 8*d*sy).roundToInt().coerceIn(0, on.height - 1)
             val width = (38*d*sx).roundToInt().coerceIn(1, on.width - left)
             val height = (16*d*sy).roundToInt().coerceIn(1, on.height - top)
             exports.success(on, name, left, top, width, height)

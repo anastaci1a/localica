@@ -1944,12 +1944,12 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="        Row(Modifier.stripContentOutset(horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),"
-        errorLine2="                                                                                                                        ~~~~">
+        errorLine1="        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),"
+        errorLine2="                                                         ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassActionButton.kt"
-            line="131"
-            column="121"/>
+            line="135"
+            column="58"/>
     </issue>
 
     <issue
@@ -6919,11 +6919,11 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="        Row(Modifier.stripContentOutset(horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),"
+        errorLine1="        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),"
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassActionButton.kt"
-            line="131"
+            line="135"
             column="9"/>
     </issue>
 
@@ -10988,28 +10988,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassShadow.kt"
             line="109"
             column="32"/>
-    </issue>
-
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
-        errorLine1="    clearGlassShadowImpl(strength,spread,radius,null,null,visible)"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassShadow.kt"
-            line="116"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
-        errorLine1="    receiver: () -> GlassShadowReceiver?): Modifier = clearGlassShadowImpl(strength,spread,radius,receiver,exclusion) { true }"
-        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassShadow.kt"
-            line="121"
-            column="55"/>
     </issue>
 
     <issue

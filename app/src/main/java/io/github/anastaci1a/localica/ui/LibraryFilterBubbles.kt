@@ -101,11 +101,11 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
         moving = emptySet()
     }
     val total = widths.values.fold(0.dp) { sum, width -> sum + width } + 8.dp * (items.size - 1).coerceAtLeast(0)
-    val shadowInset = io.github.anastaci1a.localica.ui.spec.GlassLayoutInset
+    val shadowInset = glassShadowInset()
     val drawing = rememberActionStripDrawing()
     Box(modifier.fillMaxWidth().padding(vertical = ListPillVerticalInset).nestedScroll(HorizontalGestureOwner)
         .then(drawing.replay(shadowInset, horizontal = false)).clipToBounds()) {
-    GlassShadowScope(Modifier.fillMaxWidth().stripContentOutset().then(drawing.record()).controlHorizontalScroll(scroll)
+    GlassShadowScope(Modifier.fillMaxWidth().stripContentOutset(shadowInset).then(drawing.record()).controlHorizontalScroll(scroll)
         .padding(vertical = shadowInset).padding(horizontal = horizontalInset).width(total).height(listPillTargetHeight())) {
         items.forEach { item -> key(item) {
             val selection by animateControlStateFloat(if (item in selected) .07f else 0f, item in selected, "Library filter selection", reducedMotion)

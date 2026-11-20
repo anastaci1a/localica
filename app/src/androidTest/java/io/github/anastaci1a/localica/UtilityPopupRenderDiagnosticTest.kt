@@ -269,7 +269,7 @@ class UtilityPopupRenderDiagnosticTest {
                     }) {
                         // Same separation as LocalicaScreen: browse excludes floating
                         // controls, modal records the complete underlying scene/group.
-                        Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal).pageShadowHost(group)) {
+                        Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal).shadowPlaneHost(group, 1f, 1f)) {
                             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(browse)) {
                                 drawRect(when (scene) {
                                     Scene.Light -> androidx.compose.ui.graphics.Color(0xFFF4F4F6)

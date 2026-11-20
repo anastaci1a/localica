@@ -80,7 +80,7 @@ class ActionStripDrawingTest {
                     // representation switch, including their prepared shadow caches.
                     Box(Modifier.align(Alignment.Center).width(216.dp)
                         .then(drawing.replay(inset) { replay }).graphicsLayer { clip = replay }) {
-                        Row(Modifier.fillMaxWidth().stripContentOutset(horizontal = true)
+                        Row(Modifier.fillMaxWidth().stripContentOutset(inset, horizontal = true)
                             .then(drawing.record { replay })
                             .controlHorizontalScroll(state).padding(inset),
                             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

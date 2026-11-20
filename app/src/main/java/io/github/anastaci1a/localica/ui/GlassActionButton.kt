@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
+import io.github.anastaci1a.localica.ui.spec.GlassLayoutInset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
@@ -16,6 +17,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.LayoutDirection
@@ -65,13 +67,16 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
     val scope = rememberCoroutineScope()
     val reduced = LocalReducedMotion.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val shadowInset = io.github.anastaci1a.localica.ui.spec.GlassLayoutInset
+    val shadowInset = glassShadowInset()
+    val extraViewportWidth = with(LocalDensity.current) {
+        2 * (shadowInset.roundToPx() - GlassLayoutInset.roundToPx())
+    }
     val drawing = rememberActionStripDrawing()
     val trace = LocalGlassContactTrace.current
     val traceName = "action-strip-${System.identityHashCode(scroll)}"
     fun move(forward: Boolean) {
         scope.launch {
-            val target = (scroll.value + (if (forward) 1 else -1) * scroll.viewportSize)
+            val target = (scroll.value + (if (forward) 1 else -1) * (scroll.viewportSize - extraViewportWidth))
                 .coerceIn(0, scroll.maxValue)
             if (reduced) scroll.scrollTo(target) else scroll.animateScrollTo(target)
         }
@@ -83,7 +88,7 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
         // drawing outside that clip so shadows and Presence keep their own owners.
         Box(drawing.replay(shadowInset).clipToBounds()) {
         Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner)
-            .stripContentOutset(horizontal = true)
+            .stripContentOutset(shadowInset, horizontal = true)
             .then(drawing.record())
             .then(if (trace == null) Modifier else Modifier.onGloballyPositioned { coordinates ->
                 runCatching { trace(traceName, "viewport size=${coordinates.size} bounds=${coordinates.boundsInRoot()}",
@@ -126,9 +131,8 @@ internal fun glassActionNavigationConstraints(constraints: Constraints, stripHei
 /** Inert counterpart of the scrolling strip, including its conditional footer. */
 @Composable
 internal fun GlassActionRowMeasurement(content: @Composable RowScope.() -> Unit) {
-    val inset = io.github.anastaci1a.localica.ui.spec.GlassLayoutInset
     Layout(content = {
-        Row(Modifier.stripContentOutset(horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically, content = content)
         // The live footer uses standard IconButtons: a 40dp container with the
         // same Material minimum-interactive constraint, without input or effects.
