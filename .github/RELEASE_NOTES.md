@@ -37,6 +37,7 @@ This release replaces the shared glass optics in one place, so every glass surfa
 - [#1018](https://github.com/anastaci1a/localica/issues/1018) and [#1082](https://github.com/anastaci1a/localica/issues/1082): Device-test dependency preparation and reuse reduce repeated downloads.
 
 - [#748](https://github.com/anastaci1a/localica/issues/748): Shared popup return and readable menu text and icons over dark pages.
+- [#847](https://github.com/anastaci1a/localica/issues/847): Sort and View popup refraction fades during the return to its trigger.
 - [#1075](https://github.com/anastaci1a/localica/issues/1075): Glass follows finger translation during a hold and settles on release.
 - [#1076](https://github.com/anastaci1a/localica/issues/1076): Lyrics-header shadow follows press expansion; the small surface-position difference remains unproven.
 
@@ -44,7 +45,9 @@ This release replaces the shared glass optics in one place, so every glass surfa
 
 ## Held changes
 
-- [#1081](https://github.com/anastaci1a/localica/issues/1081) — Live lens geometry is deferred.
+- [#1080](https://github.com/anastaci1a/localica/issues/1080) and [#1075](https://github.com/anastaci1a/localica/issues/1075): The remaining shared press geometry corrections are held.
+- [#1078](https://github.com/anastaci1a/localica/issues/1078) and [#1084](https://github.com/anastaci1a/localica/issues/1084): Shadow corrections, including popup spread, are held with the press geometry changes.
+- [#1081](https://github.com/anastaci1a/localica/issues/1081): Live lens geometry is deferred.
 
 ## Known issues and follow-ups
 
