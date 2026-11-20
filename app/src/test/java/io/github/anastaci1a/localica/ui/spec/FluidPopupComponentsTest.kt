@@ -44,8 +44,8 @@ class FluidPopupComponentsTest {
     @Test fun growingQueueKeepsAllThreeBatchesAndTheLiveMainSpring() {
         val eject = FluidPopupSpringSettings(0.72, 0.42)
         val absorb = FluidPopupSpringSettings(0.84, 0.65)
-        val lens = FluidLensingSpec.requests(true, true, 25.0, 90.0, 0.5, 120.0, eject, absorb)
-        val queue = fluidThroughQueue(true, eject, FluidContentDefaults) { lens }
+        val lens = FluidLensingSpec.requests(true, true, 25.0, 90.0, eject, absorb)
+        val queue = fluidThroughQueue(true, eject, FluidContent) { lens }
         assertEquals(
             listOf(
                 Source, AddSdfElements, CollapsedSource, ExpandedOverrounded, Kick, SmoothOn, LensOn, ChangeLensDimension,
@@ -72,10 +72,10 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun nonGrowingQueueKeepsDelayedTiesAndCanOmitTheLensBatch() {
-        val eject = FluidMainEjectDefaults
+        val eject = FluidMainEject
         val absorb = FluidPopupSpringSettings(0.8, 0.7)
-        val lens = FluidLensingSpec.requests(true, false, 25.0, 90.0, 0.5, 120.0, eject, absorb)
-        val queue = fluidThroughQueue(false, eject, FluidContentDefaults) { lens }
+        val lens = FluidLensingSpec.requests(true, false, 25.0, 90.0, eject, absorb)
+        val queue = fluidThroughQueue(false, eject, FluidContent) { lens }
         assertEquals(
             listOf(
                 FullyExpanded, AddSdfElements, Source, KickEjectee, KickSource, SmoothOn, LensOn, ChangeLensDimension, BlurOut,
@@ -86,7 +86,7 @@ class FluidPopupComponentsTest {
         assertEquals(List(9) { 0.0 } + List(4) { 0.1 }, queue.dropLast(1).map { it.timing.storedDelay })
         assertEquals(0x3fc3333333333334L, queue.last().timing.storedDelay.toRawBits())
         assertTrue(queue[7].timing.spring === absorb)
-        val disabled = FluidContentDefaults.copy(lensingEnabled = false)
+        val disabled = FluidContent.copy(lensingEnabled = false)
         val nonGrowingNoLens = fluidThroughQueue(false, eject, disabled) { error("Lensing must stay disabled") }
         assertEquals(listOf(FullyExpanded, AddSdfElements, Source, KickEjectee, KickSource, SmoothOn, UnkickEjectee, SmoothOff, UnkickSource), nonGrowingNoLens.map { it.action })
         val growingNoLens = fluidThroughQueue(true, eject, disabled) { error("Lensing must stay disabled") }
@@ -94,9 +94,9 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun queueResetAndStartAdmissionReuseTheOrderedThreshold() {
-        val eject = FluidMainEjectDefaults
-        val lens = FluidLensingSpec.requests(true, true, 25.0, 90.0, 0.5, 120.0, eject, eject)
-        val route = fluidThroughQueue(true, eject, FluidContentDefaults) { lens }
+        val eject = FluidMainEject
+        val lens = FluidLensingSpec.requests(true, true, 25.0, 90.0, eject, eject)
+        val route = fluidThroughQueue(true, eject, FluidContent) { lens }
         val queue = ArrayDeque<FluidTimelineStep>()
         val ran = mutableListOf<FluidTimelineAction>()
         var nextAction = AddSdfElements
@@ -132,7 +132,7 @@ class FluidPopupComponentsTest {
     @Test fun sharedMorphCompletionWaitsForStartDrainAndTheFinalInteractionRelease() {
         val completion = FluidMorphCompletion()
         val events = mutableListOf<String>()
-        val queue = ArrayDeque(fluidThroughQueue(true, FluidMainEjectDefaults, FluidContentDefaults.copy(lensingEnabled = false)) {
+        val queue = ArrayDeque(fluidThroughQueue(true, FluidMainEject, FluidContent.copy(lensingEnabled = false)) {
             error("Lensing disabled")
         })
         completion.acquireInteraction(previousAssertions = 0)
@@ -245,15 +245,15 @@ class FluidPopupComponentsTest {
         assertEquals(-80.0, FluidKickSpec.translationY(-40.0, 2.0), 0.0)
         val body = FluidScalarSpringBody(40.0, 0.0)
         val start = FluidScalarSpringEntry(body, FluidKickSpec.unkickTarget, body)
-        val returned = FluidMainEjectDefaults.advanceUnsmoothed(start, 0.35)
+        val returned = FluidMainEject.advanceUnsmoothed(start, 0.35)
         assertTrue(returned.body.value < 0.0)
     }
 
     @Test fun convertsSuppliedSpringSettingsWithUnitMass() {
-        assertEquals(0.75.toRawBits(), FluidMainEjectDefaults.dampingRatio.toRawBits())
-        assertEquals(0.5.toRawBits(), FluidMainEjectDefaults.response.toRawBits())
+        assertEquals(0.75.toRawBits(), FluidMainEject.dampingRatio.toRawBits())
+        assertEquals(0.5.toRawBits(), FluidMainEject.response.toRawBits())
         val cases = listOf(
-            FluidMainEjectDefaults to doubleArrayOf(1.0, 157.91367041742973, 18.84955592153876),
+            FluidMainEject to doubleArrayOf(1.0, 157.91367041742973, 18.84955592153876),
             FluidPopupSpringSettings(0.8, 0.7) to doubleArrayOf(1.0, 80.56819919256618, 14.361566416410483),
             FluidPopupSpringSettings(1.0, 0.3) to doubleArrayOf(1.0, 438.6490844928604, 41.88790204786391),
             FluidPopupSpringSettings(0.4, 0.22847946571562133) to doubleArrayOf(1.0, 756.2499999999998, 22.0),
@@ -267,7 +267,7 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun throughBlurUsesTheOppositeNamedSpringSlots() {
-        val defaults = FluidContentDefaults
+        val defaults = FluidContent
         assertEquals(1.2.toRawBits(), defaults.minScale.toRawBits())
         assertEquals(1.65.toRawBits(), defaults.maxScale.toRawBits())
         assertEquals(0.3.toRawBits(), defaults.blurInSpring.response.toRawBits())
@@ -341,9 +341,9 @@ class FluidPopupComponentsTest {
     @Test fun lensingRequestsSwapCapturedDimensionsAndReuseTheGrowthDelay() {
         val eject = FluidPopupSpringSettings(0.9, 0.55)
         val absorb = FluidPopupSpringSettings(0.8, 0.42)
-        val growing = FluidLensingSpec.requests(true, true, 25.0, 90.0, 0.5, 120.0, eject, absorb)
-        val shrinking = FluidLensingSpec.requests(true, false, 25.0, 90.0, 0.6, 120.0, eject, absorb)
-        assertEquals(listOf(120.0, 90.0, null), growing.map { it.dimension })
+        val growing = FluidLensingSpec.requests(true, true, 25.0, 90.0, eject, absorb)
+        val shrinking = FluidLensingSpec.requests(true, false, 25.0, 90.0, eject, absorb)
+        assertEquals(listOf(25.0, 90.0, null), growing.map { it.dimension })
         assertEquals(listOf(90.0, 25.0, null), shrinking.map { it.dimension })
         assertEquals(listOf(1.0, 1.0, 0.0), growing.map { it.gain })
         assertEquals(listOf(0.0, 0.0, 0.12), growing.map { it.timing.storedDelay })
@@ -360,9 +360,9 @@ class FluidPopupComponentsTest {
         assertEquals(listOf(1.0, 0.9, 1.0), growing.map { it.timing.spring.dampingRatio })
         assertTrue(growing[1].timing.spring === eject)
         assertTrue(shrinking[1].timing.spring === absorb)
-        val content = requireNotNull(FluidContentDefaults.blurSequence(growing = true))
+        val content = requireNotNull(FluidContent.blurSequence(growing = true))
         assertEquals(content.blurIn.dueThreshold(0.7, false, 1.0).toRawBits(), growing[2].timing.dueThreshold(0.7, false, 1.0).toRawBits())
-        assertTrue(FluidLensingSpec.requests(false, true, 25.0, 90.0, 0.5, 120.0, eject, absorb).isEmpty())
+        assertTrue(FluidLensingSpec.requests(false, true, 25.0, 90.0, eject, absorb).isEmpty())
         assertEquals(15.0, FluidLensingSpec.shortDimension(1.5, 40.0, 10.0), 0.0)
         assertEquals(60.0, FluidLensingSpec.shortDimension(1.5, 40.0, Double.NaN), 0.0)
         assertEquals((-0.0).toRawBits(), FluidLensingSpec.shortDimension(1.0, -0.0, 0.0).toRawBits())
@@ -426,8 +426,8 @@ class FluidPopupComponentsTest {
 
     @Test fun freshCentreSpringsStartAtZeroAndPreserveRunningVelocityOnHandover() {
         val controls = FluidPropertySpringControls(0.0, null, interactive = false, additive = false)
-        val content = FluidContentDefaults.copy(lensingEnabled = false)
-        val queue = fluidThroughQueue(true, FluidMainEjectDefaults, content) { error("Lensing disabled") }
+        val content = FluidContent.copy(lensingEnabled = false)
+        val queue = fluidThroughQueue(true, FluidMainEject, content) { error("Lensing disabled") }
         val carried = FluidScalarSpringBody(31.5, -7.25)
         val retained = FluidScalarSpringEntry(carried, 20.0, FluidScalarSpringBody(20.0, 0.0))
         for (action in listOf(CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick, Unkick)) {
@@ -606,7 +606,7 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun actionThresholdAppliesDragAfterSpeedAndAmplification() {
-        val step = FluidPopupStep(0.1, FluidMainEjectDefaults)
+        val step = FluidPopupStep(0.1, FluidMainEject)
         assertEquals(0.21.toRawBits(), step.dueThreshold(0.7, true, 0.3).toRawBits())
         assertEquals(0.0.toRawBits(), step.dueThreshold(0.0, true, 0.3).toRawBits())
     }
@@ -624,8 +624,8 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun geometryStepUsesTheSharedScaledSpringAndOnlyFallsBackForAbsentPositionSpring() {
-        val content = FluidContentDefaults.copy(lensingEnabled = false)
-        val route = fluidThroughQueue(true, FluidMainEjectDefaults, content) { error("Lensing disabled") }
+        val content = FluidContent.copy(lensingEnabled = false)
+        val route = fluidThroughQueue(true, FluidMainEject, content) { error("Lensing disabled") }
         val expected = listOf(CollapsedSource to 0.21, ExpandedOverrounded to 0.35, FullyExpanded to 0.35)
         for ((action, response) in expected) {
             val binding = route.first { it.action == action }.geometrySpringBinding(0.7)
@@ -1376,10 +1376,10 @@ class FluidPopupComponentsTest {
             assertTrue(entry.advanceUnsmoothed(stiffness, damping, 0.0) === entry)
             val publication = FluidScalarPublication()
             publication.queueTick(next, 0.0, false, Double::equals)
-            FluidSharedBlurSpec.publishRadius(publication) { radius, publishedVelocity, _ ->
+            publication.consume { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, publishedVelocity, _ ->
                 assertEquals(0.0.toRawBits(), radius.toRawBits())
                 assertEquals(next.velocity.toRawBits(), publishedVelocity.toRawBits())
-            }
+            } }
             assertTrue(next.value < 0.0)
         }
     }
@@ -1458,11 +1458,11 @@ class FluidPopupComponentsTest {
             val body = FluidScalarSpringBody(input, -2.25)
             val publication = FluidScalarPublication()
             publication.queueTick(body, 4.0, false) { _, _ -> error("No previous value") }
-            FluidSharedBlurSpec.publishRadius(publication) { radius, velocity, additive ->
+            publication.consume { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, velocity, additive ->
                 assertEquals(expected.toRawBits(), radius.toRawBits())
                 assertEquals((-2.25).toRawBits(), velocity.toRawBits())
                 assertFalse(additive)
-            }
+            } }
             assertEquals(input.toRawBits(), body.value.toRawBits())
         }
         val destinationWrites = mutableListOf<Double>()

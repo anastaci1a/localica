@@ -17,7 +17,7 @@ class FluidPopupClockTest {
         fun frame(nanos: Long) { now = nanos; channel.trySend(nanos) }
         fun close() = scope.cancel()
     }
-    private val queue = fluidThroughQueue(true, FluidMainEjectDefaults, FluidContentDefaults.copy(lensingEnabled = false)) { emptyList() }
+    private val queue = fluidThroughQueue(true, FluidMainEject, FluidContent.copy(lensingEnabled = false)) { emptyList() }
     private fun timeline(rig: Rig, ran: MutableList<Pair<FluidTimelineAction, Double>>) =
         FluidTimelineMotion(rig.clock) { step, speed -> ran += step.action to speed }.also { it.replace(queue) }
 
@@ -48,6 +48,36 @@ class FluidPopupClockTest {
         rig.close()
     }
 
+    @Test fun aHoldStopsTheTimerAndItsReleaseDrainsFromANewOrigin() {
+        val rig = Rig(); val ran = mutableListOf<Pair<FluidTimelineAction, Double>>(); val motion = timeline(rig, ran)
+        motion.start(0.7, false, false); val prefix = ran.size
+        motion.hold(); assertTrue(motion.holding); assertEquals(0, rig.clock.activeCount)
+        rig.frame(1_000_000_000L); assertEquals(prefix, ran.size)
+        rig.now = 2_000_000_000L; motion.release(); assertFalse(motion.holding); assertEquals(1, rig.clock.activeCount)
+        assertEquals(prefix, ran.size)
+        rig.frame(2_069_000_000L); assertEquals("thresholds count from the release", prefix, ran.size)
+        rig.frame(2_071_000_000L); assertTrue(ran.size > prefix)
+        rig.close()
+    }
+
+    @Test fun replacingTheQueueResetsARunningOrHeldTimeline() {
+        val rig = Rig(); val ran = mutableListOf<Pair<FluidTimelineAction, Double>>(); val motion = timeline(rig, ran)
+        motion.start(0.7, false, true); motion.replace(queue); assertFalse(motion.holding); assertEquals(0, rig.clock.activeCount)
+        motion.start(0.7, false, false); val prefix = ran.size - 1
+        assertEquals(queue.takeWhile { it.timing.storedDelay == 0.0 }.map { it.action }, ran.drop(1).map { it.first })
+        motion.replace(queue); assertEquals(0, rig.clock.activeCount)
+        motion.start(0.7, false, false); assertEquals("a replaced timeline admits a new start", 1 + 2 * prefix, ran.size)
+        rig.close()
+    }
+
+    @Test fun aPropertyRequestWithAnimationsOffLandsOnItsTarget() {
+        val rig = Rig(MotionAccess.Reduced); val written = mutableListOf<FluidScalarSpringBody>(); var completed = 0
+        val motion = FluidPropertyMotion(rig.clock, { a, b -> a == b }, { written += it }) { completed++ }
+        motion.animate(0.0, 4.0, FluidPropertySpringControls(0.0, null, false, false), FluidPopupSpringSettings(1.0, 0.3), 1e-6)
+        assertEquals(listOf(FluidScalarSpringBody(4.0, 0.0)), written); assertEquals(1, completed); assertEquals(0, rig.clock.activeCount)
+        rig.close()
+    }
+
     @Test fun reducedAccessRunsTheWholeQueueAtEffectiveSpeedZero() {
         val rig = Rig(MotionAccess.Reduced); val ran = mutableListOf<Pair<FluidTimelineAction, Double>>(); val motion = timeline(rig, ran)
         motion.start(0.7, true, false)
@@ -61,8 +91,8 @@ class FluidPopupClockTest {
         val rig = Rig(durationScale = 2f); val written = mutableListOf<FluidScalarSpringBody>(); var completed = 0
         val spring = FluidPopupSpringSettings(0.8, 0.45); val controls = FluidPropertySpringControls(0.0, null, false, false)
         val epsilon = 0.001 * 0.001
-        val motion = FluidPropertyMotion(rig.clock, epsilon, { a, b -> a == b }, { written += it }) { completed++ }
-        rig.now = 1_000_000_000L; motion.animate(0.0, 4.0, controls, spring); assertEquals(1, rig.clock.activeCount)
+        val motion = FluidPropertyMotion(rig.clock, { a, b -> a == b }, { written += it }) { completed++ }
+        rig.now = 1_000_000_000L; motion.animate(0.0, 4.0, controls, spring, epsilon); assertEquals(1, rig.clock.activeCount)
         val interval = (1f / 120).toDouble() * Double.fromBits(0x3ff004189374bc6aL)
         var previous = 1.0 + interval * -0.4; var expected = FluidScalarSpringEntry(FluidScalarSpringBody(0.0, 0.0), 4.0, FluidScalarSpringBody(0.0, 0.0))
         var nanos = 1_000_000_000L
@@ -80,9 +110,9 @@ class FluidPopupClockTest {
     @Test fun aRetargetKeepsTheRetainedBodyAndAddsTheImpulse() {
         val rig = Rig(); val written = mutableListOf<FluidScalarSpringBody>()
         val spring = FluidPopupSpringSettings(1.0, 0.3, retargetImpulse = 0.02); val controls = FluidPropertySpringControls(0.0, null, false, false)
-        val motion = FluidPropertyMotion(rig.clock, 1e-6, { a, b -> a == b }, { written += it })
-        motion.animate(0.0, 1.0, controls, spring); rig.frame(16_000_000L); rig.frame(32_000_000L)
-        val body = written.last(); motion.animate(9.0, 2.0, controls, spring); rig.frame(48_000_000L)
+        val motion = FluidPropertyMotion(rig.clock, { a, b -> a == b }, { written += it })
+        motion.animate(0.0, 1.0, controls, spring, 1e-6); rig.frame(16_000_000L); rig.frame(32_000_000L)
+        val body = written.last(); motion.animate(9.0, 2.0, controls, spring, 1e-6); rig.frame(48_000_000L)
         val retained = FluidScalarSpringBody(body.value, body.velocity + (2.0 - 1.0) * (0.02 * spring.stiffness))
         val advanced = spring.advanceUnsmoothed(FluidScalarSpringEntry(retained, 2.0, FluidScalarSpringBody(1.0, 0.0)), 48_000_000L / 1e9 - 32_000_000L / 1e9)
         assertEquals(advanced.body, written.last())

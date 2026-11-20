@@ -110,21 +110,14 @@ internal data class FluidSpringModifiers(
     val targetSmoothing: Double, val projectionDeceleration: Double,
 )
 
-internal val FluidMainEjectDefaults = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
+/** The constructed root settings: the through main springs and, in [FluidContent], scales, blur springs and speed. */
+internal val FluidMainEject = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
+internal val FluidMainAbsorb = FluidPopupSpringSettings(dampingRatio = 0.8, response = 0.7)
 
 @Immutable data class PopupSecondPhase(val spring: SpringLaw, val band: Float, val edgeShares: (DoubleArray) -> DoubleArray)
 
 internal object FluidPopupRuntimeInputs {
     val outlineCentre: PopupSecondPhase? = null
-    val liveMainEject: FluidPopupSpringSettings? = null
-    val liveMainAbsorb: FluidPopupSpringSettings? = null
-    val liveContent: FluidContentSettings? = null
-    val content get() = liveContent ?: FluidContentDefaults
-    val constructorMainAbsorb = FluidPopupSpringSettings(0.8, 0.7)
-    val lensDimension: ((growing: Boolean, changing: Boolean) -> Double?)? = null
-    val effectiveSpeed: Double? = null
-    val pointScale: Double? = null
-    val radiusEpsilonSquared get() = fluidRadiusEpsilonSquared(pointScale ?: 1.0)
 }
 
 internal data class FluidContentSettings(
@@ -138,7 +131,7 @@ internal data class FluidContentSettings(
             FluidPopupStep(fluidThroughTailDelay(growing), blurOutSpring),
         ) else null
 }
-internal val FluidContentDefaults = FluidContentSettings(
+internal val FluidContent = FluidContentSettings(
     minScale = 1.2, maxScale = 1.65,
     blurInSpring = FluidPopupSpringSettings(dampingRatio = 1.0, response = 0.3),
     blurOutSpring = FluidPopupSpringSettings(dampingRatio = 0.8, response = 0.45),
@@ -475,12 +468,8 @@ internal object FluidSharedBlurSpec {
         current.size == 16 && requested.size == 16 && current.indices.all { current[it] == requested[it] }
     fun radiusOrigin(model: Double?) = model ?: 0.0
 
-    fun publishRadius(publication: FluidScalarPublication, write: (Double, Double, Boolean) -> Unit) {
-        publication.consume { sample ->
-            val radius = if (sample.value <= 0.0) 0.0 else sample.value
-            write(radius, sample.velocity, additive)
-        }
-    }
+    fun publishRadius(sample: FluidScalarSpringBody, write: (Double, Double, Boolean) -> Unit) =
+        write(if (sample.value <= 0.0) 0.0 else sample.value, sample.velocity, additive)
 }
 
 /** Decomposed rotation, scale, translation, shear and perspective, in that order. */
@@ -1028,25 +1017,15 @@ internal object FluidLensingSpec {
         return if (h < w) h else w
     }
 
+    /** D0 and D1 are the short dimensions of the smaller and larger prepared endpoints on every anchor arm. */
     fun requests(
         enabled: Boolean, growing: Boolean, smallerShort: Double, largerShort: Double,
-        largerAnchorY: Double, convertedLargerHeight: Double,
         mainEject: FluidPopupSpringSettings, mainAbsorb: FluidPopupSpringSettings,
-    ): List<Request> {
-        val d0 = if (largerAnchorY == 0.5) convertedLargerHeight else smallerShort
-        return requests(enabled, growing, mainEject, mainAbsorb) { changing ->
-            if (growing == changing) largerShort else d0
-        }
-    }
-
-    fun requests(
-        enabled: Boolean, growing: Boolean, mainEject: FluidPopupSpringSettings, mainAbsorb: FluidPopupSpringSettings,
-        dimension: (changing: Boolean) -> Double?,
     ): List<Request> {
         if (!enabled) return emptyList()
         return listOf(
-            Request(FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.2)), 1.0, dimension(false)),
-            Request(FluidPopupStep(0.0, fluidThroughMainSpring(growing, mainEject, mainAbsorb)), 1.0, dimension(true)),
+            Request(FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.2)), 1.0, if (growing) smallerShort else largerShort),
+            Request(FluidPopupStep(0.0, fluidThroughMainSpring(growing, mainEject, mainAbsorb)), 1.0, if (growing) largerShort else smallerShort),
             Request(FluidPopupStep(fluidThroughTailDelay(growing), FluidPopupSpringSettings(1.0, if (growing) 0.3 else 0.4)), 0.0, null),
         )
     }
