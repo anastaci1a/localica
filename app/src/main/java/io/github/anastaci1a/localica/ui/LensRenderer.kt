@@ -8,6 +8,8 @@ import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
+import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec
+import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 
 /** One material kernel for every glass shape. The geometry adapter supplies distance
  * and inward gradient; every shape gets the same refraction law (GlassRefraction). */
@@ -217,12 +219,22 @@ internal class LensRenderer {
         }
         if (blur != blurAmount) {
             blurAmount = blur
-            blurEffect = if (blur > 0f) android.graphics.RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP) else null
+            blurEffect = if (FluidGaussianSpec.isIdentity(blur.toDouble())) null
+                else android.graphics.RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP)
         }
         val lens = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene")
-        return (blurEffect?.let { android.graphics.RenderEffect.createChainEffect(lens, it) } ?: lens).asComposeRenderEffect().also { cached = it }
+        return lensChain(blurEffect, lens, android.graphics.RenderEffect::createChainEffect).asComposeRenderEffect().also { cached = it }
     }
     companion object {
         private val emptyField by lazy { Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888) }
     }
 }
+
+/** The shared filter order: an elided (identity) blur passes the scene straight to the lens. */
+internal fun <E : Any> lensChain(blur: E?, lens: E, chain: (outer: E, inner: E) -> E): E =
+    FluidLensingSpec.colorChain(emptyList<E>()) { filter, applied ->
+        when (filter) {
+            FluidLensingSpec.Filter.GaussianBlur -> blur?.let(::listOf)
+            FluidLensingSpec.Filter.DisplacementMap -> applied + lens
+        }
+    }.reduce { inner, outer -> chain(outer, inner) }
