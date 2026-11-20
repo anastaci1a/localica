@@ -27,9 +27,9 @@ import org.junit.Test
 class LiquidGlassTest {
     @get:Rule val compose = createComposeRule()
 
-    @androidx.annotation.RequiresApi(33)
     @Test fun fluidMaskKeepsGaussianInsideTheForeground() {
         org.junit.Assume.assumeTrue("The foreground lens requires runtime shaders", Build.VERSION.SDK_INT >= 33)
+        if (Build.VERSION.SDK_INT < 33) return
         var blur by mutableFloatStateOf(0f)
         val extent = IntSize(96, 48)
         val aperture = LensGeometry(Rect(8f, 0f, 88f, 48f), 4f)
