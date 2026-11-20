@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassShadowStrength
+import io.github.anastaci1a.localica.ui.spec.GlassShadowSpread
+
 import io.github.anastaci1a.localica.ui.spec.glassShadowInset
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 import io.github.anastaci1a.localica.ui.components.PopupSharedContent
@@ -144,7 +147,6 @@ internal class GlassAnchor : PopupTakeoverOwner {
     var contextual by mutableStateOf(false)
     var bottomClearance = 0f
     var bottomLimit = Float.NaN
-    var ink by mutableStateOf(Color.Unspecified)
     // A context trigger in a scrolling grid can defer its placement until opening;
     // see contextMenuAnchor. Ordinary anchors follow every global position.
     var contextPlacementTracked by mutableStateOf(true)
@@ -257,9 +259,8 @@ internal class GlassPopupFlight(private val anchor: GlassAnchor? = null, private
 @Composable
 internal fun rememberGlassAnchor(deferContextPlacement: Boolean = false,
     role: TriggerRole<Nothing, Nothing> = TriggerRole.Surface, clearance: androidx.compose.ui.unit.Dp? = null): GlassAnchor {
-    val ink = LocalContentColor.current
     val home = LocalGlassPopupHome.current
-    val anchor = remember { GlassAnchor().also { it.ink = ink; it.contextPlacementTracked = !deferContextPlacement; it.popupHome = home } }
+    val anchor = remember { GlassAnchor().also { it.contextPlacementTracked = !deferContextPlacement; it.popupHome = home } }
     if (role == TriggerRole.Contextual) {
         val contextClearance = with(LocalDensity.current) { (clearance ?: LocalBrowseObscuredInset.current).toPx() }
         SideEffect { anchor.contextual = true; anchor.bottomClearance = contextClearance }
@@ -274,7 +275,6 @@ internal val LocalContextAnchorPlacementObserver = staticCompositionLocalOf<((Re
  * A deferred anchor keeps only its coordinates until prepareContextPlacement, so
  * resting grids do not publish window geometry for every cell on every scroll frame. */
 @Composable internal fun Modifier.contextMenuAnchor(anchor: GlassAnchor, circular: Boolean = false): Modifier {
-    anchor.captureInk()
     val view = LocalView.current
     val source = LocalFrostedBackdrop.current
     val density = LocalDensity.current
@@ -315,12 +315,6 @@ internal val LocalContextAnchorPlacementObserver = staticCompositionLocalOf<((Re
     }
     SideEffect { anchor.contextPlacement = null }
     return quietGlassCaster(anchor).backdropLocation(anchor.samplingLocation).onGloballyPositioned { publish(it) }
-}
-
-@Composable
-internal fun GlassAnchor?.captureInk() {
-    val color = LocalContentColor.current
-    SideEffect { this?.ink = color }
 }
 
 internal fun GlassAnchor.refreshSource() { source?.refresh() }
@@ -542,9 +536,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val receiverField = remember { GlassShadowReceiverField() }
     val shadowReceiver = remember { arrayOfNulls<GlassShadowReceiver>(1) }
     val shadowExclusion = remember { arrayOfNulls<GlassShadowExclusion>(1) }
-    val shadowSpread = LocalGlassAppearance.current.shadowSpread
+    val shadowSpread = GlassShadowSpread
     val wellCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
-    val wellStrength = LocalGlassAppearance.current.shadowStrength
+    val wellStrength = GlassShadowStrength
     val speed = LocalMotionSpeed.current
     val progress = popupFlight.progress
     val continuousOrigin = originPreparation.takeUnless { placement == GlassPlacement.Search }
@@ -728,12 +722,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     if (popupHome?.mounted == false) SideEffect { popupFlight.advance(gen, PopupEvent.Gone) }
     val basis = popupFlight.basis
     if (!popupFlight.present || popupHome?.mounted == false || basis == null) return
-    // Flat None retires the optical descriptor without retiring this window.
-    // Rebind in this composition, before drawing, rather than restarting its
-    // flight or waiting for an effect to publish a replacement source.
-    val flat = flatGlass()
-    fun retired(backdrop: FrostedBackdrop?) = backdrop != null &&
-        (backdrop.hasGlassLayer == flat || backdrop.isRetired)
+    fun retired(backdrop: FrostedBackdrop?) = backdrop?.isRetired == true
     val currentSource = basis.source?.takeUnless(::retired)
         ?: ambientSource?.takeUnless(::retired)
         ?: anchor.source?.takeUnless(::retired)
@@ -745,7 +734,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     // Ordinary popup input must not continuously capture the full-screen
     // backdrop: that readback can starve drag cleanup and fresh fling admission.
     BackdropLease(departingSource)
-    val homeSampleReady = flatGlass() || (departingSource?.recorded == true &&
+    val homeSampleReady = (departingSource?.recorded == true &&
         (android.os.Build.VERSION.SDK_INT >= 33 || departingSource.fallback != null))
     val samplingSource = departingSource.takeIf { homeSampleReady } ?: currentSource
     val homeSource = if (retired(anchor.source)) currentSource else anchor.source
@@ -762,11 +751,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
     }
     SideEffect { if (!returningInline) popupFlight.advance(gen, PopupEvent.HomeReturns) }
-    // One popup appearance owner (#748): an explicit host intent, then the measured trigger's ink, else the caller's.
-    // The scene recording can span pages with different ink, so material metadata never overrides them; the source's
-    // own record only starts the body morph. Reading the measurement recomposes this popup as its trigger moves.
-    val pageInk = anchor.ink.takeIf { anchor.bounds != Rect.Zero && it != Color.Unspecified } ?: LocalContentColor.current
-    val popupLightMix = darkOverride?.let { if (it) 1f else 0f } ?: if (pageInk.luminance() > .5f) 1f else 0f
+    val popupLightMix = samplingSource?.lightMix ?: 0f
     val panelDark = popupLightMix >= .5f
     val parentPanels = LocalChildPanels.current
     val childPanels = remember { mutableIntStateOf(0) }
@@ -941,11 +926,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     return source.towards(target, motion.expansion.boundedProgress(motion.geometryCurve))
                 }
                 val foregroundTargetHeight = if (viewportSized) viewportTargetHeight else targetHeight
-                SideEffect { if (hasViewport) anchor.contact.vertical = kotlin.math.abs(foregroundTargetHeight - startHeight()) > kotlin.math.abs(targetWidth - startWidth()) }
+                val popupVertical = if (hasViewport) kotlin.math.abs(foregroundTargetHeight - startHeight()) > kotlin.math.abs(targetWidth - startWidth()) else anchor.contact.vertical
                 val dark = panelDark
                 // Parent pixels invalidate the recording; they must not cancel its in-flight
                 // thumbnail readback. Restart only when the sampling owner changes.
-                val material = rememberFrostedBackdrop(listOf(samplingSource, visible, LocalGlassAppearance.current), dark = dark, lightMix = popupLightMix)
+                val material = rememberFrostedBackdrop(listOf(samplingSource, visible), dark = dark, lightMix = popupLightMix)
                 SideEffect { material.parent = samplingSource; material.materialOnly = true }
                 // This recording is sampled only by a later nested modal. Its
                 // material already has a shared raster; don't allocate and redraw
@@ -997,7 +982,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         // optical jump when the same body returns to its trigger.
                         val pose = if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight()) else null
                         val shape = if (page || reduced && pose == null) GlassShape() else pose?.shape ?: body.value
-                        val vertical = pose?.vertical ?: anchor.contact.vertical
+                        val vertical = pose?.vertical ?: popupVertical
                         val scaledField=windowNode.fieldScalesWithBody()
                         val fieldSx=if(scaledField) shape.scaleX(vertical) else 1f
                         val fieldSy=if(scaledField) shape.scaleY(vertical) else 1f
@@ -1075,7 +1060,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                         if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight())?.shape ?: body.value
                                         else body.value
                                     },
-                                    presentation = ::bodyMaterial, presentedRadius = ::radius, panelRim = ::phase)
+                                    presentation = ::bodyMaterial, presentedRadius = ::radius)
                             }
                         }
                         SurfaceLayer(Modifier.presentedAlpha { if (page) 1f else motion.foreground.at(phase()) }
@@ -1084,7 +1069,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             .then(if (!motion.shown || !foregroundReady) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
                                 awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
                             } else Modifier)) {
-                            CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides lerp(Color(0xFF202124), Color.White, popupLightMix),
+                            CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides defaultGlassInk(popupLightMix),
                                 LocalModalBackdrop provides completePanel,
                                 LocalChildPanels provides childPanels,
                                 LocalPopupScrollEdges provides !page,
@@ -1099,8 +1084,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         }
                         SurfaceLayer(Modifier.presentedAlpha { motion.face.at(phase()) }
                             .clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
-                            CompositionLocalProvider(LocalContentColor provides (anchor.ink.takeIf { it != Color.Unspecified }
-                                ?: if (dark) Color.White else Color(0xFF202124))) { anchor.face?.invoke() }
+                            CompositionLocalProvider(LocalContentColor provides lerp(Color(0xFF202124), Color.White, popupLightMix)) { anchor.face?.invoke() }
                         }
                     }) { children, panelConstraints ->
                         val measuredViewport = measure(panelConstraints, this, margin, maxHeight)
@@ -1215,7 +1199,6 @@ internal fun PopupActionPill(anchor: GlassAnchor, source: FrostedBackdrop? = Loc
         source = source, shadow = !raised,
         contactAdmission = { raised || !anchor.hidden },
         depthScale = if (raised) RaisedGlassDepthScale else anchor.depthScale) {
-        anchor.captureInk()
         io.github.anastaci1a.localica.ui.layout.ActionButtonFaceSlot(
             if (raised) Modifier.fillMaxSize() else Modifier.align(Alignment.Center), iconOnly = false,
             divider = { GlassPillDivider() },

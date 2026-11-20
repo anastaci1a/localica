@@ -23,8 +23,6 @@ import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.ui.*
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -37,23 +35,21 @@ import org.junit.Test
 class GlassRendererSwitchingTest {
     @get:Rule val compose = createComposeRule()
 
-    private data class Mounted(val owner: Any, val view: View, val generation: GlassRendererGeneration,
+    private data class Mounted(val owner: Any, val view: View,
         val draft: String = "", val material: FrostedBackdrop? = null)
 
-    @Test fun retainedNormalPopupRebindsAfterFlatNone() = retainedScene(GlassRendererMode.Normal)
-    @Test fun popupOpenedInFlatNoneAcquiresCurrentScene() = retainedScene(GlassRendererMode.FlatNone)
+    @Test fun retainedPopupFollowsCurrentScene() = retainedScene()
 
-    private fun retainedScene(initialMode: GlassRendererMode) {
-        val runtime = GlassRendererRuntime(initialMode)
+    private fun retainedScene() {
+
         var blue by mutableStateOf(false)
         lateinit var upstream: FrostedBackdrop
         val mounted = AtomicReference<Mounted?>()
         val childMounted = AtomicReference<Mounted?>()
         compose.setContent {
-            CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {
+
                 EngineTheme(reduced = true) {
-                    CompositionLocalProvider(LocalReducedMotion provides true,
-                        LocalGlassAppearance provides GlassAppearance(whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+                    CompositionLocalProvider(LocalReducedMotion provides true) {
                         val scene = rememberFrostedBackdrop(Unit, dark = false)
                         SideEffect { upstream = scene }
                         Box(Modifier.fillMaxSize()) {
@@ -65,18 +61,18 @@ class GlassRendererSwitchingTest {
                                     val owner = remember { Any() }
                                     var draft by remember { mutableStateOf("Retained draft") }
                                     val view = LocalView.current
-                                    val generation = currentGlassRendererGeneration()
+
                                     val material = requireNotNull(LocalModalBackdrop.current)
-                                    SideEffect { mounted.set(Mounted(owner, view, generation, draft, material)) }
+                                    SideEffect { mounted.set(Mounted(owner, view, draft, material)) }
                                     Column {
                                         Box(Modifier.size(96.dp, 64.dp).testTag("retained-sampling"))
                                         OutlinedTextField(draft, { draft = it }, Modifier.testTag("retained-draft"))
                                         GlassDialog(onDismiss = {}) {
                                             val childOwner = remember { Any() }
                                             val childView = LocalView.current
-                                            val childGeneration = currentGlassRendererGeneration()
+
                                             val childMaterial = requireNotNull(LocalModalBackdrop.current)
-                                            SideEffect { childMounted.set(Mounted(childOwner, childView, childGeneration, material = childMaterial)) }
+                                            SideEffect { childMounted.set(Mounted(childOwner, childView, material = childMaterial)) }
                                             Box(Modifier.size(96.dp, 64.dp).testTag("retained-child-sampling"))
                                         }
                                     }
@@ -85,37 +81,32 @@ class GlassRendererSwitchingTest {
                         }
                     }
                 }
-            }
+
         }
         compose.onNodeWithTag("retained-draft").assertIsDisplayed()
         val first = compose.runOnIdle { requireNotNull(mounted.get()) }
         val firstChild = compose.runOnIdle { requireNotNull(childMounted.get()) }
-        val optical = if (initialMode == GlassRendererMode.FlatNone) GlassRendererMode.Normal else initialMode
-        for (mode in listOf(initialMode, GlassRendererMode.FlatNone, optical, GlassRendererMode.FlatNone, optical)) {
-            compose.runOnIdle { runtime.request(mode) }
+        for (refresh in 0..4) {
+            compose.runOnIdle { upstream.refresh() }
             compose.waitForIdle()
             compose.runOnIdle {
                 val now = requireNotNull(mounted.get())
                 assertSame(first.owner, now.owner)
                 assertSame(first.view, now.view)
                 assertEquals("Retained draft", now.draft)
-                assertEquals(runtime.generation, now.generation)
                 assertSame("The retained popup samples the current descriptor", upstream, now.material?.parent)
-                assertEquals(mode != GlassRendererMode.FlatNone, upstream.hasGlassLayer)
-                if (upstream.hasGlassLayer) assertFalse(upstream.layer.isReleased)
+                assertFalse(upstream.layer.isReleased)
                 val child = requireNotNull(childMounted.get())
                 assertSame(firstChild.owner, child.owner)
                 assertSame(firstChild.view, child.view)
-                assertEquals(runtime.generation, child.generation)
                 assertSame("Nested windows hand off the current finished panel", now.material, child.material?.parent)
             }
-            if (mode == GlassRendererMode.FlatNone) continue
             // Change only the scene's draw state while the popup stays mounted.
             // Native pixels must follow both colors, not a stale published epoch.
             for (target in listOf(false, true)) {
                 compose.runOnIdle { blue = target }
                 compose.waitUntil(20_000) {
-                    upstream.recorded && upstream.recordedGeneration == runtime.generation &&
+                    upstream.recorded &&
                         (Build.VERSION.SDK_INT >= 33 || upstream.fallback != null)
                 }
                 compose.waitUntil(20_000) {
@@ -129,15 +120,16 @@ class GlassRendererSwitchingTest {
         }
     }
 
-    @Test fun switchingRetainsOpenClosingAndReopenedDialogOwnerAndLatestDraft() {
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+    @Test fun redrawRetainsOpenClosingAndReopenedDialogOwnerAndLatestDraft() {
+
         val observed = AtomicReference<Mounted?>()
+        var caption by mutableStateOf("Scene")
         var open by mutableStateOf(true)
         var commits = 0
         var saved = ""
         lateinit var host: GlassDialogs
         compose.setContent {
-            CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {
+
                 LocalicaTheme {
                     val anchor = rememberGlassAnchor()
                     val dialogs = requireNotNull(LocalGlassDialogs.current)
@@ -146,32 +138,31 @@ class GlassRendererSwitchingTest {
                         if (open) GlassDialog(onDismiss = { open = false }) {
                             val owner = remember { Any() }
                             var draft by remember { mutableStateOf("") }
-                            val generation = currentGlassRendererGeneration()
+
                             val view = LocalView.current
-                            SideEffect { observed.set(Mounted(owner, view, generation, draft)) }
+                            SideEffect { observed.set(Mounted(owner, view, draft)) }
                             Column {
+                                Text(caption)
                                 OutlinedTextField(draft, { draft = it }, Modifier.testTag("renderer-draft"), singleLine = true)
                                 TextButton(onClick = { saved = draft; commits++; open = false }) { Text("Save renderer draft") }
                             }
                         }
                     }
                 }
-            }
+
         }
         compose.onNodeWithTag("renderer-draft").performTextInput("First draft")
         val initial = compose.runOnIdle { requireNotNull(observed.get()) }
         val entry = compose.runOnIdle { host.entries.single() }
-        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.Normal)) {
-            compose.runOnIdle { runtime.request(mode) }
+        for (update in 0..4) {
+            compose.runOnIdle { caption = "Scene $update" }
             compose.waitForIdle()
             compose.runOnIdle {
                 val now = requireNotNull(observed.get())
                 assertSame(initial.owner, now.owner)
                 assertSame("A backend change cannot recreate the native dialog view", initial.view, now.view)
                 assertSame(entry, host.entries.single())
-                assertEquals(runtime.generation, now.generation)
                 assertEquals("First draft", now.draft)
-                assertEquals(mode, runtime.requested)
             }
         }
         compose.onNodeWithTag("renderer-draft").performTextReplacement("Latest draft")
@@ -183,14 +174,12 @@ class GlassRendererSwitchingTest {
             compose.runOnIdle {
                 assertFalse(entry.mounted)
                 assertTrue("The caller is gone while the retained window is still returning", entry.anchor.modalPresent)
-                runtime.request(GlassRendererMode.Normal)
             }
             compose.mainClock.advanceTimeByFrame()
             compose.runOnIdle {
                 val closing = requireNotNull(observed.get())
                 assertSame(initial.owner, closing.owner)
                 assertSame(initial.view, closing.view)
-                assertEquals("Closing content observes the shared live holder, not frozen caller mode", runtime.generation, closing.generation)
                 assertEquals("Latest draft", closing.draft)
                 open = true
             }
@@ -214,34 +203,35 @@ class GlassRendererSwitchingTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
-    @Test fun switchingRetainsNestedWindowsAndFinishedMaterialOwners() {
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+    @Test fun redrawRetainsNestedWindowsAndFinishedMaterialOwners() {
+
         val parent = AtomicReference<Mounted?>()
         val child = AtomicReference<Mounted?>()
+        var caption by mutableStateOf("Scene")
         var childOpen by mutableStateOf(false)
         compose.setContent {
-            CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {
+
                 EngineTheme(reduced = true) {
                     CompositionLocalProvider(LocalReducedMotion provides true) {
                         GlassAlertDialog(onDismissRequest = {}, title = { Text("Renderer parent") }, text = {
                             val owner = remember { Any() }
                             val view = LocalView.current
-                            val generation = currentGlassRendererGeneration()
+
                             val material = requireNotNull(LocalModalBackdrop.current)
-                            SideEffect { parent.set(Mounted(owner, view, generation, material = material)) }
+                            SideEffect { parent.set(Mounted(owner, view, material = material)) }
                             TextButton(onClick = { childOpen = true }) { Text("Open renderer child") }
                             if (childOpen) GlassAlertDialog(onDismissRequest = { childOpen = false }, title = { Text("Renderer child") }, text = {
                                 val childOwner = remember { Any() }
                                 val childView = LocalView.current
-                                val childGeneration = currentGlassRendererGeneration()
+
                                 val childMaterial = requireNotNull(LocalModalBackdrop.current)
-                                SideEffect { child.set(Mounted(childOwner, childView, childGeneration, material = childMaterial)) }
-                                Text("Nested material")
+                                SideEffect { child.set(Mounted(childOwner, childView, material = childMaterial)) }
+                                Text("Nested material $caption")
                             }, confirmButton = { TextButton(onClick = { childOpen = false }) { Text("Close renderer child") } })
                         }, confirmButton = {})
                     }
                 }
-            }
+
         }
         compose.onNodeWithText("Open renderer child").performClick()
         val firstParent = compose.runOnIdle { requireNotNull(parent.get()) }
@@ -250,24 +240,18 @@ class GlassRendererSwitchingTest {
         assertNotSame(firstParent.material, firstChild.material)
         var previousParent = firstParent
         var previousChild = firstChild
-        var previousMode = GlassRendererMode.Normal
-        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.Normal)) {
-            compose.runOnIdle { runtime.request(mode) }
+        for (update in 0..4) {
+            compose.runOnIdle { caption = "Scene $update" }
             compose.waitForIdle()
             compose.runOnIdle {
                 for ((initial, current) in listOf(previousParent to requireNotNull(parent.get()), previousChild to requireNotNull(child.get()))) {
                     assertSame(initial.owner, current.owner)
                     assertSame(initial.view, current.view)
-                    if (mode != GlassRendererMode.FlatNone && previousMode != GlassRendererMode.FlatNone)
-                        assertSame(initial.material, current.material)
-                    else assertNotSame(initial.material, current.material)
-                    assertEquals(mode != GlassRendererMode.FlatNone, requireNotNull(current.material).hasGlassLayer)
-                    assertEquals(runtime.generation, current.generation)
+                    assertSame(initial.material, current.material)
                 }
             }
             previousParent = requireNotNull(parent.get())
             previousChild = requireNotNull(child.get())
-            previousMode = mode
         }
         compose.onNodeWithText("Close renderer child").performClick()
         compose.onNodeWithText("Renderer child").assertDoesNotExist()

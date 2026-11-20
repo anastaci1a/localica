@@ -16,7 +16,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -50,8 +49,7 @@ class PlayerRefinementTest {
         val pulses = mutableListOf<ControlHaptic>()
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalContentColor provides Color.Black,
-                LocalControlHaptics provides ControlHaptics { pulses += it },
-                LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+                LocalControlHaptics provides ControlHaptics { pulses += it }) {
                 Box(Modifier.size(CompactControlSize).background(Color.White).testTag("return-drawing")) {
                     AnimatedVisibility(visible, exit = fadeOut(tween(300))) {
                         ReturnToPositionButton(up, "Current song", visible) { clicks++ }

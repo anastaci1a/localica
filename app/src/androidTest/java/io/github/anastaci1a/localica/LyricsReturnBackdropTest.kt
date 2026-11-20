@@ -40,7 +40,6 @@ import io.github.anastaci1a.localica.lyrics.LyricLine
 import io.github.anastaci1a.localica.lyrics.LyricSource
 import io.github.anastaci1a.localica.lyrics.LyricsResult
 import io.github.anastaci1a.localica.lyrics.ParsedLyrics
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -340,8 +339,7 @@ class LyricsReturnBackdropTest {
             MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.Green, onSurfaceVariant = Color.Red),
                 typography = MaterialTheme.typography.copy(headlineSmall = MaterialTheme.typography.headlineSmall.copy(
                     fontFamily = FontFamily.Monospace, fontSize = 24.sp, lineHeight = 28.sp))) {
-                CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(depth = state.depth,
-                    blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f),
+                CompositionLocalProvider(
                     LocalReducedMotion provides true,
                     LocalLyricsBackdropObserver provides { scene, attached ->
                         if (attached) sampledScene = scene

@@ -27,12 +27,11 @@ internal class BrowseBackdropScene(val source: FrostedBackdrop, contentKey: () -
     schedule: (Long, () -> Unit) -> (() -> Unit)) {
     val layers = mutableStateListOf<BrowseBackdropLayer>()
     var compositeDraws: Map<Any, BackdropProducerDraws> = emptyMap()
-    private val glassReadback = if (source.hasGlassLayer) BackdropReadback({ Snapshot.withoutReadObservation {
-        BackdropReadbackScene(listOf(contentKey(), source.size, source.location.placement, source.rendererGeneration),
+    val readback = BackdropReadback({ Snapshot.withoutReadObservation {
+        BackdropReadbackScene(listOf(contentKey(), source.size, source.location.placement),
             layers.associate { layer -> layer to BackdropReadbackProducer(
                 listOf(layer.source.size, layer.source.location.placement), layer.masked) })
-    } }, schedule) else null
-    val readback get() = requireNotNull(glassReadback) { "Flat None has no glass readback barrier" }
+    } }, schedule)
 }
 
 internal class BrowseBackdropLayer(val source: FrostedBackdrop, val masked: Boolean) {
@@ -54,7 +53,7 @@ internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: Frost
         val cancel: () -> Unit = { handler.removeCallbacks(runnable) }
         cancel
     } }
-    if (flatGlass()) return scene
+
     val observer by rememberUpdatedState(LocalBrowseBackdropObserver.current)
     SideEffect {
         source.parent = backing
@@ -70,7 +69,7 @@ internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: Frost
     // Invalidate obsolete geometry immediately. Scroll offsets are deliberately not a
     // structural generation: a moving list must be allowed to finish a coherent draw.
     LaunchedEffect(scene) {
-        snapshotFlow { listOf(currentKey, source.size, source.location.placement, source.rendererGeneration,
+        snapshotFlow { listOf(currentKey, source.size, source.location.placement,
             scene.layers.map { listOf(it.source.size, it.source.location.placement) }) }
             .collectLatest { scene.readback.sceneChanged() }
     }
@@ -81,7 +80,7 @@ internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: Frost
 internal fun rememberBrowseBackdropLayer(scene: BrowseBackdropScene, masked: Boolean = false): BrowseBackdropLayer {
     val source = rememberFrostedBackdrop(Unit, enabled = false, retainRaster = false)
     val layer = remember(source, masked) { BrowseBackdropLayer(source, masked) }
-    if (flatGlass()) return layer
+
     DisposableEffect(scene, layer) {
         scene.layers.add(layer)
         scene.readback.sceneChanged()
@@ -100,7 +99,7 @@ internal fun Modifier.recordBrowseBackdropLayer(scene: BrowseBackdropScene, laye
 
 /** Put inside the existing retained fade, so its completed outer record includes that mask. */
 internal fun Modifier.browseBackdropMaskWitness(scene: BrowseBackdropScene, layer: BrowseBackdropLayer): Modifier =
-    if (!scene.source.hasGlassLayer) this else drawWithContent {
+    drawWithContent {
         val request = scene.source.readbackRequest
         drawContent()
         layer.mask = request
@@ -127,7 +126,7 @@ private class BrowseReadbackNode(private var readback: BackdropReadback) : Modif
 /** Root coordinates include the top gradient even when the list has a separate viewport. */
 @Composable
 internal fun BoxScope.BrowseBackdropRecording(scene: BrowseBackdropScene, backing: FrostedBackdrop?) {
-    if (flatGlass()) return
+
     val source = scene.source
     Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = {
         Path().apply { addRect(Rect(Offset.Zero, size)) }

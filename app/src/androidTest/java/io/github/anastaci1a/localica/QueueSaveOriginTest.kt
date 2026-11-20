@@ -22,7 +22,6 @@ import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.SongRow
 import io.github.anastaci1a.localica.library.Track
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.navigation.MediaKind
 import io.github.anastaci1a.localica.navigation.MediaRef
@@ -193,8 +192,7 @@ class QueueSaveOriginTest {
                 drawer.host = host; drawer.sourceView = sourceView; drawer.backing = backing
                 drawer.maximumEntries = maxOf(drawer.maximumEntries, entries)
             }
-            CompositionLocalProvider(LocalFrostedBackdrop provides backing, LocalReducedMotion provides false,
-                LocalGlassAppearance provides GlassAppearance(shapeDamping = 2f), LocalSessionSelection provides drawer.selection,
+            CompositionLocalProvider(LocalFrostedBackdrop provides backing, LocalReducedMotion provides false, LocalSessionSelection provides drawer.selection,
                 LocalPlaylistSelectionDrawObserver provides if (controller == null) null else
                     ({ value: PlaylistSelectionDrawSource -> drawer.playlistSource = value })) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {

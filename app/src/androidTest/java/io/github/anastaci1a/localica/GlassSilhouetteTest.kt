@@ -29,6 +29,24 @@ class GlassSilhouetteTest {
     @Test fun sampledNormalsRemainContinuousAcrossTexelBoundaries() {
         val frame = GlassSilhouetteFrame(splitOptics(Size(120f, 60f), .3f))
         val field = LensDistanceMap.create(frame.path)
+        fun assertProduced(candidate: LensDistanceMap) {
+            fun half(value: Float) = android.util.Half.toFloat(android.util.Half.toHalf(value))
+            for (y in 0 until candidate.bitmap.height) for (x in 0 until candidate.bitmap.width) {
+                val point = candidate.origin + Offset((x + .5f) / candidate.scale, (y + .5f) / candidate.scale)
+                val expected = field.referenceSample(point, frame.path)
+                val actual = candidate.sample(point)
+                assertEquals("Produced distance texel ($x,$y)", half(expected.distance / field.range) * field.range, actual.distance, .00001f)
+                assertEquals("Produced normal X ($x,$y)", half((expected.inward.x + 1f) * .5f) * 2f - 1f, actual.inward.x, .00001f)
+                assertEquals("Produced normal Y ($x,$y)", half((expected.inward.y + 1f) * .5f) * 2f - 1f, actual.inward.y, .00001f)
+            }
+        }
+        assertProduced(field)
+        val corrupted = android.graphics.Bitmap.createBitmap(field.bitmap.width, field.bitmap.height, android.graphics.Bitmap.Config.RGBA_F16)
+        try {
+            assertThrows("A correctly sized zero map must fail the producer oracle", AssertionError::class.java) {
+                assertProduced(LensDistanceMap(corrupted, field.origin, field.scale, field.range))
+            }
+        } finally { corrupted.recycle() }
         for (y in 2 until field.bitmap.height - 2 step 3) for (x in 2 until field.bitmap.width - 2)
             for (fraction in listOf(0f, .5f)) {
             val boundary = field.origin + Offset((x + fraction) / field.scale, (y + .3f) / field.scale)

@@ -35,7 +35,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     onReverseOrder: (((SavedOrder?) -> Unit) -> Unit)? = null,
     onApplySort: ((TrackSort, Boolean, (Boolean) -> Unit) -> Unit)? = null) {
     var tab by remember { mutableIntStateOf(if (presentationOnly) 1 else 0) }
-    val shadowInset = glassLayoutInset().coerceAtLeast(12.dp)
+    val shadowInset = io.github.anastaci1a.localica.ui.spec.GlassLayoutInset.coerceAtLeast(12.dp)
     val sortScroll = rememberScrollState()
     val viewScroll = rememberScrollState()
     var edited by remember { mutableStateOf(if (mutableOrder != null)

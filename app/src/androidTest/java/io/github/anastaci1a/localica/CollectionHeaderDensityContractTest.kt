@@ -13,8 +13,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -45,8 +43,7 @@ class CollectionHeaderDensityContractTest {
                     // Pixel constraints stay fixed even when the inner ambient changes.
                     Box(Modifier.requiredWidth(with(windowDensity) { 1080.toDp() }).wrapContentHeight(unbounded = true)) {
                         MaterialTheme(colorScheme = scheme) {
-                            CompositionLocalProvider(LocalDensity provides suppliedDensity,
-                                LocalGlassAppearance provides GlassAppearance(renderer = GlassRendererMode.Normal)) {
+                            CompositionLocalProvider(LocalDensity provides suppliedDensity) {
                                 Box(Modifier.onSizeChanged { measured = it }) {
                                     CollectionHeader("Density header", "Artist", visual, false, true, play, shuffle)
                                 }

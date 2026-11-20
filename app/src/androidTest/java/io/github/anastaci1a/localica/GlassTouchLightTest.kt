@@ -14,8 +14,6 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.*
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import org.junit.Assert.*
@@ -34,7 +32,7 @@ class GlassTouchLightTest {
         image.asAndroidBitmap().getPixels(it, 0, image.width, 0, 0, image.width, image.height)
     }
     private fun channel(pixel: Int, shift: Int) = pixel ushr shift and 255
-    private fun render(glow: GlassGlow, circle: Boolean, cache: GlassRimCache = GlassRimCache(), mask: Boolean = false,
+    private fun render(glow: GlassGlow, circle: Boolean, cache: ContactGlowCache = ContactGlowCache(), mask: Boolean = false,
         tone: GlassTone = GlassTone(), shape: GlassShape = GlassShape(), vertical: Boolean = false, density: Float = 1f): IntArray {
         val image = ImageBitmap(width, height)
         try {
@@ -50,42 +48,6 @@ class GlassTouchLightTest {
             }
             return pixels(image)
         } finally { image.asAndroidBitmap().recycle() }
-    }
-    private fun referenceMask(radius: Float): Triple<IntArray, Int, Float> {
-        var sigma = radius
-        val limit = if (radius <= 4f) 2f else if (radius <= 8f) 4f else 8f
-        while (sigma > limit) sigma /= 2f
-        val n = ceil(2.5f * sigma).toInt()
-        val weights = (-n..n).map { exp(-it.toDouble() * it / (2.0 * sigma * sigma)) }
-        val coefficients = weights.map { (it * 16384 / weights.sum()).toInt() }
-        val side = 2 * (ceil(sigma).toInt() + ceil(sigma * 2.8199565410614014f + .5f).toInt() + 1) + 1
-        val disk = IntArray(side * side) { i ->
-            val x = (i % side - side / 2).toDouble(); val y = (i / side - side / 2).toDouble()
-            val r = sigma.toDouble(); val xx = max(0.0, abs(x) - .5); val yy = max(0.0, abs(y) - .5)
-            val area = if (xx * xx + yy * yy >= r * r) 0.0
-                else if ((abs(x) + .5).pow(2) + (abs(y) + .5).pow(2) <= r * r) 1.0
-                else {
-                    val left = max(x - .5, -r); val right = min(x + .5, r)
-                    var sum = 0.0
-                    // Independent vertical-strip integration of the circular source.
-                    for (sample in 0 until 8192) {
-                        val at = left + (sample + .5) * (right - left) / 8192
-                        val cap = sqrt(max(0.0, r * r - at * at))
-                        sum += max(0.0, min(y + .5, cap) - max(y - .5, -cap))
-                    }
-                    sum * (right - left) / 8192
-                }
-            (area.toFloat() * 255.99000549316406f).toInt()
-        }
-        fun convolve(input: IntArray, dx: Int, dy: Int) = IntArray(input.size) { i ->
-            var sum = 8192
-            for (j in -n..n) {
-                val x = i % side + j * dx; val y = i / side + j * dy
-                if (x in 0 until side && y in 0 until side) sum += coefficients[j + n] * input[y * side + x]
-            }
-            sum / 16384
-        }
-        return Triple(convolve(convolve(disk, 1, 0), 0, 1), side, radius / sigma)
     }
 
     @Test fun fluidSurfaceAndGlowShareOneTransformThroughHoldReleaseAndAnchor() {
@@ -124,7 +86,7 @@ class GlassTouchLightTest {
                         }
                     }
                     witness.drawGlassBody(applied) {
-                        for (pass in contactGlowPasses(GlassGlow(0f, 1f, tracked), shape, vertical, GlassRimCache(), Rect(Offset.Zero, size), Color(0xff405060), applied)) pass {}
+                        for (pass in contactGlowPasses(GlassGlow(0f, 1f, tracked), shape, vertical, ContactGlowCache(), Rect(Offset.Zero, size), Color(0xff405060), applied)) pass {}
                     }
                 }
                 assertEquals("one nested local draw", 1, draws)
@@ -139,7 +101,7 @@ class GlassTouchLightTest {
         val localMatrix = arrayOf(doubleArrayOf(1.3937000036239624, -.357699990272522, -.035999998450279236),
             doubleArrayOf(-.1062999963760376, 1.1424000263214111, -.03610000014305115),
             doubleArrayOf(-.10639999806880951, -.35749998688697815, 1.4638999700546265))
-        val reference = referenceMask(60f)
+        val reference = touchLightReferenceMask(60f)
         val (disk, side, pixels) = reference
         fun maskAt(point: Offset, x: Int, y: Int): Double {
             val xx = (x + .5 - width * point.x) / pixels + side / 2.0 - .5
@@ -154,7 +116,7 @@ class GlassTouchLightTest {
         val sensitivity = IntArray(2)
         for (backdrop in listOf(Color(0xff101418), Color(0xff405060), Color(0xffd0d8e0))) for (circle in listOf(false, true)) {
             background = backdrop
-            val cache = GlassRimCache()
+            val cache = ContactGlowCache()
             val maskField = cache.javaClass.getDeclaredField("mask").apply { isAccessible = true }
             val idle = render(GlassGlow(), circle, cache)
             assertNull(maskField.get(cache))
@@ -206,7 +168,7 @@ class GlassTouchLightTest {
     @Test fun nativeBackingPreservesExteriorAndRendersRetiringRecords() {
         var light by mutableStateOf(GlassGlow())
         compose.setContent { EngineTheme { MaterialTheme(colorScheme = darkColorScheme()) {
-            val cache = remember { GlassRimCache() }
+            val cache = remember { ContactGlowCache() }
             Box(Modifier.size(128.dp, 96.dp).testTag("native-light")) {
                 Canvas(Modifier.fillMaxSize()) {
                     drawRect(Color(0xffa46238))
@@ -253,7 +215,7 @@ class GlassTouchLightTest {
         val software = ImageBitmap(idleImage.width, idleImage.height)
         try {
             CanvasDrawScope().draw(Density(idleImage.width / 128f), LayoutDirection.Ltr, Canvas(software), Size(software.width.toFloat(), software.height.toFloat())) {
-                drawTouchLightFixture(GlassGlow(big = .7f, little = .8f, retiring = listOf(local)), GlassShape(), false, GlassRimCache(),
+                drawTouchLightFixture(GlassGlow(big = .7f, little = .8f, retiring = listOf(local)), GlassShape(), false, ContactGlowCache(),
                     Rect(size.width / 4, size.height / 6, size.width * .75f, size.height * 5 / 6), corner = 12.dp.toPx()) { drawImage(idleImage) }
             }
             exteriorUnchanged(pixels(software))
@@ -274,7 +236,6 @@ class GlassTouchLightTest {
         var light by mutableStateOf(GlassGlow(big = .25f, little = .9f, point = Offset(.2f, .8f)))
         compose.mainClock.autoAdvance = false
         compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f)) {
                 val lift = if (anchored) 1f else exp(shape.lift)
                 val ax = exp(shape.strain - shape.depth / 2) * lift
                 val ay = exp(-shape.strain - shape.depth / 2) * lift
@@ -294,7 +255,7 @@ class GlassTouchLightTest {
                             sharedContact = direct, contactPresentation = { shape })
                     }
                 }
-            }
+
         } } }
         val node = compose.onNodeWithTag("nested-light")
         fun capture(reference: Boolean, incorrect: Boolean = false): IntArray {
@@ -364,34 +325,10 @@ class GlassTouchLightTest {
         }
     }
 
-    @Test fun disabledLightRePressAtTheSamePointRetargetsFromItsOwnDown() {
-        val contact = GlassContact()
-        compose.mainClock.autoAdvance = false
-        compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(touchLight = 0f)) {
-                Box(Modifier.size(160.dp)) {
-                    LiquidGlassSurface(Modifier.size(44.dp).testTag("quiet"), source = null, cornerRadius = 22.dp, shadow = false, sharedContact = contact)
-                }
-            }
-        } } }
-        val node = compose.onNodeWithTag("quiet")
-        node.performTouchInput { down(center); moveBy(Offset(width * .3f, 0f)) }
-        compose.mainClock.advanceTimeBy(1500)
-        compose.runOnIdle {
-            assertTrue("inside drag drifts", contact.state.output.value.drift.x > 0f)
-            assertTrue("held drag settles and stops its clock", contact.state.momentum.settled)
-        }
-        node.performTouchInput { up(); down(Offset(width * .8f, height / 2f)) }
-        compose.mainClock.advanceTimeBy(1500)
-        compose.runOnIdle { assertEquals("re-press at the same point measures from its new DOWN", 0f, contact.state.output.value.drift.x, 1e-4f) }
-        node.performTouchInput { up() }
-    }
-
     @Test fun nonScalingSurfaceObservesLightWithoutMovingItsForegroundOrTakingTheClick() {
-        var strength by mutableFloatStateOf(1f)
         var clicks = 0
         compose.setContent { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(touchLight = strength)) {
+
                 val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 Box(Modifier.size(192.dp, 96.dp).testTag("light-only-frame")) {
                     Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xff31516f)) }
@@ -401,7 +338,7 @@ class GlassTouchLightTest {
                         Canvas(Modifier.fillMaxSize()) { drawRect(Color.White, Offset(size.width * .4f, size.height * .4f), Size(size.width * .2f, size.height * .2f)) }
                     }
                 }
-            }
+
         } } }
         val node = compose.onNodeWithTag("light-only")
         val frame = compose.onNodeWithTag("light-only-frame")
@@ -415,21 +352,18 @@ class GlassTouchLightTest {
         assertTrue("foreground witness exists", white(idle).isNotEmpty())
         assertArrayEquals("non-scaling foreground retains every white pixel", white(idle), white(held))
         assertEquals(0, clicks)
-        compose.runOnIdle { strength = 0f }
-        compose.mainClock.advanceTimeByFrame()
-        assertArrayEquals("the optical setting removes light-only output", idle, pixels(frame.captureToImage()))
         node.performTouchInput { up() }
         compose.runOnIdle { assertEquals("the original clickable keeps activation", 1, clicks) }
     }
 
     @Test fun actualSurfaceHasVisibleHideAndByteExactIdleSettledAndDisabledPixels() {
-        var strength by mutableFloatStateOf(1f)
+        var enabled by mutableStateOf(true)
         val contact = GlassContact()
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+
         var ownerSpeed = 1f
         lateinit var source: FrostedBackdrop
-        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = 0f, touchLight = strength)) {
+        compose.setContent {  EngineTheme(clear = true) { MaterialTheme(colorScheme = darkColorScheme()) {
+
                 val speed = LocalMotionSpeed.current
                 SideEffect { ownerSpeed = speed }
                 source = rememberFrostedBackdrop(Unit, dark = true)
@@ -440,16 +374,16 @@ class GlassTouchLightTest {
                             Offset(x * size.width / 12, 0f), Size(size.width / 12, size.height)) }
                     }
                     LiquidGlassSurface(Modifier.padding(24.dp).size(160.dp, 80.dp).testTag("light"), source,
-                        cornerRadius = 24.dp, shadow = false, sharedContact = contact, contactPresentation = { GlassShape() })
+                        cornerRadius = 24.dp, shadow = false, sharedContact = contact, contactPresentation = { GlassShape() }, contactAdmission = { enabled })
                 }
-            }
-        } } } }
+
+        } }  }
         compose.awaitGlassBackingSnapshot(source)
         val node = compose.onNodeWithTag("light")
         val frame = compose.onNodeWithTag("frame")
         compose.mainClock.autoAdvance = false
-        for (mode in GlassRendererMode.entries) {
-            compose.runOnIdle { runtime.request(mode); strength = 1f }
+        run {
+            compose.runOnIdle { enabled = true }
             compose.mainClock.advanceTimeBy(1500)
             val idle = pixels(frame.captureToImage())
             assertArrayEquals(idle, pixels(frame.captureToImage()))
@@ -465,42 +399,38 @@ class GlassTouchLightTest {
                         val w = 2 * PI / .1
                         val gain = (1 - (1 + w * seconds) * exp(-w * seconds)).toFloat()
                         val smallToLarge = (80f - 44f) / 116f
-                        assertEquals("production broad response mode=$mode sample=$sample", gain, glow.big / (1 - smallToLarge), .09f)
-                        assertEquals("production local response mode=$mode sample=$sample", gain,
+                        assertEquals("production broad response default sample=$sample", gain, glow.big / (1 - smallToLarge), .09f)
+                        assertEquals("production local response default sample=$sample", gain,
                             glow.little / (.3f * (1 - smallToLarge) + .2f * smallToLarge), .09f)
-                    } else assertTrue("owner publishes within two frames mode=$mode", sample < 2)
+                    } else assertTrue("owner publishes within two frames default", sample < 2)
                 }
             }
-            assertTrue("production intermediate response was observed mode=$mode", firstPublication >= 0)
+            assertTrue("production intermediate response was observed default", firstPublication >= 0)
             compose.mainClock.advanceTimeBy(150)
-            assertFalse("held mode=$mode", idle.contentEquals(pixels(frame.captureToImage())))
+            assertFalse("held default", idle.contentEquals(pixels(frame.captureToImage())))
             compose.mainClock.advanceTimeBy(1500)
             compose.runOnIdle { assertTrue(contact.state.momentum.settled) }
             val stable = pixels(frame.captureToImage())
             compose.mainClock.advanceTimeBy(200)
-            assertArrayEquals("settled held pixels mode=$mode", stable, pixels(frame.captureToImage()))
+            assertArrayEquals("settled held pixels default", stable, pixels(frame.captureToImage()))
             node.performTouchInput { up() }
             compose.mainClock.advanceTimeBy(150)
-            assertFalse("hide is still visible mode=$mode", idle.contentEquals(pixels(frame.captureToImage())))
+            assertFalse("hide is still visible default", idle.contentEquals(pixels(frame.captureToImage())))
             compose.mainClock.advanceTimeBy(10000)
             compose.runOnIdle {
                 assertTrue(contact.state.momentum.settled)
                 assertEquals(0f, contact.state.glow.value.big, 0f)
                 assertEquals(0f, contact.state.glow.value.little, 0f)
             }
-            assertArrayEquals("fully settled release mode=$mode", idle, pixels(frame.captureToImage()))
-            compose.runOnIdle { strength = 0f }
+            assertArrayEquals("fully settled release default", idle, pixels(frame.captureToImage()))
+            compose.runOnIdle { enabled = false }
             node.performTouchInput { down(center) }
             compose.mainClock.advanceTimeBy(200)
-            assertArrayEquals("zero strength held mode=$mode", idle, pixels(frame.captureToImage()))
+            assertArrayEquals("disabled contact held default", idle, pixels(frame.captureToImage()))
             node.performTouchInput { up() }
             compose.mainClock.advanceTimeBy(10000)
-            assertArrayEquals("zero strength released mode=$mode", idle, pixels(frame.captureToImage()))
+            assertArrayEquals("disabled contact released default", idle, pixels(frame.captureToImage()))
         }
-        for (value in listOf(Float.NaN, Float.POSITIVE_INFINITY)) assertEquals(1f, GlassAppearance(touchLight = value).normalized().touchLight, 0f)
-        assertEquals(1f, GlassAppearance().touchLight, 0f)
-        assertEquals(0f, GlassAppearance(touchLight = -1f).normalized().touchLight, 0f)
-        assertEquals(1f, GlassAppearance(touchLight = 2f).normalized().touchLight, 0f)
     }
 
     @Test fun initiatingPointerPublishesNormalizedAndOutsidePositionsWithoutTakingTheGesture() {
@@ -524,18 +454,17 @@ class GlassTouchLightTest {
         compose.runOnIdle { assertFalse(contact.pressed) }
     }
 
-    @Test fun oneOwnerSurvivesRepressAndHandoffWhileDisabledGlowSchedulesNothing() {
+    @Test fun oneOwnerSurvivesRepressAndHandoffWithTheDefaultGlow() {
         val shared = GlassBodyState()
         val reference = GlassBodyState()
         val reads = AtomicInteger()
         var held by mutableStateOf(false)
         var modal by mutableStateOf(false)
         var point by mutableStateOf(Offset(.2f, .7f))
-        var strength by mutableFloatStateOf(0f)
         var reduced by mutableStateOf(false)
         var ownerSpeed = 1f
         compose.setContent { EngineTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(touchLight = strength), LocalReducedMotion provides reduced) {
+            CompositionLocalProvider( LocalReducedMotion provides reduced) {
                 val speed = LocalMotionSpeed.current
                 SideEffect { ownerSpeed = speed }
                 rememberGlassBody({ reads.incrementAndGet(); 0f }, contact = { if (held) 1f else 0f }, state = shared,
@@ -558,16 +487,15 @@ class GlassTouchLightTest {
             }
             compose.mainClock.advanceTimeByFrame()
             compose.runOnIdle {
-                assertEquals("disabled shape frame=$frame", reference.output.value, shared.output.value)
-                assertEquals("disabled clock convergence frame=$frame", reference.momentum.settled, shared.momentum.settled)
-                assertEquals(GlassGlow(), shared.glow.value)
+                assertEquals("default shape frame=$frame", reference.output.value, shared.output.value)
+                assertEquals("default clock convergence frame=$frame", reference.momentum.settled, shared.momentum.settled)
             }
         }
         compose.mainClock.advanceTimeBy(3000)
-        compose.runOnIdle { assertTrue(shared.momentum.settled); reads.set(0); point = Offset(.9f, .1f) }
+        compose.runOnIdle { assertTrue(shared.momentum.settled); reads.set(0) }
         compose.mainClock.advanceTimeBy(500)
-        assertEquals("disabled point changes do not wake either owner", 0, reads.get())
-        compose.runOnIdle { strength = 1f; held = true }
+        assertEquals("released default owners suspend", 0, reads.get())
+        compose.runOnIdle { point = Offset(.9f, .1f); held = true }
         compose.mainClock.advanceTimeBy(1200)
         val trackingStart = compose.runOnIdle { assertTrue(shared.momentum.settled); point = Offset(.6f, .4f); shared.glow.value.point }
         compose.mainClock.advanceTimeByFrame() // h=0 admission observes the point without advancing it.
@@ -637,4 +565,41 @@ class GlassTouchLightTest {
             assertEquals(0f, shared.glow.value.little, 0f)
         }
     }
+}
+
+internal fun touchLightReferenceMask(radius: Float): Triple<IntArray, Int, Float> {
+    var sigma = radius
+    val limit = if (radius <= 4f) 2f else if (radius <= 8f) 4f else 8f
+    while (sigma > limit) sigma /= 2f
+    val n = ceil(2.5f * sigma).toInt()
+    val weights = (-n..n).map { exp(-it.toDouble() * it / (2.0 * sigma * sigma)) }
+    val coefficients = weights.map { (it * 16384 / weights.sum()).toInt() }
+    val side = 2 * (ceil(sigma).toInt() + ceil(sigma * 2.8199565410614014f + .5f).toInt() + 1) + 1
+    val disk = IntArray(side * side) { i ->
+        val x = (i % side - side / 2).toDouble(); val y = (i / side - side / 2).toDouble()
+        val r = sigma.toDouble(); val xx = max(0.0, abs(x) - .5); val yy = max(0.0, abs(y) - .5)
+        val area = if (xx * xx + yy * yy >= r * r) 0.0
+            else if ((abs(x) + .5).pow(2) + (abs(y) + .5).pow(2) <= r * r) 1.0
+            else {
+                val left = max(x - .5, -r); val right = min(x + .5, r)
+                var sum = 0.0
+                // Independent vertical-strip integration of the circular source.
+                for (sample in 0 until 8192) {
+                    val at = left + (sample + .5) * (right - left) / 8192
+                    val cap = sqrt(max(0.0, r * r - at * at))
+                    sum += max(0.0, min(y + .5, cap) - max(y - .5, -cap))
+                }
+                sum * (right - left) / 8192
+            }
+        (area.toFloat() * 255.99000549316406f).toInt()
+    }
+    fun convolve(input: IntArray, dx: Int, dy: Int) = IntArray(input.size) { i ->
+        var sum = 8192
+        for (j in -n..n) {
+            val x = i % side + j * dx; val y = i / side + j * dy
+            if (x in 0 until side && y in 0 until side) sum += coefficients[j + n] * input[y * side + x]
+        }
+        sum / 16384
+    }
+    return Triple(convolve(convolve(disk, 1, 0), 0, 1), side, radius / sigma)
 }

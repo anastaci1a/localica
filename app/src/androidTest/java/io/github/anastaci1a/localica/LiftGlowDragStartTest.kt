@@ -18,7 +18,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.BrowserItem
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.MediaKind
 import io.github.anastaci1a.localica.navigation.MediaRef
 import io.github.anastaci1a.localica.ui.*
@@ -49,7 +48,7 @@ class LiftGlowDragStartTest {
             // As BrowserScreen does: cards start from the selection host's drawn lift.
             SideEffect { state.hoverLift = { key -> selection.hover[key] } }
             val source = rememberFrostedBackdrop(Unit, dark = true)
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = 1f, shadowSpread = .6f),
+            CompositionLocalProvider(
                 LocalReducedMotion provides false) {
                 Box(Modifier.size(360.dp, 520.dp).testTag("glow-scene").onSizeChanged {
                     state.viewportWidth = it.width; state.viewportHeight = it.height

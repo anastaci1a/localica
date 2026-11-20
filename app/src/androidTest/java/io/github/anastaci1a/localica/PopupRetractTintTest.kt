@@ -37,17 +37,17 @@ class PopupRetractTintTest {
     @Test fun roundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = false)
     @Test fun sourcedPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = true)
     @Test fun sourcedRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = true)
-    @Test fun flatPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = false, GlassRendererMode.FlatNone)
-    @Test fun flatRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = false, GlassRendererMode.FlatNone)
-    @Test fun flatSourcedPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = true, GlassRendererMode.FlatNone)
-    @Test fun flatSourcedRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = true, GlassRendererMode.FlatNone)
+    @Test fun flatPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = false, "retired-preference-cleanup")
+    @Test fun flatRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = false, "fixed-default-control")
+    @Test fun flatSourcedPillRetractHandsOverWithoutStep() = retract(pill = true, sourced = true, "fixed-default-control")
+    @Test fun flatSourcedRoundButtonRetractHandsOverWithoutStep() = retract(pill = false, sourced = true, "fixed-default-control")
 
-    private fun retract(pill: Boolean, sourced: Boolean, mode: GlassRendererMode = GlassRendererMode.Normal) {
+    private fun retract(pill: Boolean, sourced: Boolean, case: String = "default") {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = InterfacePreferences(context)
         val previous = preferences.read()
         val output = File(nativeEvidenceDirectory("popup-retract-tint", context.getExternalFilesDir(null)),
-            (if (pill) "pill" else "round") + (if (sourced) "-sourced" else "") + "-" + mode.name).apply { mkdirs() }
+            (if (pill) "pill" else "round") + (if (sourced) "-sourced" else "") + "-" + case).apply { mkdirs() }
         val rows = JSONArray()
         val report = JSONObject().put("source", BuildConfig.SOURCE_SHA).put("api", android.os.Build.VERSION.SDK_INT).put("frames", rows)
         fun save() = File(output, "frames.json").writeText(report.toString(2))
@@ -59,14 +59,20 @@ class PopupRetractTintTest {
         val receipts = mutableListOf<GlassDrawReceipt>()
         glassDrawProbe = { receipt -> if (receipt is GlassSurfaceDrawObservation || receipt is GlassBodyReceipt) synchronized(receipts) { receipts += receipt } }
         try {
-            preferences.write(InterfaceSettings(reducedMotion = false, animationSpeedTenths = 10, glass = GlassAppearance(renderer = mode)))
+            preferences.write(InterfaceSettings(reducedMotion = false, animationSpeedTenths = 10))
+            if (case == "retired-preference-cleanup") {
+                val store = context.getSharedPreferences("interface", 0)
+                assertTrue(store.edit().putString("glass-renderer", "FlatNone").putFloat("glass-depth", 0f).commit())
+                preferences.read()
+                assertFalse("Retired renderer is removed before the handover", store.contains("glass-renderer"))
+                assertFalse("Retired depth is removed before the handover", store.contains("glass-depth"))
+            }
             compose.setContent { LocalicaTheme {
                 host = LocalView.current
                 val home = rememberGlassPopupHome(false)
                 val page = rememberFrostedBackdrop(home, dark = false)
                 anchor = rememberGlassAnchor()
                 CompositionLocalProvider(LocalFrostedBackdrop provides page.takeIf { sourced }, LocalModalBackdrop provides page,
-                    LocalGlassRendererRuntime provides remember { GlassRendererRuntime(mode) },
                     LocalGlassMorphWorkObserver provides { kind, window, phase ->
                         if (kind == "dialog" && window != null && popup == null) popup = window
                         if (kind == "geometry" && window === popup && phase != null) progress = phase
@@ -171,7 +177,7 @@ class PopupRetractTintTest {
             assertTrue("retract covers the hand-off: ${tail.size} tail frames", tail.size >= 4 && tail.last().let { !it.getBoolean("hidden") })
             assertEquals("three settled frames before the hand-off", 3, settled.size)
             // One optical owner per frame (#748 R5): the source takes the body once, and the popup never refills or rearms it.
-            if (mode == GlassRendererMode.Normal) {
+            run {
                 assertEquals("one R5 withdrawal per return", 1, all.sumOf { it.getInt("withdraws") })
                 assertEquals("R5 unlink or rearm after the source took the body", 0, all.sumOf { it.getInt("refills") })
                 // Material identity: the returning body's last record is the source's own record, lens weight included.

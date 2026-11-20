@@ -40,8 +40,7 @@ class SelectorFreeCornerPixelTest {
         var model by mutableStateOf(Model())
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalDensity provides Density(scale),
-                LocalLayoutDirection provides if (model.rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
-                LocalGlassAppearance provides LocalGlassAppearance.current.copy(contrast = 0f, shadowStrength = 0f)) {
+                LocalLayoutDirection provides if (model.rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                 val motion = remember { Animatable(0f) }
                 val body = remember { mutableStateOf(GlassShape()) }
                 val current = frame(model)

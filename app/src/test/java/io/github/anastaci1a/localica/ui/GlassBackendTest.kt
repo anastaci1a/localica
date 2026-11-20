@@ -1,55 +1,19 @@
 package io.github.anastaci1a.localica.ui
 
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
-import io.github.anastaci1a.localica.navigation.InterfaceSettings
-import io.github.anastaci1a.localica.navigation.TabLensStyle
 import org.junit.Assert.*
 import org.junit.Test
 
 class GlassBackendTest {
-    @Test fun touchLightStrengthRetainsItsDefaultAndNormalizedRange() {
-        assertEquals(1f, GlassAppearance().touchLight, 0f)
-        for (strength in listOf(Float.NaN, Float.POSITIVE_INFINITY))
-            assertEquals(1f, GlassAppearance(touchLight = strength).normalized().touchLight, 0f)
-        assertEquals(0f, GlassAppearance(touchLight = -1f).normalized().touchLight, 0f)
-        assertEquals(1f, GlassAppearance(touchLight = 2f).normalized().touchLight, 0f)
-    }
-
-    @Test fun normalUsesPlatformSupportAndNoneIsAlwaysAvailable() {
+    @Test fun normalUsesPlatformSupport() {
         for (api in listOf(26, 28, 31, 32, 33, 36)) {
             val normal = if (api >= 33) GlassBackend.Normal else GlassBackend.AverageFallback
-            assertEquals(normal, effectiveGlassBackend(GlassRendererMode.Normal, api))
-            assertEquals(GlassBackend.FlatNone, effectiveGlassBackend(GlassRendererMode.FlatNone, api))
+            assertEquals(normal, effectiveGlassBackend(api))
         }
     }
 
-    @Test fun unsupportedNormalPreferencesResolveToAverageFallback() {
-        for (api in 26..32) assertEquals(GlassBackend.AverageFallback,
-            effectiveGlassBackend(GlassRendererMode.Normal, api))
-        assertEquals(GlassBackend.Normal, effectiveGlassBackend(GlassRendererMode.Normal, 33))
-        assertEquals(GlassBackend.Normal, effectiveGlassBackend(GlassRendererMode.Normal, 36))
-    }
-
-    @Test fun normalizationKeepsTheRequestedModeEvenWhenItsBackendIsUnsupported() {
-        for (mode in GlassRendererMode.entries) {
-            val requested = GlassAppearance(blur = Float.NaN, whiteTint = Float.POSITIVE_INFINITY, renderer = mode).normalized()
-            assertEquals(GlassAppearance(renderer = mode), requested)
-            effectiveGlassBackend(requested.renderer, 26)
-            assertEquals(mode, requested.renderer)
-            assertEquals(mode, requested.copy(depth = .8f).normalized().renderer)
-        }
-    }
-
-    @Test fun normalIsTheDefaultAndPositionalArgumentsRemainStable() {
-        assertEquals(GlassRendererMode.Normal, GlassAppearance().renderer)
-        assertEquals(GlassRendererMode.Normal, InterfaceSettings().glass.renderer)
-        val positional = GlassAppearance(.7f, .1f, .2f, .8f, .3f, TabLensStyle.Overlay,
-            .4f, .2f, 19f, .8f, 1.5f, .3f, 1.25f, .17f, true)
-        assertEquals(GlassAppearance(blur = .7f, whiteTint = .1f, shadowStrength = .2f, shadowSpread = .8f,
-            contrast = .3f, tabStyle = TabLensStyle.Overlay, tabBlur = .4f, tabWhiteTint = .2f,
-            shapeDamping = 19f, depth = .8f, contrastWeight = 1.5f, classicOpacity = .3f,
-            controlExpansion = 1.25f, overlayDarkening = .17f, overlayForeground = true), positional)
-        assertEquals(positional, positional.normalized())
+    @Test fun unsupportedNormalResolvesToAverageFallback() {
+        for (api in 26..32) assertEquals(GlassBackend.AverageFallback, effectiveGlassBackend(api))
+        assertEquals(GlassBackend.Normal, effectiveGlassBackend(33))
+        assertEquals(GlassBackend.Normal, effectiveGlassBackend(36))
     }
 }

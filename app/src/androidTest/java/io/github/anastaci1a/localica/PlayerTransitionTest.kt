@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
-import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.ArtworkLayout
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
@@ -127,7 +126,7 @@ class PlayerTransitionTest {
         lateinit var scope: CoroutineScope
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize().background(Color.White)) {
             scope = rememberCoroutineScope()
-            PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground, glass = GlassAppearance(contrast = 0f)),
+            PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground),
                 progress, {}, {}, {}, {}, {}, {}, visual = visual)
         } } }
         for (phase in listOf(.6f, .75f, .85f, .94f, 1f, .85f, .6f)) {
@@ -197,16 +196,18 @@ class PlayerTransitionTest {
         lateinit var scope: CoroutineScope
         lateinit var backdrop: FrostedBackdrop
         compose.setContent { LocalicaTheme {
-            // Isolate outline coverage from the independently tested brightness trim.
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(whiteTint = 1f, shadowStrength = 0f, contrast = 0f)) {
+            // White recording gives the default light-ink endpoint .75; the bare page remains magenta.
+
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.Magenta)) {
                     scope = rememberCoroutineScope()
                     backdrop = rememberFrostedBackdrop(Unit)
-                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(backdrop).background(Color.Magenta))
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(backdrop, displayCutout = {
+                        androidx.compose.ui.graphics.Path().apply { addRect(androidx.compose.ui.geometry.Rect(Offset.Zero, size)) }
+                    }).background(Color.White))
                     PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {},
                         visual = PlayerVisual(), glassBackdrop = backdrop)
                 }
-            }
+
         } }
         // The material now colors its sampled scene rather than painting an
         // unrelated coating; supply the same recorded backing as the real player.

@@ -22,7 +22,7 @@ class SettingsCatalogTest {
         assertTrue(SettingsCatalog.search("grey").any { it.title == "Interface gray" })
         assertEquals("Sync now", SettingsCatalog.search("sync").first().title)
         assertEquals("Exclude short files", SettingsCatalog.search("minimum duration").first().title)
-        assertEquals("Control expansion", SettingsCatalog.search("control expansion").first().title)
+        assertEquals("Artwork hold", SettingsCatalog.search("artwork hold").first().title)
     }
 
     @Test fun tokenMatchingIsAndNormalizedAndHasNoTypoTolerance() {
@@ -33,13 +33,11 @@ class SettingsCatalogTest {
         assertTrue(SettingsCatalog.search("glass").size <= 30)
     }
 
-    @Test fun topLevelOrderAndPlayerParentStayConstantAndGlassHasInternalPages() {
+    @Test fun topLevelOrderAndPlayerParentStayConstantWithoutGlassPages() {
         assertEquals(listOf("Interface", "Online features", "Playback and queues", "Library and tags", "About and licenses"),
             SettingsCatalog.parents.filterValues { it == null }.keys.toList())
         assertEquals(listOf("Interface", "Player"), SettingsCatalog.path("Player"))
-        for (page in listOf("Glass appearance", "Glass advanced", "Navigation selector")) {
-            assertEquals(listOf("Interface", "Glass", page), SettingsCatalog.path(page))
-        }
+        assertFalse(SettingsCatalog.parents.keys.any { it in setOf("Glass", "Glass appearance", "Glass advanced", "Navigation selector") })
         SettingsCatalog.parents.keys.forEach { page -> assertEquals(page, SettingsCatalog.path(page).last()) }
     }
 }

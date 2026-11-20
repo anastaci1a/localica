@@ -16,8 +16,7 @@ import androidx.compose.ui.unit.dp
 /** One deformation model for tab, sort and settings selectors, including edge pressure. */
 @Composable
 internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, AnimationVector1D>,
-    source: FrostedBackdrop? = LocalFrostedBackdrop.current, preserveAppearance: Boolean = false,
-    vertical: Boolean = false, depthScale: Float = 1f, pressure: () -> Float = { 0f }, wall: () -> Float = { 0f }, contact: () -> Float = { 0f },
+    source: FrostedBackdrop? = LocalFrostedBackdrop.current, vertical: Boolean = false, depthScale: Float = 1f, pressure: () -> Float = { 0f }, wall: () -> Float = { 0f }, contact: () -> Float = { 0f },
     cornerRadius: androidx.compose.ui.unit.Dp? = null, tint: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Transparent,
     placement: ((GlassShape) -> SelectorTrackLens)? = null, deformation: State<GlassShape>? = null, point: () -> Offset = { Offset(.5f, .5f) }, travel: () -> Float = { 0f }, generation: () -> Int = { 0 }) {
     val light = rememberGlassLight(contact, point, travel, generation)
@@ -25,15 +24,12 @@ internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, Animati
     val frame = placement?.invoke(body.value)
     val silhouette = rememberSelectorSilhouette(frame?.contour())
     val density = androidx.compose.ui.platform.LocalDensity.current
-    CompositionLocalProvider(LocalGlassAppearance provides if (preserveAppearance) LocalGlassAppearance.current else LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, shadowStrength = .04f, contrast = 0f)) {
-        // Caller semantics and observers belong to the placed surface, not to the
-        // outer offset/wrap coordinator (whose bounds remain at the host origin).
-        LiquidGlassSurface(if (frame == null) modifier.selectorDeformation({ body.value }, vertical, wall)
-            else Modifier.selectorTrackPlacement(frame.bounds).then(modifier), source = source, pressFeedback = false, shadow = false, sharedContact = light,
-            cornerRadius = frame?.let { with(density) { it.corner.toDp() } } ?: cornerRadius, tint = tint,
-            body = { body.value }, depthScale = depthScale, silhouette = silhouette,
-            inkOverride = if (preserveAppearance) androidx.compose.ui.graphics.Color.Black else null) { Box(Modifier.matchParentSize().testTag("elastic-lens-face")) }
-    }
+    // Caller semantics and observers belong to the placed surface, not to the
+    // outer offset/wrap coordinator (whose bounds remain at the host origin).
+    LiquidGlassSurface(if (frame == null) modifier.selectorDeformation({ body.value }, vertical, wall)
+        else Modifier.selectorTrackPlacement(frame.bounds).then(modifier), source = source, pressFeedback = false, shadow = false, sharedContact = light,
+        cornerRadius = frame?.let { with(density) { it.corner.toDp() } } ?: cornerRadius, tint = tint,
+        body = { body.value }, depthScale = depthScale, silhouette = silhouette) { Box(Modifier.matchParentSize().testTag("elastic-lens-face")) }
 }
 
 /** Keep sampling origins in layout space while deforming the displayed body. */

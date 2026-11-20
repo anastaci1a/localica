@@ -55,9 +55,8 @@ class GlassMenuForegroundTest {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalContentColor provides outerInk) {
                 anchor = rememberGlassAnchor()
-                // The global recorder's flag is deliberately opposite to the
-                // actual page/trigger, as on a dark collection with player closed.
-                val source = rememberFrostedBackdrop(Unit, dark = !lightInk)
+                // The page recorder owns polarity despite the opposite outer ink.
+                val source = rememberFrostedBackdrop(Unit, dark = lightInk)
                 Box(Modifier.fillMaxSize()) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                         drawRect(if (lightInk) Color(0xFF202020) else Color(0xFFEAEAEA))
@@ -65,7 +64,6 @@ class GlassMenuForegroundTest {
                     CompositionLocalProvider(LocalModalBackdrop provides source, LocalFrostedBackdrop provides source) {
                         CompositionLocalProvider(LocalContentColor provides ink) {
                             if (anchored) {
-                                anchor.captureInk()
                                 GlassActionButton(AppIcon.ActionInfo, "Open menu",
                                     Modifier.padding(32.dp).glassAnchor(anchor).testTag("menu-trigger")) { open = true }
                             } else ActionTextButton({ open = true }, Modifier.testTag("menu-trigger")) { Text("Open menu") }
@@ -84,7 +82,6 @@ class GlassMenuForegroundTest {
             assertEquals("Menu content follows page ink", lightInk, appearance.first.luminance() > .5f)
             assertEquals("Menu theme agrees", lightInk, appearance.second.luminance() > .5f)
             assertEquals("Menu material agrees", lightInk, appearance.third)
-            if (!anchored) assertEquals("Detached anchor retains its original seed", outerInk, anchor.ink)
         }
         compose.waitUntil(5000) {
             val pixels = capturePopupPixels(compose, compose.onNodeWithTag("menu-foreground")) { popupView }
@@ -105,7 +102,6 @@ class GlassMenuForegroundTest {
         compose.onNodeWithText("Close menu").performClick()
         awaitGlassReturn(compose, anchor) { "lightInk=$lightInk anchored=$anchored open=$open nested=$nested" }
         compose.onNodeWithTag("menu-trigger").assertIsDisplayed()
-        if (anchored) compose.runOnIdle { assertEquals("Returned trigger keeps its ink", ink, anchor.ink) }
     }
     @Test fun lightParentInkSurvivesDetachedChildDeclaration() = verifyDetached(true)
     @Test fun darkParentInkSurvivesDetachedChildDeclaration() = verifyDetached(false)
