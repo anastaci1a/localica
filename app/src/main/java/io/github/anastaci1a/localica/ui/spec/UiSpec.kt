@@ -90,7 +90,26 @@ internal class FluidPopupSpringSettings(
 
     fun scaledResponses(multiplier: Double) =
         FluidPopupSpringSettings(dampingRatio, multiplier * response, retargetImpulse, multiplier * trackingResponse)
+
+    fun nontrackingModifiers(
+        enabled: Boolean, priorInteractive: Boolean,
+        dampingSmoothing: Double, responseSmoothing: Double, targetSmoothingRatio: Double, projectionDeceleration: Double,
+    ): FluidSpringModifiers {
+        val followsInteraction = enabled && priorInteractive
+        return FluidSpringModifiers(
+            if (enabled) dampingSmoothing else 0.0,
+            if (enabled) responseSmoothing else 0.0,
+            if (followsInteraction) targetSmoothingRatio * trackingResponse else 0.0,
+            if (followsInteraction) projectionDeceleration else 0.0,
+        )
+    }
 }
+
+internal data class FluidSpringModifiers(
+    val dampingSmoothing: Double, val responseSmoothing: Double,
+    val targetSmoothing: Double, val projectionDeceleration: Double,
+)
+
 internal val FluidMainEjectDefaults = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
 
 @Immutable data class PopupSecondPhase(val spring: SpringLaw, val band: Float, val edgeShares: (DoubleArray) -> DoubleArray)
