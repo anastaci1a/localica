@@ -237,6 +237,21 @@ class GlassGlowTest {
                 advanceFrames()
                 assertEquals(7.5f, motion.fluidLensHeight, 0f)
                 assertEquals(-7.5, motion.fluidLensAmount, 0.0)
+
+                motion.release()
+                advanceFrames()
+                motion.show(true)
+                repeat(3) { harness.advance(1.0 / 120) }
+                val openingHeight = motion.fluidLensHeight
+                val openingAmount = motion.fluidLensAmount
+                assertTrue(openingHeight > 0f && openingHeight < 27f)
+                assertTrue(openingAmount < -0.001 && openingAmount > -27.0)
+                motion.show(false)
+                assertEquals(openingHeight, motion.fluidLensHeight, 0f)
+                assertEquals(openingAmount, motion.fluidLensAmount, 0.0)
+                advanceFrames()
+                assertEquals(0f, motion.fluidLensHeight, 0f)
+                assertEquals(-0.001, motion.fluidLensAmount, 0.0)
             } finally {
                 motion.dispose()
             }
