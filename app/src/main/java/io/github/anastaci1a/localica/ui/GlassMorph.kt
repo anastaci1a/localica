@@ -28,6 +28,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -470,6 +471,7 @@ internal val LocalGlassMorphWorkObserver =
 // LocalFrostedBackdrop, whose recordings exclude their own foreground controls.
 internal val LocalModalBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
 private val LocalChildPanels = staticCompositionLocalOf<MutableIntState?> { null }
+private val fluidContentBlurEffect: ((radius: Double) -> RenderEffect?)? = null
 
 /** At a dismissal event, a window showing an IME keeps focus until the commit, so the hiding IME ends there (#545). */
 private fun android.view.Window.glassInput(enabled: Boolean, event: Boolean = false) {
