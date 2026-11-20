@@ -204,8 +204,6 @@ class GlassGlowTest {
         val root = File("src/main/java/io/github/anastaci1a/localica/ui")
         fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         val lens = File(root, "LensRenderer.kt").readText()
-        val warpMode = "        shader.setFloatUniform(\"warpMode\", if (warp == null) 0f else 1f)\n"
-        assertTrue("A null warp must select stock optics", lens.contains(warpMode))
         var stock = lens
         fun replaceExact(before: String, after: String = "") {
             val start = stock.indexOf(before)
@@ -213,14 +211,6 @@ class GlassGlowTest {
                 "Expected one renderer source span starting with ${before.lineSequence().first()}"
             }
             stock = stock.replaceRange(start, start + before.length, after)
-        }
-        fun subtract(first: String, next: String? = null) {
-            val start = stock.indexOf(first)
-            val end = if (next == null) stock.length else stock.indexOf(next, start + first.length)
-            check(start >= 0 && end > start && stock.indexOf(first, start + first.length) == -1) {
-                "Expected one Fluid source span starting with ${first.trim()}"
-            }
-            replaceExact(stock.substring(start, end))
         }
         replaceExact("""
             import androidx.compose.ui.unit.IntSize
@@ -235,13 +225,40 @@ class GlassGlowTest {
             |        uniform float2 warpClamp;
             |        uniform float warpMode;
         """.trimMargin() + "\n")
-        subtract("        // Popup content warp:", "        half4 main(float2 p)")
+        replaceExact("""
+            |        // Popup content warp: the glass map (distance below zero inside, outward unit normal,
+            |        // full coverage) evaluated inline, then the displacement sample it masks.
+            |        half4 warped(float2 p, float3 f) {
+            |            float2 n = dot(f.yz, f.yz) > 0.0 ? -normalize(f.yz) : float2(0);
+            |            float u = f.x - mapShape.z;
+            |            float z = u - mapShape.w;
+            |            float w = max(abs(n.x) + abs(n.y), 0.0001);
+            |            float mask = z < -5.0 ? 0.0 : clamp(z / w + 0.5, 0.0, 1.0);
+            |            if (mask < 0.00392156886) return half4(0);
+            |            float r = clamp(u / mapShape.x, 0.0, 1.0);
+            |            float lift = mix(r < 1.0 ? 1.0 - 0.2929 : 1.0, sqrt(1.0 - (1.0 - r) * (1.0 - r)), mapShape.y);
+            |            float2 normal = float2(dot(n, float2(mapAngle.x, -mapAngle.y)), dot(n, mapAngle.yx));
+            |            float2 m = (1.0 - lift) * normal * clamp((mapShape.x - u) / w + 0.5, 0.0, 1.0);
+            |            return scene.eval(min(warpClamp, p + float2(dot(m, warp.xy), dot(m, warp.zw)))) * half(mask);
+            |        }
+        """.trimMargin() + "\n")
         replaceExact("            if (warpMode > 0.5) return warped(p, f);\n")
         replaceExact(", warp: LensWarp? = null")
         replaceExact("        val words = warp?.uniforms(unit)\n")
         replaceExact(" + (words ?: FloatArray(0))")
-        subtract("        val w = words ?: FloatArray(12)\n", "        if (fieldBitmap !== map?.bitmap)")
-        subtract("\n/** Popup content warp inputs:")
+        replaceExact("""
+            |        val w = words ?: FloatArray(12)
+            |        shader.setFloatUniform("mapShape", w[0], w[1], w[2], w[3])
+            |        shader.setFloatUniform("mapAngle", w[4], w[5])
+            |        shader.setFloatUniform("warp", w[6], w[7], w[8], w[9])
+            |        shader.setFloatUniform("warpClamp", w[10], w[11])
+            |        shader.setFloatUniform("warpMode", if (warp == null) 0f else 1f)
+        """.trimMargin() + "\n")
+        // LensChainTest pins filter order and identity elision in the trailing lensChain adapter.
+        val fluidTail = "\n/** Popup content warp inputs:"
+        val tailStart = stock.indexOf(fluidTail)
+        check(tailStart >= 0 && stock.indexOf(fluidTail, tailStart + fluidTail.length) == -1)
+        stock = stock.substring(0, tailStart)
         // Zero fill makes identity exactly the complement of the accepted positive-radius test.
         replaceExact(
             "if (FluidGaussianSpec.isIdentity(blur.toDouble())) null\n" +
