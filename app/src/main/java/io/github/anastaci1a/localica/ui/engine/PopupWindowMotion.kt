@@ -121,8 +121,8 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         if (holding) expansion.hold()
         val old=placement
         if(fluid && (old?.basis!=basis || old?.preview!=preview)) {
-            val sameIntent=old?.intent==shown && (preview==null || preview.opening==shown)
-            val outline=if(sameIntent) preview?.prepare(basis.startBounds,basis.endBounds,basis.density) else null
+            val sameIntent=old?.intent==shown
+            val outline=if(sameIntent) preview?.prepare(basis.startBounds,basis.endBounds,basis.density,shown) else null
             placement=FluidPlacement(basis,preview,old?.intent,outline,old?.request.takeIf { sameIntent })
             placement?.request?.let { (step,speed) -> deliverOutline(step,speed) }
         }
@@ -142,9 +142,9 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private fun startFluid() {
         val current=placement?:return
         if (!fluid || current.intent==shown || current.intent==null && !shown) return
-        if(current.preview?.let { it.opening!=shown || shown && expansion.nativeOpening==true }==true) return
+        if(current.preview!=null && shown && expansion.nativeOpening==true) return
         val basis=current.basis
-        val outline=current.preview?.prepare(basis.startBounds,basis.endBounds,basis.density)
+        val outline=current.preview?.prepare(basis.startBounds,basis.endBounds,basis.density,shown)
         placement=current.copy(intent=shown,outline=outline,request=null)
         val from = if (shown) basis.startBounds else basis.endBounds
         val to = if (shown) basis.endBounds else basis.startBounds
