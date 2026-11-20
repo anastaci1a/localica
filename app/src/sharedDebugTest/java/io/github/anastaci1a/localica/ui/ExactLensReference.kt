@@ -19,7 +19,7 @@ internal fun LensGeometry.field(point: Offset): LensField {
         if (length > 0f) return LensField(r.x - length, -offset / length)
         val rect = b.boundingRect
         return listOf(LensField(rect.bottom - point.y, Offset(0f, -1f)),
-            LensField(rect.right - point.x, Offset(-1f, 0f)), LensField(point.y - rect.top, Offset(0f, 1f)),
+            LensField(point.y - rect.top, Offset(0f, 1f)), LensField(rect.right - point.x, Offset(-1f, 0f)),
             LensField(point.x - rect.left, Offset(1f, 0f))).minBy { it.distance }
     }
     val inside = outlines.any { it.contains(point) }
