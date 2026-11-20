@@ -653,7 +653,7 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun closingGeometryAndKicksHaveTheRecoveredSpringsAndDelays() {
-        val steps = fluidThroughQueue(false, FluidMainEject, FluidContent.copy(lensingEnabled = false)) { emptyList() }.associateBy { it.action }
+        val steps = fluidThroughQueue(false, FluidMainEject, FluidContent.copy(lensingEnabled = false), 367.5) { emptyList() }.associateBy { it.action }
         for (action in listOf(FullyExpanded, Source, KickSource, UnkickEjectee, UnkickSource)) {
             val step = steps.getValue(action)
             val spring = requireNotNull(step.propertySpring(0.7))

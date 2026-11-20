@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.boundingRect
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.engine.EngineHarness
@@ -300,12 +301,25 @@ class GlassMorphGeometryTest {
         assertEquals(initial[0].boundingRect, requireNotNull(popup.bounds).value())
         assertEquals(0.0, requireNotNull(popup.fluidDestinationProgress(popup = true)), 0.0)
         assertEquals(1.0, requireNotNull(popup.fluidDestinationProgress(popup = false)), 0.0)
+        val (menuSlot, buttonSlot) = requireNotNull(popup.fluidContentSlots())
+        assertEquals(initial[0], menuSlot.aperture)
+        assertEquals(initial[1], buttonSlot.aperture)
+        assertEquals(1.0, menuSlot.blend.opacity, 0.0)
+        assertEquals(0.0, buttonSlot.blend.opacity, 0.0)
+        val menuPlacement = requireNotNull(menuSlot.placeDestination(Size(250f, 360f), Offset.Zero, leftToRight = true))
+        assertEquals(menuSlot.aperture.boundingRect, menuPlacement.extent)
+        assertEquals(menuSlot.aperture.width / 250f, menuPlacement.scaleX, 0f)
+        assertEquals(menuSlot.aperture.height / 360f, menuPlacement.scaleY, 0f)
+        assertEquals(menuSlot.aperture.topLeftCornerRadius.x,
+            requireNotNull(menuPlacement.clip).topLeftCornerRadius.x * menuPlacement.scaleX, 1e-6f)
         h.advance(1.0 / 120)
         assertFalse(popup.isFirstOutlineClipCommit)
         val menuProgress = requireNotNull(popup.fluidDestinationProgress(popup = true))
         val buttonProgress = requireNotNull(popup.fluidDestinationProgress(popup = false))
         assertTrue(menuProgress > 0.0 && buttonProgress < 1.0)
         assertEquals(1.0, menuProgress + buttonProgress, 1e-14)
+        assertEquals(menuProgress, requireNotNull(popup.fluidContentBlend(popup = true)).opacity, 0.0)
+        assertEquals((1.0 - menuProgress) * 4.0, requireNotNull(popup.fluidContentBlend(popup = true)).gaussianRadius, 0.0)
         val first = requireNotNull(popup.outlineBodies())[0]
         assertEquals(19.912427f, first.width, 0.00002f)
         assertEquals(20.003361f, first.height, 0.00002f)

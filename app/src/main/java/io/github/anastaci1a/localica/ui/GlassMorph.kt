@@ -12,12 +12,12 @@ import io.github.anastaci1a.localica.ui.layout.lyricsHeaderWidth
 import io.github.anastaci1a.localica.ui.spec.PopupViewportInsets
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
 import io.github.anastaci1a.localica.ui.spec.PopupKind
-import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Icon
@@ -33,10 +33,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -47,6 +49,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -56,7 +59,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -471,6 +474,31 @@ internal fun Modifier.glassSurfaceOriginPresentation(): ((Float) -> GlassOriginP
     }
 
 internal enum class GlassPlacement { Search, Menu, Center, Sheet, Page }
+private data class PopupLayerBounds(
+    val material: MotionPixelRect, val portal: MotionPixelRect = material, val common: MotionPixelRect = material,
+)
+private fun portalExtent(first: Rect, second: Rect) = Rect(
+    minOf(first.left, second.left), minOf(first.top, second.top),
+    maxOf(first.right, second.right), maxOf(first.bottom, second.bottom),
+)
+
+private fun Placeable.PlacementScope.placePortalDestination(
+    destination: Placeable, layer: FluidPortalPlacement, portal: MotionPixelRect, scale: Float,
+) {
+    val x = layer.origin.x * scale - portal.left
+    val y = layer.origin.y * scale - portal.top
+    val left = x.roundToInt()
+    val top = y.roundToInt()
+    destination.placeWithLayer(left, top) {
+        transformOrigin = TransformOrigin(0f, 0f)
+        translationX = x - left
+        translationY = y - top
+        scaleX = layer.scaleX * scale
+        scaleY = layer.scaleY * scale
+        clip = layer.clip != null
+        layer.clip?.let { roundRect -> shape = GenericShape { _, _ -> addRoundRect(roundRect) } }
+    }
+}
 internal val LocalGlassPanelReady = compositionLocalOf { true }
 
 /** Optional committed-scope observations; no progress subscription or behavior switch. */
@@ -480,6 +508,7 @@ internal val LocalGlassMorphWorkObserver =
 // LocalFrostedBackdrop, whose recordings exclude their own foreground controls.
 internal val LocalModalBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
 private val LocalChildPanels = staticCompositionLocalOf<MutableIntState?> { null }
+private val fluidContentBlurEffect: ((radius: Double) -> RenderEffect?)? = null
 
 /** At a dismissal event, a window showing an IME keeps focus until the commit, so the hiding IME ends there (#545). */
 private fun android.view.Window.glassInput(enabled: Boolean, event: Boolean = false) {
@@ -974,20 +1003,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 }) {
                     // Measure and placement share one edge-rounded rectangle. Keep the
                     // shadow's layer-free placement on legacy Android.
-                    val panelBounds = remember { arrayOfNulls<MotionPixelRect>(1) }
-                    val foregroundLens = remember(motion) {
-                        if (android.os.Build.VERSION.SDK_INT >= 33) {
-                            val renderer = lazy { LensRenderer() }
-                            val effect = { aperture: LensGeometry, blur: Float, unit: Float, warp: LensWarp ->
-                                renderer.value.effect(aperture, blur, anchor.depthScale, unit, warp = warp)
-                            }
-                            effect
-                        } else null
-                    }
-                    Layout(modifier = measureModifier.glassShadowOffset {
-                        val pixels = panelBounds[0]
-                        androidx.compose.ui.unit.IntOffset(pixels?.left ?: 0, pixels?.top ?: 0)
-                    }.onGloballyPositioned {
+                    val panelBounds = remember { arrayOfNulls<PopupLayerBounds>(1) }
+                    val placedMaterial = Modifier.onGloballyPositioned {
                         if (!hasViewport || it.size.width == 0 || it.size.height == 0) return@onGloballyPositioned
                         if (it.size.width > 0 && it.size.height > 0 && window != null && modalWindow === window) measuredOriginWindow = window
                         workObserver?.invoke("geometry", window, phase())
@@ -1006,73 +1023,97 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     openingOwnedBounds = placed.takeIf { shown && moving }, slotBottom = placed?.bottom))
                             }
                         }
-                    }.onPlaced { wellCoordinates[0] = it; windowPlane.layout=it }.drawWithContent {
-                        if (!hasViewport) return@drawWithContent
-                        material.materialCorner=radius().toPx()
-                        // Match the trigger's draw-space deformation. A layout-layer
-                        // scale changes global sampling coordinates, causing a small
-                        // optical jump when the same body returns to its trigger.
+                    }.onPlaced { wellCoordinates[0] = it; windowPlane.layout = it }
+                    fun materialTransform(size: Size): GlassBodyTransform {
                         val pose = if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight()) else null
                         val shape = if (page || reduced && pose == null) GlassShape() else pose?.shape ?: body.value
                         val base = pose?.takeUnless { page }?.transform(size, density.density)
                             ?: shape.bodyTransform(size, density.density, pose?.vertical ?: popupVertical)
-                        val t = base.copy(drift = base.drift + Offset(pose?.horizontalShift ?: 0f, 0f))
-                        val scaledField=windowNode.fieldScalesWithBody()
-                        val fieldTransform=if(scaledField) t else GlassBodyTransform()
-                        // Draw in this native window outside the sampled panel/backdrop.
-                        // Read placed coordinates in the same draw, not a previous-frame
-                        // globally-positioned state handoff. The original trigger restores
-                        // before this decoration relinquishes its covered footprint.
-                        val coordinates = wellCoordinates[0]
-                        shadowReceiver[0] = null
-                        if (wellStrength > 0f && !page && !detached && !anchor.contextual &&
-                            popupFlight.expanded && admittedDraw &&
-                            coordinates?.isAttached == true) {
-                            val home = (returningHome ?: anchor.presentedBounds).translate(-coordinates.backdropPosition(view))
-                            val caster = glassWellCaster(size, radius().toPx(), t)
-                            with(originWell) { draw(home, homeRadius().toPx(), caster, wellStrength) }
-                            shadowReceiver[0] = receiverField.receiver(home,homeRadius().toPx(),size,
-                                fieldTransform,
-                                physicalSize = (returningHome ?: anchor.presentedBounds).size)
-                        }
-                        // The trigger's window keeps drawing its neighbors' shared shadow.
-                        // At home this field must equal that union, not stack over it.
-                        shadowExclusion[0] = null
-                        if (!page && !detached && popupFlight.modalPresent && admittedDraw && coordinates?.isAttached == true) {
-                            val surfaceOrigin = coordinates.backdropPosition(view)
-                            val extent = glassShadowInset(shadowSpread).toPx()
-                            val drawn = Rect(surfaceOrigin + Offset(t.drift.x + size.width * (1f - t.scale.x) / 2f,
-                                t.drift.y + size.height * (1f - t.scale.y) / 2f), Size(size.width * t.scale.x, size.height * t.scale.y)).inflate(extent)
-                            val neighbors = glassShadowNeighbors(anchor, this).filter { Rect(it.left, it.top, it.right, it.bottom).inflate(extent).overlaps(drawn) }
-                            shadowExclusion[0] = nativeShadowExclusion(neighbors, surfaceOrigin, size,
-                                fieldTransform, weight = phase())
-                        }
-                        // Composite field and material once, with the original padded footprint.
-                        nativeField.draw(this,surfaceOpacity(),wellStrength *
-                            (if(quietOptics) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
-                            radius().toPx(),t,
-                            shadowReceiver[0],shadowExclusion[0],motion.outlineBodies(),
-                            { coordinates?.takeIf { it.isAttached }?.backdropPosition(view) }) {
-                            // R5 (#847): B holds every popup optic until the restored source takes it at its draw entry.
-                            if (visible || popupFlight.expanded || anchor.restoredBodyReceipt != anchor.restoredDrawRequest)
-                                popupFlight.refillBody(this@drawWithContent) {
-                                    drawGlassBody(t) {
-                                        this@drawWithContent.drawContent()
-                                    }
-                                }
-                            opticalBody.draw(this@drawWithContent)
-                        }
+                        return base.copy(drift = base.drift + Offset(pose?.horizontalShift ?: 0f, 0f))
                     }
-                        .graphicsLayer { shape=RoundedCornerShape(radius()); clip=true }
-                        .then(if (sharedContent == null) Modifier else Modifier.drawWithContent {
-                            drawContent()
-                            wellCoordinates[0]?.let { sharedContent.drawNative(this, it, view) }
-                        }).glassPopupHome(childHome)
-                        .recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
-                        .pointerInput(Unit) { detectTapGestures { } }, content = {
-                        SurfaceLayer(Modifier.presentedAlpha {
-                            if (quietOptics) motion.quietContent.at(phase()) else 1f
-                        }.recordFrostedBackdrop(material)) {
+                    Layout(modifier = measureModifier.glassShadowOffset {
+                        val pixels = panelBounds[0]?.common
+                        androidx.compose.ui.unit.IntOffset(pixels?.left ?: 0, pixels?.top ?: 0)
+                    }.drawWithContent {
+                        if (!hasViewport) return@drawWithContent
+                        val bounds = panelBounds[0] ?: return@drawWithContent
+                        val panel = bounds.material
+                        val common = bounds.common
+                        val left = (panel.left - common.left).toFloat()
+                        val top = (panel.top - common.top).toFloat()
+                        val right = (common.right - panel.right).toFloat()
+                        val bottom = (common.bottom - panel.bottom).toFloat()
+                        inset(left, top, right, bottom) {
+                            material.materialCorner=radius().toPx()
+                            val t = materialTransform(size)
+                            val scaledField=windowNode.fieldScalesWithBody()
+                            val fieldTransform=if(scaledField) t else GlassBodyTransform()
+                            // Draw in this native window outside the sampled panel/backdrop.
+                            // Read placed coordinates in the same draw, not a previous-frame
+                            // globally-positioned state handoff. The original trigger restores
+                            // before this decoration relinquishes its covered footprint.
+                            val coordinates = wellCoordinates[0]
+                            shadowReceiver[0] = null
+                            if (wellStrength > 0f && !page && !detached && !anchor.contextual &&
+                                popupFlight.expanded && admittedDraw &&
+                                coordinates?.isAttached == true) {
+                                val home = (returningHome ?: anchor.presentedBounds).translate(-coordinates.backdropPosition(view))
+                                val caster = glassWellCaster(size, radius().toPx(), t)
+                                with(originWell) { draw(home, homeRadius().toPx(), caster, wellStrength) }
+                                shadowReceiver[0] = receiverField.receiver(home,homeRadius().toPx(),size,
+                                    fieldTransform,
+                                    physicalSize = (returningHome ?: anchor.presentedBounds).size)
+                            }
+                            // The trigger's window keeps drawing its neighbors' shared shadow.
+                            // At home this field must equal that union, not stack over it.
+                            shadowExclusion[0] = null
+                            if (!page && !detached && popupFlight.modalPresent && admittedDraw && coordinates?.isAttached == true) {
+                                val surfaceOrigin = coordinates.backdropPosition(view)
+                                val extent = glassShadowInset(shadowSpread).toPx()
+                                val drawn = Rect(surfaceOrigin + Offset(t.drift.x + size.width * (1f - t.scale.x) / 2f,
+                                    t.drift.y + size.height * (1f - t.scale.y) / 2f), Size(size.width * t.scale.x, size.height * t.scale.y)).inflate(extent)
+                                val neighbors = glassShadowNeighbors(anchor, this).filter { Rect(it.left, it.top, it.right, it.bottom).inflate(extent).overlaps(drawn) }
+                                shadowExclusion[0] = nativeShadowExclusion(neighbors, surfaceOrigin, size,
+                                    fieldTransform, weight = phase())
+                            }
+                            // Composite field and material once, with the original padded footprint.
+                            nativeField.draw(this@drawWithContent,surfaceOpacity(),wellStrength *
+                                (if(quietOptics) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
+                                radius().toPx(),t,
+                                shadowReceiver[0],shadowExclusion[0],motion.outlineBodies(),
+                                { coordinates?.takeIf { it.isAttached }?.backdropPosition(view) }) {
+                                // R5 (#847): B holds every popup optic until the restored source takes it at its draw entry.
+                                inset(-left, -top, -right, -bottom) {
+                                    if (visible || popupFlight.expanded || anchor.restoredBodyReceipt != anchor.restoredDrawRequest)
+                                        popupFlight.refillBody(this@drawWithContent) {
+                                            if (motion.hasFluidContent) {
+                                                this@drawWithContent.drawContent()
+                                                translate(left, top) { wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) } }
+                                            } else drawGlassBody(t) {
+                                                this@drawWithContent.drawContent()
+                                                wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
+                                            }
+                                        }
+                                    opticalBody.draw(this@drawWithContent)
+                                }
+                            }
+                        }
+                    }.graphicsLayer {
+                        clip = !motion.hasFluidContent
+                        if (clip) shape = RoundedCornerShape(radius())
+                    }.glassPopupHome(childHome).recordFrostedBackdrop(completePanel), content = {
+                        SurfaceLayer(placedMaterial.testTag("glass-morph-surface")
+                            .pointerInput(Unit) { detectTapGestures { } }
+                            .drawWithContent {
+                                if (motion.hasFluidContent)
+                                    drawGlassBody(materialTransform(size)) { this@drawWithContent.drawContent() }
+                                else drawContent()
+                            }.graphicsLayer {
+                                clip = motion.hasFluidContent
+                                if (clip) shape = RoundedCornerShape(radius())
+                            }.presentedAlpha {
+                                if (quietOptics) motion.quietContent.at(phase()) else 1f
+                            }.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = samplingSource,
@@ -1094,122 +1135,148 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     presentation = ::bodyMaterial, presentedRadius = ::radius)
                             }
                         }
-                        SurfaceLayer(Modifier.presentedAlpha { if (page) 1f else motion.foreground.at(phase()) }
-                            .onPlaced { sharedContent?.destination(it) }
-                            .then(contentModifier)
-                            .then(if (!motion.shown || !foregroundReady) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
-                                awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
-                            } else Modifier)) {
-                            CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides defaultGlassInk(popupLightMix),
-                                LocalModalBackdrop provides completePanel,
-                                LocalChildPanels provides childPanels,
-                                LocalPopupScrollEdges provides !page,
-                                LocalSurfaceShadows provides null, LocalPageShadows provides null,
-                                LocalShadowPlane provides windowPlane,
-                                LocalGlassOrigin provides null,
-                                LocalGlassPopupHome provides childHome,
-                                LocalPopupDismiss provides dismissNow,
-                                LocalGlassPanelReady provides (visible && admittedDraw && (placement == GlassPlacement.Search || panelReady))) {
-                                GlassPanelTheme(popupLightMix, content)
+                        Layout(modifier = Modifier.graphicsLayer {
+                            renderEffect = motion.whenFluid { fluidContentBlurEffect?.invoke(motion.fluidBlurRadius) }
+                        }, content = {
+                            SurfaceLayer(Modifier.graphicsLayer {
+                                val blend = motion.fluidContentBlend(popup = true)
+                                alpha = blend?.layerOpacity ?: if (page) 1f else motion.foreground.at(phase())
+                                renderEffect = blend?.let { fluidContentBlurEffect?.invoke(it.gaussianRadius) }
                             }
-                        }
-                        SurfaceLayer(Modifier.presentedAlpha { motion.face.at(phase()) }
-                            .clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
-                            CompositionLocalProvider(LocalContentColor provides lerp(Color(0xFF202124), Color.White, popupLightMix)) { anchor.face?.invoke() }
-                        }
-                    }) { children, panelConstraints ->
-                        val measuredViewport = measure(panelConstraints, this, margin, maxHeight)
-                        val viewportHeight = measuredViewport.viewportHeight
-                        val contentMaxHeight = measuredViewport.contentMaxHeight
-                        val fixedHeight = measuredViewport.fixedHeight
-                        if (!hasViewport || measuredViewport.empty) {
-                            // Do not measure/place the foreground at an invented 1px
-                            // size or overwrite its remembered target. An empty
-                            // measure retains all three composed children, including
-                            // the draft owner; removing content here would not.
-                            panelBounds[0] = null
-                            return@Layout layout(panelConstraints.minWidth, panelConstraints.minHeight) { }
-                        }
-                        val contentWidth = if (fitContent)
-                            children[1].maxIntrinsicWidth(contentMaxHeight).coerceIn(1, widthLimit) else widthLimit
-                        measuredWidth = contentWidth
-                        val foreground = children[1].measure(Constraints(minWidth = contentWidth, maxWidth = contentWidth,
-                            minHeight = fixedHeight ?: if (page) contentMaxHeight else 0, maxHeight = fixedHeight ?: contentMaxHeight))
-                        if (viewportSized) viewportTargetHeight = foreground.height else targetHeight = foreground.height
-                        val placedHeight = foreground.height
-                        val rightAligned = start().center.x > availableWidth / 2f
-                        val x = if (placement == GlassPlacement.Menu)
-                            (if (anchor.contextual) start().center.x - targetWidth / 2f else if (rightAligned) start().right - targetWidth else start().left).coerceIn(margin, (availableWidth - targetWidth - margin).coerceAtLeast(margin))
-                            else (availableWidth - targetWidth) / 2f
-                        val y = when (placement) {
-                            GlassPlacement.Search -> if (imeHeight > 0)
-                                (viewportHeight - placedHeight - margin).coerceAtLeast(margin)
-                                else ((viewportHeight - placedHeight) / 2f).coerceAtLeast(margin)
-                            GlassPlacement.Center -> (viewportHeight - placedHeight) / 2f
-                            GlassPlacement.Sheet -> (viewportHeight - placedHeight - margin).coerceAtLeast(margin)
-                            GlassPlacement.Page -> 0f
-                            GlassPlacement.Menu -> (if (anchor.contextual) minOf(start().top,
-                                (anchor.bottomLimit.takeIf { it.isFinite() }?.minus(windowOrigin.y) ?: (availableHeight - anchor.bottomClearance)) - placedHeight)
-                                else if (start().center.y > viewportHeight / 2f) start().bottom - placedHeight else start().top)
-                                .coerceIn(margin, (viewportHeight - placedHeight).toFloat().coerceAtLeast(margin))
-                        }
-                        val envelope = if (placement == GlassPlacement.Search) searchPanelTarget(windowOrigin,
-                            availableWidth.toFloat(), viewportHeight.toFloat(), widthLimit.toFloat(), foreground.height.toFloat(),
-                            margin, imeHeight, imeTarget, safeBottom, opening = openingSearchTarget)
-                            else Rect(windowOrigin + Offset(x, y), Size(targetWidth, foreground.height.toFloat()))
-                        sharedContent?.destinationOrigin(envelope.topLeft)
-                        val home = if (detached) Rect(envelope.topLeft + Offset(if (page) with(density) { 28.dp.toPx() } else 0f,
-                            if (page) 0f else margin * 2), envelope.size) else start().translate(windowOrigin)
-                        // Every layout retargets the one shared rectangle (position and velocity kept). A nested
-                        // action menu freezes its parent until it has returned; IME-owned Back holds one layout.
-                        if (!holdImeBack() && (placement != GlassPlacement.Search || childPanels.intValue == 0)) {
-                            val preview = motion.whenFluid {
-                                with(density) {
-                                    FluidPopupPreview(home, windowOrigin, if (detached) popupRadius.toPx() else homeRadius().toPx(),
-                                        popupRadius.toPx(), TransformOrigin.Center.pivotFractionY.toDouble(), view.scaleY.toDouble(),
-                                        sourceIsGlass = anchor.material != null)
+                                .onPlaced { sharedContent?.destination(it) }
+                                .then(contentModifier)
+                                .then(if (!motion.shown || !foregroundReady) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
+                                    awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
+                                } else Modifier)) {
+                                CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides defaultGlassInk(popupLightMix),
+                                    LocalModalBackdrop provides completePanel,
+                                    LocalChildPanels provides childPanels,
+                                    LocalPopupScrollEdges provides !page,
+                                    LocalSurfaceShadows provides null, LocalPageShadows provides null,
+                                    LocalShadowPlane provides windowPlane,
+                                    LocalGlassOrigin provides null,
+                                    LocalGlassPopupHome provides childHome,
+                                    LocalPopupDismiss provides dismissNow,
+                                    LocalGlassPanelReady provides (visible && admittedDraw && (placement == GlassPlacement.Search || panelReady))) {
+                                    GlassPanelTheme(popupLightMix, content)
                                 }
                             }
-                            motion.place(home, envelope, density.density, detached = detached, preview = preview)
-                            if (placement == GlassPlacement.Search) {
-                                searchMotion.target = envelope
-                                popupFlight.searchSlot.bindBottom(requireNotNull(motion.bounds).bottom,
-                                    motion.requestedEndpoint({ envelope.bottom }, { home.bottom }), motion.requestedEndpoint({ 1f }, { 0f }))
+                            SurfaceLayer(Modifier.graphicsLayer {
+                                val blend = motion.fluidContentBlend(popup = false)
+                                alpha = blend?.layerOpacity ?: motion.face.at(phase())
+                                renderEffect = blend?.let { fluidContentBlurEffect?.invoke(it.gaussianRadius) }
                             }
-                        }
-                        val pixels = glassMorphPixelBounds(requireNotNull(motion.bounds).value().translate(-windowOrigin))
-                        panelBounds[0] = pixels
-                        val width = pixels.width
-                        val height = pixels.height
-                        val backing = children[0].measure(Constraints.fixed(width, height))
-                        val face = children[2].measure(Constraints.fixed(startWidth().roundToInt().coerceAtLeast(1), startHeight().roundToInt().coerceAtLeast(1)))
-                        layout(width, height) {
-                            backing.place(0, 0)
-                            val foregroundX = (width - foreground.width) / 2
-                            val foregroundY = if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2
-                            foreground.placeWithLayer(foregroundX, foregroundY) {
-                                motion.whenFluid(ordinary = {
-                                    val fit = popupContentScale(width,height,foreground.width,foreground.height,page || placement == GlassPlacement.Search)
-                                    scaleX = fit; scaleY = fit
-                                }) {
-                                    foregroundLens?.let { effect ->
-                                        val blurRadius = motion.fluidBlurRadius
-                                        val lensHeight = motion.fluidLensHeight
-                                        val amount = motion.fluidLensAmount
-                                        renderEffect = if (FluidLensingSpec.isForegroundAtRest(blurRadius, lensHeight, amount)) null
-                                        else effect(
-                                            LensGeometry(Rect(-foregroundX.toFloat(), -foregroundY.toFloat(),
-                                                (width - foregroundX).toFloat(), (height - foregroundY).toFloat()), with(density) { radius().toPx() }),
-                                            (blurRadius * density.density).toFloat(), density.density,
-                                            LensWarp(lensHeight, amount, 0f, IntSize(foreground.width, foreground.height.coerceAtLeast(1))),
-                                        )
+                                .clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+                                CompositionLocalProvider(LocalContentColor provides lerp(Color(0xFF202124), Color.White, popupLightMix)) { anchor.face?.invoke() }
+                            }
+                        }) portalMeasure@{ children, panelConstraints ->
+                            val measuredViewport = measure(panelConstraints, this, margin, maxHeight)
+                            val viewportHeight = measuredViewport.viewportHeight
+                            val contentMaxHeight = measuredViewport.contentMaxHeight
+                            val fixedHeight = measuredViewport.fixedHeight
+                            if (!hasViewport || measuredViewport.empty) {
+                                // Do not measure/place the foreground at an invented 1px
+                                // size or overwrite its remembered target. An empty
+                                // measure retains all three composed children, including
+                                // the draft owner; removing content here would not.
+                                panelBounds[0] = null
+                                return@portalMeasure layout(panelConstraints.minWidth, panelConstraints.minHeight) { }
+                            }
+                            val contentWidth = if (fitContent)
+                                children[0].maxIntrinsicWidth(contentMaxHeight).coerceIn(1, widthLimit) else widthLimit
+                            measuredWidth = contentWidth
+                            val foreground = children[0].measure(Constraints(minWidth = contentWidth, maxWidth = contentWidth,
+                                minHeight = fixedHeight ?: if (page) contentMaxHeight else 0, maxHeight = fixedHeight ?: contentMaxHeight))
+                            if (viewportSized) viewportTargetHeight = foreground.height else targetHeight = foreground.height
+                            val placedHeight = foreground.height
+                            val rightAligned = start().center.x > availableWidth / 2f
+                            val x = if (placement == GlassPlacement.Menu)
+                                (if (anchor.contextual) start().center.x - targetWidth / 2f else if (rightAligned) start().right - targetWidth else start().left).coerceIn(margin, (availableWidth - targetWidth - margin).coerceAtLeast(margin))
+                                else (availableWidth - targetWidth) / 2f
+                            val y = when (placement) {
+                                GlassPlacement.Search -> if (imeHeight > 0)
+                                    (viewportHeight - placedHeight - margin).coerceAtLeast(margin)
+                                    else ((viewportHeight - placedHeight) / 2f).coerceAtLeast(margin)
+                                GlassPlacement.Center -> (viewportHeight - placedHeight) / 2f
+                                GlassPlacement.Sheet -> (viewportHeight - placedHeight - margin).coerceAtLeast(margin)
+                                GlassPlacement.Page -> 0f
+                                GlassPlacement.Menu -> (if (anchor.contextual) minOf(start().top,
+                                    (anchor.bottomLimit.takeIf { it.isFinite() }?.minus(windowOrigin.y) ?: (availableHeight - anchor.bottomClearance)) - placedHeight)
+                                    else if (start().center.y > viewportHeight / 2f) start().bottom - placedHeight else start().top)
+                                    .coerceIn(margin, (viewportHeight - placedHeight).toFloat().coerceAtLeast(margin))
+                            }
+                            val envelope = if (placement == GlassPlacement.Search) searchPanelTarget(windowOrigin,
+                                availableWidth.toFloat(), viewportHeight.toFloat(), widthLimit.toFloat(), foreground.height.toFloat(),
+                                margin, imeHeight, imeTarget, safeBottom, opening = openingSearchTarget)
+                                else Rect(windowOrigin + Offset(x, y), Size(targetWidth, foreground.height.toFloat()))
+                            sharedContent?.destinationOrigin(envelope.topLeft)
+                            val home = if (detached) Rect(envelope.topLeft + Offset(if (page) with(density) { 28.dp.toPx() } else 0f,
+                                if (page) 0f else margin * 2), envelope.size) else start().translate(windowOrigin)
+                            // Every layout retargets the one shared rectangle (position and velocity kept). A nested
+                            // action menu freezes its parent until it has returned; IME-owned Back holds one layout.
+                            if (!holdImeBack() && (placement != GlassPlacement.Search || childPanels.intValue == 0)) {
+                                val preview = motion.whenFluid {
+                                    with(density) {
+                                        FluidPopupPreview(home, windowOrigin, if (detached) popupRadius.toPx() else homeRadius().toPx(),
+                                            popupRadius.toPx(), TransformOrigin.Center.pivotFractionY.toDouble(), view.scaleY.toDouble(),
+                                            sourceIsGlass = anchor.material != null)
                                     }
                                 }
+                                motion.place(home, envelope, density.density, detached = detached, preview = preview)
+                                if (placement == GlassPlacement.Search) {
+                                    searchMotion.target = envelope
+                                    popupFlight.searchSlot.bindBottom(requireNotNull(motion.bounds).bottom,
+                                        motion.requestedEndpoint({ envelope.bottom }, { home.bottom }), motion.requestedEndpoint({ 1f }, { 0f }))
+                                }
                             }
-                            // A retained face may contain a Material Surface with a pointer node.
-                            // Alpha and cleared semantics do not remove that invisible hit target.
-                            // Keep measuring it for the return morph, but place it only while visible.
-                            placePopupFace(face,(width - face.width) / 2,(height - face.height) / 2,::phase)
+                            val pixels = glassMorphPixelBounds(requireNotNull(motion.bounds).value().translate(-windowOrigin))
+                            val width = pixels.width
+                            val height = pixels.height
+                            val face = children[1].measure(Constraints.fixed(startWidth().roundToInt().coerceAtLeast(1), startHeight().roundToInt().coerceAtLeast(1)))
+                            val slots = motion.fluidContentSlots()
+                            if (slots != null) {
+                                val leftToRight = layoutDirection == LayoutDirection.Ltr
+                                val menuLayer = slots.first.placeDestination(Size(foreground.width.toFloat(), foreground.height.toFloat()), windowOrigin, leftToRight)
+                                val buttonLayer = slots.second.placeDestination(Size(face.width.toFloat(), face.height.toFloat()), windowOrigin, leftToRight)
+                                val portalScale = motion.fluidPortalScale.toFloat()
+                                val extent = menuLayer?.extent?.let { extent ->
+                                    buttonLayer?.extent?.let { portalExtent(extent, it) } ?: extent
+                                } ?: buttonLayer?.extent
+                                val portal = extent?.let {
+                                    glassMorphPixelBounds(Rect(kotlin.math.floor(it.left * portalScale), kotlin.math.floor(it.top * portalScale),
+                                        kotlin.math.ceil(it.right * portalScale), kotlin.math.ceil(it.bottom * portalScale)))
+                                } ?: pixels
+                                val common = pixels.copy(left = minOf(pixels.left, portal.left), top = minOf(pixels.top, portal.top),
+                                    right = maxOf(pixels.right, portal.right), bottom = maxOf(pixels.bottom, portal.bottom))
+                                panelBounds[0] = PopupLayerBounds(pixels, portal, common)
+                                return@portalMeasure layout(portal.width, portal.height) {
+                                    menuLayer?.let { placePortalDestination(foreground, it, portal, portalScale) }
+                                    buttonLayer?.let { placePortalDestination(face, it, portal, portalScale) }
+                                }
+                            }
+                            panelBounds[0] = PopupLayerBounds(pixels)
+                            layout(width, height) {
+                                foreground.placeWithLayer((width - foreground.width) / 2, if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2) {
+                                    motion.whenFluid { Unit } ?: run {
+                                        val fit = popupContentScale(width,height,foreground.width,foreground.height,page || placement == GlassPlacement.Search)
+                                        scaleX = fit; scaleY = fit
+                                    }
+                                }
+                                // A retained face may contain a Material Surface with a pointer node.
+                                // Alpha and cleared semantics do not remove that invisible hit target.
+                                // Keep measuring it for the return morph, but place it only while visible.
+                                placePopupFace(face,(width - face.width) / 2,(height - face.height) / 2,::phase)
+                            }
+                        }
+                    }) { children, constraints ->
+                        val portal = children[1].measure(constraints)
+                        val bounds = panelBounds[0] ?: return@Layout layout(portal.width, portal.height) { }
+                        val panel = bounds.material
+                        val common = bounds.common
+                        val backing = children[0].measure(Constraints.fixed(panel.width, panel.height))
+                        layout(common.width, common.height) {
+                            backing.place(panel.left - common.left, panel.top - common.top)
+                            portal.place(bounds.portal.left - common.left, bounds.portal.top - common.top)
                         }
                     }
                 }

@@ -1,9 +1,14 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.boundingRect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import io.github.anastaci1a.localica.ui.engine.FluidPopupContentSlot
 import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
 import io.github.anastaci1a.localica.ui.spec.FluidOutlineContentInputs
 import io.github.anastaci1a.localica.ui.spec.FluidOutlineItemInputs
@@ -76,6 +81,32 @@ internal fun fluidDestinationPlacement(
         2 -> FluidDestinationPlacement(PopupPortalBounds(middle, 0.0, apertureWidth / ry, item.height), ry, ry)
         else -> FluidDestinationPlacement(PopupPortalBounds(middle, 0.0, item.width, item.height), rx, ry)
     }
+}
+
+internal data class FluidPortalPlacement(
+    val origin: Offset, val scaleX: Float, val scaleY: Float, val clip: RoundRect?, val extent: Rect,
+)
+
+private val FluidContentInsets = PopupPortalInsets(0.0, 0.0, 0.0, 0.0)
+
+internal fun FluidPopupContentSlot.placeDestination(size: Size, root: Offset, leftToRight: Boolean): FluidPortalPlacement? {
+    if (blend.layerOpacity <= 0f || aperture.width <= 0f || aperture.height <= 0f) return null
+    val itemBounds = PopupPortalBounds(0.0, 0.0, size.width.toDouble(), size.height.toDouble())
+    val placement = fluidDestinationPlacement(aperture.width.toDouble(), aperture.height.toDouble(),
+        FluidContentInsets, itemBounds, FluidContentInsets, item.contentScaleAxis, leftToRight)
+    val (layer, x, y) = placement
+    val left = aperture.left + layer.x - (layer.width * x * 0.5)
+    val top = aperture.top + layer.y
+    val origin = Offset((left - root.x).toFloat(), (top - root.y).toFloat())
+    if (item.prefersUnclippedContents) {
+        val extent = Rect(origin, Size((itemBounds.width * x).toFloat(), (itemBounds.height * y).toFloat()))
+        return FluidPortalPlacement(origin, x.toFloat(), y.toFloat(), null, extent)
+    }
+    val clip = RoundRect(Rect(
+        ((aperture.left - left) / x).toFloat(), ((aperture.top - top) / y).toFloat(),
+        ((aperture.right - left) / x).toFloat(), ((aperture.bottom - top) / y).toFloat(),
+    ), CornerRadius((aperture.topLeftCornerRadius.x / x).toFloat(), (aperture.topLeftCornerRadius.y / y).toFloat()))
+    return FluidPortalPlacement(origin, x.toFloat(), y.toFloat(), clip, aperture.boundingRect.translate(-root))
 }
 
 internal fun fluidPopupContentGrows(from: PopupPortalBounds, to: PopupPortalBounds) =

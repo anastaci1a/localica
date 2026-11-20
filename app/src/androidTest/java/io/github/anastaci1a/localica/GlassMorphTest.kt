@@ -25,7 +25,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -93,21 +92,23 @@ class GlassMorphTest {
                 compose.runOnUiThread {
                     val coordinates = foreground?.takeIf { it.isAttached } ?: return@runOnUiThread null
                     val measuredHeight = coordinates.size.height
-                    val visibleHeight = coordinates.boundsInWindow().height.roundToInt()
-                    if (visibleHeight <= 0 || visibleHeight >= measuredHeight) return@runOnUiThread null
                     val origin = coordinates.localToWindow(Offset.Zero)
                     val bottom = coordinates.localToWindow(Offset(0f, measuredHeight.toFloat()))
-                    assertEquals("The foreground keeps unit scale inside the moving aperture",
-                        measuredHeight, bottom.y.roundToInt() - origin.y.roundToInt())
-                    measuredHeight
+                    val presentedHeight = bottom.y.roundToInt() - origin.y.roundToInt()
+                    measuredHeight.takeIf { presentedHeight in 1 until measuredHeight }
                 }
             }
-            assertNotNull("The opening presents a genuinely clipped foreground", initialLayoutHeight)
+            assertNotNull("The moving aperture scales a nonempty foreground", initialLayoutHeight)
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
             compose.runOnUiThread {
-                assertEquals("The first clipped layout must equal the settled layout",
-                    initialLayoutHeight, requireNotNull(foreground).size.height)
+                val coordinates = requireNotNull(foreground)
+                assertEquals("The foreground keeps its final measured height in flight",
+                    initialLayoutHeight, coordinates.size.height)
+                val origin = coordinates.localToWindow(Offset.Zero)
+                val bottom = coordinates.localToWindow(Offset(0f, coordinates.size.height.toFloat()))
+                assertEquals("The settled foreground has unit scale",
+                    coordinates.size.height, bottom.y.roundToInt() - origin.y.roundToInt())
             }
         } finally {
             compose.mainClock.autoAdvance = true
