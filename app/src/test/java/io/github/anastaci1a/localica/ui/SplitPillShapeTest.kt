@@ -16,11 +16,12 @@ class SplitPillShapeTest {
     /** The header width for a full reveal or a fast source tap (reveal 0), as LyricsHeaderActions lays it out. */
     private fun size(p: Float,reveal: Float): Size { val gap=((p-.5f)*2f).coerceIn(0f,1f); return Size(c*(1f+maxOf(reveal,(p*2f).coerceIn(0f,1f))+gap/6f),c) }
 
-    /** Pre-B1 oracle: one body at rest, then the same halves; the optics formulas as GlassSilhouette had them. */
+    /** Pre-B1 oracle: one body at rest, then the same halves and rim progression. */
     private fun legacyBodies(size: Size,p: Float)=splitPillBodies(size,p).let { if(p==0f) it.take(1) else it }
-    private fun legacyOptics(size: Size,p: Float): GlassSilhouetteGeometry { val bodies=legacyBodies(size,p); val raw=if(p<.25f) p*4f else (2f-p*4f).coerceAtLeast(0f); val rim=(p*2f).coerceIn(0f,1f)
-        fun RoundRect.center()=Offset((left+right)/2f,(top+bottom)/2f)
-        return GlassSilhouetteGeometry(bodies,raw*raw*(3f-2f*raw),if(p>.25f) bodies.first().center() to bodies.last().center() else null,rim*rim*(3f-2f*rim),if(p>0f && p<.5f) size.height*p else null) }
+    private fun legacyOptics(size: Size,p: Float): GlassSilhouetteGeometry {
+        val rim=(p*2f).coerceIn(0f,1f)
+        return GlassSilhouetteGeometry(legacyBodies(size,p),rim*rim*(3f-2f*rim))
+    }
     private fun corners(b: RoundRect)=floatArrayOf(b.left,b.top,b.right,b.bottom,b.topLeftCornerRadius.x,b.topLeftCornerRadius.y,b.topRightCornerRadius.x,b.topRightCornerRadius.y,b.bottomRightCornerRadius.x,b.bottomRightCornerRadius.y,b.bottomLeftCornerRadius.x,b.bottomLeftCornerRadius.y)
 
     @Test fun regrabAtTheNeckKeepsOneShapeIdentityAndTheLegacyFrames() = EngineHarness(spec=spec).use { h ->
@@ -34,10 +35,9 @@ class SplitPillShapeTest {
                 val published=shape.outline(); follow(q); assertSame("Re-following the same phase publishes nothing (no layout feedback loop)",published,shape.outline())
                 assertEquals("The followed phase owns all motion: the shape keeps no frame loop awake (p=$q)",0,h.clock.activeCount)
                 for(scale in listOf(1f,.5f)) {
-                    val s=size(q,reveal)*scale; val actual=splitPillOptics(pill.bodies(s),s,q); val expected=legacyOptics(s,q)
+                    val s=size(q,reveal)*scale; val actual=splitPillOptics(pill.bodies(s),q); val expected=legacyOptics(s,q)
                     assertEquals(expected.bodies.size,actual.bodies.size); expected.bodies.zip(actual.bodies).forEach { (a,b) -> assertArrayEquals("p=$q reveal=$reveal scale=$scale",corners(a),corners(b),1e-3f) }
-                    assertEquals(expected.fieldWeight,actual.fieldWeight,1e-6f); assertEquals(expected.rimSplit,actual.rimSplit,1e-6f); assertEquals(expected.splitInner,actual.splitInner)
-                    assertEquals(expected.circles==null,actual.circles==null); expected.circles?.let { (a,b) -> val (x,y)=actual.circles!!; assertEquals(a.x,x.x,1e-3f); assertEquals(b.x,y.x,1e-3f); assertEquals(a.y,x.y,1e-3f) }
+                    assertEquals(expected.rimSplit,actual.rimSplit,1e-6f)
                 }
             }
             shape.dispose()

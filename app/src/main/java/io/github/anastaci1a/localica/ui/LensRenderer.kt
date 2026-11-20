@@ -1,11 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
-import android.graphics.Bitmap
-import android.graphics.BitmapShader
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import androidx.annotation.RequiresApi
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.unit.IntSize
@@ -19,10 +17,9 @@ import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 internal class LensRenderer {
     private val shader = RuntimeShader("""
         uniform shader scene;
-        uniform shader field;
-        uniform float4 bounds;
-        uniform float corner;
-        uniform float2 weights;
+        uniform float4 bodyBounds[2];
+        uniform float4 bodyRadii[4];
+        uniform float bodyCount;
         uniform float span;
         uniform float2 optics;
         uniform float4 refraction;
@@ -31,111 +28,122 @@ internal class LensRenderer {
         uniform float whiteTint;
         uniform float illumination;
         uniform float3 tone;
-        uniform float fieldMode;
-        uniform float2 fieldOrigin;
-        uniform float fieldScale;
-        uniform float fieldRange;
-        uniform float circleMode;
-        uniform float4 circleCenters;
-        uniform float splitInnerRadius;
         uniform float4 mapShape;
         uniform float2 mapAngle;
         uniform float4 warp;
         uniform float2 warpClamp;
         uniform float warpMode;
         $GlassColorShader
-        float3 circleField(float2 p, float2 center) {
-            float2 local = p - center;
-            float radial = length(local);
-            return float3(span - radial, radial > 0.000001 ? -local / radial : float2(0));
+        float2 quarterPoint(float h) {
+            return float2((1.0 - h) * (1.0 + h), 2.0 * h) / (1.0 + h * h);
         }
-        float3 analyticGeometry(float2 p) {
-            if (circleMode > 0.5) {
-                float2 axis = circleCenters.zw - circleCenters.xy;
-                float separation = length(axis);
-                if (separation < 0.000001) return circleField(p, circleCenters.xy);
-                float2 direction = axis / separation;
-                float along = dot(p - (circleCenters.xy + circleCenters.zw) * 0.5, direction);
-                float width = span * fieldMode;
-                if (width < 0.000001) return circleField(p, along <= 0.0 ? circleCenters.xy : circleCenters.zw);
-                float t = clamp(0.5 + along / (2.0 * width), 0.0, 1.0);
-                float3 a = circleField(p, circleCenters.xy);
-                float3 b = circleField(p, circleCenters.zw);
-                float3 blended = mix(a, b, t * t * (3.0 - 2.0 * t));
-                blended.yz += direction * ((b.x - a.x) * 3.0 * t * (1.0 - t) / width);
-                return blended;
+        float derivative(float h, float difference, float au, float bv) {
+            float2 q = quarterPoint(h);
+            return (difference * q.x - au) * q.y + bv * q.x;
+        }
+        float2 nearestQuarter(float2 p, float2 radii) {
+            bool swap = radii.x < radii.y;
+            float2 r = swap ? radii.yx : radii;
+            float2 q = swap ? p.yx : p;
+            float au = r.x * q.x, bv = r.y * q.y;
+            float difference = (r.x - r.y) * (r.x + r.y);
+            float2 best = difference < 2.0 * (au - bv) ? float2(1, 0) : float2(0, 1);
+            if (difference == 0.0) {
+                float2 positive = max(q, float2(0));
+                if (any(greaterThan(positive, float2(0)))) best = normalize(positive);
+            } else if (q.y == 0.0) {
+                float x = clamp(au / difference, 0.0, 1.0);
+                best = float2(x, sqrt((1.0 - x) * (1.0 + x)));
+            } else if (q.x > 0.0) {
+                // The distance as a function of cos(theta) has at most one interior minimum.
+                // For a negative short-axis query, the derivative peaks at this sin(theta).
+                float y = q.y < 0.0 ? min(1.0, pow(-bv / difference, 1.0 / 3.0)) : 0.0;
+                float lo = y / (1.0 + sqrt((1.0 - y) * (1.0 + y))), hi = 1.0;
+                if (derivative(lo, difference, au, bv) > 0.0) {
+                    for (int i = 0; i < 24; ++i) {
+                        float h = (lo + hi) * 0.5;
+                        if (derivative(h, difference, au, bv) > 0.0) lo = h;
+                        else hi = h;
+                    }
+                    float2 candidate = quarterPoint((lo + hi) * 0.5);
+                    float2 delta = candidate - best;
+                    if (difference * delta.x * (candidate.x + best.x) - 2.0 * dot(float2(au, bv), delta) < 0.0)
+                        best = candidate;
+                }
             }
-            float2 local = p - (bounds.xy + bounds.zw) * 0.5;
-            float2 e = abs(local) - (bounds.zw - bounds.xy) * 0.5;
-            float reach = corner * 1.52866495;
-            float2 q = mix(reach, corner, max(weights.x, weights.y)) + e;
-            float2 v = max(float2(0), (e + reach) / reach);
-            float length2 = length(v);
-            float t = max(v.x, v.y) == 0.0 ? 0.0 : clamp(min(v.x, v.y) / max(v.x, v.y), 0.0, 1.0);
-            float poly = (((3.15600991 - t * 0.926054) * t - 3.64122009) * t + 1.26803005) * t + 0.268530995;
-            float a = length2 + 1.0 + -1.0 / (1.0 - t * t * clamp(length2, 0.0, 1.0) * poly);
-            float b = length(max(float2(0), 1.52866495 * v - 0.528665006)) * 0.654165566 + 0.345834434;
-            float2 axes = mix(float2(a), float2(b), weights);
-            float side = v.y > v.x ? 1.0 : -1.0;
-            float distance = min(0.0, max(q.x, q.y)) + reach * (mix(axes.x, axes.y, clamp(0.5 - side + side * t, 0.0, 1.0)) - 1.0);
-            float2 n = max(q, float2(0));
-            n = dot(n, n) > 0.0 ? normalize(n) : (q.x > q.y ? float2(1, 0) : float2(0, 1));
-            return float3(-distance, local.x < 0.0 ? n.x : -n.x, local.y < 0.0 ? n.y : -n.y);
+            return swap ? best.yx : best;
         }
-        float4 quarterArc(float2 p, float2 c, float r, float side) {
-            float2 q = max((p - c) * float2(side, -1), float2(0));
-            float radial = length(q);
-            float2 edge;
-            if (radial > 0.000001) edge = c + q * float2(side, -1) * (r / radial);
-            else {
-                float2 a = c + float2(side * r, 0);
-                float2 b = c + float2(0, -r);
-                edge = dot(p - a, p - a) < dot(p - b, p - b) ? a : b;
-            }
-            return float4(edge, (c - edge) / max(length(c - edge), 0.000001));
+        float4 nearer(float4 best, float2 delta, float2 normal) {
+            return dot(delta, delta) < dot(best.xy, best.xy) ? float4(delta, normal) : best;
         }
-        float3 splitBoundary(float2 point) {
-            float2 middle = (bounds.xy + bounds.zw) * 0.5;
-            float inner = clamp(splitInnerRadius, 0.0, span);
-            float fit = min(1.0, (bounds.z - bounds.x) * 0.5 / max(span + inner, 0.000001));
-            float radius = span * fit;
-            inner *= fit;
-            float2 delta = point - middle;
-            float2 p = middle - abs(delta);
-            float2 closest = float2(clamp(p.x, bounds.x + radius, max(bounds.x + radius, middle.x - inner)), bounds.y);
-            float2 normal = float2(0, 1);
-            float square = dot(p - closest, p - closest);
-            float2 side = float2(bounds.x, clamp(p.y, bounds.y + radius, middle.y));
-            float sideSquare = dot(p - side, p - side);
-            if (sideSquare < square) { closest = side; normal = float2(1, 0); square = sideSquare; }
-            float4 outer = quarterArc(p, float2(bounds.x + radius, bounds.y + radius), radius, -1);
-            float outerSquare = dot(p - outer.xy, p - outer.xy);
-            if (outerSquare < square) { closest = outer.xy; normal = outer.zw; square = outerSquare; }
-            float4 inset = quarterArc(p, float2(middle.x - inner, bounds.y + inner), inner, 1);
-            float innerSquare = dot(p - inset.xy, p - inset.xy);
-            if (innerSquare < square) { closest = inset.xy; normal = inset.zw; square = innerSquare; }
-            float2 outerLocal = p - float2(bounds.x + radius, bounds.y + radius);
-            float2 innerLocal = p - float2(middle.x - inner, bounds.y + inner);
-            bool inside = p.x >= bounds.x && p.y >= bounds.y
-                && (p.x >= bounds.x + radius || p.y >= bounds.y + radius || dot(outerLocal, outerLocal) <= radius * radius)
-                && (p.x <= middle.x - inner || p.y >= bounds.y + inner || dot(innerLocal, innerLocal) <= inner * inner);
-            float distance = sqrt(square);
-            float polarity = inside ? 1.0 : -1.0;
-            bool boundary = distance <= max(0.0001, span * 0.00001);
-            float2 gradient = boundary ? normal : (p - closest) * (polarity / distance);
-            gradient *= -sign(delta);
-            return float3(boundary ? 0.0 : distance * polarity, gradient);
+        float4 cornerArc(float4 best, float2 p, float2 tip, float2 r, float2 direction) {
+            if (any(lessThanEqual(r, float2(0)))) return best;
+            float2 q = (p - tip) * direction + r;
+            float2 boxDelta = q - clamp(q, float2(0), r);
+            if (dot(boxDelta, boxDelta) >= dot(best.xy, best.xy)) return best;
+            float2 uv = nearestQuarter(q, r);
+            return nearer(best, (q - uv * r) * direction, -normalize(uv * r.yx * direction));
+        }
+        bool insideCorner(float2 p, float2 tip, float2 r, float2 direction) {
+            if (any(lessThanEqual(r, float2(0)))) return true;
+            float2 q = (p - tip) * direction + r;
+            if (any(lessThanEqual(q, float2(0)))) return true;
+            float2 scaled = q / r;
+            return dot(scaled, scaled) <= 1.0;
+        }
+        float4 verticalEdge(float4 best, float2 p, float x, float2 y, float2 cut, float direction) {
+            if (cut.x >= cut.y)
+                return nearer(best, p - float2(x, clamp(p.y, y.x, y.y)), float2(direction, 0));
+            if (y.x < cut.x)
+                best = nearer(best, p - float2(x, clamp(p.y, y.x, cut.x)), float2(direction, 0));
+            if (cut.y < y.y)
+                best = nearer(best, p - float2(x, clamp(p.y, cut.y, y.y)), float2(direction, 0));
+            return best;
+        }
+        float4 bodyBoundary(float4 best, float2 p, float4 b, float4 top, float4 bottom, float2 cut, bool left) {
+            best = nearer(best, p - float2(clamp(p.x, b.x + bottom.z, b.z - bottom.x), b.w), float2(0, -1));
+            best = verticalEdge(best, p, b.z, float2(b.y + top.w, b.w - bottom.y), left ? cut : float2(0), -1.0);
+            best = nearer(best, p - float2(clamp(p.x, b.x + top.x, b.z - top.z), b.y), float2(0, 1));
+            best = verticalEdge(best, p, b.x, float2(b.y + top.y, b.w - bottom.w), left ? float2(0) : cut, 1.0);
+            best = cornerArc(best, p, b.zw, bottom.xy, float2(1, 1));
+            best = cornerArc(best, p, b.xw, bottom.zw, float2(-1, 1));
+            best = cornerArc(best, p, b.zy, top.zw, float2(1, -1));
+            return cornerArc(best, p, b.xy, top.xy, float2(-1, -1));
+        }
+        bool insideBody(float2 p, float4 b, float4 top, float4 bottom) {
+            return all(greaterThanEqual(p, b.xy)) && all(lessThanEqual(p, b.zw))
+                && insideCorner(p, b.xy, top.xy, float2(-1, -1))
+                && insideCorner(p, b.zy, top.zw, float2(1, -1))
+                && insideCorner(p, b.zw, bottom.xy, float2(1, 1))
+                && insideCorner(p, b.xw, bottom.zw, float2(-1, 1));
+        }
+        float3 uniformCorners(float2 p, float4 b, float r) {
+            float2 local = p - (b.xy + b.zw) * 0.5;
+            float2 q = abs(local) - (b.zw - b.xy) * 0.5 + r;
+            float outside = length(max(q, float2(0)));
+            float2 n = outside > 0.0 ? max(q, float2(0)) / outside
+                : (q.x > q.y ? float2(1, 0) : float2(0, 1));
+            return float3(r - (outside + min(max(q.x, q.y), 0.0)),
+                local.x < 0.0 ? n.x : -n.x, local.y < 0.0 ? n.y : -n.y);
         }
         float3 geometry(float2 p) {
-            if (fieldMode <= 0.0) return analyticGeometry(p);
-            float3 sampled;
-            if (splitInnerRadius >= 0.0) sampled = splitBoundary(p);
-            else {
-                float3 raw = float3(field.eval((p - fieldOrigin) * fieldScale).rgb);
-                sampled = float3(raw.r * fieldRange, raw.gb * 2.0 - 1.0);
+            if (bodyCount == 0.0) return float3(-1e10, 0, 0);
+            float4 a = bodyBounds[0], b = bodyBounds[1];
+            float4 at = bodyRadii[0], ab = bodyRadii[1], bt = bodyRadii[2], bb = bodyRadii[3];
+            if (bodyCount == 1.0 && all(equal(at, float4(at.x))) && all(equal(ab, at)))
+                return uniformCorners(p, a, at.x);
+            float2 cut = float2(0);
+            if (bodyCount > 1.0 && a.z == b.x)
+                cut = float2(max(a.y + at.w, b.y + bt.y), min(a.w - ab.y, b.w - bb.w));
+            float4 closest = bodyBoundary(float4(1e16, 1e16, 0, 0), p, a, at, ab, cut, true);
+            bool inside = insideBody(p, a, at, ab);
+            if (bodyCount > 1.0) {
+                closest = bodyBoundary(closest, p, b, bt, bb, cut, false);
+                inside = inside || insideBody(p, b, bt, bb);
             }
-            if (fieldMode >= 1.0) return sampled;
-            return mix(analyticGeometry(p), sampled, fieldMode);
+            float distance = length(closest.xy);
+            float side = inside ? 1.0 : -1.0;
+            return float3(distance * side, distance > 0.0 ? closest.xy * (side / distance) : closest.zw);
         }
         float profile(float2 law, float inside) {
             float t = clamp(inside / law.y, 0.0, 1.0);
@@ -188,36 +196,35 @@ internal class LensRenderer {
         }
     """.trimIndent())
     private var last = floatArrayOf()
-    private var fieldBitmap: Bitmap? = null
     private var cached: RenderEffect? = null
     private var blurAmount = Float.NaN
     private var blurEffect: android.graphics.RenderEffect? = null
-    init {
-        shader.setInputBuffer("field", BitmapShader(emptyField, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP))
-    }
+
 
     /** [unit] is recorded pixels per dp: display density times recording resolution. */
     fun effect(geometry: LensGeometry, blur: Float, depth: Float, unit: Float, power: Float = 1f,
-        whiteTint: Float = 0f, illumination: Float = 1f, map: LensDistanceMap? = null,
-        origin: Offset = Offset.Zero, flattening: Float = 0f,
-        tone: GlassTone = GlassTone(), fieldWeight: Float = 1f,
-        circles: Pair<Offset, Offset>? = null, splitInner: Float? = null, warp: LensWarp? = null): RenderEffect {
-        val r = geometry.bounds
+        whiteTint: Float = 0f, illumination: Float = 1f, flattening: Float = 0f,
+        tone: GlassTone = GlassTone(), warp: LensWarp? = null): RenderEffect {
+        val bodies = geometry.bodies
+        require(bodies.size <= 2 && (bodies.size < 2 || bodies[0].right <= bodies[1].left))
+        val bounds = FloatArray(8)
+        val radii = FloatArray(16)
+        bodies.forEachIndexed { i, body ->
+            floatArrayOf(body.left, body.top, body.right, body.bottom).copyInto(bounds, i * 4)
+            body.radiusWords(radii, i * 8)
+        }
         val words = warp?.uniforms(unit)
-        val state = floatArrayOf(r.left, r.top, r.right, r.bottom, geometry.corner, unit, blur,
-            depth.coerceIn(.05f, 4f), power, whiteTint, illumination, origin.x, origin.y,
-            map?.scale ?: 1f, map?.range ?: 1f, flattening, tone.trim, tone.weight, tone.lightMix,
-            fieldWeight.coerceIn(0f, 1f), if (circles == null) 0f else 1f,
-            circles?.first?.x ?: 0f, circles?.first?.y ?: 0f,
-            circles?.second?.x ?: 0f, circles?.second?.y ?: 0f, splitInner ?: -1f) + (words ?: FloatArray(0))
-        if (state.contentEquals(last) && fieldBitmap === map?.bitmap) return requireNotNull(cached)
+        val d = depth.coerceIn(.05f, 4f)
+        val state = floatArrayOf(unit, blur, d, power, whiteTint, illumination, flattening,
+            tone.trim, tone.weight, tone.lightMix, bodies.size.toFloat(), geometry.span) +
+            bounds + radii + (words ?: FloatArray(0))
+        if (state.contentEquals(last)) return requireNotNull(cached)
         last = state
-        shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
-        shader.setFloatUniform("corner", geometry.radius)
-        shader.setFloatUniform("weights", geometry.weights.x, geometry.weights.y)
+        shader.setFloatUniform("bodyBounds", bounds)
+        shader.setFloatUniform("bodyRadii", radii)
+        shader.setFloatUniform("bodyCount", bodies.size.toFloat())
         shader.setFloatUniform("span", geometry.span)
         // Surface-wide constants belong to the draw, not every shaded pixel.
-        val d = state[7]
         shader.setFloatUniform("optics", .62f * d / kotlin.math.sqrt(1f + d * d / 4f), .4f + .06f * flattening.coerceIn(0f, 1f))
         with(GlassRefraction) {
             shader.setFloatUniform("refraction", InnerAmount * unit, InnerHeight * unit, OuterAmount * unit, OuterHeight * unit)
@@ -227,26 +234,12 @@ internal class LensRenderer {
         shader.setFloatUniform("whiteTint", whiteTint)
         shader.setFloatUniform("illumination", illumination)
         shader.setFloatUniform("tone", tone.trim, tone.weight, tone.lightMix)
-        shader.setFloatUniform("fieldMode", if (map == null && splitInner == null) 0f else fieldWeight.coerceIn(0f, 1f))
-        shader.setFloatUniform("splitInnerRadius", splitInner ?: -1f)
-        shader.setFloatUniform("circleMode", if (circles == null) 0f else 1f)
-        shader.setFloatUniform("circleCenters", circles?.first?.x ?: 0f, circles?.first?.y ?: 0f,
-            circles?.second?.x ?: 0f, circles?.second?.y ?: 0f)
-        shader.setFloatUniform("fieldOrigin", origin.x + (map?.origin?.x ?: 0f), origin.y + (map?.origin?.y ?: 0f))
-        shader.setFloatUniform("fieldScale", map?.scale ?: 1f)
-        shader.setFloatUniform("fieldRange", map?.range ?: 1f)
         val w = words ?: FloatArray(12)
         shader.setFloatUniform("mapShape", w[0], w[1], w[2], w[3])
         shader.setFloatUniform("mapAngle", w[4], w[5])
         shader.setFloatUniform("warp", w[6], w[7], w[8], w[9])
         shader.setFloatUniform("warpClamp", w[10], w[11])
         shader.setFloatUniform("warpMode", if (warp == null) 0f else 1f)
-        if (fieldBitmap !== map?.bitmap) {
-            fieldBitmap = map?.bitmap
-            shader.setInputBuffer("field", BitmapShader(map?.bitmap ?: emptyField, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
-                setFilterMode(BitmapShader.FILTER_MODE_LINEAR)
-            })
-        }
         if (blur != blurAmount) {
             blurAmount = blur
             blurEffect = if (FluidGaussianSpec.isIdentity(blur.toDouble())) null
@@ -255,8 +248,12 @@ internal class LensRenderer {
         val lens = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene")
         return lensChain(blurEffect, lens, android.graphics.RenderEffect::createChainEffect).asComposeRenderEffect().also { cached = it }
     }
-    companion object {
-        private val emptyField by lazy { Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888) }
+    private fun RoundRect.radiusWords(words: FloatArray, offset: Int) {
+        listOf(topLeftCornerRadius, topRightCornerRadius, bottomRightCornerRadius, bottomLeftCornerRadius)
+            .forEachIndexed { index, radius ->
+                words[offset + index * 2] = radius.x
+                words[offset + index * 2 + 1] = radius.y
+            }
     }
 }
 

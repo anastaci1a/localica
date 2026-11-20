@@ -5,12 +5,8 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 
-/** A small compound control shares one outline, optical field and shadow union.
- * Keep display and sampled-resolution geometry separately; translating a control
- * never rebuilds its field. Distance pixels are only created if optics need them. */
-internal data class GlassSilhouetteGeometry(val bodies: List<RoundRect>, val fieldWeight: Float = 1f,
-    val circles: Pair<Offset, Offset>? = null, val rimSplit: Float = 0f, val splitInner: Float? = null,
-    val corner: Float? = null)
+/** The same fitted bodies define the clip, shadow union and lens boundary. */
+internal data class GlassSilhouetteGeometry(val bodies: List<RoundRect>, val rimSplit: Float = 0f)
 
 internal class GlassSilhouette(private val describe: (Size) -> GlassSilhouetteGeometry) {
     private val frames = mutableListOf<GlassSilhouetteFrame>()
@@ -25,20 +21,12 @@ internal class GlassSilhouette(private val describe: (Size) -> GlassSilhouetteGe
 }
 
 internal class GlassSilhouetteFrame(val description: GlassSilhouetteGeometry) {
-    val bodies get() = description.bodies
-    val path = bodies.fold(Path()) { combined, body ->
+    val bodies = description.bodies.filter { it.width > 0f && it.height > 0f }.map { it.fittedLensCorners() }
+    val path by lazy { bodies.fold(Path()) { combined, body ->
         Path.combine(PathOperation.Union, combined, Path().apply { addRoundRect(body) })
-    }
-    val bounds = path.getBounds()
-    val geometry = LensGeometry(bounds, description.corner ?: (bounds.height / 2f))
-    val field by lazy { if (description.fieldWeight > 0f && description.splitInner == null) LensDistanceMap.create(path) else null }
-    fun opticalField(point: Offset): LensField {
-        val analytic = description.circles?.let { centers ->
-            pairedCircleLensField(point, centers, geometry.span, description.fieldWeight)
-        } ?: geometry.field(point)
-        val boundary = description.splitInner?.let { splitPillDistanceField(point, bounds, it) } ?: field?.sample(point)
-        return boundary?.let { blendLensFields(analytic, it, description.fieldWeight) } ?: analytic
-    }
+    } }
+    val bounds get() = geometry.bounds
+    val geometry = LensGeometry.fromBodies(bodies)
 }
 
 @Composable internal fun rememberGlassSilhouette(bodies: (Size) -> List<RoundRect>): GlassSilhouette {

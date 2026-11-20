@@ -59,17 +59,10 @@ private fun GlassShape.selectorScale(vertical: Boolean, size: Size, allowance: F
         scaleY(vertical).coerceIn(if (!vertical) 2f - allowanceY else .5f, allowanceY))
 }
 
-/** Ordinary/resting selectors keep their scalar material path. Deformed corners use
- * the existing silhouette adapter, blended continuously from that same optical crown. */
+/** Deformed selector corners supply their actual clip outline to the shared lens. */
 @Composable
 internal fun rememberSelectorSilhouette(contour: SelectorTrackContour?): GlassSilhouette? {
     if (contour == null || contour.isUniform) return null
     val current by rememberUpdatedState(contour)
-    return remember {
-        GlassSilhouette { size ->
-            val scale = minOf(size.width / current.bounds.width, size.height / current.bounds.height)
-            GlassSilhouetteGeometry(listOf(current.outlineAt(size)), fieldWeight = current.opticalWeight,
-                corner = current.maximumRadius * scale)
-        }
-    }
+    return remember { GlassSilhouette { size -> GlassSilhouetteGeometry(listOf(current.outlineAt(size))) } }
 }

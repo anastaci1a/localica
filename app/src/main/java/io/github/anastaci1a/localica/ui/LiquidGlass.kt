@@ -364,26 +364,21 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             FilteredBackdrop(lensLayer, source, location, resolution(own.value), padding,
                 homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint, tone), homeBounds, homeFootprint,
                 resolutionReader = presentation?.let { read -> { resolution(read()) } },
-                averageReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint, toneOf(read())) } }) { extent, resolution, flatWeight ->
+                averageReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint, toneOf(read())) } },
+                body = appliedTransform, geometry = { extent ->
+                    val radius = (presentedRadius?.invoke() ?: cornerRadius)?.let { with(density) { it.toPx() } }
+                        ?: extent.minDimension / 2f
+                    silhouette?.frame(extent)?.geometry ?: LensGeometry(Rect(Offset.Zero, extent), radius)
+                }) { geometry, resolution, flatWeight ->
                 val frame = material()
-                val cornerRadius = presentedRadius?.invoke() ?: cornerRadius
                 val blur = blur(frame)
-                val pad = padding * resolution
-                val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
-                    ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
                 val thickness = body().thickness * (if (pressFeedback || anchor != null) contactShape().thickness else 1f)
-                val outline = silhouette?.frame(Size(extent.width - 2 * pad, extent.height - 2 * pad))
                 if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(
-                    outline?.geometry?.let { it.copy(bounds = it.bounds.translate(Offset(pad, pad))) }
-                        ?: LensGeometry(androidx.compose.ui.geometry.Rect(pad, pad, extent.width - pad, extent.height - pad), radius),
-                    blur * resolution,
+                    requireNotNull(geometry), blur * resolution,
                     appearance.depth * frame.depthScale * thickness,
                     unit = density.density * resolution,
                     power = frame.refraction, whiteTint = appearance.whiteTint, illumination = 1f - flatWeight,
-                    flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(thickness), tone = toneOf(frame),
-                    map = outline?.field, origin = Offset(pad, pad), fieldWeight = outline?.description?.fieldWeight ?: 1f,
-                    circles = outline?.description?.circles?.let { (a, b) -> a + Offset(pad, pad) to b + Offset(pad, pad) },
-                    splitInner = outline?.description?.splitInner)
+                    flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(thickness), tone = toneOf(frame))
                 else if (blur > 0f) BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp) else null
             }
         }
