@@ -249,6 +249,23 @@ internal enum class FluidPopupChannel(val key: String, val value: Value) {
 internal fun fluidLensSuppressesAction(old: Double, new: Double, latest: Double?, bypass: Boolean) =
     !bypass && abs(new - old) <= 0.05 && (latest == null || abs(new - latest) <= 0.05)
 
+/** Appends to the shared property owner's request queue and chooses its existing commit hook. */
+internal fun <Request> MutableList<Request>.submitFluidPropertyPublication(
+    request: Request, hasCoordinator: () -> Boolean, currentPhase: () -> Int,
+    firstCommit: () -> Unit, afterCommit: () -> Unit,
+) {
+    add(request)
+    if (hasCoordinator()) return
+    if (currentPhase() == -1) firstCommit() else afterCommit()
+}
+
+internal fun <Coordinator> List<Pair<() -> Coordinator, (Coordinator) -> Unit>>.registerFluidPropertyPublications() {
+    for (index in indices) {
+        val (factory, register) = this[index]
+        register(factory())
+    }
+}
+
 /** The original layer's resolved view/window supplies the live scale. Null means the view or window is absent. */
 internal fun fluidLayerPointScale(resolvedContext: Boolean, windowScale: () -> Double?): Double =
     if (resolvedContext) windowScale() ?: 1.0 else 1.0
