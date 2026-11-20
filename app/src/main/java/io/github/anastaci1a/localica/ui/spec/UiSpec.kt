@@ -73,7 +73,7 @@ internal fun fluidIntermediateY(sourceY: Double, targetY: Double, ratio: Double,
 internal fun fluidStoredDelay(storedDelay: Double, speed: Double, amplify: Boolean) =
     storedDelay * speed * (if (amplify) 10.0 else 1.0)
 private fun fluidThroughTailDelay(growing: Boolean) = if (growing) 0.12 else 0.1
-internal class FluidPopupSpringSettings(val dampingRatio: Double, val response: Double) {
+internal class FluidPopupSpringSettings(val dampingRatio: Double, val response: Double, val retargetImpulse: Double = 0.0) {
     val mass get() = 1.0
     val omega = 2 * PI / response
     val stiffness = omega * omega
@@ -113,15 +113,15 @@ internal data class FluidPropertySpringControls(
     /** The scalar body handed from the property owner to the ordinary zero-delay spring. */
     fun immediateBody(
         requestedStart: Double, target: Double, retained: FluidScalarSpringBody?, previousTarget: Double?,
-        spring: FluidPopupSpringSettings?, impulse: Double, pendingVelocity: Double?,
+        spring: FluidPopupSpringSettings?, pendingVelocity: Double?,
     ): FluidScalarSpringBody {
         val value = retained?.value ?: requestedStart
         val velocity = when {
             pendingVelocity != null -> pendingVelocity
             startingVelocity != null -> (target - requestedStart) * startingVelocity
             retained == null -> 0.0
-            impulse > 0.0 && previousTarget != null && spring != null && spring.dampingRatio > 0.0 && spring.response > 0.0 ->
-                retained.velocity + (target - previousTarget) * (impulse * spring.stiffness)
+            previousTarget != null && spring != null && spring.retargetImpulse > 0.0 && spring.dampingRatio > 0.0 && spring.response > 0.0 ->
+                retained.velocity + (target - previousTarget) * (spring.retargetImpulse * spring.stiffness)
             else -> retained.velocity
         }
         return FluidScalarSpringBody(value, velocity)
