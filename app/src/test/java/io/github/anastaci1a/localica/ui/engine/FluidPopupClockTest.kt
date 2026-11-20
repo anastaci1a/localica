@@ -155,4 +155,33 @@ class FluidPopupClockTest {
         assertTrue(published.last().value > requireNotNull(sampleBeforeRetarget).value)
         rig.close()
     }
+
+    @Test fun planarZoomKeepsBothTypedScaleCoordinatesOnTheSharedClock() {
+        val rig = Rig()
+        val spring = FluidContent.blurOutSpring
+        val target = requireNotNull(FluidZoomTransform.fromPlanarScale(1.65))
+        val start = requireNotNull(FluidZoomTransform.fromPlanarScale(1.0))
+        val values = FluidZoomValues({ left, right -> (0..15).all { left[it] == right[it] } })
+        val motion = FluidPropertyMotion(rig.clock, Double::equals, initial = 1.0,
+            advance = FluidPopupSpringSettings::advancePlanarZoom)
+        val controls = FluidPropertySpringControls(0.0, null, interactive = false, additive = false)
+        val epsilon = fluidZoomEpsilonSquared(2.0, 0.0 to 0.0, empty = true, anchorX = 0.5, anchorY = 0.5)[1]
+        val kernel = SpringKernel.fromInstalled(spring.stiffness, spring.installedDamping)
+        motion.animate(start[3], target[3], controls, spring, epsilon)
+        var previous = ((1f / 120).toDouble() * 1.001) * -0.4
+        var expected = start to values.zeroVelocity
+        for (frame in 1..4) {
+            val nanos = frame * 8_333_333L
+            val time = nanos / 1e9
+            expected = kernel.advanceTransform(expected, target, time - previous, values)
+            previous = time
+            rig.frame(nanos)
+            val sample = motion.sample()
+            for (axis in 3..4) {
+                assertEquals(expected.first[axis].toRawBits(), sample.value.toRawBits())
+                assertEquals(expected.second[axis].toRawBits(), sample.velocity.toRawBits())
+            }
+        }
+        rig.close()
+    }
 }

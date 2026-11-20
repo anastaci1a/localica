@@ -98,6 +98,7 @@ internal class FluidTimelineMotion(private val clock: UiClock,private val snapRe
  * on the projected error and publishes through [write]; [completion] belongs to the lifecycle owner. */
 internal class FluidPropertyMotion(private val clock: UiClock,private val sameValue: (Double,Double)->Boolean,
     private val write: (FluidScalarSpringBody)->Unit={},initial: Double=0.0,private val snapReduced: ()->Boolean={ true },
+    private val advance: (FluidPopupSpringSettings,FluidScalarSpringEntry,Double)->FluidScalarSpringEntry=FluidPopupSpringSettings::advanceUnsmoothed,
     private val completion: (Boolean)->Unit={}): ActiveMotion {
     override val id=clock.allocateId(); override val presented get()=true
     override val reducesWithAccess get()=snapReduced()
@@ -137,7 +138,7 @@ internal class FluidPropertyMotion(private val clock: UiClock,private val sameVa
     override fun frame(stamp: FrameStamp) {
         if(stamp.sequence<=admittedAfter) return
         time=time.advance(stamp.nanos/1e9)
-        val next=spring.advanceUnsmoothed(entry,time.entryDelta(0.0,clock.fluidDrag)); entry=next
+        val next=advance(spring,entry,time.entryDelta(0.0,clock.fluidDrag)); entry=next
         settled=next.body.finished(next.target,spring.velocityScalingFactor,epsilonSquared,false); queueSample(next)
     }
     override fun endsAt(stamp: FrameStamp)=settled

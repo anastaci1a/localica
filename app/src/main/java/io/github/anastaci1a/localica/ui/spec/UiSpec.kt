@@ -85,6 +85,15 @@ internal class FluidPopupSpringSettings(
     val installedDamping = (sqrt(stiffness) + sqrt(stiffness)) * dampingRatio
     val velocityScalingFactor get() = installedDamping / stiffness
     fun advanceUnsmoothed(entry: FluidScalarSpringEntry, dt: Double) = entry.advanceUnsmoothed(stiffness, installedDamping, dt)
+    /** The portal's two equal scale coordinates follow the typed transform arithmetic. */
+    fun advancePlanarZoom(entry: FluidScalarSpringEntry, dt: Double): FluidScalarSpringEntry {
+        if (!(dt > 0.0)) return entry
+        val state = entry.body.value to entry.body.velocity
+        val (scale, velocity) = SpringKernel.fromInstalled(stiffness, installedDamping)
+            .advanceTransform(state, entry.target, FluidPlanarZoomValues)
+        return entry.copy(body = FluidScalarSpringBody(scale, velocity),
+            intermediate = FluidScalarSpringBody(entry.target, 0.0))
+    }
     fun velocityWithImpulse(velocity: Double, targetDelta: Double) =
         if (retargetImpulse > 0.0 && dampingRatio > 0.0 && response > 0.0)
             velocity + targetDelta * (retargetImpulse * stiffness)
@@ -554,6 +563,14 @@ internal class FluidZoomValues(
         }
         return FluidZoomTransform(DoubleArray(16) { left[it] + right[it] }, direction)
     }
+}
+
+private object FluidPlanarZoomValues : SpringTransformValues<Double> {
+    override val zeroVelocity = 0.0
+    override fun equal(left: Double, right: Double) = left == right
+    override fun displacement(from: Double, to: Double) = from - to
+    override fun scaledCopy(value: Double, factor: Double) = value * factor
+    override fun add(left: Double, right: Double) = left + right
 }
 
 private fun fluidModeDisplacement(difference: Double, mode: Int) =
