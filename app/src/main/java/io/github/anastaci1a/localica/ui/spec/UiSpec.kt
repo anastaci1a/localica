@@ -815,15 +815,22 @@ internal object FluidCornerSpec {
         return BoundsEncoding(21, 4f, transform.normalMatrix, radii, fieldHalfSize, gridCut)
     }
 
-    // Group texture selection is independent of the per-element image kind.
-    fun groupTexture(subtract: Boolean, roiDirect: Boolean, roiOverlap: Boolean) = when {
+    // This is the combine byte in draw state, before pipeline flag substitution.
+    fun groupCombineSelector(subtract: Boolean, roiDirect: Boolean, roiOverlap: Boolean) = when {
         subtract -> 59
         roiDirect -> 1
         roiOverlap -> 58
         else -> 3
     }
     const val rectImageFunction = 20
-    const val inlineEffectTexture = 66
+
+    data class FieldFragment(val base: Int, val combine: Int) {
+        val imageCount get() = 1
+    }
+
+    fun fieldFragment(inline: Boolean, compose: Boolean, combineSelector: Int) =
+        FieldFragment(if (inline) 66 else 1, if (!compose || combineSelector == 1) 63 else combineSelector)
+
     fun scansOverlap(parentAdmitted: Boolean, disableOption: Boolean) = parentAdmitted && !disableOption
     fun <Node : Any> inlineBounds(
         nodes: Iterable<Node>, debugDisablesInline: Boolean, capabilityDisablesInline: Boolean,
