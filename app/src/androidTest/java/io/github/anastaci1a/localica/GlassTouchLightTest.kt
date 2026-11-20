@@ -498,7 +498,8 @@ class GlassTouchLightTest {
                 assertEquals("default clock convergence frame=$frame", reference.momentum.settled, shared.momentum.settled)
             }
         }
-        compose.mainClock.advanceTimeBy(3000)
+        // A hidden default-glow record ends when its envelope reaches 0f (about 8.7 s, #1090), the same bound as the release below; tighten with #1090.
+        compose.mainClock.advanceTimeBy(10000)
         compose.runOnIdle { assertTrue(shared.momentum.settled); reads.set(0) }
         compose.mainClock.advanceTimeBy(500)
         assertEquals("released default owners suspend", 0, reads.get())

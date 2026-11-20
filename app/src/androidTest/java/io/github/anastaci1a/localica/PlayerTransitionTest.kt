@@ -220,7 +220,8 @@ class PlayerTransitionTest {
             val pixels = compose.onNodeWithTag("player-surface").captureToImage().toPixelMap()
             // Inside the rounded rectangle but outside the old, taller capsule's corner.
             val edge = pixels[10, (pixels.height * .3f).toInt()]
-            assertTrue("Glass must reach the shared outline at $p: $edge", edge.green > .7f)
+            // The 830f bound: 70% of the default material's white, .7 × GlassTone(.25, 2, light).channel(1) = .525, i.e. under 30% bare magenta page.
+            assertTrue("Glass must reach the shared outline at $p: $edge", edge.green > .525f)
 
         }
     }

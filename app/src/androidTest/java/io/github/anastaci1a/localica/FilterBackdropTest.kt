@@ -68,9 +68,9 @@ class FilterBackdropTest {
             }
             assertTrue("The lens must include the white fade, not reveal raw red/blue art: ${green / samples}", green / samples > .3f)
             if (android.os.Build.VERSION.SDK_INT >= 33) {
-                optics.establishUnitParity(compose, filter, before)
+                val actual = optics.establishUnitParity(compose, filter)
                 val reference = optics.capture(compose, filter, 0f)
-                optics.assertDisplacement(before, reference, .02f, 30)
+                optics.assertDisplacement(actual, reference, .02f, 30)
                 val withoutRefraction = optics.capture(compose, filter, 0f)
                 org.junit.Assert.assertThrows(AssertionError::class.java) {
                     optics.assertDisplacement(withoutRefraction, reference, .02f, 30)

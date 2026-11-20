@@ -113,10 +113,10 @@ class ScopedSearchOpticsTest {
                 clear.maxOf { it.red } - clear.minOf { it.red } < .035f)
         }
         if (android.os.Build.VERSION.SDK_INT >= 33) {
-            optics.establishUnitParity(compose, pill, before)
+            val actual = optics.establishUnitParity(compose, pill)
             val reference = optics.capture(compose, pill, 0f)
-            val minimum = before.width * before.height / 20
-            optics.assertDisplacement(before, reference, .15f, minimum)
+            val minimum = actual.width * actual.height / 20
+            optics.assertDisplacement(actual, reference, .15f, minimum)
             val withoutRefraction = optics.capture(compose, pill, 0f)
             org.junit.Assert.assertThrows(AssertionError::class.java) {
                 optics.assertDisplacement(withoutRefraction, reference, .15f, minimum)

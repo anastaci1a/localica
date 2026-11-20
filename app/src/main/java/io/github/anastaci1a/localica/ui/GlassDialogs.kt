@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /** Appearance captured at an action whose dialog is declared in another composition scope.
@@ -38,7 +37,7 @@ internal class GlassDialogs {
 }
 
 internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLocalContext,
-    dismiss: () -> Unit, dark: Boolean, val placement: GlassPlacement,
+    dismiss: () -> Unit, dark: Boolean?, val placement: GlassPlacement,
     val heightSizing: GlassDialogHeight, content: @Composable () -> Unit) {
     // Counted (#1051): a swap goes 1→0→1 in one apply (forgets before remembers); overlap across compositions stays declared, last writer wins.
     var declarations by mutableIntStateOf(0)
@@ -98,9 +97,8 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
     val popupHome = trigger?.popupHome ?: appearance?.popupHome ?: LocalGlassPopupHome.current
     val source = appearance?.backdrop ?: LocalModalBackdrop.current ?: LocalFrostedBackdrop.current ?: host.backdrop
     val locals = currentCompositionLocalContext
-    // Detached callbacks retain their launching scene.
-    val ink = appearance?.ink ?: defaultGlassInk(source?.lightMix ?: 0f)
-    val dark = ink.luminance() > .5f
+    // An anchored popup takes its page's polarity; other dialogs keep their declaring or detached launching scope.
+    val dark = if (trigger != null) null else (appearance?.ink ?: LocalContentColor.current).luminance() > .5f
     val resolvedContent: @Composable () -> Unit = {
         CompositionLocalProvider(LocalGlassDialogAppearance provides null, content = content)
     }

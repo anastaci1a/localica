@@ -764,7 +764,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
     }
     SideEffect { if (!returningInline) popupFlight.advance(gen, PopupEvent.HomeReturns) }
-    val popupLightMix = samplingSource?.lightMix ?: 0f
+    // Inherited coupling (#748): a trigger re-measure is what redraws the handed-off window; #1097 makes the handoff itself invalidate it.
+    anchor.bounds
+    val popupLightMix = darkOverride?.let { if (it) 1f else 0f } ?: samplingSource?.lightMix ?: 0f
     val panelDark = popupLightMix >= .5f
     val parentPanels = LocalChildPanels.current
     val childPanels = remember { mutableIntStateOf(0) }

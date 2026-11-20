@@ -21,8 +21,8 @@ import org.junit.Test
 class GlassMenuForegroundTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun anchoredMenuKeepsLightInkDespiteOppositeGlobalScene() = verify(true, true)
-    @Test fun anchoredMenuKeepsDarkInkDespiteOppositeGlobalScene() = verify(false, true)
+    @Test fun anchoredMenuOverDarkSourceKeepsLightInkDespiteOppositeOuterInk() = verify(true, true)
+    @Test fun anchoredMenuOverLightSourceKeepsDarkInkDespiteOppositeOuterInk() = verify(false, true)
     @Test fun detachedMenuUsesCurrentLightInkInsteadOfItsOldAnchorSeed() = verify(true, false)
     @Test fun detachedMenuUsesCurrentDarkInkInsteadOfItsOldAnchorSeed() = verify(false, false)
 
