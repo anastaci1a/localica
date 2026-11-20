@@ -1,12 +1,15 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.boundingRect
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.engine.EngineHarness
 import io.github.anastaci1a.localica.ui.engine.PopupWindowMotion
 import io.github.anastaci1a.localica.ui.spec.ExpansionGeometryDomain
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
 import io.github.anastaci1a.localica.ui.spec.PopupKind
+import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import io.github.anastaci1a.localica.ui.spec.SpecResult
 import io.github.anastaci1a.localica.ui.spec.uiSpec
 import java.security.MessageDigest
@@ -20,6 +23,85 @@ internal fun fixtureGeometryProgress(progress: Float, quiet: Boolean): Float {
 }
 
 class GlassMorphGeometryTest {
+    @Test fun preparedWindowPublishesBothOutlinesAndReturnsThroughTheSameAperture() {
+        val domain = ExpansionGeometryDomain(1000f, 4000f, 1f / 30)
+        val spec = (uiSpec(InterfaceSettings(popupMotion = PopupMotionStyle.Fluid), geometry = domain) as SpecResult.Accepted).spec
+        val home = Rect(16f, 10f, 56f, 30f)
+        val envelope = Rect(0f, 0f, 120f, 80f)
+        val input = FluidPopupPreview(true, home, Offset.Zero, 6f, 24f, 0.5, 2.0)
+        EngineHarness(spec = spec).use { h ->
+            val popup = PopupWindowMotion(h.clock, spec.expansion, "fluid", prepared = true, quiet = false, kind = PopupKind.Menu)
+            popup.place(home, envelope, 1f, preview = input)
+            val aperture = requireNotNull(popup.bounds)
+            fun frames(count: Int) { repeat(count) { h.advance(1.0 / 120) } }
+            popup.show(true)
+            frames(240)
+            assertTrue(popup.expansion.awaitingNativeGate)
+            assertNull(popup.outlineBodies())
+            popup.acknowledgeNativeGate(popup.expansion.nativeGeneration)
+            frames(6)
+            val moving = requireNotNull(popup.outlineBodies())
+            assertEquals(2, moving.size)
+            assertEquals(aperture.valueAt(h.clock.stampNow), moving.first().boundingRect)
+            assertEquals(aperture.valueAt(h.clock.stampNow).bottom, aperture.bottom.valueAt(h.clock.stampNow), 0f)
+            assertEquals(moving.first().topLeftCornerRadius.x, requireNotNull(popup.outlineRadius()), 0f)
+            moving.forEach { assertTrue(it.topLeftCornerRadius.x <= minOf(it.width, it.height) / 2f) }
+            frames(240)
+            val opened = requireNotNull(popup.outlineBodies())
+            assertEquals(envelope, opened[0].boundingRect)
+            assertEquals(24f, opened[0].topLeftCornerRadius.x, 0f)
+            assertEquals(Rect(32f, 15f, 52f, 35f), opened[1].boundingRect)
+            assertEquals(10f, opened[1].topLeftCornerRadius.x, 0f)
+            val edges = listOf(aperture.left, aperture.top, aperture.right, aperture.bottom)
+            val before = edges.map { it.sampleAt(h.clock.stampNow) }
+            popup.show(false)
+            popup.place(home, envelope, 1f, preview = input.copy(opening = false))
+            assertEquals(before, edges.map { it.sampleAt(h.clock.stampNow) })
+            frames(240)
+            assertTrue(popup.expansion.awaitingNativeGate)
+            assertSame(aperture, popup.bounds)
+            assertEquals(home, aperture.valueAt(h.clock.stampNow))
+            assertEquals(6f, requireNotNull(popup.outlineRadius()), 0f)
+            popup.acknowledgeNativeGate(popup.expansion.nativeGeneration)
+            frames(240)
+            assertTrue(popup.expansion.retirementReady)
+            popup.dispose()
+        }
+    }
+
+    @Test fun shrinkingOpeningKeepsTheReceivingEndpointInTheNativeAperture() {
+        val domain = ExpansionGeometryDomain(1000f, 4000f, 1f / 30)
+        val spec = (uiSpec(InterfaceSettings(popupMotion = PopupMotionStyle.Fluid), geometry = domain) as SpecResult.Accepted).spec
+        val home = Rect(16f, 10f, 56f, 30f)
+        val envelope = Rect(0f, 0f, 20f, 20f)
+        val input = FluidPopupPreview(true, home, Offset.Zero, 6f, 8f, 0.5, 2.0)
+        EngineHarness(spec = spec).use { h ->
+            val popup = PopupWindowMotion(h.clock, spec.expansion, "fluid", prepared = true, quiet = false, kind = PopupKind.Menu)
+            popup.place(home, envelope, 1f, preview = input)
+            val aperture = requireNotNull(popup.bounds)
+            for (opening in listOf(true, false)) {
+                popup.show(opening)
+                popup.place(home, envelope, 1f, preview = input.copy(opening = opening))
+                repeat(480) {
+                    if (popup.expansion.awaitingNativeGate) popup.acknowledgeNativeGate(popup.expansion.nativeGeneration)
+                    h.advance(1.0 / 120)
+                }
+                val bodies = requireNotNull(popup.outlineBodies())
+                assertEquals(2, bodies.size)
+                val endpoint = if (opening) envelope else home
+                val radius = if (opening) 8f else 6f
+                val receiving = bodies[if (opening) 1 else 0]
+                assertSame(aperture, popup.bounds)
+                assertEquals(endpoint, aperture.valueAt(h.clock.stampNow))
+                assertEquals(endpoint, receiving.boundingRect)
+                assertEquals(radius, receiving.topLeftCornerRadius.x, 0f)
+                assertEquals(radius, requireNotNull(popup.outlineRadius()), 0f)
+                assertTrue(popup.expansion.retirementReady)
+            }
+            popup.dispose()
+        }
+    }
+
     @Test fun preparedThroughRequestsKeepEndpointAndPivotOverridesWithTheirRoles() {
         val from = PopupPortalBounds(16.0, 10.0, 40.0, 20.0)
         val to = PopupPortalBounds(0.0, 0.0, 120.0, 80.0)

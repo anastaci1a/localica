@@ -61,6 +61,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     internal fun usePopupLaw(model: PopupMotionModel,kind: PopupKind) {
         clock.checkMutation(); check(!disposed); val variant=model.variant(kind)
         popupLaw=if(variant==PopupMotionVariant.Legacy) null else ResolvedPopupLaw(model,kind,variant)
+        if(model.style!=PopupMotionStyle.Fluid) bound?.clearOutline()
         if(popupLaw==null || model.centre==null && variant !in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto)) { cross?.dispose(); cross=null }
         if(cross==null && popupLaw!=null && (model.centre!=null || variant in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto))) cross=MotionFloat(clock,motion.rawValue(clock.stampNow).toFloat(),1f,key=key to "cross").also { it.onRest={ notifyLifecycle() } }
     }
@@ -71,7 +72,13 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     private data class Contact(val basis: ExpansionBasis,val reference: Double,val p: Double,val edges: DoubleArray?,val previousTarget: Boolean,val spec: ExpansionSpec,val timeScale: Double?)
     internal val lifecycle=linkedSetOf<(Boolean)->Unit>(); internal fun owns(rect: MotionRectView)=bound===rect
     internal val ownerClock get()=clock
-    private val physicalRest: Boolean get() { motion.epoch.intValue; cross?.epoch?.intValue; bound?.channels?.forEach { it.epoch.intValue }; return motion.settled && cross?.settled!=false && bound?.channels?.all { it.settled }!=false }
+    private val physicalRest: Boolean get() { val edges=bound?.physicalChannels; motion.epoch.intValue; cross?.epoch?.intValue; edges?.forEach { it.epoch.intValue }; return motion.settled && cross?.settled!=false && edges?.all { it.settled }!=false }
+    internal fun replaceOutline(poses: List<Pair<Rect,Float>>,aperture: Int,scale: Double,spring: FluidPopupSpringSettings) {
+        val rect=requireNotNull(bound); val active=rect.hasOutline
+        rect.replaceOutline(poses,aperture,scale,spring,this)
+        if(!active) rect.physicalChannels.drop(4).forEach { it.onRest={ notifyLifecycle() } }
+    }
+    internal fun kickOutline(slot: Int,target: Float,spring: FluidPopupSpringSettings) { bound?.kickOutline(slot,target,spring) }
     internal val awaitingNativeGate get()=!held && pendingNative!=null && physicalRest
     internal val retirementReady get()=!held && pendingNative==null && physicalRest
     internal val nativeOpening get()=pendingNative
@@ -213,7 +220,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         return Prepared(entries,null,plan.finish,0.0,spec,waiting,sigma)
     }
     private fun prepare(q: Boolean,stamp: FrameStamp,next: ExpansionBasis,rect: MotionRect?,releaseVelocity: Double?=null,initialize: Boolean=false,reanchor: Boolean=false): Prepared {
-        popupLaw?.let { if(contact==null) return prepareSpring(it,q,stamp,next,rect,initialize,reanchor) }
+        popupLaw?.let { if(contact==null) return prepareSpring(it,q,stamp,next,rect?.takeUnless { it.hasOutline },initialize,reanchor) }
         admitDurationBasis(next)
         val law=contact?.spec?:spec; val ctx=context(); val sigma=timeScale(); val x=motion.rawValue(stamp); val v=releaseVelocity?:motion.rawVelocity(stamp); val waiting=if(nativeBoundary==null) null else if(awaitingNativeGate || held && pendingNative!=null) pendingNative else q.takeIf { it!=nativeSide }; val target=waiting?.let { requireNotNull(nativeBoundary).toDouble() }?:if(q) 1.0 else 0.0; val geometry=contact?.basis?:next; val reference=contact?.reference?:ctx.fullPlayerReferenceTravelPx.toDouble(); val T=if(ctx.access==MotionAccess.Reduced || initialize) 2*ctx.displayIntervalSeconds.toDouble() else expansionDuration(law,(geometry.durationTravelPx?:geometry.edgeTravelPx).toDouble(),reference,x,v,target,sigma,ctx.displayIntervalSeconds.toDouble())
         val edges=rect?.channels; val edgeV=if(releaseVelocity!=null && rect!=null) DoubleArray(4) { (contact?.basis?:basis?:next).delta(it)*releaseVelocity } else null
@@ -231,10 +238,12 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         if(held) return
         // Holding leaves rest too: capture the speed the release will fly at (#854 §1.3).
         if(physicalRest) flightSigma=timeScale()
-        val channels=listOfNotNull(motion,cross)+(bound?.channels?.toList()?:emptyList())
+        val physical=bound?.physicalChannels
+        val channels=listOfNotNull(motion,cross)+(physical?.toList()?:emptyList())
         val entries=channels.map { channel ->
             val value=channel.rawValue(stamp)
-            channel to channel.prepareSegment(Driven(value,0.0),value.toFloat(),stamp,policy="DrivenInput")
+            val target=if(bound?.hasOutline==true && physical?.contains(channel)==true) channel.target else value.toFloat()
+            channel to channel.prepareSegment(Driven(value,0.0),target,stamp,policy="DrivenInput")
         }
         held=true; identity=null; lastStamp=stamp
         // Frozen destinations also preserve the frame when ordinary live reduction drains these channels.
@@ -250,6 +259,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         held=false
         if(bound!=null) { basis=next; pendingBasis=null }
         apply(prepared,logical,stamp)
+        bound?.resumeOutline()
     }
     fun contactBegin(stamp: FrameStamp) { guard(stamp); check(!held && !touching); val current=requireNotNull(basis); check(canContact) { "Contact travel cannot normalize the admitted Float tracker domain" }; val p=motion.rawValue(stamp); val sample=bound?.channels?.map { it.rawValue(stamp) }?.toDoubleArray(); val phaseInput=motion.prepareSegment(Driven(p,motion.rawVelocity(stamp)),motion.target,stamp,policy="DrivenInput"); val entries=mutableListOf(motion to phaseInput); bound?.let { r -> val rect=Rect(sample!![0].toFloat(),sample[1].toFloat(),sample[2].toFloat(),sample[3].toFloat()); entries.addAll(r.entries(r.prepareDrive(rect,stamp,this,DoubleArray(4) { r.channels[it].rawVelocity(stamp) }))) }; contact=Contact(current,context().fullPlayerReferenceTravelPx.toDouble(),p,sample,logical,capturedSpec(),localTimeScale); touching=true; pendingTarget=null; identity=null; lastStamp=stamp; commitAtomic(entries,true) }
     fun contactMove(edgeDisplacementPx: Float,stamp: FrameStamp) { guard(stamp); check(touching); require(edgeDisplacementPx.isFinite()); val frozen=contact!!; val p=(frozen.p+edgeDisplacementPx/frozen.basis.edgeTravelPx.toDouble()).coerceIn(0.0,1.0); val drive=motion.prepareDrive(p.toFloat(),stamp,if(p==0.0 || p==1.0) 0.0 else null); val entries=mutableListOf(motion to drive); bound?.let { r -> val x=DoubleArray(4) { frozen.edges!![it]+frozen.basis.delta(it)*(p-frozen.p) }; entries.addAll(r.entries(r.prepareDrive(Rect(x[0].toFloat(),x[1].toFloat(),x[2].toFloat(),x[3].toFloat()),stamp,this,DoubleArray(4) { frozen.basis.delta(it)*drive.next.velocity(0.0) }))) }; lastStamp=stamp; commitAtomic(entries,true) }

@@ -1,8 +1,14 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction
+import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
+import io.github.anastaci1a.localica.ui.spec.PopupOutline
+import io.github.anastaci1a.localica.ui.spec.PopupOutlinePreview
 import io.github.anastaci1a.localica.ui.spec.Space
 import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 import io.github.anastaci1a.localica.ui.spec.fluidThroughGrows
@@ -134,7 +140,7 @@ internal fun fluidGrowingOutlineTargets(
 }
 
 /** Both prepared rectangles use the smaller endpoint's root coordinates. */
-internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, anchorY: Double, genieScale: Double?): Double {
+internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, anchorY: Double, genieScale: Double?, amount: Double = -80.0): Double {
     val larger = standardized()
     val center = genieScale ?: if (anchorY != 0.5) anchorY else {
         val fraction = (pivot.midY - larger.y) / larger.height
@@ -142,5 +148,50 @@ internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, ancho
     }
     val fraction = (larger.height + (-60.0)) / 140.0
     val scale = if (fraction.isNaN()) 1.0 else fraction.coerceIn(0.5, 1.0)
-    return (center - (1.0 - center)) * (-80.0 * scale)
+    return (center - (1.0 - center)) * (amount * scale)
+}
+
+internal data class FluidPopupPreview(
+    override val opening: Boolean, val pivot: Rect, val root: Offset, val homeRadius: Float, val popupRadius: Float,
+    val anchorY: Double, val kickScale: Double,
+) : PopupOutlinePreview {
+    override fun prepare(home: Rect, envelope: Rect, density: Float): PopupOutline = PreparedFluidOutline(home, envelope, density, this)
+}
+
+private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, private val preview: FluidPopupPreview) : PopupOutline {
+    private val opening = preview.opening
+    private val scale = density.toDouble()
+    private fun points(r: Rect) = PopupPortalBounds((r.left - preview.root.x) / scale,
+        (r.top - preview.root.y) / scale, r.width / scale, r.height / scale)
+    private val home = points(start)
+    private val popup = points(end)
+    private val pivot = points(preview.pivot)
+    override val kickScale get()=preview.kickScale
+    override val growing = if (opening) fluidPopupContentGrows(home, popup) else fluidPopupContentGrows(popup, home)
+    override val apertureSlot get()=if (growing) 0 else 1
+    private val smaller = if (growing == opening) home else popup
+    private val larger = if (growing == opening) popup else home
+    private val targets = fluidGrowingOutlineTargets(larger, pivot, minOf(smaller.width, smaller.height), { it }, { it }) { r, inset ->
+        requireNotNull(PopupPortalInsets(inset, inset, inset, inset).signedCrop(r))
+    }
+
+    override fun outline(action: FluidTimelineAction): List<Pair<Rect, Float>>? = fluidOutlineRequests(action, growing, targets,
+        targets.fullyExpanded.takeIf { action == FullyExpanded })?.map { (role, override) ->
+        val isHome = if (role == PopupThroughItem.Pivot) true else (role == PopupThroughItem.From) == opening
+        val bounds = override?.bounds ?: if (role == PopupThroughItem.Pivot) pivot else if (isHome) home else popup
+        val rect = Rect((bounds.x * scale + preview.root.x).toFloat(), (bounds.y * scale + preview.root.y).toFloat(),
+            ((bounds.x + bounds.width) * scale + preview.root.x).toFloat(), ((bounds.y + bounds.height) * scale + preview.root.y).toFloat())
+        rect to (override?.let { (it.cornerRadius * scale).toFloat() } ?: if (isHome) preview.homeRadius else preview.popupRadius)
+    }
+
+    override fun kick(action: FluidTimelineAction): Pair<Int, Float>? {
+        val (slot, amount) = when (action) {
+            Kick, KickEjectee -> FluidKickSpec.growingSlot to larger.growingKickTarget(pivot, preview.anchorY, null)
+            KickSource -> 1 to larger.growingKickTarget(pivot, preview.anchorY, null, amount = 40.0)
+            Unkick, UnkickEjectee -> FluidKickSpec.growingSlot to FluidKickSpec.unkickTarget
+            UnkickSource -> 1 to FluidKickSpec.unkickTarget
+            else -> return null
+        }
+        return slot to (amount * scale).toFloat()
+    }
 }

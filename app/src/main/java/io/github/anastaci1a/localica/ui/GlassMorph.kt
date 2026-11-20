@@ -29,6 +29,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RenderEffect
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -713,7 +714,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     if (!visible) popupFlight.advance(gen, PopupEvent.Returned)
                 }
                 if (!gateCurrent()) continue@gateLoop
-                motion.expansion.acknowledgeNativeGate(generation)
+                motion.acknowledgeNativeGate(generation)
             } else {
                 if (!visible) {
                     nativeLease[0]?.invoke(); nativeLease[0]=null; leasedNode=null
@@ -933,7 +934,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 fun startWidth() = start().width.takeIf { it > 0f } ?: targetWidth.toFloat()
                 fun startHeight() = start().height.takeIf { it > 0f } ?: with(density) { CompactControlSize.toPx() }
                 fun homeRadius() = anchor.cornerRadius?.let { it * anchor.presentedScale } ?: with(density) { (startHeight() / 2).toDp() }
-                fun radius() = if (page) PageCornerRadius else if (detached) PopupCornerRadius else popupCornerRadius(homeRadius(), PopupCornerRadius, geometry())
+                val popupRadius = if (page) PageCornerRadius else PopupCornerRadius
+                fun radius() = motion.apertureRadius(density) {
+                    if (page || detached) popupRadius else popupCornerRadius(homeRadius(), popupRadius, geometry())
+                }
                 // The body morphs from the very record its source surface draws; a geometry-only or quiet source is zero at home.
                 val sourceMaterial = anchor.material.takeUnless { anchor.quiet || detached }
                 val quietOptics = anchor.quiet || sourceMaterial == null && !detached
@@ -1039,7 +1043,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         nativeField.draw(this,surfaceOpacity(),wellStrength *
                             (if(quietOptics) motion.quietStrength.at(phase()) else if(detached) phase() else 1f),
                             radius().toPx(),shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
-                            shadowReceiver[0],shadowExclusion[0]) {
+                            shadowReceiver[0],shadowExclusion[0],motion.outlineBodies(),
+                            { coordinates?.takeIf { it.isAttached }?.backdropPosition(view) }) {
                             // R5 (#847): B holds every popup optic until the restored source takes it at its draw entry.
                             if (visible || popupFlight.expanded || anchor.restoredBodyReceipt != anchor.restoredDrawRequest)
                                 popupFlight.refillBody(this@drawWithContent) {
@@ -1150,7 +1155,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         // Every layout retargets the one shared rectangle (position and velocity kept). A nested
                         // action menu freezes its parent until it has returned; IME-owned Back holds one layout.
                         if (!holdImeBack() && (placement != GlassPlacement.Search || childPanels.intValue == 0)) {
-                            motion.place(home, envelope, density.density, detached = detached)
+                            val preview = if (motion.fluid) with(density) {
+                                FluidPopupPreview(visible, home, windowOrigin, if (detached) popupRadius.toPx() else homeRadius().toPx(),
+                                    popupRadius.toPx(), TransformOrigin.Center.pivotFractionY.toDouble(), view.scaleY.toDouble())
+                            } else null
+                            motion.place(home, envelope, density.density, detached = detached, preview = preview)
                             if (placement == GlassPlacement.Search) {
                                 searchMotion.target = envelope
                                 popupFlight.searchSlot.bindBottom(requireNotNull(motion.bounds).bottom,

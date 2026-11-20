@@ -26,24 +26,30 @@ internal class NativeSurfaceField(private val plane: ShadowPlane,private val nod
     private var frame=ShapeFrame(emptyList(),Rect.Zero,0f,GlassStrain.None)
     internal fun frame()=frame
     fun draw(scope: androidx.compose.ui.graphics.drawscope.ContentDrawScope,opacity: Float,strength: Float,radius: Float,
-        sx: Float,sy: Float,shift: Float,receiver: GlassShadowReceiver?,exclusion: GlassShadowExclusion?,content: ()->Unit) = with(scope) {
+        sx: Float,sy: Float,shift: Float,receiver: GlassShadowReceiver?,exclusion: GlassShadowExclusion?,
+        outline: List<RoundRect>?,localOrigin: ()->Offset?,content: ()->Unit) = with(scope) {
         val corner=radius.coerceIn(0f,size.minDimension/2f)
         val presented=Rect(Offset(shift+size.width*(1f-sx)/2f,size.height*(1f-sy)/2f),Size(size.width*sx,size.height*sy))
-        val body=RoundRect(presented,CornerRadius(corner*sx,corner*sy))
-        frame=ShapeFrame(listOf(body),presented,corner,GlassStrain.None)
+        val origin=outline?.let { localOrigin() }
+        val bodies=if(outline==null || origin==null) listOf(RoundRect(presented,CornerRadius(corner*sx,corner*sy))) else outline.map { body ->
+            val topLeft=Offset(presented.left+(body.left-origin.x)*sx,presented.top+(body.top-origin.y)*sy)
+            RoundRect(Rect(topLeft,Size(body.width*sx,body.height*sy)),CornerRadius(body.topLeftCornerRadius.x*sx,body.topLeftCornerRadius.y*sy))
+        }
+        val footprint=if(bodies.size==1) presented else Rect(bodies.minOf { it.left },bodies.minOf { it.top },bodies.maxOf { it.right },bodies.maxOf { it.bottom })
+        frame=ShapeFrame(bodies,footprint,corner,GlassStrain.None)
         val alpha=opacity.coerceIn(0f,1f)
         if(alpha<=0f) return@with
         val scaled=node.fieldInheritsBodyScale
         val pad=glassShadowInset(spread).toPx()+2f
         val layer=alpha<1f
         if(layer) {
-            val footprint=Rect(presented.left-pad*(if(scaled) sx else 1f),presented.top-pad*(if(scaled) sy else 1f),
-                presented.right+pad*(if(scaled) sx else 1f),presented.bottom+pad*(if(scaled) sy else 1f))
-            drawContext.canvas.saveLayer(footprint,Paint().apply { this.alpha=alpha })
+            val padded=Rect(footprint.left-pad*(if(scaled) sx else 1f),footprint.top-pad*(if(scaled) sy else 1f),
+                footprint.right+pad*(if(scaled) sx else 1f),footprint.bottom+pad*(if(scaled) sy else 1f))
+            drawContext.canvas.saveLayer(padded,Paint().apply { this.alpha=alpha })
         }
         try {
             if(node.owns(plane)) {
-                if(scaled) translate(left=shift) { scale(sx,sy) {
+                if(scaled && bodies.size==1) translate(left=shift) { scale(sx,sy) {
                     with(cache) { draw(listOf(RoundRect(Rect(Offset.Zero,size),CornerRadius(corner)) to 1f),strength,spread,receiver,exclusion) }
                 } } else with(cache) { draw(node.frameOn(plane).bodies.map { it to 1f },strength,spread,receiver,exclusion) }
             }
