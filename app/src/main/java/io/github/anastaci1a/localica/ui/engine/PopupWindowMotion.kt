@@ -43,11 +43,11 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         Curve.window(.25f, .75f).scaled(.31640625f)
     private val ranges = requireNotNull(clock.spec.geometry).maxViewportDiagonalPx.let { EdgeRanges(it, it, it, it) }
     private var rectangle by mutableStateOf<MotionRect?>(null)
-    val bounds: MotionRectView? get() = rectangle
+    val bounds: MotionRectView? get() = rectangle?.let { expansion.aperture }
     /** The intent: what [show] last asked for. Foreground semantics follow it, so Hide releases them at its event. */
     var shown by mutableStateOf(false); private set
     val openAtRest get() = expansion.retirementReady && expansion.boundedProgress(popupCurve) == 1f
-    val moving get() = if (shown && rectangle?.hasOutline!=true) expansion.boundedProgress(popupCurve) != 1f else !expansion.retirementReady
+    val moving get() = if (shown && !expansion.hasOutline) expansion.boundedProgress(popupCurve) != 1f else !expansion.retirementReady
     private var holding = false
     private var openingEnvelope: Rect? = null
     private var nativeWindow: java.lang.ref.WeakReference<Any>? = null
@@ -56,8 +56,8 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private data class FluidPlacement(val basis: ExpansionBasis, val preview: PopupOutlinePreview<Rect>?, val intent: Boolean? = null,
         val outline: PopupOutline<Rect>? = null, val request: Pair<FluidTimelineStep,Double>? = null)
     private var placement: FluidPlacement? = null
-    internal fun outlineBodies()=rectangle?.outlineBodies()
-    internal fun outlineRadius()=rectangle?.outlineRadius()
+    internal fun outlineBodies()=expansion.outlineBodies()
+    internal fun outlineRadius()=expansion.outlineRadius()
     internal fun apertureRadius(density: Density, fallback: ()->Dp)=outlineRadius()?.let { with(density) { it.toDp() } }?:fallback()
     var fluidBlurRadius by mutableDoubleStateOf(0.0); private set
     private val fluidBlur = FluidPropertyMotion(clock, Double::equals, { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidBlurRadius = radius } })
@@ -84,7 +84,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         }
     }
     fun show(visible: Boolean) {
-        if(!shown && visible && expansion.retirementReady) rectangle?.clearOutline()
+        if(!shown && visible && expansion.retirementReady) expansion.clearOutline()
         expansion.refreshPopupLaw()
         shown = visible
         if(placement?.preview!=null && placement?.intent!=visible) fluidTimeline.replace(emptyList())

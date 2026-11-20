@@ -90,14 +90,15 @@ internal data class FluidGrowingOutlineTargets(
 )
 
 internal fun fluidOutlineRequests(
-    action: FluidTimelineAction, growing: Boolean, growth: FluidGrowingOutlineTargets?, returnOutline: FluidOutlineStep?,
+    action: FluidTimelineAction, growing: Boolean, growth: FluidGrowingOutlineTargets?,
 ): List<Pair<PopupThroughItem, FluidOutlineOverride?>>? {
     val source = when (action) {
         FluidTimelineAction.Source, FluidTimelineAction.CollapsedSource -> true
         FluidTimelineAction.ExpandedOverrounded, FluidTimelineAction.FullyExpanded -> false
         else -> return null
     }
-    val outline = if (!growing) returnOutline else when (action) {
+    // The return queue reuses the prepared FullyExpanded step; its Source carries no override.
+    val outline = when (action) {
         FluidTimelineAction.CollapsedSource -> growth?.collapsedSource
         FluidTimelineAction.ExpandedOverrounded -> growth?.overrounded
         FluidTimelineAction.FullyExpanded -> growth?.fullyExpanded
@@ -175,8 +176,7 @@ private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, priva
         requireNotNull(PopupPortalInsets(inset, inset, inset, inset).signedCrop(r))
     }
 
-    override fun outline(action: FluidTimelineAction): List<Pair<Rect, Float>>? = fluidOutlineRequests(action, growing, targets,
-        targets.fullyExpanded.takeIf { action == FullyExpanded })?.map { (role, override) ->
+    override fun outline(action: FluidTimelineAction): List<Pair<Rect, Float>>? = fluidOutlineRequests(action, growing, targets)?.map { (role, override) ->
         val isHome = if (role == PopupThroughItem.Pivot) true else (role == PopupThroughItem.From) == opening
         val bounds = override?.bounds ?: if (role == PopupThroughItem.Pivot) pivot else if (isHome) home else popup
         val rect = Rect((bounds.x * scale + preview.root.x).toFloat(), (bounds.y * scale + preview.root.y).toFloat(),

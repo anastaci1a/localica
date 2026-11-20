@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.runtime.*
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.*
 import io.github.anastaci1a.localica.BuildConfig
 import io.github.anastaci1a.localica.ui.spec.*
 import kotlin.math.*
@@ -61,7 +61,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     internal fun usePopupLaw(model: PopupMotionModel,kind: PopupKind) {
         clock.checkMutation(); check(!disposed); val variant=model.variant(kind)
         popupLaw=if(variant==PopupMotionVariant.Legacy) null else ResolvedPopupLaw(model,kind,variant)
-        if(model.style!=PopupMotionStyle.Fluid) bound?.clearOutline()
+        if(model.style!=PopupMotionStyle.Fluid) clearOutline()
         if(popupLaw==null || model.centre==null && variant !in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto)) { cross?.dispose(); cross=null }
         if(cross==null && popupLaw!=null && (model.centre!=null || variant in setOf(PopupMotionVariant.CrossAxisSnap,PopupMotionVariant.Auto))) cross=MotionFloat(clock,motion.rawValue(clock.stampNow).toFloat(),1f,key=key to "cross").also { it.onRest={ notifyLifecycle() } }
     }
@@ -70,15 +70,69 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     private var held by mutableStateOf(false)
     private var basis by mutableStateOf<ExpansionBasis?>(null); override val canContact: Boolean get()=if(held || boundCurve!=null || popupLaw!=null) false else basis?.let { b -> clock.context?.let { ctx -> b.edgeTravelPx>=1f && finiteExpansionFinish(capturedSpec(),b.edgeTravelPx.toDouble()/ctx.fullPlayerReferenceTravelPx,ctx.displayIntervalSeconds.toDouble()) } }?:false; private var bound: MotionRect?=null; private var boundCurve: Curve?=null; private var nativeBoundary: Float?=null; private var nativeSide=false; private var pendingNative by mutableStateOf<Boolean?>(null); internal var nativeGeneration=0L; private set; internal var pendingBasis: ExpansionBasis?=null; private set; internal var pendingTarget: Boolean?=null; private set
     private data class Contact(val basis: ExpansionBasis,val reference: Double,val p: Double,val edges: DoubleArray?,val previousTarget: Boolean,val spec: ExpansionSpec,val timeScale: Double?)
-    internal val lifecycle=linkedSetOf<(Boolean)->Unit>(); internal fun owns(rect: MotionRectView)=bound===rect
+    internal val lifecycle=linkedSetOf<(Boolean)->Unit>(); internal fun owns(rect: MotionRectView)=bound!=null && (bound===rect || aperture===rect)
     internal val ownerClock get()=clock
-    private val physicalRest: Boolean get() { val edges=bound?.physicalChannels; motion.epoch.intValue; cross?.epoch?.intValue; edges?.forEach { it.epoch.intValue }; return motion.settled && cross?.settled!=false && edges?.all { it.settled }!=false }
-    internal fun replaceOutline(poses: List<Pair<Rect,Float>>,aperture: Int,scale: Double,spring: FluidPopupSpringSettings) {
-        val rect=requireNotNull(bound); val active=rect.hasOutline
-        rect.replaceOutline(poses,aperture,scale,spring,this)
-        if(!active) rect.physicalChannels.drop(4).forEach { it.onRest={ notifyLifecycle() } }
+    private val physical get()=bound?.channels?.toList().orEmpty()+outline?.owned.orEmpty()
+    private val physicalRest: Boolean get() { val edges=physical; motion.epoch.intValue; cross?.epoch?.intValue; edges.forEach { it.epoch.intValue }; return motion.settled && cross?.settled!=false && edges.all { it.settled } }
+    /** #1083: the Fluid window's second through slot is a second rectangle beside [bound]; each slot has one radius and one kick. */
+    private inner class Outline(poses: List<Pair<Rect,Float>>,aperture: Int,scale: Double) {
+        val companion=MotionRect(clock,poses[1].first,requireNotNull(bound).ranges).also { it.claim(this@ExpandCollapse) }
+        val radii=poses.map { MotionFloat(clock,it.second,companion.ranges.top) }
+        val kicks=List(2) { MotionFloat(clock,FluidKickSpec.unkickTarget.toFloat(),companion.ranges.top) }
+        val owned=companion.channels.toList()+radii+kicks
+        var aperture by mutableIntStateOf(aperture); var scale by mutableDoubleStateOf(scale)
+        var spring: FluidPopupSpringSettings?=null; val kickLaws=arrayOfNulls<FluidPopupSpringSettings>(2)
+        fun translation(amount: Float)=FluidKickSpec.translationY(amount.toDouble(),scale).toFloat()
     }
-    internal fun kickOutline(slot: Int,target: Float,spring: FluidPopupSpringSettings) { bound?.kickOutline(slot,target,spring) }
+    private var outline by mutableStateOf<Outline?>(null)
+    internal val hasOutline get()=outline!=null
+    /** The bound rectangle as presented: its vertical edges carry the aperture slot's kick while an outline is installed. */
+    internal val aperture: MotionRectView=object: MotionRectView {
+        private fun edge(i: Int)=requireNotNull(bound).channels[i]
+        private fun kicked(i: Int)=object: MotionValue {
+            private fun kick(base: Float,read: (MotionFloat)->Float)=outline?.let { base+it.translation(read(it.kicks[0])) }?:base
+            override val target get()=kick(edge(i).target) { it.target }
+            override val settled get()=edge(i).settled && outline?.kicks?.first()?.settled!=false
+            override fun value()=kick(edge(i).value()) { it.value() }
+            override fun velocity()=kick(edge(i).velocity()) { it.velocity() }
+            override fun sample()=if(outline==null) edge(i).sample() else Kinematic(value(),velocity())
+            override fun valueAt(stamp: FrameStamp)=kick(edge(i).valueAt(stamp)) { it.valueAt(stamp) }
+            override fun velocityAt(stamp: FrameStamp)=kick(edge(i).velocityAt(stamp)) { it.velocityAt(stamp) }
+            override fun sampleAt(stamp: FrameStamp)=if(outline==null) edge(i).sampleAt(stamp) else Kinematic(valueAt(stamp),velocityAt(stamp))
+        }
+        override val left get()=edge(0); override val top: MotionValue=kicked(1); override val right get()=edge(2); override val bottom: MotionValue=kicked(3)
+        override fun value()=Rect(left.value(),top.value(),right.value(),bottom.value())
+        override fun valueAt(stamp: FrameStamp)=Rect(left.valueAt(stamp),top.valueAt(stamp),right.valueAt(stamp),bottom.valueAt(stamp))
+    }
+    /** Poses arrive in request order; the receiving endpoint's slot stays on the bound aperture. */
+    internal fun replaceOutline(poses: List<Pair<Rect,Float>>,aperture: Int,scale: Double,spring: FluidPopupSpringSettings) {
+        val ordered=if(aperture==0) poses else poses.asReversed()
+        val current=outline?:Outline(ordered,aperture,scale).also { o -> outline=o; o.owned.forEach { it.onRest={ notifyLifecycle() } } }
+        current.aperture=aperture; current.scale=scale; current.spring=spring
+        val edges=listOf(requireNotNull(bound),current.companion).zip(ordered).flatMap { (rect,pose) -> rect.channels.zip(floatArrayOf(pose.first.left,pose.first.top,pose.first.right,pose.first.bottom).toList()) }
+        retargetOutline(edges+current.radii.zip(ordered.map { it.second }),spring)
+    }
+    internal fun kickOutline(slot: Int,target: Float,spring: FluidPopupSpringSettings) { outline?.let { val i=slot xor it.aperture; it.kickLaws[i]=spring; retargetOutline(listOf(it.kicks[i] to target),spring) } }
+    private fun resumeOutline() { val o=outline?:return
+        o.spring?.let { spring -> retargetOutline((bound!!.channels.toList()+o.companion.channels+o.radii).map { it to it.target },spring) }
+        o.kickLaws.forEachIndexed { i,spring -> if(spring!=null) retargetOutline(listOf(o.kicks[i] to o.kicks[i].target),spring) }
+    }
+    private fun retargetOutline(targets: List<Pair<MotionFloat,Float>>,spring: FluidPopupSpringSettings) {
+        val stamp=clock.stampNow; val ctx=context(); val display=ctx.displayIntervalSeconds.toDouble(); val reduced=ctx.access==MotionAccess.Reduced
+        val moving=targets.filter { (m,q) -> m.rawValue(stamp)!=q.toDouble() || m.rawVelocity(stamp)!=0.0 }
+        val plan=if(reduced || moving.isEmpty()) null else SpringPlan.of(stamp,1.0,display,moving.map { (m,q) -> doubleArrayOf(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble()) })
+        commitAtomic(targets.map { (m,q) -> m to m.prepareSegment(plan?.let { Damped(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble(),display,it.finish,it.tauOut,it) }?:Rest(q.toDouble()),q,stamp,plan,if(reduced) "Reduced" else "Continuous") })
+    }
+    /** Both sampled slots in field order, each with its published circular radius. */
+    internal fun outlineBodies(): List<RoundRect>? = outline?.let { o ->
+        val bodies=listOf(aperture.value(),o.companion.value().translate(Offset(0f,o.translation(o.kicks[1].value())))).zip(o.radii).map { (r,radius) -> RoundRect(r,CornerRadius(presentedRadius(r,radius))) }
+        if(o.aperture==0) bodies else bodies.asReversed()
+    }
+    internal fun outlineRadius()=outline?.let { presentedRadius(aperture.value(),it.radii[0]) }
+    private fun presentedRadius(rect: Rect,radius: MotionFloat): Float { var presented=0.0; val sample=radius.value().toDouble()
+        FluidCornerSpec.publishRadii(maxOf(rect.width,0f).toDouble(),maxOf(rect.height,0f).toDouble(),{ DoubleArray(8) { sample } },null,null) { _,value,_,_,_ -> presented=value[0] }
+        return presented.toFloat() }
+    internal fun clearOutline() { outline?.owned?.forEach { it.onRest=null; it.dispose() }; outline=null }
     internal val awaitingNativeGate get()=!held && pendingNative!=null && physicalRest
     internal val retirementReady get()=!held && pendingNative==null && physicalRest
     internal val nativeOpening get()=pendingNative
@@ -220,7 +274,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         return Prepared(entries,null,plan.finish,0.0,spec,waiting,sigma)
     }
     private fun prepare(q: Boolean,stamp: FrameStamp,next: ExpansionBasis,rect: MotionRect?,releaseVelocity: Double?=null,initialize: Boolean=false,reanchor: Boolean=false): Prepared {
-        popupLaw?.let { if(contact==null) return prepareSpring(it,q,stamp,next,rect?.takeUnless { it.hasOutline },initialize,reanchor) }
+        popupLaw?.let { if(contact==null) return prepareSpring(it,q,stamp,next,rect?.takeUnless { outline!=null },initialize,reanchor) }
         admitDurationBasis(next)
         val law=contact?.spec?:spec; val ctx=context(); val sigma=timeScale(); val x=motion.rawValue(stamp); val v=releaseVelocity?:motion.rawVelocity(stamp); val waiting=if(nativeBoundary==null) null else if(awaitingNativeGate || held && pendingNative!=null) pendingNative else q.takeIf { it!=nativeSide }; val target=waiting?.let { requireNotNull(nativeBoundary).toDouble() }?:if(q) 1.0 else 0.0; val geometry=contact?.basis?:next; val reference=contact?.reference?:ctx.fullPlayerReferenceTravelPx.toDouble(); val T=if(ctx.access==MotionAccess.Reduced || initialize) 2*ctx.displayIntervalSeconds.toDouble() else expansionDuration(law,(geometry.durationTravelPx?:geometry.edgeTravelPx).toDouble(),reference,x,v,target,sigma,ctx.displayIntervalSeconds.toDouble())
         val edges=rect?.channels; val edgeV=if(releaseVelocity!=null && rect!=null) DoubleArray(4) { (contact?.basis?:basis?:next).delta(it)*releaseVelocity } else null
@@ -238,11 +292,11 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         if(held) return
         // Holding leaves rest too: capture the speed the release will fly at (#854 §1.3).
         if(physicalRest) flightSigma=timeScale()
-        val physical=bound?.physicalChannels
-        val channels=listOfNotNull(motion,cross)+(physical?.toList()?:emptyList())
+        val physical=this.physical
+        val channels=listOfNotNull(motion,cross)+physical
         val entries=channels.map { channel ->
             val value=channel.rawValue(stamp)
-            val target=if(bound?.hasOutline==true && physical?.contains(channel)==true) channel.target else value.toFloat()
+            val target=if(outline!=null && channel in physical) channel.target else value.toFloat()
             channel to channel.prepareSegment(Driven(value,0.0),target,stamp,policy="DrivenInput")
         }
         held=true; identity=null; lastStamp=stamp
@@ -259,7 +313,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         held=false
         if(bound!=null) { basis=next; pendingBasis=null }
         apply(prepared,logical,stamp)
-        bound?.resumeOutline()
+        resumeOutline()
     }
     fun contactBegin(stamp: FrameStamp) { guard(stamp); check(!held && !touching); val current=requireNotNull(basis); check(canContact) { "Contact travel cannot normalize the admitted Float tracker domain" }; val p=motion.rawValue(stamp); val sample=bound?.channels?.map { it.rawValue(stamp) }?.toDoubleArray(); val phaseInput=motion.prepareSegment(Driven(p,motion.rawVelocity(stamp)),motion.target,stamp,policy="DrivenInput"); val entries=mutableListOf(motion to phaseInput); bound?.let { r -> val rect=Rect(sample!![0].toFloat(),sample[1].toFloat(),sample[2].toFloat(),sample[3].toFloat()); entries.addAll(r.entries(r.prepareDrive(rect,stamp,this,DoubleArray(4) { r.channels[it].rawVelocity(stamp) }))) }; contact=Contact(current,context().fullPlayerReferenceTravelPx.toDouble(),p,sample,logical,capturedSpec(),localTimeScale); touching=true; pendingTarget=null; identity=null; lastStamp=stamp; commitAtomic(entries,true) }
     fun contactMove(edgeDisplacementPx: Float,stamp: FrameStamp) { guard(stamp); check(touching); require(edgeDisplacementPx.isFinite()); val frozen=contact!!; val p=(frozen.p+edgeDisplacementPx/frozen.basis.edgeTravelPx.toDouble()).coerceIn(0.0,1.0); val drive=motion.prepareDrive(p.toFloat(),stamp,if(p==0.0 || p==1.0) 0.0 else null); val entries=mutableListOf(motion to drive); bound?.let { r -> val x=DoubleArray(4) { frozen.edges!![it]+frozen.basis.delta(it)*(p-frozen.p) }; entries.addAll(r.entries(r.prepareDrive(Rect(x[0].toFloat(),x[1].toFloat(),x[2].toFloat(),x[3].toFloat()),stamp,this,DoubleArray(4) { frozen.basis.delta(it)*drive.next.velocity(0.0) }))) }; lastStamp=stamp; commitAtomic(entries,true) }
@@ -267,7 +321,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     private fun finishContact(q: Boolean,stamp: FrameStamp,v: Double?): ReleaseDecision { val oldSpec=contact!!.spec; val oldScale=timeScale(); val next=if(bound!=null) pendingBasis?:basis!! else basis!!; val prepared=prepare(q,stamp,next,bound,v); touching=false; contact=null; pendingTarget=null; if(bound!=null) { basis=next; pendingBasis=null }; apply(prepared,q,stamp); if(oldSpec!=spec || oldScale!=timeScale()) identity=null; if(v!=null && prepared.duration>0) clock.events?.let { sink -> clock.observe { sink.releaseBridge(motion,requireNotNull(prepared.plan).tauIn,prepared.approvedTau,context().displayIntervalSeconds.toDouble()) } }; return ReleaseDecision(q,prepared.duration.toFloat(),(v?:motion.rawVelocity(stamp)).toFloat()) }
     fun contactCancel() { val stamp=clock.stampNow; guard(stamp); if(!touching) return; finishContact(pendingTarget?:contact!!.previousTarget,stamp,null) }
     private fun endReduced() { val stamp=clock.stampNow; val next=pendingBasis?:basis; val prepared=next?.let { prepare(logical,stamp,it,bound) }; touching=false; contact=null; pendingTarget=null; if(next!=null) { basis=next; pendingBasis=null }; if(prepared!=null) apply(prepared,logical,stamp) }
-    internal fun dispose() { clock.checkMutation(); if(disposed) return; try { check(pendingBasis==null || bound!=null) { "Unbound pending Rebase at owner disposal" } } finally { disposed=true; lifecycle.clear(); motion.onRest=null; motion.dispose(); cross?.let { it.onRest=null; it.dispose() }; bound?.dispose() } }
+    internal fun dispose() { clock.checkMutation(); if(disposed) return; try { check(pendingBasis==null || bound!=null) { "Unbound pending Rebase at owner disposal" } } finally { disposed=true; lifecycle.clear(); motion.onRest=null; motion.dispose(); cross?.let { it.onRest=null; it.dispose() }; clearOutline(); bound?.dispose() } }
 }
 @Composable fun rememberExpandCollapse(key: Any,initiallyExpanded: Boolean): ExpandCollapse = rememberExpandCollapse(key,initiallyExpanded) { it.expansion }
 /** One expansion owner on the law [law] selects. Popups and presences use the stock law; sheets and the lyrics presence keep their v0.33.21 pace (#846). */

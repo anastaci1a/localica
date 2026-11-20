@@ -30,11 +30,10 @@ internal class NativeSurfaceField(private val plane: ShadowPlane,private val nod
         outline: List<RoundRect>?,localOrigin: ()->Offset?,content: ()->Unit) = with(scope) {
         val corner=radius.coerceIn(0f,size.minDimension/2f)
         val presented=Rect(Offset(shift+size.width*(1f-sx)/2f,size.height*(1f-sy)/2f),Size(size.width*sx,size.height*sy))
+        // One unscaled local construction: the window body, or the prepared slots relative to this node; both branches draw it.
         val origin=outline?.let { localOrigin() }
-        val bodies=if(outline==null || origin==null) listOf(RoundRect(presented,CornerRadius(corner*sx,corner*sy))) else outline.map { body ->
-            val topLeft=Offset(presented.left+(body.left-origin.x)*sx,presented.top+(body.top-origin.y)*sy)
-            RoundRect(Rect(topLeft,Size(body.width*sx,body.height*sy)),CornerRadius(body.topLeftCornerRadius.x*sx,body.topLeftCornerRadius.y*sy))
-        }
+        val local=if(outline==null || origin==null) listOf(RoundRect(Rect(Offset.Zero,size),CornerRadius(corner))) else outline.map { it.translate(-origin) }
+        val bodies=local.map { RoundRect(Rect(Offset(presented.left+it.left*sx,presented.top+it.top*sy),Size(it.width*sx,it.height*sy)),CornerRadius(it.topLeftCornerRadius.x*sx,it.topLeftCornerRadius.y*sy)) }
         val footprint=if(bodies.size==1) presented else Rect(bodies.minOf { it.left },bodies.minOf { it.top },bodies.maxOf { it.right },bodies.maxOf { it.bottom })
         frame=ShapeFrame(bodies,footprint,corner,GlassStrain.None)
         val alpha=opacity.coerceIn(0f,1f)
@@ -49,8 +48,8 @@ internal class NativeSurfaceField(private val plane: ShadowPlane,private val nod
         }
         try {
             if(node.owns(plane)) {
-                if(scaled && bodies.size==1) translate(left=shift) { scale(sx,sy) {
-                    with(cache) { draw(listOf(RoundRect(Rect(Offset.Zero,size),CornerRadius(corner)) to 1f),strength,spread,receiver,exclusion) }
+                if(scaled) translate(left=shift) { scale(sx,sy) {
+                    with(cache) { draw(local.map { it to 1f },strength,spread,receiver,exclusion) }
                 } } else with(cache) { draw(node.frameOn(plane).bodies.map { it to 1f },strength,spread,receiver,exclusion) }
             }
             content()

@@ -5,8 +5,10 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.boundingRect
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.engine.EngineHarness
+import io.github.anastaci1a.localica.ui.spec.MotionAccess
 import io.github.anastaci1a.localica.ui.engine.PopupWindowMotion
 import io.github.anastaci1a.localica.ui.spec.ExpansionGeometryDomain
+import io.github.anastaci1a.localica.ui.spec.FluidPopupSpringSettings
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
@@ -102,6 +104,59 @@ class GlassMorphGeometryTest {
         }
     }
 
+    private fun fluidWindow(access: MotionAccess, popupRadius: Float, body: (EngineHarness, PopupWindowMotion, FluidPopupPreview) -> Unit) {
+        val domain = ExpansionGeometryDomain(1000f, 4000f, 1f / 30)
+        val spec = (uiSpec(InterfaceSettings(popupMotion = PopupMotionStyle.Fluid), geometry = domain) as SpecResult.Accepted).spec
+        val input = FluidPopupPreview(true, Rect(16f, 10f, 56f, 30f), Offset.Zero, 6f, popupRadius, 0.5, 2.0)
+        EngineHarness(access, spec).use { h ->
+            val popup = PopupWindowMotion(h.clock, spec.expansion, "fluid", prepared = true, quiet = false, kind = PopupKind.Menu)
+            popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input)
+            body(h, popup, input)
+            popup.dispose()
+        }
+    }
+    private fun EngineHarness.frames(popup: PopupWindowMotion, count: Int, each: (Int) -> Unit = {}) = repeat(count) {
+        if (popup.expansion.awaitingNativeGate) popup.acknowledgeNativeGate(popup.expansion.nativeGeneration)
+        advance(1.0 / 120)
+        each(it)
+    }
+
+    @Test fun apertureRadiusClampsAndAKickInFlightSurvivesReversal() = fluidWindow(MotionAccess.Standard, 120f) { h, popup, input ->
+        val aperture = requireNotNull(popup.bounds)
+        popup.show(true)
+        h.frames(popup, 480)
+        // Radius 120 on the 120x80 slot publishes 40 per lane, on the aperture and in the field.
+        assertEquals(40f, requireNotNull(popup.outlineRadius()), 0f)
+        assertEquals(40f, requireNotNull(popup.outlineBodies())[0].topLeftCornerRadius.x, 0f)
+        popup.expansion.kickOutline(0, -40f, FluidPopupSpringSettings(1.0, 0.2))
+        h.frames(popup, 3)
+        val edges = listOf(aperture.top, aperture.bottom)
+        val kicked = edges.map { it.sampleAt(h.clock.stampNow) }
+        assertTrue(kicked.all { it.velocity != 0f })
+        popup.show(false)
+        popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input.copy(opening = false))
+        assertEquals(kicked, edges.map { it.sampleAt(h.clock.stampNow) })
+        h.frames(popup, 480)
+        assertTrue(popup.expansion.retirementReady)
+    }
+
+    @Test fun reducedMotionFinishesBothSlotsOnTheSameFrame() = fluidWindow(MotionAccess.Reduced, 24f) { h, popup, input ->
+        for (opening in listOf(true, false)) {
+            popup.show(opening)
+            popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input.copy(opening = opening))
+            var previous = popup.outlineBodies()
+            val changed = IntArray(2) { -1 }
+            h.frames(popup, 480) { frame ->
+                val bodies = popup.outlineBodies()
+                bodies?.forEachIndexed { i, body -> if (previous?.get(i) != body) changed[i] = frame }
+                previous = bodies
+            }
+            assertTrue(changed[0] >= 0)
+            assertEquals(changed[0], changed[1])
+            assertTrue(popup.expansion.retirementReady)
+        }
+    }
+
     @Test fun preparedThroughRequestsKeepEndpointAndPivotOverridesWithTheirRoles() {
         val from = PopupPortalBounds(16.0, 10.0, 40.0, 20.0)
         val to = PopupPortalBounds(0.0, 0.0, 120.0, 80.0)
@@ -111,14 +166,15 @@ class GlassMorphGeometryTest {
         val collapsed = FluidOutlineOverride(PopupPortalBounds(26.0, 10.0, 20.0, 20.0), 10.0, true)
         val companion = FluidOutlineOverride(PopupPortalBounds(32.0, 15.0, 20.0, 20.0), 10.0)
         val (start, pivot, end) = PopupThroughItem.entries
-        assertEquals(listOf(pivot to null, start to null), fluidOutlineRequests(Source, true, growth, null))
-        assertEquals(listOf(pivot to null, start to collapsed), fluidOutlineRequests(CollapsedSource, true, growth, null))
+        assertEquals(listOf(pivot to null, start to null), fluidOutlineRequests(Source, true, growth))
+        assertEquals(listOf(pivot to null, start to collapsed), fluidOutlineRequests(CollapsedSource, true, growth))
         assertEquals(listOf(end to FluidOutlineOverride(null, 120.0), pivot to companion),
-            fluidOutlineRequests(ExpandedOverrounded, true, growth, null))
-        assertEquals(listOf(end to null, pivot to companion), fluidOutlineRequests(FullyExpanded, true, growth, null))
+            fluidOutlineRequests(ExpandedOverrounded, true, growth))
+        assertEquals(listOf(end to null, pivot to companion), fluidOutlineRequests(FullyExpanded, true, growth))
         assertEquals(listOf(start to null, pivot to companion),
-            fluidOutlineRequests(FullyExpanded, false, null, FluidOutlineStep(null, companion)))
-        assertEquals(listOf(pivot to null, end to null), fluidOutlineRequests(Source, false, null, null))
+            fluidOutlineRequests(FullyExpanded, false, growth))
+        // Return Source keeps Pivot A then To with no override even when the prepared targets are supplied.
+        assertEquals(listOf(pivot to null, end to null), fluidOutlineRequests(Source, false, growth))
     }
 
     @Test fun edgeSpringPreparedPopupKeepsItsFrameCorpus() {

@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.runtime.*
-import androidx.compose.ui.geometry.*
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import io.github.anastaci1a.localica.ui.spec.*
@@ -15,7 +15,6 @@ internal data class EasedPlan(val stamp: FrameStamp,val core: UnitCurveSpec,val 
 internal class SpringPlan(val stamp: FrameStamp,val finish: Double,val tauOut: Double,val sigma: Double) {
     init { require(finish.isFinite() && finish>0 && tauOut.isFinite() && tauOut>0 && tauOut<=finish && sigma.isFinite() && sigma>0) }
     fun segment(x: Double,v: Double,q: Double,law: SpringLaw,range: Double,display: Double)=Damped(x,v,q,law.omega/sigma,law.zeta.toDouble(),range,display,finish,tauOut,this)
-    fun segment(x: Double,v: Double,q: Double,spring: FluidPopupSpringSettings,range: Double,display: Double)=Damped(x,v,q,spring.omega/sigma,spring.dampingRatio,range,display,finish,tauOut,this)
     companion object {
         /** finish = max(2 frames, every channel's settle envelope); tauOut = min(finish/8, .064 sigma, 1/slowest pole). Each state is x, v, q, omega_eff, zeta, range. */
         fun of(stamp: FrameStamp,sigma: Double,display: Double,states: List<DoubleArray>): SpringPlan {
@@ -28,33 +27,7 @@ internal class SpringPlan(val stamp: FrameStamp,val finish: Double,val tauOut: D
 private fun edges(rect: Rect)=floatArrayOf(rect.left,rect.top,rect.right,rect.bottom).also { require(it.all(Float::isFinite)) }
 @Stable class MotionRect internal constructor(internal val clock: UiClock,initial: Rect,internal val ranges: EdgeRanges,key: Any=Any()): MotionRectView {
     private val initialEdges=edges(initial); internal val channels=Array(4) { MotionFloat(clock,initialEdges[it],ranges.values()[it],key=key to "edge$it") }; private var binding: Any?=null; private var last: Any?=null
-    private inner class OutlineSlots(poses: List<Pair<Rect,Float>>, initialAperture: Int, initialScale: Double) {
-        val companion=MotionRect(clock,poses[1].first,ranges)
-        val radii=poses.map { MotionFloat(clock,it.second,ranges.top) }
-        val kicks=List(2) { MotionFloat(clock,FluidKickSpec.unkickTarget.toFloat(),ranges.top) }
-        val all=channels+companion.channels+radii+kicks
-        val top=kicked(channels[1]); val bottom=kicked(channels[3])
-        var aperture by mutableIntStateOf(initialAperture)
-        var scale by mutableDoubleStateOf(initialScale)
-        var outline: FluidPopupSpringSettings? = null
-        val kickLaws = arrayOfNulls<FluidPopupSpringSettings>(2)
-        fun translation(amount: Float)=FluidKickSpec.translationY(amount.toDouble(),scale).toFloat()
-    }
-    private var slots by mutableStateOf<OutlineSlots?>(null)
-    internal val hasOutline get()=slots!=null
-    internal val physicalChannels get()=slots?.all?:channels
-    override val left: MotionValue get()=channels[0]; override val top: MotionValue get()=slots?.top?:channels[1]; override val right: MotionValue get()=channels[2]; override val bottom: MotionValue get()=slots?.bottom?:channels[3]
-    private fun kicked(edge: MotionFloat): MotionValue = object : MotionValue {
-        private fun projected(read: (MotionFloat)->Float)=slots?.let { it.translation(read(it.kicks[0])) }?:0f
-        override val target get()=edge.target+projected { it.target }
-        override val settled get()=edge.settled && slots?.kicks?.first()?.settled!=false
-        override fun value()=edge.value()+projected { it.value() }
-        override fun velocity()=edge.velocity()+projected { it.velocity() }
-        override fun sample()=Kinematic(value(),velocity())
-        override fun valueAt(stamp: FrameStamp)=edge.valueAt(stamp)+projected { it.valueAt(stamp) }
-        override fun velocityAt(stamp: FrameStamp)=edge.velocityAt(stamp)+projected { it.velocityAt(stamp) }
-        override fun sampleAt(stamp: FrameStamp)=Kinematic(valueAt(stamp),velocityAt(stamp))
-    }
+    override val left: MotionValue get()=channels[0]; override val top: MotionValue get()=channels[1]; override val right: MotionValue get()=channels[2]; override val bottom: MotionValue get()=channels[3]
     override fun value()=Rect(left.value(),top.value(),right.value(),bottom.value())
     override fun valueAt(stamp: FrameStamp)=Rect(left.valueAt(stamp),top.valueAt(stamp),right.valueAt(stamp),bottom.valueAt(stamp))
     internal fun claim(owner: Any) { clock.checkMutation(); require(binding==null || binding===owner) { "Rectangle already has an expansion owner" }; binding=owner }
@@ -78,51 +51,7 @@ private fun edges(rect: Rect)=floatArrayOf(rect.left,rect.top,rect.right,rect.bo
     internal fun entries(intents: List<MotionIntent>)=channels.zip(intents)
     fun retarget(target: Rect,profile: MotionProfileId) { clock.checkMutation(); check(binding==null) { "Bound rectangle intents belong to ExpandCollapse" }; val values=edges(target); val identity=listOf(target,profile,clock.spec.motion[MotionProfile.valueOf(profile.name)],clock.context?.access); if(last==identity && channels.none { it.kind==3 }) return; val stamp=clock.stampNow; val intents=channels.mapIndexed { i,m -> m.prepare(values[i],profile,stamp,force=true)!! }; commitAtomic(entries(intents)); last=identity }
     fun drive(rect: Rect,stamp: FrameStamp) { clock.checkMutation(); check(binding==null) { "Bound rectangle intents belong to ExpandCollapse" }; commitAtomic(entries(prepareDrive(rect,stamp)),true); last=null }
-    internal fun replaceOutline(poses: List<Pair<Rect,Float>>, aperture: Int, scale: Double, spring: FluidPopupSpringSettings, owner: Any) {
-        require(binding===owner)
-        val ordered=if(aperture==0) poses else poses.asReversed()
-        val current=slots?:OutlineSlots(ordered,aperture,scale).also { slots=it }
-        current.aperture=aperture
-        current.scale=scale
-        current.outline=spring
-        val targets=listOf(channels,current.companion.channels).zip(ordered).flatMap { (physical,pose) -> physical.zip(edges(pose.first).toList()) }
-        retargetOutline(targets+current.radii.zip(ordered.map { it.second }),spring)
-    }
-    internal fun kickOutline(slot: Int, target: Float, spring: FluidPopupSpringSettings) {
-        slots?.let { val index=slot xor it.aperture; it.kickLaws[index]=spring; retargetOutline(listOf(it.kicks[index] to target),spring) }
-    }
-    internal fun resumeOutline() {
-        val retained=slots?:return
-        retained.outline?.let { spring -> retargetOutline(retained.all.dropLast(2).map { it to it.target },spring) }
-        for ((index,spring) in retained.kickLaws.withIndex()) if (spring!=null) retargetOutline(listOf(retained.kicks[index] to retained.kicks[index].target),spring)
-    }
-    private fun retargetOutline(targets: List<Pair<MotionFloat,Float>>,spring: FluidPopupSpringSettings) {
-        val stamp=clock.stampNow; val context=requireNotNull(clock.context); val display=context.displayIntervalSeconds.toDouble()
-        val states=targets.filter { (m,q) -> m.rawValue(stamp)!=q.toDouble() || m.rawVelocity(stamp)!=0.0 }
-        val reduced=context.access==MotionAccess.Reduced
-        val plan=if(reduced || states.isEmpty()) null else SpringPlan.of(stamp,1.0,display,states.map { (m,q) ->
-            doubleArrayOf(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble())
-        })
-        commitAtomic(targets.map { (m,q) ->
-            val segment=plan?.segment(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring,m.range.toDouble(),display)?:Rest(q.toDouble())
-            m to m.prepareSegment(segment,q,stamp,plan,if(reduced) "Reduced" else "Continuous")
-        })
-    }
-    internal fun outlineBodies(): List<RoundRect>? = slots?.let { current ->
-        val companion=current.companion.value().translate(Offset(0f,current.translation(current.kicks[1].value())))
-        val bodies=listOf(value(),companion).zip(current.radii).map { (rect,radius) -> RoundRect(rect,CornerRadius(presentedRadius(rect,radius))) }
-        if(current.aperture==0) bodies else bodies.asReversed()
-    }
-    internal fun outlineRadius()=slots?.let { presentedRadius(value(),it.radii[0]) }
-    private fun presentedRadius(rect: Rect,radius: MotionFloat): Float {
-        var presented=0.0
-        val sample=radius.value().toDouble()
-        FluidCornerSpec.publishRadii(maxOf(rect.width,0f).toDouble(),maxOf(rect.height,0f).toDouble(),
-            { DoubleArray(8) { sample } },null,null) { _,value,_,_,_ -> presented=value[0] }
-        return presented.toFloat()
-    }
-    internal fun clearOutline() { slots?.all?.drop(4)?.forEach { it.dispose() }; slots=null }
-    internal fun dispose() { physicalChannels.forEach { it.dispose() } }
+    internal fun dispose() { channels.forEach { it.dispose() } }
 }
 @Stable class MotionColor internal constructor(private val clock: UiClock,initial: Color,key: Any=Any()): MotionColorView {
     private val initialLab=toOklab(initial).also { requireColorCapacity(it.take(3).map { v -> v.toDouble()..v.toDouble() }) }; private val spans=floatArrayOf(1f,.51010436f,.5100979f,1f); private val channels=Array(4) { MotionFloat(clock,initialLab[it],spans[it],if(it==3) 0.0..1.0 else null,key to "color$it") }; private var last: Any?=null
