@@ -1379,9 +1379,52 @@ class FluidPopupComponentsTest {
         assertEquals(0.5f to 0.125f, lens.surfaceCoordinates(4f, 4f, 8, 32, true, 9, true))
         assertTrue(lens.skipsDisplacementSample(Float.fromBits(0x3b808080)))
         assertFalse(lens.skipsDisplacementSample(Float.fromBits(0x3b808081)))
-        assertEquals("DisplacementMap(GaussianBlur(color))", lens.colorChain("color") { filter, input -> "$filter($input)" })
-        assertEquals("DisplacementMap(color)", lens.colorChain("color") { filter, input ->
+        assertEquals("DisplacementMap(GaussianBlur(color))", lens.colorChain("color", { null }) { filter, input, _ -> "$filter($input)" })
+        assertEquals("DisplacementMap(color)", lens.colorChain("color", { null }) { filter, input, _ ->
             if (filter == FluidLensingSpec.Filter.GaussianBlur) null else "$filter($input)"
         })
+    }
+
+    @Test fun namedDisplacementReceivesTheSameSurfaceRenderedByTheGlassEffect() {
+        val color = Any()
+        val blurredColor = Any()
+        val displacedColor = Any()
+        val field = Any()
+        val map = FluidLensingSpec.NamedMap(Any(), 1.5f)
+        val events = mutableListOf<String>()
+        val rendered = FluidLensingSpec.colorChain(color, namedMap = {
+            FluidLensingSpec.retainNamedMap(null, field, {
+                events += "destination"
+                map
+            }) { function, input, destination ->
+                assertEquals(66, function)
+                assertTrue(input === field)
+                assertTrue(destination === map.surface)
+                events += "map draw"
+                true
+            }
+        }) { filter, input, namedMap ->
+            if (filter == FluidLensingSpec.Filter.GaussianBlur) {
+                assertTrue(input === color)
+                assertEquals(null, namedMap)
+                events += "blur"
+                blurredColor
+            } else {
+                assertTrue(input === blurredColor)
+                assertTrue(namedMap === map)
+                assertEquals(1.5f.toRawBits(), namedMap?.scale?.toRawBits())
+                events += "displacement"
+                displacedColor
+            }
+        }
+        assertTrue(rendered === displacedColor)
+        assertEquals(listOf("blur", "destination", "map draw", "displacement"), events)
+        assertTrue(FluidLensingSpec.retainNamedMap(map, null, { error("Bound slot must be kept") }) { _, _, _ ->
+            error("Bound slot must not render again")
+        } === map)
+        assertEquals(null, FluidLensingSpec.retainNamedMap(null, field, { null }) { _, _, _ ->
+            error("No acquired destination")
+        })
+        assertEquals(null, FluidLensingSpec.retainNamedMap(null, field, { map }) { _, _, _ -> false })
     }
 }
