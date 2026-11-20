@@ -321,18 +321,18 @@ internal data class FluidPropertyFrameTime(val previousTime: Double, val delta: 
 }
 
 internal fun runFluidPropertyFrame(
-    targetTimestamp: Double, preparedTransaction: Boolean, solve: () -> Boolean,
+    targetTimestamp: Double, preparationFlags: Int, solve: () -> Int,
     consumeSamples: () -> Unit, postTick: MutableList<() -> Unit>, normalizedChange: () -> Double,
     flush: (Double, Boolean, Boolean) -> Unit,
 ) {
-    val solverTransaction = solve()
+    val solverFlags = solve()
     consumeSamples()
     while (postTick.isNotEmpty()) {
         val callbacks = postTick.toList()
         postTick.clear()
         callbacks.forEach { it() }
     }
-    flush(targetTimestamp, preparedTransaction || solverTransaction, normalizedChange() >= 1.0)
+    flush(targetTimestamp, ((preparationFlags or solverFlags) and 1) != 0, normalizedChange() >= 1.0)
 }
 
 internal data class FluidModifierFormat(val valueCount: Int, val additive: Boolean)
@@ -462,7 +462,7 @@ internal object FluidGaussianSpec {
 }
 
 internal object FluidLensingSpec {
-    enum class Filter { GaussianBlur, DisplacementMap }
+    enum class Filter(val registeredName: String) { GaussianBlur("gaussianBlur"), DisplacementMap("displacementMap") }
     val filterOrder get() = Filter.entries
     fun <Image : Any> colorChain(content: Image, emit: (Filter, Image) -> Image?): Image =
         filterOrder.fold(content) { color, filter -> emit(filter, color) ?: color }
@@ -471,6 +471,22 @@ internal object FluidLensingSpec {
 
     fun publishSample(publication: FluidScalarPublication, write: (Double, Double, Int, Boolean, Boolean) -> Unit) {
         publication.consume { sample -> write(sample.value, sample.velocity, 0, false, lensPropertyControls.additive) }
+    }
+
+    // The render owner supplies the active modifier value and the original filter order.
+    fun applyPresentation(
+        channel: FluidPopupChannel, sample: Double?, effectKind: Int, filterNames: List<String?>,
+        writeHeight: (Float) -> Unit, writeAmount: (Int, Double) -> Unit,
+    ) {
+        if (sample == null) return
+        when (channel) {
+            FluidPopupChannel.LensHeight -> if (effectKind == 7) writeHeight(sample.toFloat())
+            FluidPopupChannel.LensAmount -> {
+                val index = filterNames.indexOf(Filter.DisplacementMap.registeredName)
+                if (index >= 0) writeAmount(index, sample)
+            }
+            else -> Unit
+        }
     }
 
     data class Request(val timing: FluidPopupStep<FluidPopupSpringSettings>, val gain: Double, val dimension: Double?) {
