@@ -109,7 +109,7 @@ internal fun verifyShadowMassCallers(rule: ComposeContentTestRule, finalButtons:
                                         CornerRadius(part.lifted.corner))
                                 })
                             }
-                            "stock" -> GlassPanel(body) {}
+                            "stock" -> FrostedSurface(body, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {}
                             else -> button()
                         }
                     }

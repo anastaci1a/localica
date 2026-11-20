@@ -81,7 +81,7 @@ class GlassRendererPreferenceTest {
         assertEquals("Normal", raw.getString("glass-renderer", null))
     }
 
-    @Test fun rendererPersistencePreservesTheExistingContrastMigration() = withPreferences { context, raw ->
+    @Test fun rendererPersistencePreservesTheExistingContrastMigration() = withOwnedInterfacePreferences { context, raw ->
         for ((legacy, expected) in listOf(0f to 0f, .4f to .25f)) {
             raw.edit().remove("glass-contrast-trim").putFloat("glass-contrast", legacy)
                 .putString("glass-renderer", "Modern").commit()
