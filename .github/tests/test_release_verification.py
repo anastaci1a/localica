@@ -126,8 +126,13 @@ class ReleaseVerificationTest(unittest.TestCase):
         union = self.unions['36']
         union.update(expected=2637, executed_once=2637, passed=2635, deferred=[])
         wrong_shard = jobs['device-tests (36, 7)']
+        no_failures = io.BytesIO()
+        with zipfile.ZipFile(no_failures, 'w') as passing_archive:
+            passing_archive.writestr('app/build/outputs/androidTest-results/TEST-fixture.xml',
+                                     '<testsuite><testcase classname="Example" name="case"/></testsuite>')
         cases = (
             ('pinned', {}, {}, None),
+            ('no assertions', {}, {}, 'failed outside an assertion'),
             ('wrong run', run, {'id': 43}, 'shard did not finish'),
             ('wrong attempt', run, {'run_attempt': 2}, 'shard did not finish'),
             ('wrong job', job, {'id': 99}, 'shard did not finish'),
@@ -146,9 +151,10 @@ class ReleaseVerificationTest(unittest.TestCase):
             with self.subTest(name=name), patch.dict(target, overrides):
                 progress = '\n'.join('2026-11-19T00:00:00Z '+line for entry in self.unions.values()
                                      for line in json.dumps(entry, indent=2).splitlines()).encode()
+                payload = no_failures.getvalue() if name == 'no assertions' else archive_bytes
                 with patch.object(module, 'gh', return_value=progress), \
                      patch.object(module, 'archived_artifact',
-                                  side_effect=lambda *_: zipfile.ZipFile(io.BytesIO(archive_bytes))) as opened:
+                                  side_effect=lambda *_: zipfile.ZipFile(io.BytesIO(payload))) as opened:
                     if error:
                         with self.assertRaisesRegex(ValueError, error):
                             module.provisional_native('anastaci1a/localica', run, jobs, [archive])
