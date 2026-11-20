@@ -14,14 +14,6 @@ internal interface PopupTakeoverOwner {
     val expanded: Boolean get() = takeover == PopupTakeover.InWindow
 }
 
-/** #1083: the host's prepared outline producer for one intent, built from the measured endpoints. */
-internal interface PopupOutlinePreview { val opening: Boolean; fun prepare(home: Rect, envelope: Rect, density: Float): PopupOutline }
-internal interface PopupOutline {
-    val growing: Boolean; val apertureSlot: Int; val kickScale: Double
-    fun outline(action: FluidTimelineAction): List<Pair<Rect,Float>>?
-    fun kick(action: FluidTimelineAction): Pair<Int,Float>?
-}
-
 /** #854: the surface kind of the enclosing popup; retained faces inside it (rememberFaceExpansion) inherit its motion. */
 internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
 
@@ -61,8 +53,8 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private var nativeWindow: java.lang.ref.WeakReference<Any>? = null
     private var firstNativeMeasurement = false
     private var nativeHost: java.lang.ref.WeakReference<ShadowPlane>? = null
-    private data class FluidPlacement(val basis: ExpansionBasis, val preview: PopupOutlinePreview?, val intent: Boolean? = null,
-        val outline: PopupOutline? = null, val request: Pair<FluidTimelineStep,Double>? = null)
+    private data class FluidPlacement(val basis: ExpansionBasis, val preview: PopupOutlinePreview<Rect>?, val intent: Boolean? = null,
+        val outline: PopupOutline<Rect>? = null, val request: Pair<FluidTimelineStep,Double>? = null)
     private var placement: FluidPlacement? = null
     internal fun outlineBodies()=expansion.outlineBodies()
     internal fun apertureRadius(density: Density, fallback: ()->Dp)=expansion.outlineRadius()?.let { with(density) { it.toDp() } }?:fallback()
@@ -109,7 +101,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         expansion.release()
         fluidTimeline.release()
     }
-    fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false, preview: PopupOutlinePreview? = null) {
+    fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false, preview: PopupOutlinePreview<Rect>? = null) {
         if (shown || openingEnvelope == null) openingEnvelope = envelope
         val capturedEnvelope = requireNotNull(openingEnvelope)
         // A detached window can present beyond its root viewport; its duration never exceeds the admitted travel.
