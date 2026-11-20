@@ -5,6 +5,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GlassShadowModelTest {
+    @Test fun capsuleMassKeepsTheFixedDownshiftWhenSpreadDoubles() {
+        fun field(spread: Float, shift: Float = 8f) =
+            io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMassReference(
+                496, 448, 144f, 176f, 352f, 272f, 48f, 2f, spread, shift)
+        val fixed = field(1f)
+        val wide = field(2f)
+        assertEquals(3.40, fixed.expected.ratio, .05)
+        assertEquals(1.81, wide.expected.ratio, .05)
+        assertTrue(fixed.accepts(fixed.expected))
+        assertFalse("A zero-shift field must fail the same acceptance", fixed.accepts(field(1f, 0f).expected))
+        assertTrue("Wider support reduces directionality without cancelling the shift",
+            fixed.expected.ratio > wide.expected.ratio && wide.expected.below > wide.expected.above)
+        for (background in listOf(1.0, .5)) {
+            fun near(shift: Float) = io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.shadowMassReference(
+                208, 448, 0f, 176f, 208f, 272f, 48f, 2f, shiftDp = shift,
+                code = 1.0 / (255 * background), bandDp = 16f)
+            val reference = near(8f)
+            assertEquals(2.792, reference.expected.ratio, .005)
+            assertTrue("One-code envelope must reject a symmetric field on backing $background", reference.minimum > 1.5)
+            assertFalse(reference.accepts(near(0f).expected))
+        }
+    }
     @Test fun geometryUsesOneDensityAndModelMultipliers() {
         // Independent physical pins for the reviewed 24dp radius, 48dp support and fixed 8dp shift.
         val pins = listOf(

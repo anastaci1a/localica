@@ -34,6 +34,18 @@ import kotlin.math.roundToInt
 class GlassShadowTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun sharedFieldAdaptersKeepTheDownwardShadowMass() = verifyShadowMassCallers(compose, finalButtons = false)
+
+    @Test fun finalButtonsKeepVisibleShadowBelowAcrossSharedHosts() = verifyShadowMassCallers(compose, finalButtons = true)
+
+    @Test fun pressedAndReleasedButtonsKeepTheDownwardShadowMass() =
+        verifyShadowMassCallers(compose, finalButtons = true, motion = true)
+
+    @Test fun circlesPillsAndWideBarsKeepTheDownwardShadowMass() =
+        verifyShadowMassCallers(compose, finalButtons = true, bodyClasses = true)
+
+    @Test fun heldResizeReprojectsTheBodyAndFieldBeforeTheNextPointerMove() = verifyHeldResizeShadow(compose)
+
     @Test fun deferredRingPathsMaterializeForTheCurrentGeometryOnly() {
         val cache = GlassShadowGeometry()
         val bodies = listOf(RoundRect(20f, 20f, 80f, 60f, CornerRadius(8f)))
@@ -369,7 +381,7 @@ class GlassShadowTest {
             CompositionLocalProvider(LocalPageShadows provides group, LocalGlassAppearance provides
                 io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
                 Box(Modifier.size(240.dp, 160.dp).background(Color.White)
-                    .pageShadowHost(group).testTag("shadow-union"), contentAlignment = Alignment.Center) {
+                    .shadowPlaneHost(group, 1f, 1f).testTag("shadow-union"), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(104.dp, 52.dp).glassAnchor(anchor).pageGlassCaster())
                 }
             }

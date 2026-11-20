@@ -19,10 +19,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.offset
 import io.github.anastaci1a.localica.ui.engine.*
-import kotlin.math.ceil
-import kotlin.math.floor
-import kotlin.math.roundToInt
-import kotlin.math.exp
 import kotlinx.coroutines.*
 
 /** Reserve the same extent that the shadow renderer actually draws. */
@@ -114,22 +110,12 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     }
 }
 
-@Composable internal fun Modifier.clearGlassShadow(strength: Float, spread: Float, radius: Dp?, visible: () -> Boolean = { true }): Modifier =
-    clearGlassShadowImpl(strength,spread,radius,null,null,visible)
-
-/** Receiver-aware adapter; original positional/trailing-lambda API stays unchanged. */
-@Composable internal fun Modifier.clearGlassReceiverShadow(strength: Float, spread: Float, radius: Dp?,
-    exclusion: () -> GlassShadowExclusion? = { null },
-    receiver: () -> GlassShadowReceiver?): Modifier = clearGlassShadowImpl(strength,spread,radius,receiver,exclusion) { true }
-
-@Composable private fun Modifier.clearGlassShadowImpl(strength: Float, spread: Float, radius: Dp?,
-    receiver: (() -> GlassShadowReceiver?)?, exclusion: (() -> GlassShadowExclusion?)?, visible: () -> Boolean): Modifier {
+@Composable internal fun Modifier.clearGlassShadow(strength: Float, spread: Float, radius: Dp?, visible: () -> Boolean = { true }): Modifier {
     val cache = rememberGlassShadow()
     return drawBehind {
-    if (!visible()) return@drawBehind
-    val corner = (radius?.toPx() ?: size.minDimension / 2).coerceIn(0f, size.minDimension / 2)
-    with(cache) { draw(listOf(RoundRect(0f, 0f, size.width, size.height, CornerRadius(corner)) to 1f), strength, spread,
-        receiver?.invoke(), exclusion?.invoke()) }
+        if (!visible()) return@drawBehind
+        val corner = (radius?.toPx() ?: size.minDimension / 2).coerceIn(0f, size.minDimension / 2)
+        with(cache) { draw(listOf(RoundRect(0f, 0f, size.width, size.height, CornerRadius(corner)) to 1f), strength, spread) }
     }
 }
 
@@ -146,12 +132,6 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     anchorOverride: GlassAnchor? = null): Modifier {
     val anchor = anchorOverride ?: glassSurfaceAnchor()
     return surfaceGlassShadow(radius, if (group == null) null else anchor, group, opacity)
-}
-
-/** Compatibility host for existing synthetic scenes; production uses the Engine viewport host. */
-@Composable internal fun Modifier.pageShadowHost(plane: ShadowPlane): Modifier {
-    val appearance = LocalGlassAppearance.current
-    return shadowPlaneHost(plane, appearance.shadowStrength, appearance.shadowSpread)
 }
 
 /** Quiet homes have a physical shape/identity even while their field is absent. */

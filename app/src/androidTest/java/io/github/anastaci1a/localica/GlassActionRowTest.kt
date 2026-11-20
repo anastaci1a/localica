@@ -6,6 +6,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -16,6 +19,8 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.navigation.InterfacePreferences
+import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -23,6 +28,44 @@ import org.junit.Test
 
 class GlassActionRowTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun chevronsPageByTheSameLogicalWidthAtEveryShadowSpread() = withOwnedInterfacePreferences { context, fixture ->
+        val preferences = InterfacePreferences(context)
+        val root = LocalicaUiRootState(InterfaceSettings(reducedMotion = true))
+        var spread by mutableFloatStateOf(0f)
+        var first: LayoutCoordinates? = null
+        compose.setContent { LocalicaTheme {
+            LocalicaUiRoot(root) {
+                key(spread) {
+                    Box(Modifier.width(180.dp)) {
+                        GlassActionRow(Modifier.testTag("paging-strip")) {
+                            repeat(7) { index ->
+                                GlassActionButton(AppIcon.ActionRevert, "Action $index", Modifier.width(100.dp)
+                                    .onGloballyPositioned { if (index == 0) first = it }) {}
+                            }
+                        }
+                    }
+                }
+            }
+        } }
+        val expectedPage = with(compose.density) { 180.dp.roundToPx() + 2 * 22.8.dp.roundToPx() }
+        val forward = compose.onNodeWithContentDescription("More actions")
+        for (value in listOf(0f, 1f, 2f)) {
+            compose.runOnIdle {
+                check(fixture.edit().putFloat("glass-shadow-spread-multiplier", value).commit())
+                root.settings.value = preferences.read().copy(reducedMotion = true)
+                assertEquals(value, root.settings.value.glass.shadowSpread, 0f)
+                spread = value
+            }
+            val before = compose.runOnIdle { requireNotNull(first).also { check(it.isAttached) }.positionInRoot().x }
+            val size = compose.onNodeWithTag("paging-strip").fetchSemanticsNode().size
+            forward.assertIsEnabled().performClick()
+            val after = compose.runOnIdle { requireNotNull(first).also { check(it.isAttached) }.positionInRoot().x }
+            assertEquals("Spread $value must preserve the stock page distance", expectedPage.toFloat(), before - after, 0f)
+            assertEquals(size, compose.onNodeWithTag("paging-strip").fetchSemanticsNode().size)
+            forward.assertIsEnabled()
+        }
+    }
 
     private fun assertWholeLabel(label: String) {
         val results = mutableListOf<TextLayoutResult>()

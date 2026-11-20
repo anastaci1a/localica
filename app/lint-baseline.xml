@@ -1093,12 +1093,12 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="    val shadowInset = glassLayoutInset().coerceAtLeast(12.dp)"
-        errorLine2="                                                       ~~~~~">
+        errorLine1="    val shadowInset = glassLayoutInset(1f).coerceAtLeast(12.dp)"
+        errorLine2="                                                         ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowseSortDialog.kt"
-            line="38"
-            column="56"/>
+            line="39"
+            column="58"/>
     </issue>
 
     <issue
@@ -1984,12 +1984,12 @@
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="        Row(Modifier.shadowViewportOutset(inset, horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),"
-        errorLine2="                                                                                                                                 ~~~~">
+        errorLine1="        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),"
+        errorLine2="                                                         ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassActionButton.kt"
-            line="130"
-            column="130"/>
+            line="135"
+            column="58"/>
     </issue>
 
     <issue
@@ -7069,11 +7069,11 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="        Row(Modifier.shadowViewportOutset(inset, horizontal = true).padding(inset), horizontalArrangement = Arrangement.spacedBy(8.dp),"
+        errorLine1="        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),"
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassActionButton.kt"
-            line="130"
+            line="135"
             column="9"/>
     </issue>
 
@@ -11293,28 +11293,6 @@
     <issue
         id="RawShadowOrZOrder"
         message="Use SurfaceTarget and ShadowRole"
-        errorLine1="    clearGlassShadowImpl(strength,spread,radius,null,null,visible)"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassShadow.kt"
-            line="116"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
-        errorLine1="    receiver: () -> GlassShadowReceiver?): Modifier = clearGlassShadowImpl(strength,spread,radius,receiver,exclusion) { true }"
-        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassShadow.kt"
-            line="121"
-            column="55"/>
-    </issue>
-
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
         errorLine1="    HoverDragUnderlay({ drag.moving.mapNotNull { frames[state.keyOf(it)] } }, backing, liftStyle, Modifier.matchParentSize().zIndex(2f))"
         errorLine2="                                                                                                                             ~~~~~~">
         <location
@@ -15422,12 +15400,12 @@
     <issue
         id="UnownedSurfaceLifetime"
         message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="            translate(-pad, -pad) { drawLayer(layer) }"
-        errorLine2="                                    ~~~~~~~~~">
+        errorLine1="            translate(-extent - if (horizontal) pad else 0f, -extent - pad) { drawLayer(layer) }"
+        errorLine2="                                                                              ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ActionStripDrawing.kt"
-            line="33"
-            column="37"/>
+            line="39"
+            column="79"/>
     </issue>
 
     <issue
@@ -15437,7 +15415,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ActionStripDrawing.kt"
-            line="40"
+            line="46"
             column="17"/>
     </issue>
 

@@ -10,9 +10,11 @@ import android.view.Window
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.test.*
+import androidx.compose.ui.unit.IntSize
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.room.Room
@@ -65,6 +67,67 @@ class PopupFamilyPresentationTest {
         Track("popup-family:$index", "Diagnostic song $index", artist = "Diagnostic artist", album = "Diagnostic album",
             fileName = "diagnostic-$index.mp3", relativePath = "Diagnostic album/diagnostic-$index.mp3",
             locations = listOf(TrackLocation("popup-family-root", "popup-family:$index", "Diagnostic album/diagnostic-$index.mp3")))
+    }
+
+    @Test fun nativeSortAndViewEnvelopeIgnoresShadowSpread() = withOwnedInterfacePreferences { context, fixture ->
+        val preferences = InterfacePreferences(context)
+        val root = LocalicaUiRootState(InterfaceSettings(reducedMotion = true))
+        val catalog = LibraryUiState(
+            LibrarySnapshot(listOf(FolderSelection("popup-family-root", "Diagnostic music")), tracks), loading = false)
+        val output = nativeEvidenceDirectory("sort-view-shadow-size", context.cacheDir)
+        val frames = PopupWindowEvidence(compose)
+        var mounted by mutableStateOf(true)
+        try {
+            compose.setContent {
+                if (mounted) LocalicaTheme {
+                    LocalicaUiRoot(root) {
+                        LocalicaScreen(catalog, PlaybackState(connected = true), {}, {}, {}, {}, {}, {})
+                    }
+                }
+            }
+            compose.onNodeWithContentDescription("Library").performClick()
+            compose.onNode(hasTestTag("page-heading") and hasText("Library")).assertIsDisplayed()
+
+            val expected = mutableMapOf<String, List<IntSize>>()
+            val sizes = StringBuilder()
+            for (spread in listOf(0f, 1f, 2f)) {
+                compose.runOnIdle {
+                    check(fixture.edit().putFloat("glass-shadow-spread-multiplier", spread).commit())
+                    root.settings.value = preferences.read().copy(reducedMotion = true)
+                    assertEquals(spread, root.settings.value.glass.shadowSpread, 0f)
+                }
+                compose.onNodeWithContentDescription("Sort", substring = false).performClick()
+                val dialog = compose.onPopupAction(hasTestTag("browse-options-dialog"), shown = true)
+                for (tab in listOf("Sort", "View")) {
+                    if (tab == "View") compose.onNodeWithText("View", substring = false).performClick()
+                    val panel = compose.onNodeWithTag("glass-morph-surface", useUnmergedTree = true).assertIsDisplayed()
+                    compose.awaitExpectedWindowFocus(panel)
+                    val panelNode = panel.fetchSemanticsNode()
+                    val nativeRoot = view(panelNode)
+                    val coordinates = panelNode.layoutInfo.coordinates
+                    val (window, bounds) = compose.runOnUiThread {
+                        (nativeRoot.parent as DialogWindowProvider).window to coordinates.boundsInWindow()
+                    }
+                    val image = frames.capture(window, output, "$spread-$tab")
+                    val windowSize = try { IntSize(image.width, image.height) } finally { image.recycle() }
+                    assertEquals("The native frame and measured envelope must share the same placement",
+                        bounds, compose.runOnUiThread { coordinates.boundsInWindow() })
+                    assertTrue("The panel must occupy positive pixels in its native window",
+                        bounds.width > 0f && bounds.height > 0f && bounds.width <= windowSize.width && bounds.height <= windowSize.height)
+                    val dimensions = listOf(IntSize(bounds.width.roundToInt(), bounds.height.roundToInt()),
+                        dialog.fetchSemanticsNode().size, compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().size, windowSize)
+                    sizes.append("$spread $tab $dimensions window=$windowSize bounds=$bounds\n")
+                    File(output, "envelopes.txt").writeText(sizes.toString())
+                    assertEquals("Spread must not change the native $tab envelope",
+                        expected.getOrPut(tab) { dimensions }, dimensions)
+                }
+                compose.onNodeWithText("Cancel", substring = false).performClick()
+                compose.awaitPopupGone(hasTestTag("glass-morph-surface"))
+            }
+        } finally {
+            try { frames.dispose() }
+            finally { compose.runOnIdle { mounted = false } }
+        }
     }
 
     @Test fun fiveActualCallerSurfacesRetainOriginalNativeWindowsAndProvenance() {

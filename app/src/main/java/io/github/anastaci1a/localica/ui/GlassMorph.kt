@@ -1052,13 +1052,16 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 popupFlight.refillBody(this@drawWithContent) {
                                     drawGlassBody(t) {
                                         this@drawWithContent.drawContent()
-                                        wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
                                     }
                                 }
                             opticalBody.draw(this@drawWithContent)
                         }
                     }
-                        .graphicsLayer { shape=RoundedCornerShape(radius()); clip=true }.glassPopupHome(childHome)
+                        .graphicsLayer { shape=RoundedCornerShape(radius()); clip=true }
+                        .then(if (sharedContent == null) Modifier else Modifier.drawWithContent {
+                            drawContent()
+                            wellCoordinates[0]?.let { sharedContent.drawNative(this, it, view) }
+                        }).glassPopupHome(childHome)
                         .recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
                         SurfaceLayer(Modifier.presentedAlpha {

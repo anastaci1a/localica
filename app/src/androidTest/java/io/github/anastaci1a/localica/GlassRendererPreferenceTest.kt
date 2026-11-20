@@ -13,26 +13,26 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.UUID
 
+internal fun withOwnedInterfacePreferences(test: (Context, SharedPreferences) -> Unit) {
+    val base = InstrumentationRegistry.getInstrumentation().targetContext
+    val ownedName = "glass-renderer-test-${UUID.randomUUID()}"
+    val context = object : ContextWrapper(base) {
+        override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
+            check(name == "interface")
+            return base.getSharedPreferences(ownedName, mode)
+        }
+    }
+    val raw = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
+    try { test(context, raw) } finally {
+        raw.edit().clear().commit()
+        base.deleteSharedPreferences(ownedName)
+    }
+}
+
 /** Actual Android preferences in an owned namespace; no production interface settings are cleared. */
 @RunWith(AndroidJUnit4::class)
 class GlassRendererPreferenceTest {
-    private fun withPreferences(test: (Context, SharedPreferences) -> Unit) {
-        val base = InstrumentationRegistry.getInstrumentation().targetContext
-        val ownedName = "glass-renderer-test-${UUID.randomUUID()}"
-        val context = object : ContextWrapper(base) {
-            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
-                check(name == "interface")
-                return base.getSharedPreferences(ownedName, mode)
-            }
-        }
-        val raw = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
-        try { test(context, raw) } finally {
-            raw.edit().clear().commit()
-            base.deleteSharedPreferences(ownedName)
-        }
-    }
-
-    @Test fun retiredModesMigrateAndRetiredScrollSettingIsRemoved() = withPreferences { context, raw ->
+    @Test fun retiredModesMigrateAndRetiredScrollSettingIsRemoved() = withOwnedInterfacePreferences { context, raw ->
         for (name in listOf("SingleToneBlur", "None", "Automatic", "Modern", "Legacy")) for (scroll in listOf(false, true)) {
             raw.edit().clear().putString("glass-renderer", name)
                 .putBoolean("glass-live-scroll", scroll).putBoolean("confirm-exit", true).commit()
@@ -45,7 +45,7 @@ class GlassRendererPreferenceTest {
         }
     }
 
-    @Test fun missingAndUnknownRendererNamesRestoreNormalWithoutChangingOtherSettings() = withPreferences { context, raw ->
+    @Test fun missingAndUnknownRendererNamesRestoreNormalWithoutChangingOtherSettings() = withOwnedInterfacePreferences { context, raw ->
         assertEquals(InterfaceSettings(), InterfacePreferences(context).read())
         raw.edit().putBoolean("confirm-exit", true).putFloat("glass-depth", .8f).commit()
         val expected = InterfaceSettings(confirmExit = true, glass = GlassAppearance(depth = .8f))
@@ -56,7 +56,7 @@ class GlassRendererPreferenceTest {
         }
     }
 
-    @Test fun everyRequestedModeRoundTripsAllExistingSettingsAndNormalStaysRequested() = withPreferences { context, raw ->
+    @Test fun everyRequestedModeRoundTripsAllExistingSettingsAndNormalStaysRequested() = withOwnedInterfacePreferences { context, raw ->
         val appearance = GlassAppearance(.7f, .1f, .2f, .8f, .3f, TabLensStyle.Overlay,
             .4f, .2f, 19f, .8f, 1.5f, .3f, 1.25f, .17f, true)
         val original = InterfaceSettings(tabs = listOf(MainTab.Songs, MainTab.Folders), tabHistory = false,
