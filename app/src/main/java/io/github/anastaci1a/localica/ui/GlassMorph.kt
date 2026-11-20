@@ -9,6 +9,8 @@ import io.github.anastaci1a.localica.ui.layout.lyricsHeaderWidth
 import io.github.anastaci1a.localica.ui.spec.PopupViewportInsets
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
 import io.github.anastaci1a.localica.ui.spec.PopupKind
+import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec
+import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -29,7 +31,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -52,6 +53,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -481,7 +483,6 @@ internal val LocalGlassMorphWorkObserver =
 // LocalFrostedBackdrop, whose recordings exclude their own foreground controls.
 internal val LocalModalBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
 private val LocalChildPanels = staticCompositionLocalOf<MutableIntState?> { null }
-private val fluidContentBlurEffect: ((radius: Double) -> RenderEffect?)? = null
 
 /** At a dismissal event, a window showing an IME keeps focus until the commit, so the hiding IME ends there (#545). */
 private fun android.view.Window.glassInput(enabled: Boolean, event: Boolean = false) {
@@ -979,6 +980,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     // Measure and placement share one edge-rounded rectangle. Keep the
                     // shadow's layer-free placement on legacy Android.
                     val panelBounds = remember { arrayOfNulls<MotionPixelRect>(1) }
+                    val foregroundLens = remember(motion) { lazy { if (android.os.Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
                     Layout(modifier = measureModifier.glassShadowOffset {
                         val pixels = panelBounds[0]
                         androidx.compose.ui.unit.IntOffset(pixels?.left ?: 0, pixels?.top ?: 0)
@@ -1170,9 +1172,23 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         val face = children[2].measure(Constraints.fixed(startWidth().roundToInt().coerceAtLeast(1), startHeight().roundToInt().coerceAtLeast(1)))
                         layout(width, height) {
                             backing.place(0, 0)
-                            foreground.placeWithLayer((width - foreground.width) / 2, if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2) {
+                            val foregroundX = (width - foreground.width) / 2
+                            val foregroundY = if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2
+                            foreground.placeWithLayer(foregroundX, foregroundY) {
                                 if (motion.fluid) {
-                                    renderEffect = fluidContentBlurEffect?.invoke(motion.fluidBlurRadius)
+                                    if (android.os.Build.VERSION.SDK_INT >= 33 && foreground.height > 0) {
+                                        val blur = motion.fluidBlurRadius
+                                        val lensHeight = motion.fluidLensHeight
+                                        val amount = motion.fluidLensAmount
+                                        val atRest = FluidGaussianSpec.isIdentity(blur) && amount == FluidLensingSpec.freshAmount &&
+                                            (lensHeight == 0f || lensHeight == FluidLensingSpec.freshHeight.toFloat())
+                                        renderEffect = if (atRest) null else foregroundLens.value?.effect(
+                                            LensGeometry(Rect(-foregroundX.toFloat(), -foregroundY.toFloat(),
+                                                (width - foregroundX).toFloat(), (height - foregroundY).toFloat()), with(density) { radius().toPx() }),
+                                            (blur * density.density).toFloat(), anchor.depthScale, density.density,
+                                            warp = LensWarp(lensHeight.toDouble(), amount, 0f, IntSize(foreground.width, foreground.height)),
+                                        )
+                                    }
                                 } else {
                                     val fit = popupContentScale(width,height,foreground.width,foreground.height,page || placement == GlassPlacement.Search)
                                     scaleX = fit; scaleY = fit
