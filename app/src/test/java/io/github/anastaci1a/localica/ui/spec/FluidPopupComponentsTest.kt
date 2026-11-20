@@ -476,6 +476,19 @@ class FluidPopupComponentsTest {
         value.present(null)
     }
 
+    @Test fun contentPointScaleUsesTheLiveOriginalLayerContext() {
+        assertEquals(1.0, fluidLayerPointScale(false) { error("The layer context was not resolved") }, 0.0)
+        assertEquals(1.0, fluidLayerPointScale(true) { null }, 0.0)
+        assertEquals((-0.0).toRawBits(), fluidLayerPointScale(true) { -0.0 }.toRawBits())
+        var live = 2.0
+        val windowScale = { live }
+        assertEquals(0.25, fluidRadiusEpsilonSquared(fluidLayerPointScale(true, windowScale)), 0.0)
+        live = 4.0
+        val pointScale = fluidLayerPointScale(true, windowScale)
+        val thresholds = fluidZoomEpsilonSquared(pointScale, 6.0 to 8.0, false, 0.5, 0.5)
+        assertEquals(listOf(0.0025000000000000005, 0.0025000000000000005, 0.0625, 0.0025000000000000005, 0.0025000000000000005), thresholds.toList())
+    }
+
     @Test fun typedThresholdsKeepThePointScaleAndGeometryOverloadsDistinct() {
         assertEquals(0.1111111111111111.toRawBits(), fluidRadiusEpsilonSquared(3.0).toRawBits())
         val fixed = fluidZoomEpsilonSquared(2.0, null, false, 0.0, 0.0)
