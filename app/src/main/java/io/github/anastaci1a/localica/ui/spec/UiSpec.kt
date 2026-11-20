@@ -73,7 +73,9 @@ internal fun fluidIntermediateY(sourceY: Double, targetY: Double, ratio: Double,
 internal fun fluidStoredDelay(storedDelay: Double, speed: Double, amplify: Boolean) =
     storedDelay * speed * (if (amplify) 10.0 else 1.0)
 private fun fluidThroughTailDelay(growing: Boolean) = if (growing) 0.12 else 0.1
-internal class FluidPopupSpringSettings(val dampingRatio: Double, val response: Double, val retargetImpulse: Double = 0.0) {
+internal class FluidPopupSpringSettings(
+    val dampingRatio: Double, val response: Double, val retargetImpulse: Double = 0.0, val trackingResponse: Double = 0.15,
+) {
     val mass get() = 1.0
     val omega = 2 * PI / response
     val stiffness = omega * omega
@@ -83,7 +85,8 @@ internal class FluidPopupSpringSettings(val dampingRatio: Double, val response: 
     fun advance(body: FluidScalarSpringBody, target: Double, dt: Double) =
         SpringKernel(sqrt(stiffness), dampingRatio, installedDamping).advanceBody(body, target, dt)
 
-    fun scaledResponses(multiplier: Double, trackingResponse: Double) = (multiplier * response) to (multiplier * trackingResponse)
+    fun scaledResponses(multiplier: Double) =
+        FluidPopupSpringSettings(dampingRatio, multiplier * response, retargetImpulse, multiplier * trackingResponse)
 }
 internal val FluidMainEjectDefaults = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
 
@@ -148,7 +151,19 @@ internal enum class FluidTimelineAction {
 
 internal data class FluidTimelineStep(
     val action: FluidTimelineAction, val timing: FluidPopupStep<FluidPopupSpringSettings?>, val lens: FluidLensingSpec.Request? = null,
-)
+) {
+    fun propertySpring(effectiveSpeed: Double) = timing.spring?.scaledResponses(effectiveSpeed)
+}
+
+/** One supplied behavior drives position X/Y, width, height, content morph and transform. */
+internal data class FluidGeometrySpringBinding(val sharedSpring: FluidPopupSpringSettings?) {
+    val tracksPresentationLayer get() = true
+}
+
+internal fun FluidTimelineStep.geometrySpringBinding(effectiveSpeed: Double) =
+    FluidGeometrySpringBinding(propertySpring(effectiveSpeed))
+
+internal fun fluidPositionSpring(resolved: FluidPopupSpringSettings?) = resolved ?: FluidPopupSpringSettings(1.0, 0.4)
 
 internal fun fluidThroughQueue(
     growing: Boolean, mainEject: FluidPopupSpringSettings, content: FluidContentSettings,

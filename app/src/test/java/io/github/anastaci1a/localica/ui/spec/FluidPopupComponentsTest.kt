@@ -337,12 +337,36 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun actionBridgeScalesBothCapturedResponsesWithoutMutatingTheSpring() {
-        val spring = FluidPopupSpringSettings(0.9, 0.55)
-        val (response, tracking) = spring.scaledResponses(1.25, trackingResponse = 0.4)
-        assertEquals(0.6875.toRawBits(), response.toRawBits())
-        assertEquals(0.5.toRawBits(), tracking.toRawBits())
+        val spring = FluidPopupSpringSettings(0.9, 0.55, retargetImpulse = 0.125, trackingResponse = 0.4)
+        val scaled = spring.scaledResponses(1.25)
+        assertEquals(0.6875.toRawBits(), scaled.response.toRawBits())
+        assertEquals(0.5.toRawBits(), scaled.trackingResponse.toRawBits())
         assertEquals(0.55.toRawBits(), spring.response.toRawBits())
+        assertEquals(0.4.toRawBits(), spring.trackingResponse.toRawBits())
         assertEquals(0.9.toRawBits(), spring.dampingRatio.toRawBits())
+        assertEquals(spring.dampingRatio.toRawBits(), scaled.dampingRatio.toRawBits())
+        assertEquals(spring.retargetImpulse.toRawBits(), scaled.retargetImpulse.toRawBits())
+    }
+
+    @Test fun geometryStepUsesTheSharedScaledSpringAndOnlyFallsBackForAbsentPositionSpring() {
+        val content = FluidContentDefaults.copy(lensingEnabled = false)
+        val route = fluidThroughQueue(true, FluidMainEjectDefaults, content) { error("Lensing disabled") }
+        val expected = listOf(CollapsedSource to 0.21, ExpandedOverrounded to 0.35, FullyExpanded to 0.35)
+        for ((action, response) in expected) {
+            val binding = route.first { it.action == action }.geometrySpringBinding(0.7)
+            val shared = requireNotNull(binding.sharedSpring)
+            assertTrue(binding.tracksPresentationLayer)
+            assertTrue(fluidPositionSpring(shared) === shared)
+            assertEquals(response.toRawBits(), shared.response.toRawBits())
+            assertEquals(0.105.toRawBits(), shared.trackingResponse.toRawBits())
+            assertEquals(0.0.toRawBits(), shared.retargetImpulse.toRawBits())
+        }
+        val unresolved = route.first().geometrySpringBinding(0.7)
+        assertEquals(null, unresolved.sharedSpring)
+        assertTrue(unresolved.tracksPresentationLayer)
+        val fallback = fluidPositionSpring(null)
+        assertEquals(1.0, fallback.dampingRatio, 0.0)
+        assertEquals(0.4, fallback.response, 0.0)
     }
 
     @Test fun lensingSetupKeepsFilterOrderAndTrackedProperties() {
