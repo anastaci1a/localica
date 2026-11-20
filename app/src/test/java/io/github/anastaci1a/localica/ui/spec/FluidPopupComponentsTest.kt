@@ -846,6 +846,32 @@ class FluidPopupComponentsTest {
         assertFalse(caps.copy(simdShuffleAndFill = false).admitsSimd(0, hasShape = false, reinterpretedSource = false))
     }
 
+    @Test fun gaussianSimdUploadSelectsTheNamedWidthsAndCentersTheHalfWeights() {
+        val widthsByCount = listOf(5, 5, 5, 5, 7, 11, 11, 15, 15, 19, 19, 23, 23, 27, 27)
+        val widths = listOf(27, 23, 19, 15, 11, 7, 5)
+        val halfBits = listOf(
+            0x2c00, 0x3000, 0x3200, 0x3400, 0x3500, 0x3600, 0x3700,
+            0x3800, 0x3880, 0x3900, 0x3980, 0x3a00, 0x3a80, 0x3b00,
+        )
+        widthsByCount.forEachIndexed { count, width ->
+            val weights = FloatArray(count) { (it + 1) / 16f }
+            val narrowed = mutableListOf<Float>()
+            val upload = FluidGaussianSpec.simdTapUpload(weights) {
+                narrowed += it
+                halfBits[(it * 16f).toInt() - 1].toShort()
+            }
+            assertEquals(weights.toList(), narrowed)
+            assertEquals("tile_simd_blur_$width", upload.width.tileName)
+            assertEquals("compute_simd_blur_$width", upload.width.computeName)
+            assertEquals(4 + widths.indexOf(width), upload.width.tileId)
+            assertEquals(36 - widths.indexOf(width), upload.width.computeId)
+            val leftAndCentre = List((width + 1) / 2 - count) { 0 } + halfBits.take(count)
+            assertEquals(leftAndCentre + leftAndCentre.dropLast(1).reversed(), upload.halfWeights.map(Short::toInt))
+            assertEquals(1, upload.weightIndex)
+            assertEquals(2 * width, upload.weightBytes)
+        }
+    }
+
     @Test fun gaussianBoxFallbackKeepsAxisScalesAndTheComputeAndDrawInputsSeparate() {
         val factors = FluidGaussianSpec.Decimation.entries
         fun box(size: FluidGaussianSpec.Decimation, compute: Boolean, supported: Boolean = true) =
