@@ -36,6 +36,7 @@ internal data class PopupPortalBounds(val x: Double, val y: Double, val width: D
 internal data class PopupPortalInsets(val top: Double, val leading: Double, val bottom: Double, val trailing: Double) {
     val horizontal get() = leading + trailing
     val vertical get() = top + bottom
+    val isZero get() = top == 0.0 && leading == 0.0 && bottom == 0.0 && trailing == 0.0
 
     fun signedCrop(bounds: PopupPortalBounds?): PopupPortalBounds? = bounds?.standardized()?.let {
         PopupPortalBounds(it.x + leading, it.y + top, it.width - horizontal, it.height - vertical)
@@ -180,14 +181,34 @@ internal fun fluidPopupDestinationScale(
 internal fun fluidPopupAutoAxis(oldWidth: Double, oldHeight: Double, targetWidth: Double, targetHeight: Double) =
     if (kotlin.math.abs(targetHeight - oldHeight) / oldHeight < kotlin.math.abs(targetWidth - oldWidth) / oldWidth) 2 else 1
 
+private fun fluidPopupAutoAxis(old: PopupPortalBounds, target: PopupPortalBounds): Int {
+    val from = old.standardized()
+    val to = target.standardized()
+    return fluidPopupAutoAxis(from.width, from.height, to.width, to.height)
+}
+
+internal fun fluidPopupIncomingAxis(
+    existingCount: Int, current: Int, incomingInsets: PopupPortalInsets,
+    incomingSize: () -> PopupPortalBounds, presentedBounds: () -> PopupPortalBounds?,
+    existingTailSize: () -> PopupPortalBounds,
+): Int? {
+    if (existingCount == 0 || current != 0) return null
+    if (!incomingInsets.isZero) return 1
+    return fluidPopupAutoAxis(presentedBounds() ?: existingTailSize(), incomingSize())
+}
+
+internal data class FluidRasterRequest(val rasterize: Boolean, val scale: Double?, val minificationFilter: String)
+
+internal fun fluidPopupRasterRequest(wantsMinificationFilter: Boolean, retainedDisplayScale: Double) =
+    if (wantsMinificationFilter) FluidRasterRequest(true, retainedDisplayScale, "box")
+    else FluidRasterRequest(false, null, "linear")
+
 internal fun fluidPopupLayoutAxis(
     topInsets: PopupPortalInsets, preferred: Int, current: Int, itemSize: PopupPortalBounds,
     presentedBounds: () -> PopupPortalBounds?,
 ): Int? {
-    if (preferred == current || topInsets.top != 0.0 || topInsets.leading != 0.0 || topInsets.bottom != 0.0 || topInsets.trailing != 0.0) return null
-    val target = itemSize.standardized()
-    val old = presentedBounds()?.standardized() ?: target
-    return fluidPopupAutoAxis(old.width, old.height, target.width, target.height)
+    if (preferred == current || !topInsets.isZero) return null
+    return fluidPopupAutoAxis(presentedBounds() ?: itemSize, itemSize)
 }
 
 internal fun requestFluidContentSize(
