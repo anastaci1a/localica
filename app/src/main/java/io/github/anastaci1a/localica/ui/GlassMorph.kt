@@ -1161,7 +1161,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         // action menu freezes its parent until it has returned; IME-owned Back holds one layout.
                         if (!holdImeBack() && (placement != GlassPlacement.Search || childPanels.intValue == 0)) {
                             val preview = if (motion.fluid) with(density) {
-                                FluidPopupPreview(visible, home, windowOrigin, if (detached) popupRadius.toPx() else homeRadius().toPx(),
+                                FluidPopupPreview(home, windowOrigin, if (detached) popupRadius.toPx() else homeRadius().toPx(),
                                     popupRadius.toPx(), TransformOrigin.Center.pivotFractionY.toDouble(), view.scaleY.toDouble())
                             } else null
                             motion.place(home, envelope, density.density, detached = detached, preview = preview)

@@ -31,7 +31,7 @@ class GlassMorphGeometryTest {
         val spec = (uiSpec(InterfaceSettings(popupMotion = PopupMotionStyle.Fluid), geometry = domain) as SpecResult.Accepted).spec
         val home = Rect(16f, 10f, 56f, 30f)
         val envelope = Rect(0f, 0f, 120f, 80f)
-        val input = FluidPopupPreview(true, home, Offset.Zero, 6f, 24f, 0.5, 2.0)
+        val input = FluidPopupPreview(home, Offset.Zero, 6f, 24f, 0.5, 2.0)
         EngineHarness(spec = spec).use { h ->
             val popup = PopupWindowMotion(h.clock, spec.expansion, "fluid", prepared = true, quiet = false, kind = PopupKind.Menu)
             popup.place(home, envelope, 1f, preview = input)
@@ -58,7 +58,7 @@ class GlassMorphGeometryTest {
             val edges = listOf(aperture.left, aperture.top, aperture.right, aperture.bottom)
             val before = edges.map { it.sampleAt(h.clock.stampNow) }
             popup.show(false)
-            popup.place(home, envelope, 1f, preview = input.copy(opening = false))
+            popup.place(home, envelope, 1f, preview = input)
             assertEquals(before, edges.map { it.sampleAt(h.clock.stampNow) })
             frames(240)
             assertTrue(popup.expansion.awaitingNativeGate)
@@ -77,14 +77,14 @@ class GlassMorphGeometryTest {
         val spec = (uiSpec(InterfaceSettings(popupMotion = PopupMotionStyle.Fluid), geometry = domain) as SpecResult.Accepted).spec
         val home = Rect(16f, 10f, 56f, 30f)
         val envelope = Rect(0f, 0f, 20f, 20f)
-        val input = FluidPopupPreview(true, home, Offset.Zero, 6f, 8f, 0.5, 2.0)
+        val input = FluidPopupPreview(home, Offset.Zero, 6f, 8f, 0.5, 2.0)
         EngineHarness(spec = spec).use { h ->
             val popup = PopupWindowMotion(h.clock, spec.expansion, "fluid", prepared = true, quiet = false, kind = PopupKind.Menu)
             popup.place(home, envelope, 1f, preview = input)
             val aperture = requireNotNull(popup.bounds)
             for (opening in listOf(true, false)) {
                 popup.show(opening)
-                popup.place(home, envelope, 1f, preview = input.copy(opening = opening))
+                popup.place(home, envelope, 1f, preview = input)
                 repeat(480) {
                     if (popup.expansion.awaitingNativeGate) popup.acknowledgeNativeGate(popup.expansion.nativeGeneration)
                     h.advance(1.0 / 120)
@@ -108,7 +108,7 @@ class GlassMorphGeometryTest {
     private fun fluidWindow(access: MotionAccess, popupRadius: Float, body: (EngineHarness, PopupWindowMotion, FluidPopupPreview) -> Unit) {
         val domain = ExpansionGeometryDomain(1000f, 4000f, 1f / 30)
         val spec = (uiSpec(InterfaceSettings(popupMotion = PopupMotionStyle.Fluid), geometry = domain) as SpecResult.Accepted).spec
-        val input = FluidPopupPreview(true, Rect(16f, 10f, 56f, 30f), Offset.Zero, 6f, popupRadius, 0.5, 2.0)
+        val input = FluidPopupPreview(Rect(16f, 10f, 56f, 30f), Offset.Zero, 6f, popupRadius, 0.5, 2.0)
         EngineHarness(access, spec).use { h ->
             val popup = PopupWindowMotion(h.clock, spec.expansion, "fluid", prepared = true, quiet = false, kind = PopupKind.Menu)
             popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input)
@@ -135,7 +135,7 @@ class GlassMorphGeometryTest {
         val kicked = edges.map { it.sampleAt(h.clock.stampNow) }
         assertTrue(kicked.all { it.velocity != 0f })
         popup.show(false)
-        popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input.copy(opening = false))
+        popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input)
         assertEquals(kicked, edges.map { it.sampleAt(h.clock.stampNow) })
         h.frames(popup, 480)
         assertTrue(popup.expansion.retirementReady)
@@ -144,7 +144,7 @@ class GlassMorphGeometryTest {
     @Test fun reducedMotionFinishesBothSlotsOnTheSameFrame() = fluidWindow(MotionAccess.Reduced, 24f) { h, popup, input ->
         for (opening in listOf(true, false)) {
             popup.show(opening)
-            popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input.copy(opening = opening))
+            popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input)
             var previous = popup.outlineBodies()
             val changed = IntArray(2) { -1 }
             h.frames(popup, 480) { frame ->
@@ -172,14 +172,34 @@ class GlassMorphGeometryTest {
                 h.frames(popup, 3)
                 if (held) popup.hold()
                 popup.show(false)
-                popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input.copy(opening = false))
+                popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input)
                 if (held) popup.release()
                 val aperture = requireNotNull(popup.bounds)
                 targets = listOf(aperture.top.target, aperture.bottom.target, requireNotNull(popup.rectangle).top.target)
             }
             return targets
         }
-        assertEquals(reversal(held = false), reversal(held = true))
+        val held = reversal(held = true)
+        assertEquals(reversal(held = false), held)
+        // Absolute: the manual -40 kick (translation -80 at kick scale 2) does not survive the reversal.
+        assertNotEquals(-80f, held[0] - held[2], 0f)
+    }
+
+    @Test fun aReturnWithoutALayoutReachesHomeBeforeItsGate() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
+        popup.show(true)
+        h.frames(popup, 480)
+        popup.show(false)
+        var gated = false
+        repeat(480) {
+            if (!gated && popup.expansion.awaitingNativeGate) {
+                gated = true
+                assertEquals(input.pivot, requireNotNull(popup.bounds).valueAt(h.clock.stampNow))
+                popup.acknowledgeNativeGate(popup.expansion.nativeGeneration)
+            }
+            h.advance(1.0 / 120)
+        }
+        assertTrue(gated)
+        assertTrue(popup.expansion.retirementReady)
     }
 
     @Test fun preparedThroughRequestsKeepEndpointAndPivotOverridesWithTheirRoles() {

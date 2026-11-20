@@ -131,14 +131,14 @@ internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, ancho
 }
 
 internal data class FluidPopupPreview(
-    override val opening: Boolean, val pivot: Rect, val root: Offset, val homeRadius: Float, val popupRadius: Float,
+    val pivot: Rect, val root: Offset, val homeRadius: Float, val popupRadius: Float,
     val anchorY: Double, val kickScale: Double,
 ) : PopupOutlinePreview<Rect> {
-    override fun prepare(home: Rect, envelope: Rect, density: Float): PopupOutline<Rect> = PreparedFluidOutline(home, envelope, density, this)
+    override fun prepare(home: Rect, envelope: Rect, density: Float, opening: Boolean): PopupOutline<Rect> =
+        PreparedFluidOutline(home, envelope, density, opening, this)
 }
 
-private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, private val preview: FluidPopupPreview) : PopupOutline<Rect> {
-    private val opening = preview.opening
+private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, private val opening: Boolean, private val preview: FluidPopupPreview) : PopupOutline<Rect> {
     private val scale = density.toDouble()
     private fun points(r: Rect) = PopupPortalBounds((r.left - preview.root.x) / scale,
         (r.top - preview.root.y) / scale, r.width / scale, r.height / scale)

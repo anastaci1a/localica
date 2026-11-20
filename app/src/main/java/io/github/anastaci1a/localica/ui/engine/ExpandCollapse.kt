@@ -109,7 +109,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     internal fun replaceOutline(poses: List<Pair<Rect,Float>>,aperture: Int,scale: Double,spring: FluidPopupSpringSettings) {
         val ordered=if(aperture==0) poses else poses.asReversed()
         val current=outline?:Outline(ordered,aperture,scale).also { o -> outline=o; o.owned.forEach { it.onRest={ notifyLifecycle() } } }
-        current.aperture=aperture; current.scale=scale
+        current.aperture=aperture; current.scale=scale; drawn=null
         val edges=listOf(requireNotNull(bound),current.companion).zip(ordered).flatMap { (rect,pose) -> rect.channels.zip(floatArrayOf(pose.first.left,pose.first.top,pose.first.right,pose.first.bottom).toList()) }
         current.edges=(edges+current.radii.zip(ordered.map { it.second })) to spring
         if(!held) resumeEdges(current)
@@ -119,21 +119,24 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     private fun resumeKick(o: Outline,i: Int) { o.kickRequests[i]?.let { (target,spring) -> retargetOutline(listOf(o.kicks[i] to target),spring) } }
     private fun resumeOutline() { val o=outline?:return; resumeEdges(o); for(i in 0..1) resumeKick(o,i) }
     private fun retargetOutline(targets: List<Pair<MotionFloat,Float>>,spring: FluidPopupSpringSettings) {
+        drawn=null
         val stamp=clock.stampNow; val ctx=context(); val display=ctx.displayIntervalSeconds.toDouble(); val reduced=ctx.access==MotionAccess.Reduced
         val moving=targets.filter { (m,q) -> m.rawValue(stamp)!=q.toDouble() || m.rawVelocity(stamp)!=0.0 }
         val plan=if(reduced || moving.isEmpty()) null else SpringPlan.of(stamp,1.0,display,moving.map { (m,q) -> doubleArrayOf(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble()) })
         commitAtomic(targets.map { (m,q) -> m to m.prepareSegment(plan?.let { Damped(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble(),display,it.finish,it.tauOut,it) }?:Rest(q.toDouble()),q,stamp,plan,if(reduced) "Reduced" else "Continuous") })
     }
+    // The bodies sampled at one frame stamp: the field and every radius reader of that frame share one construction.
+    private var drawn: Pair<FrameStamp,List<RoundRect>>?=null
     /** Both sampled slots in field order, each with its published circular radius. */
-    internal fun outlineBodies(): List<RoundRect>? = outline?.let { o ->
+    internal fun outlineBodies(): List<RoundRect>? = outline?.let { o -> drawn?.takeIf { it.first==clock.stamp }?.second ?: run {
         val bodies=listOf(aperture.value(),o.companion.value().translate(Offset(0f,o.translation(o.kicks[1].value())))).zip(o.radii).map { (r,radius) -> RoundRect(r,CornerRadius(presentedRadius(r,radius))) }
         if(o.aperture==0) bodies else bodies.asReversed()
-    }
+    }.also { drawn=clock.stamp to it } }
     internal fun outlineRadius()=outline?.let { o -> requireNotNull(outlineBodies())[o.aperture].topLeftCornerRadius.x }
     private fun presentedRadius(rect: Rect,radius: MotionFloat): Float { var presented=0.0; val sample=radius.value().toDouble()
         FluidCornerSpec.publishRadii(maxOf(rect.width,0f).toDouble(),maxOf(rect.height,0f).toDouble(),{ DoubleArray(8) { sample } },null,null) { _,value,_,_,_ -> presented=value[0] }
         return presented.toFloat() }
-    internal fun clearOutline() { outline?.owned?.forEach { it.onRest=null; it.dispose() }; outline=null }
+    internal fun clearOutline() { outline?.owned?.forEach { it.onRest=null; it.dispose() }; outline=null; drawn=null }
     internal val awaitingNativeGate get()=!held && pendingNative!=null && physicalRest
     internal val retirementReady get()=!held && pendingNative==null && physicalRest
     internal val nativeOpening get()=pendingNative
@@ -293,12 +296,10 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         if(held) return
         // Holding leaves rest too: capture the speed the release will fly at (#854 §1.3).
         if(physicalRest) flightSigma=timeScale()
-        val physical=this.physical
         val channels=listOfNotNull(motion,cross)+physical
         val entries=channels.map { channel ->
             val value=channel.rawValue(stamp)
-            val target=if(outline!=null && channel in physical) channel.target else value.toFloat()
-            channel to channel.prepareSegment(Driven(value,0.0),target,stamp,policy="DrivenInput")
+            channel to channel.prepareSegment(Driven(value,0.0),value.toFloat(),stamp,policy="DrivenInput")
         }
         held=true; identity=null; lastStamp=stamp
         // Frozen destinations also preserve the frame when ordinary live reduction drains these channels.
