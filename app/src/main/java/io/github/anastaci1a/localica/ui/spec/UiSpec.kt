@@ -1067,6 +1067,21 @@ internal object FluidLensingSpec {
         val lanes = floatArrayOf(height, curvature, effectOffset, maskOffset, cosine, sine, 0f, 0f)
         return ShortArray(lanes.size) { narrowHalf(lanes[it]) }
     }
+    fun deepFramebufferBit(extendedColorQuery: Long, preference: () -> Boolean?): Boolean =
+        extendedColorQuery != 0L && (preference() ?: ((extendedColorQuery and 1L) != 0L))
+
+    fun glassEffectFragmentName(feature16: Boolean, fieldFormat: Int?, cachedDeepFramebuffer: () -> Boolean): String {
+        val floatPrecision = !feature16 || cachedDeepFramebuffer() || fieldFormat?.let { packed ->
+            (0 until 6).any { lane ->
+                when ((packed ushr (lane * 5)) and 31) {
+                    15, 18, 20, 21 -> true
+                    else -> false
+                }
+            }
+        } == true
+        return if (floatPrecision) "fixed_frag_lph_cpf" else "fixed_frag_lph_cph"
+    }
+
     const val namedSourceTexture = 1
     const val displacementVertexType = 6
     const val freshHeight = 20.0
