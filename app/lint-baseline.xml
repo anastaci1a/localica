@@ -10347,11 +10347,11 @@
     <issue
         id="RawPresentationTransform"
         message="Bind presentation through Modifier.surface"
-        errorLine1="                            foreground.placeWithLayer((width - foreground.width) / 2, if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2) {"
+        errorLine1="                            foreground.placeWithLayer(foregroundX, foregroundY) {"
         errorLine2="                                       ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="1133"
+            line="1176"
             column="40"/>
     </issue>
 
