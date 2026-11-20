@@ -140,6 +140,25 @@ internal data class FluidScalarSpringBody(val value: Double, val velocity: Doubl
     }
 }
 
+/** Publication state of one running property entry. The owner supplies its value equality rule. */
+internal class FluidScalarPublication {
+    private var previousValue: Double? = null
+    private var pending: FluidScalarSpringBody? = null
+
+    fun queueTick(body: FluidScalarSpringBody, target: Double, finished: Boolean, sameValue: (Double, Double) -> Boolean) {
+        val sample = if (finished) FluidScalarSpringBody(target, 0.0) else body
+        val previous = previousValue
+        if (previous == null || !sameValue(sample.value, previous)) pending = sample
+        previousValue = sample.value
+    }
+
+    fun consume(write: (FluidScalarSpringBody) -> Unit) {
+        val sample = pending ?: return
+        pending = null
+        write(sample)
+    }
+}
+
 internal fun fluidThroughMainSpring(growing: Boolean, eject: FluidPopupSpringSettings, absorb: FluidPopupSpringSettings) =
     if (growing) eject else absorb
 
@@ -367,6 +386,10 @@ internal object FluidLensingSpec {
         filterOrder.fold(content) { color, filter -> emit(filter, color) ?: color }
 
     private val lensPropertyControls = FluidPropertySpringControls(delay = 0.0, startingVelocity = null, interactive = false, additive = false)
+
+    fun publishSample(publication: FluidScalarPublication, write: (Double, Double, Int, Boolean, Boolean) -> Unit) {
+        publication.consume { sample -> write(sample.value, sample.velocity, 0, false, lensPropertyControls.additive) }
+    }
 
     data class Request(val timing: FluidPopupStep<FluidPopupSpringSettings>, val gain: Double, val dimension: Double?) {
         val propertyControls get() = lensPropertyControls
