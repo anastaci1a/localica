@@ -270,11 +270,11 @@ class GlassGlowTest {
             "lensChain(blurEffect, lens, android.graphics.RenderEffect::createChainEffect)",
             "(blurEffect?.let { android.graphics.RenderEffect.createChainEffect(lens, it) } ?: lens)",
         )
-        assertEquals("3bbe5235adf8e87f0b047d0dfc35a4d0a247fb801d5a2b77a58d1541e74ecb91", sha(stock.toByteArray()))
+        assertEquals("0c91faeb8eea83fb866daa77d0efd458dff4b9cda36beeddd27b8d07934711fa", sha(stock.toByteArray()))
         val source = File(root, "LiquidGlass.kt").readText()
         val start = source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")
         val effect = source.substring(start, source.indexOf("\n                else if", start))
         // Re-pinned for #748: depth/power/tone read the one material record and the D13/RM01 white-tint fade is deleted; kernel unchanged.
-        assertEquals("25bd1e042f1820f425790952550ca323046beb263de21d74875f9b12da954b7e", sha(effect.toByteArray()))
+        assertEquals("fc2616dd8b70649aac971c6520b99794c970b303803c8deebec5fb52de757a99", sha(effect.toByteArray()))
     }
 }
