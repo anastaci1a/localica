@@ -276,9 +276,9 @@ class GlassMorphGeometryTest {
         assertEquals(22f, initial[1].topLeftCornerRadius.x, 0f)
         h.advance(1.0 / 120)
         val first = requireNotNull(popup.outlineBodies())[0]
-        assertEquals(17.713926f, first.width, 0.00002f)
-        assertEquals(17.79482f, first.height, 0.00002f)
-        assertEquals(8.856963f, first.topLeftCornerRadius.x, 0.00002f)
+        assertEquals(19.912427f, first.width, 0.00002f)
+        assertEquals(20.003361f, first.height, 0.00002f)
+        assertEquals(9.956213f, first.topLeftCornerRadius.x, 0.00002f)
         assertEquals(first.boundingRect, requireNotNull(popup.bounds).value())
     }
 
@@ -305,8 +305,6 @@ class GlassMorphGeometryTest {
         expansion.kickOutline(0, 40f, FluidKickSpec.ejecteeSpring)
         h.advance(1.0 / 120)
         val slots = requireNotNull(popup.outlineBodies())
-        val progress = 0.010378857970991029
-        val scale = 0.25 + 0.75 * progress
         val propertyTime = 0.008333333 + 0.4 * 1.001 * (1f / 120).toDouble()
         val frequency = 2.0 * Math.PI / 0.35
         val decay = 0.75 * frequency
@@ -315,7 +313,7 @@ class GlassMorphGeometryTest {
             (kotlin.math.cos(oscillation * propertyTime) + decay / oscillation * kotlin.math.sin(oscillation * propertyTime)))
         val kt = 2.0 * Math.PI / 0.2 * propertyTime
         val kick = 40.0 * (1.0 - (1.0 + kt) * kotlin.math.exp(-kt))
-        assertEquals((250.0 * scale).toFloat(), slots[0].width, 0.00002f)
+        assertEquals((250.0 * kickScale / 2.0).toFloat(), slots[0].width, 0.00002f)
         assertEquals((180.0 + kickScale * kick).toFloat(), slots[0].boundingRect.center.y, 0.00002f)
         assertEquals(180f, slots[1].boundingRect.center.y, 0f)
     }

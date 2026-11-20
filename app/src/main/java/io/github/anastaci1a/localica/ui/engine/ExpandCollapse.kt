@@ -78,23 +78,25 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         motion.epoch.intValue; cross?.epoch?.intValue
         edges?.forEach { it.epoch.intValue }; current?.owned?.forEach { it.epoch.intValue }
         return motion.settled && cross?.settled!=false && edges?.all { it.settled }!=false &&
-            current?.owned?.all { it.settled }!=false && current?.kickProperties?.all { it.settled }!=false
+            current?.owned?.all { it.settled }!=false && current?.properties?.all { it.settled }!=false
     }
-    private val kickControls=FluidPropertySpringControls(0.0,null,false,false)
+    private val propertyControls=FluidPropertySpringControls(0.0,null,false,false)
+    private data class OutlineRequest(
+        val edges: List<Pair<MotionFloat,Float>>,val scales: List<Float>,val spring: FluidPopupSpringSettings,
+    )
     private inner class Outline(poses: List<PopupOutlinePose<Rect>>,val boundSlot: Int,hostScaleY: Double) {
         val companion=MotionRect(clock,poses[1].bounds,requireNotNull(bound).ranges).also { it.claim(this@ExpandCollapse) }
         val radii=poses.map { MotionFloat(clock,0f,companion.ranges.top) }
-        val scales=poses.map { MotionFloat(clock,it.scale,1f) }
-        val kicks=poses.map { kickProperty(FluidKickSpec.unkickTarget) }
-        val kickScales=poses.map { kickProperty(hostScaleY*it.scale) }
-        val kickProperties=kicks+kickScales
-        val owned=companion.channels.toList()+radii+scales
+        val scales=poses.map { scalar(it.scale.toDouble()) }
+        val kicks=poses.map { scalar(FluidKickSpec.unkickTarget) }
+        val kickScales=poses.map { scalar(hostScaleY*it.scale) }
+        val properties=scales+kicks+kickScales
+        val owned=companion.channels.toList()+radii
         var aperture by mutableIntStateOf(boundSlot); var hostScaleY=hostScaleY
         val presentedSlot get()=if(aperture==boundSlot || !physicalRest) boundSlot else aperture
-        // The last edge and kick requests: committed unless held, and replayed by [resumeOutline] at release.
-        var edges: Pair<List<Pair<MotionFloat,Float>>,FluidPopupSpringSettings>?=null; val kickRequests=arrayOfNulls<Pair<Float,FluidPopupSpringSettings>>(2)
+        var request: OutlineRequest?=null; val kickRequests=arrayOfNulls<Pair<Float,FluidPopupSpringSettings>>(2)
         fun rect(slot: Int)=if(slot==0) requireNotNull(bound) else companion
-        private fun kickProperty(initial: Double)=FluidPropertyMotion(clock,Double::equals,initial=initial,
+        private fun scalar(initial: Double)=FluidPropertyMotion(clock,Double::equals,initial=initial,
             snapReduced={ false },completion={ finished -> if(finished) notifyLifecycle() })
     }
     private var outline by mutableStateOf<Outline?>(null)
@@ -108,13 +110,13 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         private fun projected(i: Int)=object: MotionValue {
             private val axis=i%2
             private val side=if(i<2) -1f else 1f
-            private fun value(read: (MotionFloat)->Float, kick: (FluidPropertyMotion)->Double): Float {
+            private fun value(read: (MotionFloat)->Float, property: (FluidPropertyMotion)->Double): Float {
                 val o=outline?:return read(boundEdge(i))
                 val slot=slot(o)
                 val edges=o.rect(slot).channels
                 val base=read(edges[i])
-                val scale=read(o.scales[slot])
-                val translation=if(axis==1) FluidKickSpec.translationY(kick(o.kicks[slot]),kick(o.kickScales[slot])).toFloat() else 0f
+                val scale=property(o.scales[slot]).toFloat()
+                val translation=if(axis==1) FluidKickSpec.translationY(property(o.kicks[slot]),property(o.kickScales[slot])).toFloat() else 0f
                 val span=(base-read(edges[i xor 2]))*side
                 return base+(abs(scale)*span.coerceAtLeast(0f)-span)*side*0.5f+translation
             }
@@ -124,8 +126,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
                 val edges=o.rect(slot).channels
                 val base=read(edges[i])
                 val other=read(edges[i xor 2])
-                val scale=read(o.scales[slot])
-                val scaleVelocity=if(scale.value<0f) -scale.velocity else scale.velocity
+                val scale=o.scales[slot].sample()
+                val scaleVelocity=if(scale.value<0.0) -scale.velocity else scale.velocity
                 val span=(base.value-other.value)*side
                 val spanVelocity=if(span<0f) 0f else (base.velocity-other.velocity)*side
                 val kick=if(axis==1) o.kicks[slot].sample().let { amount ->
@@ -133,7 +135,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
                     (kickScale.value*amount.velocity+kickScale.velocity*amount.value).toFloat()
                 } else 0f
                 return (base.velocity+other.velocity)*0.5f+
-                    side*0.5f*(abs(scale.value)*spanVelocity+scaleVelocity*span.coerceAtLeast(0f))+kick
+                    (side*0.5*(abs(scale.value)*spanVelocity+scaleVelocity*span.coerceAtLeast(0f))).toFloat()+kick
             }
             override val target get()=value({ it.target },{ it.target })
             override val settled get()=outline?.let { o ->
@@ -169,48 +171,54 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
                 pose.bounds.translate(current.rect(slot).valueAt(clock.stampNow).center-pose.bounds.center)
             } else pose.bounds
             current.rect(slot).channels.zip(listOf(r.left,r.top,r.right,r.bottom))+
-                listOf(current.radii[slot] to pose.radius,current.scales[slot] to pose.scale)
+                (current.radii[slot] to pose.radius)
         }
         if(existing==null) {
             retargetOutline(targets,spring,snap=true)
-        } else if(!held || current.edges!=null) {
-            val previous=current.edges
-            current.edges=targets to spring
+        } else if(!held || current.request!=null) {
+            val previous=current.request
+            val request=OutlineRequest(targets,ordered.map { it.scale },spring)
+            current.request=request
             if(!held) {
-                val unchanged=previous?.takeIf { (_,law) -> law.omega==spring.omega && law.dampingRatio==spring.dampingRatio }
-                retargetOutline(if(unchanged==null) targets else targets-unchanged.first.toSet(),spring)
-                retargetKickScales(current,spring)
+                val unchanged=previous?.takeIf { it.spring.omega==spring.omega && it.spring.dampingRatio==spring.dampingRatio }
+                retargetOutline(if(unchanged==null) targets else targets-unchanged.edges.toSet(),spring)
+                retargetScales(current,request)
             }
         }
     }
     internal fun kickOutline(slot: Int,target: Float,spring: FluidPopupSpringSettings) { outline?.let { val i=slot xor it.boundSlot; it.kickRequests[i]=target to spring; if(!held) resumeKick(it,i) } }
-    private fun resumeEdges(o: Outline) { o.edges?.let { (targets,spring) -> retargetOutline(targets,spring); retargetKickScales(o,spring) } }
-    private fun retargetKickScales(o: Outline,spring: FluidPopupSpringSettings) {
-        o.kickScales.forEachIndexed { i,property ->
-            val target=o.hostScaleY*o.scales[i].target
-            if(property.target!=target) retargetKick(property,target,spring,FluidKickSpec.epsilonSquared)
+    private fun retargetScales(o: Outline,request: OutlineRequest) {
+        request.scales.forEachIndexed { i,scale ->
+            val target=scale.toDouble()
+            val kickTarget=o.hostScaleY*target
+            val display=o.scales[i]
+            val kick=o.kickScales[i]
+            if(display.target!=target) retargetProperty(display,target,request.spring,FluidKickSpec.epsilonSquared)
+            if(kick.target!=kickTarget) retargetProperty(kick,kickTarget,request.spring,FluidKickSpec.epsilonSquared)
         }
     }
     private fun resumeKick(o: Outline,i: Int) {
         o.kickRequests[i]?.let { (target,spring) ->
             val density=requireNotNull(basis).density
-            retargetKick(o.kicks[i],target.toDouble(),spring,FluidKickSpec.epsilonSquared*density)
+            retargetProperty(o.kicks[i],target.toDouble(),spring,FluidKickSpec.epsilonSquared*density)
         }
     }
-    private fun retargetKick(property: FluidPropertyMotion,target: Double,spring: FluidPopupSpringSettings,epsilonSquared: Double) {
+    private fun retargetProperty(property: FluidPropertyMotion,target: Double,spring: FluidPopupSpringSettings,epsilonSquared: Double) {
         if(property.settled && property.target==target) return
         drawn=null
-        property.animate(property.sample().value,target,kickControls,spring,epsilonSquared)
+        property.animate(property.sample().value,target,propertyControls,spring,epsilonSquared)
     }
-    private fun resumeOutline() { val o=outline?:return; resumeEdges(o); for(i in 0..1) resumeKick(o,i) }
+    private fun resumeOutline() {
+        val o=outline?:return
+        o.request?.let { retargetOutline(it.edges,it.spring); retargetScales(o,it) }
+        for(i in 0..1) resumeKick(o,i)
+    }
     private fun retargetOutline(targets: List<Pair<MotionFloat,Float>>,spring: FluidPopupSpringSettings,snap: Boolean=false) {
         if(targets.isEmpty()) return
         drawn=null
         val stamp=clock.stampNow; val ctx=context(); val display=ctx.displayIntervalSeconds.toDouble()
-        val geometry=fluidOutlineGeometrySpring(spring,ctx.access)
-        val scales=outline?.scales
+        val law=fluidOutlineGeometrySpring(spring,ctx.access)
         val states=if(snap) emptyList() else targets.map { (m,q) ->
-            val law=if(scales?.contains(m)==true) spring else geometry
             val x=m.rawValue(stamp)
             val from=if(m.kind==2) m.target.toDouble() else x
             val v=law.velocityWithImpulse(m.rawVelocity(stamp),q.toDouble()-from)
@@ -235,12 +243,12 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     }.also { drawn=clock.stamp to it } }
     internal fun outlineRadius()=outline?.let { o -> requireNotNull(outlineBodies())[o.presentedSlot].topLeftCornerRadius.x }
     private fun Outline.presentedRadius(slot: Int,rect: Rect): Float {
-        val scale=abs(scales[slot].value())
+        val scale=abs(scales[slot].sample().value)
         val side=minOf(rect.width,rect.height).coerceAtLeast(0f)
         return FluidCornerSpec.clampRadius(radii[slot].value().toDouble()*scale,side*0.5).toFloat()
     }
     internal fun clearOutline() {
-        outline?.let { o -> o.owned.forEach { it.onRest=null; it.dispose() }; o.kickProperties.forEach { it.stop() } }
+        outline?.let { o -> o.owned.forEach { it.onRest=null; it.dispose() }; o.properties.forEach { it.stop() } }
         outline=null; drawn=null
     }
     internal val awaitingNativeGate get()=!held && pendingNative!=null && physicalRest
@@ -412,7 +420,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         commitAtomic(entries,true)
         // A held frame is constant: it runs no frames, even while its departing home stays mounted (an offscreen pager page).
         channels.forEach(clock::unregister)
-        outline?.kickProperties?.forEach { it.stop() }
+        outline?.properties?.forEach { it.stop() }
     }
     internal fun release() {
         val stamp=clock.stampNow; guard(stamp)
