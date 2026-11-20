@@ -54,7 +54,6 @@ settingsSearchEntryModifier|app/src/main/java/io/github/anastaci1a/localica/ui/c
 shadowPlaneHost|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|shadow plane host modifier, no motion input
 surface|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|binds presentation through the compositor (RawPresentationTransform rule)
 windowRetained|app/src/main/java/io/github/anastaci1a/localica/ui/engine/NativeShadowPlane.kt|native window retention for shadows, no motion input
-captureInk|app/src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt|records the trigger's current ink on its anchor; takes no argument
 rememberGlassLight|app/src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt|shared touch-contact input for painted controls; no popup or motion-law selection
 ContactGlowBacking|app/src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt|shared touch-paint adapter; rim and foreground remain outside its backing
 ContactLightBacking|app/src/main/java/io/github/anastaci1a/localica/ui/engine/Compositor.kt|bounded touch-paint recording; reuses backing without choosing popup motion

@@ -386,7 +386,7 @@ class SourceMethodsContract(unittest.TestCase):
                      "io.github.anastaci1a.localica.FrostedSurfaceTest",
                      "io.github.anastaci1a.localica.FloatingControlSystemMotionTest"]
         result = source_methods.inventory(ROOT, selectors)
-        self.assertEqual(result["method_count"], 11)
+        self.assertEqual(result["method_count"], 10)
         self.assertEqual(result["methods"], sorted([
             selectors[0] + "#searchSlotUsesPlacedTravelThroughNativeReadinessAndInterruptedReturn",
             selectors[0] + "#reducedSearchSlotUsesTheSameNativePlacementEndpoints",
@@ -394,7 +394,6 @@ class SourceMethodsContract(unittest.TestCase):
             selectors[0] + "#scopedResultsWrapBelowTheirLimitWithAndWithoutKeyboard",
             selectors[0] + "#visibleSearchVacancyRestoresWithoutCumulativeListMovement",
             selectors[0] + "#popupKeepsScopeAndBothListPositionsWhenOpeningAResult",
-            selectors[1] + "#neutralFrostFollowsConfiguredContrastInBothInkPolarities",
             selectors[1] + "#listBackdropCannotPaintOverSiblingHeaderControls",
             selectors[1] + "#queueDrawerKeepsItsMaterialFromShelfThroughHeldExpansion",
             selectors[1] + "#glassTransmitsTheActualSceneWithSoftEdgesAndCrispControls",
