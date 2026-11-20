@@ -621,6 +621,71 @@ class FluidPopupComponentsTest {
         assertEquals(listOf("first commit", "after commit"), events)
     }
 
+    @Test fun lensModifierReusesOnlyACompatibleOrdinaryAssociation() {
+        val channel = FluidPopupChannel.LensHeight
+        val format = FluidModifierFormat(1, additive = false)
+        val store = mutableMapOf(channel.key to format)
+        val events = mutableListOf<String>()
+        fun write(ordinary: Boolean) {
+            store.writeFluidPresentationModifier(
+                channel, ordinary, format, { it }, { existing ->
+                    assertTrue(existing === format)
+                    events += "update"
+                },
+                { key ->
+                    assertEquals(null, store[key])
+                    events += "cancel $key"
+                },
+                { key -> events += "create $key" },
+            )
+        }
+        write(ordinary = true)
+        assertEquals(listOf("update"), events)
+        for (old in listOf(FluidModifierFormat(2, false), FluidModifierFormat(1, true))) {
+            store[channel.key] = old
+            events.clear()
+            write(ordinary = true)
+            assertEquals(listOf("cancel effect.height", "create effect.height"), events)
+        }
+        store[channel.key] = format
+        events.clear()
+        write(ordinary = false)
+        assertEquals(listOf("cancel effect.height", "create effect.height"), events)
+    }
+
+    @Test fun oldLensCompletionClearsTheKeyAndCapturesOnlyTheRemovedModifier() {
+        val height = FluidPopupChannel.LensHeight
+        val amount = FluidPopupChannel.LensAmount
+        val old = Any()
+        val replacement = Any()
+        val amountModifier = Any()
+        val store = mutableMapOf(height.key to old, amount.key to amountModifier)
+        val queuedCreate = mutableSetOf(height.key, amount.key)
+        val deferred = mutableListOf<Any>()
+        val oldCompletion: (Boolean) -> Unit = {
+            store.completeFluidPresentationModifier(
+                height,
+                { key ->
+                    assertEquals(null, store[key])
+                    queuedCreate.remove(key)
+                },
+                { false }, { error("This removal is queued") }, { modifier -> deferred += modifier },
+            )
+        }
+        oldCompletion(false)
+        store[height.key] = replacement
+        assertEquals(listOf(old), deferred)
+        assertTrue(store[height.key] === replacement)
+        assertTrue(store[amount.key] === amountModifier)
+        assertEquals(setOf(amount.key), queuedCreate)
+        store.completeFluidPresentationModifier(
+            amount, { queuedCreate.remove(it) }, { true },
+            { assertTrue(it === amountModifier) }, { error("This removal is immediate") },
+        )
+        assertEquals(null, store[amount.key])
+        assertTrue(queuedCreate.isEmpty())
+    }
+
     @Test fun contentPointScaleUsesTheLiveOriginalLayerContext() {
         assertEquals(1.0, fluidLayerPointScale(false) { error("The layer context was not resolved") }, 0.0)
         assertEquals(1.0, fluidLayerPointScale(true) { null }, 0.0)
