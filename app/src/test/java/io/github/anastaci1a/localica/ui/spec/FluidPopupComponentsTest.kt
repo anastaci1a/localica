@@ -679,6 +679,28 @@ class FluidPopupComponentsTest {
         assertEquals(listOf("first commit", "after commit"), events)
     }
 
+    @Test fun sharedRadiusAdvancesTowardTheSuppliedIntermediateBeforePublication() {
+        val body = FluidScalarSpringBody(-2.0, -1.3)
+        val cases = listOf(
+            doubleArrayOf(100.0, 7.0, 0.023, -2.277141109672307, -22.1331732458615),
+            doubleArrayOf(144.0, 24.0, 0.019, -2.2432583584385632, -22.580950056268875),
+            doubleArrayOf(81.0, 24.0, 0.031, -2.334434614188172, -18.071557887997244),
+        )
+        for ((stiffness, damping, dt, value, velocity) in cases) {
+            val next = FluidSharedBlurSpec.advanceRadius(body, -12.0, stiffness, damping, dt)
+            assertEquals(value, next.value, 1e-12 * maxOf(1.0, kotlin.math.abs(value)))
+            assertEquals(velocity, next.velocity, 1e-12 * maxOf(1.0, kotlin.math.abs(velocity)))
+            assertTrue(FluidSharedBlurSpec.advanceRadius(body, -12.0, stiffness, damping, 0.0) === body)
+            val publication = FluidScalarPublication()
+            publication.queueTick(next, 0.0, false, Double::equals)
+            FluidSharedBlurSpec.publishRadius(publication) { radius, publishedVelocity, _ ->
+                assertEquals(0.0.toRawBits(), radius.toRawBits())
+                assertEquals(next.velocity.toRawBits(), publishedVelocity.toRawBits())
+            }
+            assertTrue(next.value < 0.0)
+        }
+    }
+
     @Test fun sharedBlurOriginsAndPublishedRadiusPreserveTheTypedBody() {
         val identity = FluidSharedBlurSpec.zoomOrigin(null)
         assertEquals(listOf(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0), identity.toList())
