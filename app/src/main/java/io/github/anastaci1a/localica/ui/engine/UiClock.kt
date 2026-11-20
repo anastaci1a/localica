@@ -83,7 +83,7 @@ internal class FluidTimelineMotion(private val clock: UiClock,private val run: (
 /** #1083: one running property entry on the shared clock. Each frame advances the installed spring by the frame delta over the drag, finishes
  * on the projected error and publishes through [write]; [completion] belongs to the lifecycle owner. */
 internal class FluidPropertyMotion(private val clock: UiClock,private val sameValue: (Double,Double)->Boolean,
-    private val write: (FluidScalarSpringBody)->Unit={},private val completion: ()->Unit={},initial: Double=0.0): ActiveMotion {
+    private val write: (FluidScalarSpringBody)->Unit={},initial: Double=0.0,private val completion: ()->Unit={}): ActiveMotion {
     override val id=clock.allocateId(); override val presented get()=true
     override var settled by mutableStateOf(true); private set
     private var entry by mutableStateOf(rest(initial))
