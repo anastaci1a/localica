@@ -535,6 +535,64 @@ class FluidPopupComponentsTest {
         value.present(null)
     }
 
+    @Test fun propertyDisplayTimePrimesFromTheDriverAndKeepsNonpositiveTicksAtZero() {
+        val unprimed = FluidPropertyFrameTime(0.0, 0.0, 0.0)
+        val driver = 0.016
+        val primed = unprimed.primed(12.0) { driver }
+        val expectedInterval = driver * Double.fromBits(0x3ff004189374bc6aL)
+        assertEquals(expectedInterval.toRawBits(), primed.refreshInterval.toRawBits())
+        assertEquals((12.0 + expectedInterval * -0.4).toRawBits(), primed.previousTime.toRawBits())
+        assertEquals(0.0.toRawBits(), primed.delta.toRawBits())
+        assertEquals(0x3f91156f8c384071L, unprimed.primed(12.0) { 0.0 }.refreshInterval.toRawBits())
+        val reprime = primed.primed(13.0) { error("Use the stored refresh interval") }
+        assertEquals(primed.refreshInterval.toRawBits(), reprime.refreshInterval.toRawBits())
+        val tick = primed.advance(12.01)
+        assertEquals(12.01.toRawBits(), tick.previousTime.toRawBits())
+        assertEquals((12.01 - primed.previousTime).toRawBits(), tick.delta.toRawBits())
+        assertEquals(((0.02 + tick.delta) / 2.0).toRawBits(), tick.entryDelta(0.02, 2.0).toRawBits())
+        for (time in listOf(0.0, Double.NaN, 12.0, 12.01)) {
+            val stale = tick.advance(time)
+            assertEquals(tick.previousTime.toRawBits(), stale.previousTime.toRawBits())
+            assertEquals(0.0.toRawBits(), stale.delta.toRawBits())
+        }
+    }
+
+    @Test fun propertyFrameDeliversTheFinalSampleBeforeCompletionAndGroupFlush() {
+        val publication = FluidScalarPublication()
+        val callbacks = mutableListOf<() -> Unit>()
+        val events = mutableListOf<String>()
+        runFluidPropertyFrame(
+            targetTimestamp = 1.02,
+            preparedTransaction = false,
+            solve = {
+                assertTrue(events.isEmpty())
+                events += "solve"
+                publication.queueTick(FluidScalarSpringBody(0.99, 7.0), 1.0, true, Double::equals)
+                callbacks += {
+                    events += "complete true"
+                    callbacks += { events += "cleanup" }
+                }
+                true
+            },
+            consumeSamples = {
+                publication.consume {
+                    assertEquals(FluidScalarSpringBody(1.0, 0.0), it)
+                    events += "sample"
+                }
+            },
+            postTick = callbacks,
+            normalizedChange = { 1.0 },
+            flush = { stamp, transaction, changed ->
+                assertEquals(1.02.toRawBits(), stamp.toRawBits())
+                assertTrue(transaction)
+                assertTrue(changed)
+                events += "flush"
+            },
+        )
+        assertEquals(listOf("solve", "sample", "complete true", "cleanup", "flush"), events)
+        assertTrue(callbacks.isEmpty())
+    }
+
     @Test fun lensPublicationPreservesPendingOnEqualityAndClearsBeforeTheCallback() {
         val height = FluidScalarPublication()
         val amount = FluidScalarPublication()

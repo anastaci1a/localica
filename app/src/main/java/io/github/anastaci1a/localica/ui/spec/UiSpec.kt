@@ -299,6 +299,39 @@ internal fun <Coordinator> List<Pair<() -> Coordinator, (Coordinator) -> Unit>>.
     }
 }
 
+/** Time values supplied by the existing property owner after it clears the priming flag. */
+internal data class FluidPropertyFrameTime(val previousTime: Double, val delta: Double, val refreshInterval: Double) {
+    fun primed(now: Double, driverInterval: () -> Double): FluidPropertyFrameTime {
+        val interval = if (refreshInterval != 0.0) refreshInterval else {
+            val driver = driverInterval()
+            if (driver > 0.0) driver * Double.fromBits(0x3ff004189374bc6aL) else Double.fromBits(0x3f91156f8c384071L)
+        }
+        return FluidPropertyFrameTime(now + interval * -0.4, 0.0, interval)
+    }
+
+    fun advance(timestamp: Double): FluidPropertyFrameTime {
+        val elapsed = timestamp - previousTime
+        return if (timestamp > 0.0 && elapsed > 0.0) copy(previousTime = timestamp, delta = elapsed) else copy(delta = 0.0)
+    }
+
+    fun entryDelta(accumulated: Double, drag: Double) = (accumulated + delta) / drag
+}
+
+internal fun runFluidPropertyFrame(
+    targetTimestamp: Double, preparedTransaction: Boolean, solve: () -> Boolean,
+    consumeSamples: () -> Unit, postTick: MutableList<() -> Unit>, normalizedChange: () -> Double,
+    flush: (Double, Boolean, Boolean) -> Unit,
+) {
+    val solverTransaction = solve()
+    consumeSamples()
+    while (postTick.isNotEmpty()) {
+        val callbacks = postTick.toList()
+        postTick.clear()
+        callbacks.forEach { it() }
+    }
+    flush(targetTimestamp, preparedTransaction || solverTransaction, normalizedChange() >= 1.0)
+}
+
 internal data class FluidModifierFormat(val valueCount: Int, val additive: Boolean)
 
 /** The admitted presentation owner supplies one store per receiving layer. */
