@@ -422,6 +422,48 @@ class FluidPopupComponentsTest {
         for (i in 0..15) assertEquals((positive[i] * -2.0).toRawBits(), scaled[i].toRawBits())
     }
 
+    @Test fun sharedZoomBindsPlanarEndpointsAndOnlyRecomposesTheVerifiedDiagonalDomain() {
+        fun matrix(x: Double, y: Double, z: Double) = List(16) { index ->
+            when (index) {
+                0 -> x
+                5 -> y
+                10 -> z
+                15 -> 1.0
+                else -> 0.0
+            }.toRawBits()
+        }
+        val request = FluidContentBlurRequest(1.375, 4.0)
+        val typed = requireNotNull(request.typedZoom())
+        assertEquals(matrix(1.375, 1.375, 1.0), request.zoomMatrix().map(Double::toRawBits))
+        assertEquals(matrix(1.375, 1.375, 1.0), typed.diagonalMatrix()?.map(Double::toRawBits))
+        assertEquals(0, typed.rotationDirection)
+        assertEquals(listOf(0.0, -0.0, 0.0).map(Double::toRawBits), (0..2).map { typed[it].toRawBits() })
+        val identity = requireNotNull(FluidContentBlurIn.typedZoom())
+        assertEquals(matrix(1.0, 1.0, 1.0), identity.diagonalMatrix()?.map(Double::toRawBits))
+        val values = FluidZoomValues({ a, b -> (0..15).all { a[it] == b[it] } })
+        val sample = SpringKernel.fromInstalled(100.0, 20.0).advanceTransform(identity to values.zeroVelocity, typed, 0.08, values)
+        val presented = requireNotNull(sample.first.diagonalMatrix())
+        assertTrue(presented[0] > 1.0 && presented[0] < 1.375)
+        assertEquals(matrix(presented[0], presented[0], 1.0), presented.map(Double::toRawBits))
+
+        val subnormal = requireNotNull(FluidZoomTransform.fromPlanarScale(1.6e-162))
+        assertEquals(kotlin.math.sqrt(Double.MIN_VALUE).toRawBits(), subnormal[3].toRawBits())
+        for (scale in listOf(Double.MIN_VALUE, Double.MAX_VALUE, 0.0, -1.0, Double.NaN)) {
+            assertEquals(null, FluidZoomTransform.fromPlanarScale(scale))
+        }
+        val lanes = DoubleArray(16) { typed[it] }
+        lanes[3] = 1.25
+        lanes[4] = 1.5
+        lanes[5] = 0.75
+        assertEquals(matrix(1.25, 1.5, 0.75), FluidZoomTransform(lanes, 0).diagonalMatrix()?.map(Double::toRawBits))
+        for (index in listOf(0, 6, 9, 12, 15)) {
+            val outside = lanes.copyOf().also { it[index] = 0.125 }
+            assertEquals(null, FluidZoomTransform(outside, 0).diagonalMatrix())
+        }
+        val invalidScale = lanes.copyOf().also { it[3] = Double.POSITIVE_INFINITY }
+        assertEquals(null, FluidZoomTransform(invalidScale, 0).diagonalMatrix())
+    }
+
     @Test fun installedPropertyScalesFinishVelocityWithItsPhysicalDamping() {
         val spring = FluidPopupSpringSettings(0.68, 0.37)
         assertEquals(0.08008676736384175.toRawBits(), spring.velocityScalingFactor.toRawBits())
