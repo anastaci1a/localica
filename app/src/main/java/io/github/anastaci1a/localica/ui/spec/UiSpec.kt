@@ -256,6 +256,20 @@ internal fun fluidContentBlurOut(height: Double, maxScale: () -> Double, minScal
 }
 internal val FluidContentBlurIn = FluidContentBlurRequest(1.0, 0.0)
 
+internal object FluidSharedBlurSpec {
+    const val additive = false
+
+    fun zoomOrigin(model: DoubleArray?) = model ?: DoubleArray(16) { if (it % 5 == 0) 1.0 else 0.0 }
+    fun radiusOrigin(model: Double?) = model ?: 0.0
+
+    fun publishRadius(publication: FluidScalarPublication, write: (Double, Double, Boolean) -> Unit) {
+        publication.consume { sample ->
+            val radius = if (sample.value <= 0.0) 0.0 else sample.value
+            write(radius, sample.velocity, additive)
+        }
+    }
+}
+
 internal enum class FluidPopupChannel(val key: String, val value: Value) {
     DestinationOpacity("opacity", Value.PresentationScalar), ContentZoom("sublayerTransform", Value.Transform),
     GaussianRadius("filters.gaussianBlur.inputRadius", Value.ScaledScalar), LensHeight("effect.height", Value.CoarseScalar),

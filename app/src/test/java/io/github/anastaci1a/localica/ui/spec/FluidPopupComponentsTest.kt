@@ -621,6 +621,33 @@ class FluidPopupComponentsTest {
         assertEquals(listOf("first commit", "after commit"), events)
     }
 
+    @Test fun sharedBlurOriginsAndPublishedRadiusPreserveTheTypedBody() {
+        val identity = FluidSharedBlurSpec.zoomOrigin(null)
+        assertEquals(listOf(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0), identity.toList())
+        val zoom = identity.copyOf().also { it[0] = 1.2 }
+        assertTrue(FluidSharedBlurSpec.zoomOrigin(zoom) === zoom)
+        assertEquals(0.0.toRawBits(), FluidSharedBlurSpec.radiusOrigin(null).toRawBits())
+        assertEquals((-0.0).toRawBits(), FluidSharedBlurSpec.radiusOrigin(-0.0).toRawBits())
+        assertFalse(FluidSharedBlurSpec.additive)
+
+        val nan = Double.fromBits(0x7ff8000000000042L)
+        val values = listOf(-7.0 to 0.0, -0.0 to 0.0, nan to nan, 3.25 to 3.25)
+        for ((input, expected) in values) {
+            val body = FluidScalarSpringBody(input, -2.25)
+            val publication = FluidScalarPublication()
+            publication.queueTick(body, 4.0, false) { _, _ -> error("No previous value") }
+            FluidSharedBlurSpec.publishRadius(publication) { radius, velocity, additive ->
+                assertEquals(expected.toRawBits(), radius.toRawBits())
+                assertEquals((-2.25).toRawBits(), velocity.toRawBits())
+                assertFalse(additive)
+            }
+            assertEquals(input.toRawBits(), body.value.toRawBits())
+        }
+        val destinationWrites = mutableListOf<Double>()
+        FluidDestinationBlend(0.5, -1.0).present { _, value -> destinationWrites += value }
+        assertEquals(listOf(0.5, -1.0), destinationWrites)
+    }
+
     @Test fun lensModifierReusesOnlyACompatibleOrdinaryAssociation() {
         val channel = FluidPopupChannel.LensHeight
         val format = FluidModifierFormat(1, additive = false)
