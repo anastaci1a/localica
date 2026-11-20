@@ -174,6 +174,7 @@ class NestedGlassRegistrationTest {
             Element("silhouette", 200f, 48f, null, GlassSilhouette { GlassSilhouetteGeometry(splitPillBodies(it, 0f)) }))
         val poses = listOf(GlassShape(), GlassShape(pressDepth = -.24f),
             GlassShape(strain = .15f, pressDepth = -.08f, drift = Offset(.06f, -.04f)))
+        val tilePhase = 2.dp
         var element by mutableStateOf(elements[0])
         var pose by mutableStateOf(poses[0])
         var power by mutableFloatStateOf(0f)
@@ -191,8 +192,9 @@ class NestedGlassRegistrationTest {
                 Box(Modifier.size(360.dp, 200.dp).testTag("live-body-scene").onGloballyPositioned { scene = it }) {
                     Canvas(Modifier.fillMaxSize().onGloballyPositioned { backing = it }.recordFrostedBackdrop(source)) {
                         val cell = 16.dp.toPx()
-                        for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt())
-                            drawRect(cellColor(x, y), Offset(x * cell, y * cell), Size(cell, cell))
+                        val phase = tilePhase.toPx()
+                        for (y in 0..(size.height / cell).toInt()) for (x in -1..(size.width / cell).toInt())
+                            drawRect(cellColor(x, y), Offset(x * cell + phase, y * cell), Size(cell, cell))
                     }
                     val shown = element
                     key(shown) {
@@ -207,8 +209,9 @@ class NestedGlassRegistrationTest {
             }
         } }
         val cell = 16f * compose.density.density
-        fun cellAt(p: Offset) = cellColor(floor(p.x / cell).toInt(), floor(p.y / cell).toInt())
-        fun clearOfEdges(p: Offset) = listOf(p.x, p.y).all { (it - floor(it / cell) * cell) in 3f..cell - 3f }
+        val phase = with(compose.density) { tilePhase.toPx() }
+        fun cellAt(p: Offset) = cellColor(floor((p.x - phase) / cell).toInt(), floor(p.y / cell).toInt())
+        fun clearOfEdges(p: Offset) = listOf(p.x - phase, p.y).all { (it - floor(it / cell) * cell) in 3f..cell - 3f }
         for (shown in elements) for (shape in poses) for (refraction in listOf(0f, 1f)) {
             compose.runOnIdle { element = shown; pose = shape; power = refraction; stage++ }
             compose.waitForIdle()
