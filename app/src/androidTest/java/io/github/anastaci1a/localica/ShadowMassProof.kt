@@ -88,7 +88,8 @@ internal fun verifyShadowMassCallers(rule: ComposeContentTestRule, finalButtons:
                                 val node = rememberWindowCaster(plane, "mass-native")
                                 val field = rememberNativeSurfaceField(plane, node, 1f)
                                 Box(body.drawWithContent {
-                                    field.draw(this, 1f, 1f, 24.dp.toPx(), GlassBodyTransform(), null, null) { drawContent() }
+                                    field.draw(this, 1f, 1f, 24.dp.toPx(), GlassBodyTransform(), null, null,
+                                        outline = null, localOrigin = { null }) { drawContent() }
                                 }.background(Color.Red))
                             }
                             "selection" -> {
