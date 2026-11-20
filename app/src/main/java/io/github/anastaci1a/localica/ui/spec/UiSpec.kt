@@ -691,6 +691,32 @@ internal object FluidGaussianSpec {
             jointTiles && simdShuffleAndFill && edgeMode != 1 && !hasShape && !reinterpretedSource
     }
 
+    enum class SimdWidth(val countThreshold: Int, val radius: Int, val tileId: Int, val computeId: Int) {
+        Taps27(12, 13, 4, 0x24), Taps23(10, 11, 5, 0x23), Taps19(8, 9, 6, 0x22),
+        Taps15(6, 7, 7, 0x21), Taps11(4, 5, 8, 0x20), Taps7(3, 3, 9, 0x1f), Taps5(0, 2, 10, 0x1e);
+
+        val taps get() = 2 * radius + 1
+        val tileName get() = "tile_simd_blur_$taps"
+        val computeName get() = "compute_simd_blur_$taps"
+    }
+
+    data class SimdTapUpload(val width: SimdWidth, val halfWeights: ShortArray) {
+        val weightIndex get() = 1
+        val weightBytes get() = 2 * halfWeights.size
+    }
+
+    /** The admitted axis supplies the generated weights from the outermost tap to the centre. */
+    fun simdTapUpload(weights: FloatArray, narrowHalf: (Float) -> Short): SimdTapUpload {
+        val width = SimdWidth.entries.firstOrNull { weights.size > it.countThreshold } ?: SimdWidth.Taps5
+        val centre = width.radius
+        val first = centre + 1 - weights.size
+        require(first >= 0)
+        val packed = ShortArray(width.taps)
+        weights.forEachIndexed { index, weight -> packed[first + index] = narrowHalf(weight) }
+        for (index in 0 until centre) packed[centre + 1 + index] = packed[centre - 1 - index]
+        return SimdTapUpload(width, packed)
+    }
+
     enum class Decimation(
         val factor: Int, val textureFunction: Int, val computeFunction: Int, val threadDivisor: UInt, val tileWeightBits: Int,
     ) {
