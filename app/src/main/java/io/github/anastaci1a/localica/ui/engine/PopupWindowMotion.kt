@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.ui.spec.*
-import kotlin.math.abs
 
 /** #920: a popup's one stored takeover phase (SPEC.md section 2); every takeover flag is a view of it. */
 internal enum class PopupTakeover { Closed, Admitting, InWindow, Restoring }
@@ -56,7 +55,6 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private var fluidOrigin: FrameStamp? = null
     private var fluidTick: FrameStamp? = null
     private var fluidIntent: Boolean? = null
-    private var fluidHeight = 0.0
     private var fluidBasis: ExpansionBasis? = null
     private var blurSpring: FluidPopupSpringSettings? = null
     private var blurEntry = FluidScalarSpringEntry(FluidScalarSpringBody(0.0, 0.0), 0.0, FluidScalarSpringBody(0.0, 0.0))
@@ -130,7 +128,6 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         val from = if (shown) basis.startBounds else basis.endBounds
         val to = if (shown) basis.endBounds else basis.startBounds
         val growing = fluidThroughGrows(from.width.toDouble(), from.height.toDouble(), to.width.toDouble(), to.height.toDouble())
-        fluidHeight = maxOf(abs(from.height.toDouble()), abs(to.height.toDouble()))
         val inputs = FluidPopupRuntimeInputs
         val eject = inputs.liveMainEject ?: FluidMainEjectDefaults
         val absorb = inputs.liveMainAbsorb ?: inputs.constructorMainAbsorb
@@ -152,15 +149,15 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         val content = FluidPopupRuntimeInputs.content
         pendingFluid.drainFluidTimeline((stamp.nanos - origin.nanos) / 1e9, FluidPopupRuntimeInputs.effectiveSpeed ?: content.speed, content.amplifyDelays,
             { clock.context?.durationScale?.toDouble() ?: 1.0 }, firstOnly) { step, speed ->
-            val blur = when (step.action) {
-                FluidTimelineAction.BlurOut -> fluidContentBlurOut(fluidHeight, { content.maxScale }, { content.minScale })
-                FluidTimelineAction.BlurIn -> FluidContentBlurIn
+            val radius = when (step.action) {
+                FluidTimelineAction.BlurOut -> FluidSharedBlurSpec.blurOutRadius
+                FluidTimelineAction.BlurIn -> FluidContentBlurIn.gaussianRadius
                 else -> null
             }
             // The constructor blur behaviors disable smoothing and projection. Live step modifiers are open.
-            if (blur != null && FluidPopupRuntimeInputs.liveContent == null) {
+            if (radius != null && FluidPopupRuntimeInputs.liveContent == null) {
                 blurSpring = step.propertySpring(speed)
-                blurEntry = blurControls.immediateEntry(fluidBlurRadius, blur.gaussianRadius, blurEntry, blurEntry.target, blurSpring, null)
+                blurEntry = blurControls.immediateEntry(fluidBlurRadius, radius, blurEntry, blurEntry.target, blurSpring, null)
             }
         }
     }

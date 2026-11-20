@@ -462,14 +462,17 @@ private fun fluidZoomDiagonal(x: Double, y: Double, z: Double) = DoubleArray(16)
 internal fun fluidContentBlurOut(height: Double, maxScale: () -> Double, minScale: () -> Double): FluidContentBlurRequest {
     val fraction = (height + (-215.0)) / 305.0
     val t = if (fraction.isNaN()) 1.0 else fraction.coerceIn(0.0, 1.0)
-    return FluidContentBlurRequest((1.0 - t) * maxScale() + t * minScale(), 4.0)
+    return FluidContentBlurRequest((1.0 - t) * maxScale() + t * minScale(), FluidSharedBlurSpec.blurOutRadius)
 }
 internal val FluidContentBlurIn = FluidContentBlurRequest(1.0, 0.0)
 
 internal object FluidSharedBlurSpec {
     const val additive = false
+    const val blurOutRadius = 4.0
 
-    fun zoomOrigin(model: DoubleArray?) = model ?: FluidContentBlurIn.zoomMatrix()
+    fun zoomOrigin(model: DoubleArray?, resolvedDefault: () -> DoubleArray?) = model ?: resolvedDefault()
+    fun skipsZoomMutation(current: DoubleArray, requested: DoubleArray) =
+        current.size == 16 && requested.size == 16 && current.indices.all { current[it] == requested[it] }
     fun radiusOrigin(model: Double?) = model ?: 0.0
 
     fun publishRadius(publication: FluidScalarPublication, write: (Double, Double, Boolean) -> Unit) {
