@@ -109,7 +109,7 @@ class GlassTouchLightTest {
                 val p = if (extent.maxDimension < 120f) 16f else 4f
                 assertEquals((1f + shape.lift * (p / extent.maxDimension)) * exp(s), applied.scale.x, 0f)
                 assertEquals((1f + shape.lift * (p / extent.maxDimension)) * exp(-s), applied.scale.y, 0f)
-                if (shape.lift > 0f) assertTrue("translated contact drifts", applied.drift.getDistance() > 0f)
+                assertEquals(Offset(shape.drift.x * extent.width, shape.drift.y * extent.height), applied.drift)
                 var draws = 0
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), extent) {
                     val witness = object : DrawScope by this {
