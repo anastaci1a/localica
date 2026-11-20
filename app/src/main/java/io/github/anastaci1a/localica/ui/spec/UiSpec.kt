@@ -48,12 +48,13 @@ enum class PopupDirection { Open, Close, Gate }
 @Immutable data class PopupMotionModel(val revision: String, val open: SpringLaw, val close: SpringLaw, val crossOpen: SpringLaw, val gate: SpringLaw,
     val snapAspect: Float, val preparedRamp: Float, val rampBlend: Float, val variants: Map<PopupKind,PopupMotionVariant>,
     /** The phase band [-band, 1 + band] every spring channel must stay in; admission and the engine's extremum proofs both read it. */
-    val band: Float = StockPopupExpansionBand, val centre: SpringLaw? = null, val centreBand: Float = band) {
+    val band: Float = StockPopupExpansionBand, val centre: PopupSecondPhase? = null,
+    val style: PopupMotionStyle = PopupMotionStyle.EdgeSpring) {
     fun variant(kind: PopupKind): PopupMotionVariant = variants[kind] ?: PopupMotionVariant.Base
     internal val reversalReach by lazy { popupReversalReach(this) }
     /** One channel's law: the main axis by [direction]; only a [cross] open uses the snap law; close and gate run the main law on every edge. */
     @Suppress("UNUSED_PARAMETER") fun law(kind: PopupKind, direction: PopupDirection, cross: Boolean): SpringLaw =
-        if(cross && direction==PopupDirection.Open) centre ?: crossOpen else when(direction) { PopupDirection.Open -> open; PopupDirection.Close -> close; PopupDirection.Gate -> gate }
+        if(cross && direction==PopupDirection.Open) centre?.spring ?: crossOpen else when(direction) { PopupDirection.Open -> open; PopupDirection.Close -> close; PopupDirection.Gate -> gate }
 }
 /** Provenance of [StockPopupMotion]: revision 855-ios262-60fps-interim (feedback/issues/855-apple-popup-motion/pass2/INTERIM-MODEL.md,
  * lead swap 2026-11-11), -r926: iOS 26.2 60 fps menu fits open (28, .78), close (20, 1) with the gate = close; open cross snap (120, 1) unchanged from
@@ -64,8 +65,7 @@ internal const val StockPopupMotionRevision = "855-ios262-60fps-interim-r926"
 internal val StockPopupMotion = PopupMotionModel(StockPopupMotionRevision, SpringLaw(28f,.78f), SpringLaw(20f,1f), SpringLaw(120f,1f), SpringLaw(20f,1f), 1.4f, .25f, .05f,
     mapOf(PopupKind.Menu to PopupMotionVariant.Base, PopupKind.RowMenu to PopupMotionVariant.Base, PopupKind.BottomMenu to PopupMotionVariant.CrossAxisSnap, PopupKind.Dialog to PopupMotionVariant.Base,
         PopupKind.SelectionPill to PopupMotionVariant.Base, PopupKind.Legacy to PopupMotionVariant.Legacy))
-// Provisional neutral law while #1083 pass 2 determines the fluid shape; replace only this spec.
-internal fun fluidPopupMotion() = StockPopupMotion.copy(centre = StockPopupMotion.open)
+internal fun fluidPopupMotion() = StockPopupMotion.copy(style = PopupMotionStyle.Fluid, centre = FluidPopupRuntimeInputs.outlineCentre)
 internal fun fluidPreviewMorphs(compact: Boolean, overlapsPreview: () -> Boolean) =
     compact && overlapsPreview()
 internal fun fluidIntermediateY(sourceY: Double, targetY: Double, ratio: Double, cap: Double) =
@@ -90,6 +90,19 @@ internal class FluidPopupSpringSettings(
         FluidPopupSpringSettings(dampingRatio, multiplier * response, retargetImpulse, multiplier * trackingResponse)
 }
 internal val FluidMainEjectDefaults = FluidPopupSpringSettings(dampingRatio = 0.75, response = 0.5)
+
+@Immutable data class PopupSecondPhase(val spring: SpringLaw, val band: Float, val edgeShares: (DoubleArray) -> DoubleArray)
+
+internal object FluidPopupRuntimeInputs {
+    val outlineCentre: PopupSecondPhase? = null
+    val liveMainEject: FluidPopupSpringSettings? = null
+    val liveMainAbsorb: FluidPopupSpringSettings? = null
+    val constructorMainAbsorb = FluidPopupSpringSettings(0.8, 0.7)
+    val lensDimension: ((growing: Boolean, changing: Boolean) -> Double?)? = null
+    val effectiveSpeed: Double? = null
+    val pointScale: Double? = null
+    val radiusEpsilonSquared get() = fluidRadiusEpsilonSquared(pointScale ?: 1.0)
+}
 
 internal data class FluidContentSettings(
     val minScale: Double, val maxScale: Double,
@@ -963,11 +976,20 @@ internal object FluidLensingSpec {
         largerAnchorY: Double, convertedLargerHeight: Double,
         mainEject: FluidPopupSpringSettings, mainAbsorb: FluidPopupSpringSettings,
     ): List<Request> {
-        if (!enabled) return emptyList()
         val d0 = if (largerAnchorY == 0.5) convertedLargerHeight else smallerShort
+        return requests(enabled, growing, mainEject, mainAbsorb) { changing ->
+            if (growing == changing) largerShort else d0
+        }
+    }
+
+    fun requests(
+        enabled: Boolean, growing: Boolean, mainEject: FluidPopupSpringSettings, mainAbsorb: FluidPopupSpringSettings,
+        dimension: (changing: Boolean) -> Double?,
+    ): List<Request> {
+        if (!enabled) return emptyList()
         return listOf(
-            Request(FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.2)), 1.0, if (growing) d0 else largerShort),
-            Request(FluidPopupStep(0.0, fluidThroughMainSpring(growing, mainEject, mainAbsorb)), 1.0, if (growing) largerShort else d0),
+            Request(FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.2)), 1.0, dimension(false)),
+            Request(FluidPopupStep(0.0, fluidThroughMainSpring(growing, mainEject, mainAbsorb)), 1.0, dimension(true)),
             Request(FluidPopupStep(fluidThroughTailDelay(growing), FluidPopupSpringSettings(1.0, if (growing) 0.3 else 0.4)), 0.0, null),
         )
     }
@@ -1348,16 +1370,17 @@ internal fun springOvershoot(zeta: Double): Double = if(zeta>=1) 0.0 else exp(-P
 internal fun popupMotionAdmission(m: PopupMotionModel): List<String> {
     val errors=mutableListOf<String>(); val band=m.band
     if(!(band.isFinite() && band>0f && band<=.1f)) return listOf("band")
-    if(m.centre!=null && !(m.centreBand.isFinite() && m.centreBand>0f)) return listOf("centreBand")
-    for((key,law) in listOf("open" to m.open,"close" to m.close,"crossOpen" to m.crossOpen,"gate" to m.gate)+listOfNotNull(m.centre?.let { "centre" to it })) {
+    val centreBand = m.centre?.band ?: band
+    if(!(centreBand.isFinite() && centreBand>0f)) return listOf("centreBand")
+    for((key,law) in listOf("open" to m.open,"close" to m.close,"crossOpen" to m.crossOpen,"gate" to m.gate)+listOfNotNull(m.centre?.let { "centre" to it.spring })) {
         if(!(law.omega.isFinite() && law.zeta.isFinite() && law.omega in 1f..400f && law.zeta in (if(key=="centre") .3f else .5f)..4f)) { errors+=key; continue }
         if(key!="open" && key!="centre" && law.zeta<1f) errors+="$key.overshoot"
-        if((key=="open" || key=="centre") && springOvershoot(law.zeta.toDouble())>(if(key=="centre") m.centreBand else band)) errors+="$key.overshoot"
-        if(popupLawHorizon(law,MinimumAnimationSpeed.toDouble(),if(key=="centre") 1.0+m.centreBand else 1.05)>2.0) errors+="$key.horizon"
+        if((key=="open" || key=="centre") && springOvershoot(law.zeta.toDouble())>(if(key=="centre") centreBand else band)) errors+="$key.overshoot"
+        if(popupLawHorizon(law,MinimumAnimationSpeed.toDouble(),if(key=="centre") 1.0+centreBand else 1.05)>2.0) errors+="$key.horizon"
     }
     if(!(m.snapAspect.isFinite() && m.snapAspect>1f)) errors+="snapAspect"
     if(!(m.preparedRamp.isFinite() && m.preparedRamp in 0f..(.5f) && m.rampBlend.isFinite() && m.rampBlend>0f && m.rampBlend<=.25f)) errors+="ramp"
-    if(errors.isEmpty()) for((pair,peak) in m.reversalReach) { val limit=if(pair.startsWith("centre")) m.centreBand else band; if(peak.start< -limit || peak.endInclusive>1+limit) errors+="reversal.$pair" }
+    if(errors.isEmpty()) for((pair,peak) in m.reversalReach) { val limit=if(pair.startsWith("centre")) centreBand else band; if(peak.start< -limit || peak.endInclusive>1+limit) errors+="reversal.$pair" }
     if(PopupKind.entries.any { it !in m.variants } || m.variants[PopupKind.Legacy]!=PopupMotionVariant.Legacy || m.variants.any { (k,v) -> k!=PopupKind.Legacy && v==PopupMotionVariant.Legacy }) errors+="variants"
     return errors
 }
@@ -1506,7 +1529,7 @@ internal fun popupReversalReach(m: PopupMotionModel): Map<String,ClosedFloatingP
     }
     fun pairs(open: SpringLaw,prefix: String)=mapOf(prefix+"openClose" to reach(open,0.0,1.0,m.close,0.0),prefix+"closeOpen" to reach(m.close,1.0,0.0,open,1.0),
         prefix+"openGate" to reach(open,0.0,1.0,m.gate,m.preparedRamp.toDouble()),prefix+"gateOpen" to reach(m.gate,0.0,m.preparedRamp.toDouble(),open,1.0))
-    return pairs(m.open,"")+m.centre?.let { pairs(it,"centre") }.orEmpty()
+    return pairs(m.open,"")+m.centre?.let { pairs(it.spring,"centre") }.orEmpty()
 }
 /** The settle horizon of [spring] at [speed] from its worst admitted state, |x0| <= 1.05 and |v0| <= 1.1 omega_eff (A2.2). The parameter is not
  * named law: #884 reserves that name for motion-selecting arguments, and this is the spec's own admission math. */
