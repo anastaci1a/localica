@@ -16,6 +16,8 @@ import io.github.anastaci1a.localica.ui.components.rememberLyricsHeaderSurface
 import io.github.anastaci1a.localica.ui.layout.LyricsHeaderLayout
 import io.github.anastaci1a.localica.ui.layout.LyricsHeaderJoinedLayout
 
+internal fun androidx.compose.ui.geometry.RoundRect.deformed(transform: GlassBodyTransform, pivot: Offset) = deformed(transform.scale, transform.drift, pivot)
+
 /** One joined surface narrows its neck before handing two tangent bodies their
  * independent clocks. Rejoining follows the same geometry in reverse. */
 @Composable
@@ -27,16 +29,17 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     // A fast source tap can finish the still-growing two-action header without
     // substituting a full-width pill at the beginning of preparation.
     val pill = rememberSplitPill { preparation.progress }
-    // Each body casts through the transform its surface draws with, lift and drift included (the anchored left body has neither).
+    // Each body casts through the transform its surface draws with, lift and drift included.
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
     // Separated surfaces are the measured header height square at either end, so their casters are too, posed by the surfaces' own presentation.
     val shadow = rememberGlassSilhouette { size ->
         val joined = contacts.joined
-        if (!preparation.separated) pill.bodies(size).map { it.deformed(joined.body.value.bodyTransform(size, joined.vertical), size.center) }
+        if (!preparation.separated) pill.bodies(size).map { it.deformed(joined.body.value.bodyTransform(size, density, joined.vertical), size.center) }
         else listOf(-1f, 1f).map { side ->
             val left = if (side < 0f) 0f else size.width - size.height
             val body = RoundRect(left, 0f, left + size.height, size.height, CornerRadius(size.height / 2f))
             val pose = TriggerRole.LyricsHeader(contacts, preparation, true, side).presentation(size.height)
-            val drawn = pose.shape.bodyTransform(Size(size.height, size.height), pose.vertical, anchored = side < 0f)
+            val drawn = pose.shape.bodyTransform(Size(size.height, size.height), density, pose.vertical)
             body.deformed(drawn.copy(drift = drawn.drift + Offset(pose.horizontalShift, 0f)), body.center)
         }
     }

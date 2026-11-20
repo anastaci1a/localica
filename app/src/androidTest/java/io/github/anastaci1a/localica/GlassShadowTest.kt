@@ -61,7 +61,7 @@ class GlassShadowTest {
         cache.update(joined, model)
         val neighbors = GlassShadowGeometry().also { it.update(emptyList(), model, neighbors = joined) }
         val exclusion = GlassShadowExclusion(joined, androidx.compose.ui.geometry.Offset.Zero,
-            androidx.compose.ui.geometry.Size(100f, 100f), 1f, 1f, 0f, 0f)
+            androidx.compose.ui.geometry.Size(100f, 100f), io.github.anastaci1a.localica.ui.GlassBodyTransform(), 0f)
         for (index in 0 until model.count) if (model.expansion(index) < 0f) {
             val expansion = model.expansion(index)
             val expected = androidx.compose.ui.geometry.Rect(20f - expansion, 20f - expansion + model.shift,
@@ -69,6 +69,19 @@ class GlassShadowTest {
             org.junit.Assert.assertEquals(expected, cache.rings[index].getBounds())
             val ring = checkNotNull(exclusion.ring(index, neighbors, model.count, androidx.compose.ui.geometry.Offset.Zero))
             org.junit.Assert.assertEquals(expected, ring.getBounds())
+            for (dy in listOf(-8f, 0f, 16f)) {
+                val t = io.github.anastaci1a.localica.ui.GlassBodyTransform(
+                    androidx.compose.ui.geometry.Offset(1.25f, .75f), androidx.compose.ui.geometry.Offset(12f, dy))
+                val transformed = GlassShadowExclusion(joined, androidx.compose.ui.geometry.Offset.Zero,
+                    androidx.compose.ui.geometry.Size(100f, 100f), t, 0f)
+                val actual = checkNotNull(transformed.ring(index, neighbors, model.count, androidx.compose.ui.geometry.Offset.Zero)).getBounds()
+                fun x(v: Float) = 50f + (v - 50f - 12f) / 1.25f
+                fun y(v: Float) = 50f + (v - 50f - dy) / .75f
+                org.junit.Assert.assertEquals(x(expected.left), actual.left, .0001f)
+                org.junit.Assert.assertEquals(x(expected.right), actual.right, .0001f)
+                org.junit.Assert.assertEquals(y(expected.top), actual.top, .0001f)
+                org.junit.Assert.assertEquals(y(expected.bottom), actual.bottom, .0001f)
+            }
             for (path in listOf(cache.rings[index], ring)) {
                 val region = android.graphics.Region()
                 region.setPath(path.asAndroidPath(), android.graphics.Region(0, 0, 100, 100))
@@ -124,7 +137,7 @@ class GlassShadowTest {
                     val home = androidx.compose.ui.geometry.Rect(120.dp.toPx(),80.dp.toPx(),180.dp.toPx(),140.dp.toPx())
                     val receiver = if (mode == 0) null else field.receiver(
                         if (mode == 2) home.translate(androidx.compose.ui.geometry.Offset(400.dp.toPx(),0f)) else home,
-                        30.dp.toPx(),size,1f,1f,shift,physicalSize=home.size)
+                        30.dp.toPx(),size,io.github.anastaci1a.localica.ui.GlassBodyTransform(drift=androidx.compose.ui.geometry.Offset(shift,0f)),physicalSize=home.size)
                     if (retainedMode) with(retained) { draw(listOf(body to 1f),1f,.6f,receiver) }
                     else glassShadows(listOf(body to 1f),1f,.6f,geometry,receiver=receiver)
                 })
@@ -165,7 +178,7 @@ class GlassShadowTest {
         compose.waitUntil(5000) { retained.rasterizations > 0 }
         compose.runOnIdle {
             val home=androidx.compose.ui.geometry.Rect(100f,200f,1300f,230f)
-            val first=requireNotNull(field.receiver(home,15f,androidx.compose.ui.geometry.Size(180f,90f),1f,1f,0f))
+            val first=requireNotNull(field.receiver(home,15f,androidx.compose.ui.geometry.Size(180f,90f),io.github.anastaci1a.localica.ui.GlassBodyTransform()))
             val count=field.rasterizations
             assertTrue("Total padded mask budget",first.mask.width<=96 && first.mask.height<=96)
             assertTrue("Narrow home retains enough cross-section samples",first.mask.height>=21)
@@ -175,12 +188,12 @@ class GlassShadowTest {
                 org.junit.Assert.assertEquals(1f,mask[x,2].alpha,0f)
                 org.junit.Assert.assertEquals(1f,mask[x,mask.height-1].alpha,0f)
             }
-            for (sx in listOf(.7f,1f,1.3f)) for (sy in listOf(.8f,1f,1.2f)) for (dx in listOf(-13f,0f,19f)) {
-                val next=requireNotNull(field.receiver(home.translate(androidx.compose.ui.geometry.Offset(dx,0f)),15f,
-                    androidx.compose.ui.geometry.Size(180f,90f),sx,sy,dx,physicalSize=home.size))
+            for (sx in listOf(.7f,1f,1.3f)) for (sy in listOf(.8f,1f,1.2f)) for (dx in listOf(-13f,0f,19f)) for (dy in listOf(-17f,0f,23f)) {
+                val next=requireNotNull(field.receiver(home.translate(androidx.compose.ui.geometry.Offset(dx,dy)),15f,
+                    androidx.compose.ui.geometry.Size(180f,90f),io.github.anastaci1a.localica.ui.GlassBodyTransform(androidx.compose.ui.geometry.Offset(sx,sy),androidx.compose.ui.geometry.Offset(dx,dy)),physicalSize=home.size))
                 org.junit.Assert.assertSame("Caster motion reuses mask",first.mask,next.mask)
             }
-            org.junit.Assert.assertEquals("27 transformed samples do not rasterize",count,field.rasterizations)
+            org.junit.Assert.assertEquals("27 original and 54 added Y-transformed samples do not rasterize",count,field.rasterizations)
         }
     }
 

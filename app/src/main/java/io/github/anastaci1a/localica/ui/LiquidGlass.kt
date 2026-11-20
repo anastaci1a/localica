@@ -46,6 +46,18 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 
+/** Selector lenses and switch thumbs: depth-scaled axes about the centre, no lift or drift. */
+internal fun GlassShape.lensTransform(vertical: Boolean) = GlassBodyTransform(Offset(scaleX(vertical), scaleY(vertical)))
+
+/** One size law at the current drawn dimensions, independent of spring publication. */
+internal fun GlassShape.bodyTransform(size: Size, density: Float, vertical: Boolean = false): GlassBodyTransform {
+    val s = if (vertical) -strain else strain
+    val long = size.maxDimension / density
+    val gain = if (size.isEmpty()) 0f else FlexSpec.pressPoints(long, size.minDimension / density) / long
+    val m = pressDepth?.let { 1f + (-gain / .24f) * it } ?: (1f + lift * gain)
+    return GlassBodyTransform(Offset(m * kotlin.math.exp(s), m * kotlin.math.exp(-s)), Offset(drift.x * size.width, drift.y * size.height))
+}
+
 internal fun glassBackdropBlurRadius(density: Float): Float {
     val k = density.coerceIn(2f, 3f)
     return (if (k <= 2.625f) 5.165593576f + (5.755008754f - 5.165593576f) * ((k - 2f) / .625f) else 5.755008754f + (6.062170952f - 5.755008754f) * ((k - 2.625f) / .375f)) / (.5f * GlassBlurDefault)
@@ -168,7 +180,7 @@ internal fun rememberGlassContact(shared: GlassContact? = null, bodyOverride: Fl
 @Composable
 internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     presentation: () -> GlassShape = { contact.body.value }, admit: () -> Boolean = { true },
-    transform: (Size) -> GlassBodyTransform = { presentation().bodyTransform(it, contact.vertical) },
+    transform: (Size) -> GlassBodyTransform = androidx.compose.ui.platform.LocalDensity.current.density.let { d -> { presentation().bodyTransform(it, d, contact.vertical) } },
     onPressed: (Boolean) -> Unit = {}): Modifier {
     return glassBody(transform).glassTouch(contact, admit, onPressed)
 }
@@ -297,7 +309,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact, bodyOverride)
     val contactShape = contactPresentation ?: modifier.glassSurfaceContactPresentation() ?: { contact.body.value }
     val appliedTransform: (Size) -> GlassBodyTransform = { extent -> if (pressFeedback || anchor != null)
-        contactShape().bodyTransform(extent, contact.vertical, anchored = anchor != null) else GlassBodyTransform() }
+        contactShape().bodyTransform(extent, density.density, contact.vertical) else GlassBodyTransform() }
     val surfaceClip = remember(silhouette, cornerRadius) {
         silhouette?.let { outline -> androidx.compose.foundation.shape.GenericShape { extent, _ ->
             addPath(outline.frame(extent).path)
@@ -443,7 +455,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
 
 @Composable
 internal fun ContactGlowBacking(modifier: Modifier, glow: () -> GlassGlow, shape: () -> GlassShape, vertical: Boolean, cache: ContactGlowCache,
-    sample: () -> Color?, transform: (Size) -> GlassBodyTransform = { shape().bodyTransform(it, vertical, anchored = true) }, geometry: DrawScope.() -> Pair<Rect, Float> = { Rect(Offset.Zero, size) to 0f }, content: @Composable () -> Unit) {
+    sample: () -> Color?, transform: (Size) -> GlassBodyTransform = { shape().lensTransform(vertical) }, geometry: DrawScope.() -> Pair<Rect, Float> = { Rect(Offset.Zero, size) to 0f }, content: @Composable () -> Unit) {
     val background = MaterialTheme.colorScheme.background
     ContactLightBacking(modifier, geometry = geometry, background = background, enabled = { val frame = glow(); frame.big > 0f || frame.little > 0f || frame.retiring.any { it.little > 0f } },
         effect = { g -> cache.effect(glow(), transform(size), g.first, density, background, size.height, g.second) }, reduction = { cache.meanEffect(background) },
@@ -459,7 +471,7 @@ internal fun DrawScope.contactGlowPasses(glow: GlassGlow, body: GlassShape, vert
     return (listOf(GlassGlow(big = glow.big)) + glow.retiring + glow.copy(big = 0f, retiring = emptyList())).mapNotNull { frame ->
         val local = frame.big == 0f; val alpha = if (local) frame.little else frame.big
         if (alpha <= 0f) null else {
-            val point = bounds.topLeft + (transform ?: body.bodyTransform(bounds.size, vertical, anchored = true)).localPoint(frame.point, bounds.size)
+            val point = bounds.topLeft + (transform ?: body.lensTransform(vertical)).localPoint(frame.point, bounds.size)
             val paint = cache.paint(local, white); val mask = if (local) cache.mask(sigma) else null
             val pass: io.github.anastaci1a.localica.ui.engine.ContactLightPass = { backing ->
                 clipPath(cache.roundedPath(bounds, corner)) {

@@ -17,7 +17,8 @@ internal class S1OpticalState(val strain: Float, rawDepth: Float, gain: Float?) 
     val depth = .24f * tanh(rawDepth / .24f)
     val thickness = exp(depth)
     private val scale = gain?.let { 1f + it * rawDepth }
-    val shape get() = GlassShape(strain, depth, scale)
+    private val pressDepth = gain?.let { rawDepth }
+    val shape get() = GlassShape(strain, depth, pressDepth)
     fun scaleX(vertical: Boolean) = scale?.let { it * exp(if (vertical) -strain else strain) } ?: exp((if (vertical) -strain else strain) - depth / 2)
     fun scaleY(vertical: Boolean) = scale?.let { it * exp(if (vertical) strain else -strain) } ?: exp((if (vertical) strain else -strain) - depth / 2)
 }
@@ -63,8 +64,10 @@ class GlassBodyOpticsTest {
             assertEquals(original.depth.toBits(), shape.depth.toBits())
             assertEquals(original.thickness.toBits(), shape.thickness.toBits())
             for (vertical in listOf(false, true)) {
-                assertEquals(original.scaleX(vertical).toBits(), shape.scaleX(vertical).toBits())
-                assertEquals(original.scaleY(vertical).toBits(), shape.scaleY(vertical).toBits())
+                val size = Size(if (gain == -(16f / 64f) / .24f) 64f else 160f, 44f)
+                val t = if (gain == null) shape.lensTransform(vertical) else shape.bodyTransform(size, 1f, vertical)
+                assertEquals(original.scaleX(vertical).toBits(), t.scale.x.toBits())
+                assertEquals(original.scaleY(vertical).toBits(), t.scale.y.toBits())
             }
             for (alpha in listOf(-.2f, 0f, .37f, 1f)) for (density in listOf(1f, 2.5f)) for (background in 0..2) {
                 val glow = GlassGlow(alpha, alpha * .3f, Offset(if (index % 2 == 0) .25f else 1.25f, -.25f))

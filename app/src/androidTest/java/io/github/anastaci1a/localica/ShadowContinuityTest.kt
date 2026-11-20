@@ -78,7 +78,7 @@ class ShadowContinuityTest {
                         (60 + width).dp.toPx(), 120.dp.toPx(), androidx.compose.ui.geometry.CornerRadius(20.dp.toPx()))
                     // Popup neighbor exclusion selects the live path even at identical geometry.
                     val exclusion = if (moving) GlassShadowExclusion(emptyList(),
-                        androidx.compose.ui.geometry.Offset.Zero, size, 1f, 1f, 0f, 1f) else null
+                        androidx.compose.ui.geometry.Offset.Zero, size, io.github.anastaci1a.localica.ui.GlassBodyTransform(), 1f) else null
                     with(shadow) { draw(listOf(body to 1f).also { currentBodies = it }, 1f, 1f, exclusion = exclusion) }
                 })
             }
@@ -175,7 +175,7 @@ class ShadowContinuityTest {
                             androidx.compose.ui.geometry.CornerRadius(20.dp.toPx())) to 1f
                     }
                     val exclusion = if (moving) GlassShadowExclusion(emptyList(),
-                        androidx.compose.ui.geometry.Offset.Zero, size, 1f, 1f, 0f, 1f) else null
+                        androidx.compose.ui.geometry.Offset.Zero, size, io.github.anastaci1a.localica.ui.GlassBodyTransform(), 1f) else null
                     with(shadow) { draw(bodies.also { currentBodies = it }, 1f, 1f, exclusion = exclusion) }
                 })
         }

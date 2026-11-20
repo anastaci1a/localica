@@ -33,7 +33,7 @@ internal fun magneticChoicePosition(raw: Float): Float {
         momentum.spec = flex
         momentum.extent = androidx.compose.ui.geometry.Size(size.width / density, size.height / density)
         if (body != null) {
-            momentum.bodyOverride = body.copy(scaleGain = if (long > 0f) -(16f / long) / .24f else null)
+            momentum.bodyOverride = body.copy(scaleGain = if (long > 0f) -(flex.lift.points / long) / .24f else null)
             output.value = if (reduced) GlassShape() else momentum.shape
         }
         if (anchored) impulseScale = sqrt(96f * density / size.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)

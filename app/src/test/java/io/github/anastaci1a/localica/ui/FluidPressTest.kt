@@ -46,7 +46,7 @@ class FluidPressTest {
         assertEquals(.27, spec.response, 0.0); assertEquals(.625, spec.damping, 0.0)
         assertEquals(.032, spec.impulse, 0.0); assertEquals(.5, spec.releaseResponse, 0.0)
         assertEquals(.7, spec.releaseDamping, 0.0); assertEquals(.016, spec.releaseImpulse, 0.0)
-        assertEquals(FlexPress.Large, FlexSpec.dynamic(180f).lift)
+        assertEquals(FlexPress.Large.copy(points = 4f), FlexSpec.dynamic(180f).lift)
         val resized = GlassMomentum()
         resized.advance(0f, 0.0, contact = 1f)
         val v = depth(resized, "velocity").toDouble()
@@ -128,17 +128,17 @@ class FluidPressTest {
         assertTrue(body.finishSettlement()); assertEquals(GlassShape(), body.shape)
     }
 
-    @Test fun stationaryPressNeverDriftsAndAnchorsNeverTranslate() {
+    @Test fun stationaryPressNeverDriftsAndPopupTriggersTranslateByTheSameLaw() {
         for (density in listOf(2f, 2.48125f, 3f)) {
             val body = GlassMomentum().apply { extent = Size(64f, 64f); origin = Offset(.8f, .2f) }
             body.advance(0f, 0.0, contact = 1f, point = Offset(.8f, .2f))
             repeat(60) { body.advance(0f, 1.0 / 120, contact = 1f, point = Offset(.8f, .2f)) }
             assertTrue(body.shape.lift > 0f)
-            assertEquals(Offset.Zero, body.shape.bodyTransform(Size(64 * density, 64 * density)).drift)
-            val pulled = GlassShape(strain = .12f, depth = -.2f, lift = ln(1.25f), drift = Offset(.1f, -.1f))
-            assertEquals(Offset(6.4f * density, -6.4f * density), pulled.bodyTransform(Size(64 * density, 64 * density)).drift)
-            assertEquals(Offset.Zero, pulled.bodyTransform(Size(300 * density, 200 * density), anchored = true).drift)
-            assertEquals(1f, pulled.liftScale(anchored = true), 0f)
+            assertEquals(Offset.Zero, body.shape.bodyTransform(Size(64 * density, 64 * density), density).drift)
+            val pulled = GlassShape(strain = .12f, depth = -.2f, lift = 1f, drift = Offset(.1f, -.1f))
+            assertEquals(Offset(6.4f * density, -6.4f * density), pulled.bodyTransform(Size(64 * density, 64 * density), density).drift)
+            assertEquals(Offset(30f * density, -20f * density), pulled.bodyTransform(Size(300 * density, 200 * density), density).drift)
+            assertEquals(1.25f * exp(.12f), pulled.bodyTransform(Size(64 * density, 64 * density), density).scale.x, 0f)
         }
     }
     @Test fun travelOnlyDepthKeepsTheOriginalSolverAndShapeDamping() {
