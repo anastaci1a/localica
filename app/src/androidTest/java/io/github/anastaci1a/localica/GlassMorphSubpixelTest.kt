@@ -11,8 +11,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.*
+import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -21,6 +23,54 @@ class GlassMorphSubpixelTest {
     @get:Rule val compose = localicaComposeRule()
     @Test fun menuKeepsItsAnchoredEdgesFixedThroughoutGrowthAndReturn() = sweep(GlassPlacement.Menu)
     @Test fun centeredPopupMovesEachEdgeMonotonicallyAndLandsExactly() = sweep(GlassPlacement.Center)
+
+    @Test fun fluidWindowKeepsItsApertureWhileTheSharedFieldPublishesBothSlots() {
+        val root = LocalicaUiRootState(InterfaceSettings(popupMotion = PopupMotionStyle.Fluid, respectSystemAnimationScale = false))
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        var plane: ShadowPlane? = null
+        compose.setContent { LocalicaUiRoot(root) { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides false) {
+                anchor = rememberGlassAnchor()
+                Box(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp)) {
+                    Box(Modifier.align(Alignment.BottomEnd).size(48.dp).glassAnchor(anchor))
+                    GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center, fitContent = true) {
+                        val native = LocalShadowPlane.current
+                        SideEffect { plane = native }
+                        Box(Modifier.size(220.dp, 180.dp))
+                    }
+                }
+            }
+        } } }
+        compose.mainClock.autoAdvance = false
+        var aperture: MotionRectView? = null
+        try {
+            for (opening in listOf(true, false)) {
+                compose.runOnIdle { open = opening }
+                var samples = 0
+                repeat(120) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.waitForIdle()
+                    compose.runOnUiThread {
+                        val field = plane ?: return@runOnUiThread
+                        val owner = field.casters.singleOrNull() ?: return@runOnUiThread
+                        val frame = owner.frameOn(field)
+                        if (frame.bodies.size == 2 && anchor.hidden) {
+                            if (aperture == null) aperture = owner.transform else assertSame(aperture, owner.transform)
+                            frame.bodies.forEach { assertTrue(it.topLeftCornerRadius.x <= it.width / 2f) }
+                            samples++
+                        }
+                    }
+                }
+                assertTrue("Both retained outlines reach the window field on opening=$opening", samples >= 3)
+            }
+            assertFalse(anchor.modalPresent)
+        } finally {
+            compose.mainClock.autoAdvance = true
+            compose.runOnIdle { open = false }
+            compose.waitForIdle()
+        }
+    }
 
     private fun sweep(placement: GlassPlacement) {
         var open by mutableStateOf(false)
