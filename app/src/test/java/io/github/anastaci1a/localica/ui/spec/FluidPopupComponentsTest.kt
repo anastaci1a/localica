@@ -177,6 +177,29 @@ class FluidPopupComponentsTest {
         assertEquals((-0.0).toRawBits(), FluidLensingSpec.shortDimension(1.0, -0.0, 0.0).toRawBits())
     }
 
+    @Test fun immediatePropertySpringStartsFreshFromPreWriteAndRetainsALiveBody() {
+        val controls = FluidPropertySpringControls(0.0, null, interactive = false, additive = false)
+        val spring = FluidPopupSpringSettings(1.0, 2 * Math.PI)
+        val fresh = controls.immediateBody(-0.001, 5.0, null, null, spring, 0.5, null)
+        assertEquals(FluidScalarSpringBody(-0.001, 0.0), fresh)
+        val stored = FluidScalarSpringBody(1.25, 7.0)
+        assertEquals(FluidScalarSpringBody(1.25, 8.0), controls.immediateBody(20.0, 5.0, stored, 3.0, spring, 0.5, null))
+        assertEquals(stored, controls.immediateBody(20.0, 5.0, stored, null, spring, 0.5, null))
+        assertEquals(stored, controls.immediateBody(20.0, 5.0, stored, 3.0, spring, 0.0, null))
+        assertEquals(stored, controls.immediateBody(20.0, 5.0, stored, 3.0, null, 0.5, null))
+        val nonpositiveDamping = FluidPopupSpringSettings(0.0, 0.2)
+        assertEquals(stored, controls.immediateBody(20.0, 5.0, stored, 3.0, nonpositiveDamping, 0.5, null))
+    }
+
+    @Test fun pendingPropertyVelocityTakesPrecedenceOverStartingVelocityAndImpulse() {
+        val controls = FluidPropertySpringControls(0.0, 0.5, interactive = false, additive = false)
+        val spring = FluidPopupSpringSettings(1.0, 2 * Math.PI)
+        val stored = FluidScalarSpringBody(1.25, 7.0)
+        assertEquals(FluidScalarSpringBody(1.25, 2.5), controls.immediateBody(20.0, 25.0, stored, 3.0, spring, 0.5, null))
+        assertEquals(FluidScalarSpringBody(1.25, -0.0), controls.immediateBody(20.0, 25.0, stored, 3.0, spring, 0.5, -0.0))
+        assertEquals(FluidScalarSpringBody(20.0, 2.5), controls.immediateBody(20.0, 25.0, null, null, spring, 0.0, null))
+    }
+
     @Test fun actionThresholdAppliesDragAfterSpeedAndAmplification() {
         val step = FluidPopupStep(0.1, FluidMainEjectDefaults)
         assertEquals(0.21.toRawBits(), step.dueThreshold(0.7, true, 0.3).toRawBits())
