@@ -59,7 +59,11 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     internal fun outlineBodies()=expansion.outlineBodies()
     internal fun apertureRadius(density: Density, fallback: ()->Dp)=expansion.outlineRadius()?.let { with(density) { it.toDp() } }?:fallback()
     var fluidBlurRadius by mutableDoubleStateOf(0.0); private set
+    var fluidLensHeight by mutableFloatStateOf(FluidLensingSpec.freshHeight.toFloat()); private set
+    var fluidLensAmount by mutableDoubleStateOf(FluidLensingSpec.freshAmount); private set
     private val fluidBlur = FluidPropertyMotion(clock, Double::equals, { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidBlurRadius = radius } })
+    private val lensHeight = FluidPropertyMotion(clock, Double::equals, { fluidLensHeight = it.value.toFloat() })
+    private val lensAmount = FluidPropertyMotion(clock, Double::equals, { fluidLensAmount = it.value })
     private val fluidBlurControls = FluidPropertySpringControls(0.0, null, false, false)
     private val fluidTimeline = FluidTimelineMotion(clock) { step, speed ->
         deliverOutline(step,speed)
@@ -72,6 +76,17 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         // The attached window's density is the point scale; before attachment it is 1.
         val scale = fluidLayerPointScale(nativeWindow?.get() != null) { placement?.basis?.density?.toDouble() }
         if (radius != null && spring != null) fluidBlur.animate(fluidBlurRadius, radius, fluidBlurControls, spring, fluidRadiusEpsilonSquared(scale))
+        val lens = step.lens
+        if (lens != null && spring != null) {
+            val ratio = lens.dimension?.div(250.0)
+            if (ratio != null || lens.gain == 0.0) {
+                val factor = if (ratio == null) 0.0 else lens.gain * (if (ratio > 1.0) 1.0 else ratio)
+                val height = 75.0 * factor
+                val epsilonSquared = 0.05 * 0.05
+                lensHeight.animate(fluidLensHeight.toDouble(), height, lens.propertyControls, spring, epsilonSquared)
+                lensAmount.animate(fluidLensAmount, minOf(-height, FluidLensingSpec.freshAmount), lens.propertyControls, spring, epsilonSquared)
+            }
+        }
     }
     val fluid get() = expansion.popupLaw?.model?.style == PopupMotionStyle.Fluid
     init { expansion.nativeGate(gate) }
@@ -160,7 +175,13 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     }
     fun updateSpeed(speed: Float) = expansion.updateSpeed(speed)
     fun updateSpec(spec: ExpansionSpec) = expansion.updateSpec(spec)
-    fun dispose() { clock.unregister(fluidTimeline); clock.unregister(fluidBlur); expansion.dispose() }
+    fun dispose() {
+        clock.unregister(fluidTimeline)
+        clock.unregister(fluidBlur)
+        clock.unregister(lensHeight)
+        clock.unregister(lensAmount)
+        expansion.dispose()
+    }
 }
 
 /** #854: a popup's kind follows its placement and its trigger's role, which bind after the first composition, but it changes only

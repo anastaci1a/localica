@@ -1,8 +1,17 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import io.github.anastaci1a.localica.navigation.InterfaceSettings
+import io.github.anastaci1a.localica.ui.engine.EngineHarness
+import io.github.anastaci1a.localica.ui.engine.PopupWindowMotion
+import io.github.anastaci1a.localica.ui.spec.ExpansionGeometryDomain
 import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
+import io.github.anastaci1a.localica.ui.spec.PopupKind
+import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
+import io.github.anastaci1a.localica.ui.spec.SpecResult
+import io.github.anastaci1a.localica.ui.spec.uiSpec
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.PI
@@ -197,6 +206,40 @@ class GlassGlowTest {
             }
             assertTrue("velocity survives the show/hide frequency change", negative)
             assertTrue(body.settled)
+        }
+    }
+
+    @Test fun fluidLensUsesThePreparedShortDimensionInEachDirection() {
+        val spec = (uiSpec(
+            InterfaceSettings(popupMotion = PopupMotionStyle.Fluid),
+            null,
+            ExpansionGeometryDomain(1000f, 4000f, 1f / 30),
+        ) as SpecResult.Accepted).spec
+        EngineHarness(spec = spec).use { harness ->
+            fun advanceFrames() = repeat(240) { harness.advance(1.0 / 120) }
+            val motion = PopupWindowMotion(harness.clock, spec.expansion, "fluid-lens", false, false, PopupKind.Menu)
+            try {
+                motion.show(true)
+                motion.place(Rect(40f, 50f, 90f, 130f), Rect(10f, 20f, 190f, 620f), density = 2f)
+                motion.expansion.acknowledgeNativeGate(motion.expansion.nativeGeneration)
+                motion.hold()
+                advanceFrames()
+                assertEquals(27f, motion.fluidLensHeight, 0f)
+                assertEquals(-27.0, motion.fluidLensAmount, 0.0)
+
+                motion.release()
+                advanceFrames()
+                assertEquals(0f, motion.fluidLensHeight, 0f)
+                assertEquals(-0.001, motion.fluidLensAmount, 0.0)
+
+                motion.show(false)
+                motion.hold()
+                advanceFrames()
+                assertEquals(7.5f, motion.fluidLensHeight, 0f)
+                assertEquals(-7.5, motion.fluidLensAmount, 0.0)
+            } finally {
+                motion.dispose()
+            }
         }
     }
 
