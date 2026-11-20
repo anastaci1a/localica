@@ -116,6 +116,47 @@ class ReleaseVerificationTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'complete unions'):
                 module.provisional_native('anastaci1a/localica', self.run, jobs, [artifact])
 
+        run = dict(self.run, id=44665987162)
+        jobs['device-tests (36, 0)']['conclusion'] = 'success'
+        job = jobs['device-tests (36, 6)']
+        job.update(id=136057552596, conclusion='cancelled')
+        archive = dict(artifact, name='device-reports-api-36-shard-6', id=14600427762,
+                       digest='sha256:80980caeea641aa5f698affeece0644ddbb7d9cf7eda0061e24c9e55c28ba23a',
+                       workflow_run={'id': run['id'], 'head_sha': self.sha})
+        union = self.unions['36']
+        union.update(expected=2637, executed_once=2637, passed=2635, deferred=[])
+        wrong_shard = jobs['device-tests (36, 7)']
+        cases = (
+            ('pinned', {}, {}, None),
+            ('wrong run', run, {'id': 43}, 'shard did not finish'),
+            ('wrong attempt', run, {'run_attempt': 2}, 'shard did not finish'),
+            ('wrong job', job, {'id': 99}, 'shard did not finish'),
+            ('wrong status', job, {'conclusion': 'timed_out'}, 'shard did not finish'),
+            ('second canceled shard', wrong_shard, {'conclusion': 'cancelled'}, 'shard did not finish'),
+            ('incomplete union', union, {'executed_once': 2636}, 'Incomplete provisional native union'),
+            ('wrong union size', union, {'expected': 2636, 'executed_once': 2636, 'passed': 2634},
+             'shard did not finish'),
+            ('deferred method', union, {'deferred': ['Example#other']}, 'shard did not finish'),
+            ('missing archive', archive, {'expired': True}, 'retained artifact'),
+            ('wrong archive', archive, {'id': 101}, 'Pinned provisional native archive mismatch'),
+            ('wrong archive digest', archive, {'digest': 'sha256:'+'c'*64},
+             'Pinned provisional native archive mismatch'),
+        )
+        for name, target, overrides, error in cases:
+            with self.subTest(name=name), patch.dict(target, overrides):
+                progress = '\n'.join('2026-11-19T00:00:00Z '+line for entry in self.unions.values()
+                                     for line in json.dumps(entry, indent=2).splitlines()).encode()
+                with patch.object(module, 'gh', return_value=progress), \
+                     patch.object(module, 'archived_artifact',
+                                  side_effect=lambda *_: zipfile.ZipFile(io.BytesIO(archive_bytes))) as opened:
+                    if error:
+                        with self.assertRaisesRegex(ValueError, error):
+                            module.provisional_native('anastaci1a/localica', run, jobs, [archive])
+                    else:
+                        self.assertEqual(module.provisional_native('anastaci1a/localica', run, jobs, [archive]),
+                                         (self.unions, failed))
+                        opened.assert_called_once_with('anastaci1a/localica', archive)
+
     def test_split_tag_cannot_be_activated_for_another_ref_or_actor(self):
         from unittest.mock import patch
 
