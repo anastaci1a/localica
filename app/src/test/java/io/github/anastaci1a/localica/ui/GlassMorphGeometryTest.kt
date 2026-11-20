@@ -161,22 +161,25 @@ class GlassMorphGeometryTest {
         }
     }
 
-    @Test fun aReversalRequestedWhileHeldLandsItsUnkickAtRelease() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
-        popup.show(true)
-        h.frames(popup, 480)
-        val aperture = requireNotNull(popup.bounds)
-        val edges = requireNotNull(popup.rectangle)
-        popup.expansion.kickOutline(0, -40f, FluidKickSpec.ejecteeSpring)
-        h.frames(popup, 3)
-        assertNotEquals(edges.top.target, aperture.top.target, 0f)
-        popup.hold()
-        popup.show(false)
-        popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input.copy(opening = false))
-        popup.release()
-        // The reversal's unkick was requested while held; release replays it instead of the old kick.
-        assertEquals(edges.top.target, aperture.top.target, 0f)
-        h.frames(popup, 480)
-        assertTrue(popup.expansion.retirementReady)
+    @Test fun aReversalRequestedWhileHeldLandsItsKicksAtRelease() {
+        // Oracle: a hold that covers the reversal stamp leaves exactly the targets of the same reversal without a hold.
+        fun reversal(held: Boolean): List<Float> {
+            var targets = emptyList<Float>()
+            fluidWindow(MotionAccess.Standard, 24f) { h, popup, input ->
+                popup.show(true)
+                h.frames(popup, 480)
+                popup.expansion.kickOutline(0, -40f, FluidKickSpec.ejecteeSpring)
+                h.frames(popup, 3)
+                if (held) popup.hold()
+                popup.show(false)
+                popup.place(input.pivot, Rect(0f, 0f, 120f, 80f), 1f, preview = input.copy(opening = false))
+                if (held) popup.release()
+                val aperture = requireNotNull(popup.bounds)
+                targets = listOf(aperture.top.target, aperture.bottom.target, requireNotNull(popup.rectangle).top.target)
+            }
+            return targets
+        }
+        assertEquals(reversal(held = false), reversal(held = true))
     }
 
     @Test fun preparedThroughRequestsKeepEndpointAndPivotOverridesWithTheirRoles() {
