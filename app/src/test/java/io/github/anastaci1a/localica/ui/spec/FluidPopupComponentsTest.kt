@@ -535,6 +535,49 @@ class FluidPopupComponentsTest {
         value.present(null)
     }
 
+    @Test fun lensEntriesAppendIndependentlyAndReuseTheExistingDrain() {
+        val pending = mutableListOf<FluidPopupChannel>()
+        val events = mutableListOf<String>()
+        pending.submitFluidPropertyPublication(
+            FluidPopupChannel.LensHeight, { false }, { -1 },
+            {
+                assertEquals(listOf(FluidPopupChannel.LensHeight), pending)
+                events += "first commit"
+            },
+            { error("The idle phase uses the first commit hook") },
+        )
+        pending.submitFluidPropertyPublication(
+            FluidPopupChannel.LensAmount, { true }, { error("The drain is already registered") },
+            { error("The drain is already registered") }, { error("The drain is already registered") },
+        )
+        assertEquals(listOf(FluidPopupChannel.LensHeight, FluidPopupChannel.LensAmount), pending)
+        val registrationOrder = mutableListOf<String>()
+        pending.map { channel ->
+            val factory = {
+                registrationOrder += "factory ${channel.key}"
+                channel
+            }
+            factory to { coordinator: FluidPopupChannel -> registrationOrder += "register ${coordinator.key}" }
+        }.registerFluidPropertyPublications()
+        assertEquals(
+            listOf(
+                "factory effect.height", "register effect.height",
+                "factory filters.displacementMap.inputAmount", "register filters.displacementMap.inputAmount",
+            ),
+            registrationOrder,
+        )
+        pending.clear()
+        pending.submitFluidPropertyPublication(
+            FluidPopupChannel.LensAmount, { false }, { 1 },
+            { error("The active phase uses the platform hook") },
+            {
+                assertEquals(listOf(FluidPopupChannel.LensAmount), pending)
+                events += "after commit"
+            },
+        )
+        assertEquals(listOf("first commit", "after commit"), events)
+    }
+
     @Test fun contentPointScaleUsesTheLiveOriginalLayerContext() {
         assertEquals(1.0, fluidLayerPointScale(false) { error("The layer context was not resolved") }, 0.0)
         assertEquals(1.0, fluidLayerPointScale(true) { null }, 0.0)
