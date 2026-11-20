@@ -234,6 +234,10 @@ internal enum class FluidPopupChannel(val key: String, val value: Value) {
 internal fun fluidLensSuppressesAction(old: Double, new: Double, latest: Double?, bypass: Boolean) =
     !bypass && abs(new - old) <= 0.05 && (latest == null || abs(new - latest) <= 0.05)
 
+/** The original layer's resolved view/window supplies the live scale. Null means the view or window is absent. */
+internal fun fluidLayerPointScale(resolvedContext: Boolean, windowScale: () -> Double?): Double =
+    if (resolvedContext) windowScale() ?: 1.0 else 1.0
+
 internal fun fluidRadiusEpsilonSquared(pointScale: Double): Double {
     val unit = 1.0 / pointScale
     return unit * unit
