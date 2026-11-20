@@ -137,9 +137,10 @@ class FluidPopupComponentsTest {
         assertEquals(FluidPopupChannel.Value.StandardScalar, FluidPopupChannel.KickAmount.value)
         assertEquals(FluidPopupChannel.Value.StandardScalar, FluidPopupChannel.KickScale.value)
         assertEquals(-80.0, FluidKickSpec.translationY(-40.0, 2.0), 0.0)
-        val start = FluidScalarSpringBody(40.0, 0.0)
-        val returned = FluidMainEjectDefaults.advance(start, FluidKickSpec.unkickTarget, 0.35)
-        assertTrue(returned.value < 0.0)
+        val body = FluidScalarSpringBody(40.0, 0.0)
+        val start = FluidScalarSpringEntry(body, FluidKickSpec.unkickTarget, body)
+        val returned = FluidMainEjectDefaults.advanceUnsmoothed(start, 0.35)
+        assertTrue(returned.body.value < 0.0)
     }
 
     @Test fun convertsSuppliedSpringSettingsWithUnitMass() {
@@ -264,25 +265,41 @@ class FluidPopupComponentsTest {
     @Test fun immediatePropertySpringStartsFreshFromPreWriteAndRetainsALiveBody() {
         val controls = FluidPropertySpringControls(0.0, null, interactive = false, additive = false)
         val spring = FluidPopupSpringSettings(1.0, 2 * Math.PI, retargetImpulse = 0.5)
-        val fresh = controls.immediateBody(-0.001, 5.0, null, null, spring, null)
-        assertEquals(FluidScalarSpringBody(-0.001, 0.0), fresh)
+        val fresh = controls.immediateEntry(-0.001, 5.0, null, null, spring, null)
+        assertEquals(FluidScalarSpringBody(-0.001, 0.0), fresh.body)
+        assertEquals(fresh.body, fresh.intermediate)
+        assertEquals(5.0.toRawBits(), fresh.target.toRawBits())
+        assertTrue(spring.advanceUnsmoothed(fresh, 0.0) === fresh)
+        assertTrue(spring.advanceUnsmoothed(fresh, -0.03) === fresh)
+        val sampled = spring.advanceUnsmoothed(fresh, 0.03)
+        assertEquals(FluidScalarSpringBody(5.0, 0.0), sampled.intermediate)
+        val expected = SpringKernel.fromInstalled(1.0, 2.0).advanceBody(fresh.body, 5.0, 0.03)
+        assertEquals(expected, sampled.body)
         val stored = FluidScalarSpringBody(1.25, 7.0)
-        assertEquals(FluidScalarSpringBody(1.25, 8.0), controls.immediateBody(20.0, 5.0, stored, 3.0, spring, null))
-        assertEquals(stored, controls.immediateBody(20.0, 5.0, stored, null, spring, null))
+        val retained = FluidScalarSpringEntry(stored, 3.0, FluidScalarSpringBody(2.0, -0.25))
+        fun retarget(previous: Double?, settings: FluidPopupSpringSettings?) =
+            controls.immediateEntry(20.0, 5.0, retained, previous, settings, null)
+        val composed = retarget(3.0, spring)
+        assertEquals(FluidScalarSpringBody(1.25, 8.0), composed.body)
+        assertEquals(retained.intermediate, composed.intermediate)
+        assertEquals(5.0.toRawBits(), composed.target.toRawBits())
+        assertEquals(stored, retarget(null, spring).body)
         val noImpulse = FluidPopupSpringSettings(1.0, 2 * Math.PI)
-        assertEquals(stored, controls.immediateBody(20.0, 5.0, stored, 3.0, noImpulse, null))
-        assertEquals(stored, controls.immediateBody(20.0, 5.0, stored, 3.0, null, null))
+        assertEquals(stored, retarget(3.0, noImpulse).body)
+        assertEquals(stored, retarget(3.0, null).body)
         val nonpositiveDamping = FluidPopupSpringSettings(0.0, 0.2, retargetImpulse = 0.5)
-        assertEquals(stored, controls.immediateBody(20.0, 5.0, stored, 3.0, nonpositiveDamping, null))
+        assertEquals(stored, retarget(3.0, nonpositiveDamping).body)
     }
 
     @Test fun pendingPropertyVelocityTakesPrecedenceOverStartingVelocityAndImpulse() {
         val controls = FluidPropertySpringControls(0.0, 0.5, interactive = false, additive = false)
         val spring = FluidPopupSpringSettings(1.0, 2 * Math.PI, retargetImpulse = 0.5)
-        val stored = FluidScalarSpringBody(1.25, 7.0)
-        assertEquals(FluidScalarSpringBody(1.25, 2.5), controls.immediateBody(20.0, 25.0, stored, 3.0, spring, null))
-        assertEquals(FluidScalarSpringBody(1.25, -0.0), controls.immediateBody(20.0, 25.0, stored, 3.0, spring, -0.0))
-        assertEquals(FluidScalarSpringBody(20.0, 2.5), controls.immediateBody(20.0, 25.0, null, null, spring, null))
+        val stored = FluidScalarSpringEntry(FluidScalarSpringBody(1.25, 7.0), 3.0, FluidScalarSpringBody(3.0, 0.0))
+        assertEquals(FluidScalarSpringBody(1.25, 2.5), controls.immediateEntry(20.0, 25.0, stored, 3.0, spring, null).body)
+        assertEquals(FluidScalarSpringBody(1.25, -0.0), controls.immediateEntry(20.0, 25.0, stored, 3.0, spring, -0.0).body)
+        val fresh = controls.immediateEntry(20.0, 25.0, null, null, spring, null)
+        assertEquals(FluidScalarSpringBody(20.0, 2.5), fresh.body)
+        assertEquals(FluidScalarSpringBody(20.0, 0.0), fresh.intermediate)
     }
 
     @Test fun freshCentreSpringsStartAtZeroAndPreserveRunningVelocityOnHandover() {
@@ -290,11 +307,12 @@ class FluidPopupComponentsTest {
         val content = FluidContentDefaults.copy(lensingEnabled = false)
         val queue = fluidThroughQueue(true, FluidMainEjectDefaults, content) { error("Lensing disabled") }
         val carried = FluidScalarSpringBody(31.5, -7.25)
+        val retained = FluidScalarSpringEntry(carried, 20.0, FluidScalarSpringBody(20.0, 0.0))
         for (action in listOf(CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick, Unkick)) {
             val spring = requireNotNull(queue.first { it.action == action }.timing.spring)
             assertEquals(0.0.toRawBits(), spring.retargetImpulse.toRawBits())
-            assertEquals(FluidScalarSpringBody(8.0, 0.0), controls.immediateBody(8.0, 40.0, null, null, spring, null))
-            assertEquals(carried, controls.immediateBody(8.0, 40.0, carried, 20.0, spring, null))
+            assertEquals(FluidScalarSpringBody(8.0, 0.0), controls.immediateEntry(8.0, 40.0, null, null, spring, null).body)
+            assertEquals(carried, controls.immediateEntry(8.0, 40.0, retained, 20.0, spring, null).body)
         }
     }
 
@@ -318,11 +336,14 @@ class FluidPopupComponentsTest {
         val spring = FluidPopupSpringSettings(0.68, 0.37)
         assertEquals(0.08008676736384175.toRawBits(), spring.velocityScalingFactor.toRawBits())
         val dueBody = FluidScalarSpringBody(3.0, -80.43776178513674)
-        val next = spring.advance(dueBody, -7.0, 0.019)
+        val due = FluidScalarSpringEntry(dueBody, -7.0, FluidScalarSpringBody(0.0, 4.0))
+        val next = spring.advanceUnsmoothed(due, 0.019).body
         assertEquals(1.3359182287897973, next.value, 1e-12 * 1.3359182287897973)
         assertEquals(-92.34064472028794, next.velocity, 1e-12 * 92.34064472028794)
         val rest = FluidScalarSpringBody(-7.0, -0.0)
-        assertTrue(spring.advance(rest, -7.0, 0.019) === rest)
+        val settled = spring.advanceUnsmoothed(due.copy(body = rest), 0.019)
+        assertTrue(settled.body === rest)
+        assertEquals(FluidScalarSpringBody(-7.0, 0.0), settled.intermediate)
         val cancel = FluidScalarSpringBody(2.0, 4.0)
         assertTrue(cancel.finished(1.0, 0.25, 0.0, hasPending = false))
         assertFalse(cancel.finished(1.0, 0.25, 0.0, hasPending = true))

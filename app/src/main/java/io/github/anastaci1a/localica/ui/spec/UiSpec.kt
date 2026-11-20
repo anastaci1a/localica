@@ -82,8 +82,12 @@ internal class FluidPopupSpringSettings(
     val damping = 2 * dampingRatio * omega
     private val installedDamping = (sqrt(stiffness) + sqrt(stiffness)) * dampingRatio
     val velocityScalingFactor get() = installedDamping / stiffness
-    fun advance(body: FluidScalarSpringBody, target: Double, dt: Double) =
-        SpringKernel.fromInstalled(stiffness, installedDamping).advanceBody(body, target, dt)
+    fun advanceUnsmoothed(entry: FluidScalarSpringEntry, dt: Double): FluidScalarSpringEntry {
+        if (dt <= 0.0) return entry
+        val intermediate = FluidScalarSpringBody(entry.target, 0.0)
+        val body = SpringKernel.fromInstalled(stiffness, installedDamping).advanceBody(entry.body, intermediate.value, dt)
+        return entry.copy(body = body, intermediate = intermediate)
+    }
 
     fun scaledResponses(multiplier: Double) =
         FluidPopupSpringSettings(dampingRatio, multiplier * response, retargetImpulse, multiplier * trackingResponse)
@@ -113,23 +117,29 @@ internal data class FluidPopupStep<out Spring>(val storedDelay: Double, val spri
 internal data class FluidPropertySpringControls(
     val delay: Double, val startingVelocity: Double?, val interactive: Boolean, val additive: Boolean,
 ) {
-    /** The scalar body handed from the property owner to the ordinary zero-delay spring. */
-    fun immediateBody(
-        requestedStart: Double, target: Double, retained: FluidScalarSpringBody?, previousTarget: Double?,
+    /** The scalar entry handed from the property owner to the ordinary zero-delay spring. */
+    fun immediateEntry(
+        requestedStart: Double, target: Double, retained: FluidScalarSpringEntry?, previousTarget: Double?,
         spring: FluidPopupSpringSettings?, pendingVelocity: Double?,
-    ): FluidScalarSpringBody {
-        val value = retained?.value ?: requestedStart
+    ): FluidScalarSpringEntry {
+        val oldBody = retained?.body
+        val value = oldBody?.value ?: requestedStart
         val velocity = when {
             pendingVelocity != null -> pendingVelocity
             startingVelocity != null -> (target - requestedStart) * startingVelocity
-            retained == null -> 0.0
+            oldBody == null -> 0.0
             previousTarget != null && spring != null && spring.retargetImpulse > 0.0 && spring.dampingRatio > 0.0 && spring.response > 0.0 ->
-                retained.velocity + (target - previousTarget) * (spring.retargetImpulse * spring.stiffness)
-            else -> retained.velocity
+                oldBody.velocity + (target - previousTarget) * (spring.retargetImpulse * spring.stiffness)
+            else -> oldBody.velocity
         }
-        return FluidScalarSpringBody(value, velocity)
+        val intermediate = retained?.intermediate ?: FluidScalarSpringBody(requestedStart, 0.0)
+        return FluidScalarSpringEntry(FluidScalarSpringBody(value, velocity), target, intermediate)
     }
 }
+
+internal data class FluidScalarSpringEntry(
+    val body: FluidScalarSpringBody, val target: Double, val intermediate: FluidScalarSpringBody,
+)
 
 internal data class FluidScalarSpringBody(val value: Double, val velocity: Double) {
     fun finished(target: Double, velocityScalingFactor: Double, epsilonSquared: Double, hasPending: Boolean): Boolean {
