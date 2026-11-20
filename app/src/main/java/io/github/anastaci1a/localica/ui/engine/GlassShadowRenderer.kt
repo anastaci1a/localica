@@ -14,20 +14,20 @@ import kotlinx.coroutines.*
 
 /** Neighboring group shadows that the trigger's own window keeps drawing while a
  * popup owns the trigger's shadow. Bodies are screen-space; [origin] is the caster's
- * untransformed screen origin and [size]/[scaleX]/[scaleY]/[shift] its draw transform.
+ * untransformed screen origin and [size]/[transform] its draw transform.
  * Each ring is drawn at [weight] where it overlaps the same neighbor ring: 0 at home
  * reproduces the shared union exactly, 1 is the popup's independent resting field. */
 internal class GlassShadowExclusion(val bodies: List<RoundRect>, private val origin: Offset,
-    private val size: Size, private val scaleX: Float, private val scaleY: Float, private val shift: Float,
+    private val size: Size, private val transform: GlassBodyTransform,
     val weight: Float) {
     private val path = Path()
     /** Map the cached whole-neighbor-union ring into the caster's draw coordinates. */
     fun ring(index: Int, geometry: GlassShadowGeometry, count: Int, translation: Offset): Path? {
         if (bodies.isEmpty()) return null
-        val local = glassReceiverInCasterSpace(Rect(-origin, Size(1f, 1f)), size, scaleX, scaleY, shift) ?: return null
+        val local = glassReceiverInCasterSpace(Rect(-origin, Size(1f, 1f)), size, transform) ?: return null
         path.asAndroidPath().set(geometry.rings[count + index].asAndroidPath())
         path.asAndroidPath().transform(android.graphics.Matrix().apply {
-            setScale(1f / scaleX, 1f / scaleY)
+            setScale(1f / transform.scale.x, 1f / transform.scale.y)
             postTranslate(local.left + translation.x, local.top + translation.y)
         })
         return path

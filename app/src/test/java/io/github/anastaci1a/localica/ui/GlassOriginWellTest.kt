@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.ui.engine.*
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import org.junit.Assert.*
 import org.junit.Test
@@ -40,7 +41,7 @@ class GlassOriginWellTest {
         assertEquals(0f,glassWellShade(75f,40f,150f,80f,0f,p),0f)
     }
     @Test fun casterUsesDrawScaleAndTranslationNotLayoutRectangle() {
-        val caster = glassWellCaster(Size(120f,50f),25f,1.2f,.8f,7f)
+        val caster = glassWellCaster(Size(120f,50f),25f,GlassBodyTransform(Offset(1.2f,.8f),Offset(7f,0f)))
         assertEquals(-5f,caster.left,.00001f)
         assertEquals(139f,caster.right,.00001f)
         assertEquals(5f,caster.top,.00001f)
@@ -51,17 +52,32 @@ class GlassOriginWellTest {
     @Test fun receiverInverseMapsTheActualCasterTransformWithoutMovingTheHome() {
         val home = androidx.compose.ui.geometry.Rect(150f,70f,214f,134f)
         val size = Size(180f,90f)
-        for (sx in listOf(.7f,1f,1.3f)) for (sy in listOf(.8f,1f,1.2f)) for (shift in listOf(-11f,0f,13f)) {
-            val local = requireNotNull(glassReceiverInCasterSpace(home,size,sx,sy,shift))
+        for (sx in listOf(.7f,1f,1.3f)) for (sy in listOf(.8f,1f,1.2f)) for (shift in listOf(-11f,0f,13f)) for (dy in listOf(-17f,0f,23f)) {
+            val local = requireNotNull(glassReceiverInCasterSpace(home,size,GlassBodyTransform(Offset(sx,sy),Offset(shift,dy))))
             fun x(v: Float) = size.width/2 + shift + sx*(v-size.width/2)
-            fun y(v: Float) = size.height/2 + sy*(v-size.height/2)
+            fun y(v: Float) = size.height/2 + dy + sy*(v-size.height/2)
             assertEquals(home.left,x(local.left),.0001f); assertEquals(home.right,x(local.right),.0001f)
             assertEquals(home.top,y(local.top),.0001f); assertEquals(home.bottom,y(local.bottom),.0001f)
         }
-        assertNull(glassReceiverInCasterSpace(home,size,0f,1f,0f))
-        assertNull(glassReceiverInCasterSpace(home,size,Float.NaN,1f,0f))
-        assertNull(glassReceiverInCasterSpace(home,size,.002f,1f,-Float.MAX_VALUE))
-        assertNull(glassReceiverInCasterSpace(home,size,Float.MAX_VALUE,1f,0f))
+        assertNull(glassReceiverInCasterSpace(home,size,GlassBodyTransform(Offset(0f,1f))))
+        assertNull(glassReceiverInCasterSpace(home,size,GlassBodyTransform(Offset(Float.NaN,1f))))
+        assertNull(glassReceiverInCasterSpace(home,size,GlassBodyTransform(Offset(.002f,1f),Offset(-Float.MAX_VALUE,0f))))
+        assertNull(glassReceiverInCasterSpace(home,size,GlassBodyTransform(Offset(Float.MAX_VALUE,1f))))
+        assertNull(glassReceiverInCasterSpace(home,size,GlassBodyTransform(drift=Offset(0f,Float.NaN))))
+    }
+    @Test fun bodyCasterAndReceiverAgreeInBothAxesAndKeepIndependentCorners() {
+        val size=Size(128f,64f)
+        val rest=androidx.compose.ui.geometry.RoundRect(androidx.compose.ui.geometry.Rect(Offset.Zero,size),androidx.compose.ui.geometry.CornerRadius(16f))
+        for (dx in listOf(-12f,0f,20f)) for (dy in listOf(-8f,0f,16f)) {
+            val t=GlassBodyTransform(Offset(1.25f,.75f),Offset(dx,dy))
+            val body=rest.deformed(t,Offset(64f,32f))
+            val caster=glassWellCaster(size,16f,t)
+            assertEquals(body,caster)
+            assertEquals(androidx.compose.ui.geometry.Rect(Offset.Zero,size),
+                glassReceiverInCasterSpace(androidx.compose.ui.geometry.Rect(caster.left,caster.top,caster.right,caster.bottom),size,t))
+            assertEquals(20f,caster.topLeftCornerRadius.x,0f)
+            assertEquals(12f,caster.topLeftCornerRadius.y,0f)
+        }
     }
     @Test fun receiverWeightKeepsExteriorNormalAndWeakensFloorWithoutNormalCreases() {
         val size = Size(150f,80f)
