@@ -337,19 +337,36 @@ class FluidPopupComponentsTest {
     }
 
     @Test fun trackedCornerBoundsChooseUniformAndSignedUnevenPayloads() {
-        val uniform = FluidCornerSpec.boundsEncoding(floatArrayOf(-1f, 0f, 0.009f, 0.01f), 2f, 0, 6f, 8f)
+        val transform = FluidCornerSpec.fieldTransform(doubleArrayOf(2.0, 0.0, 0.0, 0.0, 0.0, 2.0), Math::fma)
+        val uniform = FluidCornerSpec.boundsEncoding(floatArrayOf(-1f, 0f, 0.009f, 0.01f), transform, 0, 6f, 8f)
         assertEquals(21, uniform.imageFunction)
         assertEquals(4f, uniform.family, 0f)
         assertEquals(listOf(1f, 1f, 0.02f, 0f), uniform.radii.toList())
-        val rounded = FluidCornerSpec.boundsEncoding(FloatArray(4) { 5f }, 2f, 1, 0f, 10f)
+        val rounded = FluidCornerSpec.boundsEncoding(FloatArray(4) { 5f }, transform, 1, 0f, 10f)
         assertEquals(listOf(1f, 0f, 10f, 0f), rounded.radii.toList())
-        val uneven = FluidCornerSpec.boundsEncoding(floatArrayOf(1f, 2f, 3f, 4f), 2f, 1, 6f, 8f)
+        val uneven = FluidCornerSpec.boundsEncoding(floatArrayOf(1f, 2f, 3f, 4f), transform, 1, 6f, 8f)
         assertEquals(22, uneven.imageFunction)
         assertEquals(5f, uneven.family, 0f)
+        assertEquals(listOf(1f, -0f, -0f, 1f).map(Float::toRawBits), uneven.normalMatrix.map(Float::toRawBits))
         assertEquals(listOf(-2f, -4f, -6f, -8f), uneven.radii.toList())
         assertEquals(0x402875696e58a32fL, uneven.expansion.toRawBits())
         assertFalse(uneven.splitsIntoRect(0.0, uneven.expansion))
         assertTrue(uneven.splitsIntoRect(0.0, Math.nextUp(uneven.expansion)))
+        assertTrue(uneven.splitsIntoRect(Double.NaN, uneven.expansion))
+        assertTrue(uneven.splitsIntoRect(0.0, Double.NaN))
+    }
+
+    @Test fun trackedCornerScaleAndMatrixShareTheFusedAffineDeterminant() {
+        val identity = FluidCornerSpec.fieldTransform(null) { _, _, _ -> error("Absent affine uses literal identity") }
+        assertEquals(1f, identity.scale, 0f)
+        assertEquals(listOf(1f, 0f, 0f, 1f).map(Float::toRawBits), identity.normalMatrix.map(Float::toRawBits))
+        val reflected = FluidCornerSpec.fieldTransform(doubleArrayOf(-3.0, 0.0, 0.0, 0.0, 0.0, 4.0), Math::fma)
+        assertEquals(3f, reflected.scale, 0f)
+        assertEquals(listOf(-1f, 0f, 0f, 0.75f).map(Float::toRawBits), reflected.normalMatrix.map(Float::toRawBits))
+        val cancellation = FluidCornerSpec.fieldTransform(
+            doubleArrayOf(Math.nextUp(1f).toDouble(), 1.0, 0.0, 0.0, 8_388_610.0, 8_388_609.0), Math::fma,
+        )
+        assertEquals(0x287ffffc, cancellation.scale.toRawBits())
     }
 
     @Test fun trackedCornerDispatchKeepsImageAndCompositionSelectionsSeparate() {
