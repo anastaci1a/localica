@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui.spec
 
+import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
 import java.util.IdentityHashMap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,26 +41,92 @@ class FluidPopupComponentsTest {
         assertEquals(0.0.toRawBits(), fluidStoredDelay(0.1, 0.0, false).toRawBits())
     }
 
-    @Test fun growingGeometryPrefixKeepsStoredOrderAndTheLiveMainSpring() {
+    @Test fun growingQueueKeepsAllThreeBatchesAndTheLiveMainSpring() {
         val eject = FluidPopupSpringSettings(0.72, 0.42)
         val absorb = FluidPopupSpringSettings(0.84, 0.65)
-        val prefix = fluidGrowingGeometryPrefix(fluidThroughMainSpring(true, eject, absorb))
+        val lens = FluidLensingSpec.requests(true, true, 25.0, 90.0, 0.5, 120.0, eject, absorb)
+        val queue = fluidThroughQueue(true, eject, FluidContentDefaults) { lens }
         assertEquals(
             listOf(
-                FluidGeometryAction.CollapsedSource, FluidGeometryAction.ExpandedOverrounded, FluidGeometryAction.FullyExpanded,
-                FluidGeometryAction.Kick, FluidGeometryAction.Unkick,
+                Source, AddSdfElements, CollapsedSource, ExpandedOverrounded, Kick, SmoothOn, LensOn, ChangeLensDimension,
+                BlurOut, FullyExpanded, Unkick, LensOff, BlurIn, SmoothOff,
             ),
-            prefix.map { it.action },
+            queue.map { it.action },
         )
-        assertEquals(listOf(0.0, 0.0, 0.1, 0.0, 0.1), prefix.map { it.timing.storedDelay })
-        assertEquals(listOf(1.0, 0.72, 0.72, 1.0, 0.72), prefix.map { it.timing.spring.dampingRatio })
-        assertEquals(listOf(0.3, 0.42, 0.42, 0.2, 0.42), prefix.map { it.timing.spring.response })
-        assertTrue(prefix[1].timing.spring === eject)
-        assertTrue(prefix[2].timing.spring === eject)
-        assertTrue(prefix[4].timing.spring === eject)
+        assertEquals(List(9) { 0.0 } + listOf(0.1, 0.1, 0.12, 0.12, 0.3), queue.map { it.timing.storedDelay })
+        val growingGeometry = listOf(CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick, Unkick).map { action ->
+            queue.first { it.action == action }.timing
+        }
+        val springs = growingGeometry.map { requireNotNull(it.spring) }
+        assertEquals(listOf(1.0, 0.72, 0.72, 1.0, 0.72), springs.map { it.dampingRatio })
+        assertEquals(listOf(0.3, 0.42, 0.42, 0.2, 0.42), springs.map { it.response })
+        for (index in listOf(1, 2, 4)) assertTrue(springs[index] === eject)
+        assertTrue(fluidThroughMainSpring(true, eject, absorb) === eject)
         assertTrue(fluidThroughMainSpring(false, eject, absorb) === absorb)
-        assertEquals(0.06999999999999999.toRawBits(), prefix[2].timing.dueThreshold(0.7, false, 1.0).toRawBits())
-        assertEquals(0.0.toRawBits(), prefix[3].timing.dueThreshold(0.7, false, 1.0).toRawBits())
+        assertEquals(0.06999999999999999.toRawBits(), growingGeometry[2].dueThreshold(0.7, false, 1.0).toRawBits())
+        assertEquals(0.0.toRawBits(), growingGeometry[3].dueThreshold(0.7, false, 1.0).toRawBits())
+        assertTrue(queue[7].lens === lens[1])
+        assertEquals(0.1, requireNotNull(queue[5].timing.spring).response, 0.0)
+        assertEquals(0.6, requireNotNull(queue.last().timing.spring).response, 0.0)
+        assertEquals(1.0, requireNotNull(queue.last().timing.spring).dampingRatio, 0.0)
+    }
+
+    @Test fun nonGrowingQueueKeepsDelayedTiesAndCanOmitTheLensBatch() {
+        val eject = FluidMainEjectDefaults
+        val absorb = FluidPopupSpringSettings(0.8, 0.7)
+        val lens = FluidLensingSpec.requests(true, false, 25.0, 90.0, 0.5, 120.0, eject, absorb)
+        val queue = fluidThroughQueue(false, eject, FluidContentDefaults) { lens }
+        assertEquals(
+            listOf(
+                FullyExpanded, AddSdfElements, Source, KickEjectee, KickSource, SmoothOn, LensOn, ChangeLensDimension, BlurOut,
+                UnkickEjectee, SmoothOff, LensOff, BlurIn, UnkickSource,
+            ),
+            queue.map { it.action },
+        )
+        assertEquals(List(9) { 0.0 } + List(4) { 0.1 }, queue.dropLast(1).map { it.timing.storedDelay })
+        assertEquals(0x3fc3333333333334L, queue.last().timing.storedDelay.toRawBits())
+        assertTrue(queue[7].timing.spring === absorb)
+        val disabled = FluidContentDefaults.copy(lensingEnabled = false)
+        val nonGrowingNoLens = fluidThroughQueue(false, eject, disabled) { error("Lensing must stay disabled") }
+        assertEquals(listOf(FullyExpanded, AddSdfElements, Source, KickEjectee, KickSource, SmoothOn, UnkickEjectee, SmoothOff, UnkickSource), nonGrowingNoLens.map { it.action })
+        val growingNoLens = fluidThroughQueue(true, eject, disabled) { error("Lensing must stay disabled") }
+        assertEquals(listOf(Source, AddSdfElements, CollapsedSource, ExpandedOverrounded, Kick, SmoothOn, FullyExpanded, Unkick, SmoothOff), growingNoLens.map { it.action })
+    }
+
+    @Test fun queueResetAndStartAdmissionReuseTheOrderedThreshold() {
+        val eject = FluidMainEjectDefaults
+        val lens = FluidLensingSpec.requests(true, true, 25.0, 90.0, 0.5, 120.0, eject, eject)
+        val route = fluidThroughQueue(true, eject, FluidContentDefaults) { lens }
+        val queue = ArrayDeque<FluidTimelineStep>()
+        val ran = mutableListOf<FluidTimelineAction>()
+        var nextAction = AddSdfElements
+        fun execute(step: FluidTimelineStep, speed: Double) {
+            assertEquals(nextAction, queue.first().action)
+            assertEquals(0.7, speed, 0.0)
+            ran += step.action
+        }
+        queue.add(route.last())
+        queue.replaceFluidTimeline(route)
+        assertEquals(route, queue.toList())
+        queue.drainFluidTimeline(0.0, 0.7, false, { error("A holding start takes the first action directly") }, true, ::execute)
+        assertEquals(listOf(Source), ran)
+        assertEquals(AddSdfElements, queue.first().action)
+        nextAction = FullyExpanded
+        queue.drainFluidTimeline(0.0, 0.7, false, { 1.0 }, false, ::execute)
+        assertEquals(route.take(9).map { it.action }, ran)
+        nextAction = LensOff
+        queue.drainFluidTimeline(0.07, 0.7, false, { 1.0 }, false, ::execute)
+        assertEquals(listOf(FullyExpanded, Unkick), ran.takeLast(2))
+        assertEquals(LensOff, queue.first().action)
+        queue.replaceFluidTimeline(route)
+        val disabled = mutableListOf<FluidTimelineStep>()
+        queue.drainFluidTimeline(0.0, 0.0, true, { 1.0 }, false) { step, speed ->
+            assertEquals(0.0, speed, 0.0)
+            assertTrue(queue.isEmpty())
+            disabled += step
+        }
+        assertEquals(route, disabled)
+        assertTrue(queue.isEmpty())
     }
 
     @Test fun growingKickUsesTheExistingPropertySpringAndSuppliedPresentationScale() {
