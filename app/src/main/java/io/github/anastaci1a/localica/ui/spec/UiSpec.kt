@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui.spec
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -117,15 +116,15 @@ internal val FluidMainAbsorb = FluidPopupSpringSettings(dampingRatio = 0.8, resp
 
 @Immutable data class PopupSecondPhase(val spring: SpringLaw, val band: Float, val edgeShares: (DoubleArray) -> DoubleArray)
 
-internal interface PopupOutlinePreview {
+internal interface PopupOutlinePreview<Bounds> {
     val opening: Boolean
-    fun prepare(home: Rect, envelope: Rect, density: Float): PopupOutline
+    fun prepare(home: Bounds, envelope: Bounds, density: Float): PopupOutline<Bounds>
 }
-internal interface PopupOutline {
+internal interface PopupOutline<Bounds> {
     val growing: Boolean
     val apertureSlot: Int
     val kickScale: Double
-    fun outline(action: FluidTimelineAction): List<Pair<Rect,Float>>?
+    fun outline(action: FluidTimelineAction): List<Pair<Bounds,Float>>?
     fun kick(action: FluidTimelineAction): Pair<Int,Float>?
 }
 

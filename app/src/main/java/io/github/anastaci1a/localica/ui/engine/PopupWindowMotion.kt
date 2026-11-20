@@ -53,8 +53,8 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private var nativeWindow: java.lang.ref.WeakReference<Any>? = null
     private var firstNativeMeasurement = false
     private var nativeHost: java.lang.ref.WeakReference<ShadowPlane>? = null
-    private data class FluidPlacement(val basis: ExpansionBasis, val preview: PopupOutlinePreview?, val intent: Boolean? = null,
-        val outline: PopupOutline? = null, val request: Pair<FluidTimelineStep,Double>? = null)
+    private data class FluidPlacement(val basis: ExpansionBasis, val preview: PopupOutlinePreview<Rect>?, val intent: Boolean? = null,
+        val outline: PopupOutline<Rect>? = null, val request: Pair<FluidTimelineStep,Double>? = null)
     private var placement: FluidPlacement? = null
     internal fun outlineBodies()=rectangle?.outlineBodies()
     internal fun outlineRadius()=rectangle?.outlineRadius()
@@ -103,7 +103,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         placement?.takeIf { it.intent==shown }?.request?.let { (step,speed) -> deliverOutline(step,speed) }
         fluidTimeline.release()
     }
-    fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false, preview: PopupOutlinePreview? = null) {
+    fun place(home: Rect, envelope: Rect, density: Float, detached: Boolean = false, preview: PopupOutlinePreview<Rect>? = null) {
         if (shown || openingEnvelope == null) openingEnvelope = envelope
         val capturedEnvelope = requireNotNull(openingEnvelope)
         // A detached window can present beyond its root viewport; its duration never exceeds the admitted travel.
