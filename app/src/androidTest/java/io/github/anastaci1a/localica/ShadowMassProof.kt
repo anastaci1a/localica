@@ -170,6 +170,9 @@ internal fun verifyShadowMassCallers(rule: ComposeContentTestRule, finalButtons:
                     "recovered" -> rule.mainClock.advanceTimeBy(1600)
                 }
                 rule.waitForIdle()
+                if (motion && caller == "shared-anchored" && phase == "recovered") {
+                    rule.awaitRetainedShadows("$caller-$background-$phase", "mass-body")
+                }
                 val semantics = target.fetchSemanticsNode()
                 val layoutBody = semantics.boundsInRoot
                 val owners = if (motion) shadowMassOwners(semantics) else null
