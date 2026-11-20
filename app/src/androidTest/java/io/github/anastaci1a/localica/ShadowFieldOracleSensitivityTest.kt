@@ -211,4 +211,13 @@ class ShadowFieldOracleSensitivityTest {
     @Test fun realShadowCallersHaveCompleteNativeFieldsInNormal() = verifyNativeShadowCallers(compose, GlassRendererMode.Normal)
     @Test fun projectedReferenceMatchesActualPressAndReboundInNormal() =
         verifyNativeShadowCallers(compose, GlassRendererMode.Normal, projectedReference = true)
+
+    @Test fun missingPressedShadowIsRejectedByFullPoseOracle() {
+        val failure = assertThrows(AssertionError::class.java) {
+            verifyNativeShadowCallers(compose, GlassRendererMode.Normal, suppressPressedShadow = true)
+        }
+        assertTrue("Suppression must fail at its selected press frame: ${failure.message}",
+            failure.message.orEmpty().contains("Normal-press-true-4"))
+    }
+
 }
