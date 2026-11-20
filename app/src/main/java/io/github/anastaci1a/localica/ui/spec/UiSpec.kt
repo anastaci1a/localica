@@ -287,6 +287,26 @@ internal fun fluidDestinationBlend(
 }
 
 internal object FluidGaussianSpec {
+    enum class NarrowWidth { Taps7, Taps11, Taps15, Taps19, Taps23, Taps27 }
+    enum class NarrowTexel { GaussianColor, Zero, ClampedSource, ExistingDestination }
+
+    class NarrowComputePass(val function: Int, val textureFunction: Int, private val finalPass: Boolean) {
+        val writeOptions get() = if (finalPass) 3 else 2
+
+        fun texel(inside: Boolean, edgePolicy: Int) = when {
+            inside -> NarrowTexel.GaussianColor
+            finalPass -> NarrowTexel.ExistingDestination
+            edgePolicy == 0 -> NarrowTexel.Zero
+            else -> NarrowTexel.ClampedSource
+        }
+    }
+
+    fun narrowCompute(width: NarrowWidth, finalRequested: Boolean, destinationFlags: Int): NarrowComputePass {
+        val finalPass = finalRequested && (destinationFlags and 0xa0000000.toInt()) == 0x80000000.toInt()
+        val base = if (finalPass) 0x18 else 0x12
+        return NarrowComputePass(base + width.ordinal, 0x21 + width.ordinal, finalPass)
+    }
+
     fun decodeBounds(encoded: DoubleArray?): DoubleArray? =
         encoded?.takeIf { it.size >= 4 }?.let { doubleArrayOf(it[0], it[1], it[2] - it[0], it[3] - it[1]) }
 
