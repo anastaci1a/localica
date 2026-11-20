@@ -239,6 +239,9 @@ internal class GlassPopupFlight(private val anchor: GlassAnchor? = null, private
     /** R5 optical body (B and D; the native field stays outside it) and the closing request's withdrawal at an ordinary source's draw entry. */
     var body: OpticalBody? = null
     var sourceDraw: ((DrawScope) -> Unit)? = null
+    fun clearSourceDraw(expected: (DrawScope) -> Unit) {
+        sourceDraw = sourceDraw.takeUnless { it === expected }
+    }
     fun withdrawBody(scope: DrawScope, request: Long) {
         val a = anchor ?: return
         val take = a.restoredBodyReceipt != request
@@ -702,8 +705,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 if (fieldReady) break
                             }
                         }
-                    } } finally { if (continuousOrigin?.withdrawal === withdrawal) continuousOrigin.withdrawal = null
-                        if (popupFlight.sourceDraw === withdrawal) popupFlight.sourceDraw = null }
+                    } } finally {
+                        continuousOrigin?.clearWithdrawal(withdrawal)
+                        popupFlight.clearSourceDraw(withdrawal)
+                    }
                     if (!gateCurrent()) continue@gateLoop
                     // Keep one frame in which the restored trigger is drawn while this modal
                     // still owns the window, so a reopen there reclaims the same dialog (#858).
@@ -994,7 +999,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             searchMotion.observer?.let { observer ->
                                 val placed = motion.bounds?.value()
                                 observer(SearchMorphSample(phase(), shown, bounds,
-                                    searchMotion.flight, if (shown) searchMotion.target else anchor.presentedBounds,
+                                    searchMotion.flight, motion.requestedEndpoint({ searchMotion.target }, { anchor.presentedBounds }),
                                     imeHeight, imeSource, imeTarget, placed?.bottom.takeIf { shown }, availableHeight.toFloat(),
                                     surfaceOpacity = surfaceOpacity(), nativeIme = nativeIme, windowFocused = windowFocused,
                                     slotFraction = popupFlight.searchSlot.fraction, slotTravel = popupFlight.searchSlot.travel,
@@ -1158,15 +1163,17 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         // Every layout retargets the one shared rectangle (position and velocity kept). A nested
                         // action menu freezes its parent until it has returned; IME-owned Back holds one layout.
                         if (!holdImeBack() && (placement != GlassPlacement.Search || childPanels.intValue == 0)) {
-                            val preview = if (motion.fluid) with(density) {
-                                FluidPopupPreview(home, windowOrigin, if (detached) popupRadius.toPx() else homeRadius().toPx(),
-                                    popupRadius.toPx(), TransformOrigin.Center.pivotFractionY.toDouble(), view.scaleY.toDouble())
-                            } else null
+                            val preview = motion.whenFluid {
+                                with(density) {
+                                    FluidPopupPreview(home, windowOrigin, if (detached) popupRadius.toPx() else homeRadius().toPx(),
+                                        popupRadius.toPx(), TransformOrigin.Center.pivotFractionY.toDouble(), view.scaleY.toDouble())
+                                }
+                            }
                             motion.place(home, envelope, density.density, detached = detached, preview = preview)
                             if (placement == GlassPlacement.Search) {
                                 searchMotion.target = envelope
                                 popupFlight.searchSlot.bindBottom(requireNotNull(motion.bounds).bottom,
-                                    if (motion.shown) envelope.bottom else home.bottom, if (motion.shown) 1f else 0f)
+                                    motion.requestedEndpoint({ envelope.bottom }, { home.bottom }), motion.requestedEndpoint({ 1f }, { 0f }))
                             }
                         }
                         val pixels = glassMorphPixelBounds(requireNotNull(motion.bounds).value().translate(-windowOrigin))
@@ -1180,7 +1187,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             val foregroundX = (width - foreground.width) / 2
                             val foregroundY = if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2
                             foreground.placeWithLayer(foregroundX, foregroundY) {
-                                if (motion.fluid) {
+                                motion.whenFluid {
                                     foregroundLens?.let { effect ->
                                         val blurRadius = motion.fluidBlurRadius
                                         val lensHeight = motion.fluidLensHeight
@@ -1193,7 +1200,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                             LensWarp(lensHeight, amount, 0f, IntSize(foreground.width, foreground.height.coerceAtLeast(1))),
                                         )
                                     }
-                                } else {
+                                    Unit
+                                } ?: run {
                                     val fit = popupContentScale(width,height,foreground.width,foreground.height,page || placement == GlassPlacement.Search)
                                     scaleX = fit; scaleY = fit
                                 }

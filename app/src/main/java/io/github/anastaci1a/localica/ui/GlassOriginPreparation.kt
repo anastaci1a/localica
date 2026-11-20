@@ -25,6 +25,9 @@ internal class GlassOriginPreparation(private val projection: io.github.anastaci
     private var presentedProgress = Float.NaN
     /** Installed by the closing popup (#748 R5): withdraws its optical body on the source DrawScope, before the source draws. */
     var withdrawal: ((androidx.compose.ui.graphics.drawscope.DrawScope) -> Unit)? = null
+    fun clearWithdrawal(expected: (androidx.compose.ui.graphics.drawscope.DrawScope) -> Unit) {
+        withdrawal = withdrawal.takeUnless { it === expected }
+    }
     /** Draws the source: the receipts qualify this actual layout pass after the current proof began; the engine checks its progress. */
     fun drawSource(scope: androidx.compose.ui.graphics.drawscope.DrawScope, sample: Float, receipt: Int, content: () -> Unit) =
         projection.drawOrigin(scope, sample, receipt == originReceipt && placedReceipt == receipt && placedProgress == sample, withdrawal, content)
