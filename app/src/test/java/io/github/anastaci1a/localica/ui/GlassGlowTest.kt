@@ -203,8 +203,57 @@ class GlassGlowTest {
     @Test fun frozenOpticsMatchTheAcceptedSliceOneSource() {
         val root = File("src/main/java/io/github/anastaci1a/localica/ui")
         fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        // Re-pinned for the shared refraction law (#1005); GlassRefractionTest pins its formulas.
-        assertEquals("3bbe5235adf8e87f0b047d0dfc35a4d0a247fb801d5a2b77a58d1541e74ecb91", sha(File(root, "LensRenderer.kt").readBytes()))
+        val lens = File(root, "LensRenderer.kt").readText()
+        val warpMode = "        shader.setFloatUniform(\"warpMode\", if (warp == null) 0f else 1f)\n"
+        assertTrue("A null warp must select stock optics", lens.contains(warpMode))
+        var stock = lens
+        fun replaceExact(before: String, after: String = "") {
+            val start = stock.indexOf(before)
+            check(start >= 0 && stock.indexOf(before, start + before.length) == -1) {
+                "Expected one renderer source span starting with ${before.lineSequence().first()}"
+            }
+            stock = stock.replaceRange(start, start + before.length, after)
+        }
+        fun subtract(first: String, next: String? = null) {
+            val start = stock.indexOf(first)
+            val end = if (next == null) stock.length else stock.indexOf(next, start + first.length)
+            check(start >= 0 && end > start && stock.indexOf(first, start + first.length) == -1) {
+                "Expected one Fluid source span starting with ${first.trim()}"
+            }
+            replaceExact(stock.substring(start, end))
+        }
+        replaceExact("""
+            import androidx.compose.ui.unit.IntSize
+            import io.github.anastaci1a.localica.ui.spec.FluidContentBlurIn
+            import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec
+            import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
+        """.trimIndent() + "\n")
+        replaceExact("""
+            |        uniform float4 mapShape;
+            |        uniform float2 mapAngle;
+            |        uniform float4 warp;
+            |        uniform float2 warpClamp;
+            |        uniform float warpMode;
+        """.trimMargin() + "\n")
+        subtract("        // Popup content warp:", "        half4 main(float2 p)")
+        replaceExact("            if (warpMode > 0.5) return warped(p, f);\n")
+        replaceExact(", warp: LensWarp? = null")
+        replaceExact("        val words = warp?.uniforms(unit)\n")
+        replaceExact(" + (words ?: FloatArray(0))")
+        subtract("        val w = words ?: FloatArray(12)\n", "        if (fieldBitmap !== map?.bitmap)")
+        subtract("\n/** Popup content warp inputs:")
+        // Zero fill makes identity exactly the complement of the accepted positive-radius test.
+        replaceExact(
+            "if (FluidGaussianSpec.isIdentity(blur.toDouble())) null\n" +
+                "                else android.graphics.RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP)",
+            "if (blur > 0f) android.graphics.RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP) else null",
+        )
+        // LensChainTest covers the installed blur order and identity elision.
+        replaceExact(
+            "lensChain(blurEffect, lens, android.graphics.RenderEffect::createChainEffect)",
+            "(blurEffect?.let { android.graphics.RenderEffect.createChainEffect(lens, it) } ?: lens)",
+        )
+        assertEquals("3bbe5235adf8e87f0b047d0dfc35a4d0a247fb801d5a2b77a58d1541e74ecb91", sha(stock.toByteArray()))
         val source = File(root, "LiquidGlass.kt").readText()
         val start = source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")
         val effect = source.substring(start, source.indexOf("\n                else if", start))
