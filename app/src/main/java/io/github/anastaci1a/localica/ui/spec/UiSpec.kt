@@ -429,15 +429,26 @@ internal fun fluidDestinationBlend(
 }
 
 internal object FluidGaussianSpec {
+    data class Capabilities(
+        val familySupportsCompute: Boolean, val computeDisableByte: Int,
+        val tileShaders: Boolean, val simdShuffleAndFill: Boolean, val tilePreferenceByte: Int,
+    ) {
+        val promotesCompute get() = familySupportsCompute && (computeDisableByte and 1) == 0
+        val jointTiles get() = tileShaders && (tilePreferenceByte xor 1) != 0
+
+        fun admitsSimd(edgeMode: Int, hasShape: Boolean, reinterpretedSource: Boolean) =
+            jointTiles && simdShuffleAndFill && edgeMode != 1 && !hasShape && !reinterpretedSource
+    }
+
     enum class Decimation(val factor: Int, val textureFunction: Int, val computeFunction: Int, val threadDivisor: UInt) {
         By2(2, 1, 0x25, 2u), By4(4, 0x1b, 0x0d, 2u), By8(8, 0x1d, 0x0f, 4u);
     }
 
     fun admitsTileDecimation(
         size: Decimation, hasShape: Boolean, blurFlags: Int, mode: Int,
-        contextAllowsTile: Boolean, isCurrentSurface: Boolean, sourceLevel: Int,
+        capabilities: Capabilities, isCurrentSurface: Boolean, sourceLevel: Int,
     ) = !hasShape && (blurFlags and 2) == 0 && ((blurFlags and 1) == 0 || mode != 1) &&
-        contextAllowsTile && isCurrentSurface && (sourceLevel and 15) >= size.factor
+        capabilities.jointTiles && isCurrentSurface && (sourceLevel and 15) >= size.factor
 
     data class TileDecimationPass(
         val function: String, val threads: Pair<UInt, UInt>, val offsetLanes: Int, val gainInputs: Pair<Float, Float>,

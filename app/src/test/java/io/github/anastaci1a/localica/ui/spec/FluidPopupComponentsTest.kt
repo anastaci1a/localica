@@ -477,10 +477,11 @@ class FluidPopupComponentsTest {
 
     @Test fun gaussianTileDecimationUsesLiveAdmissionAndTheNamedThreadDivisors() {
         val factors = FluidGaussianSpec.Decimation.entries
+        val capabilities = FluidGaussianSpec.Capabilities(true, 0, true, true, 0)
         for (size in factors) {
             fun admits(shape: Boolean = false, flags: Int = 0, mode: Int = 0,
                 allowed: Boolean = true, current: Boolean = true, level: Int = 0xf0 or size.factor,
-            ) = FluidGaussianSpec.admitsTileDecimation(size, shape, flags, mode, allowed, current, level)
+            ) = FluidGaussianSpec.admitsTileDecimation(size, shape, flags, mode, capabilities.copy(tileShaders = allowed), current, level)
             assertTrue(admits())
             assertTrue(admits(flags = 1, mode = 2))
             assertFalse(admits(shape = true))
@@ -504,6 +505,27 @@ class FluidPopupComponentsTest {
         assertEquals(null, tile(factors.first(), destinationFlags = 8))
         assertEquals(null, tile(factors.first(), sourceFlags = 0x40))
         assertEquals(null, tile(factors.last(), tileSize = 3u to 8u))
+    }
+
+    @Test fun gaussianCapabilitiesUseDistinctLiveComputeAndTilePreferences() {
+        val caps = FluidGaussianSpec.Capabilities(
+            familySupportsCompute = true, computeDisableByte = 0,
+            tileShaders = true, simdShuffleAndFill = true, tilePreferenceByte = 0,
+        )
+        assertTrue(caps.promotesCompute)
+        assertTrue(caps.copy(computeDisableByte = 2).promotesCompute)
+        assertFalse(caps.copy(computeDisableByte = 3).promotesCompute)
+        assertFalse(caps.copy(familySupportsCompute = false).promotesCompute)
+        assertTrue(caps.copy(tilePreferenceByte = 3).jointTiles)
+        assertFalse(caps.copy(tilePreferenceByte = 1).jointTiles)
+        assertFalse(caps.copy(tileShaders = false).jointTiles)
+        assertTrue(caps.copy(simdShuffleAndFill = false).jointTiles)
+        assertTrue(caps.admitsSimd(0, hasShape = false, reinterpretedSource = false))
+        assertTrue(caps.admitsSimd(2, hasShape = false, reinterpretedSource = false))
+        assertFalse(caps.admitsSimd(1, hasShape = false, reinterpretedSource = false))
+        assertFalse(caps.admitsSimd(0, hasShape = true, reinterpretedSource = false))
+        assertFalse(caps.admitsSimd(0, hasShape = false, reinterpretedSource = true))
+        assertFalse(caps.copy(simdShuffleAndFill = false).admitsSimd(0, hasShape = false, reinterpretedSource = false))
     }
 
     @Test fun gaussianBoxFallbackKeepsAxisScalesAndTheComputeAndDrawInputsSeparate() {
