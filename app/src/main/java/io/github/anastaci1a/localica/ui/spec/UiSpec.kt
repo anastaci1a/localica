@@ -102,6 +102,19 @@ internal val FluidContentDefaults = FluidContentSettings(
 internal data class FluidPopupStep(val storedDelay: Double, val spring: FluidPopupSpringSettings) {
     fun dueThreshold(effectiveSpeed: Double, amplify: Boolean, drag: Double) = fluidStoredDelay(storedDelay, effectiveSpeed, amplify) * drag
 }
+internal enum class FluidGeometryAction { CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick }
+internal data class FluidGeometryStep(val action: FluidGeometryAction, val timing: FluidPopupStep)
+
+internal fun fluidThroughMainSpring(growing: Boolean, eject: FluidPopupSpringSettings, absorb: FluidPopupSpringSettings) =
+    if (growing) eject else absorb
+
+internal fun fluidGrowingGeometryPrefix(mainEject: FluidPopupSpringSettings) = listOf(
+    FluidGeometryStep(FluidGeometryAction.CollapsedSource, FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.3))),
+    FluidGeometryStep(FluidGeometryAction.ExpandedOverrounded, FluidPopupStep(0.0, mainEject)),
+    FluidGeometryStep(FluidGeometryAction.FullyExpanded, FluidPopupStep(0.1, mainEject)),
+    FluidGeometryStep(FluidGeometryAction.Kick, FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.2))),
+)
+
 internal data class FluidContentBlurSequence(val blurOut: FluidPopupStep, val blurIn: FluidPopupStep)
 internal data class FluidContentBlurRequest(val portalScale: Double, val gaussianRadius: Double)
 internal fun fluidContentBlurOut(height: Double, maxScale: () -> Double, minScale: () -> Double): FluidContentBlurRequest {
@@ -215,7 +228,7 @@ internal object FluidLensingSpec {
         val d0 = if (largerAnchorY == 0.5) convertedLargerHeight else smallerShort
         return listOf(
             Request(FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.2)), 1.0, if (growing) d0 else largerShort),
-            Request(FluidPopupStep(0.0, if (growing) mainEject else mainAbsorb), 1.0, if (growing) largerShort else d0),
+            Request(FluidPopupStep(0.0, fluidThroughMainSpring(growing, mainEject, mainAbsorb)), 1.0, if (growing) largerShort else d0),
             Request(FluidPopupStep(fluidThroughTailDelay(growing), FluidPopupSpringSettings(1.0, if (growing) 0.3 else 0.4)), 0.0, null),
         )
     }
