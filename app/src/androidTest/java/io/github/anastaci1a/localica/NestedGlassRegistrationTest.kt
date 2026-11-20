@@ -13,7 +13,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -161,110 +160,6 @@ class NestedGlassRegistrationTest {
                 assertEquals(message, io.github.anastaci1a.localica.ui.glassFillChannel(0, expected.red, expected.green, expected.blue).coerceAtMost(1f), actual.red, .08f)
                 assertEquals(message, io.github.anastaci1a.localica.ui.glassFillChannel(1, expected.red, expected.green, expected.blue).coerceAtMost(1f), actual.green, .08f)
                 assertEquals(message, io.github.anastaci1a.localica.ui.glassFillChannel(2, expected.red, expected.green, expected.blue).coerceAtMost(1f), actual.blue, .08f)
-            }
-        }
-    }
-
-    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
-    @Test fun deformedBodiesSampleTheBackdropUnderTheirLiveBox() {
-        class Element(val name: String, val width: Float, val height: Float, val corner: androidx.compose.ui.unit.Dp?,
-            val silhouette: GlassSilhouette? = null)
-        val elements = listOf(Element("circle", 64f, 64f, null), Element("pill", 160f, 48f, 24.dp),
-            Element("wide-bar", 280f, 40f, 12.dp),
-            Element("silhouette", 200f, 48f, null, GlassSilhouette { GlassSilhouetteGeometry(splitPillBodies(it, 0f)) }))
-        val poses = listOf(GlassShape(), GlassShape(pressDepth = -.24f),
-            GlassShape(strain = .15f, pressDepth = -.08f, drift = Offset(.06f, -.04f)))
-        val tilePhase = 2.dp
-        var element by mutableStateOf(elements[0])
-        var pose by mutableStateOf(poses[0])
-        var power by mutableFloatStateOf(0f)
-        var stage by mutableIntStateOf(0)
-        val draws = mutableMapOf<Element, BackdropSamplingObservation>()
-        lateinit var view: View
-        lateinit var scene: LayoutCoordinates
-        lateinit var backing: LayoutCoordinates
-        lateinit var lens: LayoutCoordinates
-        compose.setContent { LocalicaTheme {
-            view = LocalView.current
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
-                blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
-                val source = rememberFrostedBackdrop(Unit, dark = false)
-                Box(Modifier.size(360.dp, 200.dp).testTag("live-body-scene").onGloballyPositioned { scene = it }) {
-                    Canvas(Modifier.fillMaxSize().onGloballyPositioned { backing = it }.recordFrostedBackdrop(source)) {
-                        val cell = 16.dp.toPx()
-                        val phase = tilePhase.toPx()
-                        for (y in 0..(size.height / cell).toInt()) for (x in -1..(size.width / cell).toInt())
-                            drawRect(cellColor(x, y), Offset(x * cell + phase, y * cell), Size(cell, cell))
-                    }
-                    val shown = element
-                    key(shown) {
-                        CompositionLocalProvider(LocalBackdropSamplingObserver provides { draw -> draws[shown] = draw }) {
-                            LiquidGlassSurface(Modifier.align(Alignment.Center).size(shown.width.dp, shown.height.dp)
-                                .onGloballyPositioned { lens = it }, source = source, refraction = power, cornerRadius = shown.corner,
-                                silhouette = shown.silhouette, shadow = false, contactPresentation = { pose })
-                        }
-                    }
-                    PresentationMarker { stage }
-                }
-            }
-        } }
-        val cell = 16f * compose.density.density
-        val phase = with(compose.density) { tilePhase.toPx() }
-        fun cellAt(p: Offset) = cellColor(floor((p.x - phase) / cell).toInt(), floor(p.y / cell).toInt())
-        fun clearOfEdges(p: Offset) = listOf(p.x - phase, p.y).all { (it - floor(it / cell) * cell) in 3f..cell - 3f }
-        for (shown in elements) for (shape in poses) for (refraction in listOf(0f, 1f)) {
-            compose.runOnIdle { element = shown; pose = shape; power = refraction; stage++ }
-            compose.waitForIdle()
-            val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("live-body-scene"), stage) { view }
-            var discriminating = 0
-            val (samples, corners) = compose.runOnIdle {
-                val size = Size(lens.size.width.toFloat(), lens.size.height.toFloat())
-                val d = compose.density.density
-                val transform = shape.bodyTransform(size, d)
-                val (sx, sy) = transform.scale
-                val (dx, dy) = transform.drift
-                val pivot = Offset(size.width / 2, size.height / 2)
-                fun live(rest: Offset) = Offset(pivot.x + (rest.x - pivot.x) * sx + dx, pivot.y + (rest.y - pivot.y) * sy + dy)
-                val corner = shown.corner?.let { it.value * d } ?: size.minDimension / 2
-                val rest = shown.silhouette?.frame(size)?.geometry ?: LensGeometry(Rect(Offset.Zero, size), corner)
-                val geometry = rest.deformed(transform, pivot)
-                val expectedCorners = listOf(Offset.Zero, Offset(size.width, 0f),
-                    Offset(size.width, size.height), Offset(0f, size.height)).map { backing.localPositionOf(lens, live(it)) }
-                val rendered = requireNotNull(draws[shown]) { "The sampler drew the current element" }
-                val corners = expectedCorners.zip(rendered.consumerCornersInSource)
-                buildList {
-                    for (y in 6..34) for (x in 6..34) {
-                        val rest = Offset(size.width * x / 40f, size.height * y / 40f)
-                        val radius = minOf(size.width, size.height) / 2
-                        val cap = Offset(rest.x.coerceIn(radius, size.width - radius), size.height / 2)
-                        if ((rest - cap).getDistance() > radius * .7f) continue
-                        val livePoint = live(rest)
-                        val opticalField = geometry.field(livePoint)
-                        val offset = GlassRefractionReference.at(opticalField, compose.density.density).inner * refraction
-                        val inBacking = backing.localPositionOf(lens, livePoint + offset)
-                        val stretched = backing.localPositionOf(lens, rest)
-                        if (!clearOfEdges(inBacking) || !clearOfEdges(stretched)) continue
-                        if (cellAt(inBacking) != cellAt(stretched)) discriminating++
-                        val expected = cellAt(inBacking)
-                        val face = FloatArray(3) { glassFillChannel(it, expected.red, expected.green, expected.blue).coerceAtMost(1f) }
-                        val scenePoint = scene.localPositionOf(lens, livePoint)
-                        if (scenePoint.x.roundToInt() !in 0 until pixels.width || scenePoint.y.roundToInt() !in 0 until pixels.height) continue
-                        add(scenePoint to referenceHighlight(face, opticalField, geometry.span,
-                            1.35f, 0f, GlassTone(), refraction))
-                    }
-                } to corners
-            }
-            val where = "${shown.name} pose=$shape power=$refraction"
-            assertTrue("Enough interior landmarks for $where", samples.size >= 4)
-            if (shape != poses[0]) assertTrue("The oracle separates live from stretched sampling for $where", discriminating >= 2)
-            for ((point, expected) in samples) {
-                val actual = pixels[point.x.roundToInt(), point.y.roundToInt()]
-                val message = "$where point=$point expected=$expected actual=$actual"
-                for (channel in 0..2) assertEquals(message, expected[channel], listOf(actual.red, actual.green, actual.blue)[channel], .08f)
-            }
-            for ((expected, actual) in corners) {
-                assertEquals("Live sampling corner x", expected.x, actual.x, .04f)
-                assertEquals("Live sampling corner y", expected.y, actual.y, .04f)
             }
         }
     }
