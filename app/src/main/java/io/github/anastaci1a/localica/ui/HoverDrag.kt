@@ -48,8 +48,6 @@ internal class HoverCardFrame(
 internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: FrostedBackdrop?, liftStyle: LiftShadow,
     stackShadow: () -> Float = { 0f }, contentAlpha: () -> Float = frame.alpha,
     content: @Composable BoxScope.() -> Unit) {
-    val averageProgress = glassAverageProgress()
-    val flatColor = if (flatGlass()) flatGlassColor() else null
     val group = rememberHoverGroupRenderer()
     val location = remember { BackdropLocation() }
     val density = LocalDensity.current
@@ -59,13 +57,12 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
         // into the list, while its cover and text stay opaque until the row is ready.
         Box(Modifier.matchParentSize().graphicsLayer { alpha = frame.alpha().coerceIn(0f, 1f) }.drawWithContent {
             val geometry = frame.geometry()
-            with(group.surface(listOf(0), flatColor != null)) {
+            with(group.surface(listOf(0))) {
                 drawShadow(listOf(geometry.lifted.contour to 1f), .22f * liftStyle.strength * stackShadow(),
                     liftStyle.spread, color = liftStyle.color)
             }
             drawHoverGroup(group, listOf(geometry), { _, _ -> 1f }, backing, location, Build.VERSION.SDK_INT >= 33,
-                density, direction, MediaSelectionGap.toPx(), sampleOffset = frame.sampleShift(), shadow = false, lift = liftStyle,
-                averageProgress = averageProgress.value, flatColor = flatColor)
+                density, direction, MediaSelectionGap.toPx(), sampleOffset = frame.sampleShift(), shadow = false, lift = liftStyle)
         })
         Box(Modifier.graphicsLayer { alpha = contentAlpha().coerceIn(0f, 1f) }.drawWithContent {
             val geometry = frame.geometry()
@@ -82,8 +79,6 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
 @Composable
 internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: FrostedBackdrop?, liftStyle: LiftShadow,
     modifier: Modifier) {
-    val averageProgress = glassAverageProgress()
-    val flatColor = if (flatGlass()) flatGlassColor() else null
     val shadow = rememberHoverGroupRenderer()
     val location = remember { BackdropLocation() }
     val density = LocalDensity.current
@@ -113,6 +108,6 @@ internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: Fros
         // their own backdrop. No strength cutoff removes a finite bridge.
         drawHoverGroup(shadow,placed,{ a,b -> strengths[min(a,b)][max(a,b)] },backing,location,
             Build.VERSION.SDK_INT >= 33,density,direction,gap,sampleOffset = cards.first().sampleShift(),
-            opacity = alphas.maxOrNull() ?: 0f,itemOpacity = alphas,lift = liftStyle,averageProgress = averageProgress.value, flatColor = flatColor)
+            opacity = alphas.maxOrNull() ?: 0f,itemOpacity = alphas,lift = liftStyle)
     })
 }

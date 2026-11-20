@@ -441,7 +441,7 @@ class PopupFamilyPresentationTest {
             .put("api", Build.VERSION.SDK_INT).put("declaredTotalCaptures", 5).put("requestedCopies", requests)
             .put("fixedOrder", JSONArray(labels)).put("records", records)
             .put("fixture", "Actual LocalicaScreen/TagEditorHost; synthetic three-song album; real in-memory Queue/Playlist controllers; default InterfaceSettings; no playback service attached")
-            .put("configuredAppearance", InterfaceSettings().glass.toString())
+            .put("configuredAppearance", "Default")
             .put("readiness", "Default motion; clock paused only to install native draw witness on new production window, then ordinary Compose idle + focus/layout/draw. No forced redraw.")
             .put("limitations", "Presentation diagnostics, NOT band acceptance. No physical display/compositor identity, native sampled revision, direct-menu expansion/anchor/shadow receipt, or cross-family equal-crop claim. No image-driven readiness or optical thresholds. Original full window buffers retained; only ownership/route/readiness assertions.")
             .toString(2))

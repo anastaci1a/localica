@@ -81,7 +81,6 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     SettingsInterface("settings.interface", R.drawable.ic_settings_interface),
     SettingsAppearance("settings.appearance", R.drawable.ic_settings_appearance),
     SettingsIconPacks("settings.icon_packs", R.drawable.ic_settings_icon_packs),
-    SettingsGlass("settings.glass", R.drawable.ic_settings_glass),
     SettingsNavigation("settings.navigation", R.drawable.ic_settings_navigation),
     SettingsPlayer("settings.player", R.drawable.ic_settings_player),
     SettingsMotion("settings.motion", R.drawable.ic_settings_motion),

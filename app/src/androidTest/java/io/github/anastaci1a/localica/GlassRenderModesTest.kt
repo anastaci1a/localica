@@ -14,8 +14,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.navigation.GlassAppearance
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -27,13 +25,12 @@ class GlassRenderModesTest {
     @get:Rule val compose = localicaComposeRule()
 
     @Test fun popupMaterialSamplesItsPhaseInDrawingAndMatchesStaticMaterials() {
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+
         val phase = mutableFloatStateOf(0f)
         var compositions = 0
         lateinit var source: FrostedBackdrop
-        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = .3f, whiteTint = .2f,
-                contrast = 0f, shadowStrength = 0f)) {
+        compose.setContent {  LocalicaTheme {
+
                 SideEffect { compositions++ }
                 source = rememberFrostedBackdrop(Unit, dark = false)
                 Box(Modifier.size(240.dp, 300.dp)) {
@@ -51,11 +48,10 @@ class GlassRenderModesTest {
                             })
                     }
                 }
-            }
-        } } }
+
+        }  }
         compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
-        for (mode in listOf(GlassRendererMode.Normal)) {
-            compose.runOnIdle { runtime.request(mode) }
+        run {
             compose.waitForIdle()
             val settled = compositions
             for (p in listOf(0f, .4f, 1f, .4f, 0f)) {
@@ -67,10 +63,10 @@ class GlassRenderModesTest {
                 assertEquals(reference.height, actual.height)
                 for (y in 0 until actual.height step 7) for (x in 0 until actual.width step 7) {
                     val a = actual[x, y]; val b = reference[x, y]
-                    assertEquals("Red mode=$mode p=$p ($x,$y)", b.red, a.red, .025f)
-                    assertEquals("Green mode=$mode p=$p ($x,$y)", b.green, a.green, .025f)
-                    assertEquals("Blue mode=$mode p=$p ($x,$y)", b.blue, a.blue, .025f)
-                    assertEquals("Alpha mode=$mode p=$p ($x,$y)", b.alpha, a.alpha, .025f)
+                    assertEquals("Red default p=$p ($x,$y)", b.red, a.red, .025f)
+                    assertEquals("Green default p=$p ($x,$y)", b.green, a.green, .025f)
+                    assertEquals("Blue default p=$p ($x,$y)", b.blue, a.blue, .025f)
+                    assertEquals("Alpha default p=$p ($x,$y)", b.alpha, a.alpha, .025f)
                 }
                 assertEquals("Draw-time phase must not recompose the material owner", settled, compositions)
             }
@@ -78,14 +74,13 @@ class GlassRenderModesTest {
     }
 
     @Test fun switchingAndReversingNeverDropsTheBackingOrReplacesTheSurface() {
-        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+
         var stage by mutableIntStateOf(0)
         lateinit var view: android.view.View
         lateinit var source: FrostedBackdrop
         val owners = mutableSetOf<Int>()
-        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = 0f,
-                contrast = 0f, shadowStrength = 0f), LocalGlassSurfaceDrawObserver provides { glassDrawProbe?.invoke(it); (it as? GlassSurfaceDrawObservation)?.let { o -> owners += o.surfaceIdentity } }) {
+        compose.setContent {  LocalicaTheme {
+            CompositionLocalProvider( LocalGlassSurfaceDrawObserver provides { glassDrawProbe?.invoke(it); (it as? GlassSurfaceDrawObservation)?.let { o -> owners += o.surfaceIdentity } }) {
                 view = androidx.compose.ui.platform.LocalView.current
                 source = rememberFrostedBackdrop(Unit, dark = false)
                 Box(Modifier.size(180.dp).testTag("switch-frame")) {
@@ -98,20 +93,18 @@ class GlassRenderModesTest {
                     PresentationMarker { stage }
                 }
             }
-        } } }
+        }  }
         compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
         compose.mainClock.autoAdvance = false
         try {
-            for (mode in listOf(GlassRendererMode.FlatNone, GlassRendererMode.Normal, GlassRendererMode.FlatNone)) {
-                compose.runOnIdle { runtime.request(mode) }
+            repeat(3) {
                 repeat(12) {
                     val token = compose.runOnIdle { stage = stage % 30 + 1; stage }
                     compose.mainClock.advanceTimeByFrame()
                     val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("switch-frame"), token) { view }
                     val c = pixels[pixels.width / 3, pixels.height / 2]
-                    assertTrue("Backing vanished during mode switch: $mode frame=$it color=$c", c.red > .35f && c.blue > .35f)
-                    // FlatNone composes a layer-less backdrop that never records; Normal records every frame.
-                    assertEquals("Recording follows the renderer: $mode frame=$it", mode == GlassRendererMode.Normal,
+                    assertTrue("Backing vanished during mode redraw frame=$it color=$c", c.red > .35f && c.blue > .35f)
+                    assertEquals("Recording follows the renderer: Default frame=$it", true,
                         compose.runOnIdle { source.recorded })
                 }
             }

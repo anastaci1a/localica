@@ -52,8 +52,14 @@ class UiPerformanceTest {
         folders = listOf(FolderSelection("fixture", "Fixture")), tracks = tracks), loading = false) }
     private val queue by lazy { ListeningQueue(id = "fixture", name = "Fixture", createdAt = 0,
         entries = tracks.mapIndexed { n, track -> QueueEntry("entry:$n", track) }) }
-    private val glassMode = GlassRendererMode.FlatNone
-    private var effectiveMode = "unobserved"
+    private val executedPaths = mutableSetOf<String>()
+    private var observeMaterial by mutableStateOf(true)
+    private val observedBackend get() = when {
+        executedPaths.isEmpty() -> "unobserved"
+        executedPaths.all { it == "average-fallback" } -> GlassBackend.AverageFallback.name
+        executedPaths.all { it == "lens" || it == "material-average" } -> GlassBackend.Normal.name
+        else -> "mixed:$executedPaths"
+    }
     private val events = mutableListOf<JSONObject>()
     private val windows = mutableSetOf<Window>() // main thread only
     private var scenario: ActivityScenario<ComponentActivity>? = null
@@ -61,8 +67,30 @@ class UiPerformanceTest {
     private var tone by mutableFloatStateOf(.4f)
     private var lyrics by mutableStateOf(LyricsResult())
 
-    @Test fun performanceRendererUsesExplicitFlatNone() {
-        org.junit.Assert.assertEquals(GlassRendererMode.FlatNone, glassMode)
+    @Test fun sceneBackendComesFromCompletedMaterialDraw() {
+        try {
+            launch {
+                val source = rememberFrostedBackdrop(Unit, dark = false)
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().then(
+                    Modifier.semantics { testTag = "backend-draw-scene" })) {
+                    androidx.compose.foundation.Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                        drawRect(androidx.compose.ui.graphics.Color.Red)
+                        drawRect(androidx.compose.ui.graphics.Color.Blue, size = size.copy(width = size.width / 2f))
+                    }
+                    LiquidGlassSurface(Modifier.fillMaxSize(), source, pressFeedback = false, shadow = false)
+                }
+            }
+            awaitStableScene()
+            val until = SystemClock.uptimeMillis() + 10_000
+            while (nodes { executedPaths.isEmpty() } && SystemClock.uptimeMillis() < until) Thread.sleep(25)
+            main {
+                check(observedBackend == effectiveGlassBackend(Build.VERSION.SDK_INT).name) { "Completed draw paths: $executedPaths" }
+                check(if (Build.VERSION.SDK_INT >= 33) "lens" in executedPaths else "average-fallback" in executedPaths)
+            }
+        } finally {
+            if (activity != null) main { it.setContent {} }
+            scenario?.close(); scenario = null; activity = null; windows.clear()
+        }
     }
 
     @Test fun measurePureUiScenarios() {
@@ -79,8 +107,7 @@ class UiPerformanceTest {
             .associateWith { context.getSharedPreferences(it, 0).all.toMap() }
         try {
             context.getSharedPreferences("interface", 0).edit().clear()
-                .putString("tabs", "Songs,Albums,Home").putString("glass-renderer", glassMode.name)
-                .putFloat("glass-blur", 0f).putFloat("tab-lens-blur", 0f).putBoolean("glass-live-scroll", false).commit()
+                .putString("tabs", "Songs,Albums,Home").commit()
             PinPreferences(context).write(tracks.take(30).map { MediaRef(MediaKind.Song, it.id) })
             var measuredScenarios = 0
             fun measure(name: String, launch: () -> Unit, prepare: () -> Unit = {}, action: () -> Unit) {
@@ -94,9 +121,12 @@ class UiPerformanceTest {
                             check(context.getSharedPreferences(it, 0).edit().clear().commit())
                         }
                         launch(); prepare(); awaitStableScene(); events.clear()
+                        main {
+                            check(observedBackend == effectiveGlassBackend(Build.VERSION.SDK_INT).name) { "Executed material paths: $executedPaths" }
+                            observeMaterial = false
+                        }
+                        awaitStableScene()
                         main { activity ->
-                            check(io.github.anastaci1a.localica.navigation.InterfacePreferences(context).read().glass.renderer == GlassRendererMode.FlatNone)
-                            check(effectiveMode == "FlatNone") { "Effective scene backend: $effectiveMode" }
                             if (!protocolLegacy) FrameStats.setScenarioTag(name)
                             FrameStats.start(activity)
                             windows.forEach { FrameStats.attach(it) }
@@ -112,12 +142,13 @@ class UiPerformanceTest {
                         Thread.sleep(300)
                         val report = JSONObject(FrameStats.report()).put("scenario", name).put("rep", rep)
                             .put("warmup", warmup && rep == 0).put("protocolLegacy", protocolLegacy).put("seed", seed).put("songs", tracks.size)
-                            .put("api", Build.VERSION.SDK_INT).put("glassMode", glassMode.name)
-                            .put("glassFallback", false).put("requestedGlass", "FlatNone").put("observedSceneBackend", effectiveMode)
+                            .put("api", Build.VERSION.SDK_INT).put("glassBackend", observedBackend)
+                            .put("glassFallback", observedBackend == GlassBackend.AverageFallback.name).put("observedSceneBackend", observedBackend)
+                            .put("executedMaterialPaths", org.json.JSONArray(executedPaths))
                             .put("scriptVersion", "stage0-flat-none-v1").put("actions", org.json.JSONArray(events))
                             .put("artwork", "placeholders; no media I/O")
                             .put("source", args.getString("uiPerformanceSource") ?: "unspecified")
-                        check(report.getString("effectiveGlass") == "FlatNone")
+                        check(report.getString("expectedGlass") == observedBackend)
                         if (!protocolLegacy) check(report.getString("source") == BuildConfig.SOURCE_SHA && report.getString("buildSource") == BuildConfig.SOURCE_SHA)
                         check(!report.getBoolean("windowLimitReached"))
                         check(!report.getBoolean("timeLimitReached")) { "$name exceeded the capture time limit" }
@@ -302,17 +333,20 @@ class UiPerformanceTest {
     }
     private fun launch(content: @Composable () -> Unit) {
         tone = .4f
+        executedPaths.clear(); observeMaterial = true
         scenario = ActivityScenario.launch(ComponentActivity::class.java)
         requireNotNull(scenario).onActivity { activity = it }
         main { activity ->
             windows += activity.window
             activity.setContent {
-                val runtime = remember { GlassRendererRuntime(glassMode) }
-                SideEffect { effectiveMode = runtime.generation.backend.name }
-                CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
+
+
+                CompositionLocalProvider(
+                    LocalBackdropSamplingObserver provides if (observeMaterial) { receipt ->
+                        receipt.executedPath?.let { executedPaths += it }
+                    } else null,
                     LocalGlassMorphWorkObserver provides { _, window, _ ->
                         if (window != null) {
-                            check(runtime.requested == GlassRendererMode.FlatNone && runtime.generation.backend == GlassBackend.FlatNone)
                             windows += window; FrameStats.attach(window)
                         }
                     }, LocalBrowseObscuredInset provides 96.dp) { LocalicaTheme(tone, content) }

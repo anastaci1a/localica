@@ -107,7 +107,7 @@ class SettingsLinkMorphTest {
                 MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.Red, onSurfaceVariant = Color.Red)) {
                     child = rememberGlassAnchor()
                     Column(Modifier.fillMaxWidth().padding(24.dp)) {
-                        SettingsLink("Selector style", "Overlay", anchor = child) { childOpen = true }
+                        SettingsLink("Previous button", "Restart behavior", anchor = child) { childOpen = true }
                         Spacer(Modifier.height(160.dp))
                     }
                     GlassMorphPopup(childOpen, child, { childOpen = false }) {
@@ -129,7 +129,7 @@ class SettingsLinkMorphTest {
         advanceReturn(1500)
         assertFalse(child.hidden)
         assertTrue(parent.hidden)
-        compose.onNodeWithText("Selector style").assertIsDisplayed()
+        compose.onNodeWithText("Previous button").assertIsDisplayed()
         compose.runOnIdle { parentOpen = false }
         advanceReturn(1500)
         assertFalse(parent.hidden)

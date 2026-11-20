@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
-import io.github.anastaci1a.localica.ui.spec.glassLayoutInset
+import io.github.anastaci1a.localica.ui.spec.GlassShadowStrength
+import io.github.anastaci1a.localica.ui.spec.GlassShadowSpread
+
 import io.github.anastaci1a.localica.ui.spec.glassShadowInset
 import io.github.anastaci1a.localica.ui.components.TriggerRole
 
@@ -26,8 +28,7 @@ import kotlin.math.exp
 import kotlinx.coroutines.*
 
 /** Reserve the same extent that the shadow renderer actually draws. */
-@Composable internal fun glassShadowInset(): Dp = glassShadowInset(LocalGlassAppearance.current.shadowSpread)
-@Composable internal fun glassLayoutInset(): Dp = glassLayoutInset(LocalGlassAppearance.current.shadowSpread)
+@Composable internal fun glassShadowInset(): Dp = glassShadowInset(GlassShadowSpread)
 
 /** Lambda offset uses a surface-sized placement layer, clipping overflowing shadows
  * on legacy Android even without an alpha layer. Keep its placement-phase reads,
@@ -40,10 +41,9 @@ internal fun Modifier.glassShadowOffset(offset: Density.() -> IntOffset): Modifi
     }
 }
 
-/** Expand a scrolling strip's clip, without changing its content's layout slot.
- * Pair with matching inner padding after horizontalScroll. */
-internal fun Modifier.shadowViewportOutset(inset: Dp, horizontal: Boolean = false): Modifier = layout { measurable, constraints ->
-    val pad = inset.roundToPx()
+/** Fixed content spacing shared by the scrolling strip and its measurement. */
+internal fun Modifier.stripContentOutset(horizontal: Boolean = false): Modifier = layout { measurable, constraints ->
+    val pad = io.github.anastaci1a.localica.ui.spec.GlassLayoutInset.roundToPx()
     val side = if (horizontal) pad else 0
     val child = measurable.measure(constraints.offset(horizontal = side * 2, vertical = pad * 2))
     layout((child.width - side * 2).coerceAtLeast(0), (child.height - pad * 2).coerceAtLeast(0)) { child.place(-side, -pad) }
@@ -76,19 +76,17 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
  * Never hoist a scrolling page or modal's descendants into a window-wide group. */
 @Composable internal fun GlassShadowScope(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
     val plane = rememberShadowPlane()
-    val appearance = LocalGlassAppearance.current
     CompositionLocalProvider(LocalSurfaceShadows provides plane) {
-        ShadowPlaneHost(plane, appearance.shadowStrength, appearance.shadowSpread, modifier, content)
+        ShadowPlaneHost(plane, GlassShadowStrength, GlassShadowSpread, modifier, content)
     }
 }
 
 @Composable internal fun Modifier.surfaceGlassShadow(radius: Dp?, anchor: GlassAnchor?, group: ShadowPlane? = LocalSurfaceShadows.current, opacity: () -> Float = { 1f }): Modifier {
-    val appearance = LocalGlassAppearance.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val key = anchor ?: remember { Any() }
     val plane = group ?: rememberShadowPlane()
     val registration = anchor.glassAnchor(TriggerRole.MaterialSurface(plane))
-    val host = if (group == null) Modifier.shadowPlaneHost(plane, appearance.shadowStrength, appearance.shadowSpread) else Modifier
+    val host = if (group == null) Modifier.shadowPlaneHost(plane, GlassShadowStrength, GlassShadowSpread) else Modifier
     return this.then(host).glassCaster(plane, key, if (group == null) ({ 1f }) else opacity, onNode = registration, retained = (anchor?.surfaceNode) ?: anchor?.returningNode?.takeIf { it.windowRetained() }, inheritsBodyScale = group == null) {
             if (group != null) glassCasterBody(it, density, radius, anchor, opacity())
             else if (anchor?.modalPresent == true && anchor.surfaceNode?.windowRetained() != true) null else glassCasterBody(it, density, radius, null)
@@ -136,9 +134,8 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
 
 @Composable internal fun Modifier.silhouetteGlassShadow(shape: GlassSilhouette): Modifier {
     val cache = rememberGlassShadow()
-    val appearance = LocalGlassAppearance.current
     return drawBehind {
-        with(cache) { draw(shape.frame(size).bodies.map { it to 1f }, appearance.shadowStrength, appearance.shadowSpread) }
+        with(cache) { draw(shape.frame(size).bodies.map { it to 1f }, GlassShadowStrength, GlassShadowSpread) }
     }
 }
 
@@ -151,8 +148,7 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
 
 /** Compatibility host for existing synthetic scenes; production uses the Engine viewport host. */
 @Composable internal fun Modifier.pageShadowHost(plane: ShadowPlane): Modifier {
-    val appearance = LocalGlassAppearance.current
-    return shadowPlaneHost(plane, appearance.shadowStrength, appearance.shadowSpread)
+    return shadowPlaneHost(plane, GlassShadowStrength, GlassShadowSpread)
 }
 
 /** Quiet homes have a physical shape/identity even while their field is absent. */
@@ -166,9 +162,8 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
  * lives outside the joined/separated content branches and alone enters a window. */
 @Composable internal fun Modifier.splitGlassShadow(anchor: GlassAnchor,shape: GlassSilhouette): Modifier {
     val plane=rememberShadowPlane()
-    val appearance=LocalGlassAppearance.current
     val right=remember(anchor) { Any() }
-    return this.shadowPlaneHost(plane,appearance.shadowStrength,appearance.shadowSpread)
+    return this.shadowPlaneHost(plane,GlassShadowStrength,GlassShadowSpread)
         .glassCaster(plane,anchor,onNode=anchor.glassAnchor(TriggerRole.RetainedSurface(plane)),retained=(anchor.surfaceNode) ?: anchor.returningNode?.takeIf { it.windowRetained() }) { r -> shape.frame(r.size).bodies.firstOrNull()?.translate(r.topLeft) }
         .glassCaster(plane,right) { r -> shape.frame(r.size).bodies.getOrNull(1)?.translate(r.topLeft) }
 }

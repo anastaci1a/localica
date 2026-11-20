@@ -26,23 +26,9 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
     prepare: () -> Boolean = { false },
     scene: DrawScope.() -> Unit) {
     val rim = remember { GlassRimCache() }
-    val flat = flatGlass()
-    val flatColor = flatGlassColor()
+    val glowCache = remember { ContactGlowCache() }
     val geometryObserver = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) LocalControlGeometryDraw.current else null
     val mean = remember { arrayOfNulls<Color>(1) }
-    if (flat) {
-        ContactGlowBacking(modifier, glow, body, false, rim, sample = { mean[0] }, geometry = { geometry().let { it.bounds to it.corner } }) {
-        // No recording, source subscription, lens, reduction or exclusive lease in None.
-        Canvas(Modifier.fillMaxSize()) {
-            scene()
-            val shape = geometry()
-            geometryObserver?.invoke(shape)
-            mean[0] = flatColor
-            drawRoundRect(flatColor, shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
-        }
-        }
-        return
-    }
     val modern = Build.VERSION.SDK_INT >= 33
     val currentActive by rememberUpdatedState(active)
     val optical by remember { derivedStateOf { currentActive() > 0f } }
@@ -55,7 +41,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
     val averageBitmap = if (optical && !modern) remember { arrayOfNulls<ImageBitmap>(1) } else null
     val onLensDraw = LocalControlLensDraw.current
     val opticalWork = LocalGlassOpticalWork.current
-    ContactGlowBacking(modifier, glow, body, false, rim, sample = { mean[0] }, geometry = { geometry().let { it.bounds to it.corner } }) {
+    ContactGlowBacking(modifier, glow, body, false, glowCache, sample = { mean[0] }, geometry = { geometry().let { it.bounds to it.corner } }) {
     Canvas(Modifier.fillMaxSize().backdropLocation(location)) {
         val shape = geometry()
         geometryObserver?.invoke(shape)
@@ -66,7 +52,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
             return@Canvas
         }
         if (modern) source?.let { location.observeRecordingAcrossWindows(it) }
-        val silhouette = rim.roundedPath(shape.bounds, shape.corner)
+        val silhouette = glowCache.roundedPath(shape.bounds, shape.corner)
         // The capture is limited to the thumb, including reachable refraction pixels.
         val pad = horizontalPadding.toPx()
         val origin = shape.bounds.topLeft - Offset(pad, pad)
@@ -100,7 +86,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
         var average = Color.Transparent
         if (layer != null && modern) {
             opticalWork?.invoke()
-            layer.renderEffect = lens.value?.effect(shifted, 0f, 1.35f * thickness, unit = density, flattening = flattening)
+            layer.renderEffect = lens.value?.effect(shifted, 0f, io.github.anastaci1a.localica.ui.spec.GlassDepth * thickness, unit = density, flattening = flattening)
             layer.record(Density(density, fontScale), layoutDirection, extent) { recordScene() }
         } else if (averageBitmap != null && !shape.bounds.isEmpty) {
             val region = shape.bounds
@@ -133,5 +119,5 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp,
         }
     }
     }
-    Canvas(modifier) { val shape = geometry(); drawGlassRim(shape.bounds, shape.corner, path = rim.roundedPath(shape.bounds, shape.corner), opacity = active(), cache = rim) }
+    Canvas(modifier) { val shape = geometry(); drawGlassRim(shape.bounds, shape.corner, path = glowCache.roundedPath(shape.bounds, shape.corner), opacity = active(), cache = rim) }
 }

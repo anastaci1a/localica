@@ -296,14 +296,13 @@ class GlassShadowTest {
 
     @Test fun pageShadowEscapesTheClippedHeaderRow() {
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides
-                io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
+
                 EngineRecord { GlassShadowScope(Modifier.size(240.dp, 180.dp).background(Color.White).testTag("page-shadow")) {
                     Box(Modifier.padding(top = 40.dp).fillMaxWidth().height(48.dp).clipToBounds(), contentAlignment = Alignment.Center) {
                         LiquidGlassSurface(Modifier.size(100.dp, 48.dp)) {}
                     }
                 } }
-            }
+
         } }
         val pixels = compose.onNodeWithTag("page-shadow").captureToImage().toPixelMap()
         val d = pixels.width / 240f
@@ -353,8 +352,7 @@ class GlassShadowTest {
             val group = rememberShadowPlane()
             anchor = rememberGlassAnchor()
             flight = remember(anchor) { GlassPopupFlight(anchor) }
-            CompositionLocalProvider(LocalPageShadows provides group, LocalGlassAppearance provides
-                io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
+            CompositionLocalProvider(LocalPageShadows provides group) {
                 Box(Modifier.size(240.dp, 160.dp).background(Color.White)
                     .pageShadowHost(group).testTag("shadow-union"), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(104.dp, 52.dp).glassAnchor(anchor).pageGlassCaster())

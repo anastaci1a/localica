@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassShapeDamping
+import io.github.anastaci1a.localica.ui.spec.GlassTouchLight
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
@@ -17,16 +20,14 @@ internal fun magneticChoicePosition(raw: Float): Float {
     return center + delta * (0.04f + 3.84f * delta * delta)
 }
 
-/** Deliberately slower than transport/page motion, even at a faster animation speed. */
-internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.spring<Float>(1f, 90f * speed * speed, visibilityThreshold = .0001f)
-
-/** One interruptible shape clock; live tuning preserves its current displacement and velocity. */
+/** One interruptible shape clock preserves its current displacement and velocity. */
 @Stable internal class GlassBodyState(bodyOverride: FlexSpec? = null) {
     val output = mutableStateOf(GlassShape())
     val glow = mutableStateOf(GlassGlow())
     val momentum = GlassMomentum(bodyOverride)
     var impulseScale = 1f
     var previous = 0f
+
 }
 
 @Composable
@@ -36,7 +37,6 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
     val result = state.output
     val reduced = LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
-    val damping by rememberUpdatedState(LocalGlassAppearance.current.shapeDamping)
     val input by rememberUpdatedState(position)
     val force by rememberUpdatedState(pressure)
     val touch by rememberUpdatedState(contact)
@@ -45,14 +45,13 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
     val distance by rememberUpdatedState(lightTravel)
     val begin by rememberUpdatedState(generation)
     val illuminate by rememberUpdatedState(lightContact)
-    val strength by rememberUpdatedState(LocalGlassAppearance.current.touchLight)
     val ownsClock by rememberUpdatedState(active)
     LaunchedEffect(state, reduced, speed) {
         val body = state.momentum
         var runner: Job? = null
-        snapshotFlow { listOf(input(), force(), touch(), damping, ownsClock(), if (touch() > 0f || strength > 0f) glowPoint?.invoke() else null, verticalAxis(), strength, if (strength > 0f) distance() else 0f, begin(), illuminate()) }.collect {
+        snapshotFlow { listOf(input(), force(), touch(), ownsClock(), glowPoint?.invoke(), verticalAxis(), distance(), begin(), illuminate()) }.collect {
             if (!ownsClock()) { runner?.cancel(); runner = null; return@collect }
-            if (reduced) { body.reset(); body.targetGlow(glowPoint?.invoke(), illuminate(), strength, snap = true, travel = distance(), generation = begin()); state.glow.value = body.glow; result.value = GlassShape(); state.previous = input(); return@collect }
+            if (reduced) { body.reset(); body.targetGlow(glowPoint?.invoke(), illuminate(), GlassTouchLight, snap = true, travel = distance(), generation = begin()); state.glow.value = body.glow; result.value = GlassShape(); state.previous = input(); return@collect }
             if (runner?.isActive != true) runner = launch {
                 var last: Long? = null
                 while (true) {
@@ -67,9 +66,9 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
                     val displacement = current - state.previous
                     val touched = touch()
                     body.advance(if (dt > 0.0) (displacement / dt).toFloat().coerceIn(-20f, 20f) else 0f,
-                        dt, force(), touched, state.impulseScale, damping,
+                        dt, force(), touched, state.impulseScale, GlassShapeDamping,
                         glowPoint?.invoke(), verticalAxis())
-                    body.targetGlow(glowPoint?.invoke(), illuminate(), strength, travel = distance(), generation = begin())
+                    body.targetGlow(glowPoint?.invoke(), illuminate(), GlassTouchLight, travel = distance(), generation = begin())
                     state.previous = current
                     last = frame
                     val finished = dt > 0.0 && displacement == 0f && body.finishSettlement()

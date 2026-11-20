@@ -103,6 +103,13 @@ export function markedConstruct(code, underline, marker) {
  * message, underline and marked construct text are byte-identical, and the construct occurs exactly once on the new line. */
 export const sameIncident = (old, now) => !!old.construct && old.rule === now.rule && old.path === now.path && old.fqn === now.fqn &&
     old.message === now.message && old.span === now.span && old.construct === now.construct && now.occurrences === 1;
+// Lead decision 2026-11-19: these two surviving calls shed their appearance multiplier while sibling calls are deleted.
+// Exact identities only; all same-incident checks still apply and the rule total must fall.
+const approvedPairs = [
+    ['RawShadowOrZOrder', '101a2e3e10ed0cb1c802c8501c3105fe9a0a5d45b49f6efc810b6ed9a6375782', '9908c85850386f43de4e2e851263d828c2ad426e82c446725350a8bdd0838460'],
+    ['UnownedSurfaceLifetime', 'bb716c768bbee48e320d40c6bd3de5334b8b6db250bf719c2feb435b62cd42f1', '10050e92f314a1bbaf5ebcc085d02ca96eb53057c1d44725f993c07dbda3059c']
+].map(([rule, ...hashes]) => hashes.map(hash => JSON.stringify([rule,
+    'app/src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt', 'io.github.anastaci1a.localica.ui.DrawScope.magnified', hash])));
 /** A transfer re-anchored onto its edited line records its prior row, which must reproduce the prior fingerprint. */
 function priorTransferRow(e) {
     const r = e.reanchoredFrom;
@@ -184,11 +191,19 @@ export function compare(before, after, stage, transfers = [], transferReanchored
     // Lead ruling 2026-11-10: an incident whose line was edited around its unchanged marked construct is re-anchored, listed
     // separately and counted neither as removed nor as added; equal-sized groups pair in source order (#956).
     let removed = [...gone.values()].flat(); const sameIncidents = [], pairedOld = new Set(), pairedNew = new Set();
+    for (const [prior, current] of approvedPairs) {
+        const olds = removed.filter(d => d.identity === prior), news = added.filter(d => d.identity === current);
+        if (olds.length !== 1 || news.length !== 1 || !sameIncident(olds[0], news[0]) ||
+            counts[news[0].rule].after >= counts[news[0].rule].before) continue;
+        pairedOld.add(olds[0]); pairedNew.add(news[0]);
+        sameIncidents.push({rule:news[0].rule, path:news[0].path, fqn:news[0].fqn, construct:news[0].construct,
+            from:{identity:prior, line:olds[0].originalLine}, to:{identity:current, line:news[0].originalLine}, approval:'lead-2026-11-19-1079'});
+    }
     for (const d of added) {
         if (pairedNew.has(d)) continue;
-        const olds = removed.filter(g => sameIncident(g, d));
+        const olds = removed.filter(g => !pairedOld.has(g) && sameIncident(g, d));
         if (!olds.length) continue;
-        const news = added.filter(a => sameIncident(olds[0], a));
+        const news = added.filter(a => !pairedNew.has(a) && sameIncident(olds[0], a));
         if (olds.length !== news.length) continue;
         for (const group of [olds, news]) group.sort((a,b) => a.originalLine - b.originalLine);
         news.forEach((d,i) => {
