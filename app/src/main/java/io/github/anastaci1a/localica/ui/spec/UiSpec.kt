@@ -116,6 +116,18 @@ internal val FluidMainAbsorb = FluidPopupSpringSettings(dampingRatio = 0.8, resp
 
 @Immutable data class PopupSecondPhase(val spring: SpringLaw, val band: Float, val edgeShares: (DoubleArray) -> DoubleArray)
 
+internal interface PopupOutlinePreview<Bounds> {
+    val opening: Boolean
+    fun prepare(home: Bounds, envelope: Bounds, density: Float): PopupOutline<Bounds>
+}
+internal interface PopupOutline<Bounds> {
+    val growing: Boolean
+    val apertureSlot: Int
+    val kickScale: Double
+    fun outline(action: FluidTimelineAction): List<Pair<Bounds,Float>>?
+    fun kick(action: FluidTimelineAction): Pair<Int,Float>?
+}
+
 internal object FluidPopupRuntimeInputs {
     val outlineCentre: PopupSecondPhase? = null
 }

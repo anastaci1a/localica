@@ -7,8 +7,8 @@ import androidx.compose.ui.unit.Dp
 import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
-import io.github.anastaci1a.localica.ui.engine.PopupOutline
-import io.github.anastaci1a.localica.ui.engine.PopupOutlinePreview
+import io.github.anastaci1a.localica.ui.spec.PopupOutline
+import io.github.anastaci1a.localica.ui.spec.PopupOutlinePreview
 import io.github.anastaci1a.localica.ui.spec.Space
 import io.github.anastaci1a.localica.ui.spec.StockUiSpec
 import io.github.anastaci1a.localica.ui.spec.fluidThroughGrows
@@ -133,11 +133,11 @@ internal fun PopupPortalBounds.growingKickTarget(pivot: PopupPortalBounds, ancho
 internal data class FluidPopupPreview(
     override val opening: Boolean, val pivot: Rect, val root: Offset, val homeRadius: Float, val popupRadius: Float,
     val anchorY: Double, val kickScale: Double,
-) : PopupOutlinePreview {
-    override fun prepare(home: Rect, envelope: Rect, density: Float): PopupOutline = PreparedFluidOutline(home, envelope, density, this)
+) : PopupOutlinePreview<Rect> {
+    override fun prepare(home: Rect, envelope: Rect, density: Float): PopupOutline<Rect> = PreparedFluidOutline(home, envelope, density, this)
 }
 
-private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, private val preview: FluidPopupPreview) : PopupOutline {
+private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, private val preview: FluidPopupPreview) : PopupOutline<Rect> {
     private val opening = preview.opening
     private val scale = density.toDouble()
     private fun points(r: Rect) = PopupPortalBounds((r.left - preview.root.x) / scale,
