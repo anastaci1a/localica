@@ -45,17 +45,34 @@ class FluidPopupComponentsTest {
         val absorb = FluidPopupSpringSettings(0.84, 0.65)
         val prefix = fluidGrowingGeometryPrefix(fluidThroughMainSpring(true, eject, absorb))
         assertEquals(
-            listOf(FluidGeometryAction.CollapsedSource, FluidGeometryAction.ExpandedOverrounded, FluidGeometryAction.FullyExpanded, FluidGeometryAction.Kick),
+            listOf(
+                FluidGeometryAction.CollapsedSource, FluidGeometryAction.ExpandedOverrounded, FluidGeometryAction.FullyExpanded,
+                FluidGeometryAction.Kick, FluidGeometryAction.Unkick,
+            ),
             prefix.map { it.action },
         )
-        assertEquals(listOf(0.0, 0.0, 0.1, 0.0), prefix.map { it.timing.storedDelay })
-        assertEquals(listOf(1.0, 0.72, 0.72, 1.0), prefix.map { it.timing.spring.dampingRatio })
-        assertEquals(listOf(0.3, 0.42, 0.42, 0.2), prefix.map { it.timing.spring.response })
+        assertEquals(listOf(0.0, 0.0, 0.1, 0.0, 0.1), prefix.map { it.timing.storedDelay })
+        assertEquals(listOf(1.0, 0.72, 0.72, 1.0, 0.72), prefix.map { it.timing.spring.dampingRatio })
+        assertEquals(listOf(0.3, 0.42, 0.42, 0.2, 0.42), prefix.map { it.timing.spring.response })
         assertTrue(prefix[1].timing.spring === eject)
         assertTrue(prefix[2].timing.spring === eject)
+        assertTrue(prefix[4].timing.spring === eject)
         assertTrue(fluidThroughMainSpring(false, eject, absorb) === absorb)
         assertEquals(0.06999999999999999.toRawBits(), prefix[2].timing.dueThreshold(0.7, false, 1.0).toRawBits())
         assertEquals(0.0.toRawBits(), prefix[3].timing.dueThreshold(0.7, false, 1.0).toRawBits())
+    }
+
+    @Test fun growingKickUsesTheExistingPropertySpringAndSuppliedPresentationScale() {
+        assertEquals(0, FluidKickSpec.growingSlot)
+        assertEquals(0.0.toRawBits(), FluidKickSpec.unkickTarget.toRawBits())
+        assertEquals("MagicMorphAnimation.kickAmount", FluidPopupChannel.KickAmount.key)
+        assertEquals("MagicMorphAnimation.kickScale", FluidPopupChannel.KickScale.key)
+        assertEquals(FluidPopupChannel.Value.StandardScalar, FluidPopupChannel.KickAmount.value)
+        assertEquals(FluidPopupChannel.Value.StandardScalar, FluidPopupChannel.KickScale.value)
+        assertEquals(-80.0, FluidKickSpec.translationY(-40.0, 2.0), 0.0)
+        val start = FluidScalarSpringBody(40.0, 0.0)
+        val returned = FluidMainEjectDefaults.advance(start, FluidKickSpec.unkickTarget, 0.35)
+        assertTrue(returned.value < 0.0)
     }
 
     @Test fun convertsSuppliedSpringSettingsWithUnitMass() {

@@ -137,7 +137,7 @@ internal data class FluidScalarSpringBody(val value: Double, val velocity: Doubl
     }
 }
 
-internal enum class FluidGeometryAction { CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick }
+internal enum class FluidGeometryAction { CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick, Unkick }
 internal data class FluidGeometryStep(val action: FluidGeometryAction, val timing: FluidPopupStep)
 
 internal fun fluidThroughMainSpring(growing: Boolean, eject: FluidPopupSpringSettings, absorb: FluidPopupSpringSettings) =
@@ -148,7 +148,14 @@ internal fun fluidGrowingGeometryPrefix(mainEject: FluidPopupSpringSettings) = l
     FluidGeometryStep(FluidGeometryAction.ExpandedOverrounded, FluidPopupStep(0.0, mainEject)),
     FluidGeometryStep(FluidGeometryAction.FullyExpanded, FluidPopupStep(0.1, mainEject)),
     FluidGeometryStep(FluidGeometryAction.Kick, FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.2))),
+    FluidGeometryStep(FluidGeometryAction.Unkick, FluidPopupStep(0.1, mainEject)),
 )
+
+internal object FluidKickSpec {
+    const val growingSlot = 0
+    const val unkickTarget = 0.0
+    fun translationY(amount: Double, scale: Double) = scale * amount
+}
 
 internal data class FluidContentBlurSequence(val blurOut: FluidPopupStep, val blurIn: FluidPopupStep)
 internal data class FluidContentBlurRequest(val portalScale: Double, val gaussianRadius: Double)
@@ -162,9 +169,10 @@ internal val FluidContentBlurIn = FluidContentBlurRequest(1.0, 0.0)
 internal enum class FluidPopupChannel(val key: String, val value: Value) {
     DestinationOpacity("opacity", Value.PresentationScalar), ContentZoom("sublayerTransform", Value.Transform),
     GaussianRadius("filters.gaussianBlur.inputRadius", Value.ScaledScalar), LensHeight("effect.height", Value.CoarseScalar),
-    LensAmount("filters.displacementMap.inputAmount", Value.CoarseScalar);
+    LensAmount("filters.displacementMap.inputAmount", Value.CoarseScalar),
+    KickAmount("MagicMorphAnimation.kickAmount", Value.StandardScalar), KickScale("MagicMorphAnimation.kickScale", Value.StandardScalar);
 
-    enum class Value { PresentationScalar, Transform, ScaledScalar, CoarseScalar }
+    enum class Value { PresentationScalar, Transform, ScaledScalar, CoarseScalar, StandardScalar }
 }
 
 internal fun fluidLensSuppressesAction(old: Double, new: Double, latest: Double?, bypass: Boolean) =
