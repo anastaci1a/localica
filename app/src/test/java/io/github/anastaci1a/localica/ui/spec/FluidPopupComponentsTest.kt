@@ -1614,6 +1614,25 @@ class FluidPopupComponentsTest {
         })
     }
 
+    @Test fun glassEffectPrecisionCombinesTheContextAndEachPackedTextureLane() {
+        val lens = FluidLensingSpec
+        assertEquals("fixed_frag_lph_cpf", lens.glassEffectFragmentName(false, null) { error("Feature disabled") })
+        assertEquals("fixed_frag_lph_cpf", lens.glassEffectFragmentName(true, 0) { true })
+        assertEquals("fixed_frag_lph_cph", lens.glassEffectFragmentName(true, null) { false })
+        assertEquals("fixed_frag_lph_cph", lens.glassEffectFragmentName(true, 0xc0000000.toInt()) { false })
+        for (lane in 0 until 6) {
+            for (format in listOf(15, 18, 20, 21)) {
+                assertEquals("fixed_frag_lph_cpf", lens.glassEffectFragmentName(true, format shl (lane * 5)) { false })
+            }
+            assertEquals("fixed_frag_lph_cph", lens.glassEffectFragmentName(true, 19 shl (lane * 5)) { false })
+        }
+        assertFalse(lens.deepFramebufferBit(0L) { error("Extended color unavailable") })
+        assertTrue(lens.deepFramebufferBit(3L) { null })
+        assertFalse(lens.deepFramebufferBit(2L) { null })
+        assertFalse(lens.deepFramebufferBit(3L) { false })
+        assertTrue(lens.deepFramebufferBit(2L) { true })
+    }
+
     @Test fun glassEffectPacksTheTwoHalfRowsInFieldOrder() {
         val lens = FluidLensingSpec
         val rows = lens.glassEffectEncoding
