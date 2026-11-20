@@ -98,4 +98,78 @@ class FluidPopupPortalGeometryTest {
         assertEquals(PopupThroughItem.From to PopupThroughItem.Pivot, popupThroughSlots(smaller, tied, fromPhase = true))
         assertEquals(PopupThroughItem.Pivot to PopupThroughItem.To, popupThroughSlots(smaller, tied, fromPhase = false))
     }
+
+    @Test fun presentedPlacementUsesLiveInsetsAndAxisSpecificBounds() {
+        val apertureInsets = PopupPortalInsets(10.0, 8.0, 6.0, 4.0)
+        val itemInsets = PopupPortalInsets(2.0, 3.0, 4.0, 5.0)
+        val aperture = fluidPopupAperture(100.0, 60.0, apertureInsets)
+        fun placed(axis: Int, reversed: Boolean): PopupPortalPlacement {
+            val scale = fluidPopupDestinationScale(100.0, 60.0, 42.0, 34.0, axis)
+            return aperture.presentedDestination(50.0, 40.0, scale, axis, apertureInsets, itemInsets, reversed)
+        }
+        val xBounds = PopupPortalBounds(0.0, 0.0, 50.0, 31.92)
+        assertEquals(PopupPortalPlacement(xBounds, 60.38095238095239, 5.238095238095238), placed(1, false))
+        assertEquals(PopupPortalPlacement(xBounds, 51.61904761904763, 5.238095238095238), placed(1, true))
+        assertEquals(PopupPortalPlacement(PopupPortalBounds(0.0, 0.0, 63.46666666666667, 40.0), 56.0, 0.0), placed(2, false))
+        assertEquals(PopupPortalPlacement(PopupPortalBounds(0.0, 0.0, 50.0, 40.0), 56.0, 0.0), placed(0, false))
+    }
+
+    @Test fun presentedPlacementKeepsZeroScaleDivision() {
+        val aperture = fluidPopupAperture(0.0, 60.0, insets)
+        val horizontal = aperture.presentedDestination(50.0, 40.0, 0.0 to 0.0, 1, insets, insets, false)
+        assertEquals(Double.POSITIVE_INFINITY, horizontal.bounds.height, 0.0)
+        assertTrue(horizontal.x.isNaN())
+        val vertical = aperture.presentedDestination(50.0, 40.0, -0.0 to -0.0, 2, insets, insets, false)
+        assertEquals(Double.NEGATIVE_INFINITY, vertical.bounds.width, 0.0)
+        assertEquals(0.0.toRawBits(), vertical.y.toRawBits())
+    }
+
+    @Test fun firstMatchingDestinationKeepsItsLayerAndProgressWhenMovedToTheTail() {
+        data class Destination(val id: String, val layer: Any = Any(), val progress: Any = Any(), var payload: String)
+        val first = Destination("match", payload = "old-first")
+        val duplicate = Destination("match", payload = "old-second")
+        val destinations = mutableListOf(first, duplicate)
+        val calls = mutableListOf<String>()
+        val keptLayer = first.layer
+        val keptProgress = first.progress
+        val match = updateFluidPopupDestination(destinations, "new", { current, _ -> current.id == "match" },
+            { error("An existing destination must be reused") },
+            { current ->
+                assertTrue(current === destinations.last())
+                assertTrue(current.layer === keptLayer)
+                calls += current.payload
+            },
+            { current, payload -> current.payload = payload },
+            { error("The opacity setup is for new destinations only") },
+        )
+        assertTrue(match === first)
+        assertTrue(match.progress === keptProgress)
+        assertEquals(listOf("old-first"), calls)
+        assertEquals(listOf("old-second", "new"), destinations.map { it.payload })
+        val progress = mutableListOf<Pair<Any, Double>>()
+        destinations.requestFluidDestinationProgress { destination, target -> progress += destination.progress to target }
+        assertEquals(listOf(duplicate.progress to 0.0, keptProgress to 1.0), progress)
+    }
+
+    @Test fun newDestinationIsPreparedBeforeAppendAndHiddenOnlyWithAnOlderOne() {
+        val destinations = mutableListOf<String>()
+        val hidden = mutableListOf<String>()
+        for (item in listOf("first", "second")) {
+            val added = updateFluidPopupDestination(destinations, item, String::equals,
+                {
+                    assertFalse(item in destinations)
+                    item
+                },
+                { error("There is no matching item") },
+                { _, _ -> error("There is no existing item to replace") },
+                {
+                    assertEquals(it, destinations.last())
+                    hidden += it
+                },
+            )
+            assertEquals(item, added)
+        }
+        assertEquals(listOf("first", "second"), destinations)
+        assertEquals(listOf("second"), hidden)
+    }
 }
