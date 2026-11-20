@@ -141,7 +141,7 @@ internal class LensRenderer {
             float t = clamp(inside / law.y, 0.0, 1.0);
             return law.x * (1.0 - sqrt(t * (2.0 - t)));
         }
-        // Popup content warp: the glass map (distance below zero inside, outward unit normal,
+        // Popup content warp: the glass map (distance above zero inside, outward unit normal,
         // full coverage) evaluated inline, then the displacement sample it masks.
         half4 warped(float2 p, float3 f) {
             float2 n = dot(f.yz, f.yz) > 0.0 ? -normalize(f.yz) : float2(0);
@@ -188,6 +188,7 @@ internal class LensRenderer {
         }
     """.trimIndent())
     private var last = floatArrayOf()
+    private var lastWarp: FloatArray? = null
     private var fieldBitmap: Bitmap? = null
     private var cached: RenderEffect? = null
     private var blurAmount = Float.NaN
@@ -209,9 +210,10 @@ internal class LensRenderer {
             map?.scale ?: 1f, map?.range ?: 1f, flattening, tone.trim, tone.weight, tone.lightMix,
             fieldWeight.coerceIn(0f, 1f), if (circles == null) 0f else 1f,
             circles?.first?.x ?: 0f, circles?.first?.y ?: 0f,
-            circles?.second?.x ?: 0f, circles?.second?.y ?: 0f, splitInner ?: -1f) + (words ?: FloatArray(0))
-        if (state.contentEquals(last) && fieldBitmap === map?.bitmap) return requireNotNull(cached)
+            circles?.second?.x ?: 0f, circles?.second?.y ?: 0f, splitInner ?: -1f)
+        if (state.contentEquals(last) && words.contentEquals(lastWarp) && fieldBitmap === map?.bitmap) return requireNotNull(cached)
         last = state
+        lastWarp = words
         shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
         shader.setFloatUniform("corner", geometry.radius)
         shader.setFloatUniform("weights", geometry.weights.x, geometry.weights.y)
@@ -267,9 +269,10 @@ internal class LensWarp(val height: Double, val amount: Double, val effectOffset
     val maskOffset: Float = 0f) {
     fun uniforms(unit: Float): FloatArray {
         val (limitX, limitY) = FluidLensingSpec.usedExtent(used.width, used.height, 1, 1)
+        val displacement = FluidLensingSpec.amountUniform(transform, 1, 1, unit, amount)
         return floatArrayOf(height.toFloat() * unit, curvature.coerceIn(0f, 1f), effectOffset * unit, maskOffset * unit,
-            kotlin.math.cos(angle), kotlin.math.sin(angle)) + FluidLensingSpec.amountUniform(transform, 1, 1, unit, amount) +
-            floatArrayOf(limitX, limitY)
+            kotlin.math.cos(angle), kotlin.math.sin(angle),
+            displacement[0], displacement[1], displacement[2], displacement[3], limitX, limitY)
     }
 }
 

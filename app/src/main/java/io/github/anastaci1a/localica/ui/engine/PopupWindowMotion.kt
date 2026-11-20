@@ -72,10 +72,10 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         if (radius != null && spring != null) fluidBlur.animate(fluidBlurRadius, radius, fluidBlurControls, spring, fluidRadiusEpsilonSquared(scale))
         val lens = step.lens
         if (lens != null && spring != null) {
-            val ratio = lens.dimension?.div(250.0)
-            if (ratio != null || lens.gain == 0.0) {
-                val factor = if (ratio == null) 0.0 else lens.gain * (if (ratio > 1.0) 1.0 else ratio)
-                val height = 75.0 * factor
+            val height = if (step.action == FluidTimelineAction.LensOff) 0.0 else lens.dimension?.let { dimension ->
+                75.0 * (lens.gain * minOf(dimension / 250.0, 1.0))
+            }
+            if (height != null) {
                 val epsilonSquared = 0.05 * 0.05
                 lensHeight.animate(fluidLensHeight.toDouble(), height, lens.propertyControls, spring, epsilonSquared)
                 lensAmount.animate(fluidLensAmount, minOf(-height, FluidLensingSpec.freshAmount), lens.propertyControls, spring, epsilonSquared)
