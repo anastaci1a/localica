@@ -17,7 +17,6 @@ import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.platform.testTag
-import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import kotlin.math.*
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -172,11 +171,9 @@ class SplitPillContactTest {
         var item by mutableIntStateOf(0)
         var clicks=0
         val pill=GlassAnchor(); val search=GlassAnchor()
-        val runtime=GlassRendererRuntime(GlassRendererMode.FlatNone)
         lateinit var host: android.view.View
-        compose.setContent { host=androidx.compose.ui.platform.LocalView.current; CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { EngineTheme(clear=true) {
+        compose.setContent { host=androidx.compose.ui.platform.LocalView.current; EngineTheme(clear=true) {
             MaterialTheme(colorScheme=lightColorScheme()) {
-                CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(touchLight=0f)) {
                 Box(Modifier.size(360.dp,560.dp).background(Color.Black).testTag("production-press-scene")) {
                     when(item) {
                         0 -> PopupActionPill(pill,source=null,modifier=Modifier.align(Alignment.Center).height(CompactControlSize),
@@ -186,9 +183,8 @@ class SplitPillContactTest {
                         else -> Box(Modifier.align(Alignment.Center).width(328.dp)) { ListSearchPill("Search album",{clicks++},anchor=search) }
                     }
                 }
-                }
             }
-        } } }
+        } }
         compose.mainClock.autoAdvance=false
         var active: SemanticsNodeInteraction?=null
         try {
