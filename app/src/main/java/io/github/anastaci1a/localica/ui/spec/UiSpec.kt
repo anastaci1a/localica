@@ -104,7 +104,7 @@ internal val FluidContentDefaults = FluidContentSettings(
     blurOutSpring = FluidPopupSpringSettings(dampingRatio = 0.8, response = 0.45),
     speed = 0.7, amplifyDelays = false, lensingEnabled = true,
 )
-internal data class FluidPopupStep(val storedDelay: Double, val spring: FluidPopupSpringSettings) {
+internal data class FluidPopupStep<out Spring>(val storedDelay: Double, val spring: Spring) {
     fun dueThreshold(effectiveSpeed: Double, amplify: Boolean, drag: Double) = fluidStoredDelay(storedDelay, effectiveSpeed, amplify) * drag
 }
 internal data class FluidPropertySpringControls(
@@ -137,19 +137,73 @@ internal data class FluidScalarSpringBody(val value: Double, val velocity: Doubl
     }
 }
 
-internal enum class FluidGeometryAction { CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick, Unkick }
-internal data class FluidGeometryStep(val action: FluidGeometryAction, val timing: FluidPopupStep)
-
 internal fun fluidThroughMainSpring(growing: Boolean, eject: FluidPopupSpringSettings, absorb: FluidPopupSpringSettings) =
     if (growing) eject else absorb
 
-internal fun fluidGrowingGeometryPrefix(mainEject: FluidPopupSpringSettings) = listOf(
-    FluidGeometryStep(FluidGeometryAction.CollapsedSource, FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.3))),
-    FluidGeometryStep(FluidGeometryAction.ExpandedOverrounded, FluidPopupStep(0.0, mainEject)),
-    FluidGeometryStep(FluidGeometryAction.FullyExpanded, FluidPopupStep(0.1, mainEject)),
-    FluidGeometryStep(FluidGeometryAction.Kick, FluidPopupStep(0.0, FluidPopupSpringSettings(1.0, 0.2))),
-    FluidGeometryStep(FluidGeometryAction.Unkick, FluidPopupStep(0.1, mainEject)),
+internal enum class FluidTimelineAction {
+    Source, AddSdfElements, CollapsedSource, ExpandedOverrounded, FullyExpanded, Kick, Unkick,
+    KickEjectee, UnkickEjectee, KickSource, UnkickSource, SmoothOn, SmoothOff,
+    LensOn, ChangeLensDimension, LensOff, BlurOut, BlurIn,
+}
+
+internal data class FluidTimelineStep(
+    val action: FluidTimelineAction, val timing: FluidPopupStep<FluidPopupSpringSettings?>, val lens: FluidLensingSpec.Request? = null,
 )
+
+internal fun fluidThroughQueue(
+    growing: Boolean, mainEject: FluidPopupSpringSettings, content: FluidContentSettings,
+    lensRequests: () -> List<FluidLensingSpec.Request>,
+): List<FluidTimelineStep> = buildList {
+    fun step(action: FluidTimelineAction, delay: Double = 0.0, spring: FluidPopupSpringSettings? = null) {
+        add(FluidTimelineStep(action, FluidPopupStep(delay, spring)))
+    }
+    if (growing) {
+        step(FluidTimelineAction.Source)
+        step(FluidTimelineAction.AddSdfElements)
+        step(FluidTimelineAction.CollapsedSource, spring = FluidPopupSpringSettings(1.0, 0.3))
+        step(FluidTimelineAction.ExpandedOverrounded, spring = mainEject)
+        step(FluidTimelineAction.FullyExpanded, 0.1, mainEject)
+        step(FluidTimelineAction.Kick, spring = FluidPopupSpringSettings(1.0, 0.2))
+        step(FluidTimelineAction.Unkick, 0.1, mainEject)
+    } else {
+        step(FluidTimelineAction.FullyExpanded)
+        step(FluidTimelineAction.AddSdfElements)
+        step(FluidTimelineAction.Source)
+        step(FluidTimelineAction.KickEjectee)
+        step(FluidTimelineAction.UnkickEjectee, 0.1)
+        step(FluidTimelineAction.KickSource)
+        step(FluidTimelineAction.UnkickSource, Double.fromBits(0x3fc3333333333334L))
+    }
+    step(FluidTimelineAction.SmoothOn, spring = FluidPopupSpringSettings(1.0, 0.1))
+    step(FluidTimelineAction.SmoothOff, if (growing) 0.3 else 0.1, FluidPopupSpringSettings(1.0, 0.6))
+    content.blurSequence(growing)?.let { blur ->
+        val (on, change, off) = lensRequests()
+        add(FluidTimelineStep(FluidTimelineAction.LensOn, on.timing, on))
+        add(FluidTimelineStep(FluidTimelineAction.ChangeLensDimension, change.timing, change))
+        add(FluidTimelineStep(FluidTimelineAction.LensOff, off.timing, off))
+        add(FluidTimelineStep(FluidTimelineAction.BlurOut, blur.blurOut))
+        add(FluidTimelineStep(FluidTimelineAction.BlurIn, blur.blurIn))
+    }
+}.sortedBy { it.timing.storedDelay }
+
+internal fun ArrayDeque<FluidTimelineStep>.replaceFluidTimeline(steps: List<FluidTimelineStep>) {
+    clear()
+    addAll(steps)
+}
+
+internal fun ArrayDeque<FluidTimelineStep>.drainFluidTimeline(
+    elapsed: Double, effectiveSpeed: Double, amplify: Boolean, drag: () -> Double, holdingStart: Boolean,
+    run: (FluidTimelineStep, Double) -> Unit,
+) {
+    val due = buildList {
+        do {
+            val action = this@drainFluidTimeline.firstOrNull() ?: break
+            if (!holdingStart && !(action.timing.dueThreshold(effectiveSpeed, amplify, drag()) <= elapsed)) break
+            add(this@drainFluidTimeline.removeFirst())
+        } while (!holdingStart)
+    }
+    due.forEach { run(it, effectiveSpeed) }
+}
 
 internal object FluidKickSpec {
     const val growingSlot = 0
@@ -157,7 +211,9 @@ internal object FluidKickSpec {
     fun translationY(amount: Double, scale: Double) = scale * amount
 }
 
-internal data class FluidContentBlurSequence(val blurOut: FluidPopupStep, val blurIn: FluidPopupStep)
+internal data class FluidContentBlurSequence(
+    val blurOut: FluidPopupStep<FluidPopupSpringSettings>, val blurIn: FluidPopupStep<FluidPopupSpringSettings>,
+)
 internal data class FluidContentBlurRequest(val portalScale: Double, val gaussianRadius: Double)
 internal fun fluidContentBlurOut(height: Double, maxScale: () -> Double, minScale: () -> Double): FluidContentBlurRequest {
     val fraction = (height + (-215.0)) / 305.0
@@ -256,7 +312,7 @@ internal object FluidLensingSpec {
 
     private val lensPropertyControls = FluidPropertySpringControls(delay = 0.0, startingVelocity = null, interactive = false, additive = false)
 
-    data class Request(val timing: FluidPopupStep, val gain: Double, val dimension: Double?) {
+    data class Request(val timing: FluidPopupStep<FluidPopupSpringSettings>, val gain: Double, val dimension: Double?) {
         val propertyControls get() = lensPropertyControls
     }
 
