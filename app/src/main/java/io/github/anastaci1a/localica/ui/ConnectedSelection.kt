@@ -199,16 +199,11 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
 }
 
 /** One surface's retained blur/shadow resources; each active subset has its own recording. */
-internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope: kotlinx.coroutines.CoroutineScope) {
+internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope: kotlinx.coroutines.CoroutineScope,
+    members: Int = 1) {
     private val opticalLayer = graphics.createGraphicsLayer().also { GlassWork.event("layer") }
     val output get() = opticalLayer
-    val lens by lazy { if (android.os.Build.VERSION.SDK_INT >= 33) LensRenderer() else null }
-    private var path: Path? = null
-    private var field: LensDistanceMap? = null
-    fun field(outline: Path): LensDistanceMap? {
-        if (path !== outline) { path = outline; field = LensDistanceMap.create(outline) }
-        return field
-    }
+    val lens by lazy { if (android.os.Build.VERSION.SDK_INT >= 33) LensRenderer(connectedBodies = members) else null }
     private val lifetime=kotlinx.coroutines.Job(scope.coroutineContext[kotlinx.coroutines.Job])
     val shadow=RetainedGlassShadow(kotlinx.coroutines.CoroutineScope(scope.coroutineContext+lifetime))
     /** Root adapter for callers outside the D04 allowance (HoverDrag): the same retained renderer call. */
@@ -220,7 +215,7 @@ internal class HoverGroupRenderer(private val graphics: GraphicsContext,private 
     val outlines=SelectionOpacityPathCache()
     private val surfaces=mutableMapOf<List<Int>,HoverSurfaceRenderer>()
     fun surface(members: List<Int>): HoverSurfaceRenderer {
-        return surfaces.getOrPut(members) { HoverSurfaceRenderer(graphics,scope) }
+        return surfaces.getOrPut(members) { HoverSurfaceRenderer(graphics,scope,members.size) }
     }
     fun retain(members: Set<List<Int>>) {
         val unused=surfaces.keys.filter { it !in members }
@@ -288,15 +283,16 @@ private fun DrawScope.drawHoverSurface(surface: HoverSurfaceRenderer,parts: List
         io.github.anastaci1a.localica.ui.spec.GlassContrastWeightDefault, source.lightMix)
     clipPath(path) {
         if (blurEffects && android.os.Build.VERSION.SDK_INT >= 33) {
-            val crop = path.getBounds().inflate(blur * 2f)
+            val bounds = path.getBounds()
+            val crop = bounds.inflate(blur * 2f)
             if (!crop.isEmpty) {
                 val output = surface.output
-                val field = surface.field(outline.localPath)
+                val bodies = parts.map { it.lifted.contour.translate(-crop.topLeft).fittedLensCorners() }
                 output.renderEffect = surface.lens?.effect(
-                    LensGeometry(path.getBounds().translate(-crop.topLeft), liftedBounds.height / 2f),
+                    LensGeometry(bodies),
                     blur, io.github.anastaci1a.localica.ui.spec.GlassDepth, density.density,
                     whiteTint = io.github.anastaci1a.localica.ui.spec.GlassWhiteTint, tone = tone,
-                    map = field, origin = outline.origin - crop.topLeft)
+                    highlightSpan = bounds.size.minDimension / 2f)
                 output.record(density, direction, IntSize(ceil(crop.width).toInt(), ceil(crop.height).toInt())) {
                     translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }
                 }
