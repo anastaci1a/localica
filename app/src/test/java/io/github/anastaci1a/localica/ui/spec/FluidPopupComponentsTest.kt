@@ -381,6 +381,47 @@ class FluidPopupComponentsTest {
         }
     }
 
+    @Test fun typedZoomDisplacementUsesTheFreshRawModeAndTheStoredRotationDirection() {
+        val period = Double.fromBits(0x401921fb54442d18L)
+        val source = DoubleArray(16) { if (it % 2 == 0) 7.0 else -7.0 }
+        source[0] = 0.25
+        source[1] = -0.25
+        source[2] = -0.0
+        val from = FluidZoomTransform(source, 1)
+        fun to(direction: Int) = FluidZoomTransform(DoubleArray(16), direction)
+        val equality = { a: FluidZoomTransform, b: FluidZoomTransform -> (0..15).all { a[it] == b[it] } }
+        val fresh = FluidZoomValues(equality)
+        val ordinary = fresh.displacement(from, to(0))
+        for (i in 3..15) assertEquals(source[i].toRawBits(), ordinary[i].toRawBits())
+        assertEquals(0, ordinary.rotationDirection)
+        assertEquals((-0.0).toRawBits(), ordinary[2].toRawBits())
+
+        val negative = fresh.displacement(from, to(1))
+        val positive = fresh.displacement(from, to(2))
+        assertEquals(0.25 - period, negative[0], 1e-12)
+        assertEquals(-0.25, negative[1], 1e-12)
+        assertEquals(0.25, positive[0], 1e-12)
+        assertEquals(period - 0.25, positive[1], 1e-12)
+        assertEquals(2, positive.rotationDirection)
+        val shortest = FluidZoomValues(equality, displacementMode = 1).displacement(from, to(0))
+        val forcedNegative = FluidZoomValues(equality, displacementMode = 2).displacement(from, to(0))
+        val forcedPositive = FluidZoomValues(equality, displacementMode = 3).displacement(from, to(0))
+        assertEquals(7.0 - period, shortest[4], 1e-12)
+        assertEquals(7.0 - period - period, forcedNegative[4], 1e-12)
+        assertEquals(period + period - 7.0, forcedPositive[15], 1e-12)
+        assertEquals(0.25, forcedNegative[0], 1e-12)
+
+        assertEquals(1, fresh.add(to(0), to(1)).rotationDirection)
+        assertEquals(2, fresh.add(to(1), to(2)).rotationDirection)
+        assertEquals(2, fresh.add(to(2), to(1)).rotationDirection)
+        val doubled = fresh.add(negative, negative)
+        assertEquals(1, doubled.rotationDirection)
+        assertEquals((negative[0] + negative[0]).toRawBits(), doubled[0].toRawBits())
+        val scaled = fresh.scaledCopy(positive, -2.0)
+        assertEquals(2, scaled.rotationDirection)
+        for (i in 0..15) assertEquals((positive[i] * -2.0).toRawBits(), scaled[i].toRawBits())
+    }
+
     @Test fun installedPropertyScalesFinishVelocityWithItsPhysicalDamping() {
         val spring = FluidPopupSpringSettings(0.68, 0.37)
         assertEquals(0.08008676736384175.toRawBits(), spring.velocityScalingFactor.toRawBits())
