@@ -100,7 +100,11 @@ internal class DefaultRefractionFixture {
         for ((x, y) in materialPixels) {
             val a = actual[x, y]; val b = unit[x, y]
             val delta = maxOf(abs(a.red - b.red), abs(a.green - b.green), abs(a.blue - b.blue))
-            assertTrue("The real caller and unit reference must match before power varies ($x,$y delta=$delta)", delta <= 1f / 255f)
+            assertTrue("The real caller and unit reference must match before power varies ($x,$y delta=$delta)" +
+                if (delta <= 1f / 255f) "" else " actual=$a unit=$b target=${frame.bounds} material=${frame.material}" +
+                    " original=${frame.draw} current=${draws[frame.draw.surfaceIdentity]}" +
+                    " references=${draws.values.filter { it.surfaceIdentity != frame.draw.surfaceIdentity && it.width == frame.draw.width && it.height == frame.draw.height }}",
+                delta <= 1f / 255f)
         }
         return unit
     }
