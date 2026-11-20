@@ -239,6 +239,26 @@ class FluidPopupPortalGeometryTest {
         assertEquals(listOf("clear", "from", "to", "model"), calls)
     }
 
+    @Test fun incomingAxisUsesTheSnapshotGuardsAndOnlyFallsBackToTheExistingTail() {
+        val zero = PopupPortalInsets(-0.0, 0.0, 0.0, 0.0)
+        val target = { PopupPortalBounds(0.0, 0.0, 120.0, 60.0) }
+        val skip = { error("The geometry read must be skipped") }
+        assertNull(fluidPopupIncomingAxis(0, 0, zero, skip, skip, skip))
+        assertNull(fluidPopupIncomingAxis(1, 2, zero, skip, skip, skip))
+        assertEquals(1, fluidPopupIncomingAxis(1, 0, insets, skip, skip, skip))
+        assertEquals(1, fluidPopupIncomingAxis(1, 0, zero, target, {
+            PopupPortalBounds(0.0, 0.0, 120.0, 40.0)
+        }, skip))
+        assertEquals(2, fluidPopupIncomingAxis(1, 0, zero, target, { null }) {
+            PopupPortalBounds(0.0, 0.0, -80.0, 60.0)
+        })
+    }
+
+    @Test fun rasterRequestUsesTheRetainedScaleOnlyWithBoxMinification() {
+        assertEquals(FluidRasterRequest(true, 1.75, "box"), fluidPopupRasterRequest(true, 1.75))
+        assertEquals(FluidRasterRequest(false, null, "linear"), fluidPopupRasterRequest(false, Double.NaN))
+    }
+
     @Test fun layoutAxisReadsPresentedBoundsOnlyForZeroInsetsAndADifferentPreference() {
         val zero = PopupPortalInsets(-0.0, 0.0, 0.0, 0.0)
         val item = PopupPortalBounds(0.0, 0.0, 120.0, 44.0)
