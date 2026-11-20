@@ -481,22 +481,45 @@ class FluidPopupComponentsTest {
 
     @Test fun trackedCornerBoundsChooseUniformAndSignedUnevenPayloads() {
         val transform = FluidCornerSpec.fieldTransform(doubleArrayOf(2.0, 0.0, 0.0, 0.0, 0.0, 2.0), Math::fma)
-        val uniform = FluidCornerSpec.boundsEncoding(floatArrayOf(-1f, 0f, 0.009f, 0.01f), transform, 0, 6f, 8f)
+        val uniform = FluidCornerSpec.boundsEncoding(floatArrayOf(-1f, 0f, 0.009f, 0.01f), transform, 0, 6.0, 8.0, 0f, inline = true)
         assertEquals(21, uniform.imageFunction)
         assertEquals(4f, uniform.family, 0f)
         assertEquals(listOf(1f, 1f, 0.02f, 0f), uniform.radii.toList())
-        val rounded = FluidCornerSpec.boundsEncoding(FloatArray(4) { 5f }, transform, 1, 0f, 10f)
+        val rounded = FluidCornerSpec.boundsEncoding(FloatArray(4) { 5f }, transform, 1, 0.0, 10.0, 0f, inline = true)
         assertEquals(listOf(1f, 0f, 10f, 0f), rounded.radii.toList())
-        val uneven = FluidCornerSpec.boundsEncoding(floatArrayOf(1f, 2f, 3f, 4f), transform, 1, 6f, 8f)
+        val uneven = FluidCornerSpec.boundsEncoding(floatArrayOf(1f, 2f, 3f, 4f), transform, 1, 60.0, 80.0, 0f, inline = true)
         assertEquals(22, uneven.imageFunction)
         assertEquals(5f, uneven.family, 0f)
         assertEquals(listOf(1f, -0f, -0f, 1f).map(Float::toRawBits), uneven.normalMatrix.map(Float::toRawBits))
         assertEquals(listOf(-2f, -4f, -6f, -8f), uneven.radii.toList())
-        assertEquals(0x402875696e58a32fL, uneven.expansion.toRawBits())
-        assertFalse(uneven.splitsIntoRect(0.0, uneven.expansion))
-        assertTrue(uneven.splitsIntoRect(0.0, Math.nextUp(uneven.expansion)))
-        assertTrue(uneven.splitsIntoRect(Double.NaN, uneven.expansion))
-        assertTrue(uneven.splitsIntoRect(0.0, Double.NaN))
+        val cut = Double.fromBits(0x402875696e58a32fL).toFloat() / 2f
+        assertEquals(cut to cut, uneven.gridCut)
+    }
+
+    @Test fun trackedCornerExtentPadsBeforeScalingAndSplitsOnlyPastTheOrderedThreshold() {
+        val identity = FluidCornerSpec.fieldTransform(null, Math::fma)
+        fun encode(width: Double, height: Double, pad: Float, inline: Boolean) =
+            FluidCornerSpec.boundsEncoding(FloatArray(4) { 2f }, identity, 0, width, height, pad, inline)
+
+        val direct = encode(8.0, 0.0, -1f, inline = false)
+        assertEquals(3f to -1f, direct.fieldHalfSize)
+        assertEquals(3f to 0f, direct.gridCut)
+        val inline = encode(8.0, 0.0, -1f, inline = true)
+        assertEquals(5f to 1f, inline.fieldHalfSize)
+        assertEquals(1f to 0f, inline.gridCut)
+        val padded = encode(8.0, 2.0, -1f, inline = false)
+        assertEquals(4f to 1f, padded.fieldHalfSize)
+        assertEquals(3f to 2f, padded.gridCut)
+        assertEquals(null, encode(4.0, 2.0, 1f, inline = false).gridCut)
+        assertEquals(null, encode(8.0, 2.0, -1f, inline = true).gridCut)
+        assertEquals(-4096f to -4096f, encode(0.0, 0.0, 8192f, inline = true).fieldHalfSize)
+        assertEquals(3f to 3f, encode(4.0, 2.0, -3f, inline = true).fieldHalfSize)
+        assertTrue(encode(4.0, Double.NaN, 0f, inline = true).gridCut?.second?.isNaN() == true)
+        assertTrue(encode(4.0, 2.0, Float.NaN, inline = false).gridCut?.first?.isNaN() == true)
+
+        assertEquals(6f, FluidCornerSpec.parentPadding(2f, 8f, 0f, 1f, Math::fma), 0f)
+        assertEquals(7f, FluidCornerSpec.parentPadding(2f, 8f, 0f, -1f, Math::fma), 0f)
+        assertEquals(0x40333333, FluidCornerSpec.parentPadding(0f, 0f, 1f, 0f, Math::fma).toRawBits())
     }
 
     @Test fun trackedCornerScaleAndMatrixShareTheFusedAffineDeterminant() {

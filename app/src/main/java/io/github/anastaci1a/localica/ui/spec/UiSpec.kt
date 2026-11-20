@@ -616,26 +616,57 @@ internal object FluidCornerSpec {
     }
 
     data class BoundsEncoding(
-        val imageFunction: Int, val family: Float, val normalMatrix: FloatArray, val radii: FloatArray, val expansion: Double,
-    ) {
-        fun splitsIntoRect(pad: Double, largerHalfExtent: Double) = !(expansion + pad >= largerHalfExtent)
+        val imageFunction: Int, val family: Float, val normalMatrix: FloatArray, val radii: FloatArray,
+        val fieldHalfSize: Pair<Float, Float>, val gridCut: Pair<Float, Float>?,
+    )
+
+    // Effect kind 7 supplies this first lane to both the direct and inline draws.
+    fun parentPadding(
+        amount: Float, base: Float, weighted: Float, offset: Float,
+        fusedMultiplyAdd: (Float, Float, Float) -> Float,
+    ): Float {
+        val padding = fusedMultiplyAdd(weighted, Float.fromBits(0x40333333), base) + -amount
+        return if (offset > 0f) padding else padding - offset
     }
 
-    fun boundsEncoding(raw: FloatArray, transform: FieldTransform, curveCode: Int, halfWidth: Float, halfHeight: Float): BoundsEncoding {
+    fun boundsEncoding(
+        raw: FloatArray, transform: FieldTransform, curveCode: Int,
+        width: Double, height: Double, inheritedPad: Float, inline: Boolean,
+    ): BoundsEncoding {
+        val capped = if (inheritedPad > 4096f) 4096f else inheritedPad
+        val pad = if (!inline && capped < 1f) 1f else capped
+        val high = if (width > height) width else height
+        val low = if (width < height) width else height
+        val canPad = high < Double.MAX_VALUE && low > 0.0
+        val grownBy = if (canPad) (-pad / transform.scale).toDouble() * -2.0 else 0.0
+        val paddedWidth = if (canPad) grownBy + width else width
+        val paddedHeight = if (canPad) grownBy + height else height
+        val collapsed = canPad && (paddedWidth <= 0.0 || paddedHeight <= 0.0)
+        val halfWidth = if (collapsed) 0f else (paddedWidth * transform.scale).toFloat() * 0.5f
+        val halfHeight = if (collapsed) 0f else (paddedHeight * transform.scale).toFloat() * 0.5f
+        val fieldHalfSize = (halfWidth - pad) to (halfHeight - pad)
         val floor = Float.fromBits(0x3c23d70a)
         val clamped = FloatArray(4) { if (raw[it] < floor) floor else raw[it] }
         val uniform = clamped[0] == clamped[1] && clamped[1] == clamped[2] && clamped[2] == clamped[3]
         val scaled = FloatArray(4) { clamped[it] * transform.scale }
         val continuous = curveCode and 3 != 0
-        val maxRadius = (if (uniform) scaled[0] else scaled.reduce { left, right -> if (left > right) left else right }).toDouble()
+        fun orderedMax(left: Float, right: Float) = if (left > right) left else right
+        val maxRadius = orderedMax(orderedMax(scaled[0], scaled[1]), orderedMax(scaled[2], scaled[3])).toDouble()
         val expansion = if (continuous) maxRadius * Double.fromBits(0x3ff875696e58a32fL) else maxRadius
-        if (!uniform) return BoundsEncoding(22, 5f, transform.normalMatrix, if (continuous) FloatArray(4) { -scaled[it] } else scaled, expansion)
+        val threshold = expansion + pad.toDouble()
+        fun cut(half: Float) = (if (threshold < half.toDouble()) threshold.toFloat() else half) / transform.scale
+        val gridCut = if (threshold >= orderedMax(halfWidth, halfHeight).toDouble()) null else cut(halfWidth) to cut(halfHeight)
+        if (!uniform) {
+            val radii = if (continuous) FloatArray(4) { -scaled[it] } else scaled
+            return BoundsEncoding(22, 5f, transform.normalMatrix, radii, fieldHalfSize, gridCut)
+        }
         fun weight(half: Float): Float {
             if (!continuous) return 1f
             val coefficient = Double.fromBits(0x400721e8a7a4b61bL)
             return ((half + half).toDouble() * -coefficient / expansion + coefficient).coerceIn(0.0, 1.0).toFloat()
         }
-        return BoundsEncoding(21, 4f, transform.normalMatrix, floatArrayOf(weight(halfWidth), weight(halfHeight), scaled[0], 0f), expansion)
+        val radii = floatArrayOf(weight(fieldHalfSize.first), weight(fieldHalfSize.second), scaled[0], 0f)
+        return BoundsEncoding(21, 4f, transform.normalMatrix, radii, fieldHalfSize, gridCut)
     }
 
     // Group texture selection is independent of the per-element image kind.
