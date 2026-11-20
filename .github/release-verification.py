@@ -136,10 +136,13 @@ def provisional_native(repository, run, jobs, artifacts):
                 and union['expected'] == union['executed_once'] > 0 and union['error'] == 0
                 and union['passed'] + union['skipped'] + union['failure'] == union['expected'],
                 'Incomplete provisional native union')
-        for shard in range(DEVICE_SHARDS):
-            job = jobs[f'device-tests ({api}, {shard})']
-            require(job['conclusion'] in ('success', 'failure'), 'Provisional native shard did not finish')
-            if job['conclusion'] == 'success':
+        api_jobs = [(shard, jobs[f'device-tests ({api}, {shard})']) for shard in range(DEVICE_SHARDS)]
+        require(all(job['conclusion'] in ('success', 'failure') for _, job in api_jobs),
+                'Provisional native shard did not finish')
+        accounted = 0
+        for shard, job in sorted(api_jobs, key=lambda item: item[1]['conclusion'] == 'success'):
+            # A successful shard may contain assertions counted by the complete union.
+            if job['conclusion'] == 'success' and accounted >= union['failure']:
                 continue
             name = f'device-reports-api-{api}-shard-{shard}'
             item = artifact(artifacts, name, run, job)
@@ -162,7 +165,8 @@ def provisional_native(repository, run, jobs, artifacts):
                         require(identity not in failed and message.strip(), 'Invalid provisional failure')
                         failed[identity] = hashlib.sha256(message.encode()).hexdigest()
                         count += 1
-            require(count > 0, 'Provisional shard failed outside an assertion')
+            require(count > 0 or job['conclusion'] == 'success', 'Provisional shard failed outside an assertion')
+            accounted += count
     require(Counter(api for api, _ in failed) == Counter({api: union['failure'] for api, union in unions.items()}),
             'Provisional failures differ from the complete unions')
     return unions, failed
@@ -171,6 +175,7 @@ def provisional_native(repository, run, jobs, artifacts):
 def scoped_native_coverage(repository, commit, scoped_runs):
     require(0 < len(scoped_runs) <= 24 and len(set(scoped_runs)) == len(scoped_runs), 'Invalid scope run IDs')
     covered = {'26': set(), '36': set()}
+    passed = {'26': set(), '36': set()}
     for run_id in scoped_runs:
         run, scoped_jobs = delta_run(repository, run_id, 'prototype.yml', commit)
         decision_job = scoped_jobs['Prototype evidence and delivery decision']
@@ -188,11 +193,12 @@ def scoped_native_coverage(repository, commit, scoped_runs):
                 and manifest['run_attempt'] == str(run['run_attempt']) and manifest['validation_errors'] == []
                 and not manifest['build_only'] and not manifest['requested_methods'], 'Invalid whole-class proof')
         for api, evidence in manifest['focused_evidence'].items():
-            require(manifest['checks']['focused_'+api] == 'passed' and evidence['sha'] == commit
+            require(api in covered and manifest['checks']['focused_'+api] == 'passed' and evidence['sha'] == commit
                     and str(evidence['api']) == api and all(outcome in ('passed', 'skipped')
                     for outcome in evidence['methods'].values()), 'Native scope did not pass')
             covered[api].update(evidence['selectors'])
-    return covered
+            passed[api].update(method for method, outcome in evidence['methods'].items() if outcome == 'passed')
+    return covered, passed
 
 
 def verify_native_scope(repository, commit, packet, failed):
@@ -203,8 +209,11 @@ def verify_native_scope(repository, commit, packet, failed):
             and len(final_classes)+len(carried_classes) == len(packet['affected_classes'])+len(packet['carried_classes'])
             and all(re.fullmatch(r'io\.github\.anastaci1a\.localica\.[\w.$]+', c)
                     for c in final_classes | carried_classes), 'Invalid reviewed dependency partition')
-    final_coverage = scoped_native_coverage(repository, commit, packet['scoped_runs'])
-    require(all(final_classes <= classes for classes in final_coverage.values()), 'Final hosted affected-class gap')
+    final_coverage, final_passed = scoped_native_coverage(repository, commit, packet['scoped_runs'])
+    require(final_classes <= final_coverage['26'], 'Final hosted API 26 affected-class gap')
+    require(all(method in final_passed['26'] for api, method in failed
+                if api == '26' and method.rpartition('#')[0] in final_classes),
+            'Final hosted API 26 held method did not pass')
     prior_runs = packet['carried_scoped_runs']
     require(bool(carried_classes) == bool(prior_runs)
             and set(prior_runs).isdisjoint(packet['scoped_runs']), 'Invalid carried class run IDs')
@@ -213,7 +222,7 @@ def verify_native_scope(repository, commit, packet, failed):
         comparison = gh(f'repos/{repository}/compare/{prior}...{commit}?per_page=1')
         require(comparison['status'] == 'ahead' and comparison['merge_base_commit']['sha'] == prior,
                 'Carried source is not an ancestor of the release')
-        carried_coverage = scoped_native_coverage(repository, prior, prior_runs)
+        carried_coverage, _ = scoped_native_coverage(repository, prior, prior_runs)
         require(all(carried_classes <= classes for classes in carried_coverage.values()), 'Carried hosted class gap')
     for api in ('26', '36'):
         local = packet['local'][api]
