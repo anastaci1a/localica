@@ -184,7 +184,10 @@ class FluidPopupComponentsTest {
         val events = mutableListOf<String>()
         completion.start(
             block = { events += "group completion" },
-            drain = { completion.increment() },
+            drain = {
+                completion.increment()
+                completion.add { events += "request completion" }
+            },
             propagateHold = {},
         )
         val release = {
@@ -195,7 +198,9 @@ class FluidPopupComponentsTest {
         releaseFluidMorphRequest(stateInstalled = true, release = null)
         assertTrue(events.isEmpty())
         releaseFluidMorphRequest(stateInstalled = true, release)
-        assertEquals(listOf("request release", "group completion"), events)
+        assertEquals(listOf("request release"), events)
+        releaseFluidMorphRequest(stateInstalled = true, release)
+        assertEquals(listOf("request release", "request release", "group completion", "request completion"), events)
     }
 
     @Test fun sharedMorphCompletionClearsBeforeFiringAndSupportsTheDisabledRoute() {
