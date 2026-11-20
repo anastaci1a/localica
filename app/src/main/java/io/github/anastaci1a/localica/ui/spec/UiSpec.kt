@@ -845,6 +845,42 @@ internal object FluidGaussianSpec {
         return NarrowCoordinates(horizontal.first to vertical.first, horizontal.second to vertical.second)
     }
 
+    data class SinglePassEncoding(val contextOffset: Int, val descriptor: Int) {
+        val channels get() = descriptor and 7
+        val elementCount get() = channels * ((descriptor ushr 3) and 15)
+        val elementBytes get() = if ((descriptor and 0x80) != 0) 2 else 4
+        val alignment get() = channels * elementBytes
+    }
+
+    val singlePassEncoding = listOf(SinglePassEncoding(0xb0, 0x42), SinglePassEncoding(0x100, 0x94), SinglePassEncoding(0x150, 0x89))
+
+    data class SinglePassUniforms(val offsets: List<Pair<Float, Float>>, val normalization: Float) {
+        val textureFunction get() = 0x2d
+        val weight get() = 0.25f
+    }
+
+    fun singlePassUniforms(
+        variance: Pair<Float, Float>, sampleScale: Pair<Float, Float>, mode: Int, final: Boolean, flags: Int,
+        fusedMultiplyAdd: (Double, Double, Double) -> Double,
+    ): SinglePassUniforms {
+        val (vx, vy) = variance
+        fun axis(value: Float): Pair<Double, Double> {
+            val exponent = exp(-0.5 / value.toDouble())
+            val divisor = fusedMultiplyAdd(exponent, 2.0, 1.0)
+            return (1.0 / divisor) to (exponent / divisor)
+        }
+        val x = axis(vx)
+        val comparable = !vx.isNaN() && !vy.isNaN() && ((vx >= 0f) != (vy < 0f))
+        val nearby = (vx.toRawBits() - vy.toRawBits() + 3).toUInt() < 7u
+        val y = if (vx == vy || (comparable && nearby)) x else axis(vy)
+        val a = (x.first * 4.0 * x.second).toFloat()
+        val b = (y.first * 4.0 * y.second).toFloat()
+        val (sx, sy) = sampleScale
+        val offsets = listOf((-a * sx) to (b * sy), (a * sx) to (b * sy), (-a * sx) to (-b * sy), (a * sx) to (-b * sy))
+        val normalization = if (mode == 2 && (final || (flags and 2) != 0)) 1f else 0f
+        return SinglePassUniforms(offsets, normalization)
+    }
+
     fun decodeBounds(encoded: DoubleArray?): DoubleArray? =
         encoded?.takeIf { it.size >= 4 }?.let { doubleArrayOf(it[0], it[1], it[2] - it[0], it[3] - it[1]) }
 

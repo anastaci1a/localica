@@ -744,6 +744,44 @@ class FluidPopupComponentsTest {
         assertEquals(0x18, FluidGaussianSpec.narrowCompute(width, true, prepared).function)
     }
 
+    @Test fun singlePassGaussianStagesOrderedTapsAndTheThreeUniformDescriptors() {
+        var evaluations = 0
+        fun pass(vy: Float, mode: Int = 0, final: Boolean = false, flags: Int = 0, sx: Float = 2f) =
+            FluidGaussianSpec.singlePassUniforms(0.5f to vy, sx to 3f, mode, final, flags) { a, b, c ->
+                evaluations++
+                Math.fma(a, b, c)
+            }
+        val ordinary = pass(0.25f)
+        val x = 0xbf7a1132.toInt()
+        val y = 0x3f80bf2c
+        assertEquals(listOf(
+            x to y, 0x3f7a1132 to y, x to 0xbf80bf2c.toInt(), 0x3f7a1132 to 0xbf80bf2c.toInt(),
+        ), ordinary.offsets.map { (dx, dy) -> dx.toRawBits() to dy.toRawBits() })
+        assertEquals(2, evaluations)
+        assertEquals(0x2d, ordinary.textureFunction)
+        assertEquals(0.25f.toRawBits(), ordinary.weight.toRawBits())
+        assertEquals(0f.toRawBits(), pass(0.5f, final = true, flags = 2).normalization.toRawBits())
+        assertEquals(0f.toRawBits(), pass(0.5f, mode = 2).normalization.toRawBits())
+        assertEquals(1f.toRawBits(), pass(0.5f, mode = 2, final = true).normalization.toRawBits())
+        assertEquals(1f.toRawBits(), pass(0.5f, mode = 2, flags = 2).normalization.toRawBits())
+        evaluations = 0
+        val equal = pass(0.5f)
+        val nearby = pass(Float.fromBits(0.5f.toRawBits() + 3))
+        assertEquals(equal, nearby)
+        assertEquals(2, evaluations)
+        pass(Float.fromBits(0.5f.toRawBits() + 4))
+        assertEquals(4, evaluations)
+        assertEquals(listOf(0f, -0f, 0f, -0f).map(Float::toRawBits),
+            pass(0.5f, sx = -0f).offsets.map { it.first.toRawBits() })
+
+        val descriptors = FluidGaussianSpec.singlePassEncoding
+        assertEquals(listOf(0xb0, 0x100, 0x150), descriptors.map { it.contextOffset })
+        assertEquals(listOf(0x42, 0x94, 0x89), descriptors.map { it.descriptor })
+        assertEquals(listOf(16, 8, 1), descriptors.map { it.elementCount })
+        assertEquals(listOf(4, 2, 2), descriptors.map { it.elementBytes })
+        assertEquals(listOf(8, 8, 2), descriptors.map { it.alignment })
+    }
+
     @Test fun gaussianTileDecimationUsesLiveAdmissionAndTheNamedThreadDivisors() {
         val factors = FluidGaussianSpec.Decimation.entries
         val capabilities = FluidGaussianSpec.Capabilities(true, 0, true, true, 0)
