@@ -96,13 +96,16 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     private fun outlineView(slot: Int)=object: MotionRectView {
         private fun edge(i: Int)= (outline?.rect(slot) ?: requireNotNull(bound)).channels[i]
         private fun projected(i: Int)=object: MotionValue {
-            private val vertical=i%2==1
+            private val axis=i%2
+            private val half=if(i<2) -0.5f else 0.5f
             private fun value(read: (MotionFloat)->Float): Float {
                 val base=read(edge(i))
                 val o=outline?:return base
                 val scale=read(o.scales[slot])
-                val kick=if(vertical) FluidKickSpec.translationY(read(o.kicks[slot]).toDouble(),o.hostScaleY*scale).toFloat() else 0f
-                return base+(abs(scale)-1f)*(base-read(edge(i xor 2)))*0.5f+kick
+                val kick=if(axis==1) FluidKickSpec.translationY(read(o.kicks[slot]).toDouble(),o.hostScaleY*scale).toFloat() else 0f
+                val contentHalf=half*abs(scale)*read(o.content[slot][axis]).coerceAtLeast(0f)
+                val viewHalf=(base-read(edge(i xor 2)))*0.5f
+                return base+(contentHalf-viewHalf)+kick
             }
             private fun velocity(read: (MotionFloat)->Kinematic): Float {
                 val base=read(edge(i))
@@ -110,15 +113,18 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
                 val other=read(edge(i xor 2))
                 val scale=read(o.scales[slot])
                 val scaleVelocity=if(scale.value<0f) -scale.velocity else scale.velocity
-                val kick=if(vertical) read(o.kicks[slot]).let {
+                val span=read(o.content[slot][axis])
+                val spanVelocity=if(span.value<0f) 0f else span.velocity
+                val kick=if(axis==1) read(o.kicks[slot]).let {
                     (o.hostScaleY*(scale.value*it.velocity+scale.velocity*it.value)).toFloat()
                 } else 0f
-                return base.velocity+(abs(scale.value)-1f)*(base.velocity-other.velocity)*0.5f+
-                    scaleVelocity*(base.value-other.value)*0.5f+kick
+                return (base.velocity+other.velocity)*0.5f+
+                    half*(abs(scale.value)*spanVelocity+scaleVelocity*span.value.coerceAtLeast(0f))+kick
             }
             override val target get()=value { it.target }
             override val settled get()=edge(i).settled && (outline?.let { o ->
-                edge(i xor 2).settled && o.scales[slot].settled && (!vertical || o.kicks[slot].settled)
+                edge(i xor 2).settled && o.content[slot][axis].settled &&
+                    o.scales[slot].settled && (axis!=1 || o.kicks[slot].settled)
             } ?: true)
             override fun value()=value { it.value() }
             override fun velocity()=velocity { it.sample() }
@@ -184,10 +190,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     }.also { drawn=clock.stamp to it } }
     internal fun outlineRadius()=outline?.let { o -> requireNotNull(outlineBodies())[o.aperture].topLeftCornerRadius.x }
     private fun Outline.presentedRadius(slot: Int,rect: Rect): Float {
-        val (width,height)=content[slot]
         val scale=abs(scales[slot].value())
-        val contentLimit=minOf(width.value(),height.value())*scale
-        val side=minOf(rect.width,rect.height,contentLimit).coerceAtLeast(0f)
+        val side=minOf(rect.width,rect.height).coerceAtLeast(0f)
         return FluidCornerSpec.clampRadius(radii[slot].value().toDouble()*scale,side*0.5).toFloat()
     }
     internal fun clearOutline() { outline?.owned?.forEach { it.onRest=null; it.dispose() }; outline=null; drawn=null }
