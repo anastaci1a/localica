@@ -4,6 +4,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import io.github.anastaci1a.localica.ui.spec.Space
 import io.github.anastaci1a.localica.ui.spec.StockUiSpec
+import io.github.anastaci1a.localica.ui.spec.fluidThroughGrows
 
 /** A popup's resting window margin in pixels, exactly v0.34.1's for every motion kind (#854 review): the spring overshoot exists
  * only in flight and may pass this margin at its peak; it never moves or shrinks a resting menu or dialog. Pages fill the window. */
@@ -58,7 +59,7 @@ internal fun fluidPopupContentBounds(
 }
 
 internal fun fluidPopupContentGrows(from: PopupPortalBounds, to: PopupPortalBounds) =
-    from.width * from.height < to.width * to.height
+    fluidThroughGrows(from.width, from.height, to.width, to.height)
 
 internal enum class PopupThroughItem { From, Pivot, To }
 

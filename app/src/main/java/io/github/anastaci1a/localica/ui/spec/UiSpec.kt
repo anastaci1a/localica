@@ -72,6 +72,8 @@ internal fun fluidIntermediateY(sourceY: Double, targetY: Double, ratio: Double,
     sourceY + (ratio * (targetY - sourceY)).coerceIn(-cap, cap)
 internal fun fluidStoredDelay(storedDelay: Double, speed: Double, amplify: Boolean) =
     storedDelay * speed * (if (amplify) 10.0 else 1.0)
+internal fun fluidThroughGrows(fromWidth: Double, fromHeight: Double, toWidth: Double, toHeight: Double) =
+    fromWidth * fromHeight < toWidth * toHeight
 private fun fluidThroughTailDelay(growing: Boolean) = if (growing) 0.12 else 0.1
 private fun fluidSpringOmega(response: Double) = 2 * PI / response
 
@@ -97,6 +99,8 @@ internal object FluidPopupRuntimeInputs {
     val outlineCentre: PopupSecondPhase? = null
     val liveMainEject: FluidPopupSpringSettings? = null
     val liveMainAbsorb: FluidPopupSpringSettings? = null
+    val liveContent: FluidContentSettings? = null
+    val content get() = liveContent ?: FluidContentDefaults
     val constructorMainAbsorb = FluidPopupSpringSettings(0.8, 0.7)
     val lensDimension: ((growing: Boolean, changing: Boolean) -> Double?)? = null
     val effectiveSpeed: Double? = null

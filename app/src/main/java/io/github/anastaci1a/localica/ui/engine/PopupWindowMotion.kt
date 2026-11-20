@@ -129,12 +129,12 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         }
         val from = if (shown) basis.startBounds else basis.endBounds
         val to = if (shown) basis.endBounds else basis.startBounds
-        val growing = from.width.toDouble() * from.height < to.width.toDouble() * to.height
+        val growing = fluidThroughGrows(from.width.toDouble(), from.height.toDouble(), to.width.toDouble(), to.height.toDouble())
         fluidHeight = maxOf(abs(from.height.toDouble()), abs(to.height.toDouble()))
         val inputs = FluidPopupRuntimeInputs
         val eject = inputs.liveMainEject ?: FluidMainEjectDefaults
         val absorb = inputs.liveMainAbsorb ?: inputs.constructorMainAbsorb
-        val content = FluidContentDefaults
+        val content = FluidPopupRuntimeInputs.content
         pendingFluid.replaceFluidTimeline(fluidThroughQueue(growing, eject, content) {
             FluidLensingSpec.requests(content.lensingEnabled, growing, eject, absorb) { changing ->
                 inputs.lensDimension?.invoke(growing, changing)
@@ -149,7 +149,7 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
 
     private fun drainFluid(stamp: FrameStamp, firstOnly: Boolean) {
         val origin = fluidOrigin ?: return
-        val content = FluidContentDefaults
+        val content = FluidPopupRuntimeInputs.content
         pendingFluid.drainFluidTimeline((stamp.nanos - origin.nanos) / 1e9, FluidPopupRuntimeInputs.effectiveSpeed ?: content.speed, content.amplifyDelays,
             { clock.context?.durationScale?.toDouble() ?: 1.0 }, firstOnly) { step, speed ->
             val blur = when (step.action) {
