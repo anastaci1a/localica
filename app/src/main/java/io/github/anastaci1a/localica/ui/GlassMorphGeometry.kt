@@ -120,8 +120,7 @@ internal fun fluidOutlineTargets(
     val largerSide = if (larger.width <= larger.height) larger.height else larger.width
     val sourcePivot = if (largerSide > 0) {
         val bounds = if (sourceRegion.width < 0 || sourceRegion.height < 0) {
-            // The infinite position override has no resolved host conversion. Retain the host centre.
-            PopupPortalBounds(0.0, 0.0, larger.width, larger.width).centeredAt(pivot.midX, pivot.midY)
+            PopupPortalBounds(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, larger.width, larger.width)
         } else {
             toPivotContainer(sourceRegion.squareClampedAt(pivot.midX, pivot.midY, larger.width))
         }
@@ -169,10 +168,12 @@ private class PreparedFluidOutline(start: Rect, end: Rect, density: Float, priva
     override fun outline(action: FluidTimelineAction): List<PopupOutlinePose<Rect>>? = fluidOutlineRequests(action, growing, targets)?.map { (role, override) ->
         val isHome = if (role == PopupThroughItem.Pivot) true else (role == PopupThroughItem.From) == opening
         val bounds = override?.bounds ?: if (role == PopupThroughItem.Pivot) pivot else if (isHome) home else popup
-        val rect = Rect((bounds.x * scale + preview.root.x).toFloat(), (bounds.y * scale + preview.root.y).toFloat(),
-            ((bounds.x + bounds.width) * scale + preview.root.x).toFloat(), ((bounds.y + bounds.height) * scale + preview.root.y).toFloat())
+        val preservesCenter = bounds.x == Double.POSITIVE_INFINITY && bounds.y == Double.POSITIVE_INFINITY
+        val layout = if (preservesCenter) bounds.centeredAt(pivot.midX, pivot.midY) else bounds
+        val rect = Rect((layout.x * scale + preview.root.x).toFloat(), (layout.y * scale + preview.root.y).toFloat(),
+            ((layout.x + layout.width) * scale + preview.root.x).toFloat(), ((layout.y + layout.height) * scale + preview.root.y).toFloat())
         val radius = override?.let { (it.cornerRadius * scale).toFloat() } ?: if (isHome) preview.homeRadius else preview.popupRadius
-        PopupOutlinePose(rect, radius, (override?.scale ?: 1.0).toFloat())
+        PopupOutlinePose(rect, radius, (override?.scale ?: 1.0).toFloat(), preservesCenter)
     }
 
     override fun kick(action: FluidTimelineAction): Pair<Int, Float>? {

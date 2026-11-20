@@ -83,6 +83,8 @@ class FluidPopupPortalGeometryTest {
         val targets = fluidOutlineTargets(smaller, larger, pivot, { it }, { it })
         val source = requireNotNull(targets.sourcePivot)
         val bounds = requireNotNull(source.bounds)
+        assertEquals(Double.POSITIVE_INFINITY, bounds.x, 0.0)
+        assertEquals(Double.POSITIVE_INFINITY, bounds.y, 0.0)
         assertEquals(250.0, bounds.width, 0.0)
         assertEquals(250.0, bounds.height, 0.0)
         assertEquals(125.0, source.cornerRadius, 0.0)

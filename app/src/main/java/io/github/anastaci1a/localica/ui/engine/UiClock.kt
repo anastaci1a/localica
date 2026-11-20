@@ -76,24 +76,36 @@ internal class FluidTimelineMotion(private val clock: UiClock,private val run: (
 /** #1083: one running property entry on the shared clock. Each frame advances the installed spring by the frame delta over the drag, finishes
  * on the projected error and publishes through [write]; [completion] belongs to the lifecycle owner. */
 internal class FluidPropertyMotion(private val clock: UiClock,private val sameValue: (Double,Double)->Boolean,
-    private val write: (FluidScalarSpringBody)->Unit,private val completion: ()->Unit={}): ActiveMotion {
-    override val id=clock.allocateId(); override val presented get()=true; override var settled=true; private set
-    private var entry: FluidScalarSpringEntry?=null; private lateinit var spring: FluidPopupSpringSettings; private var epsilonSquared=0.0; private var time=FluidPropertyFrameTime(0.0,0.0,0.0); private val publication=FluidScalarPublication()
+    private val write: (FluidScalarSpringBody)->Unit={},private val completion: ()->Unit={},initial: Double=0.0): ActiveMotion {
+    override val id=clock.allocateId(); override val presented get()=true
+    override var settled by mutableStateOf(true); private set
+    private var entry by mutableStateOf(rest(initial))
+    private lateinit var spring: FluidPopupSpringSettings
+    private var epsilonSquared=0.0; private var time=FluidPropertyFrameTime(0.0,0.0,0.0); private val publication=FluidScalarPublication()
+    val target get()=entry.target
+    fun sample()=entry.body
+    private fun rest(value: Double)=FluidScalarSpringBody(value,0.0).let { FluidScalarSpringEntry(it,value,it) }
+    fun stop() { clock.unregister(this); entry=rest(entry.body.value); settled=true }
     /** [epsilonSquared] is the finish threshold at the request's point scale; with animations off the entry lands on its target at once. */
     fun animate(requestedStart: Double,target: Double,controls: FluidPropertySpringControls,spring: FluidPopupSpringSettings,epsilonSquared: Double) {
-        clock.checkMutation(); val old=entry; entry=controls.immediateEntry(requestedStart,target,old,old?.target,spring,null); this.spring=spring; this.epsilonSquared=epsilonSquared
+        clock.checkMutation()
+        val old=entry.takeUnless { settled }
+        val admission=if(old==null && controls.startingVelocity==null && spring.retargetImpulse>0.0)
+            controls.copy(startingVelocity=spring.velocityWithImpulse(0.0,1.0)) else controls
+        entry=admission.immediateEntry(requestedStart,target,old,old?.target,spring,null)
+        this.spring=spring; this.epsilonSquared=epsilonSquared
         if(clock.context?.access==MotionAccess.Reduced) { reduce(clock.stampNow); return }
         if(settled) { settled=false; time=time.primed(clock.stampNow.nanos/1e9) { clock.context?.displayIntervalSeconds?.toDouble()?:0.0 }; clock.register(this) }
     }
     private fun publish(next: FluidScalarSpringEntry) { publication.queueTick(next.body,next.target,settled,sameValue); publication.consume(write) }
     override fun frame(stamp: FrameStamp) {
-        val current=entry?:return; time=time.advance(stamp.nanos/1e9)
-        val next=spring.advanceUnsmoothed(current,time.entryDelta(0.0,clock.fluidDrag)); entry=next
+        time=time.advance(stamp.nanos/1e9)
+        val next=spring.advanceUnsmoothed(entry,time.entryDelta(0.0,clock.fluidDrag)); entry=next
         settled=next.body.finished(next.target,spring.velocityScalingFactor,epsilonSquared,false); publish(next)
     }
     override fun endsAt(stamp: FrameStamp)=settled
-    override fun finish(stamp: FrameStamp) { entry=null; completion() }
-    override fun reduce(stamp: FrameStamp) { clock.unregister(this); settled=true; entry?.let(::publish); finish(stamp) }
+    override fun finish(stamp: FrameStamp) { entry=rest(entry.target); completion() }
+    override fun reduce(stamp: FrameStamp) { clock.unregister(this); settled=true; publish(entry); finish(stamp) }
 }
 @Composable internal fun ProvideUiClock(content: @Composable ()->Unit) {
     val inherited=LocalClockOwner.current

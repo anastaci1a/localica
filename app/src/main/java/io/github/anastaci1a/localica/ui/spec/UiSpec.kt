@@ -130,7 +130,7 @@ internal interface PopupOutline<Bounds> {
     fun kick(action: FluidTimelineAction): Pair<Int,Float>?
 }
 
-internal data class PopupOutlinePose<Bounds>(val bounds: Bounds, val radius: Float, val scale: Float)
+internal data class PopupOutlinePose<Bounds>(val bounds: Bounds, val radius: Float, val scale: Float, val preservesCenter: Boolean = false)
 
 internal data class FluidContentSettings(
     val minScale: Double, val maxScale: Double,
@@ -443,6 +443,7 @@ internal fun completeFluidTimeline(
 }
 
 internal object FluidKickSpec {
+    const val epsilonSquared = 0.001 * 0.001
     const val growingSlot = 0
     const val growingAmount = -80.0
     const val sourceAmount = 40.0

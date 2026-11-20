@@ -5,12 +5,14 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.boundingRect
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.engine.EngineHarness
+import io.github.anastaci1a.localica.ui.engine.FluidPropertyMotion
 import io.github.anastaci1a.localica.ui.spec.MotionAccess
 import io.github.anastaci1a.localica.ui.engine.PopupWindowMotion
 import io.github.anastaci1a.localica.ui.spec.ExpansionGeometryDomain
 import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
 import io.github.anastaci1a.localica.ui.spec.FluidMainEject
 import io.github.anastaci1a.localica.ui.spec.FluidPopupSpringSettings
+import io.github.anastaci1a.localica.ui.spec.FluidPropertySpringControls
 import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
@@ -285,11 +287,50 @@ class GlassMorphGeometryTest {
         val slots = requireNotNull(popup.outlineBodies())
         val progress = 0.010378857970991029
         val scale = 0.25 + 0.75 * progress
-        val kt = 2.0 * Math.PI / 0.2 / 120
+        val propertyTime = 0.008333333 + 0.4 * 1.001 * (1f / 120).toDouble()
+        val frequency = 2.0 * Math.PI / 0.35
+        val decay = 0.75 * frequency
+        val oscillation = frequency * kotlin.math.sqrt(1.0 - 0.75 * 0.75)
+        val kickScale = 2.0 * (1.0 - 0.75 * kotlin.math.exp(-decay * propertyTime) *
+            (kotlin.math.cos(oscillation * propertyTime) + decay / oscillation * kotlin.math.sin(oscillation * propertyTime)))
+        val kt = 2.0 * Math.PI / 0.2 * propertyTime
         val kick = 40.0 * (1.0 - (1.0 + kt) * kotlin.math.exp(-kt))
         assertEquals((250.0 * scale).toFloat(), slots[0].width, 0.00002f)
-        assertEquals((180.0 + scale * kick * 2.0).toFloat(), slots[0].boundingRect.center.y, 0.00002f)
+        assertEquals((180.0 + kickScale * kick).toFloat(), slots[0].boundingRect.center.y, 0.00002f)
         assertEquals(180f, slots[1].boundingRect.center.y, 0f)
+    }
+
+    @Test fun invertedSourceUsesTheRetainedSlotCenter() = fluidWindow(MotionAccess.Reduced, 24f) { _, popup, _ ->
+        val expansion = popup.expansion
+        val spring = fluidOutlineSpring(null)
+        val before = PopupOutlinePose(Rect(50f, 20f, 90f, 60f), 20f, 1f)
+        expansion.replaceOutline(listOf(before, before), 0, 1.0, spring)
+        val inverted = PopupOutlinePose(Rect(0f, 0f, 250f, 250f), 125f, 0.25f, preservesCenter = true)
+        expansion.replaceOutline(listOf(inverted, before), 0, 1.0, spring)
+        val after = requireNotNull(popup.outlineBodies()).first()
+        assertEquals(Offset(70f, 40f), after.boundingRect.center)
+        assertEquals(62.5f, after.width, 0f)
+        assertEquals(31.25f, after.topLeftCornerRadius.x, 0f)
+    }
+
+    @Test fun kickPropertiesFinishIndependentlyOnTheirProjectedError() {
+        EngineHarness().use { h ->
+            val controls = FluidPropertySpringControls(0.0, null, interactive = false, additive = false)
+            val small = FluidPropertyMotion(h.clock, Double::equals)
+            val large = FluidPropertyMotion(h.clock, Double::equals)
+            val spring = FluidKickSpec.ejecteeSpring
+            small.animate(0.0, 0.5e-6, controls, spring, FluidKickSpec.epsilonSquared)
+            large.animate(0.0, 2e-6, controls, spring, FluidKickSpec.epsilonSquared)
+            h.advance(1.0 / 120)
+            assertTrue(small.settled)
+            assertEquals(0.5e-6, small.sample().value, 0.0)
+            assertEquals(0.0, small.sample().velocity, 0.0)
+            assertFalse(large.settled)
+            assertTrue(large.sample().velocity > 0.0)
+            val running = large.sample()
+            large.animate(running.value, 0.0, controls, spring, FluidKickSpec.epsilonSquared)
+            assertEquals(running, large.sample())
+        }
     }
 
     @Test fun unscaledSourceAppliesOnlyTheRecoveredSpringImpulse() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, _ ->
