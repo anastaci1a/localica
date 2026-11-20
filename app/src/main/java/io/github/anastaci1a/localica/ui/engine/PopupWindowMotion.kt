@@ -59,11 +59,15 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     internal fun outlineBodies()=expansion.outlineBodies()
     internal fun apertureRadius(density: Density, fallback: ()->Dp)=expansion.outlineRadius()?.let { with(density) { it.toDp() } }?:fallback()
     var fluidBlurRadius by mutableDoubleStateOf(0.0); private set
-    var fluidLensHeight by mutableFloatStateOf(FluidLensingSpec.freshHeight.toFloat()); private set
+    var fluidLensHeight by mutableDoubleStateOf(FluidLensingSpec.freshHeight); private set
     var fluidLensAmount by mutableDoubleStateOf(FluidLensingSpec.freshAmount); private set
     private val fluidBlur = FluidPropertyMotion(clock, Double::equals, { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidBlurRadius = radius } })
-    private val lensHeight = FluidPropertyMotion(clock, Double::equals, { fluidLensHeight = it.value.toFloat() })
-    private val lensAmount = FluidPropertyMotion(clock, Double::equals, { fluidLensAmount = it.value })
+    private val lensHeight = FluidPropertyMotion(clock, Double::equals, { sample ->
+        FluidLensingSpec.publishSample(sample) { height, _, _, _, _ -> fluidLensHeight = height }
+    })
+    private val lensAmount = FluidPropertyMotion(clock, Double::equals, { sample ->
+        FluidLensingSpec.publishSample(sample) { amount, _, _, _, _ -> fluidLensAmount = amount }
+    })
     private val fluidBlurControls = FluidPropertySpringControls(0.0, null, false, false)
     private val fluidTimeline = FluidTimelineMotion(clock) { step, speed ->
         deliverOutline(step,speed)
@@ -78,12 +82,11 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
         if (radius != null && spring != null) fluidBlur.animate(fluidBlurRadius, radius, fluidBlurControls, spring, fluidRadiusEpsilonSquared(scale))
         val lens = step.lens
         if (lens != null && spring != null) {
-            val height = if (step.action == FluidTimelineAction.LensOff) 0.0 else lens.dimension?.let { dimension ->
-                75.0 * (lens.gain * minOf(dimension / 250.0, 1.0))
-            }
+            val height = if (step.action == FluidTimelineAction.LensOff) 0.0
+                else lens.dimension?.let { FluidLensingSpec.height(it, lens.gain) }
             if (height != null) {
-                val epsilonSquared = 0.05 * 0.05
-                lensHeight.animate(fluidLensHeight.toDouble(), height, lens.propertyControls, spring, epsilonSquared)
+                val epsilonSquared = FluidLensingSpec.epsilonSquared
+                lensHeight.animate(fluidLensHeight, height, lens.propertyControls, spring, epsilonSquared)
                 lensAmount.animate(fluidLensAmount, minOf(-height, FluidLensingSpec.freshAmount), lens.propertyControls, spring, epsilonSquared)
             }
         }

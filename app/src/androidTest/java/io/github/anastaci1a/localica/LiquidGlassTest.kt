@@ -4,7 +4,6 @@ import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -14,14 +13,20 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
 import io.github.anastaci1a.localica.ui.*
-import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
+import androidx.test.filters.SdkSuppress
+import io.github.anastaci1a.localica.navigation.InterfaceSettings
+import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -29,8 +34,8 @@ import org.junit.Test
 class LiquidGlassTest {
     @get:Rule val compose = createComposeRule()
 
+    @SdkSuppress(minSdkVersion = 33)
     @Test fun fluidMaskKeepsGaussianInsideTheForeground() {
-        org.junit.Assume.assumeTrue("The foreground lens requires runtime shaders", Build.VERSION.SDK_INT >= 33)
         if (Build.VERSION.SDK_INT < 33) return
         var blur by mutableFloatStateOf(0f)
         val extent = IntSize(96, 48)
@@ -65,52 +70,68 @@ class LiquidGlassTest {
         }
     }
 
-    @Test fun fluidLensActivationKeepsTheParentAperture() {
-        org.junit.Assume.assumeTrue("The foreground lens requires runtime shaders", Build.VERSION.SDK_INT >= 33)
-        if (Build.VERSION.SDK_INT < 33) return
-        var lensHeight by mutableFloatStateOf(FluidLensingSpec.freshHeight.toFloat())
-        var lensAmount by mutableDoubleStateOf(FluidLensingSpec.freshAmount)
-        val extent = IntSize(64, 64)
-        val corner = 8f
-        val aperture = LensGeometry(Rect(0f, 0f, extent.width.toFloat(), extent.height.toFloat()), corner)
-        compose.setContent {
-            val renderer = remember { LensRenderer() }
-            val density = LocalDensity.current
-            val outline = RoundedCornerShape(with(density) { corner.toDp() })
-            Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-                Box(with(density) { Modifier.requiredSize(extent.width.toDp(), extent.height.toDp()) }
-                    .testTag("fluid-activation-aperture").graphicsLayer { shape = outline; clip = true }) {
-                    Canvas(Modifier.fillMaxSize().graphicsLayer {
-                        val height = lensHeight
-                        val amount = lensAmount
-                        renderEffect = if (FluidLensingSpec.isForegroundAtRest(0.0, height, amount)) null
-                        else renderer.effect(aperture, 0f, 1f, 1f, warp = LensWarp(height.toDouble(), amount, 0f, extent))
-                    }) { drawRect(Color.White) }
+    @SdkSuppress(minSdkVersion = 36)
+    @Test fun fluidSearchWarpUsesThePlacedForegroundAperture() {
+        val root = LocalicaUiRootState(InterfaceSettings(
+            popupMotion = PopupMotionStyle.Fluid, respectSystemAnimationScale = false,
+        ))
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        lateinit var popupView: android.view.View
+        var foreground: LayoutCoordinates? = null
+        compose.setContent { LocalicaUiRoot(root) { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides false) {
+                Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
+                    anchor = rememberGlassAnchor()
+                    Box(Modifier.padding(start = 28.dp, top = 52.dp).size(48.dp).glassAnchor(anchor))
+                    GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Search, darkOverride = true) {
+                        popupView = LocalView.current
+                        Canvas(Modifier.fillMaxWidth().height(240.dp).onPlaced { foreground = it }) {
+                            drawRect(Color.Red)
+                            drawRect(Color.Blue, Offset(size.width / 2f, 0f), Size(size.width / 2f, size.height))
+                        }
+                    }
                 }
             }
+        } } }
+        val aperture = compose.onNodeWithTag("glass-morph-surface")
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { open = true }
+            val active = (1..30).any {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                anchor.contact.expansion.value in .45f.. .78f
+            }
+            assertTrue("Observe the real opening before the aperture settles", active)
+            val bounds = aperture.fetchSemanticsNode().boundsInRoot
+            val origin = compose.runOnIdle {
+                val coordinates = requireNotNull(foreground)
+                assertTrue("Search vertically pins the foreground instead of centring it", bounds.height < coordinates.size.height)
+                assertTrue("The moving aperture is narrower than the foreground", bounds.width < coordinates.size.width)
+                coordinates.positionInRoot()
+            }
+            assertEquals("Search aligns the foreground with the aperture top", bounds.top, origin.y, 1f)
+            assertTrue("The aperture's left edge is inset in foreground coordinates", bounds.left > origin.x)
+
+            val pixels = capturePopupPixels(compose, aperture) { popupView }
+            val left = pixels[pixels.width / 4, 2]
+            val corner = pixels[1, 2]
+            assertTrue("The active field clips the foreground at the placed left corner: $corner vs $left",
+                left.red - left.green > corner.red - corner.green + .1f)
+            val row = pixels.height / 2
+            val seam = pixels[pixels.width / 2, row]
+            assertTrue("The active Gaussian mixes both channels inside the aperture: $seam",
+                seam.red > seam.green + .04f && seam.blue > seam.green + .04f)
+
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            val settled = capturePopupPixels(compose, aperture) { popupView }
+            assertEquals(Color.Red, settled[settled.width / 4, settled.height / 2])
+            assertEquals(Color.Blue, settled[settled.width * 3 / 4, settled.height / 2])
+        } finally {
+            compose.mainClock.autoAdvance = true
         }
-        val foreground = compose.onNodeWithTag("fluid-activation-aperture")
-        val edge = 0 until corner.toInt()
-        fun cornerPixels(): List<Color> {
-            val frame = foreground.captureNativeFrame().toPixelMap()
-            return edge.flatMap { y -> edge.map { x -> frame[x, y] } }
-        }
-        val fresh = cornerPixels()
-        assertTrue("The rounded parent has a partially covered edge", fresh.any { it.red > 0f && it.red < 1f })
-        compose.runOnIdle {
-            lensHeight = corner
-            lensAmount = -corner.toDouble()
-        }
-        val active = cornerPixels().zip(fresh)
-        assertTrue("The active mask stays within the parent coverage", active.all { (masked, clipped) -> masked.red <= clipped.red })
-        assertTrue("The active mask contributes coverage at the seam", active.any { (masked, clipped) ->
-            clipped.red > 0f && clipped.red < 1f && masked.red < clipped.red
-        })
-        compose.runOnIdle {
-            lensHeight = 0f
-            lensAmount = FluidLensingSpec.freshAmount
-        }
-        assertEquals("Settled LensOff restores the parent's original antialiasing", fresh, cornerPixels())
     }
 
     @Test fun resizingAnInactiveBackdropDoesNotRecomposeItsScreen() {
