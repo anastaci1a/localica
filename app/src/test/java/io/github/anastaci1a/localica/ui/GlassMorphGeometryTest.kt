@@ -15,6 +15,7 @@ import io.github.anastaci1a.localica.ui.spec.FluidTimelineAction.*
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
 import io.github.anastaci1a.localica.ui.spec.PopupOutlinePose
+import io.github.anastaci1a.localica.ui.spec.fluidPositionSpring
 import io.github.anastaci1a.localica.ui.spec.SpecResult
 import io.github.anastaci1a.localica.ui.spec.uiSpec
 import java.security.MessageDigest
@@ -281,6 +282,27 @@ class GlassMorphGeometryTest {
         assertEquals((250.0 * progress * scale).toFloat(), slots[0].width, 0.00002f)
         assertEquals((180.0 + scale * kick * 2.0).toFloat(), slots[0].boundingRect.center.y, 0.00002f)
         assertEquals(180f, slots[1].boundingRect.center.y, 0f)
+    }
+
+    @Test fun unscaledSourceAppliesOnlyTheRecoveredSpringImpulse() = fluidWindow(MotionAccess.Standard, 24f) { h, popup, _ ->
+        val bounds = Rect(0f, 0f, 250f, 360f)
+        val pose = PopupOutlinePose(bounds, 24f, 1f)
+        val expansion = popup.expansion
+        val spring = fluidPositionSpring(null)
+        val aperture = requireNotNull(popup.bounds)
+        fun centreVelocity() = with(h.clock.stampNow) { (aperture.left.velocityAt(this) + aperture.right.velocityAt(this)) * 0.5f }
+        fun request(dx: Float) {
+            val moved = pose.copy(bounds = bounds.translate(Offset(dx, 0f)))
+            expansion.replaceOutline(listOf(moved, pose), 0, 1.0, spring)
+        }
+        request(0f)
+        assertEquals(0f, centreVelocity(), 0f)
+        request(12f)
+        val impulsePerPoint = 0.016 * (2 * Math.PI / 0.3) * (2 * Math.PI / 0.3)
+        assertEquals((12 * impulsePerPoint).toFloat(), centreVelocity(), 0.002f)
+        request(17f)
+        assertEquals((17 * impulsePerPoint).toFloat(), centreVelocity(), 0.002f)
+        assertEquals(125f, aperture.valueAt(h.clock.stampNow).center.x, 0f)
     }
 
     @Test fun edgeSpringPreparedPopupKeepsItsFrameCorpus() {

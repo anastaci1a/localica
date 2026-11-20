@@ -85,6 +85,10 @@ internal class FluidPopupSpringSettings(
     val installedDamping = (sqrt(stiffness) + sqrt(stiffness)) * dampingRatio
     val velocityScalingFactor get() = installedDamping / stiffness
     fun advanceUnsmoothed(entry: FluidScalarSpringEntry, dt: Double) = entry.advanceUnsmoothed(stiffness, installedDamping, dt)
+    fun velocityWithImpulse(velocity: Double, targetDelta: Double) =
+        if (retargetImpulse > 0.0 && dampingRatio > 0.0 && response > 0.0)
+            velocity + targetDelta * (retargetImpulse * stiffness)
+        else velocity
 
     fun scaledResponses(multiplier: Double) =
         FluidPopupSpringSettings(dampingRatio, multiplier * response, retargetImpulse, multiplier * trackingResponse)
@@ -162,8 +166,7 @@ internal data class FluidPropertySpringControls(
             pendingVelocity != null -> pendingVelocity
             startingVelocity != null -> (target - requestedStart) * startingVelocity
             oldBody == null -> 0.0
-            previousTarget != null && spring != null && spring.retargetImpulse > 0.0 && spring.dampingRatio > 0.0 && spring.response > 0.0 ->
-                oldBody.velocity + (target - previousTarget) * (spring.retargetImpulse * spring.stiffness)
+            previousTarget != null && spring != null -> spring.velocityWithImpulse(oldBody.velocity, target - previousTarget)
             else -> oldBody.velocity
         }
         val intermediate = retained?.intermediate ?: FluidScalarSpringBody(requestedStart, 0.0)

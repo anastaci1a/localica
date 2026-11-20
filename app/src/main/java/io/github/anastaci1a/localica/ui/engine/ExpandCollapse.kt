@@ -177,9 +177,21 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
         drawn=null
         val stamp=clock.stampNow; val ctx=context(); val display=ctx.displayIntervalSeconds.toDouble()
         val immediate=snap || ctx.access==MotionAccess.Reduced
-        val moving=targets.filter { (m,q) -> m.rawValue(stamp)!=q.toDouble() || m.rawVelocity(stamp)!=0.0 }
-        val plan=if(immediate || moving.isEmpty()) null else SpringPlan.of(stamp,1.0,display,moving.map { (m,q) -> doubleArrayOf(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble()) })
-        commitAtomic(targets.map { (m,q) -> m to m.prepareSegment(plan?.let { Damped(m.rawValue(stamp),m.rawVelocity(stamp),q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble(),display,it.finish,it.tauOut,it) }?:Rest(q.toDouble()),q,stamp,plan,if(immediate) "Reduced" else "Continuous") })
+        val states=if(immediate) emptyList() else targets.map { (m,q) ->
+            val x=m.rawValue(stamp)
+            val from=if(m.kind==2) m.target.toDouble() else x
+            val v=spring.velocityWithImpulse(m.rawVelocity(stamp),q.toDouble()-from)
+            doubleArrayOf(x,v,q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble())
+        }
+        val moving=states.filter { it[0]!=it[2] || it[1]!=0.0 }
+        val plan=if(moving.isEmpty()) null else SpringPlan.of(stamp,1.0,display,moving)
+        commitAtomic(targets.mapIndexed { index,(m,q) ->
+            val segment=if(plan==null) Rest(q.toDouble()) else {
+                val (x,v)=states[index]
+                Damped(x,v,q.toDouble(),spring.omega,spring.dampingRatio,m.range.toDouble(),display,plan.finish,plan.tauOut,plan)
+            }
+            m to m.prepareSegment(segment,q,stamp,plan,if(immediate) "Reduced" else "Continuous")
+        })
     }
     // The bodies sampled at one frame stamp: the field and every radius reader of that frame share one construction.
     private var drawn: Pair<FrameStamp,List<RoundRect>>?=null

@@ -644,6 +644,8 @@ class FluidPopupComponentsTest {
         assertEquals(0.3, fallback.response, 0.0)
         assertEquals(0.3, fallback.trackingResponse, 0.0)
         assertEquals(0.016, fallback.retargetImpulse, 0.0)
+        val delayed = route.first { it.action == FullyExpanded }.timing
+        assertEquals(((0.1 * 0.7) * 10.0) * 1.25, delayed.dueThreshold(0.7, true, 1.25), 0.0)
         assertFalse(route.any { it.action == KickSource || it.action == UnkickSource })
     }
 
