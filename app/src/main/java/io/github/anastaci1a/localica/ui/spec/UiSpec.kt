@@ -938,6 +938,14 @@ internal fun popupMotionAdmission(m: PopupMotionModel): List<String> {
     if(PopupKind.entries.any { it !in m.variants } || m.variants[PopupKind.Legacy]!=PopupMotionVariant.Legacy || m.variants.any { (k,v) -> k!=PopupKind.Legacy && v==PopupMotionVariant.Legacy }) errors+="variants"
     return errors
 }
+internal interface SpringTransformValues<Value : Any> {
+    val zeroVelocity: Value
+    fun equal(left: Value, right: Value): Boolean
+    fun displacement(from: Value, to: Value): Value
+    fun scaledCopy(value: Value, factor: Double): Value
+    fun add(left: Value, right: Value): Value
+}
+
 /** #854 (rule 12): the one closed-form damped spring. The engine's Damped flies it and the admission below composes it (the spec
  * layer cannot depend on the engine). Overdamped laws use expm1, so near-critical laws keep their precision. */
 internal class SpringKernel(private val omega: Double, private val zeta: Double, installedDamping: Double? = null) {
@@ -956,17 +964,38 @@ internal class SpringKernel(private val omega: Double, private val zeta: Double,
     internal val slow = if (zeta > 1) omega / (zeta + sqrt(zeta * zeta - 1)) else a
     private val fast = if (zeta > 1) omega * (zeta + sqrt(zeta * zeta - 1)) else omega
 
+    private inline fun <Result> installedBasis(t: Double, apply: (sine: Double, cosine: Double, envelope: Double) -> Result): Result {
+        val envelope = exp(-a * t)
+        if (critical) return apply(t, 1.0, envelope)
+        val angle = wd * t
+        return if (underdamped) apply(sin(angle), cos(angle), envelope) else apply(sinh(angle), cosh(angle), envelope)
+    }
+
     /** The offset from the target ([d] false) or the velocity ([d] true) [t] seconds after offset [offset] and velocity [v]. */
     fun response(offset: Double, v: Double, t: Double, d: Boolean): Double {
+        if (installed) return installedBasis(t) { sine, cosine, envelope ->
+            if (critical) {
+                val b = v + a * offset
+                val displacement = offset + b * t
+                if (d) envelope * b - envelope * (displacement * a) else envelope * displacement
+            } else {
+                val b = (1 / wd) * (a * offset + v)
+                val displacement = if (underdamped) offset * cosine + b * sine else cosine * offset + sine * b
+                if (d) {
+                    val first = wd * (offset * sine)
+                    val second = wd * (cosine * b)
+                    envelope * (if (underdamped) second - first else first + second) - envelope * (displacement * a)
+                } else envelope * displacement
+            }
+        }
         if (underdamped) {
-            val b = if (installed) (1 / wd) * (a * offset + v) else (v + a * offset) / wd
+            val b = (v + a * offset) / wd
             val angle = wd * t
             val cosine = cos(angle)
             val sine = sin(angle)
             val envelope = exp(-a * t)
             val displacement = offset * cosine + b * sine
             if (!d) return envelope * displacement
-            if (installed) return envelope * ((wd * (cosine * b)) - (wd * (offset * sine))) - envelope * (displacement * a)
             return envelope * (v * cosine - (a * b + offset * wd) * sine)
         }
         if (critical) {
@@ -974,18 +1003,7 @@ internal class SpringKernel(private val omega: Double, private val zeta: Double,
             val displacement = offset + b * t
             val envelope = exp(-a * t)
             if (!d) return envelope * displacement
-            if (installed) return envelope * b - envelope * (displacement * a)
             return envelope * (v - a * b * t)
-        }
-        if (installed) {
-            val b = (1 / wd) * (a * offset + v)
-            val angle = wd * t
-            val sinh = sinh(angle)
-            val cosh = cosh(angle)
-            val envelope = exp(-a * t)
-            val displacement = cosh * offset + sinh * b
-            return if (d) envelope * ((wd * (offset * sinh)) + (wd * (cosh * b))) - envelope * (displacement * a)
-            else envelope * displacement
         }
         val difference = fast - slow
         val b = -(v + slow * offset) / difference
@@ -997,6 +1015,30 @@ internal class SpringKernel(private val omega: Double, private val zeta: Double,
         if (dt <= 0.0 || (body.value == target && body.velocity == 0.0)) return body
         val offset = body.value - target
         return FluidScalarSpringBody(target + response(offset, body.velocity, dt, false), response(offset, body.velocity, dt, true))
+    }
+
+    /** Installed transform channels preserve their value type's ordered copy, scale and sum operations. */
+    fun <Value : Any> advanceTransform(
+        body: Pair<Value, Value>, target: Value, dt: Double, values: SpringTransformValues<Value>,
+    ): Pair<Value, Value> {
+        if (dt <= 0.0 || (values.equal(body.first, target) && values.equal(body.second, values.zeroVelocity))) return body
+        val offset = values.displacement(body.first, target)
+        return installedBasis(dt) { sine, cosine, envelope ->
+            fun start() = values.add(values.scaledCopy(offset, a), body.second)
+            fun waveStart() = values.scaledCopy(start(), 1 / wd)
+            fun displaced() = if (critical) values.add(offset, values.scaledCopy(start(), dt))
+                else values.add(values.scaledCopy(offset, cosine), values.scaledCopy(waveStart(), sine))
+
+            val displacement = values.scaledCopy(displaced(), envelope)
+            val velocityTerm = if (critical) values.scaledCopy(start(), envelope) else {
+                val first = values.scaledCopy(values.scaledCopy(offset, if (underdamped) -sine else sine), wd)
+                val second = values.scaledCopy(values.scaledCopy(waveStart(), cosine), wd)
+                values.scaledCopy(values.add(first, second), envelope)
+            }
+            val decayTerm = values.scaledCopy(values.scaledCopy(displaced(), -a), envelope)
+            val velocity = values.add(velocityTerm, decayTerm)
+            values.add(displacement, target) to velocity
+        }
     }
 
     /** The first velocity zeros, possibly negative (later underdamped extrema shrink by the overshoot factor each half period). */
