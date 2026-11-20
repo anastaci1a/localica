@@ -86,7 +86,7 @@ private class ContactLightEffect {
         return android.graphics.RenderEffect.createRuntimeShaderEffect(mean, "scene").asComposeRenderEffect().also { meanEffect = it }
     }
     fun <T : Any> effect(glow: GlassGlow, transform: T, bounds: Rect, density: Float,
-        mask: ImageBitmap, background: Color, height: Float, corner: Float): RenderEffect? {
+        mask: ImageBitmap, background: Color, height: Float, corner: Float, localPoint: (T, Offset, Size) -> Offset): RenderEffect? {
         val key = listOf(glow, transform, bounds, density, mask, background, height, corner)
         if (key == previous) return cached
         previous = key
