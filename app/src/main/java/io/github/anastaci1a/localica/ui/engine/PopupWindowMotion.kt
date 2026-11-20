@@ -16,6 +16,7 @@ internal interface PopupTakeoverOwner {
 
 /** #854: the surface kind of the enclosing popup; retained faces inside it (rememberFaceExpansion) inherit its motion. */
 internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
+private const val DestinationProgressEpsilonSquared = 0.001 * 0.001
 
 /** The native presenter owns one expansion and one measured rectangle. A native
  * receipt releases its gate; changing the envelope rebases those same edges. */
@@ -72,13 +73,23 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     private val lensAmount = FluidPropertyMotion(clock, Double::equals, { sample ->
         FluidLensingSpec.publishSample(sample) { amount, _, _, _, _ -> fluidLensAmount = amount }
     })
+    private val fluidZoom = FluidPropertyMotion(clock, Double::equals, initial = 1.0,
+        snapReduced = ::snapsReducedFluid, advance = FluidPopupSpringSettings::advancePlanarZoom)
+    internal val fluidPortalScale get() = fluidZoom.sample().value
+    private var fluidDestinations: List<FluidPropertyMotion>? = null
+    internal fun fluidDestinationProgress(popup: Boolean) = fluidDestinations?.get(if (popup) 0 else 1)?.sample()?.value
     private val fluidBlurControls = FluidPropertySpringControls(0.0, null, false, false)
     private val fluidTimeline = FluidTimelineMotion(clock, ::snapsReducedFluid) { step, speed ->
+        val fresh = !expansion.hasOutline
         deliverOutline(step,speed)
+        deliverFluidDestinations(step, speed, fresh)
         val spring = step.propertySpring(speed) ?: return@FluidTimelineMotion
         step.content?.let { content ->
             val scale = fluidLayerPointScale(nativeWindow?.get() != null) { placement?.basis?.density?.toDouble() }
             fluidBlur.animate(fluidBlurRadius, content.gaussianRadius, fluidBlurControls, spring, fluidRadiusEpsilonSquared(scale))
+            val zoom = requireNotNull(content.typedZoom())[3]
+            val zoomEpsilon = fluidZoomEpsilonSquared(scale, 0.0 to 0.0, empty = true, anchorX = 0.5, anchorY = 0.5)[1]
+            if (fluidZoom.target != zoom) fluidZoom.animate(fluidPortalScale, zoom, fluidBlurControls, spring, zoomEpsilon)
         }
         val lens = step.lens
         if (lens != null) {
@@ -89,6 +100,27 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
                 lensHeight.animate(fluidLensHeight, height, lens.propertyControls, spring, epsilonSquared)
                 lensAmount.animate(fluidLensAmount, minOf(-height, FluidLensingSpec.freshAmount), lens.propertyControls, spring, epsilonSquared)
             }
+        }
+    }
+    private fun deliverFluidDestinations(step: FluidTimelineStep, speed: Double, fresh: Boolean) {
+        val outline = placement?.outline ?: return
+        val source = when (step.action) {
+            FluidTimelineAction.Source, FluidTimelineAction.CollapsedSource -> true
+            FluidTimelineAction.ExpandedOverrounded, FluidTimelineAction.FullyExpanded -> false
+            else -> return
+        }
+        val menuTail = (source == outline.growing) != shown
+        val targets = listOf(if (menuTail) 1.0 else 0.0, if (menuTail) 0.0 else 1.0)
+        if (fresh) {
+            fluidDestinations?.forEach(FluidPropertyMotion::stop)
+            fluidDestinations = targets.map { FluidPropertyMotion(clock, Double::equals,
+                initial = it, snapReduced = ::snapsReducedFluid) }
+            return
+        }
+        val spring = fluidOutlineSpring(step.propertySpring(speed))
+        requireNotNull(fluidDestinations).zip(targets).forEach { (destination, target) ->
+            if (destination.target != target) destination.animate(destination.sample().value, target,
+                fluidBlurControls, spring, DestinationProgressEpsilonSquared)
         }
     }
     val fluid get() = expansion.popupLaw?.model?.style == PopupMotionStyle.Fluid
@@ -181,9 +213,11 @@ internal val LocalPopupKind = staticCompositionLocalOf { PopupKind.Legacy }
     fun updateSpec(spec: ExpansionSpec) = expansion.updateSpec(spec)
     fun dispose() {
         clock.unregister(fluidTimeline)
-        clock.unregister(fluidBlur)
         clock.unregister(lensHeight)
         clock.unregister(lensAmount)
+        fluidBlur.stop()
+        fluidZoom.stop()
+        fluidDestinations?.forEach(FluidPropertyMotion::stop)
         expansion.dispose()
     }
 }

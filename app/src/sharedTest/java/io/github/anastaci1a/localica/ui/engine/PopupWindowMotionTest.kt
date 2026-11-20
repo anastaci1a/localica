@@ -153,10 +153,13 @@ class PopupWindowMotionTest {
             val radii = frames(h, motion, 2.0)
             assertTrue("BlurOut raises the radius toward 4", radii.max() > 0.0 && radii.max() < 4.0)
             assertEquals("BlurIn lands at 0", 0.0, radii.last(), 0.0)
+            assertEquals("BlurIn restores portal identity", 1.0, motion.fluidPortalScale, 0.0)
             motion.show(false); h.advance(1.0 / 120); motion.hold()
             assertEquals("a held timeline keeps BlurIn waiting while the blur settles at 4", 4.0, frames(h, motion, 1.0).last(), 1e-3)
+            assertEquals("BlurOut uses the 300 point larger endpoint", 1.5245901639344264, motion.fluidPortalScale, 0.0)
             motion.release()
             assertEquals(0.0, frames(h, motion, 2.0).last(), 0.0)
+            assertEquals(1.0, motion.fluidPortalScale, 0.0)
             motion.show(true); h.advance(1.0 / 120)
             motion.dispose()
             assertEquals("dispose releases the timeline and the blur owner", 0, h.clock.activeCount)
@@ -164,6 +167,7 @@ class PopupWindowMotionTest {
         EngineHarness(MotionAccess.Reduced, fluid).use { h ->
             val motion = popup(h)
             assertEquals("animations off run the whole queue and land the blur at 0", 0.0, motion.fluidBlurRadius, 0.0)
+            assertEquals(1.0, motion.fluidPortalScale, 0.0)
             motion.dispose()
         }
     }
