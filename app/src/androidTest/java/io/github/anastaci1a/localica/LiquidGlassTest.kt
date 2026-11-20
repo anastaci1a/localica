@@ -8,13 +8,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -22,6 +26,42 @@ import org.junit.Test
 
 class LiquidGlassTest {
     @get:Rule val compose = createComposeRule()
+
+    @androidx.annotation.RequiresApi(33)
+    @Test fun fluidMaskKeepsGaussianInsideTheForeground() {
+        org.junit.Assume.assumeTrue("The foreground lens requires runtime shaders", Build.VERSION.SDK_INT >= 33)
+        var blur by mutableFloatStateOf(0f)
+        val extent = IntSize(96, 48)
+        val aperture = LensGeometry(Rect(8f, 0f, 88f, 48f), 4f)
+        val warp = LensWarp(8.0, -0.001, 0f, extent)
+        compose.setContent {
+            val renderer = remember { LensRenderer() }
+            val density = LocalDensity.current
+            Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+                Canvas(with(density) { Modifier.requiredSize(extent.width.toDp(), extent.height.toDp()) }
+                    .testTag("fluid-foreground-mask").graphicsLayer {
+                        renderEffect = renderer.effect(aperture, blur, depth = 1f, unit = 1f, warp = warp)
+                    }) {
+                    drawRect(Color.Red)
+                    drawRect(Color.Blue, Offset(size.width / 2f, 0f), Size(size.width / 2f, size.height))
+                }
+            }
+        }
+        val foreground = compose.onNodeWithTag("fluid-foreground-mask")
+        val sharp = foreground.captureNativeFrame().toPixelMap()
+        assertEquals(Color.Black, sharp[7, 24])
+        assertEquals(Color.Red, sharp[8, 24])
+        assertEquals(Color.Red, sharp[47, 24])
+        assertEquals(Color.Blue, sharp[48, 24])
+
+        compose.runOnIdle { blur = 4f }
+        val blurred = foreground.captureNativeFrame().toPixelMap()
+        assertEquals("The mask is applied after the blur", Color.Black, blurred[7, 24])
+        for (x in 47..48) {
+            val seam = blurred[x, 24]
+            assertTrue("The Gaussian mixes the two colors at x=$x: $seam", seam.red > 0f && seam.blue > 0f)
+        }
+    }
 
     @Test fun resizingAnInactiveBackdropDoesNotRecomposeItsScreen() {
         lateinit var source: FrostedBackdrop
