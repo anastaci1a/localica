@@ -23,36 +23,17 @@ import org.junit.Test
 import kotlin.math.abs
 
 class GlassSilhouetteTest {
-    private fun splitOptics(size: Size, p: Float) = splitPillOptics(splitPillBodies(size, p).filter { it.width > 0f }, size, p)
+    private fun splitOptics(size: Size, p: Float) = splitPillOptics(splitPillBodies(size, p), p)
     @get:Rule val compose = createComposeRule()
 
-    @Test fun sampledNormalsRemainContinuousAcrossTexelBoundaries() {
-        val frame = GlassSilhouetteFrame(splitOptics(Size(120f, 60f), .3f))
-        val field = LensDistanceMap.create(frame.path)
-        fun assertProduced(candidate: LensDistanceMap) {
-            fun half(value: Float) = android.util.Half.toFloat(android.util.Half.toHalf(value))
-            for (y in 0 until candidate.bitmap.height) for (x in 0 until candidate.bitmap.width) {
-                val point = candidate.origin + Offset((x + .5f) / candidate.scale, (y + .5f) / candidate.scale)
-                val expected = field.referenceSample(point, frame.path)
-                val actual = candidate.sample(point)
-                assertEquals("Produced distance texel ($x,$y)", half(expected.distance / field.range) * field.range, actual.distance, .00001f)
-                assertEquals("Produced normal X ($x,$y)", half((expected.inward.x + 1f) * .5f) * 2f - 1f, actual.inward.x, .00001f)
-                assertEquals("Produced normal Y ($x,$y)", half((expected.inward.y + 1f) * .5f) * 2f - 1f, actual.inward.y, .00001f)
-            }
-        }
-        assertProduced(field)
-        val corrupted = android.graphics.Bitmap.createBitmap(field.bitmap.width, field.bitmap.height, android.graphics.Bitmap.Config.RGBA_F16)
-        try {
-            assertThrows("A correctly sized zero map must fail the producer oracle", AssertionError::class.java) {
-                assertProduced(LensDistanceMap(corrupted, field.origin, field.scale, field.range))
-            }
-        } finally { corrupted.recycle() }
-        for (y in 2 until field.bitmap.height - 2 step 3) for (x in 2 until field.bitmap.width - 2)
-            for (fraction in listOf(0f, .5f)) {
-            val boundary = field.origin + Offset((x + fraction) / field.scale, (y + .3f) / field.scale)
-            val a = field.sample(boundary - Offset(.0001f, 0f))
-            val b = field.sample(boundary + Offset(.0001f, 0f))
-            assertTrue("A sampling boundary must not jump its refracting normal", (a.inward - b.inward).getDistance() < .001f)
+    @Test fun curvedNormalsRemainContinuousAcrossFormerTexelBoundaries() {
+        val lens = GlassSilhouetteFrame(splitOptics(Size(120f, 60f), .3f)).geometry
+        for (step in 1..89) {
+            val theta = step * kotlin.math.PI.toFloat() / 180f
+            val point = Offset(30f - 26f * kotlin.math.cos(theta), 30f - 26f * kotlin.math.sin(theta))
+            val a = lens.field(point - Offset(.0001f, 0f))
+            val b = lens.field(point + Offset(.0001f, 0f))
+            assertTrue("The exposed arc's normal must be continuous", (a.inward - b.inward).getDistance() < .001f)
         }
     }
 
@@ -84,14 +65,12 @@ class GlassSilhouetteTest {
             GlassSilhouetteFrame(splitOptics(androidx.compose.ui.geometry.Size(
                 120f + 10f * ((progress - .5f) * 2f).coerceIn(0f, 1f), 60f), progress))
         }
-        assertNull(frames.first().field)
-        assertNull(frames.last().field)
-        assertTrue("The split control never allocates a sampled field", frames.all { it.field == null })
+        assertEquals(1, frames.first().geometry.bodies.size)
+        assertEquals(2, frames.last().geometry.bodies.size)
+        assertTrue(frames.all { frame -> frame.geometry.bodies.all { it.width > 0f && it.height > 0f } })
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             val renderer = LensRenderer()
-            frames.forEach { frame -> renderer.effect(frame.geometry, 0f, 1.3f, 1f,
-                map = frame.field, fieldWeight = frame.description.fieldWeight, circles = frame.description.circles,
-                splitInner = frame.description.splitInner) }
+            frames.forEach { frame -> renderer.effect(frame.geometry, 0f, 1.3f, 1f) }
         }
     }
 
@@ -157,10 +136,8 @@ class GlassSilhouetteTest {
     private fun legacyGeometry(size: Size, progress: Float): GlassSilhouetteGeometry {
         val p = progress.coerceIn(0f, 1f)
         val bodies = splitPillBodies(size, p).let { if (p == 0f) it.take(1) else it }
-        val raw = if (p < .25f) p * 4f else (2f - p * 4f).coerceAtLeast(0f)
-        val centers = if (p > .25f) bodies.map { Offset((it.left + it.right) / 2f, (it.top + it.bottom) / 2f) }.let { it.first() to it.last() } else null
         val rim = (p * 2f).coerceIn(0f, 1f)
-        return GlassSilhouetteGeometry(bodies, raw * raw * (3f - 2f * raw), centers, rim * rim * (3f - 2f * rim), if (p > 0f && p < .5f) size.height * p else null)
+        return GlassSilhouetteGeometry.of(bodies, rim * rim * (3f - 2f * rim))
     }
 
     @Test fun persistentSplitPillMatchesTheLegacyFramesWithinTheHandoffTolerance() {

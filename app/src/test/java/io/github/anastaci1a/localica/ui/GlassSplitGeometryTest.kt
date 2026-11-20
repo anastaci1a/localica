@@ -3,20 +3,22 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.boundingRect
 import io.github.anastaci1a.localica.ui.engine.deformed
 import org.junit.Assert.*
 import org.junit.Test
 
 class GlassSplitGeometryTest {
-    private fun optics(size: Size, p: Float) = splitPillOptics(splitPillBodies(size, p).filter { it.width > 0f }, size, p)
+    private fun lens(size: Size, p: Float) = GlassSilhouetteFrame(splitPillOptics(splitPillBodies(size, p), p)).geometry
 
     @Test fun roundedPixelSizesNormalizeTheSplitCornersWithoutAnEmptyEdge() {
         for (width in listOf(119f, 120f, 121f, 315f)) for (height in listOf(60f, 61f, 158f)) {
             val bounds = Rect(0f, 0f, width, height)
             for (fraction in listOf(.01f, .5f, .9998f)) {
-                val field = splitPillDistanceField(bounds.center, bounds, height / 2f * fraction)
+                val field = lens(bounds.size, fraction / 2f).field(bounds.center)
                 assertTrue(field.distance.isFinite())
-                assertEquals(Offset.Zero, field.inward)
+                assertTrue(field.distance > 0f)
+                assertEquals(1f, field.inward.getDistance(), .00001f)
             }
         }
     }
@@ -24,29 +26,31 @@ class GlassSplitGeometryTest {
     @Test fun analyticSplitBoundaryStaysZeroAndItsNormalsStayFinite() {
         val bounds = Rect(0f, 0f, 120f, 60f)
         for (inner in listOf(.01f, 5f, 15f, 25f, 30f)) {
+            val geometry = lens(bounds.size, inner / 60f)
             for (step in 1..89) {
                 val angle = step * kotlin.math.PI.toFloat() / 180f
                 val outer = Offset(30f - 30f * kotlin.math.cos(angle), 30f - 30f * kotlin.math.sin(angle))
                 val inset = Offset(60f - inner + inner * kotlin.math.cos(angle), inner - inner * kotlin.math.sin(angle))
                 for (point in listOf(outer, inset)) {
-                    val field = splitPillDistanceField(point, bounds, inner)
+                    val field = geometry.field(point)
                     assertEquals(0f, field.distance, .00002f)
                     assertTrue(field.inward.x.isFinite() && field.inward.y.isFinite())
                     assertTrue(field.inward.getDistance() <= 1.00001f)
                 }
             }
-            val seam = splitPillDistanceField(Offset(60f, 30f), bounds, inner)
+            val seam = geometry.field(Offset(60f, 30f))
             assertEquals("The shared edge is interior until the neck closes", 30f - inner, seam.distance, .00001f)
-            assertEquals(Offset.Zero, seam.inward)
+            assertEquals(1f, seam.inward.getDistance(), .00001f)
         }
     }
 
     @Test fun analyticSplitBoundaryBecomesTheExactCircleField() {
         for (x in listOf(5f, 20f, 30f, 45f, 55f)) for (y in listOf(15f, 25f, 35f, 45f)) {
             val point = Offset(x, y)
-            val expected = circleLensField(point, Offset(30f, 30f), 30f)
-            val actual = splitPillDistanceField(point, Rect(0f, 0f, 120f, 60f), 30f)
+            val expected = LensGeometry(Rect(0f, 0f, 60f, 60f), 30f).field(point)
+            val actual = lens(Size(120f, 60f), .5f).field(point)
             assertEquals(expected.distance, actual.distance, .00002f)
+            if (point == Offset(30f, 30f)) continue
             assertEquals(expected.inward.x, actual.inward.x, .00002f)
             assertEquals(expected.inward.y, actual.inward.y, .00002f)
         }
@@ -97,36 +101,46 @@ class GlassSplitGeometryTest {
     }
 
     @Test fun endpointsUseTheOrdinaryAnalyticPillAndCircleFields() {
-        val joined = optics(Size(120f, 60f), 0f)
-        assertEquals(0f, joined.fieldWeight, 0f)
-        assertNull(joined.circles)
-        val split = optics(Size(130f, 60f), 1f)
-        assertEquals(0f, split.fieldWeight, 0f)
-        assertEquals(Offset(30f, 30f) to Offset(100f, 30f), split.circles)
+        val joined = lens(Size(120f, 60f), 0f)
+        val split = lens(Size(130f, 60f), 1f)
+        assertEquals(1, joined.bodies.size)
+        assertEquals(listOf(Offset(30f, 30f), Offset(100f, 30f)), split.bodies.map { it.boundingRect.center })
         val circle = LensGeometry(Rect(0f, 0f, 60f, 60f), 30f)
+        val pill = LensGeometry(Rect(0f, 0f, 120f, 60f), 30f)
         for (point in listOf(Offset(30f, 30f), Offset(5f, 30f), Offset(40f, 40f), Offset(30f, 58f))) {
+            assertEquals(pill.field(point), joined.field(point))
             val expected = circle.field(point)
-            val actual = circleLensField(point, Offset(30f, 30f), 30f)
+            val actual = split.field(point)
             assertEquals(expected.distance, actual.distance, .001f)
-            if (point == circle.bounds.center) continue // The center has no edge direction.
+            if (point == circle.bounds.center) continue
             assertEquals(expected.inward.x, actual.inward.x, .001f)
             assertEquals(expected.inward.y, actual.inward.y, .001f)
         }
     }
 
-    @Test fun theIntermediateBoundaryHidesTheAnalyticEndpointHandoff() {
-        assertEquals(1f, optics(Size(120f, 60f), .25f).fieldWeight, 0f)
-        for (p in listOf(.24999f, .25001f)) {
-            assertTrue(optics(Size(120f, 60f), p).fieldWeight > .9999f)
+    @Test fun theExposedBoundaryFollowsTheNeckThroughFormerBlendTransitions() {
+        val size = Size(120f, 60f)
+        val seam = Offset(60f, 30f)
+        for (p in listOf(.24999f, .25f, .25001f, .49999f, .5f)) {
+            assertEquals(30f - 60f * p, lens(size, p).field(seam).distance, .00001f)
         }
-        assertEquals(0f, optics(Size(120f, 60f), .5f).fieldWeight, 0f)
     }
 
-    @Test fun theConnectedOpticalNeckHasNoNormalSeamAndMatchesItsHeightGradient() {
-        val centers = Offset(30f, 30f) to Offset(90f, 30f)
-        fun field(point: Offset) = pairedCircleLensField(point, centers, 30f, .6f)
-        assertEquals(0f, field(Offset(60f, 30f)).inward.x, .00001f)
-        for (point in listOf(Offset(52f, 24f), Offset(60f, 30f), Offset(68f, 36f))) {
+    @Test fun theConnectedOpticalNeckKeepsItsDepthAndFoldsAtTheMidline() {
+        val geometry = lens(Size(120f, 60f), .3f)
+        fun field(point: Offset) = geometry.field(point)
+        val medial = field(Offset(60f, 30f))
+        assertEquals(12f, medial.distance, .00001f)
+        assertEquals(0f, medial.inward.x, .00001f)
+        assertEquals(1f, kotlin.math.abs(medial.inward.y), .00001f)
+        for (side in listOf(-1f, 1f)) {
+            val flank = field(Offset(60f, 30f + side * .25f))
+            assertEquals(11.75f, flank.distance, .00001f)
+            assertEquals(0f, flank.inward.x, .00001f)
+            assertEquals(-side, flank.inward.y, .00001f)
+        }
+        assertEquals(0f, field(Offset(60f, 24f)).inward.x, .00001f)
+        for (point in listOf(Offset(52f, 24f), Offset(60f, 24f), Offset(68f, 36f))) {
             val dx = (field(point + Offset(.01f, 0f)).distance - field(point - Offset(.01f, 0f)).distance) / .02f
             val dy = (field(point + Offset(0f, .01f)).distance - field(point - Offset(0f, .01f)).distance) / .02f
             assertEquals(dx, field(point).inward.x, .002f)

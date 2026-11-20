@@ -10,7 +10,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -37,8 +38,9 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
-    resolutionReader: (() -> Float)? = null, averageReader: (() -> MaterialAverageStyle)? = null, effect: (Size, Float, Float) -> RenderEffect?) {
-
+    resolutionReader: (() -> Float)? = null, averageReader: (() -> MaterialAverageStyle)? = null,
+    liveLens: (Size) -> LiveLensFrame,
+    effect: (LensGeometry, Float, Float) -> RenderEffect?) {
     val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     val drawObserver = LocalBackdropSamplingObserver.current
@@ -53,9 +55,11 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     val averageSource = if (average != null && source.materialOnly) rememberGlassLayer() else null
     val averageHome = if (average != null && (homeSource?.materialOnly == true)) rememberGlassLayer() else null
     layer.clip = true
-    // Keep sibling motion isolated, but explicitly invalidate consumers in another
-    // window when their source records new content.
-    Canvas(modifier.graphicsLayer()) {
+    fun DrawScope.sample(live: LensGeometry) {
+        val origin = live.bounds.topLeft
+        val shift = if (origin != Offset.Zero)
+            BackdropRegistration.create(1f, 0f, 0f, 1f, -origin.x, -origin.y) else null
+        fun BackdropRegistration.cropped() = if (shift == null) this else followedBy(shift)
         val average = averageReader?.invoke() ?: average
         val resolution = resolutionReader?.invoke() ?: resolution
         location.observeRecordingAcrossWindows(source)
@@ -63,26 +67,26 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
         // A list may load after this floating control's first draw. Observe the
         // first recording explicitly: GraphicsLayer.size is not snapshot state,
         // and returning before drawLayer otherwise installs no dependency.
-        if (!source.recorded || source.layer.isReleased || source.layer.size.width <= 0) return@Canvas
-        if (size.width <= 0f || size.height <= 0f) return@Canvas
+        if (!source.recorded || source.layer.isReleased || source.layer.size.width <= 0) return
+        if (size.width <= 0f || size.height <= 0f) return
         val blend = if (homeSource != null) homeWeight().coerceIn(0f, 1f) else 0f
         // A requested home is not interchangeable with the primary during an
         // epoch handoff. Observe readiness here so its first current record can
         // invalidate this draw, rather than silently changing the requested mix.
         if (blend > 0f && (homeSource == null || !homeSource.recorded || homeSource.layer.isReleased ||
-                homeSource.layer.size.width <= 0 || homeSource.layer.size.height <= 0)) return@Canvas
-        val sourceToLocal = source.location.registrationTo(location) ?: return@Canvas
-        val localToSource = sourceToLocal.inverse() ?: return@Canvas
+                homeSource.layer.size.width <= 0 || homeSource.layer.size.height <= 0)) return
+        val sourceToLocal = source.location.registrationTo(location)?.cropped() ?: return
+        val localToSource = sourceToLocal.inverse() ?: return
         val viewportBounds = Rect(Offset.Zero, size)
-        val homeToLocal = homeSource?.location?.registrationTo(location)
-        if (blend > 0f && homeToLocal == null) return@Canvas
+        val homeToLocal = homeSource?.location?.registrationTo(location)?.cropped()
+        if (blend > 0f && homeToLocal == null) return
         // A measured trigger retains its actual affine basis, independently of morph geometry.
         // Only callers without a physical trigger use the legacy logical bounds.
         val footprint = homeFootprint?.invoke()
-        if (blend > 0f && homeFootprint != null && footprint == null) return@Canvas
+        if (blend > 0f && homeFootprint != null && footprint == null) return
         val legacyBounds = if (homeFootprint == null) homeBounds?.invoke()?.takeUnless { it.isEmpty } else null
         if (legacyBounds != null && !listOf(legacyBounds.left, legacyBounds.top,
-                legacyBounds.right, legacyBounds.bottom).all { it.isFinite() }) return@Canvas
+                legacyBounds.right, legacyBounds.bottom).all { it.isFinite() }) return
         val homeToScreen = homeSource?.location?.registrationToScreen()
         val homeToFootprint = when {
             footprint != null -> footprint.sourceToLocal(homeToScreen)
@@ -90,10 +94,10 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
                 BackdropRegistration.create(1f, 0f, 0f, 1f, -legacyBounds.left, -legacyBounds.top)!!)
             else -> homeToLocal
         }
-        if (blend > 0f && homeToFootprint == null) return@Canvas
+        if (blend > 0f && homeToFootprint == null) return
         val homeExtent = footprint?.size ?: legacyBounds?.size ?: size
         if (!homeExtent.width.isFinite() || !homeExtent.height.isFinite() ||
-            homeExtent.width <= 0f || homeExtent.height <= 0f) return@Canvas
+            homeExtent.width <= 0f || homeExtent.height <= 0f) return
         val homeCorners = if (footprint != null) footprint.cornersInSource(homeToScreen)
             else homeToFootprint?.inverse()?.corners(Rect(Offset.Zero, homeExtent))
         val flatSource = averageRenderer != null && (homeSource == null && source.canAverage(localToSource.corners(viewportBounds)))
@@ -130,15 +134,15 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
                 else crop(source)
             }
             scale(viewport.width / 8f, viewport.height / 8f, Offset.Zero) { drawLayer(layer) }
-            drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds, "material-average") }
-            return@Canvas
+            drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds, "material-average", origin) }
+            return
         }
         val r = resolution.coerceIn(.25f, 1f)
         val extent = IntSize(ceil((size.width + 2 * padding) * r).toInt().coerceAtLeast(1),
             ceil((size.height + 2 * padding) * r).toInt().coerceAtLeast(1))
         val allocation = glassLayerExtent(extent)
         opticalWork?.invoke()
-        layer.renderEffect = effect(Size(extent.width.toFloat(), extent.height.toFloat()), r, flatWeight)
+        layer.renderEffect = effect(live.recorded(r, padding), r, flatWeight)
         // A morph keeps its averaged home source while gradually admitting the detailed
         // destination. Endpoint appearance and return handoff use the same color mapping.
         if (android.os.Build.VERSION.SDK_INT >= 33 && rawAverageRenderer != null) {
@@ -160,7 +164,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
             clipRect { scale(r, r, Offset.Zero) {
                 val backingToLocal = (if (isHome) homeToLocal else sourceToLocal) ?: return@scale
                 translate(padding, padding) {
-                    drawSampledScene(backing, backingToLocal, parentToLocal = { scene -> scene.location.registrationTo(location) })
+                    drawSampledScene(backing, backingToLocal, parentToLocal = { scene -> scene.location.registrationTo(location)?.cropped() })
                 }
             } }
         }
@@ -176,7 +180,19 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
             else scene(source)
         }
         translate(-padding, -padding) { scale(1f / r, 1f / r, Offset.Zero) { drawLayer(layer) } }
-        drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds, if (layer.renderEffect != null) "lens" else "unfiltered") }
+        drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds, if (layer.renderEffect != null) "lens" else "unfiltered", origin) }
+    }
+    // Isolate sibling motion and undo the outer press before placing the live recording.
+    Canvas(modifier.graphicsLayer()) {
+        val (live, transform) = liveLens(size)
+        val bounds = live.bounds
+        if (bounds.isEmpty) return@Canvas
+        if (transform.scale == Offset(1f, 1f) && transform.drift == Offset.Zero && bounds == Rect(Offset.Zero, size)) sample(live)
+        else scale(1f / transform.scale.x, 1f / transform.scale.y) {
+            translate(-transform.drift.x, -transform.drift.y) {
+                inset(bounds.left, bounds.top, size.width - bounds.right, size.height - bounds.bottom) { sample(live) }
+            }
+        }
     }
 }
 

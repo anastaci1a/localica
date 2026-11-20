@@ -1,20 +1,50 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.*
 import kotlin.math.*
 
-/** A rounded rectangle with continuous corners. The weights blend each axis toward a
- * circular arc as that side approaches the corner's reach; a capsule's short axis is round. */
-internal data class LensGeometry(val bounds: Rect, val corner: Float) {
+internal data class LensGeometry(val bodies: List<RoundRect>) {
+    val bounds = when (bodies.size) {
+        0 -> Rect.Zero
+        1 -> bodies.single().boundingRect
+        else -> Rect(bodies.minOf { it.left }, bodies.minOf { it.top },
+            bodies.maxOf { it.right }, bodies.maxOf { it.bottom })
+    }
     val span get() = min(bounds.width, bounds.height) / 2f
-    val radius get() = corner.coerceIn(.01f, max(span, .01f))
-    val weights get() = Offset(cornerWeight(bounds.width), cornerWeight(bounds.height))
-    private fun cornerWeight(side: Float) =
-        (side.toDouble() * -1.44577851758675 / (radius * CornerReach) + 2.8915570351735).coerceIn(0.0, 1.0).toFloat()
-
+    val corner get() = bodies.single().topLeftCornerRadius.x
 }
-private const val CornerReach = 1.52866495f
+
+internal fun LensGeometry(bounds: Rect, corner: Float) =
+    LensGeometry(listOf(RoundRect(bounds, CornerRadius(corner.coerceIn(0f, bounds.size.minDimension / 2f)))))
+
+/** Compose 58 fields contain negative-inside distance, outward normal and coverage.
+ * The caller floors the smoothing value before submitting it. */
+internal const val LensFieldUnionShader = """
+    half4 sdfUnion(half4 a, half4 element, half smoothing) {
+        half4 b = element.w == half(0) ? half4(10000, 0, 0, 0) : element;
+        half alignment = clamp(half(0.5) - half(dot(a.yz, b.yz) * half(0.5)), half(0), half(1));
+        half k = half(alignment * smoothing);
+        half h = clamp(half(half(half(b.x - a.x) * half(0.5)) / k) + half(0.5), half(0), half(1));
+        half correction = half(half(k * h) * half(half(1) - h));
+        return half4(half(mix(float(b.x), float(a.x), float(h)) - float(correction)), mix(b.yz, a.yz, h), half(1));
+    }
+"""
+
+/** Fit the four adjacent radius sums before applying body strain. */
+internal fun RoundRect.fittedLensCorners(): RoundRect {
+    fun CornerRadius.squareIfCollapsed() = if (x > 0f && y > 0f) this else CornerRadius.Zero
+    val tl = topLeftCornerRadius.squareIfCollapsed()
+    val tr = topRightCornerRadius.squareIfCollapsed()
+    val br = bottomRightCornerRadius.squareIfCollapsed()
+    val bl = bottomLeftCornerRadius.squareIfCollapsed()
+    fun fit(length: Double, a: Float, b: Float) = length / (a.toDouble() + b)
+    val width = right.toDouble() - left
+    val height = bottom.toDouble() - top
+    val scale = minOf(1.0, fit(width, tl.x, tr.x), fit(height, tr.y, br.y),
+        fit(width, br.x, bl.x), fit(height, bl.y, tl.y)).toFloat()
+    fun CornerRadius.scaled() = CornerRadius(x * scale, y * scale)
+    return RoundRect(left, top, right, bottom, tl.scaled(), tr.scaled(), br.scaled(), bl.scaled())
+}
 
 /** Background refraction, in dp. Each profile displaces along the inward gradient by
  * amount * (1 - sqrt(t(2 - t))), t = inside / height. The outer sample mixes in only
