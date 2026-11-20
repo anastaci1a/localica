@@ -751,7 +751,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
     }
     SideEffect { if (!returningInline) popupFlight.advance(gen, PopupEvent.HomeReturns) }
-    val popupLightMix = samplingSource?.lightMix ?: 0f
+    // Reading the trigger's measurement recomposes this popup as its trigger moves (#748), whatever owns its polarity.
+    anchor.bounds
+    val popupLightMix = darkOverride?.let { if (it) 1f else 0f } ?: samplingSource?.lightMix ?: 0f
     val panelDark = popupLightMix >= .5f
     val parentPanels = LocalChildPanels.current
     val childPanels = remember { mutableIntStateOf(0) }

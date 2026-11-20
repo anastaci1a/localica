@@ -82,8 +82,10 @@ internal class DefaultRefractionFixture {
         return compose.onNodeWithTag("default-refraction-reference").captureToImage().toPixelMap()
     }
 
-    fun establishUnitParity(compose: ComposeTestRule, node: SemanticsNodeInteraction, actual: PixelMap): PixelMap {
+    /** Returns the caller captured in the same scene state as its unit reference: mounting the reference can record the shared source. */
+    fun establishUnitParity(compose: ComposeTestRule, node: SemanticsNodeInteraction): PixelMap {
         val unit = capture(compose, node, 1f)
+        val actual = node.captureToImage().toPixelMap()
         val frame = requireNotNull(reference)
         assertEquals(actual.width, unit.width); assertEquals(actual.height, unit.height)
         val top = (frame.material.top - frame.bounds.top) * actual.height / frame.bounds.height
@@ -106,7 +108,7 @@ internal class DefaultRefractionFixture {
                     " references=${draws.values.filter { it.surfaceIdentity != frame.draw.surfaceIdentity && it.width == frame.draw.width && it.height == frame.draw.height }}",
                 delta <= 1f / 255f)
         }
-        return unit
+        return actual
     }
 
     fun assertDisplacement(actual: PixelMap, reference: PixelMap, threshold: Float, minimum: Int) {
