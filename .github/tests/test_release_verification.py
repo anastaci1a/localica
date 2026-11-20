@@ -219,8 +219,10 @@ class ReleaseVerificationTest(unittest.TestCase):
                 module.verify_native_scope('anastaci1a/localica', self.sha, packet, held, notes)
             del local['inherited_methods']
             packet['local']['26']['inherited_methods'] = [entry]
+            coverage[1]['26'].add(method)
+            api26_held = {('26', method): 'b'*64}
             with self.assertRaisesRegex(ValueError, 'Invalid inherited local method outcome'):
-                module.verify_native_scope('anastaci1a/localica', self.sha, packet, held, notes)
+                module.verify_native_scope('anastaci1a/localica', self.sha, packet, api26_held, notes)
 
     def test_scoped_native_coverage_admits_only_authenticated_passes(self):
         from io import BytesIO
