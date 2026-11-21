@@ -81,31 +81,27 @@ internal data class FluidPopupContentSlot(
     private val fluidZoom = FluidPropertyMotion(clock, Double::equals, initial = 1.0,
         snapReduced = ::snapsReducedFluid, advance = FluidPopupSpringSettings::advancePlanarZoom)
     internal val fluidPortalScale get() = fluidZoom.sample().value
-    private class FluidDestinations(val samples: List<FluidPropertyMotion>) {
-        var firstBlendFrame: Long? = null
-    }
-    private var fluidDestinations: FluidDestinations? = null
+    private var fluidDestinations: List<FluidPropertyMotion>? = null
     internal val hasFluidContent get() = expansion.hasOutline && fluidDestinations != null && placement?.outline != null
-    internal fun fluidDestinationProgress(popup: Boolean) = fluidDestinations?.samples?.get(if (popup) 0 else 1)?.sample()?.value
-    private fun FluidDestinations.blend(popup: Boolean, item: FluidOutlineItemInputs): FluidDestinationBlend {
-        val destination = samples[if (popup) 0 else 1]
-        val progress = if (firstBlendFrame == clock.stamp.sequence) destination.target else destination.sample().value
+    internal fun fluidDestinationProgress(popup: Boolean) = fluidDestinations?.get(if (popup) 0 else 1)?.sample()?.value
+    private fun blend(destination: FluidPropertyMotion, item: FluidOutlineItemInputs): FluidDestinationBlend {
+        val progress = if (isFirstOutlineClipCommit) destination.target else destination.sample().value
         return fluidDestinationBlend(progress, item.isGlass, allOpaque = false, lastDestination = destination.target == 1.0)
     }
     internal fun fluidContentBlend(popup: Boolean): FluidDestinationBlend? {
         if (!hasFluidContent) return null
         val inputs = requireNotNull(placement?.outline).contentInputs
-        return fluidDestinations?.blend(popup, if (popup) inputs.popup else inputs.home)
+        return fluidDestinations?.get(if (popup) 0 else 1)?.let { blend(it, if (popup) inputs.popup else inputs.home) }
     }
     internal fun fluidContentSlots(): Pair<FluidPopupContentSlot, FluidPopupContentSlot>? {
         val current = placement ?: return null
         val outline = current.outline ?: return null
         val bodies = expansion.outlineBodies() ?: return null
-        val destinations = fluidDestinations ?: return null
+        val samples = fluidDestinations ?: return null
         val popupSlot = if (current.intent == true) outline.apertureSlot else outline.apertureSlot xor 1
         val inputs = outline.contentInputs
-        return FluidPopupContentSlot(bodies[popupSlot], inputs.popup, destinations.blend(true, inputs.popup)) to
-            FluidPopupContentSlot(bodies[popupSlot xor 1], inputs.home, destinations.blend(false, inputs.home))
+        return FluidPopupContentSlot(bodies[popupSlot], inputs.popup, blend(samples[0], inputs.popup)) to
+            FluidPopupContentSlot(bodies[popupSlot xor 1], inputs.home, blend(samples[1], inputs.home))
     }
     private val fluidBlurControls = FluidPropertySpringControls(0.0, null, false, false)
     private val fluidTimeline = FluidTimelineMotion(clock, ::snapsReducedFluid) { step, speed ->
@@ -141,17 +137,13 @@ internal data class FluidPopupContentSlot(
         val menuTail = (source == outline.growing) != shown
         val targets = listOf(if (menuTail) 1.0 else 0.0, if (menuTail) 0.0 else 1.0)
         if (fresh) {
-            fluidDestinations?.samples?.forEach(FluidPropertyMotion::stop)
-            fluidDestinations = FluidDestinations(targets.map { FluidPropertyMotion(clock, Double::equals,
-                initial = it, snapReduced = ::snapsReducedFluid) })
+            fluidDestinations?.forEach(FluidPropertyMotion::stop)
+            fluidDestinations = targets.map { FluidPropertyMotion(clock, Double::equals,
+                initial = it, snapReduced = ::snapsReducedFluid) }
             return
         }
-        val destinations = requireNotNull(fluidDestinations)
-        if (shown && step.action == FluidTimelineAction.ExpandedOverrounded && destinations.firstBlendFrame == null) {
-            destinations.firstBlendFrame = clock.stamp.sequence
-        }
         val spring = fluidOutlineSpring(step.propertySpring(speed))
-        destinations.samples.zip(targets).forEach { (destination, target) ->
+        requireNotNull(fluidDestinations).zip(targets).forEach { (destination, target) ->
             if (destination.target != target) destination.animate(destination.sample().value, target,
                 fluidBlurControls, spring, DestinationProgressEpsilonSquared)
         }
@@ -250,7 +242,7 @@ internal data class FluidPopupContentSlot(
         clock.unregister(lensAmount)
         fluidBlur.stop()
         fluidZoom.stop()
-        fluidDestinations?.samples?.forEach(FluidPropertyMotion::stop)
+        fluidDestinations?.forEach(FluidPropertyMotion::stop)
         expansion.dispose()
     }
 }
