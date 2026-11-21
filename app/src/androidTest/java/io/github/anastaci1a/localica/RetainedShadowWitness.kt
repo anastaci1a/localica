@@ -51,6 +51,7 @@ private fun retainedShadowFor(layout: Any): RetainedGlassShadow? {
 internal fun ComposeTestRule.awaitRetainedShadows(label: String, vararg tags: String): List<JSONObject> {
     var result = emptyList<JSONObject>()
     waitUntil(10000) {
+        if (!mainClock.autoAdvance) mainClock.advanceTimeByFrame()
         val nodes = tags.map { onNodeWithTag(it, useUnmergedTree = true).fetchSemanticsNode() }
         result = runOnIdle {
             nodes.map { node ->

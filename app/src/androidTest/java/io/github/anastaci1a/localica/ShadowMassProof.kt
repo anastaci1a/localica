@@ -10,6 +10,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.test.*
@@ -359,20 +360,35 @@ internal fun verifyHeldResizeShadow(rule: ComposeContentTestRule) {
         val rows = (0 until image.height).filter { bodyInk(pixels[sampleX, it]) }
         check(columns.isNotEmpty() && rows.isNotEmpty()) { "Held resize capture must contain the body" }
         val drawn = Rect(columns.first().toFloat(), rows.first().toFloat(), columns.last() + 1f, rows.last() + 1f)
+        val paintedEdgeTolerance = 1.5f
         listOf("left" to (predicted.left to drawn.left), "top" to (predicted.top to drawn.top),
             "right" to (predicted.right to drawn.right), "bottom" to (predicted.bottom to drawn.bottom))
-            .forEach { (side, pair) -> org.junit.Assert.assertEquals(side, pair.first, pair.second, 1.5f) }
+            .forEach { (side, pair) -> org.junit.Assert.assertEquals(side, pair.first, pair.second, paintedEdgeTolerance) }
         val observedGain = (drawn.width / kotlin.math.exp(drag) - layout.width).toFloat()
         org.junit.Assert.assertEquals("Recover P from the painted body", (points * density).toFloat(), observedGain, 1.5f)
         val pose = rule.runOnIdle { contact.body.value }
         rule.runOnIdle { castShadow = false }
         rule.mainClock.advanceTimeByFrame()
         val control = scene.captureToImage().toPixelMap()
+        val controlRows = (0 until image.height).filter { bodyInk(control[sampleX, it]) }
+        check(controlRows.isNotEmpty()) { "The shadow-off capture must contain the held body" }
+        val edgeRows = listOf(rows.first(), rows.last(), controlRows.first(), controlRows.last())
+            .flatMap { (it - 1)..(it + 1) }.distinct().sorted().filter { it in 0 until image.height }
+        fun rgb(pixel: Color) = (pixel.toArgb() and 0xffffff).toString(16).padStart(6, '0')
+        File(output, "width-${width.toInt()}-drag-$drag-edge-rgb.txt").writeText(
+            edgeRows.joinToString("\n", postfix = "\n") { y ->
+                "$sampleX $y ${rgb(pixels[sampleX, y])} ${rgb(control[sampleX, y])}"
+            })
         org.junit.Assert.assertEquals("Shadow-off capture preserves the held body snapshot", pose, rule.runOnIdle { contact.body.value })
         org.junit.Assert.assertEquals("Shadow-off horizontal body mask", columns,
             (0 until image.width).filter { bodyInk(control[it, sampleY]) })
-        org.junit.Assert.assertEquals("Shadow-off vertical body mask", rows,
-            (0 until image.height).filter { bodyInk(control[sampleX, it]) })
+        org.junit.Assert.assertEquals("Shadow-off top edge",
+            rows.first().toFloat(), controlRows.first().toFloat(), paintedEdgeTolerance)
+        org.junit.Assert.assertEquals("Shadow-off bottom edge",
+            rows.last().toFloat(), controlRows.last().toFloat(), paintedEdgeTolerance)
+        val commonRows = maxOf(rows.first(), controlRows.first())..minOf(rows.last(), controlRows.last())
+        org.junit.Assert.assertEquals("Shadow-off vertical body mask inside both edges",
+            rows.filter { it in commonRows }, controlRows.filter { it in commonRows })
         rule.runOnIdle { castShadow = true }
         rule.mainClock.advanceTimeByFrame()
         org.junit.Assert.assertEquals("Restoring the shadow preserves the held body snapshot", pose, rule.runOnIdle { contact.body.value })
