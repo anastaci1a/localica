@@ -158,8 +158,9 @@ class GlassBodyOpticsTest {
         )
         val tone = GlassTone(lightInk = true)
         fun red(color: Int) = (color shr 16 and 255) / 255f
-        fun render(renderer: LensRenderer, members: List<RoundRect>) = renderS1Kernel(bitmap,
-            renderer.effect(LensGeometry(members), 0f, 1.35f, 1f, illumination = 0f, tone = tone), width, height)
+        fun render(renderer: LensRenderer, members: List<RoundRect>, traceMode: Int = 0) = renderS1Kernel(bitmap,
+            renderer.effect(LensGeometry(members), 0f, 1.35f, 1f, illumination = 0f, tone = tone,
+                tieTraceMode = traceMode), width, height)
         try {
             bitmap.setPixels(IntArray(width * height) { index ->
                 val x = index % width
@@ -173,7 +174,10 @@ class GlassBodyOpticsTest {
                 }
                 android.graphics.Color.rgb(ramp, (y * 13) % 256, 120)
             }, 0, width, 0, 0, width, height)
-            val union = render(LensRenderer(connectedBodies = bodies.size), bodies)
+            val connected = LensRenderer(connectedBodies = bodies.size)
+            val union = render(connected, bodies)
+            val phaseAndDistances = render(connected, bodies, traceMode = 1)
+            val normalsAndFlags = render(connected, bodies, traceMode = 2)
             val single = bodies.map { render(LensRenderer(), listOf(it)) }
             val coordinateAndTies = android.graphics.RuntimeShader("""
                 uniform shader scene;
@@ -193,6 +197,8 @@ class GlassBodyOpticsTest {
                 val index = 48 * width + x
                 android.util.Log.i("LOCALICA_PROOF", "TIE_PHASE x=$x coordinateAndNormals=${rgb(measurement[index])} " +
                     "union=${rgb(union[index])} singles=${single.map { rgb(it[index]) }}")
+                android.util.Log.i("LOCALICA_PROOF", "TIE_PRODUCTION x=$x phaseAndDistances=${rgb(phaseAndDistances[index])} " +
+                    "normalsAndFlags=${rgb(normalsAndFlags[index])}")
             }
             val cap = .08f
             val opposite = 48 * width + 80

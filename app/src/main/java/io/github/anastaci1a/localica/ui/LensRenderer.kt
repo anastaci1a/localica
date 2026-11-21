@@ -18,12 +18,17 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
     private val bodyCapacity = maxOf(2, connectedBodies)
     private fun connectedQuery() = if (connectedBodies == 0) "" else """
         $LensFieldUnionShader
-        float3 connectedField(float2 p) {
+        float3 connectedField(float2 p, out float4 tieProbe) {
             // Compose 58 consumes negative-inside distances and outward normals.
-            half4 field = half4(half3(-uniformCorners(p, bodyBounds[0], bodyRadii[0].x)), half(1));
+            float3 first = -uniformCorners(p, bodyBounds[0], bodyRadii[0].x);
+            half4 field = half4(half3(first), half(1));
+            tieProbe = float4(0);
             for (int i = 1; i < $connectedBodies; ++i) {
-                half4 next = half4(half3(-uniformCorners(p, bodyBounds[i], bodyRadii[i * 2].x)), half(1));
+                float3 body = -uniformCorners(p, bodyBounds[i], bodyRadii[i * 2].x);
+                half4 next = half4(half3(body), half(1));
+                if (i == 1) tieProbe.xy = float2(body.x - first.x, float(next.x) - float(field.x));
                 field = sdfUnion(field, next, half(0.0001));
+                if (i == 1) tieProbe.zw = float2(float(field.y), all(equal(field.yz, half2(0))) ? 1.0 : 0.0);
             }
             return -float3(field.xyz);
         }
@@ -46,6 +51,7 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
         uniform float4 warp;
         uniform float2 warpClamp;
         uniform float warpMode;
+        uniform float tieTraceMode;
         $GlassColorShader
         float2 quarterPoint(float h) {
             return float2((1.0 - h) * (1.0 + h), 2.0 * h) / (1.0 + h * h);
@@ -140,9 +146,10 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
                 local.x < 0.0 ? n.x : -n.x, local.y < 0.0 ? n.y : -n.y);
         }
         ${connectedQuery()}
-        float3 geometry(float2 p) {
+        float3 geometry(float2 p, out float4 tieProbe) {
+            tieProbe = float4(0);
             if (bodyCount == 0.0) return float3(-1e10, 0, 0);
-            ${if (connectedBodies > 0) "return connectedField(p);" else """
+            ${if (connectedBodies > 0) "return connectedField(p, tieProbe);" else """
             float4 a = bodyBounds[0], b = bodyBounds[1];
             float4 at = bodyRadii[0], ab = bodyRadii[1], bt = bodyRadii[2], bb = bodyRadii[3];
             if (bodyCount == 1.0 && all(equal(at, float4(at.x))) && all(equal(ab, at)))
@@ -180,14 +187,23 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
             float2 m = (1.0 - lift) * normal * clamp((mapShape.x - u) / w + 0.5, 0.0, 1.0);
             return scene.eval(min(warpClamp, p + float2(dot(m, warp.xy), dot(m, warp.zw)))) * half(mask);
         }
+        half tieMarker(float value) { return half(clamp(0.5 + value * 4096.0, 0.0, 1.0)); }
         half4 main(float2 p) {
-            float3 f = geometry(p);
+            float4 tieProbe;
+            float3 f = geometry(p, tieProbe);
             if (warpMode > 0.5) return warped(p, f);
             if (f.x < outerMix.y) return scene.eval(p);
             float2 inward = dot(f.yz, f.yz) > 0.0 ? normalize(f.yz) : float2(0);
             half4 sampled = scene.eval(p - inward * (profile(refraction.xy, f.x) * power));
             float weight = outerMix.x * clamp((-f.x - outerMix.y) / (outerMix.z - outerMix.y), 0.0, 1.0);
             if (weight > 0.0) sampled = mix(sampled, scene.eval(p - inward * (profile(refraction.zw, f.x) * power)), half(weight));
+            if (tieTraceMode == 1.0) return half4(tieMarker(p.x - 80.5), tieMarker(tieProbe.x), tieMarker(tieProbe.y), sampled.a);
+            if (tieTraceMode == 2.0) {
+                float flags = (p.x == 80.5 ? 1.0 : 0.0) + (tieProbe.x == 0.0 ? 2.0 : 0.0) +
+                    (tieProbe.y == 0.0 ? 4.0 : 0.0) + 8.0 * tieProbe.w +
+                    (all(equal(f.yz, float2(0))) ? 16.0 : 0.0);
+                return half4(tieMarker(tieProbe.z), tieMarker(-f.y), half(flags / 31.0), sampled.a);
+            }
             float alpha = float(sampled.a);
             float3 color = glassColor(float3(sampled.rgb) / max(alpha, 0.0001), whiteTint, tone);
             // A broad environment reflection belongs to the curved normal. No
@@ -219,7 +235,8 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
     /** [unit] is recorded pixels per dp: display density times recording resolution. */
     fun effect(geometry: LensGeometry, blur: Float, depth: Float, unit: Float, power: Float = 1f,
         whiteTint: Float = 0f, illumination: Float = 1f, flattening: Float = 0f,
-        tone: GlassTone = GlassTone(), warp: LensWarp? = null, highlightSpan: Float = geometry.span): RenderEffect {
+        tone: GlassTone = GlassTone(), warp: LensWarp? = null, highlightSpan: Float = geometry.span,
+        tieTraceMode: Int = 0): RenderEffect {
         val bodies = geometry.bodies
         // Stock surfaces supply one fitted round rectangle or SplitPill's horizontal pair.
         require(if (connectedBodies > 0) bodies.size == connectedBodies else
@@ -233,7 +250,7 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
         val words = warp?.uniforms(unit)
         val d = depth.coerceIn(.05f, 4f)
         val state = floatArrayOf(unit, blur, d, power, whiteTint, illumination, flattening,
-            tone.trim, tone.weight, tone.lightMix, bodies.size.toFloat(), highlightSpan) +
+            tone.trim, tone.weight, tone.lightMix, bodies.size.toFloat(), highlightSpan, tieTraceMode.toFloat()) +
             bounds + radii + (words ?: FloatArray(0))
         if (state.contentEquals(last)) return requireNotNull(cached)
         last = state
@@ -257,6 +274,7 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
         shader.setFloatUniform("warp", w[6], w[7], w[8], w[9])
         shader.setFloatUniform("warpClamp", w[10], w[11])
         shader.setFloatUniform("warpMode", if (warp == null) 0f else 1f)
+        shader.setFloatUniform("tieTraceMode", tieTraceMode.toFloat())
         if (blur != blurAmount) {
             blurAmount = blur
             blurEffect = if (FluidGaussianSpec.isIdentity(blur.toDouble())) null
