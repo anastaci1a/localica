@@ -85,7 +85,7 @@ internal data class FluidPopupContentSlot(
         var firstBlendFrame: Long? = null
     }
     private var fluidDestinations: FluidDestinations? = null
-    internal val hasFluidContent get() = fluidDestinations != null && expansion.hasOutline && placement?.outline != null
+    internal val hasFluidContent get() = expansion.hasOutline && fluidDestinations != null && placement?.outline != null
     internal fun fluidDestinationProgress(popup: Boolean) = fluidDestinations?.samples?.get(if (popup) 0 else 1)?.sample()?.value
     private fun FluidDestinations.blend(popup: Boolean, item: FluidOutlineItemInputs): FluidDestinationBlend {
         val destination = samples[if (popup) 0 else 1]

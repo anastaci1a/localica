@@ -1031,6 +1031,19 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             ?: shape.bodyTransform(size, density.density, pose?.vertical ?: popupVertical)
                         return base.copy(drift = base.drift + Offset(pose?.horizontalShift ?: 0f, 0f))
                     }
+                    val fluidMaterial = motion.whenFluid {
+                        Modifier.drawWithContent {
+                            if (motion.hasFluidContent)
+                                drawGlassBody(materialTransform(size)) { this@drawWithContent.drawContent() }
+                            else drawContent()
+                        }.graphicsLayer {
+                            clip = motion.hasFluidContent
+                            if (clip) shape = RoundedCornerShape(radius())
+                        }
+                    } ?: Modifier
+                    val contentEffect = motion.whenFluid {
+                        Modifier.graphicsLayer { renderEffect = fluidContentBlurEffect?.invoke(motion.fluidBlurRadius) }
+                    } ?: Modifier
                     Layout(modifier = measureModifier.glassShadowOffset {
                         val pixels = panelBounds[0]?.common
                         androidx.compose.ui.unit.IntOffset(pixels?.left ?: 0, pixels?.top ?: 0)
@@ -1104,14 +1117,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     }.glassPopupHome(childHome).recordFrostedBackdrop(completePanel), content = {
                         SurfaceLayer(placedMaterial.testTag("glass-morph-surface")
                             .pointerInput(Unit) { detectTapGestures { } }
-                            .drawWithContent {
-                                if (motion.hasFluidContent)
-                                    drawGlassBody(materialTransform(size)) { this@drawWithContent.drawContent() }
-                                else drawContent()
-                            }.graphicsLayer {
-                                clip = motion.hasFluidContent
-                                if (clip) shape = RoundedCornerShape(radius())
-                            }.presentedAlpha {
+                            .then(fluidMaterial).presentedAlpha {
                                 if (quietOptics) motion.quietContent.at(phase()) else 1f
                             }.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
@@ -1135,9 +1141,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     presentation = ::bodyMaterial, presentedRadius = ::radius)
                             }
                         }
-                        Layout(modifier = Modifier.graphicsLayer {
-                            renderEffect = motion.whenFluid { fluidContentBlurEffect?.invoke(motion.fluidBlurRadius) }
-                        }, content = {
+                        Layout(modifier = contentEffect, content = {
                             SurfaceLayer(Modifier.graphicsLayer {
                                 val blend = motion.fluidContentBlend(popup = true)
                                 alpha = blend?.layerOpacity ?: if (page) 1f else motion.foreground.at(phase())
@@ -1257,10 +1261,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             panelBounds[0] = PopupLayerBounds(pixels)
                             layout(width, height) {
                                 foreground.placeWithLayer((width - foreground.width) / 2, if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2) {
-                                    motion.whenFluid { Unit } ?: run {
+                                    motion.whenFluid(ordinary = {
                                         val fit = popupContentScale(width,height,foreground.width,foreground.height,page || placement == GlassPlacement.Search)
                                         scaleX = fit; scaleY = fit
-                                    }
+                                    }) { Unit }
                                 }
                                 // A retained face may contain a Material Surface with a pointer node.
                                 // Alpha and cleared semantics do not remove that invisible hit target.
