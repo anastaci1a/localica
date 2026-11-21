@@ -75,7 +75,7 @@ internal class FluidTimelineMotion(private val clock: UiClock,private val snapRe
     /** An interaction assertion stops the timer; its final release resets the origin, drains the due prefix and restarts it. */
     fun hold() { clock.checkMutation(); clock.unregister(this); timing=false; holding=true }
     fun release() { clock.checkMutation(); if(holding) { holding=false; begin() } }
-    private fun begin() { started=clock.stampNow; drain(started); if(!holding && actions.isNotEmpty()) { timing=true; clock.register(this) } }
+    private fun begin() { started=clock.stampNow; drain(clock.stampNow); if(!holding && actions.isNotEmpty()) { timing=true; clock.register(this) } }
     private fun drain(stamp: FrameStamp)=actions.drainFluidTimeline((stamp.nanos-started.nanos)/1e9,
         if(reducesWithAccess && clock.context?.access==MotionAccess.Reduced) 0.0 else speed,amplify,{ clock.fluidDrag },holding,run)
     override fun frame(stamp: FrameStamp)=drain(stamp)

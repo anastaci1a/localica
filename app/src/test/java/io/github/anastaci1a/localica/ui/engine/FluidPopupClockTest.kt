@@ -8,9 +8,10 @@ import org.junit.Test
 
 /** #1083: the staged through timeline and installed property spring run on the shared UiClock, never a second timer. */
 class FluidPopupClockTest {
-    private class Rig(access: MotionAccess = MotionAccess.Standard, durationScale: Float = 1f) {
+    private class Rig(access: MotionAccess = MotionAccess.Standard, durationScale: Float = 1f,
+        readNanos: (Long) -> Long = { it }) {
         val channel = Channel<Long>(Channel.UNLIMITED); var now = 0L
-        val clock = UiClock(object : FrameSource { override suspend fun awaitFrame() = channel.receive() }, { now }, {})
+        val clock = UiClock(object : FrameSource { override suspend fun awaitFrame() = channel.receive() }, { readNanos(now) }, {})
         private val scope = CoroutineScope(Dispatchers.Unconfined + SupervisorJob())
         init { configure(access, durationScale); scope.launch { clock.run() } }
         fun configure(access: MotionAccess, durationScale: Float = 1f) = clock.configure(EngineContext(1f / 120, 1000f, access, durationScale), StockUiSpec)
@@ -32,6 +33,23 @@ class FluidPopupClockTest {
         assertEquals(zero + queue.filter { it.timing.storedDelay == 0.1 }.map { it.action }, ran.map { it.first })
         rig.frame(1_000_000_000L + 211_000_000L)
         assertEquals(queue.map { it.action }, ran.map { it.first }); assertTrue(motion.settled); assertEquals(0, rig.clock.activeCount)
+        rig.close()
+    }
+
+    @Test fun firstDrainCanAdmitTheDelayedFullExpansion() {
+        val clockSamples = ArrayDeque<Long>()
+        val rig = Rig(readNanos = { clockSamples.removeFirstOrNull() ?: it })
+        val ran = mutableListOf<Pair<FluidTimelineAction, Double>>()
+        val motion = timeline(rig, ran)
+        clockSamples.addLast(1_000_000_000L)
+        clockSamples.addLast(1_070_000_000L)
+        motion.start(0.7, false, false)
+        assertEquals(
+            queue.takeWhile { it.timing.storedDelay <= 0.1 }.map { it.action to 0.7 },
+            ran,
+        )
+        assertTrue(ran.any { it.first == FluidTimelineAction.FullyExpanded })
+        assertEquals(1, rig.clock.activeCount)
         rig.close()
     }
 
