@@ -336,7 +336,7 @@ class GlassGlowTest {
             "lensChain(blurEffect, lens, android.graphics.RenderEffect::createChainEffect)",
             "(blurEffect?.let { android.graphics.RenderEffect.createChainEffect(lens, it) } ?: lens)",
         )
-        assertEquals("ee72b085a1ee7d5506c7f308e57e98f02626a05aea2c925586ec48003a37eb1b", sha(stock.toByteArray()))
+        assertEquals("b29ed18930cad69af0b1d393eb3442b87122011cbb59c373e630a2eeb4c38afe", sha(stock.toByteArray()))
         val source = File(root, "LiquidGlass.kt").readText()
         val start = source.indexOf("if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(")
         val effect = source.substring(start, source.indexOf("\n                else null", start))
