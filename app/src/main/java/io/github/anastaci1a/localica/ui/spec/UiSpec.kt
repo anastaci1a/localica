@@ -700,14 +700,18 @@ internal fun fluidRadiusEpsilonSquared(pointScale: Double): Double {
     return unit * unit
 }
 
-internal fun fluidZoomEpsilonSquared(pointScale: Double, size: Pair<Double, Double>?, empty: Boolean, anchorX: Double, anchorY: Double): DoubleArray {
+internal fun fluidZoomEpsilonSquared(
+    pointScale: Double, bounds: PopupPortalBounds?, anchorX: Double, anchorY: Double,
+): DoubleArray {
     val translation = fluidRadiusEpsilonSquared(pointScale)
     val fixed = Double.fromBits(0x3eb0c6f7a0b5ed8dL)
-    if (size == null) return doubleArrayOf(0.0001, fixed, translation, fixed, fixed)
-    if (empty) return doubleArrayOf(0.01 * 0.01, 0.001 * 0.001, translation, 0.001 * 0.001, 0.001 * 0.001)
-    val (width, height) = size
-    val x = maxOf(anchorX, 1.0 - anchorX) * width
-    val y = maxOf(anchorY, 1.0 - anchorY) * height
+    if (bounds == null) return doubleArrayOf(0.0001, fixed, translation, fixed, fixed)
+    if (bounds.isNull || bounds.width == 0.0 || bounds.height == 0.0) {
+        return doubleArrayOf(0.01 * 0.01, 0.001 * 0.001, translation, 0.001 * 0.001, 0.001 * 0.001)
+    }
+    val metrics = bounds.forMetrics()
+    val x = maxOf(anchorX, 1.0 - anchorX) * metrics.width
+    val y = maxOf(anchorY, 1.0 - anchorY) * metrics.height
     val length = sqrt(x * x + y * y)
     val spatial = (1.0 / pointScale) / (if (length <= 1.0) 1.0 else length)
     val square = spatial * spatial

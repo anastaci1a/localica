@@ -256,7 +256,7 @@ private fun Placeable.PlacementScope.placePortalDestination(
             val scale = fluidPointScale()
             fluidBlur.animate(fluidBlurRadius, content.gaussianRadius, fluidBlurControls, spring, fluidRadiusEpsilonSquared(scale))
             val zoom = requireNotNull(content.typedZoom())[3]
-            val zoomEpsilon = fluidZoomEpsilonSquared(scale, 0.0 to 0.0, empty = true, anchorX = 0.5, anchorY = 0.5)[1]
+            val zoomEpsilon = fluidZoomEpsilonSquared(scale, PopupPortalBounds(0.0, 0.0, 0.0, 0.0), anchorX = 0.5, anchorY = 0.5)[1]
             if (fluidZoom.target != zoom) fluidZoom.animate(fluidPortalScale, zoom, fluidBlurControls, spring, zoomEpsilon)
         }
         val lens = step.lens

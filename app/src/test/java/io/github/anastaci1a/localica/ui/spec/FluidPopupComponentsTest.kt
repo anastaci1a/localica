@@ -1577,19 +1577,37 @@ class FluidPopupComponentsTest {
         assertEquals(0.25, fluidRadiusEpsilonSquared(fluidLayerPointScale(true, windowScale)), 0.0)
         live = 4.0
         val pointScale = fluidLayerPointScale(true, windowScale)
-        val thresholds = fluidZoomEpsilonSquared(pointScale, 6.0 to 8.0, false, 0.5, 0.5)
+        val thresholds = fluidZoomEpsilonSquared(pointScale, PopupPortalBounds(0.0, 0.0, 6.0, 8.0), 0.5, 0.5)
         assertEquals(listOf(0.0025000000000000005, 0.0025000000000000005, 0.0625, 0.0025000000000000005, 0.0025000000000000005), thresholds.toList())
     }
 
     @Test fun typedThresholdsKeepThePointScaleAndGeometryOverloadsDistinct() {
         assertEquals(0.1111111111111111.toRawBits(), fluidRadiusEpsilonSquared(3.0).toRawBits())
-        val fixed = fluidZoomEpsilonSquared(2.0, null, false, 0.0, 0.0)
+        val fixed = fluidZoomEpsilonSquared(2.0, null, 0.0, 0.0)
         assertEquals(listOf(0.0001, 0.000001, 0.25, 0.000001, 0.000001), fixed.toList())
-        val empty = fluidZoomEpsilonSquared(2.0, 0.0 to 1.0, true, 0.5, 0.5)
-        assertEquals(fixed.toList(), empty.toList())
-        val spatial = fluidZoomEpsilonSquared(25.0, 6.0 to 8.0, false, 0.5, 0.5)
+        val bounds = PopupPortalBounds(0.0, 0.0, 6.0, 8.0)
+        listOf(
+            bounds.copy(x = Double.POSITIVE_INFINITY), bounds.copy(y = Double.POSITIVE_INFINITY),
+            bounds.copy(width = 0.0), bounds.copy(width = -0.0),
+            bounds.copy(height = 0.0), bounds.copy(height = -0.0),
+            bounds.copy(x = Double.NaN, width = 0.0), bounds.copy(y = Double.NaN, height = 0.0),
+        ).forEach {
+            assertEquals("bounds $it", fixed.toList(), fluidZoomEpsilonSquared(2.0, it, 0.5, 0.5).toList())
+        }
+        val spatial = fluidZoomEpsilonSquared(25.0, bounds, 0.5, 0.5)
         assertEquals(listOf(0.000064, 0.000064, 0.0016, 0.000064, 0.000064), spatial.toList())
-        val overflow = fluidZoomEpsilonSquared(1e-140, 2e155 to 1.0, false, 0.5, 0.5)
+        listOf(
+            bounds.copy(width = -6.0), bounds.copy(height = -8.0),
+            bounds.copy(x = Double.NaN), bounds.copy(y = Double.NaN),
+            bounds.copy(x = Double.NEGATIVE_INFINITY), bounds.copy(y = Double.NEGATIVE_INFINITY),
+        ).forEach {
+            assertEquals("bounds $it", spatial.toList(), fluidZoomEpsilonSquared(25.0, it, 0.5, 0.5).toList())
+        }
+        val unordered = listOf(Double.NaN, Double.NaN, 0.0016, Double.NaN, Double.NaN)
+        listOf(bounds.copy(width = Double.NaN), bounds.copy(height = Double.NaN)).forEach {
+            assertEquals("bounds $it", unordered, fluidZoomEpsilonSquared(25.0, it, 0.5, 0.5).toList())
+        }
+        val overflow = fluidZoomEpsilonSquared(1e-140, bounds.copy(width = 2e155, height = 1.0), 0.5, 0.5)
         assertEquals(listOf(0.0, 0.0, fluidRadiusEpsilonSquared(1e-140), 0.0, 0.0), overflow.toList())
         assertTrue(fluidLensSuppressesAction(0.0, 0.05, null, bypass = false))
         assertTrue(fluidLensSuppressesAction(0.0, 0.05, 0.0, bypass = false))

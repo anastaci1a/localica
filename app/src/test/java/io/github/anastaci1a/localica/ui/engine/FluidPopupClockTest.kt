@@ -151,7 +151,7 @@ class FluidPopupClockTest {
         val motion = FluidPropertyMotion(rig.clock, Double::equals, initial = 1.0,
             advance = FluidPopupSpringSettings::advancePlanarZoom)
         val controls = FluidPropertySpringControls(0.0, null, interactive = false, additive = false)
-        val epsilon = fluidZoomEpsilonSquared(2.0, 0.0 to 0.0, empty = true, anchorX = 0.5, anchorY = 0.5)[1]
+        val epsilon = fluidZoomEpsilonSquared(2.0, PopupPortalBounds(0.0, 0.0, 0.0, 0.0), anchorX = 0.5, anchorY = 0.5)[1]
         val kernel = SpringKernel.fromInstalled(spring.stiffness, spring.installedDamping)
         motion.animate(start[3], target[3], controls, spring, epsilon)
         var previous = ((1f / 120).toDouble() * 1.001) * -0.4
