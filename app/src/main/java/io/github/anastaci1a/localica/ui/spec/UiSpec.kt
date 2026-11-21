@@ -180,6 +180,7 @@ internal data class FluidPropertySpringControls(
         requestedStart: Double, target: Double, retained: FluidScalarSpringEntry?, previousTarget: Double?,
         spring: FluidPopupSpringSettings?, pendingVelocity: Double?,
     ): FluidScalarSpringEntry {
+        require(!(delay > 0.0)) { "Delayed Fluid property requests require timeline admission" }
         val oldBody = retained?.body
         val value = oldBody?.value ?: requestedStart
         val velocity = when {
@@ -729,12 +730,20 @@ internal data class FluidDestinationBlend(val opacity: Double, val gaussianRadiu
 }
 
 internal data class PopupPortalBounds(val x: Double, val y: Double, val width: Double, val height: Double) {
-    val midX get() = minX + kotlin.math.abs(width) * 0.5
-    val midY get() = minY + kotlin.math.abs(height) * 0.5
-    private val minX get() = if (width < 0.0) x + width else x
-    private val minY get() = if (height < 0.0) y + height else y
+    val isNull get() = x == Double.POSITIVE_INFINITY || y == Double.POSITIVE_INFINITY
+    val midX get() = forMetrics().let { it.x + it.width * 0.5 }
+    val midY get() = forMetrics().let { it.y + it.height * 0.5 }
 
-    fun standardized() = PopupPortalBounds(minX, minY, kotlin.math.abs(width), kotlin.math.abs(height))
+    fun forMetrics() = if (width < 0.0 || height < 0.0) standardized() else this
+
+    fun standardized(): PopupPortalBounds {
+        if (isNull) return PopupPortalBounds(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, 0.0, 0.0)
+        val flipX = width < 0.0
+        val flipY = height < 0.0
+        if (!flipX && !flipY) return this
+        return PopupPortalBounds(if (flipX) x + width else x, if (flipY) y + height else y,
+            if (flipX) -width else width, if (flipY) -height else height)
+    }
 
     fun centeredAt(centerX: Double, centerY: Double) =
         copy(x = centerX - width * 0.5, y = centerY - height * 0.5)
@@ -744,8 +753,10 @@ internal data class PopupPortalInsets(val top: Double, val leading: Double, val 
     val horizontal get() = leading + trailing
     val vertical get() = top + bottom
 
-    fun signedCrop(bounds: PopupPortalBounds?): PopupPortalBounds? = bounds?.standardized()?.let {
-        PopupPortalBounds(it.x + leading, it.y + top, it.width - horizontal, it.height - vertical)
+    fun signedCrop(bounds: PopupPortalBounds?): PopupPortalBounds? {
+        if (bounds == null || bounds.isNull) return bounds
+        val source = bounds.standardized()
+        return PopupPortalBounds(source.x + leading, top + source.y, source.width - horizontal, source.height - vertical)
     }
 }
 

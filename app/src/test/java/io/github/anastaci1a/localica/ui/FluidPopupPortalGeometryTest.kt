@@ -17,8 +17,23 @@ class FluidPopupPortalGeometryTest {
         val crop = requireNotNull(insets.signedCrop(original))
         assertEquals(PopupPortalBounds(8.0, 20.0, 6.0, 15.0), crop)
         assertNull(insets.signedCrop(null))
+        val nullOrigin = PopupPortalBounds(Double.POSITIVE_INFINITY, 7.0, 0.0, 0.0)
+        assertEquals(nullOrigin, insets.signedCrop(nullOrigin))
         assertEquals(0.0, requireNotNull(insets.copy(trailing = 12.0).signedCrop(original)).width, 0.0)
         assertEquals(-1.0, requireNotNull(insets.copy(trailing = 13.0).signedCrop(original)).width, 0.0)
+    }
+
+    @Test fun midpointStandardizesOnlyForAnOrderedNegativeExtent() {
+        val nullX = PopupPortalBounds(Double.POSITIVE_INFINITY, 7.0, 0.0, 0.0)
+        val nullY = PopupPortalBounds(7.0, Double.POSITIVE_INFINITY, 0.0, 0.0)
+        assertEquals(7.0, nullX.midY, 0.0)
+        assertEquals(7.0, nullY.midX, 0.0)
+        assertEquals(Double.POSITIVE_INFINITY, nullX.copy(width = -1.0).midY, 0.0)
+        assertEquals(Double.POSITIVE_INFINITY, nullY.copy(height = -1.0).midX, 0.0)
+        assertEquals(7.0, nullX.copy(width = Double.NaN).midY, 0.0)
+        val inverted = PopupPortalBounds(20.0, 40.0, -14.0, -22.0)
+        assertEquals(13.0, inverted.midX, 0.0)
+        assertEquals(29.0, inverted.midY, 0.0)
     }
 
     @Test fun endpointSelectionUsesScaledAreaAndKeepsTheSourceOnTies() {
@@ -122,8 +137,8 @@ class FluidPopupPortalGeometryTest {
         val targets = fluidOutlineTargets(smaller, larger, pivot, { it }, { it })
         val source = requireNotNull(targets.sourcePivot)
         val bounds = requireNotNull(source.bounds)
-        assertEquals(Double.POSITIVE_INFINITY, bounds.x, 0.0)
-        assertEquals(Double.POSITIVE_INFINITY, bounds.y, 0.0)
+        assertEquals(-81.0, bounds.x, 0.0)
+        assertEquals(-103.0, bounds.y, 0.0)
         assertEquals(250.0, bounds.width, 0.0)
         assertEquals(250.0, bounds.height, 0.0)
         assertEquals(125.0, source.cornerRadius, 0.0)
@@ -146,8 +161,7 @@ class FluidPopupPortalGeometryTest {
             assertTrue(square.x.isFinite() && square.y.isFinite())
             square
         }).companion
-        val retained = PopupPortalBounds(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, 44.0, 44.0)
-        assertEquals(FluidOutlineOverride(retained, 22.0, 0.25), inverted)
+        assertEquals(FluidOutlineOverride(PopupPortalBounds(78.0, 60.0, 44.0, 44.0), 22.0, 0.25), inverted)
 
         val zeroExtent = narrow.copy(width = 11.0, height = 200.0)
         val pinned = fluidOutlineTargets(source, zeroExtent, source, { it }, { it }).companion

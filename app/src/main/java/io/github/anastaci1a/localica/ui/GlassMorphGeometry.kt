@@ -94,9 +94,8 @@ internal fun fluidOutlineTargets(
     fun PopupPortalBounds.squareClampedAt(
         x: Double, y: Double, side: Double, convert: (PopupPortalBounds) -> PopupPortalBounds,
     ): PopupPortalBounds {
-        if (width < 0 || height < 0)
-            return PopupPortalBounds(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, side, side)
-        return convert(squareAt(clamp(x, this.x, this.x + width), clamp(y, this.y, this.y + height), side))
+        val range = forMetrics()
+        return convert(squareAt(clamp(x, range.x, range.x + range.width), clamp(y, range.y, range.y + range.height), side))
     }
 
     val collapsed = circle(toSmallerContainer(squareAt(pivot.midX, pivot.midY, diameter)))

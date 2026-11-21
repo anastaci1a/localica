@@ -375,6 +375,13 @@ class FluidPopupComponentsTest {
         val controls = FluidPropertySpringControls(0.0, null, interactive = false, additive = false)
         val spring = FluidPopupSpringSettings(1.0, 2 * Math.PI, retargetImpulse = 0.5)
         val fresh = controls.immediateEntry(-0.001, 5.0, null, null, spring, null)
+        for (delay in listOf(-0.1, Double.NEGATIVE_INFINITY, Double.NaN)) {
+            assertEquals(fresh, controls.copy(delay = delay).immediateEntry(-0.001, 5.0, null, null, spring, null))
+        }
+        for (delay in listOf(Double.MIN_VALUE, Double.POSITIVE_INFINITY)) {
+            val failure = runCatching { controls.copy(delay = delay).immediateEntry(-0.001, 5.0, null, null, spring, null) }
+            assertTrue(failure.exceptionOrNull() is IllegalArgumentException)
+        }
         assertEquals(FluidScalarSpringBody(-0.001, 0.0), fresh.body)
         assertEquals(fresh.body, fresh.intermediate)
         assertEquals(5.0.toRawBits(), fresh.target.toRawBits())
