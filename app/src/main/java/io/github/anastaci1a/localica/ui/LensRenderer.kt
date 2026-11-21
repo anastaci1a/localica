@@ -474,7 +474,7 @@ private class FluidMeltTargets(private val union: RuntimeShader) {
             map.setFloatUniform("angle", warp[4], warp[5])
             map.setDeviceQuad(requireNotNull(BackdropRegistration.create(1f, 0f, 0f, 1f, field.deviceOrigin.x, field.deviceOrigin.y)))
             return try {
-                MeltTarget(extent, mapFormat).use { it.draw(map).sampler(mode = Shader.TileMode.CLAMP) }
+                MeltTarget(extent, mapFormat).use { it.draw(map).sampler() }
             } finally { map.setInputShader("image", emptyLensInput) }
         } finally { scratch.forEach { it?.close() } }
     }
@@ -538,8 +538,8 @@ private class MeltTarget(val extent: IntSize, format: Int) : AutoCloseable {
         return this
     }
 
-    fun sampler(mode: Shader.TileMode = Shader.TileMode.REPEAT, linear: Boolean = true) =
-        BitmapShader(requireNotNull(Bitmap.wrapHardwareBuffer(buffer, colors)), mode, mode).apply {
+    fun sampler(linear: Boolean = true) =
+        BitmapShader(requireNotNull(Bitmap.wrapHardwareBuffer(buffer, colors)), Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
             setFilterMode(if (linear) BitmapShader.FILTER_MODE_LINEAR else BitmapShader.FILTER_MODE_NEAREST)
         }
 
