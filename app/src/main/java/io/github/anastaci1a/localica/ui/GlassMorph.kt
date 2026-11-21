@@ -1242,7 +1242,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             motion.fluidPortalLayout(pixels, foreground, face, windowOrigin, layoutDirection == LayoutDirection.Ltr)?.let { portal ->
                                 panelBounds[0] = portal.bounds
                                 return@portalMeasure layout(portal.bounds.portal.width, portal.bounds.portal.height) {
-                                    portal.place(this, foreground, face)
+                                    portal.place(this, foreground, face, windowOrigin)
                                 }
                             }
                             panelBounds[0] = PopupLayerBounds(pixels)

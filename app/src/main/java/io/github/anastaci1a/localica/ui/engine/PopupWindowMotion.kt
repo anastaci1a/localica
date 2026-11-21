@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui.engine
 
+import android.os.Build
 import androidx.compose.runtime.*
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.ui.Modifier
@@ -15,6 +16,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import io.github.anastaci1a.localica.ui.BackdropRegistration
+import io.github.anastaci1a.localica.ui.fluidApertureClip
 import io.github.anastaci1a.localica.ui.spec.*
 import kotlin.math.roundToInt
 
@@ -68,9 +71,9 @@ internal class FluidPortalLayout(
     val bounds: PopupLayerBounds, private val menu: FluidPortalPlacement?, private val button: FluidPortalPlacement?,
     private val scale: Float,
 ) {
-    fun place(scope: Placeable.PlacementScope, foreground: Placeable, face: Placeable) = with(scope) {
-        menu?.let { placePortalDestination(foreground, it, bounds.portal, scale) }
-        button?.let { placePortalDestination(face, it, bounds.portal, scale) }
+    fun place(scope: Placeable.PlacementScope, foreground: Placeable, face: Placeable, root: Offset) = with(scope) {
+        menu?.let { placePortalDestination(foreground, it, bounds.portal, scale, root) }
+        button?.let { placePortalDestination(face, it, bounds.portal, scale, root) }
     }
 }
 
@@ -80,7 +83,7 @@ private fun portalExtent(first: Rect, second: Rect) = Rect(
 )
 
 private fun Placeable.PlacementScope.placePortalDestination(
-    destination: Placeable, layer: FluidPortalPlacement, portal: MotionPixelRect, scale: Float,
+    destination: Placeable, layer: FluidPortalPlacement, portal: MotionPixelRect, scale: Float, root: Offset,
 ) {
     val x = layer.origin.x * scale - portal.left
     val y = layer.origin.y * scale - portal.top
@@ -92,8 +95,17 @@ private fun Placeable.PlacementScope.placePortalDestination(
         translationY = y - top
         scaleX = layer.scaleX * scale
         scaleY = layer.scaleY * scale
-        clip = layer.clip != null
-        layer.clip?.let { roundRect -> shape = GenericShape { _, _ -> addRoundRect(roundRect) } }
+        val aperture = layer.clip
+        val registration = aperture?.let {
+            BackdropRegistration.create(scaleX, 0f, 0f, scaleY,
+                root.x + portal.left + left + translationX, root.y + portal.top + top + translationY)
+        }
+        renderEffect = if (Build.VERSION.SDK_INT >= 33 && aperture != null && registration != null &&
+            aperture.topLeftCornerRadius.x > 0f && aperture.topLeftCornerRadius.y > 0f) {
+            fluidApertureClip(aperture, registration)
+        } else null
+        clip = aperture != null && renderEffect == null
+        if (clip && aperture != null) shape = GenericShape { _, _ -> addRoundRect(aperture) }
     }
 }
 /** The native presenter owns one expansion and one measured rectangle. A native

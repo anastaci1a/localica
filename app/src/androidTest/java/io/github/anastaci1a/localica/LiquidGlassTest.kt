@@ -18,10 +18,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asAndroidRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -44,9 +48,56 @@ import org.junit.Test
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
 
 class LiquidGlassTest {
     @get:Rule val compose = createComposeRule()
+
+    @SdkSuppress(minSdkVersion = 36)
+    @RequiresApi(33)
+    @Test fun fluidApertureCoverageUsesRegisteredQuadPartners() {
+        val rect = RoundRect(Rect(0f, 0f, 12f, 12f), CornerRadius(2.75f, 3.25f))
+        val registration = requireNotNull(BackdropRegistration.create(.54f, 0f, 0f, .89f, 1.25f, -.375f))
+        val probes = listOf(
+            listOf(Triple(11, 9, 180), Triple(10, 10, 218)),
+            listOf(Triple(11, 9, 198), Triple(11, 10, 196)),
+            listOf(Triple(9, 11, 255), Triple(11, 10, 195)),
+            listOf(Triple(11, 9, 255), Triple(11, 10, 196)),
+        )
+        probes.forEachIndexed { index, samples ->
+            val selector = index + 10
+            val node = RenderNode("Fluid aperture $selector").apply { setPosition(0, 0, 16, 16) }
+            try {
+                node.beginRecording().drawColor(android.graphics.Color.WHITE)
+                node.endRecording()
+                node.setRenderEffect(fluidApertureClip(rect, registration, selector, .3f, .6f).asAndroidRenderEffect())
+                val image = renderNativeReferenceImage(16, 16, "Fluid aperture coverage", opaque = false) {
+                    it.drawRenderNode(node)
+                }
+                try {
+                    val pixels = image.toPixelMap()
+                    samples.forEach { (x, y, alpha) ->
+                        assertEquals("selector=$selector x=$x y=$y", alpha, (pixels[x, y].alpha * 255).roundToInt())
+                    }
+                } finally { image.asAndroidBitmap().recycle() }
+            } finally { node.discardDisplayList() }
+        }
+
+        val precision = RuntimeShader("""
+            $FluidDeviceQuadShader
+            $FluidApertureCoverageShader
+            half4 main(float2 p) {
+                float tie = halfOffset(0.2501220703125);
+                float above = halfOffset(0.2501221001148224);
+                return (tie == 0.25 && above == 0.250244140625) ? half4(0, 1, 0, 1) : half4(1, 0, 0, 1);
+            }
+        """.trimIndent())
+        val halfProbe = renderNativeReferenceImage(1, 1, "Fluid contour half conversion") {
+            it.drawPaint(Paint().apply { shader = precision })
+        }
+        try { assertEquals(Color.Green, halfProbe.toPixelMap()[0, 0]) }
+        finally { halfProbe.asAndroidBitmap().recycle() }
+    }
 
     @SdkSuppress(minSdkVersion = 36)
     @RequiresApi(34)

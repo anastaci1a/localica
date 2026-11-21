@@ -297,3 +297,103 @@ internal fun <E : Any> lensChain(blur: E?, lens: E, chain: (outer: E, inner: E) 
             FluidLensingSpec.Filter.DisplacementMap -> applied + lens
         }
     }.reduce { inner, outer -> chain(outer, inner) }
+
+/** Device quad partners mapped back into the same local primitive. */
+internal const val FluidDeviceQuadShader = """
+    uniform float3x3 toDevice, toLocal;
+    float2 quadPartner(float2 device, float2 axis) {
+        float2 direction = 1.0 - 2.0 * mod(floor(device), 2.0);
+        return (toLocal * float3(device + direction * axis, 1.0)).xy;
+    }
+    float quadWidth(float value, float horizontal, float vertical) {
+        return max(abs(value - horizontal) + abs(value - vertical), 0.0001);
+    }
+"""
+
+internal const val FluidApertureCoverageShader = """
+    float halfOffset(float value) {
+        float magnitude = abs(value);
+        float unit = exp2(floor(log2(max(magnitude, 0.00006103515625))) - 10.0);
+        float whole = floor(magnitude / unit);
+        float remainder = magnitude / unit - whole;
+        bool up = remainder > 0.5 || (remainder == 0.5 && mod(whole, 2.0) == 1.0);
+        return sign(value) * (whole + (up ? 1.0 : 0.0)) * unit;
+    }
+    float contour(float2 q, float2 mixWeight, int selector) {
+        if (selector == 10) return sqrt(dot(q, q));
+        q = abs(q);
+        float weight = q.y > q.x ? mixWeight.x : mixWeight.y;
+        float shifted = length(max(q * 1.528664947 - 0.5286650062, float2(0)));
+        if (selector == 11) {
+            float high = max(q.x, q.y);
+            float t = high == 0.0 ? 0.0 : clamp(min(q.x, q.y) / high, 0.0, 1.0);
+            float s = (((3.156009913 - 0.9260540008 * t) * t - 3.641220093) * t + 1.268030047) * t + 0.2685309947;
+            return mix(length(q) + 1.0 - 1.0 / (1.0 - t * t * s),
+                       shifted * 0.654165566 + 0.345834434, weight);
+        }
+        if (selector == 12) {
+            float2 r = max(q * 1.329273939 - 0.3292739391, float2(0));
+            float t = clamp(1.0 - abs(r.y - r.x), 0.0, 1.0);
+            float s = ((((-1.5 - t * 1.13) * t + 12.15) * t - 17.4) * t + 9.0) * t - 0.12;
+            return mix(length(r) - (t * 0.05402784795) * s, (shifted - 1.0) * 0.8695652485 + 1.0, weight);
+        }
+        float2 r = max(q * 1.273887396 - 0.2738873959, float2(0));
+        float high = max(r.x, r.y);
+        float t = high == 0.0 ? 0.0 : min(r.x, r.y) / high;
+        float s = (((16.03350067 - t * 4.821469784) * t - 17.85799980) * t + 4.901319981) * t + 2.744640112;
+        return mix(length(r) - (t * t * 0.06903559715) * s, (shifted - 1.0) * 0.8333333135 + 1.0, weight);
+    }
+    half cornerCoverage(float2 q, float2 x, float2 y, float2 mixWeight, int selector) {
+        float u = contour(q, mixWeight, selector);
+        if (selector >= 12 && u < 0.8) return half(1);
+        float ux = contour(x, mixWeight, selector), uy = contour(y, mixWeight, selector);
+        if (selector == 11) {
+            float d = halfOffset(u - 1.0);
+            float width = quadWidth(d + 1.0, halfOffset(ux - 1.0) + 1.0, halfOffset(uy - 1.0) + 1.0);
+            return half(halfOffset(clamp(0.5 - d / width, 0.0, 1.0)));
+        }
+        return half(halfOffset(clamp(0.5 + (1.0 - u) / quadWidth(u, ux, uy), 0.0, 1.0)));
+    }
+"""
+
+@RequiresApi(33)
+private val apertureClipShader by lazy {
+    RuntimeShader("""
+        uniform shader scene;
+        uniform float2 center, halfSize, radius, mixWeight;
+        uniform int selector;
+        $FluidDeviceQuadShader
+        $FluidApertureCoverageShader
+        half4 main(float2 p) {
+            float2 quadrant = step(float2(0), p - center) * 2.0 - 1.0;
+            float2 r = (p - center) * quadrant - (halfSize - radius);
+            float2 device = (toDevice * float3(p, 1.0)).xy;
+            float2 x = r + (quadPartner(device, float2(1, 0)) - p) * quadrant;
+            float2 y = r + (quadPartner(device, float2(0, 1)) - p) * quadrant;
+            half mask;
+            if (r.x > 0.0 && r.y > 0.0) mask = cornerCoverage(r / radius, x / radius, y / radius, mixWeight, selector);
+            else {
+                bool useX = r.x - radius.x > r.y - radius.y;
+                float distance = useX ? r.x - radius.x : r.y - radius.y;
+                float width = useX ? quadWidth(r.x, x.x, y.x) : quadWidth(r.y, x.y, y.y);
+                mask = half(clamp(0.5 - distance / width, 0.0, 1.0));
+            }
+            return scene.eval(p) * mask;
+        }
+    """.trimIndent())
+}
+
+@RequiresApi(33)
+internal fun fluidApertureClip(
+    aperture: RoundRect, device: BackdropRegistration, selector: Int = 10, mixX: Float = 0f, mixY: Float = 0f,
+): RenderEffect = apertureClipShader.run {
+    fun BackdropRegistration.words() = floatArrayOf(xx, yx, 0f, xy, yy, 0f, tx, ty, 1f)
+    setFloatUniform("toDevice", device.words())
+    setFloatUniform("toLocal", requireNotNull(device.inverse()).words())
+    setFloatUniform("center", (aperture.left + aperture.right) * 0.5f, (aperture.top + aperture.bottom) * 0.5f)
+    setFloatUniform("halfSize", aperture.width * 0.5f, aperture.height * 0.5f)
+    setFloatUniform("radius", aperture.topLeftCornerRadius.x, aperture.topLeftCornerRadius.y)
+    setFloatUniform("mixWeight", mixX, mixY)
+    setIntUniform("selector", selector)
+    android.graphics.RenderEffect.createRuntimeShaderEffect(this, "scene").asComposeRenderEffect()
+}
