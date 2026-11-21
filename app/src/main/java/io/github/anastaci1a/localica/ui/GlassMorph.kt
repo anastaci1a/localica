@@ -12,6 +12,7 @@ import io.github.anastaci1a.localica.ui.layout.lyricsHeaderWidth
 import io.github.anastaci1a.localica.ui.spec.PopupViewportInsets
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
 import io.github.anastaci1a.localica.ui.spec.PopupKind
+import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -57,6 +58,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -984,6 +986,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     // Measure and placement share one edge-rounded rectangle. Keep the
                     // shadow's layer-free placement on legacy Android.
                     val panelBounds = remember { arrayOfNulls<PopupLayerBounds>(1) }
+                    val portalLens = remember(motion) {
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            val renderer = lazy { LensRenderer() }
+                            val effect = { aperture: LensGeometry, blur: Float, unit: Float, warp: LensWarp ->
+                                renderer.value.effect(aperture, blur, anchor.depthScale, unit, warp = warp)
+                            }
+                            effect
+                        } else null
+                    }
                     val placedMaterial = Modifier.onGloballyPositioned {
                         if (!hasViewport || it.size.width == 0 || it.size.height == 0) return@onGloballyPositioned
                         if (it.size.width > 0 && it.size.height > 0 && window != null && modalWindow === window) measuredOriginWindow = window
@@ -1015,7 +1026,21 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         }
                     }
                     val contentEffect = motion.whenFluid(ordinary = { Modifier }) {
-                        Modifier.graphicsLayer { renderEffect = fluidContentBlurEffect?.invoke(motion.fluidBlurRadius) }
+                        Modifier.graphicsLayer {
+                            val portal = panelBounds[0]?.portal
+                            val bounds = motion.bounds?.value()
+                            val radius = motion.expansion.outlineRadius()
+                            val blur = motion.fluidBlurRadius
+                            val height = motion.fluidLensHeight
+                            val amount = motion.fluidLensAmount
+                            renderEffect = if (portal == null || bounds == null || radius == null || bounds.isEmpty ||
+                                FluidLensingSpec.isForegroundAtRest(blur, height, amount)) null
+                            else portalLens?.invoke(
+                                LensGeometry(bounds.translate(-windowOrigin - Offset(portal.left.toFloat(), portal.top.toFloat())), radius),
+                                (blur * density.density).toFloat(), density.density,
+                                LensWarp(height, amount, 0f, IntSize(portal.width, portal.height)),
+                            )
+                        }
                     }
                     val popupTapTarget = Modifier.pointerInput(Unit) { detectTapGestures { } }
                     val ordinaryTapTarget = motion.whenFluid(ordinary = { popupTapTarget }) { Modifier }
