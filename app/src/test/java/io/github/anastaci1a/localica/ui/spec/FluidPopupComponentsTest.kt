@@ -1582,6 +1582,8 @@ class FluidPopupComponentsTest {
         assertEquals(fixed.toList(), empty.toList())
         val spatial = fluidZoomEpsilonSquared(25.0, 6.0 to 8.0, false, 0.5, 0.5)
         assertEquals(listOf(0.000064, 0.000064, 0.0016, 0.000064, 0.000064), spatial.toList())
+        val overflow = fluidZoomEpsilonSquared(1e-140, 2e155 to 1.0, false, 0.5, 0.5)
+        assertEquals(listOf(0.0, 0.0, fluidRadiusEpsilonSquared(1e-140), 0.0, 0.0), overflow.toList())
         assertTrue(fluidLensSuppressesAction(0.0, 0.05, null, bypass = false))
         assertTrue(fluidLensSuppressesAction(0.0, 0.05, 0.0, bypass = false))
         assertFalse(fluidLensSuppressesAction(0.0, 0.05, 1.0, bypass = false))

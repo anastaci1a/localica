@@ -755,13 +755,13 @@ internal fun fluidDestinationPlacement(
     contentWidth: Double, contentHeight: Double, apertureInsets: PopupPortalInsets, item: PopupPortalBounds,
     destinationInsets: PopupPortalInsets, axis: Int, leftToRight: Boolean = true,
 ): FluidDestinationPlacement {
-    val destination = destinationInsets.signedCrop(item)?.takeIf { it.width >= 0.0 && it.height >= 0.0 }
+    val destination = requireNotNull(destinationInsets.signedCrop(item))
     val width = kotlin.math.abs(contentWidth)
     val height = kotlin.math.abs(contentHeight)
     val apertureWidth = width + apertureInsets.horizontal
     val apertureHeight = height + apertureInsets.vertical
-    val rx = destination?.width?.takeUnless { it == 0.0 }?.let { width / it } ?: 1.0
-    val ry = destination?.height?.takeUnless { it == 0.0 }?.let { height / it } ?: 1.0
+    val rx = kotlin.math.abs(destination.width).takeUnless { it == 0.0 }?.let { width / it } ?: 1.0
+    val ry = kotlin.math.abs(destination.height).takeUnless { it == 0.0 }?.let { height / it } ?: 1.0
     val middle = apertureWidth * 0.5
     return when (axis) {
         1 -> {
