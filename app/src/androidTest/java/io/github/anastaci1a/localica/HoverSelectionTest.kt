@@ -98,12 +98,16 @@ class HoverSelectionTest {
 
     /** Backdrop: a red ramp across the first row's leading edge, fine green stripes everywhere. */
     @Composable private fun Fixture(first: Boolean, second: Boolean, rowGap: androidx.compose.ui.unit.Dp = 8.dp, retainSecond: Boolean = false,
-        measuredOutline: Boolean = false,third: Boolean? = null, blue: Float = .6f) {
+        measuredOutline: Boolean = false,third: Boolean? = null, blue: Float = .6f, joinBackdrop: Color? = null) {
         LocalicaTheme {
             val outline=rememberPaddedItemOutline(48.dp,0.dp,null,0.dp,0.dp).takeIf { measuredOutline }
             source = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.size(360.dp, if(third==null)320.dp else 420.dp).testTag("hover-scene")) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                    if (joinBackdrop != null) {
+                        drawRect(joinBackdrop)
+                        return@Canvas
+                    }
                     val stripe = 3.dp.toPx()
                     val rampStart = 24.dp.toPx() - 8.dp.toPx()
                     val ramp = 16.dp.toPx()
@@ -115,6 +119,8 @@ class HoverSelectionTest {
                         x += 1f
                     }
                 }
+                // Hide the displayed scene while leaving the recorded backdrop visible to the lens.
+                if (joinBackdrop != null) Canvas(Modifier.fillMaxSize()) { drawRect(Color.Magenta) }
                 CompositionLocalProvider(LocalFrostedBackdrop provides source) {
                     ConnectedSelectionHost(Modifier.fillMaxSize()) {
                         scene = checkNotNull(LocalSelectionScene.current)
@@ -304,6 +310,40 @@ class HoverSelectionTest {
                 assertTrue("No final-frame shadow pop: $means",abs(means[i]-means[i-1])<=allowed)
             }
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
+    @Test fun visibleFilletCentreSamplesTheBlurredSceneOutsideEveryMember() {
+        val sceneColor = Color(.18f, .36f, .62f)
+        compose.setContent { Fixture(true, true, rowGap = 12.dp, measuredOutline = true, joinBackdrop = sceneColor) }
+        compose.waitForIdle()
+        val pixels = capture()
+        val density = compose.density.density
+        val pair = compose.runOnIdle { listOf(scene.viewportHover.getValue("first"), scene.viewportHover.getValue("second")) }
+        val (upper, lower) = pair.map { it.lifted.bounds }
+        val x = lower.center.x.toInt()
+        val y = ((upper.bottom + lower.top) / 2f).toInt()
+        assertTrue("Both body edges are more than 1 dp from the probe",
+            minOf(y + .5f - upper.bottom, lower.top - y - .5f) > density)
+
+        val layers = SelectionOpacityPathCache().paths(pair.map { SelectionRegion(it.lifted.bounds, it.lifted.corner) },
+            pair.map { SelectionRegion(it.rest.bounds, it.rest.corner) }, MediaSelectionGap.value * density,
+            listOf(1f, 1f), splitRestComponents = true) { _, _ -> 1f }
+        val outline = layers.single().groups.single().path
+        val region = Region().apply { setPath(outline.asAndroidPath(), Region(0, 0, pixels.width, pixels.height)) }
+        assertTrue("The optical probe is inside the joined clip", region.contains(x, y))
+
+        fun rgbDelta(a: Color, b: Color) = maxOf(abs(a.red - b.red), abs(a.green - b.green), abs(a.blue - b.blue))
+        val cap = 2f / 255
+        val join = pixels[x, y]
+        val interior = pixels[x, lower.center.y.toInt()]
+        val outside = pixels[0, 0]
+        android.util.Log.i("LOCALICA_PROOF",
+            "FILLET_CENTRE ($x,$y) gap=${lower.top - upper.bottom} join=$join interior=$interior outside=$outside")
+        assertTrue("The displayed backdrop is the contrasting cover", rgbDelta(outside, Color.Magenta) <= cap)
+        assertTrue("The clip-only join draws the uniform blurred scene", rgbDelta(join, sceneColor) <= cap)
+        assertTrue("The adjacent body still receives the material", rgbDelta(interior, sceneColor) > cap)
+        assertTrue("The adjacent body draws its recorded backdrop", rgbDelta(interior, Color.Magenta) > cap)
     }
 
     @Test fun aDepartingMiddleMemberRevealsTheSameShadowWhenItsRestGroupSplits() {
