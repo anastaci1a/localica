@@ -99,4 +99,19 @@ class FluidPopupPortalGeometryTest {
         val source = requireNotNull(fluidOutlineTargets(smaller, larger, pivot, { it }, { it }).sourcePivot)
         assertEquals(PopupPortalBounds(-95.0, -95.0, 250.0, 250.0), source.bounds)
     }
+
+    @Test fun companionDistinguishesAnInvertedInsetFromAZeroExtent() {
+        val source = PopupPortalBounds(0.0, 0.0, 44.0, 44.0)
+        val narrow = PopupPortalBounds(100.0, 10.0, 5.0, 500.0)
+        val inverted = fluidOutlineTargets(source, narrow, source, { it }, { square ->
+            assertTrue(square.x.isFinite() && square.y.isFinite())
+            square
+        }).companion
+        val retained = PopupPortalBounds(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, 44.0, 44.0)
+        assertEquals(FluidOutlineOverride(retained, 22.0, 0.25), inverted)
+
+        val zeroExtent = narrow.copy(width = 11.0, height = 200.0)
+        val pinned = fluidOutlineTargets(source, zeroExtent, source, { it }, { it }).companion
+        assertEquals(FluidOutlineOverride(PopupPortalBounds(84.0, 22.0, 44.0, 44.0), 22.0, 0.25), pinned)
+    }
 }

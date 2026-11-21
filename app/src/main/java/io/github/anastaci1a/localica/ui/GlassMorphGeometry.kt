@@ -110,22 +110,24 @@ internal fun fluidOutlineTargets(
         require(lower <= upper)
         return if (value <= upper) maxOf(value, lower) else upper
     }
-    fun PopupPortalBounds.squareClampedAt(x: Double, y: Double, side: Double) =
-        squareAt(clamp(x, this.x, this.x + width), clamp(y, this.y, this.y + height), side)
+    fun PopupPortalBounds.squareClampedAt(
+        x: Double, y: Double, side: Double, convert: (PopupPortalBounds) -> PopupPortalBounds,
+    ): PopupPortalBounds {
+        if (width < 0 || height < 0)
+            return PopupPortalBounds(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, side, side)
+        return convert(squareAt(clamp(x, this.x, this.x + width), clamp(y, this.y, this.y + height), side))
+    }
 
     val collapsed = circle(toSmallerContainer(squareAt(pivot.midX, pivot.midY, diameter)))
-    val region = inset(larger, diameter / 8, diameter / 8).standardized()
-    val companion = circle(toPivotContainer(region.squareClampedAt(
-        pivot.midX * 0.75 + larger.midX * 0.25, pivot.midY * 0.75 + larger.midY * 0.25, diameter,
-    )), 0.25)
+    val companionInset = (diameter * 0.25) * 0.5
+    val region = inset(larger, companionInset, companionInset)
+    val companion = circle(region.squareClampedAt(
+        pivot.midX * 0.75 + larger.midX * 0.25, pivot.midY * 0.75 + larger.midY * 0.25, diameter, toPivotContainer,
+    ), 0.25)
     val sourceRegion = inset(smaller, pivot.width * 0.5, pivot.height * 0.5)
     val largerSide = if (larger.width <= larger.height) larger.height else larger.width
     val sourcePivot = if (largerSide > 0) {
-        val bounds = if (sourceRegion.width < 0 || sourceRegion.height < 0) {
-            PopupPortalBounds(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, larger.width, larger.width)
-        } else {
-            toPivotContainer(sourceRegion.squareClampedAt(pivot.midX, pivot.midY, larger.width))
-        }
+        val bounds = sourceRegion.squareClampedAt(pivot.midX, pivot.midY, larger.width, toPivotContainer)
         circle(bounds, pivot.height * 0.5 / largerSide)
     } else {
         null
