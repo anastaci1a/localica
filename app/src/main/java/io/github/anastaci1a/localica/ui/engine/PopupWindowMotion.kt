@@ -142,7 +142,7 @@ internal data class FluidPopupContentSlot(
                 initial = it, snapReduced = ::snapsReducedFluid) }
             return
         }
-        val spring = fluidOutlineSpring(step.propertySpring(speed))
+        val spring = fluidOutlineGeometrySpring(fluidOutlineSpring(step.propertySpring(speed)), requireNotNull(clock.context).access)
         requireNotNull(fluidDestinations).zip(targets).forEach { (destination, target) ->
             if (destination.target != target) destination.animate(destination.sample().value, target,
                 fluidBlurControls, spring, DestinationProgressEpsilonSquared)
