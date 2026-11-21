@@ -12,7 +12,6 @@ import io.github.anastaci1a.localica.ui.layout.lyricsHeaderWidth
 import io.github.anastaci1a.localica.ui.spec.PopupViewportInsets
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
 import io.github.anastaci1a.localica.ui.spec.PopupKind
-import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -990,13 +989,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     val portalLens = remember(motion) {
                         if (android.os.Build.VERSION.SDK_INT >= 33) lazy { LensRenderer() } else null
                     }
-                    DisposableEffect(portalLens) {
-                        onDispose {
-                            if (android.os.Build.VERSION.SDK_INT >= 33 && portalLens?.isInitialized() == true) {
-                                portalLens.value.close()
-                            }
-                        }
-                    }
                     val placedMaterial = Modifier.onGloballyPositioned {
                         if (!hasViewport || it.size.width == 0 || it.size.height == 0) return@onGloballyPositioned
                         if (it.size.width > 0 && it.size.height > 0 && window != null && modalWindow === window) measuredOriginWindow = window
@@ -1030,18 +1022,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     val contentEffect = motion.whenFluid(ordinary = { Modifier }) {
                         Modifier.graphicsLayer {
                             val portal = panelBounds[0]?.portal
-                            val bounds = motion.bounds?.value()
-                            val radius = motion.expansion.outlineRadius()
-                            val blur = motion.fluidBlurRadius
-                            val height = motion.fluidLensHeight
-                            val amount = motion.fluidLensAmount
-                            val melt = motion.fluidMeltRadius
-                            renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33 && portalLens != null) {
-                                if (portal == null || bounds == null || radius == null || bounds.isEmpty ||
-                                    melt == 0.0 && FluidLensingSpec.isForegroundAtRest(blur, height, amount)) {
-                                    if (portalLens.isInitialized()) portalLens.value.clearField()
-                                    null
-                                } else {
+                            renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33 && portalLens != null && portal != null) {
+                                motion.fluidForegroundEffect(
+                                    onRest = { if (portalLens.isInitialized()) portalLens.value.clearField() },
+                                ) { bounds, radius, blur, height, amount, melt ->
                                     val origin = windowOrigin + Offset(portal.left.toFloat(), portal.top.toFloat())
                                     val field = motion.fluidFieldBodies()?.let { bodies ->
                                         FluidLensField(bodies.map { it.translate(-origin) }, melt, origin, window?.isWideColorGamut == true)

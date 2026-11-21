@@ -152,7 +152,6 @@ private fun Placeable.PlacementScope.placePortalDestination(
     internal val isFirstOutlineClipCommit get()=expansion.isFirstOutlineClipCommit
     internal fun apertureRadius(density: Density, fallback: ()->Dp)=expansion.outlineRadius()?.let { with(density) { it.toDp() } }?:fallback()
     var fluidBlurRadius by mutableDoubleStateOf(0.0); private set
-    internal var fluidMeltRadius by mutableDoubleStateOf(0.0); private set
     var fluidLensHeight by mutableDoubleStateOf(FluidLensingSpec.freshHeight); private set
     var fluidLensAmount by mutableDoubleStateOf(FluidLensingSpec.freshAmount); private set
     private fun snapsReducedFluid() = placement?.outline == null
@@ -160,6 +159,24 @@ private fun Placeable.PlacementScope.placePortalDestination(
         { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidBlurRadius = radius } }, snapReduced=::snapsReducedFluid)
     private var fluidMelt by mutableStateOf<FluidPropertyMotion?>(null)
     internal fun fluidFieldBodies() = fluidMelt?.let { expansion.outlineBodies() }
+    private val fluidMeltRadius get() = FluidGaussianSpec.effectiveRadius(fluidMelt?.sample()?.value ?: 0.0, 0.0)
+
+    internal inline fun fluidForegroundEffect(
+        onRest: () -> Unit, draw: (Rect, Float, Double, Double, Double, Double) -> RenderEffect?,
+    ): RenderEffect? {
+        val aperture = bounds?.value()
+        val radius = expansion.outlineRadius()
+        val melt = if (Build.VERSION.SDK_INT >= 34) fluidMeltRadius else 0.0
+        val blur = fluidBlurRadius
+        val height = fluidLensHeight
+        val amount = fluidLensAmount
+        if (aperture == null || aperture.isEmpty || radius == null ||
+            melt == 0.0 && FluidLensingSpec.isForegroundAtRest(blur, height, amount)) {
+            onRest()
+            return null
+        }
+        return draw(aperture, radius, blur, height, amount, melt)
+    }
     private fun fluidPointScale() =
         fluidLayerPointScale(nativeWindow?.get() != null) { placement?.basis?.density?.toDouble() }
     private val lensHeight = FluidPropertyMotion(clock, Double::equals, { sample ->
@@ -224,9 +241,7 @@ private fun Placeable.PlacementScope.placePortalDestination(
         deliverOutline(step,speed)
         deliverFluidDestinations(step, speed, fresh)
         if (step.action == FluidTimelineAction.AddSdfElements && expansion.hasOutline && fluidMelt == null) {
-            fluidMelt = FluidPropertyMotion(clock, Double::equals, { sample ->
-                FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidMeltRadius = radius }
-            }, snapReduced = ::snapsReducedFluid)
+            fluidMelt = FluidPropertyMotion(clock, Double::equals, snapReduced = ::snapsReducedFluid)
         }
         val spring = step.propertySpring(speed) ?: return@FluidTimelineMotion
         val meltTarget = when (step.action) {
@@ -296,7 +311,6 @@ private fun Placeable.PlacementScope.placePortalDestination(
             expansion.clearOutline()
             fluidMelt?.stop()
             fluidMelt = null
-            fluidMeltRadius = 0.0
         }
         expansion.refreshPopupLaw()
         shown = visible

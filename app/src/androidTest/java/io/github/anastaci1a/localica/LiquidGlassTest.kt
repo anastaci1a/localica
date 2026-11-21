@@ -158,6 +158,36 @@ class LiquidGlassTest {
         }
     }
 
+    @SdkSuppress(minSdkVersion = 36)
+    @RequiresApi(34)
+    @Test fun fluidMeltRendersBothRegisteredFields() {
+        val extent = IntSize(192, 120)
+        val aperture = LensGeometry(Rect(8f, 12f, 88f, 108f), 12f)
+        val companion = RoundRect(Rect(104f, 12f, 184f, 108f), CornerRadius(12f))
+        val warp = LensWarp(12.0, -0.001, 0f, extent)
+        val renderer = LensRenderer()
+        for (radius in listOf(0.0, 0.5, 8.0, 16.0)) {
+            val field = FluidLensField(aperture.bodies + companion, radius, Offset.Zero, wideColor = false)
+            val effect = renderer.effect(aperture, 0f, depth = 1f, unit = 1f, warp = warp, field = field)
+            val node = RenderNode("Fluid melt map").apply { setPosition(0, 0, extent.width, extent.height) }
+            try {
+                node.beginRecording().drawColor(android.graphics.Color.WHITE)
+                node.endRecording()
+                node.setRenderEffect(effect.asAndroidRenderEffect())
+                val result = renderNativeReferenceImage(extent.width, extent.height, "Fluid melt", opaque = false) {
+                    it.drawRenderNode(node)
+                }
+                try {
+                    val pixels = result.toPixelMap()
+                    assertEquals("First field at radius $radius", Color.White, pixels[41, 40])
+                    assertEquals("Companion field at radius $radius", Color.White, pixels[141, 40])
+                    assertEquals("Outside both fields at radius $radius", 0f, pixels[0, 0].alpha, 0f)
+                } finally { result.asAndroidBitmap().recycle() }
+            } finally { node.discardDisplayList() }
+        }
+        renderer.clearField()
+    }
+
     @SdkSuppress(minSdkVersion = 33)
     @Test fun fluidMaskKeepsGaussianInsideTheForeground() {
         if (Build.VERSION.SDK_INT < 33) return
