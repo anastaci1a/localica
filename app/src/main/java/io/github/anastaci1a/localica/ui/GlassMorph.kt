@@ -1044,6 +1044,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     val contentEffect = motion.whenFluid {
                         Modifier.graphicsLayer { renderEffect = fluidContentBlurEffect?.invoke(motion.fluidBlurRadius) }
                     } ?: Modifier
+                    val popupTapTarget = Modifier.pointerInput(Unit) { detectTapGestures { } }
+                    val ordinaryTapTarget = motion.whenFluid(ordinary = { popupTapTarget }) { Modifier } ?: Modifier
+                    val fluidTapTarget = motion.whenFluid { popupTapTarget } ?: Modifier
                     Layout(modifier = measureModifier.glassShadowOffset {
                         val pixels = panelBounds[0]?.common
                         androidx.compose.ui.unit.IntOffset(pixels?.left ?: 0, pixels?.top ?: 0)
@@ -1114,10 +1117,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     }.graphicsLayer {
                         clip = !motion.hasFluidContent
                         if (clip) shape = RoundedCornerShape(radius())
-                    }.glassPopupHome(childHome).recordFrostedBackdrop(completePanel), content = {
-                        SurfaceLayer(placedMaterial.testTag("glass-morph-surface")
-                            .pointerInput(Unit) { detectTapGestures { } }
-                            .then(fluidMaterial).presentedAlpha {
+                    }.glassPopupHome(childHome).recordFrostedBackdrop(completePanel)
+                        .testTag("glass-morph-surface").then(ordinaryTapTarget), content = {
+                        SurfaceLayer(placedMaterial.then(fluidTapTarget).then(fluidMaterial).presentedAlpha {
                                 if (quietOptics) motion.quietContent.at(phase()) else 1f
                             }.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
