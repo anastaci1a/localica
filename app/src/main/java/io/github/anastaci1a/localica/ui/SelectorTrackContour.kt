@@ -23,9 +23,6 @@ internal data class SelectorTrackContour private constructor(val outline: RoundR
 
     val corner get() = outline.topLeftCornerRadius.x
     val isUniform = radii.all { it == CornerRadius(corner) }
-    val maximumRadius = radii.maxOf { maxOf(it.x, it.y) }
-    val opticalWeight = if (maximumRadius > 0f)
-        (1f - radii.minOf { minOf(it.x, it.y) } / maximumRadius).coerceIn(0f, 1f) else 0f
 
     fun contains(point: Offset): Boolean {
         val b = bounds

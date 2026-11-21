@@ -12,13 +12,13 @@ internal val LocalBackdropSamplingObserver =
     staticCompositionLocalOf<((BackdropSamplingObservation) -> Unit)?> { null }
 
 internal fun observeBackdropSampling(observer: (BackdropSamplingObservation) -> Unit,
-    location: BackdropLocation, consumerToSource: BackdropRegistration, bounds: Rect, executedPath: String? = null) {
+    location: BackdropLocation, consumerToSource: BackdropRegistration, bounds: Rect, executedPath: String? = null, origin: Offset = Offset.Zero) {
     // Reuse the registration already selected by the real renderer. Diagnostics
     // must neither subscribe drawing to new state nor affect material rendering.
     try { Snapshot.withoutReadObservation {
         val coordinates = location.coordinates?.takeIf { it.isAttached }
         val local = listOf(bounds.topLeft, bounds.topRight, bounds.bottomRight, bounds.bottomLeft)
-        observer(BackdropSamplingObservation(coordinates?.let { c -> local.map(c::localToRoot) },
+        observer(BackdropSamplingObservation(coordinates?.let { c -> local.map { c.localToRoot(it + origin) } },
             consumerToSource.corners(bounds), executedPath))
     } } catch (_: Throwable) { /* Observation cannot break rendering. */ }
 }
