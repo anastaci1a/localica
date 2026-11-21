@@ -11,6 +11,7 @@ import io.github.anastaci1a.localica.ui.spec.FlexSpec
 import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec
 import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec.Axis
 import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec.Decimation
+import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec.NarrowWidth
 import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
@@ -25,6 +26,43 @@ import java.io.File
 import java.security.MessageDigest
 
 class GlassGlowTest {
+    @Test fun fluidMeltDecimationLoadsTheRecordedFloatWords() {
+        val twofold = FluidGaussianSpec.meltDownsample(Decimation.By2)
+        assertEquals(listOf(0x3ff9c511, 0x4079d40a, 0x40bb7131), twofold.offsets.map(Float::toRawBits))
+        assertEquals(listOf(0x3e81c0e9, 0x3e567bc2, 0x3df22b33, 0x3d3ab6f0), twofold.weights.map(Float::toRawBits))
+        val fourfold = FluidGaussianSpec.meltDownsample(Decimation.By4)
+        assertEquals(
+            listOf(0x3ffc6032, 0x407c6329, 0x40bd4e0a, 0x40fc6ecd, 0x411dca90, 0x413d6114),
+            fourfold.offsets.map(Float::toRawBits),
+        )
+        assertEquals(
+            listOf(0x3e418790, 0x3e2d1035, 0x3df7842a, 0x3d8d897c, 0x3d016ea8, 0x3c3d4627, 0x3b5d489b, 0),
+            fourfold.weights.map(Float::toRawBits),
+        )
+    }
+
+    @Test fun fluidMeltNarrowPairsUseTheFirstZeroWidthAndResidualWeight() {
+        val narrow = FluidGaussianSpec.meltNarrow(0.25f, Math::fma)
+        assertEquals(NarrowWidth.Taps7, narrow.width)
+        assertEquals(0x3e5a2055, narrow.samples.offsets.first().toRawBits())
+        assertEquals(0x3f000000, narrow.samples.weights.first().toRawBits())
+        val middle = FluidGaussianSpec.meltNarrow(2f, Math::fma)
+        assertEquals(NarrowWidth.Taps11, middle.width)
+        assertEquals(
+            listOf(0x3f1be7fe, 0x400e40b8, 0x40830d1a, 0, 0, 0, 0),
+            middle.samples.offsets.map(Float::toRawBits),
+        )
+        assertEquals(
+            listOf(0x3eb8b80e, 0x3e08b6b3, 0x3bbb2601, 0, 0, 0, 0, 0),
+            middle.samples.weights.map(Float::toRawBits),
+        )
+        val wide = FluidGaussianSpec.meltNarrow(36f, Math::fma)
+        assertEquals(NarrowWidth.Taps27, wide.width)
+        assertEquals(0x41469ff9, wide.samples.offsets.last().toRawBits())
+        assertEquals(0x3dcf6aca, wide.samples.weights.first().toRawBits())
+        assertEquals(0, wide.samples.weights.last().toRawBits())
+    }
+
     @Test fun fluidMeltInterleavesDecimationAndPreservesResidualVariance() {
         val steps = mutableListOf<Pair<Decimation, Axis>>()
         val residual = requireNotNull(FluidGaussianSpec.meltPasses(

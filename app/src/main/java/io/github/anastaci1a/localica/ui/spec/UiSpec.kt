@@ -847,6 +847,57 @@ internal object FluidGaussianSpec {
 
     enum class Axis { X, Y }
 
+    data class MeltSamples(val offsets: FloatArray, val weights: FloatArray)
+
+    private val meltTwofold = MeltSamples(
+        floatWords(0x3ff9c511, 0x4079d40a, 0x40bb7131),
+        floatWords(0x3e81c0e9, 0x3e567bc2, 0x3df22b33, 0x3d3ab6f0),
+    )
+    private val meltFourfold = MeltSamples(
+        floatWords(0x3ffc6032, 0x407c6329, 0x40bd4e0a, 0x40fc6ecd, 0x411dca90, 0x413d6114),
+        floatWords(0x3e418790, 0x3e2d1035, 0x3df7842a, 0x3d8d897c, 0x3d016ea8, 0x3c3d4627, 0x3b5d489b, 0),
+    )
+
+    private fun floatWords(vararg words: Int) = FloatArray(words.size) { Float.fromBits(words[it]) }
+
+    fun meltDownsample(size: Decimation) = when (size) {
+        Decimation.By2 -> meltTwofold
+        Decimation.By4 -> meltFourfold
+        Decimation.By8 -> error("Box-only decimation")
+    }
+
+    data class MeltNarrow(val width: NarrowWidth, val samples: MeltSamples)
+
+    /** SDF narrow always supplies capacity 27 and uses the ordinary pass for both axes. */
+    fun meltNarrow(variance: Float, fusedMultiplyAdd: (Double, Double, Double) -> Double): MeltNarrow {
+        require(variance > 0f && variance.isFinite())
+        val inverse = 1.0 / variance.toDouble()
+        val density = DoubleArray(14)
+        var sum = 0.0
+        for (tap in 13 downTo 1) {
+            density[tap] = exp((tap * tap * -0.5) * inverse)
+            sum += density[tap]
+        }
+        val scale = 1.0 / fusedMultiplyAdd(sum, 2.0, 1.0)
+        for (tap in 1..13) density[tap] *= scale
+        val offsets = FloatArray(7)
+        val weights = DoubleArray(8)
+        offsets[0] = (density[1] / fusedMultiplyAdd(scale, 0.5, density[1])).toFloat()
+        for (pair in 1..6) {
+            val even = 2 * pair
+            val weight = density[even + 1] + density[even]
+            if (weight >= 0.002) {
+                weights[pair] = weight
+                offsets[pair] = (even + density[even + 1] / weight).toFloat()
+            }
+        }
+        weights[0] = 0.5 - (((weights[1] + weights[2]) + weights[5]) + ((weights[3] + weights[4]) + weights[6]))
+        val uniformWeights = FloatArray(weights.size) { weights[it].toFloat() }
+        var widthIndex = 0
+        while (widthIndex < 5 && uniformWeights[widthIndex + 2] != 0f) widthIndex++
+        return MeltNarrow(NarrowWidth.entries[widthIndex], MeltSamples(offsets, uniformWeights))
+    }
+
     data class MeltResidual(val varianceX: Double, val varianceY: Double, val singlePass: Boolean) {
         val narrowPassesX get() = narrowPasses(varianceX)
         val narrowPassesY get() = narrowPasses(varianceY)
