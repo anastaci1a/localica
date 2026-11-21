@@ -175,6 +175,25 @@ class GlassBodyOpticsTest {
             }, 0, width, 0, 0, width, height)
             val union = render(LensRenderer(connectedBodies = bodies.size), bodies)
             val single = bodies.map { render(LensRenderer(), listOf(it)) }
+            val coordinateAndTies = android.graphics.RuntimeShader("""
+                uniform shader scene;
+                $LensFieldUnionShader
+                half4 main(float2 p) {
+                    half4 pair = sdfUnion(half4(-8, 1, 0, 1), half4(-8, -1, 0, 1), half(0.0001));
+                    half4 withThird = sdfUnion(pair, half4(26.5, 1, 0, 1), half(0.0001));
+                    return half4(half(clamp((p.x - 79.0) * 0.25, 0.0, 1.0)),
+                        half(0.5) + half(0.5) * pair.y, half(0.5) + half(0.5) * withThird.y, scene.eval(p).a);
+                }
+            """.trimIndent())
+            val measurement = renderS1Kernel(bitmap,
+                android.graphics.RenderEffect.createRuntimeShaderEffect(coordinateAndTies, "scene").asComposeRenderEffect(),
+                width, height)
+            fun rgb(color: Int) = listOf(color shr 16 and 255, color shr 8 and 255, color and 255)
+            for (x in 79..82) {
+                val index = 48 * width + x
+                android.util.Log.i("LOCALICA_PROOF", "TIE_PHASE x=$x coordinateAndNormals=${rgb(measurement[index])} " +
+                    "union=${rgb(union[index])} singles=${single.map { rgb(it[index]) }}")
+            }
             val cap = .08f
             val opposite = 48 * width + 80
             val unwarped = red(bitmap.getPixel(80, 48))
