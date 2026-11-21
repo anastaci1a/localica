@@ -1102,12 +1102,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 inset(-left, -top, -right, -bottom) {
                                     if (visible || popupFlight.expanded || anchor.restoredBodyReceipt != anchor.restoredDrawRequest)
                                         popupFlight.refillBody(this@drawWithContent) {
-                                            if (motion.hasFluidContent) {
+                                            if (motion.hasFluidContent) this@drawWithContent.drawContent()
+                                            else drawGlassBody(t) {
                                                 this@drawWithContent.drawContent()
-                                                translate(left, top) { wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) } }
-                                            } else drawGlassBody(t) {
-                                                this@drawWithContent.drawContent()
-                                                wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
                                             }
                                         }
                                     opticalBody.draw(this@drawWithContent)
@@ -1117,7 +1114,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     }.graphicsLayer {
                         clip = !motion.hasFluidContent
                         if (clip) shape = RoundedCornerShape(radius())
-                    }.glassPopupHome(childHome).recordFrostedBackdrop(completePanel)
+                    }.then(if (sharedContent == null) Modifier else Modifier.drawWithContent {
+                        drawContent()
+                        val bounds = panelBounds[0] ?: return@drawWithContent
+                        val coordinates = wellCoordinates[0] ?: return@drawWithContent
+                        translate((bounds.material.left - bounds.common.left).toFloat(),
+                            (bounds.material.top - bounds.common.top).toFloat()) {
+                            sharedContent.drawNative(this, coordinates, view)
+                        }
+                    }).glassPopupHome(childHome).recordFrostedBackdrop(completePanel)
                         .testTag("glass-morph-surface").then(ordinaryTapTarget), content = {
                         SurfaceLayer(placedMaterial.then(fluidTapTarget).then(fluidMaterial).presentedAlpha {
                                 if (quietOptics) motion.quietContent.at(phase()) else 1f
