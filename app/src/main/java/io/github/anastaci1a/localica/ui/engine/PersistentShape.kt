@@ -25,8 +25,23 @@ internal fun RoundRect.deformed(transform: GlassBodyTransform, pivot: Offset): R
 
 /** [keys] (D14) name bodies for correspondence; null corresponds by order and geometry. */ @Immutable data class ShapeTarget(val bodies: List<RoundRect>,val join: JoinPolicy=JoinPolicy.ConcaveFillet,val strain: GlassStrain=GlassStrain.None,val keys: List<Any>?=null)
 enum class JoinPolicy { ConcaveFillet,Union }; @Immutable data class GlassStrain(val strain: Float,val depth: Float) { companion object { val None=GlassStrain(0f,0f) } }; @Stable interface ShapeView { val key: Any; fun outline(): ShapeFrame; fun outlineAt(stamp: FrameStamp): ShapeFrame }
-/** One published frame. [path] is the GlassSilhouette Union fold over nonzero-area bodies, or with [join] the #556 ConcaveFillet contour; built once on first read and never reset. */ @Immutable class ShapeFrame internal constructor(val bodies: List<RoundRect>,val bounds: Rect,val cornerRadius: Float,val strain: GlassStrain,internal val join: JoinData?=null) { val path: Path by lazy { if(join!=null) filletInputs(bodies,join).let { (o,local,s) -> Path().apply { addPath(concaveFilletPath(local,join.gap,s),o) } } else bodies.filter { it.width>0 && it.height>0 }.fold(Path()) { c,b -> Path.combine(PathOperation.Union,c,Path().apply { addRoundRect(b) }) } } }
+/** One published frame. [path] is the GlassSilhouette Union fold over nonzero-area bodies, or with [join] the #556 ConcaveFillet contour; built once on first read and never reset. */ @Immutable class ShapeFrame internal constructor(val bodies: List<RoundRect>,val bounds: Rect,val cornerRadius: Float,val strain: GlassStrain,internal val join: JoinData?=null) { val path: Path by lazy { if(join!=null) filletInputs(bodies,join).let { (o,local,s) -> Path().apply { addPath(concaveFilletPath(local,join.gap,s),o) } } else bodies.filter { it.width>0 && it.height>0 }.fold(Path()) { c,b -> Path.combine(PathOperation.Union,c,Path().apply { addRoundRect(b) }) } }
+    /** Project all body slots through the frame's solid bounds. */
+    internal fun projectBodies(size: Size): List<RoundRect> {
+        if (bounds.isEmpty) return emptyList()
+        val sx = size.width / bounds.width
+        val sy = size.height / bounds.height
+        fun x(v: Float) = (v - bounds.left) * sx
+        fun y(v: Float) = (v - bounds.top) * sy
+        fun CornerRadius.scaled() = CornerRadius(this.x * sx, this.y * sy)
+        return bodies.map {
+            RoundRect(x(it.left), y(it.top), x(it.right), y(it.bottom), it.topLeftCornerRadius.scaled(),
+                it.topRightCornerRadius.scaled(), it.bottomRightCornerRadius.scaled(), it.bottomLeftCornerRadius.scaled())
+        }
+    }
+}
 /** D14: Engine-internal ConcaveFillet data, set by the U09 group adapter (Stage 4) and by nobody in Stage 3; [strength] indexes [ShapeFrame.bodies]. */ internal data class JoinData(val gap: Float,val rest: List<Rect>,val strength: (Int,Int)->Float)
+
 /** D15: the solver input HoverPathCache builds: nonzero bodies on a 1/64 px grid from the first, one circular radius each (the smallest, fitted to the half side), pair strengths with the far-pair cutoff. */ internal fun filletInputs(bodies: List<RoundRect>,join: JoinData): Triple<Offset,List<RoundRect>,(Int,Int)->Float> { val solid=bodies.indices.filter { bodies[it].width>0 && bodies[it].height>0 }; val o=solid.firstOrNull()?.let { Offset(bodies[it].left,bodies[it].top) }?:Offset.Zero; val g={ v: Float -> round(v*64f)/64f }
     val local=solid.map { val b=bodies[it]; val l=g(b.left-o.x); val t=g(b.top-o.y); val r=g(b.right-o.x); val d=g(b.bottom-o.y); RoundRect(l,t,r,d,CornerRadius(minOf(listOf(b.topLeftCornerRadius,b.topRightCornerRadius,b.bottomRightCornerRadius,b.bottomLeftCornerRadius).minOf { min(it.x,it.y) },(r-l)/2f,(d-t)/2f).coerceAtLeast(0f))) }; return Triple(o,local) { a,b -> val i=min(a,b); val j=max(a,b); filletStrength(local[i].boundingRect,local[j].boundingRect,join.gap,join.strength(solid[i],solid[j])) } }
 private val chartBounds=listOf(null,null,0.0..Double.POSITIVE_INFINITY,0.0..Double.POSITIVE_INFINITY)+List(8) { 0.0..1.0 } // Body chart (B1, 9:45 AM): left, top, width, height, then per side (top, right, bottom, left) the sum of its two radii as a fraction of the side and the clockwise-first corner's split of it. r_a+r_b ≤ side is Skia's own legal set, so every chart point is legal: no clamps.

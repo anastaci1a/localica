@@ -8,19 +8,7 @@ import io.github.anastaci1a.localica.ui.engine.*
 /** D17: one Engine shape follows the lyrics preparation phase with both bodies from rest (B1);
  * [follow] drives it from the laid-out size. The lens reads the same bodies as its clip. */
 internal class SplitPill(val shape: ShapeView, val follow: Modifier, private val progress: () -> Float) {
-    /** Project the body slots at the sampled [size]. Silhouette geometry keeps the solid ones. */
-    fun bodies(size: Size): List<RoundRect> {
-        val frame = shape.outline(); val b = frame.bounds
-        if (b.isEmpty) return emptyList()
-        val sx = size.width / b.width; val sy = size.height / b.height
-        fun x(v: Float) = (v - b.left) * sx
-        fun y(v: Float) = (v - b.top) * sy
-        fun CornerRadius.scaled() = CornerRadius(this.x * sx, this.y * sy)
-        // Bounds enclose the solid bodies; with none there is nothing to scale. Scaling by one is exact.
-        return frame.bodies.map {
-            RoundRect(x(it.left), y(it.top), x(it.right), y(it.bottom), it.topLeftCornerRadius.scaled(),
-                it.topRightCornerRadius.scaled(), it.bottomRightCornerRadius.scaled(), it.bottomLeftCornerRadius.scaled()) }
-    }
+    fun bodies(size: Size): List<RoundRect> = shape.outline().projectBodies(size)
     val silhouette = GlassSilhouette { splitPillOptics(bodies(it), progress()) }
 }
 
