@@ -8,6 +8,9 @@ import io.github.anastaci1a.localica.ui.engine.PopupWindowMotion
 import io.github.anastaci1a.localica.ui.spec.ExpansionGeometryDomain
 import io.github.anastaci1a.localica.ui.spec.FlexGlow
 import io.github.anastaci1a.localica.ui.spec.FlexSpec
+import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec
+import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec.Axis
+import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec.Decimation
 import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 import io.github.anastaci1a.localica.ui.spec.PopupKind
 import io.github.anastaci1a.localica.ui.spec.PopupMotionStyle
@@ -22,6 +25,45 @@ import java.io.File
 import java.security.MessageDigest
 
 class GlassGlowTest {
+    @Test fun fluidMeltInterleavesDecimationAndPreservesResidualVariance() {
+        val steps = mutableListOf<Pair<Decimation, Axis>>()
+        val residual = requireNotNull(FluidGaussianSpec.meltPasses(
+            20.0, 3.0, 1f, 1f, fourfoldSupported = true, singlePassSupported = true,
+        ) { factor, axis ->
+            steps += factor to axis
+        })
+        assertEquals(listOf(
+            Decimation.By4 to Axis.X, Decimation.By4 to Axis.Y,
+            Decimation.By4 to Axis.X, Decimation.By4 to Axis.Y,
+        ), steps)
+        assertEquals(0x4029c83d70a3d70aL, residual.varianceX.toRawBits())
+        assertEquals(residual.varianceX.toRawBits(), residual.varianceY.toRawBits())
+        assertFalse(residual.singlePass)
+        assertEquals(1, residual.narrowPassesX)
+        assertEquals(1, residual.narrowPassesY)
+
+        steps.clear()
+        val twofold = requireNotNull(FluidGaussianSpec.meltPasses(
+            8.0, 1.0, 1f, 0.5f, fourfoldSupported = false, singlePassSupported = true,
+        ) { factor, axis ->
+            steps += factor to axis
+        })
+        assertEquals(listOf(Decimation.By2 to Axis.X, Decimation.By2 to Axis.Y, Decimation.By2 to Axis.X), steps)
+        assertEquals(0x3fe9999999999994L, twofold.varianceX.toRawBits())
+        assertEquals(0x3ff70a3d70a3d708L, twofold.varianceY.toRawBits())
+    }
+
+    @Test fun fluidMeltUsesAnInclusiveResidualCutoffOnlyWithSupport() {
+        assertTrue(FluidGaussianSpec.admitsMeltSinglePass(0.6, 0.0, supported = true))
+        assertFalse(FluidGaussianSpec.admitsMeltSinglePass(0.0, Math.nextUp(0.6), supported = true))
+        assertFalse(FluidGaussianSpec.admitsMeltSinglePass(0.6, 0.6, supported = false))
+        assertNull(FluidGaussianSpec.meltPasses(
+            0.0, 3.0, 1f, 1f, fourfoldSupported = true, singlePassSupported = true,
+        ) { _, _ ->
+            fail("A zero melt radius must omit the blur")
+        })
+    }
+
     @Test fun fluidLensHeightAndFinishThresholdUseTheRecordedScale() {
         assertEquals(0.0.toRawBits(), FluidLensingSpec.height(100.0, 0.0).toRawBits())
         assertEquals(37.5.toRawBits(), FluidLensingSpec.height(125.0, 1.0).toRawBits())

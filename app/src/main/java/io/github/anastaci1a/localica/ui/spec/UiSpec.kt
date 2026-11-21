@@ -845,6 +845,66 @@ internal object FluidGaussianSpec {
         By2(2, 1, 0x25, 2u, 0x3400), By4(4, 0x1b, 0x0d, 2u, 0x2c00), By8(8, 0x1d, 0x0f, 4u, 0x2400);
     }
 
+    enum class Axis { X, Y }
+
+    data class MeltResidual(val varianceX: Double, val varianceY: Double, val singlePass: Boolean) {
+        val narrowPassesX get() = narrowPasses(varianceX)
+        val narrowPassesY get() = narrowPasses(varianceY)
+
+        private fun narrowPasses(variance: Double) =
+            if (singlePass) 0 else ceil(variance / (6.1 * 6.1)).toInt().coerceAtLeast(0)
+    }
+
+    fun admitsMeltSinglePass(varianceX: Double, varianceY: Double, supported: Boolean) =
+        supported && maxOf(varianceX, varianceY) <= 0.6
+
+    /** SDF mode 1 and flags 0x184. The caller supplies the admitted layer scales and backend capabilities. */
+    fun meltPasses(
+        radius: Double, drawScale: Double, layerScaleX: Float, layerScaleY: Float,
+        fourfoldSupported: Boolean, singlePassSupported: Boolean,
+        downsample: (Decimation, Axis) -> Unit,
+    ): MeltResidual? {
+        if (isIdentity(radius)) return null
+        val scaledRadius = (radius * drawScale).toFloat()
+        fun variance(scale: Float): Double {
+            val sigma = (scaledRadius * scale).toDouble()
+            return minOf(sigma * sigma, 1e8)
+        }
+        var varianceX = variance(layerScaleX)
+        var varianceY = variance(layerScaleY)
+        val big = maxOf(varianceX, varianceY) > 100.0
+        if (fourfoldSupported) {
+            val minimum = if (big) 7.5 else 3.5
+            while (true) {
+                val nextX = varianceX / 16.0 - 1.1025
+                val nextY = varianceY / 16.0 - 1.1025
+                val admitsX = nextX >= minimum
+                val admitsY = nextY >= minimum
+                if (!admitsX && !admitsY) break
+                if (admitsX) {
+                    downsample(Decimation.By4, Axis.X)
+                    varianceX = nextX
+                }
+                if (admitsY) {
+                    downsample(Decimation.By4, Axis.Y)
+                    varianceY = nextY
+                }
+            }
+        }
+        val maximum = if (big) 56.25 else 12.25
+        while (varianceX > maximum || varianceY > maximum) {
+            if (varianceX > maximum) {
+                downsample(Decimation.By2, Axis.X)
+                varianceX = varianceX / 4.0 - 2.5600000000000005
+            }
+            if (varianceY > maximum) {
+                downsample(Decimation.By2, Axis.Y)
+                varianceY = varianceY / 4.0 - 2.5600000000000005
+            }
+        }
+        return MeltResidual(varianceX, varianceY, admitsMeltSinglePass(varianceX, varianceY, singlePassSupported))
+    }
+
     fun admitsTileDecimation(
         size: Decimation, hasShape: Boolean, blurFlags: Int, mode: Int,
         capabilities: Capabilities, isCurrentSurface: Boolean, sourceLevel: Int,
