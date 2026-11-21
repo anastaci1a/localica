@@ -1118,7 +1118,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             (bounds.material.top - bounds.common.top).toFloat()) {
                             sharedContent.drawNative(this, coordinates, view)
                         }
-                    }).glassPopupHome(childHome).recordFrostedBackdrop(completePanel)
+                    }).glassPopupHome(childHome)
+                        .recordFrostedBackdrop(completePanel, displayBacking = !motion.fluid)
                         .testTag("glass-morph-surface").then(ordinaryTapTarget), content = {
                         SurfaceLayer(placedMaterial.then(fluidTapTarget).then(fluidMaterial).presentedAlpha {
                                 if (quietOptics) motion.quietContent.at(phase()) else 1f
