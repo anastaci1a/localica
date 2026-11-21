@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.PopupPortalBounds
+import io.github.anastaci1a.localica.ui.spec.PopupPortalInsets
+import io.github.anastaci1a.localica.ui.spec.fluidDestinationPlacement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

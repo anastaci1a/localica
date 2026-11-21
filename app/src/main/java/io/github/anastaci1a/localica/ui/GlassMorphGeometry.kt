@@ -1,14 +1,11 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.boundingRect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import io.github.anastaci1a.localica.ui.engine.FluidPopupContentSlot
+import io.github.anastaci1a.localica.ui.spec.PopupPortalBounds
+import io.github.anastaci1a.localica.ui.spec.PopupPortalInsets
 import io.github.anastaci1a.localica.ui.spec.FluidKickSpec
 import io.github.anastaci1a.localica.ui.spec.FluidOutlineContentInputs
 import io.github.anastaci1a.localica.ui.spec.FluidOutlineItemInputs
@@ -29,84 +26,6 @@ internal fun Density.popupMarginPx(page: Boolean): Float = if (page) 0f else Sto
 internal fun popupCornerRadius(home: Dp, popup: Dp, geometry: Float): Dp {
     val g = geometry.coerceIn(0f, 1f)
     return home * (1f - g) + popup * g
-}
-
-internal data class PopupPortalBounds(val x: Double, val y: Double, val width: Double, val height: Double) {
-    val midX get() = minX + kotlin.math.abs(width) * 0.5
-    val midY get() = minY + kotlin.math.abs(height) * 0.5
-    private val minX get() = if (width < 0.0) x + width else x
-    private val minY get() = if (height < 0.0) y + height else y
-
-    fun standardized() = PopupPortalBounds(minX, minY, kotlin.math.abs(width), kotlin.math.abs(height))
-
-    fun centeredAt(centerX: Double, centerY: Double) =
-        copy(x = centerX - width * 0.5, y = centerY - height * 0.5)
-}
-
-internal data class PopupPortalInsets(val top: Double, val leading: Double, val bottom: Double, val trailing: Double) {
-    val horizontal get() = leading + trailing
-    val vertical get() = top + bottom
-
-    fun signedCrop(bounds: PopupPortalBounds?): PopupPortalBounds? = bounds?.standardized()?.let {
-        PopupPortalBounds(it.x + leading, it.y + top, it.width - horizontal, it.height - vertical)
-    }
-}
-
-internal data class FluidDestinationPlacement(val layer: PopupPortalBounds, val scaleX: Double, val scaleY: Double)
-
-internal fun fluidDestinationPlacement(
-    contentWidth: Double, contentHeight: Double, apertureInsets: PopupPortalInsets, item: PopupPortalBounds,
-    destinationInsets: PopupPortalInsets, axis: Int, leftToRight: Boolean = true,
-): FluidDestinationPlacement {
-    val destination = destinationInsets.signedCrop(item)?.takeIf { it.width >= 0.0 && it.height >= 0.0 }
-    val width = kotlin.math.abs(contentWidth)
-    val height = kotlin.math.abs(contentHeight)
-    val apertureWidth = width + apertureInsets.horizontal
-    val apertureHeight = height + apertureInsets.vertical
-    val rx = destination?.width?.takeUnless { it == 0.0 }?.let { width / it } ?: 1.0
-    val ry = destination?.height?.takeUnless { it == 0.0 }?.let { height / it } ?: 1.0
-    val middle = apertureWidth * 0.5
-    return when (axis) {
-        1 -> {
-            val span = item.width * rx
-            val left = if (leftToRight) apertureInsets.leading else apertureInsets.trailing
-            val destinationLeft = if (leftToRight) destinationInsets.leading else destinationInsets.trailing
-            val x = left - destinationLeft * rx
-            val fraction = 1.0 - (middle - x) / span
-            FluidDestinationPlacement(
-                PopupPortalBounds(middle + span * (fraction - 0.5), apertureInsets.top - destinationInsets.top * rx,
-                    item.width, apertureHeight / rx), rx, rx,
-            )
-        }
-        2 -> FluidDestinationPlacement(PopupPortalBounds(middle, 0.0, apertureWidth / ry, item.height), ry, ry)
-        else -> FluidDestinationPlacement(PopupPortalBounds(middle, 0.0, item.width, item.height), rx, ry)
-    }
-}
-
-internal data class FluidPortalPlacement(
-    val origin: Offset, val scaleX: Float, val scaleY: Float, val clip: RoundRect?, val extent: Rect,
-)
-
-private val FluidContentInsets = PopupPortalInsets(0.0, 0.0, 0.0, 0.0)
-
-internal fun FluidPopupContentSlot.placeDestination(size: Size, root: Offset, leftToRight: Boolean): FluidPortalPlacement? {
-    if (blend.layerOpacity <= 0f || aperture.width <= 0f || aperture.height <= 0f) return null
-    val itemBounds = PopupPortalBounds(0.0, 0.0, size.width.toDouble(), size.height.toDouble())
-    val placement = fluidDestinationPlacement(aperture.width.toDouble(), aperture.height.toDouble(),
-        FluidContentInsets, itemBounds, FluidContentInsets, item.contentScaleAxis, leftToRight)
-    val (layer, x, y) = placement
-    val left = aperture.left + layer.x - (layer.width * x * 0.5)
-    val top = aperture.top + layer.y
-    val origin = Offset((left - root.x).toFloat(), (top - root.y).toFloat())
-    if (item.prefersUnclippedContents) {
-        val extent = Rect(origin, Size((itemBounds.width * x).toFloat(), (itemBounds.height * y).toFloat()))
-        return FluidPortalPlacement(origin, x.toFloat(), y.toFloat(), null, extent)
-    }
-    val clip = RoundRect(Rect(
-        ((aperture.left - left) / x).toFloat(), ((aperture.top - top) / y).toFloat(),
-        ((aperture.right - left) / x).toFloat(), ((aperture.bottom - top) / y).toFloat(),
-    ), CornerRadius((aperture.topLeftCornerRadius.x / x).toFloat(), (aperture.topLeftCornerRadius.y / y).toFloat()))
-    return FluidPortalPlacement(origin, x.toFloat(), y.toFloat(), clip, aperture.boundingRect.translate(-root))
 }
 
 internal fun fluidPopupContentGrows(from: PopupPortalBounds, to: PopupPortalBounds) =

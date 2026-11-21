@@ -1,11 +1,22 @@
 package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.boundingRect
+import androidx.compose.ui.graphics.RenderEffect
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import io.github.anastaci1a.localica.ui.spec.*
+import kotlin.math.roundToInt
 
 /** #920: a popup's one stored takeover phase (SPEC.md section 2); every takeover flag is a view of it. */
 internal enum class PopupTakeover { Closed, Admitting, InWindow, Restoring }
@@ -23,6 +34,68 @@ internal data class FluidPopupContentSlot(
     val aperture: RoundRect, val item: FluidOutlineItemInputs, val blend: FluidDestinationBlend,
 )
 
+internal data class FluidPortalPlacement(
+    val origin: Offset, val scaleX: Float, val scaleY: Float, val clip: RoundRect?, val extent: Rect,
+)
+
+private val FluidContentInsets = PopupPortalInsets(0.0, 0.0, 0.0, 0.0)
+
+internal fun FluidPopupContentSlot.placeDestination(size: Size, root: Offset, leftToRight: Boolean): FluidPortalPlacement? {
+    if (blend.layerOpacity <= 0f || aperture.width <= 0f || aperture.height <= 0f) return null
+    val itemBounds = PopupPortalBounds(0.0, 0.0, size.width.toDouble(), size.height.toDouble())
+    val placement = fluidDestinationPlacement(aperture.width.toDouble(), aperture.height.toDouble(),
+        FluidContentInsets, itemBounds, FluidContentInsets, item.contentScaleAxis, leftToRight)
+    val (layer, x, y) = placement
+    val left = aperture.left + layer.x - (layer.width * x * 0.5)
+    val top = aperture.top + layer.y
+    val origin = Offset((left - root.x).toFloat(), (top - root.y).toFloat())
+    if (item.prefersUnclippedContents) {
+        val extent = Rect(origin, Size((itemBounds.width * x).toFloat(), (itemBounds.height * y).toFloat()))
+        return FluidPortalPlacement(origin, x.toFloat(), y.toFloat(), null, extent)
+    }
+    val clip = RoundRect(Rect(
+        ((aperture.left - left) / x).toFloat(), ((aperture.top - top) / y).toFloat(),
+        ((aperture.right - left) / x).toFloat(), ((aperture.bottom - top) / y).toFloat(),
+    ), CornerRadius((aperture.topLeftCornerRadius.x / x).toFloat(), (aperture.topLeftCornerRadius.y / y).toFloat()))
+    return FluidPortalPlacement(origin, x.toFloat(), y.toFloat(), clip, aperture.boundingRect.translate(-root))
+}
+
+internal data class PopupLayerBounds(
+    val material: MotionPixelRect, val portal: MotionPixelRect = material, val common: MotionPixelRect = material,
+)
+
+internal class FluidPortalLayout(
+    val bounds: PopupLayerBounds, private val menu: FluidPortalPlacement?, private val button: FluidPortalPlacement?,
+    private val scale: Float,
+) {
+    fun place(scope: Placeable.PlacementScope, foreground: Placeable, face: Placeable) = with(scope) {
+        menu?.let { placePortalDestination(foreground, it, bounds.portal, scale) }
+        button?.let { placePortalDestination(face, it, bounds.portal, scale) }
+    }
+}
+
+private fun portalExtent(first: Rect, second: Rect) = Rect(
+    minOf(first.left, second.left), minOf(first.top, second.top),
+    maxOf(first.right, second.right), maxOf(first.bottom, second.bottom),
+)
+
+private fun Placeable.PlacementScope.placePortalDestination(
+    destination: Placeable, layer: FluidPortalPlacement, portal: MotionPixelRect, scale: Float,
+) {
+    val x = layer.origin.x * scale - portal.left
+    val y = layer.origin.y * scale - portal.top
+    val left = x.roundToInt()
+    val top = y.roundToInt()
+    destination.placeWithLayer(left, top) {
+        transformOrigin = TransformOrigin(0f, 0f)
+        translationX = x - left
+        translationY = y - top
+        scaleX = layer.scaleX * scale
+        scaleY = layer.scaleY * scale
+        clip = layer.clip != null
+        layer.clip?.let { roundRect -> shape = GenericShape { _, _ -> addRoundRect(roundRect) } }
+    }
+}
 /** The native presenter owns one expansion and one measured rectangle. A native
  * receipt releases its gate; changing the envelope rebases those same edges. */
 @Stable internal class PopupWindowMotion(
@@ -103,6 +176,31 @@ internal data class FluidPopupContentSlot(
         return FluidPopupContentSlot(bodies[popupSlot], inputs.popup, blend(samples[0], inputs.popup)) to
             FluidPopupContentSlot(bodies[popupSlot xor 1], inputs.home, blend(samples[1], inputs.home))
     }
+    internal fun fluidPortalLayout(
+        pixels: MotionPixelRect, foreground: Placeable, face: Placeable, root: Offset, leftToRight: Boolean,
+    ): FluidPortalLayout? {
+        val (menuSlot, buttonSlot) = fluidContentSlots() ?: return null
+        val menu = menuSlot.placeDestination(Size(foreground.width.toFloat(), foreground.height.toFloat()), root, leftToRight)
+        val button = buttonSlot.placeDestination(Size(face.width.toFloat(), face.height.toFloat()), root, leftToRight)
+        val scale = fluidPortalScale.toFloat()
+        val extent = menu?.extent?.let { first -> button?.extent?.let { portalExtent(first, it) } ?: first } ?: button?.extent
+        val portal = extent?.let {
+            popupPixelBounds(Rect(kotlin.math.floor(it.left * scale), kotlin.math.floor(it.top * scale),
+                kotlin.math.ceil(it.right * scale), kotlin.math.ceil(it.bottom * scale)))
+        } ?: pixels
+        val common = pixels.copy(left = minOf(pixels.left, portal.left), top = minOf(pixels.top, portal.top),
+            right = maxOf(pixels.right, portal.right), bottom = maxOf(pixels.bottom, portal.bottom))
+        return FluidPortalLayout(PopupLayerBounds(pixels, portal, common), menu, button, scale)
+    }
+
+    internal fun destinationPresentation(
+        popup: Boolean, effect: ((Double) -> RenderEffect?)?, ordinaryOpacity: () -> Float,
+    ) = Modifier.graphicsLayer {
+        val blend = fluidContentBlend(popup)
+        alpha = blend?.layerOpacity ?: ordinaryOpacity()
+        renderEffect = blend?.let { effect?.invoke(it.gaussianRadius) }
+    }
+
     private val fluidBlurControls = FluidPropertySpringControls(0.0, null, false, false)
     private val fluidTimeline = FluidTimelineMotion(clock, ::snapsReducedFluid) { step, speed ->
         val fresh = !expansion.hasOutline
@@ -149,8 +247,11 @@ internal data class FluidPopupContentSlot(
         }
     }
     val fluid get() = expansion.popupLaw?.model?.style == PopupMotionStyle.Fluid
-    internal inline fun <T> whenFluid(ordinary: () -> T? = { null }, content: () -> T): T? =
+    internal inline fun <T> whenFluid(content: () -> T): T? = whenFluid({ null }, content)
+    internal inline fun <T> whenFluid(ordinary: () -> T, content: () -> T): T =
         if (fluid) content() else ordinary()
+    internal inline fun whenFluidContent(ordinary: () -> Unit, content: () -> Unit) =
+        if (hasFluidContent) content() else ordinary()
     internal inline fun <T> requestedEndpoint(open: () -> T, home: () -> T): T = if (shown) open() else home()
     init { expansion.nativeGate(gate) }
     fun attached(window: Any, host: ShadowPlane) {

@@ -10131,7 +10131,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="1272"
+            line="1227"
             column="40"/>
     </issue>
 

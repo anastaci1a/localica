@@ -728,6 +728,58 @@ internal data class FluidDestinationBlend(val opacity: Double, val gaussianRadiu
     }
 }
 
+internal data class PopupPortalBounds(val x: Double, val y: Double, val width: Double, val height: Double) {
+    val midX get() = minX + kotlin.math.abs(width) * 0.5
+    val midY get() = minY + kotlin.math.abs(height) * 0.5
+    private val minX get() = if (width < 0.0) x + width else x
+    private val minY get() = if (height < 0.0) y + height else y
+
+    fun standardized() = PopupPortalBounds(minX, minY, kotlin.math.abs(width), kotlin.math.abs(height))
+
+    fun centeredAt(centerX: Double, centerY: Double) =
+        copy(x = centerX - width * 0.5, y = centerY - height * 0.5)
+}
+
+internal data class PopupPortalInsets(val top: Double, val leading: Double, val bottom: Double, val trailing: Double) {
+    val horizontal get() = leading + trailing
+    val vertical get() = top + bottom
+
+    fun signedCrop(bounds: PopupPortalBounds?): PopupPortalBounds? = bounds?.standardized()?.let {
+        PopupPortalBounds(it.x + leading, it.y + top, it.width - horizontal, it.height - vertical)
+    }
+}
+
+internal data class FluidDestinationPlacement(val layer: PopupPortalBounds, val scaleX: Double, val scaleY: Double)
+
+internal fun fluidDestinationPlacement(
+    contentWidth: Double, contentHeight: Double, apertureInsets: PopupPortalInsets, item: PopupPortalBounds,
+    destinationInsets: PopupPortalInsets, axis: Int, leftToRight: Boolean = true,
+): FluidDestinationPlacement {
+    val destination = destinationInsets.signedCrop(item)?.takeIf { it.width >= 0.0 && it.height >= 0.0 }
+    val width = kotlin.math.abs(contentWidth)
+    val height = kotlin.math.abs(contentHeight)
+    val apertureWidth = width + apertureInsets.horizontal
+    val apertureHeight = height + apertureInsets.vertical
+    val rx = destination?.width?.takeUnless { it == 0.0 }?.let { width / it } ?: 1.0
+    val ry = destination?.height?.takeUnless { it == 0.0 }?.let { height / it } ?: 1.0
+    val middle = apertureWidth * 0.5
+    return when (axis) {
+        1 -> {
+            val span = item.width * rx
+            val left = if (leftToRight) apertureInsets.leading else apertureInsets.trailing
+            val destinationLeft = if (leftToRight) destinationInsets.leading else destinationInsets.trailing
+            val x = left - destinationLeft * rx
+            val fraction = 1.0 - (middle - x) / span
+            FluidDestinationPlacement(
+                PopupPortalBounds(middle + span * (fraction - 0.5), apertureInsets.top - destinationInsets.top * rx,
+                    item.width, apertureHeight / rx), rx, rx,
+            )
+        }
+        2 -> FluidDestinationPlacement(PopupPortalBounds(middle, 0.0, apertureWidth / ry, item.height), ry, ry)
+        else -> FluidDestinationPlacement(PopupPortalBounds(middle, 0.0, item.width, item.height), rx, ry)
+    }
+}
+
 internal fun fluidDestinationBlend(
     progress: Double, crossBlur: Boolean, allOpaque: Boolean, lastDestination: Boolean,
 ): FluidDestinationBlend {

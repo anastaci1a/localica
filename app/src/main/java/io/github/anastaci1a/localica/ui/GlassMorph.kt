@@ -17,7 +17,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Icon
@@ -49,7 +48,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -474,31 +472,6 @@ internal fun Modifier.glassSurfaceOriginPresentation(): ((Float) -> GlassOriginP
     }
 
 internal enum class GlassPlacement { Search, Menu, Center, Sheet, Page }
-private data class PopupLayerBounds(
-    val material: MotionPixelRect, val portal: MotionPixelRect = material, val common: MotionPixelRect = material,
-)
-private fun portalExtent(first: Rect, second: Rect) = Rect(
-    minOf(first.left, second.left), minOf(first.top, second.top),
-    maxOf(first.right, second.right), maxOf(first.bottom, second.bottom),
-)
-
-private fun Placeable.PlacementScope.placePortalDestination(
-    destination: Placeable, layer: FluidPortalPlacement, portal: MotionPixelRect, scale: Float,
-) {
-    val x = layer.origin.x * scale - portal.left
-    val y = layer.origin.y * scale - portal.top
-    val left = x.roundToInt()
-    val top = y.roundToInt()
-    destination.placeWithLayer(left, top) {
-        transformOrigin = TransformOrigin(0f, 0f)
-        translationX = x - left
-        translationY = y - top
-        scaleX = layer.scaleX * scale
-        scaleY = layer.scaleY * scale
-        clip = layer.clip != null
-        layer.clip?.let { roundRect -> shape = GenericShape { _, _ -> addRoundRect(roundRect) } }
-    }
-}
 internal val LocalGlassPanelReady = compositionLocalOf { true }
 
 /** Optional committed-scope observations; no progress subscription or behavior switch. */
@@ -996,6 +969,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 fun holdImeBack() = placement == GlassPlacement.Search && searchDismissOnImeBack && popupFlight.expanded &&
                     motion.openAtRest && windowFocused && childPanels.intValue == 0 &&
                     imeTarget == 0 && searchMotion.lastIme > 0
+                fun materialTransform(size: Size): GlassBodyTransform {
+                    val pose = if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight()) else null
+                    val shape = if (page || reduced && pose == null) GlassShape() else pose?.shape ?: body.value
+                    val base = pose?.takeUnless { page }?.transform(size, density.density)
+                        ?: shape.bodyTransform(size, density.density, pose?.vertical ?: popupVertical)
+                    return base.copy(drift = base.drift + Offset(pose?.horizontalShift ?: 0f, 0f))
+                }
                 fun surfaceOpacity() = if (!admittedDraw) 0f else if (detached) motion.detachedOpacity.at(phase()) else
                     if (popupFlight.present && window != null && popupFlight.window === window) 1f else 0f
                 Box(Modifier.fillMaxSize().onGloballyPositioned {
@@ -1024,29 +1004,22 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             }
                         }
                     }.onPlaced { wellCoordinates[0] = it; windowPlane.layout = it }
-                    fun materialTransform(size: Size): GlassBodyTransform {
-                        val pose = if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight()) else null
-                        val shape = if (page || reduced && pose == null) GlassShape() else pose?.shape ?: body.value
-                        val base = pose?.takeUnless { page }?.transform(size, density.density)
-                            ?: shape.bodyTransform(size, density.density, pose?.vertical ?: popupVertical)
-                        return base.copy(drift = base.drift + Offset(pose?.horizontalShift ?: 0f, 0f))
-                    }
-                    val fluidMaterial = motion.whenFluid {
+                    val fluidMaterial = motion.whenFluid(ordinary = { Modifier }) {
                         Modifier.drawWithContent {
-                            if (motion.hasFluidContent)
+                            motion.whenFluidContent(ordinary = { drawContent() }) {
                                 drawGlassBody(materialTransform(size)) { this@drawWithContent.drawContent() }
-                            else drawContent()
+                            }
                         }.graphicsLayer {
                             clip = motion.hasFluidContent
                             if (clip) shape = RoundedCornerShape(radius())
                         }
-                    } ?: Modifier
-                    val contentEffect = motion.whenFluid {
+                    }
+                    val contentEffect = motion.whenFluid(ordinary = { Modifier }) {
                         Modifier.graphicsLayer { renderEffect = fluidContentBlurEffect?.invoke(motion.fluidBlurRadius) }
-                    } ?: Modifier
+                    }
                     val popupTapTarget = Modifier.pointerInput(Unit) { detectTapGestures { } }
-                    val ordinaryTapTarget = motion.whenFluid(ordinary = { popupTapTarget }) { Modifier } ?: Modifier
-                    val fluidTapTarget = motion.whenFluid { popupTapTarget } ?: Modifier
+                    val ordinaryTapTarget = motion.whenFluid(ordinary = { popupTapTarget }) { Modifier }
+                    val fluidTapTarget = motion.whenFluid(ordinary = { Modifier }) { popupTapTarget }
                     Layout(modifier = measureModifier.glassShadowOffset {
                         val pixels = panelBounds[0]?.common
                         androidx.compose.ui.unit.IntOffset(pixels?.left ?: 0, pixels?.top ?: 0)
@@ -1102,8 +1075,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 inset(-left, -top, -right, -bottom) {
                                     if (visible || popupFlight.expanded || anchor.restoredBodyReceipt != anchor.restoredDrawRequest)
                                         popupFlight.refillBody(this@drawWithContent) {
-                                            if (motion.hasFluidContent) this@drawWithContent.drawContent()
-                                            else drawGlassBody(t) {
+                                            motion.whenFluidContent(ordinary = {
+                                                drawGlassBody(t) { this@drawWithContent.drawContent() }
+                                            }) {
                                                 this@drawWithContent.drawContent()
                                             }
                                         }
@@ -1149,10 +1123,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             }
                         }
                         Layout(modifier = contentEffect, content = {
-                            SurfaceLayer(Modifier.graphicsLayer {
-                                val blend = motion.fluidContentBlend(popup = true)
-                                alpha = blend?.layerOpacity ?: if (page) 1f else motion.foreground.at(phase())
-                                renderEffect = blend?.let { fluidContentBlurEffect?.invoke(it.gaussianRadius) }
+                            SurfaceLayer(motion.destinationPresentation(popup = true, effect = fluidContentBlurEffect) {
+                                if (page) 1f else motion.foreground.at(phase())
                             }
                                 .onPlaced { sharedContent?.destination(it) }
                                 .then(contentModifier)
@@ -1172,10 +1144,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     GlassPanelTheme(popupLightMix, content)
                                 }
                             }
-                            SurfaceLayer(Modifier.graphicsLayer {
-                                val blend = motion.fluidContentBlend(popup = false)
-                                alpha = blend?.layerOpacity ?: motion.face.at(phase())
-                                renderEffect = blend?.let { fluidContentBlurEffect?.invoke(it.gaussianRadius) }
+                            SurfaceLayer(motion.destinationPresentation(popup = false, effect = fluidContentBlurEffect) {
+                                motion.face.at(phase())
                             }
                                 .clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                                 CompositionLocalProvider(LocalContentColor provides lerp(Color(0xFF202124), Color.White, popupLightMix)) { anchor.face?.invoke() }
@@ -1244,25 +1214,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             val width = pixels.width
                             val height = pixels.height
                             val face = children[1].measure(Constraints.fixed(startWidth().roundToInt().coerceAtLeast(1), startHeight().roundToInt().coerceAtLeast(1)))
-                            val slots = motion.fluidContentSlots()
-                            if (slots != null) {
-                                val leftToRight = layoutDirection == LayoutDirection.Ltr
-                                val menuLayer = slots.first.placeDestination(Size(foreground.width.toFloat(), foreground.height.toFloat()), windowOrigin, leftToRight)
-                                val buttonLayer = slots.second.placeDestination(Size(face.width.toFloat(), face.height.toFloat()), windowOrigin, leftToRight)
-                                val portalScale = motion.fluidPortalScale.toFloat()
-                                val extent = menuLayer?.extent?.let { extent ->
-                                    buttonLayer?.extent?.let { portalExtent(extent, it) } ?: extent
-                                } ?: buttonLayer?.extent
-                                val portal = extent?.let {
-                                    glassMorphPixelBounds(Rect(kotlin.math.floor(it.left * portalScale), kotlin.math.floor(it.top * portalScale),
-                                        kotlin.math.ceil(it.right * portalScale), kotlin.math.ceil(it.bottom * portalScale)))
-                                } ?: pixels
-                                val common = pixels.copy(left = minOf(pixels.left, portal.left), top = minOf(pixels.top, portal.top),
-                                    right = maxOf(pixels.right, portal.right), bottom = maxOf(pixels.bottom, portal.bottom))
-                                panelBounds[0] = PopupLayerBounds(pixels, portal, common)
-                                return@portalMeasure layout(portal.width, portal.height) {
-                                    menuLayer?.let { placePortalDestination(foreground, it, portal, portalScale) }
-                                    buttonLayer?.let { placePortalDestination(face, it, portal, portalScale) }
+                            motion.fluidPortalLayout(pixels, foreground, face, windowOrigin, layoutDirection == LayoutDirection.Ltr)?.let { portal ->
+                                panelBounds[0] = portal.bounds
+                                return@portalMeasure layout(portal.bounds.portal.width, portal.bounds.portal.height) {
+                                    portal.place(this, foreground, face)
                                 }
                             }
                             panelBounds[0] = PopupLayerBounds(pixels)
