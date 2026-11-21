@@ -16,18 +16,6 @@ import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
 @RequiresApi(33)
 internal class LensRenderer(private val connectedBodies: Int = 0) {
     private val bodyCapacity = maxOf(2, connectedBodies)
-    private fun connectedQuery() = if (connectedBodies == 0) "" else """
-        $LensFieldUnionShader
-        float3 connectedField(float2 p) {
-            // Compose 58 consumes negative-inside distances and outward normals.
-            half4 field = half4(half3(-uniformCorners(p, bodyBounds[0], bodyRadii[0].x)), half(1));
-            for (int i = 1; i < $connectedBodies; ++i) {
-                half4 next = half4(half3(-uniformCorners(p, bodyBounds[i], bodyRadii[i * 2].x)), half(1));
-                field = sdfUnion(field, next, half(0.0001));
-            }
-            return -float3(field.xyz);
-        }
-    """.trimIndent()
     private val shader = RuntimeShader("""
         uniform shader scene;
         uniform float4 bodyBounds[$bodyCapacity];
@@ -104,20 +92,14 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
             float2 scaled = q / r;
             return dot(scaled, scaled) <= 1.0;
         }
-        float4 verticalEdge(float4 best, float2 p, float x, float2 y, float2 cut, float direction) {
-            if (cut.x >= cut.y)
-                return nearer(best, p - float2(x, clamp(p.y, y.x, y.y)), float2(direction, 0));
-            if (y.x < cut.x)
-                best = nearer(best, p - float2(x, clamp(p.y, y.x, cut.x)), float2(direction, 0));
-            if (cut.y < y.y)
-                best = nearer(best, p - float2(x, clamp(p.y, cut.y, y.y)), float2(direction, 0));
-            return best;
+        float4 verticalEdge(float4 best, float2 p, float x, float2 y, float direction) {
+            return nearer(best, p - float2(x, clamp(p.y, y.x, y.y)), float2(direction, 0));
         }
-        float4 bodyBoundary(float4 best, float2 p, float4 b, float4 top, float4 bottom, float2 cut, bool left) {
+        float4 bodyBoundary(float4 best, float2 p, float4 b, float4 top, float4 bottom) {
             best = nearer(best, p - float2(clamp(p.x, b.x + bottom.z, b.z - bottom.x), b.w), float2(0, -1));
-            best = verticalEdge(best, p, b.z, float2(b.y + top.w, b.w - bottom.y), left ? cut : float2(0), -1.0);
+            best = verticalEdge(best, p, b.z, float2(b.y + top.w, b.w - bottom.y), -1.0);
             best = nearer(best, p - float2(clamp(p.x, b.x + top.x, b.z - top.z), b.y), float2(0, 1));
-            best = verticalEdge(best, p, b.x, float2(b.y + top.y, b.w - bottom.w), left ? float2(0) : cut, 1.0);
+            best = verticalEdge(best, p, b.x, float2(b.y + top.y, b.w - bottom.w), 1.0);
             best = cornerArc(best, p, b.zw, bottom.xy, float2(1, 1));
             best = cornerArc(best, p, b.xw, bottom.zw, float2(-1, 1));
             best = cornerArc(best, p, b.zy, top.zw, float2(1, -1));
@@ -139,27 +121,29 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
             return float3(r - (outside + min(max(q.x, q.y), 0.0)),
                 local.x < 0.0 ? n.x : -n.x, local.y < 0.0 ? n.y : -n.y);
         }
-        ${connectedQuery()}
-        float3 geometry(float2 p) {
-            if (bodyCount == 0.0) return float3(-1e10, 0, 0);
-            ${if (connectedBodies > 0) "return connectedField(p);" else """
-            float4 a = bodyBounds[0], b = bodyBounds[1];
-            float4 at = bodyRadii[0], ab = bodyRadii[1], bt = bodyRadii[2], bb = bodyRadii[3];
-            if (bodyCount == 1.0 && all(equal(at, float4(at.x))) && all(equal(ab, at)))
-                return uniformCorners(p, a, at.x);
-            float2 cut = float2(0);
-            if (bodyCount > 1.0 && a.z == b.x)
-                cut = float2(max(a.y + at.w, b.y + bt.y), min(a.w - ab.y, b.w - bb.w));
-            float4 closest = bodyBoundary(float4(1e16, 1e16, 0, 0), p, a, at, ab, cut, true);
-            bool inside = insideBody(p, a, at, ab);
-            if (bodyCount > 1.0) {
-                closest = bodyBoundary(closest, p, b, bt, bb, cut, false);
-                inside = inside || insideBody(p, b, bt, bb);
-            }
+        float3 bodyField(float2 p, float4 b, float4 top, float4 bottom) {
+            ${if (connectedBodies > 0) "return uniformCorners(p, b, top.x);" else """
+            if (all(equal(top, float4(top.x))) && all(equal(bottom, top))) return uniformCorners(p, b, top.x);
+            float4 closest = bodyBoundary(float4(1e16, 1e16, 0, 0), p, b, top, bottom);
             float distance = length(closest.xy);
-            float side = inside ? 1.0 : -1.0;
+            float side = insideBody(p, b, top, bottom) ? 1.0 : -1.0;
             return float3(distance * side, distance > 0.0 ? closest.xy * (side / distance) : closest.zw);
             """}
+        }
+        $LensFieldUnionShader
+        float3 geometry(float2 p) {
+            if (bodyCount == 0.0) return float3(-1e10, 0, 0);
+            float3 first = bodyField(p, bodyBounds[0], bodyRadii[0], bodyRadii[1]);
+            ${if (connectedBodies == 0) "if (bodyCount == 1.0) return first;" else ""}
+            // Compose 58 consumes negative-inside distances and outward normals.
+            half4 field = half4(half3(-first), half(1));
+            for (int i = 1; i < $bodyCapacity; ++i) {
+                if (float(i) < bodyCount) {
+                    half4 next = half4(half3(-bodyField(p, bodyBounds[i], bodyRadii[2 * i], bodyRadii[2 * i + 1])), half(1));
+                    field = sdfUnion(field, next, half(0.0001));
+                }
+            }
+            return -float3(field.xyz);
         }
         float profile(float2 law, float inside) {
             float t = clamp(inside / law.y, 0.0, 1.0);

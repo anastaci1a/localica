@@ -10,6 +10,7 @@ import org.junit.Test
 
 class GlassSplitGeometryTest {
     private fun lens(size: Size, p: Float) = GlassSilhouetteFrame(splitPillOptics(splitPillBodies(size, p), p)).geometry
+    private val seamDepth = 420f / (1 shl 24) // H(H(H(1e-4) * 0.5) * 0.5), from Compose 58.
 
     @Test fun roundedPixelSizesNormalizeTheSplitCornersWithoutAnEmptyEdge() {
         for (width in listOf(119f, 120f, 121f, 315f)) for (height in listOf(60f, 61f, 158f)) {
@@ -18,7 +19,7 @@ class GlassSplitGeometryTest {
                 val field = lens(bounds.size, fraction / 2f).field(bounds.center)
                 assertTrue(field.distance.isFinite())
                 assertTrue(field.distance > 0f)
-                assertEquals(1f, field.inward.getDistance(), .00001f)
+                assertEquals(0f, field.inward.getDistance(), .00001f)
             }
         }
     }
@@ -30,17 +31,23 @@ class GlassSplitGeometryTest {
             for (step in 1..89) {
                 val angle = step * kotlin.math.PI.toFloat() / 180f
                 val outer = Offset(30f - 30f * kotlin.math.cos(angle), 30f - 30f * kotlin.math.sin(angle))
-                val inset = Offset(60f - inner + inner * kotlin.math.cos(angle), inner - inner * kotlin.math.sin(angle))
-                for (point in listOf(outer, inset)) {
+                val cos = kotlin.math.cos(angle)
+                val sin = kotlin.math.sin(angle)
+                val inset = Offset(60f - inner + inner * cos, inner - inner * sin)
+                val toOtherCenter = Offset(60f + inner, inner) - inset
+                val otherRadius = toOtherCenter.getDistance()
+                val insetDepth = composeLensReference(LensField(0f, Offset(-cos, sin)),
+                    LensField(inner - otherRadius, toOtherCenter / otherRadius)).distance
+                for ((point, expected) in listOf(outer to 0f, inset to insetDepth)) {
                     val field = geometry.field(point)
-                    assertEquals(0f, field.distance, .00002f)
+                    assertEquals(expected, field.distance, .00002f)
                     assertTrue(field.inward.x.isFinite() && field.inward.y.isFinite())
                     assertTrue(field.inward.getDistance() <= 1.00001f)
                 }
             }
             val seam = geometry.field(Offset(60f, 30f))
-            assertEquals("The shared edge is interior until the neck closes", 30f - inner, seam.distance, .00001f)
-            assertEquals(1f, seam.inward.getDistance(), .00001f)
+            assertEquals("The shared edge carries the Compose 58 correction", seamDepth, seam.distance, .00001f)
+            assertEquals(0f, seam.inward.getDistance(), .00001f)
         }
     }
 
@@ -49,10 +56,10 @@ class GlassSplitGeometryTest {
             val point = Offset(x, y)
             val expected = LensGeometry(Rect(0f, 0f, 60f, 60f), 30f).field(point)
             val actual = lens(Size(120f, 60f), .5f).field(point)
-            assertEquals(expected.distance, actual.distance, .00002f)
+            assertEquals(expected.distance.lensHalf(), actual.distance, .00002f)
             if (point == Offset(30f, 30f)) continue
-            assertEquals(expected.inward.x, actual.inward.x, .00002f)
-            assertEquals(expected.inward.y, actual.inward.y, .00002f)
+            assertEquals(expected.inward.x.lensHalf(), actual.inward.x, .00002f)
+            assertEquals(expected.inward.y.lensHalf(), actual.inward.y, .00002f)
         }
     }
 
@@ -111,40 +118,39 @@ class GlassSplitGeometryTest {
             assertEquals(pill.field(point), joined.field(point))
             val expected = circle.field(point)
             val actual = split.field(point)
-            assertEquals(expected.distance, actual.distance, .001f)
+            assertEquals(expected.distance.lensHalf(), actual.distance, .001f)
             if (point == circle.bounds.center) continue
-            assertEquals(expected.inward.x, actual.inward.x, .001f)
-            assertEquals(expected.inward.y, actual.inward.y, .001f)
+            assertEquals(expected.inward.x.lensHalf(), actual.inward.x, .001f)
+            assertEquals(expected.inward.y.lensHalf(), actual.inward.y, .001f)
         }
     }
 
-    @Test fun theExposedBoundaryFollowsTheNeckThroughFormerBlendTransitions() {
+    @Test fun theComposedFieldKeepsTheSeamThroughFormerBlendTransitions() {
         val size = Size(120f, 60f)
         val seam = Offset(60f, 30f)
         for (p in listOf(.24999f, .25f, .25001f, .49999f, .5f)) {
-            assertEquals(30f - 60f * p, lens(size, p).field(seam).distance, .00001f)
+            assertEquals(seamDepth, lens(size, p).field(seam).distance, .00001f)
         }
     }
 
-    @Test fun theConnectedOpticalNeckKeepsItsDepthAndFoldsAtTheMidline() {
+    @Test fun theConnectedOpticalNeckCarriesTheOpposedNormalMix() {
         val geometry = lens(Size(120f, 60f), .3f)
         fun field(point: Offset) = geometry.field(point)
         val medial = field(Offset(60f, 30f))
-        assertEquals(12f, medial.distance, .00001f)
+        assertEquals(seamDepth, medial.distance, .00001f)
         assertEquals(0f, medial.inward.x, .00001f)
-        assertEquals(1f, kotlin.math.abs(medial.inward.y), .00001f)
+        assertEquals(0f, medial.inward.y, .00001f)
         for (side in listOf(-1f, 1f)) {
             val flank = field(Offset(60f, 30f + side * .25f))
-            assertEquals(11.75f, flank.distance, .00001f)
+            assertEquals(seamDepth, flank.distance, .00001f)
             assertEquals(0f, flank.inward.x, .00001f)
-            assertEquals(-side, flank.inward.y, .00001f)
+            assertEquals(0f, flank.inward.y, .00001f)
         }
         assertEquals(0f, field(Offset(60f, 24f)).inward.x, .00001f)
-        for (point in listOf(Offset(52f, 24f), Offset(60f, 24f), Offset(68f, 36f))) {
-            val dx = (field(point + Offset(.01f, 0f)).distance - field(point - Offset(.01f, 0f)).distance) / .02f
-            val dy = (field(point + Offset(0f, .01f)).distance - field(point - Offset(0f, .01f)).distance) / .02f
-            assertEquals(dx, field(point).inward.x, .002f)
-            assertEquals(dy, field(point).inward.y, .002f)
+        for ((point, expected) in listOf(Offset(52f, 24f) to Offset(-1f, 0f),
+            Offset(60f, 24f) to Offset.Zero, Offset(68f, 36f) to Offset(1f, 0f))) {
+            assertEquals(expected.x, field(point).inward.x, .002f)
+            assertEquals(expected.y, field(point).inward.y, .002f)
         }
     }
 

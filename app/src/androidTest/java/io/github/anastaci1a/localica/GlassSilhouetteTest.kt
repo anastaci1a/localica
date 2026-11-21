@@ -79,7 +79,7 @@ class GlassSilhouetteTest {
         lateinit var backing: FrostedBackdrop
         compose.setContent { EngineTheme(clear = true) {
             backing = rememberFrostedBackdrop(Unit)
-            val progress = when (phase) { 2 -> .0001f; 3 -> .4999f; 4, 5 -> .5f; else -> 0f }
+            val progress = when (phase) { 2 -> .0001f; 3 -> .4999f; 4, 5 -> .5f; 6 -> .3f; else -> 0f }
             val pill = rememberSplitPill { progress }
             Box(Modifier.size(280.dp, 160.dp)) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backing)) {
@@ -118,6 +118,14 @@ class GlassSilhouetteTest {
             }
         }
         val images = (0..5).map(::capture)
+        val neck = capture(6).toPixelMap()
+        val rest = images[1].toPixelMap()
+        val x = neck.width / 2
+        val y = neck.height / 2
+        fun samples(pixels: androidx.compose.ui.graphics.PixelMap) = (-2..2).map { step ->
+            pixels[x + step, y].let { listOf(it.red, it.green, it.blue) }
+        }
+        android.util.Log.i("GlassSplitOptics", "neck p=0.3 center=($x,$y) rest=${samples(rest)} composed=${samples(neck)}")
         for ((a, b) in listOf(0 to 1, 1 to 2, 3 to 4, 4 to 5)) {
             val first = images[a].toPixelMap(); val second = images[b].toPixelMap()
             var error = 0.0
