@@ -315,7 +315,7 @@ class HoverSelectionTest {
     @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun visibleFilletCentreSamplesTheBlurredSceneOutsideEveryMember() {
         val sceneColor = Color(.18f, .36f, .62f)
-        compose.setContent { Fixture(true, true, rowGap = 18.dp, measuredOutline = true, joinBackdrop = sceneColor) }
+        compose.setContent { Fixture(true, true, rowGap = 12.dp, measuredOutline = true, joinBackdrop = sceneColor) }
         compose.waitForIdle()
         val pixels = capture()
         val density = compose.density.density
