@@ -103,6 +103,7 @@ internal fun boundedPlan(stamp: FrameStamp,core: UnitCurveSpec,T: Double,sigma: 
     }
     private var outline by mutableStateOf<Outline?>(null)
     internal val hasOutline get()=outline!=null
+    internal val isFirstOutlineClipCommit get()=outline?.usesModelClip(clock.stamp)==true
     internal val aperture: MotionRectView=outlineView()
     private val boundOutlineView=outlineView(0)
     private val companionView=outlineView(1)

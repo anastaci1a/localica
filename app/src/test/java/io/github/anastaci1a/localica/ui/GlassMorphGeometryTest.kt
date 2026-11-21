@@ -280,6 +280,7 @@ class GlassMorphGeometryTest {
         repeat(240) { h.advance(1.0 / 120) }
         assertTrue(popup.expansion.awaitingNativeGate)
         popup.acknowledgeNativeGate(popup.expansion.nativeGeneration)
+        assertTrue(popup.isFirstOutlineClipCommit)
         val initial = requireNotNull(popup.outlineBodies())
         assertEquals(160f, initial[0].boundingRect.center.x, 0f)
         assertEquals(220f, initial[0].boundingRect.center.y, 0f)
@@ -290,6 +291,7 @@ class GlassMorphGeometryTest {
         assertEquals(22f, initial[1].topLeftCornerRadius.x, 0f)
         assertEquals(initial[0].boundingRect, requireNotNull(popup.bounds).value())
         h.advance(1.0 / 120)
+        assertFalse(popup.isFirstOutlineClipCommit)
         val first = requireNotNull(popup.outlineBodies())[0]
         assertEquals(19.912427f, first.width, 0.00002f)
         assertEquals(20.003361f, first.height, 0.00002f)
