@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.translate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.TransformOrigin
@@ -987,13 +988,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     // shadow's layer-free placement on legacy Android.
                     val panelBounds = remember { arrayOfNulls<PopupLayerBounds>(1) }
                     val portalLens = remember(motion) {
-                        if (android.os.Build.VERSION.SDK_INT >= 33) {
-                            val renderer = lazy { LensRenderer() }
-                            val effect = { aperture: LensGeometry, blur: Float, unit: Float, warp: LensWarp ->
-                                renderer.value.effect(aperture, blur, anchor.depthScale, unit, warp = warp)
+                        if (android.os.Build.VERSION.SDK_INT >= 33) lazy { LensRenderer() } else null
+                    }
+                    DisposableEffect(portalLens) {
+                        onDispose {
+                            if (android.os.Build.VERSION.SDK_INT >= 33 && portalLens?.isInitialized() == true) {
+                                portalLens.value.close()
                             }
-                            effect
-                        } else null
+                        }
                     }
                     val placedMaterial = Modifier.onGloballyPositioned {
                         if (!hasViewport || it.size.width == 0 || it.size.height == 0) return@onGloballyPositioned
@@ -1033,13 +1035,24 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             val blur = motion.fluidBlurRadius
                             val height = motion.fluidLensHeight
                             val amount = motion.fluidLensAmount
-                            renderEffect = if (portal == null || bounds == null || radius == null || bounds.isEmpty ||
-                                FluidLensingSpec.isForegroundAtRest(blur, height, amount)) null
-                            else portalLens?.invoke(
-                                LensGeometry(bounds.translate(-windowOrigin - Offset(portal.left.toFloat(), portal.top.toFloat())), radius),
-                                (blur * density.density).toFloat(), density.density,
-                                LensWarp(height, amount, 0f, IntSize(portal.width, portal.height)),
-                            )
+                            val melt = motion.fluidMeltRadius
+                            renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33 && portalLens != null) {
+                                if (portal == null || bounds == null || radius == null || bounds.isEmpty ||
+                                    melt == 0.0 && FluidLensingSpec.isForegroundAtRest(blur, height, amount)) {
+                                    if (portalLens.isInitialized()) portalLens.value.clearField()
+                                    null
+                                } else {
+                                    val origin = windowOrigin + Offset(portal.left.toFloat(), portal.top.toFloat())
+                                    val field = motion.fluidFieldBodies()?.let { bodies ->
+                                        FluidLensField(bodies.map { it.translate(-origin) }, melt, origin, window?.isWideColorGamut == true)
+                                    }
+                                    portalLens.value.effect(
+                                        LensGeometry(bounds.translate(-origin), radius),
+                                        (blur * density.density).toFloat(), anchor.depthScale, density.density,
+                                        warp = LensWarp(height, amount, 0f, IntSize(portal.width, portal.height)), field = field,
+                                    )
+                                }
+                            } else null
                         }
                     }
                     val popupTapTarget = Modifier.pointerInput(Unit) { detectTapGestures { } }

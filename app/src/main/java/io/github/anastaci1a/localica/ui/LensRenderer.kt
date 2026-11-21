@@ -1,8 +1,18 @@
 package io.github.anastaci1a.localica.ui
 
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.BlendMode
+import android.graphics.ColorSpace
+import android.graphics.HardwareBufferRenderer
+import android.graphics.Paint
+import android.graphics.RenderNode
 import android.graphics.RuntimeShader
 import android.graphics.Shader
+import android.hardware.HardwareBuffer
+import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -10,26 +20,34 @@ import androidx.compose.ui.unit.IntSize
 import io.github.anastaci1a.localica.ui.spec.FluidContentBlurIn
 import io.github.anastaci1a.localica.ui.spec.FluidGaussianSpec
 import io.github.anastaci1a.localica.ui.spec.FluidLensingSpec
+import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 /** One material kernel for every glass shape. The geometry adapter supplies distance
  * and inward gradient; every shape gets the same refraction law (GlassRefraction). */
 @RequiresApi(33)
-internal class LensRenderer(private val connectedBodies: Int = 0) {
+internal class LensRenderer(private val connectedBodies: Int = 0) : AutoCloseable {
     private val bodyCapacity = maxOf(2, connectedBodies)
-    private fun connectedQuery() = if (connectedBodies == 0) "" else """
+    private fun connectedQuery() = """
         $LensFieldUnionShader
-        float3 connectedField(float2 p) {
-            // Compose 58 consumes negative-inside distances and outward normals.
-            half4 field = half4(half3(-uniformCorners(p, bodyBounds[0], bodyRadii[0].x)), half(1));
-            for (int i = 1; i < $connectedBodies; ++i) {
-                half4 next = half4(half3(-uniformCorners(p, bodyBounds[i], bodyRadii[i * 2].x)), half(1));
-                field = sdfUnion(field, next, half(0.0001));
+        half4 connectedPacket(float2 p) {
+            half4 field = half4(0);
+            for (int i = 0; i < $bodyCapacity; ++i) {
+                half coverage = float(i) < bodyCount ? half(1) : half(0);
+                half4 next = half4(half3(-uniformCorners(p, bodyBounds[i], bodyRadii[i * 2].x)), coverage);
+                field = field.w == half(0) ? next : sdfUnion(field, next, half(0.0001));
             }
-            return -float3(field.xyz);
+            return field.w == half(0) ? half4(0) : field;
+        }
+        float3 connectedField(float2 p) {
+            return -float3(connectedPacket(p).xyz);
         }
     """.trimIndent()
-    private val shader = RuntimeShader("""
+    private val program = """
         uniform shader scene;
+        uniform shader displacementMap;
+        uniform float hasDisplacementMap;
         uniform float4 bodyBounds[$bodyCapacity];
         uniform float4 bodyRadii[${2 * bodyCapacity}];
         uniform float bodyCount;
@@ -165,6 +183,11 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
             float t = clamp(inside / law.y, 0.0, 1.0);
             return law.x * (1.0 - sqrt(t * (2.0 - t)));
         }
+        half4 displaced(float2 p, float2 m, float mask) {
+            if (mask < 0.00392156886) return half4(0);
+            float2 sample = min(warpClamp, p + float2(dot(m, warp.xy), dot(m, warp.zw)));
+            return scene.eval(sample) * half(mask);
+        }
         // Popup content warp: the glass map (distance above zero inside, outward unit normal,
         // full coverage) evaluated inline, then the displacement sample it masks.
         half4 warped(float2 p, float3 f) {
@@ -178,9 +201,13 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
             float lift = mix(r < 1.0 ? 1.0 - 0.2929 : 1.0, sqrt(1.0 - (1.0 - r) * (1.0 - r)), mapShape.y);
             float2 normal = float2(dot(n, float2(mapAngle.x, -mapAngle.y)), dot(n, mapAngle.yx));
             float2 m = (1.0 - lift) * normal * clamp((mapShape.x - u) / w + 0.5, 0.0, 1.0);
-            return scene.eval(min(warpClamp, p + float2(dot(m, warp.xy), dot(m, warp.zw)))) * half(mask);
+            return displaced(p, m, mask);
         }
-        half4 main(float2 p) {
+        half4 lens(float2 p) {
+            if (hasDisplacementMap > 0.0) {
+                half4 map = displacementMap.eval(p);
+                return displaced(p, float2(map.rg), float(map.b));
+            }
             float3 f = geometry(p);
             if (warpMode > 0.5) return warped(p, f);
             if (f.x < outerMix.y) return scene.eval(p);
@@ -210,36 +237,40 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
             float reflectedTone = mix(1.0, 1.0 - glassTrim(tone), tone.z);
             return half4(half3(color * alpha + reflected * reflectedTone), half(alpha + reflected));
         }
-    """.trimIndent())
+    """.trimIndent()
+    private val shader = RuntimeShader(program + "\nhalf4 main(float2 p) { return lens(p); }")
+    private val emptyMap = lazy { RuntimeShader("half4 main(float2 p) { return half4(0); }") }
+    private val fieldTargets = lazy {
+        if (Build.VERSION.SDK_INT >= 34) FluidMeltTargets(
+            RuntimeShader(program + "\nhalf4 main(float2 p) { return connectedPacket(p); }")
+        ) else null
+    }
     private var last = floatArrayOf()
     private var cached: RenderEffect? = null
     private var blurAmount = Float.NaN
     private var blurEffect: android.graphics.RenderEffect? = null
+    private var lastField: FluidLensField? = null
 
     /** [unit] is recorded pixels per dp: display density times recording resolution. */
     fun effect(geometry: LensGeometry, blur: Float, depth: Float, unit: Float, power: Float = 1f,
         whiteTint: Float = 0f, illumination: Float = 1f, flattening: Float = 0f,
-        tone: GlassTone = GlassTone(), warp: LensWarp? = null, highlightSpan: Float = geometry.span): RenderEffect {
+        tone: GlassTone = GlassTone(), warp: LensWarp? = null, highlightSpan: Float = geometry.span,
+        field: FluidLensField? = null,
+    ): RenderEffect {
         val bodies = geometry.bodies
         // Stock surfaces supply one fitted round rectangle or SplitPill's horizontal pair.
         require(if (connectedBodies > 0) bodies.size == connectedBodies else
             bodies.size <= 2 && (bodies.size < 2 || bodies[0].right <= bodies[1].left))
-        val bounds = FloatArray(4 * bodyCapacity)
-        val radii = FloatArray(8 * bodyCapacity)
-        bodies.forEachIndexed { i, body ->
-            floatArrayOf(body.left, body.top, body.right, body.bottom).copyInto(bounds, i * 4)
-            body.radiusWords(radii, i * 8)
-        }
+        val bodiesInput = packBodies(bodies)
         val words = warp?.uniforms(unit)
         val d = depth.coerceIn(.05f, 4f)
         val state = floatArrayOf(unit, blur, d, power, whiteTint, illumination, flattening,
             tone.trim, tone.weight, tone.lightMix, bodies.size.toFloat(), highlightSpan) +
-            bounds + radii + (words ?: FloatArray(0))
-        if (state.contentEquals(last)) return requireNotNull(cached)
+            bodiesInput.first + bodiesInput.second + (words ?: FloatArray(0))
+        if (state.contentEquals(last) && field == lastField) return requireNotNull(cached)
         last = state
-        shader.setFloatUniform("bodyBounds", bounds)
-        shader.setFloatUniform("bodyRadii", radii)
-        shader.setFloatUniform("bodyCount", bodies.size.toFloat())
+        lastField = field
+        shader.setBodies(bodiesInput, bodies.size)
         shader.setFloatUniform("span", highlightSpan)
         // Surface-wide constants belong to the draw, not every shaded pixel.
         shader.setFloatUniform("optics", .62f * d / kotlin.math.sqrt(1f + d * d / 4f), .4f + .06f * flattening.coerceIn(0f, 1f))
@@ -257,6 +288,14 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
         shader.setFloatUniform("warp", w[6], w[7], w[8], w[9])
         shader.setFloatUniform("warpClamp", w[10], w[11])
         shader.setFloatUniform("warpMode", if (warp == null) 0f else 1f)
+        val map = if (Build.VERSION.SDK_INT >= 34 && field != null && warp != null) {
+            fieldTargets.value?.render(field, warp.used, unit, w) { input, shapes ->
+                input.setBodies(packBodies(shapes), shapes.size)
+            }
+        } else null
+        shader.setFloatUniform("hasDisplacementMap", if (map == null) 0f else 1f)
+        if (map != null) shader.setInputBuffer("displacementMap", map)
+        else if (fieldTargets.isInitialized()) shader.setInputShader("displacementMap", emptyMap.value)
         if (blur != blurAmount) {
             blurAmount = blur
             blurEffect = if (FluidGaussianSpec.isIdentity(blur.toDouble())) null
@@ -264,6 +303,35 @@ internal class LensRenderer(private val connectedBodies: Int = 0) {
         }
         val lens = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene")
         return lensChain(blurEffect, lens, android.graphics.RenderEffect::createChainEffect).asComposeRenderEffect().also { cached = it }
+    }
+
+    private fun packBodies(bodies: List<RoundRect>): Pair<FloatArray, FloatArray> {
+        val bounds = FloatArray(4 * bodyCapacity)
+        val radii = FloatArray(8 * bodyCapacity)
+        bodies.forEachIndexed { i, body ->
+            floatArrayOf(body.left, body.top, body.right, body.bottom).copyInto(bounds, i * 4)
+            body.radiusWords(radii, i * 8)
+        }
+        return bounds to radii
+    }
+
+    private fun RuntimeShader.setBodies(input: Pair<FloatArray, FloatArray>, count: Int) {
+        setFloatUniform("bodyBounds", input.first)
+        setFloatUniform("bodyRadii", input.second)
+        setFloatUniform("bodyCount", count.toFloat())
+    }
+
+    override fun close() {
+        if (Build.VERSION.SDK_INT >= 34 && fieldTargets.isInitialized()) fieldTargets.value?.close()
+    }
+
+    fun clearField() {
+        if (lastField == null) return
+        lastField = null
+        last = floatArrayOf()
+        cached = null
+        shader.setInputShader("displacementMap", emptyMap.value)
+        close()
     }
     private fun RoundRect.radiusWords(words: FloatArray, offset: Int) {
         listOf(topLeftCornerRadius, topRightCornerRadius, bottomRightCornerRadius, bottomLeftCornerRadius)
@@ -297,6 +365,206 @@ internal fun <E : Any> lensChain(blur: E?, lens: E, chain: (outer: E, inner: E) 
             FluidLensingSpec.Filter.DisplacementMap -> applied + lens
         }
     }.reduce { inner, outer -> chain(outer, inner) }
+
+internal data class FluidLensField(
+    val bodies: List<RoundRect>, val radius: Double, val deviceOrigin: Offset, val wideColor: Boolean,
+)
+
+/** Scratch is read only by the next offscreen pass. The completed map is immutable in the window. */
+@RequiresApi(34)
+private class FluidMeltTargets(private val union: RuntimeShader) : AutoCloseable {
+    private val scratch = arrayOfNulls<MeltTarget>(2)
+    private val empty = RuntimeShader("half4 main(float2 p) { return half4(0); }")
+    private val gaussian = mutableMapOf<Pair<Int, Boolean>, RuntimeShader>()
+    private val residual = RuntimeShader("""
+        uniform shader image;
+        uniform float2 offsets[4];
+        half4 main(float2 p) {
+            half4 a = image.eval(p + offsets[0]), b = image.eval(p + offsets[1]);
+            half4 c = image.eval(p + offsets[2]), d = image.eval(p + offsets[3]);
+            return (((b + a) + c) + d) * half(0.25);
+        }
+    """.trimIndent())
+    private val resolve = RuntimeShader("""
+        uniform shader image;
+        uniform float2 scale;
+        half4 main(float2 p) {
+            half4 field = image.eval(p * scale);
+            if (field.w < half(0.5)) return half4(0);
+            half2 n = field.yz;
+            return half4(field.x / field.w, n * inversesqrt(dot(n, n)), half(1));
+        }
+    """.trimIndent())
+    private val map = RuntimeShader("""
+        uniform shader image;
+        uniform float4 shape;
+        uniform float2 angle;
+        $FluidDeviceQuadShader
+        float inside(half4 f) { return float(-(f.x + half(shape.z))); }
+        half4 main(float2 p) {
+            half4 f = image.eval(p);
+            float u = inside(f), z = u - float(half(shape.w));
+            float2 device = (toDevice * float3(p, 1)).xy;
+            float x = inside(image.eval(quadPartner(device, float2(1, 0)))) - float(half(shape.w));
+            float y = inside(image.eval(quadPartner(device, float2(0, 1)))) - float(half(shape.w));
+            float w = quadWidth(z, x, y);
+            float mask = z < -5.0 ? 0.0 : clamp(0.5 + z / w, 0.0, 1.0) * float(f.w);
+            float height = float(half(shape.x)), r = clamp(u / height, 0.0, 1.0);
+            float lift = mix(r < 1.0 ? 1.0 - 0.2929 : 1.0, sqrt(1.0 - (1.0 - r) * (1.0 - r)), float(half(shape.y)));
+            half2 n = half2(dot(f.yz, half2(angle.x, -angle.y)), dot(f.yz, half2(angle.yx)));
+            n = (half(1.0 - lift) * n) * half(clamp((height - u) / w + 0.5, 0.0, 1.0));
+            return half4(n, half(mask), half(1));
+        }
+    """.trimIndent())
+
+    fun render(
+        field: FluidLensField, extent: IntSize, unit: Float, warp: FloatArray,
+        setBodies: (RuntimeShader, List<RoundRect>) -> Unit,
+    ): BitmapShader? {
+        val mapFormat = if (field.wideColor) HardwareBuffer.RGBA_FP16 else HardwareBuffer.RGBA_8888
+        if (!MeltTarget.supported(extent, HardwareBuffer.RGBA_FP16) || !MeltTarget.supported(extent, mapFormat)) return null
+        val shapes = field.bodies.filter { it.width > 0f && it.height > 0f }
+        setBodies(union, shapes)
+        var front = 0
+        var source = target(front, extent).draw(union)
+        var scaleX = 1f
+        var scaleY = 1f
+        fun pass(shader: RuntimeShader, size: IntSize = source.extent) {
+            shader.setInputBuffer("image", source.sampler())
+            front = front xor 1
+            source = target(front, size).draw(shader)
+            shader.setInputShader("image", empty)
+        }
+        val plan = FluidGaussianSpec.meltPasses(field.radius, unit.toDouble(), 1f, 1f, true, true) { size, axis ->
+            val factor = size.factor
+            val x = if (axis == FluidGaussianSpec.Axis.X) factor else 1
+            val y = if (axis == FluidGaussianSpec.Axis.Y) factor else 1
+            val samples = FluidGaussianSpec.meltDownsample(size)
+            val shader = pairs(axis, samples, samples.offsets.size + 1, center = true)
+            shader.setFloatUniform("scale", x.toFloat(), y.toFloat())
+            pass(shader, IntSize((source.extent.width + x - 1) / x, (source.extent.height + y - 1) / y))
+            scaleX /= x
+            scaleY /= y
+        }
+        if (plan == null) {
+            scratch[1]?.close()
+            scratch[1] = null
+        } else {
+            if (plan.singlePass) {
+                val offsets = FluidGaussianSpec.singlePassUniforms(
+                    plan.varianceX.toFloat() to plan.varianceY.toFloat(), 1f to 1f, 1, false, 0x184, Math::fma,
+                ).offsets
+                residual.setFloatUniform("offsets", offsets.flatMap { listOf(it.first, it.second) }.toFloatArray())
+                pass(residual)
+            } else {
+                fun narrow(variance: Double, count: Int, axis: FluidGaussianSpec.Axis) {
+                    if (count == 0) return
+                    val kernel = FluidGaussianSpec.meltNarrow((variance / count).toFloat(), Math::fma)
+                    val shader = pairs(axis, kernel.samples, kernel.width.ordinal + 2, center = false)
+                    shader.setFloatUniform("scale", 1f, 1f)
+                    repeat(count) { pass(shader) }
+                }
+                narrow(plan.varianceX, plan.narrowPassesX, FluidGaussianSpec.Axis.X)
+                narrow(plan.varianceY, plan.narrowPassesY, FluidGaussianSpec.Axis.Y)
+            }
+            resolve.setFloatUniform("scale", scaleX, scaleY)
+            pass(resolve, extent)
+        }
+        map.setInputBuffer("image", source.sampler(linear = false))
+        map.setFloatUniform("shape", warp[0], warp[1], warp[2], warp[3])
+        map.setFloatUniform("angle", warp[4], warp[5])
+        map.setDeviceQuad(requireNotNull(BackdropRegistration.create(1f, 0f, 0f, 1f, field.deviceOrigin.x, field.deviceOrigin.y)))
+        return MeltTarget(extent, mapFormat).use {
+            it.draw(map).sampler(mode = Shader.TileMode.CLAMP)
+        }.also { map.setInputShader("image", empty) }
+    }
+
+    private fun target(slot: Int, size: IntSize): MeltTarget =
+        scratch[slot]?.takeIf { it.extent == size } ?: run {
+            scratch[slot]?.close()
+            MeltTarget(size, HardwareBuffer.RGBA_FP16).also { scratch[slot] = it }
+        }
+
+    private fun pairs(axis: FluidGaussianSpec.Axis, samples: FluidGaussianSpec.MeltSamples, count: Int, center: Boolean): RuntimeShader {
+        val shader = gaussian.getOrPut(count to center) {
+            val order = when (count) {
+                2 -> listOf(1, 0)
+                3 -> listOf(2, 0, 1)
+                else -> listOf(3, 0, 2, 1) + (count - 1 downTo 4)
+            }
+            val taps = (0 until count).joinToString("\n") { i ->
+                if (center && i == 0) "half4 p0 = half(weights[0]) * image.eval(p);"
+                else {
+                    val d = if (center) i - 1 else i
+                    "half4 p$i = (image.eval(p + offsets[$d]) + image.eval(p - offsets[$d])) * half(weights[$i]);"
+                }
+            }
+            RuntimeShader("""
+                uniform shader image;
+                uniform float2 scale, offsets[${count - if (center) 1 else 0}];
+                uniform float weights[$count];
+                half4 main(float2 point) {
+                    float2 p = point * scale;
+                    $taps
+                    return ${order.joinToString(" + ") { "p$it" }};
+                }
+            """.trimIndent())
+        }
+        val offsets = FloatArray(2 * (count - if (center) 1 else 0))
+        val lane = if (axis == FluidGaussianSpec.Axis.X) 0 else 1
+        for (i in 0 until offsets.size / 2) offsets[2 * i + lane] = samples.offsets[i]
+        shader.setFloatUniform("offsets", offsets)
+        shader.setFloatUniform("weights", samples.weights.copyOf(count))
+        return shader
+    }
+
+    override fun close() {
+        scratch.forEach { it?.close() }
+        scratch.fill(null)
+    }
+}
+
+@RequiresApi(34)
+private class MeltTarget(val extent: IntSize, format: Int) : AutoCloseable {
+    private val buffer = HardwareBuffer.create(extent.width, extent.height, format, 1, usage)
+    private val colors = ColorSpace.get(if (format == HardwareBuffer.RGBA_FP16)
+        ColorSpace.Named.LINEAR_EXTENDED_SRGB else ColorSpace.Named.LINEAR_SRGB)
+    private val renderer = HardwareBufferRenderer(buffer)
+    private val node = RenderNode("Fluid lens field").apply { setPosition(0, 0, extent.width, extent.height) }
+    private val paint = Paint().apply { blendMode = BlendMode.SRC }
+
+    fun draw(shader: RuntimeShader): MeltTarget {
+        paint.shader = shader
+        node.beginRecording(extent.width, extent.height).drawPaint(paint)
+        node.endRecording()
+        renderer.setContentRoot(node)
+        val completed = CompletableFuture<HardwareBufferRenderer.RenderResult>()
+        renderer.obtainRenderRequest().setColorSpace(colors).draw({ it.run() }) { completed.complete(it) }
+        val result = completed.get(5, TimeUnit.SECONDS)
+        result.fence.use {
+            check(result.status == HardwareBufferRenderer.RenderResult.SUCCESS && it.await(Duration.ofSeconds(5)))
+        }
+        node.discardDisplayList()
+        paint.shader = null
+        return this
+    }
+
+    fun sampler(mode: Shader.TileMode = Shader.TileMode.REPEAT, linear: Boolean = true) =
+        BitmapShader(requireNotNull(Bitmap.wrapHardwareBuffer(buffer, colors)), mode, mode).apply {
+            setFilterMode(if (linear) BitmapShader.FILTER_MODE_LINEAR else BitmapShader.FILTER_MODE_NEAREST)
+        }
+
+    override fun close() {
+        renderer.close()
+        buffer.close()
+    }
+
+    companion object {
+        private const val usage = HardwareBuffer.USAGE_GPU_COLOR_OUTPUT or HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE
+        fun supported(size: IntSize, format: Int) =
+            HardwareBuffer.isSupported(size.width, size.height, format, 1, usage)
+    }
+}
 
 /** Device quad partners mapped back into the same local primitive. */
 internal const val FluidDeviceQuadShader = """
@@ -387,13 +655,18 @@ private val apertureClipShader by lazy {
 internal fun fluidApertureClip(
     aperture: RoundRect, device: BackdropRegistration, selector: Int = 10, mixX: Float = 0f, mixY: Float = 0f,
 ): RenderEffect = apertureClipShader.run {
-    fun BackdropRegistration.words() = floatArrayOf(xx, yx, 0f, xy, yy, 0f, tx, ty, 1f)
-    setFloatUniform("toDevice", device.words())
-    setFloatUniform("toLocal", requireNotNull(device.inverse()).words())
+    setDeviceQuad(device)
     setFloatUniform("center", (aperture.left + aperture.right) * 0.5f, (aperture.top + aperture.bottom) * 0.5f)
     setFloatUniform("halfSize", aperture.width * 0.5f, aperture.height * 0.5f)
     setFloatUniform("radius", aperture.topLeftCornerRadius.x, aperture.topLeftCornerRadius.y)
     setFloatUniform("mixWeight", mixX, mixY)
     setIntUniform("selector", selector)
     android.graphics.RenderEffect.createRuntimeShaderEffect(this, "scene").asComposeRenderEffect()
+}
+
+@RequiresApi(33)
+private fun RuntimeShader.setDeviceQuad(device: BackdropRegistration) {
+    fun BackdropRegistration.words() = floatArrayOf(xx, yx, 0f, xy, yy, 0f, tx, ty, 1f)
+    setFloatUniform("toDevice", device.words())
+    setFloatUniform("toLocal", requireNotNull(device.inverse()).words())
 }

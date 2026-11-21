@@ -158,8 +158,8 @@ private fun Placeable.PlacementScope.placePortalDestination(
     private fun snapsReducedFluid() = placement?.outline == null
     private val fluidBlur = FluidPropertyMotion(clock, Double::equals,
         { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidBlurRadius = radius } }, snapReduced=::snapsReducedFluid)
-    private val fluidMelt = FluidPropertyMotion(clock, Double::equals,
-        { sample -> FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidMeltRadius = radius } }, snapReduced=::snapsReducedFluid)
+    private var fluidMelt by mutableStateOf<FluidPropertyMotion?>(null)
+    internal fun fluidFieldBodies() = fluidMelt?.let { expansion.outlineBodies() }
     private fun fluidPointScale() =
         fluidLayerPointScale(nativeWindow?.get() != null) { placement?.basis?.density?.toDouble() }
     private val lensHeight = FluidPropertyMotion(clock, Double::equals, { sample ->
@@ -223,14 +223,19 @@ private fun Placeable.PlacementScope.placePortalDestination(
         val fresh = !expansion.hasOutline
         deliverOutline(step,speed)
         deliverFluidDestinations(step, speed, fresh)
+        if (step.action == FluidTimelineAction.AddSdfElements && expansion.hasOutline && fluidMelt == null) {
+            fluidMelt = FluidPropertyMotion(clock, Double::equals, { sample ->
+                FluidSharedBlurSpec.publishRadius(sample) { radius, _, _ -> fluidMeltRadius = radius }
+            }, snapReduced = ::snapsReducedFluid)
+        }
         val spring = step.propertySpring(speed) ?: return@FluidTimelineMotion
         val meltTarget = when (step.action) {
             FluidTimelineAction.SmoothOn -> 20.0
             FluidTimelineAction.SmoothOff -> 0.0
             else -> null
         }
-        if (meltTarget != null && expansion.hasOutline) {
-            fluidMelt.animate(fluidMeltRadius, meltTarget, fluidBlurControls, spring, fluidRadiusEpsilonSquared(fluidPointScale()))
+        if (meltTarget != null) {
+            fluidMelt?.animate(fluidMeltRadius, meltTarget, fluidBlurControls, spring, fluidRadiusEpsilonSquared(fluidPointScale()))
         }
         step.content?.let { content ->
             val scale = fluidPointScale()
@@ -289,7 +294,8 @@ private fun Placeable.PlacementScope.placePortalDestination(
     fun show(visible: Boolean) {
         if (!shown && visible && expansion.retirementReady) {
             expansion.clearOutline()
-            fluidMelt.stop()
+            fluidMelt?.stop()
+            fluidMelt = null
             fluidMeltRadius = 0.0
         }
         expansion.refreshPopupLaw()
@@ -371,7 +377,7 @@ private fun Placeable.PlacementScope.placePortalDestination(
         clock.unregister(lensHeight)
         clock.unregister(lensAmount)
         fluidBlur.stop()
-        fluidMelt.stop()
+        fluidMelt?.stop()
         fluidZoom.stop()
         fluidDestinations?.forEach(FluidPropertyMotion::stop)
         expansion.dispose()
